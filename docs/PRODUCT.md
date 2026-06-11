@@ -4,13 +4,13 @@
 
 ## 1. 产品定位
 
-LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、CloudCode、Cursor、OpenCloud、Hermes 等不同 AI Agent 的模型请求接入 LLMIngress，再由 LLMIngress 统一完成 Provider 接入、模型选择、Fallback、成本记录和用量控制。
+LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Claude Code、Cursor、OpenCode、Hermes 等不同 AI Agent 的模型请求接入 LLMIngress，再由 LLMIngress 统一完成 Provider 接入、模型选择、Fallback、成本记录和用量控制。
 
 核心目标：
 
-- 统一 AI Agent 接入入口：让 Codex、CloudCode、Cursor、OpenCode、Hermes 等不同 AI Agent 只接入一个 LLMIngress Gateway。
+- 统一 AI Agent 接入入口：让 Codex、Claude Code、Cursor、OpenCode、Hermes 等不同 AI Agent 只接入一个 LLMIngress Gateway。
 - 自动匹配合适模型：根据请求参数、上下文长度、任务类型、工具调用、模型能力和使用场景选择真实 Provider 与模型。
-- 多 Provider / 多模型统一管理：集中管理 API Key、订阅额度、本地模型和自定义模型服务，让多个 AI Agent 复用同一套模型资源。
+- 多 Provider / 多模型统一管理：集中管理 API Key、订阅额度和本地模型，让多个 AI Agent 复用同一套模型资源。
 - 面向 AI Agent 的路由策略：围绕 coding、repo 理解、terminal / shell、long context、reasoning、tool calling 等 Agent 高频场景设计路由规则。
 - 提升请求稳定性：当 Provider 限流、失败、超时或模型不可用时，自动切换到备用模型，减少 AI Agent 工作流中断。
 - Agent 级可观测性：按 Agent、Agent API Key 和 Virtual Model Name 查看请求、模型命中、Tokens、成本、失败原因、Fallback 情况和延迟表现。
@@ -23,7 +23,7 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 
 - AI Agent 统一接入：为多个 AI Agent 提供统一 Gateway endpoint、Agent API Key 和可用 Virtual Model Name。
 - 自动模型路由：通过 Virtual Model Name / Route Policy，基于请求参数、上下文长度、任务类型、工具调用、模型能力和使用场景选择真实 Provider 与模型。
-- Provider 与模型资源管理：集中管理 API Key、订阅额度、本地模型、自定义模型服务和多个 Provider 下的模型列表。
+- Provider 与模型资源管理：集中管理 API Key、订阅额度、本地模型和多个 Provider 下的模型列表。
 - Agent 场景路由策略：覆盖 coding、repo 理解、terminal / shell、long context、reasoning、tool calling 等 AI Agent 高频场景。
 - 稳定性与 Fallback：在 Provider 限流、失败、超时或模型不可用时自动切换备用模型。
 - Agent 级可观测性：按 Agent、Agent API Key 和 Virtual Model Name 记录请求、模型命中、Tokens、成本、失败原因、Fallback 情况和延迟表现。
@@ -53,19 +53,21 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 - Cursor。
 - OpenCode。
 - Hermes。
-- OpenClaw
-- GitHub Copilot
+- OpenClaw。
+- GitHub Copilot。
 - 其他可配置 OpenAI-compatible endpoint 的 AI Agent。
+
+首批支持范围以各 Agent 实际可配置 endpoint 能力为准；如果某个 Agent 的官方闭源能力不支持自定义 Gateway，则只支持其可开放配置的模型请求路径。
 
 ## 4. 核心用户故事
 
 ### 4.1 统一接入多个 AI Agent
 
-作为个人 AI Agent 用户，我希望把 Codex、Claude Code、Cursor、OpenCode、Hermes、GitHub Copilot 等 Agent 接到同一个 Gateway，这样每个 Agent 都可以通过统一 endpoint 使用我的模型资源，而不是在不同工具里反复配置 Provider、API Key 和 Virtual Model Name。
+作为个人 AI Agent 用户，我希望把 Codex、Claude Code、Cursor、OpenCode、Hermes、OpenClaw、GitHub Copilot 等 Agent 接到同一个 Gateway，这样真实 Provider、Provider API Key 和真实模型只需要在 LLMIngress 中集中维护；每个 Agent 只需要配置 Gateway URL、Agent API Key，并在 `model` 字段选择 LLMIngress 暴露的 Virtual Model Name。
 
 ### 4.2 统一管理模型资源
 
-作为个人 AI Agent 用户，我希望在一个地方配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、本地 Ollama 和自定义模型服务，这样所有 Agent 都可以复用同一套模型资源、订阅额度和本地模型能力。
+作为个人 AI Agent 用户，我希望在一个地方配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot 和本地 Ollama，这样所有 Agent 都可以复用同一套模型资源、订阅额度和本地模型能力。
 
 ### 4.3 任务感知的模型选择
 
@@ -77,7 +79,9 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 
 ### 4.5 质量兜底与自动切换
 
-作为个人 AI Agent 用户，我希望当低成本模型无法满足任务、请求失败、Provider 限流或模型不可用时，Agent 请求能自动切换到更合适的备用模型，避免当前工作流中断，并保证关键任务的完成质量。
+作为个人 AI Agent 用户，我希望当路由规则在请求前判断低成本模型不适合当前任务，或请求失败、Provider 限流、模型不可用时，Agent 请求能自动切换到更合适的备用模型，避免当前工作流中断，并提升关键任务的完成稳定性。
+
+V1 不承诺对已生成结果进行自动质量判断后再升级模型；质量驱动升级可作为 V2 能力，由用户显式开启 judge / retry 策略。
 
 ### 4.6 看清选择原因和节省效果
 
@@ -100,18 +104,18 @@ Gateway Service 是 LLMIngress 的运行时模块，也是实际处理 Agent 请
 
 Gateway Service 包含以下核心能力：
 
-- Agent Request Ingress：接收来自不同 AI Agent 的请求，优先提供 OpenAI-compatible API。
-- Agent Authentication：识别请求来自哪个 Agent，并校验 Agent API Key。
-- Request Normalization：把不同 Agent 或协议风格的请求转换成内部统一请求结构。
-- Policy Evaluation：根据 Agent API Key、Virtual Model Name、任务复杂度、上下文长度、工具调用和成本偏好匹配 Route Policy。
-- Model Selection：选择真实 Provider 和真实模型。
-- Provider Dispatch：把请求转发到 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、Ollama 或自定义 Provider。
-- Streaming Proxy：支持流式响应，并把 Provider 返回结果转发给原始 Agent。
-- Fallback & Retry：当 Provider 失败、限流、超时或模型不可用时，自动切换备用模型。
-- Usage Metering：记录 Agent、Agent API Key、Virtual Model Name / Route Policy、实际命中的 Provider、实际命中的 Model、Tokens、成本、延迟、失败原因和 Fallback 过程。
-- Budget Guard：在请求前或请求后检查 Agent API Key 级 Token 限制、成本限制和预算策略。
-- Runtime Config Loader：加载 Console 中配置的 Agents、Agent API Keys、Providers、Models、Virtual Models / Routes 和 Limits，并支持配置更新。
-- Health & Diagnostics：暴露 Gateway 健康状态、Provider 连通性、运行地址、版本和最近错误。
+- 接收来自不同 AI Agent 的请求，优先提供 OpenAI-compatible API。
+- 识别请求来自哪个 Agent，并校验 Agent API Key。
+- 兼容不同 Agent 的请求协议，并统一转发到后端 Provider。
+- 根据 Agent API Key、Virtual Model Name、上下文长度、工具调用和成本偏好匹配 Route Policy。
+- 为每次请求选择真实 Provider 和真实模型。
+- 把请求转发到 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、Ollama。
+- 支持流式响应，并把 Provider 返回结果转发给原始 Agent。
+- 当 Provider 失败、限流、超时或模型不可用时，自动切换备用模型。
+- 记录 Agent、Agent API Key、Virtual Model Name / Route Policy、实际命中的 Provider、实际命中的 Model、Tokens、成本、延迟、失败原因和 Fallback 过程。
+- 检查 Agent API Key 级 Token 限制、成本限制、Rate Limit 和预算策略。
+- Console 中的配置修改对新请求即时生效。
+- 展示 Gateway 健康状态、Provider 连通性、运行地址、版本和最近错误。
 
 ### 5.2 Console
 
@@ -121,12 +125,12 @@ Console 包含以下一级模块：
 
 - Overview：查看 Gateway 状态、今日请求量、今日成本、失败率、节省效果和活跃 Agent。
 - Agents：管理接入的 AI Agent，包括 Agent 类型、Gateway URL、Agent API Key、Allowed Virtual Model Names、Budget / Limit 和接入说明。
-- Providers：配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、Ollama 和自定义 Provider。
+- Providers：配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、Ollama。
 - Models：管理可用模型、模型能力、上下文长度、价格、Provider 归属和是否参与自动路由。
 - Virtual Models / Routes：管理全局 Virtual Model Name，并为每个 Virtual Model Name 配置对应 Route Policy、Provider 范围、模型范围、Fallback Chain 和成本偏好。
 - Activity：查看每次请求的 Agent、Agent API Key、Virtual Model Name、Provider、命中模型、延迟、Tokens、成本、失败原因和 Fallback 过程。
 - Usage & Cost：按 Agent、Agent API Key、Virtual Model Name、Provider、Model 和时间维度分析 Tokens、成本、模型分布和节省效果。
-- Limits：配置 Agent API Key 级 Token 上限、成本上限、每日预算、月度预算和超限处理方式。
+- Limits：配置 Agent API Key 级 Token 上限、成本上限、小时 / 日 / 周 / 月预算、RPM、TPM、并发请求数和超限处理方式。
 - Gateway Runtime：查看 Gateway Service 的运行地址、版本、健康检查、Provider 连通性和最近运行错误。
 - Playground：模拟 Agent 请求，测试请求会被路由到哪个 Provider 和模型，并查看选择原因。
 - Settings：管理服务端口、数据目录、日志保留、安全设置、导入导出和部署相关配置。
@@ -207,10 +211,11 @@ Agent 分类围绕 AI Agent 的使用形态：
 - Codex
 - Claude Code
 - Cursor
+- OpenCode
 - GitHub Copilot
 - Hermes
 - OpenClaw
-- OpenAI-compatible custom agent。
+- 其他可配置 OpenAI-compatible endpoint 的 AI Agent。
 
 ### 6.4 Agent 接入方式
 
@@ -231,6 +236,8 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - 查看当前 Agent API Key 可使用的 Virtual Model Name。
 - 设置 Agent API Key 的默认 Virtual Model Name。
 
+OpenClaw 作为首批支持 Agent 接入。若 OpenClaw 支持 OpenAI-compatible endpoint，则通过上述通用 Agent 接入方式接入 LLMIngress。
+
 ### 6.5 Agent 状态
 
 - 未配置。
@@ -248,9 +255,12 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - 提供 OpenAI-compatible endpoint。
 - 支持 `POST /v1/chat/completions`。
 - 支持 `POST /v1/responses`。
+- 支持 `POST /v1/messages`。
+- 支持 `POST /v1/embeddings`。
 - 支持 `GET /v1/models`。
 - 优先保证主流 Agent 能够用 OpenAI-compatible 方式接入。
-- Anthropic-compatible endpoint 可作为增强能力。
+- 为支持 Claude Code，Anthropic-compatible `/v1/messages` endpoint 属于核心接入能力。
+- `GET /v1/models` 返回当前 Agent API Key 被授权使用的 Virtual Model Name 列表，而不直接暴露真实 Provider 模型列表。
 
 ### 7.2 Virtual Model 抽象
 
@@ -277,10 +287,10 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 
 ### 7.4 响应元数据
 
-每次响应应返回可观测信息：
+每次请求的路由过程对用户完全可追溯：通过响应附带的元数据和 Activity 记录，可以看到命中模型、路由原因、Tokens 和成本。响应中不回传完整 API Key，只展示 key prefix。
 
 - Agent。
-- Agent API Key。
+- Agent API Key prefix。
 - Virtual Model Name。
 - Route Policy。
 - 实际命中的 Provider。
@@ -303,6 +313,12 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - Dashboard 显示 key prefix。
 - 支持 key 轮换。
 - 支持禁用旧 key。
+
+### 7.6 错误反馈
+
+- Gateway 返回统一格式的错误，Agent 端可以区分错误类别。
+- 错误至少可区分：Key 无效、无权使用该 Virtual Model、超出预算、超出频率限制、上游 Provider 不可用、Fallback 全部失败、请求超时。
+- 每个错误附带 request id，可在 Activity 中定位到对应请求。
 
 ## 8. Provider 能力
 
@@ -331,7 +347,6 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - Groq。
 - Fireworks AI。
 - Z.ai。
-- 其他兼容 Provider。
 
 ### 8.3 Subscription Provider
 
@@ -344,7 +359,8 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - Kimi Coding Plan。
 - GLM Coding Plan。
 - OpenCode Go。
-- 其他可通过 Token、OAuth 或 Device Code 接入的订阅。
+
+Subscription Provider 属于高风险探索能力，不进入 MVP 默认范围。涉及 ChatGPT Plus / Pro、Claude Pro / Max、GitHub Copilot 等消费级订阅时，必须明确标注 ToS、封号和协议变更风险。若 Provider 不允许 API 转发，系统应禁用该 Provider 类型，并降级使用官方 API Key Provider 或 Local Provider。
 
 ### 8.4 Local Provider
 
@@ -353,10 +369,8 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - Ollama。
 - LM Studio。
 - llama.cpp。
-- 任意 OpenAI-compatible server。
 
-
-### 8.6 Provider 管理
+### 8.5 Provider 管理
 
 - 添加 Provider。
 - 删除 Provider。
@@ -369,9 +383,14 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - 调整 Key 优先级。
 - 查看 Key prefix，不展示完整密钥。
 
-### 8.7 Provider 依赖检查
+同一 Provider 多 Key 支持：
 
-当用户禁用或删除 Provider、Provider Key、模型或自定义 endpoint 时，系统需要先检查依赖关系。
+- 同一 Provider 可保存多个 Key，按优先级自动切换，失败的 Key 自动跳过。
+- 更智能的多 Key 分配，例如按额度或按负载分配，作为后续增强能力。
+
+### 8.6 Provider 依赖检查
+
+当用户禁用或删除 Provider、Provider Key 或模型时，系统需要先检查依赖关系。
 
 检查范围包括：
 
@@ -389,7 +408,7 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - 连接 Provider 后自动拉取模型列表。
 - 支持手动刷新模型。
 - 支持本地模型同步。
-- 支持自定义模型手动添加。
+- 支持手动补充已支持 Provider 下的模型元数据。
 - 支持模型不可用提示。
 
 ### 9.2 模型元数据
@@ -415,6 +434,11 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - 标记本地模型成本为 0。
 - 用价格估算 Agent 消费。
 - 用价格参与路由建议。
+- 支持内置价格表。
+- 支持用户手动覆盖价格。
+- 支持从 Provider 或模型 registry 同步价格。
+- 未知价格模型不参与成本优化路由，除非用户手动确认价格。
+- Prompt caching、cached input token、reasoning token 需要单独记录。
 
 ## 10. Virtual Model / Routing 能力
 
@@ -460,11 +484,40 @@ Route Policy 支持：
 
 Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key 上。
 
-### 10.4 运行时逻辑
+### 10.4 路由决策机制
+
+V1 路由采用确定性规则引擎，不默认额外调用 LLM 分类器。V2 可加入可选任务分类器或 judge，但必须展示额外延迟和成本。
+
+信号来源：
+
+- Agent 类型。
+- Agent API Key。
+- Virtual Model Name。
+- 请求协议。
+- 输入 token 估算。
+- 是否包含 tools / function calling。
+- 是否包含 repo、terminal、shell、diff、测试日志等特征。
+- 用户显式配置的 task hint。
+- Route Policy 中的固定规则。
+
+成本偏好语义：
+
+- 省钱优先：在满足硬约束的前提下优先最低成本模型。
+- 平衡：综合模型能力、价格、延迟和健康状态。
+- 质量优先：优先高能力模型，仅在成本或预算受限时降级。
+
+路由行为承诺：
+
+- 用户固定指定的模型永远优先于自动路由。
+- 自动路由永远不会选中不满足请求要求的模型，例如上下文不够或不支持工具调用。
+- 每次路由结果都附带用户可读的选择原因。
+- V1 路由是确定性的：同样的请求和配置得到同样的路由结果。
+
+### 10.5 运行时逻辑
 
 1. 请求进入 Gateway。
 2. 通过 API Key 识别 Agent / API Key。
-3. 检查 API Key 是否可用、是否超出 Budget / Limit。
+3. 检查 API Key 是否可用、是否超出 Budget / Limit / Rate Limit。
 4. 读取请求里的 `model` 字段。
 5. 根据 `model` 找到对应 Virtual Model Name / Route Policy。
 6. 检查该 API Key 是否有权限使用这个 Virtual Model Name。
@@ -481,10 +534,12 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 - 每个 Virtual Model Name / Route Policy 可配置独立 Fallback Chain。
 - Fallback 按顺序尝试。
 - 每条链最多建议 5 个备用模型。
-- 可混合 API Key Provider、Subscription Provider、本地模型和自定义 Provider。
+- 可混合 API Key Provider、Subscription Provider、本地模型。
 - Fallback 过程需要记录原始失败 Provider / Model、最终成功 Provider / Model 和每次失败原因。
 
 ### 11.2 触发条件
+
+Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 中断时，V1 不自动重放请求，避免 Agent 收到重复或冲突内容；中断会被完整记录在 Activity 中，用户能看到失败发生在响应中途。
 
 - Provider 5xx。
 - Provider 429。
@@ -493,6 +548,12 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 - 模型不可用。
 - 请求被 Provider 拒绝。
 - Streaming 首包前失败。
+
+不属于 V1 自动 Fallback：
+
+- 模型回答质量不佳。
+- 用户不满意输出。
+- 首包后已产生部分内容的流式失败。
 
 ### 11.3 用户可见结果
 
@@ -528,10 +589,22 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 - 支持达到阈值后阻断请求。
 - 支持手动重置或修改限制。
 - 支持限制 Agent API Key 可使用的 Virtual Model Name。
+- 成本统计优先采用 Provider 实际计费数据；无法获得实际数据时使用估算值，估算值在界面上明确标注。
 
-### 12.4 成本节省
+### 12.4 Rate Limiting
 
-- 估算 auto routing 相比固定强模型节省的成本。
+除 Budget / Token Limit 外，Agent API Key 支持 RPM、TPM 和并发请求数限制。
+
+- RPM：限制每分钟请求数。
+- TPM：限制每分钟 token 估算消耗。
+- Concurrency：限制同一 Agent API Key 的并发请求。
+- 超限时返回频率限制错误。
+- Rate Limit 用于快速阻断 Agent 循环调用；Budget 用于控制成本上限。
+
+### 12.5 成本节省
+
+- 估算 auto routing 相比用户指定基线模型节省的成本。
+- 若用户未指定基线模型，则使用该 Virtual Model Name 的质量优先默认模型作为基线，并在 Usage 页面明确展示基线模型名称。
 - 展示节省金额。
 - 展示节省百分比。
 - 展示低成本模型命中比例。
@@ -557,7 +630,7 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 详情页展示：
 
 - Agent。
-- Agent API Key。
+- Agent API Key prefix。
 - Virtual Model Name。
 - Route Policy。
 - 实际命中的 Provider。
@@ -581,7 +654,7 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 - 可删除单条记录。
 - 可一键清空某个 Agent 的记录。
 
-## 14. Desktop Dashboard
+## 14. Console 页面与功能
 
 ### 14.1 首页
 
@@ -656,9 +729,25 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 - Agent API Key limit rules。
 - 成本限制。
 - Token 限制。
+- RPM / TPM 限制。
+- 并发请求数限制。
 - Allowed Virtual Model Names。
 - 通知配置。
 - 阻断策略。
+
+通知渠道支持：
+
+- Desktop notification。
+- Email。
+- Webhook。
+
+告警事件包括：
+
+- Provider 连续失败。
+- Fallback Chain 耗尽。
+- Budget 接近阈值。
+- Rate Limit 高频触发。
+- Gateway 暴露公网但未配置 Console 鉴权。
 
 ### 14.8 Playground 页面
 
@@ -670,6 +759,13 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 - 查看 routing metadata。
 - 对比不同 Virtual Model Name / Route Policy 的输出。
 
+### 14.9 Observability Export
+
+- Prometheus metrics。
+- OpenTelemetry traces。
+- Webhook events。
+- JSONL request logs。
+
 ## 15. 部署与数据
 
 ### 15.1 Gateway 部署
@@ -680,6 +776,14 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 - 支持自定义端口。
 - 支持开机自启。
 - 支持菜单栏或托盘状态显示。
+
+部署形态：
+
+- Desktop app：面向个人电脑，默认监听 `127.0.0.1`，可提供菜单栏或托盘状态。
+- Docker / server：面向本地服务器或云服务器，默认不暴露公网。
+- Single binary：面向轻量自托管部署。
+
+开源许可、商业许可和分发方式由 README / LICENSE 单独定义，PRODUCT.md 不默认承诺。
 
 ### 15.2 数据存储
 
@@ -697,7 +801,13 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 
 - 导出请求记录。
 - 导出成本报表。
+- 导出 Provider / Model / Route Policy 配置。
+- 导入配置备份。
+- 升级前自动备份配置数据库。
+- 提供数据迁移机制。
+- 支持日志保留周期和日志轮转。
 - 清空日志。
+- 清空 prompt / response 内容但保留 metadata。
 - 删除 Agent 数据。
 - 删除 Provider 凭据。
 
@@ -722,39 +832,92 @@ Route Policy 不承载 Budget / Limit。Budget / Limit 配置在 Agent API Key �
 
 - 个人电脑部署默认只监听 `127.0.0.1`；服务器部署可显式配置监听地址。
 - 用户显式配置后才允许 LAN 或公网访问。
-- Custom Provider URL 需要校验。
 - Cloud Provider 请求只发送到用户配置的 Provider。
 
-## 17. 关键指标
+### 16.4 Console 鉴权
 
-### 17.1 激活指标
+Console 必须支持访问控制，尤其是服务器或公网部署场景。
 
-- 用户创建第一个 Agent。
-- 用户成功连接第一个 Provider。
-- 用户完成第一次 Agent 请求。
+- 本地 localhost 模式可允许首次无密码引导。
+- 非 localhost 监听必须启用 Console 登录。
+- 支持设置管理员密码。
+- 支持禁用公网访问。
+- 所有 Provider Key、Subscription Token、Agent API Key 操作需要鉴权。
 
-### 17.2 留存指标
+## 17. 非功能需求、成功指标与版本规划
 
-- 每日活跃 Agent 数。
-- 每日 Gateway 请求数。
-- 每周查看 Usage 页次数。
-- 每周至少一次路由配置调整。
+### 17.1 非功能需求
 
-### 17.3 成本价值指标
+- V1 路由决策不额外调用 LLM。
+- Gateway 规则路由额外延迟目标：p95 小于 100ms，不包含上游 Provider 延迟。
+- Streaming 首包代理额外延迟目标：p95 小于 200ms，不包含上游 Provider 首包时间。
+- 配置修改后对新请求即时生效，不影响进行中的请求。
+- 服务器部署必须支持 Console 鉴权。
+- 默认不记录 prompt / response 内容。
 
-- Auto routing 命中低成本模型比例。
-- Fallback 成功次数。
-- 估算节省金额。
-- 超预算阻断次数。
+### 17.2 成功指标
+
+- 首个 Agent 接入耗时。
+- 请求成功率。
+- Fallback 成功率。
+- Fallback Chain 耗尽率。
+- Route Policy 命中解释覆盖率。
+- 相比基线模型的成本节省比例。
+- Budget / Rate Limit 阻断次数。
+- Provider 平均延迟和失败率。
+
+### 17.3 版本规划
+
+MVP：
+
+- OpenAI-compatible `/v1/chat/completions`、`/v1/responses`。
+- Anthropic-compatible `/v1/messages`。
+- Agent API Key。
+- Virtual Model Name / Route Policy。
+- API Key Provider。
+- Local Provider。
+- 确定性规则路由。
+- Fallback Chain。
+- Usage / Cost / Activity。
+- Budget、Token Limit、RPM、TPM。
+- Console 鉴权。
+
+V1：
+
+- Embeddings endpoint。
+- Provider 多 Key failover。
+- Prometheus / OpenTelemetry / Webhook export。
+- 配置导入导出。
+- Prompt caching 成本核算。
+- OpenClaw 专用接入模板。
+
+V2：
+
+- 可选 LLM 分类器。
+- 可选质量 judge。
+- Semantic cache。
+- Quota-aware key balancing。
+- 更多 Agent 专用接入模板。
 
 ## 18. 产品边界
 
-LLMIngress 是 AI Agent Gateway。
+LLMIngress 是单用户 AI Agent Gateway。产品优先解决个人开发者在多个 AI Agent、多个 Provider 和多个模型之间的接入、路由、Fallback、成本控制和可观测性问题。
 
 产品焦点：
 
 - 让 AI Agent 通过一个统一 endpoint 接入模型能力。
 - 在 Gateway 后方统一管理多个 Provider 和模型。
 - 根据请求参数、上下文、任务类型、工具调用和模型能力自动匹配合适模型。
-- 为 AI Agent 提供 Fallback、用量统计、成本控制和请求可观测性。
+- 为 AI Agent 提供 Fallback、用量统计、成本控制、Rate Limit 和请求可观测性。
 - 保持用户自主管理的数据与凭据方式。
+
+Non-goals：
+
+- 不做团队协作和多租户权限系统。
+- 不做 prompt 管理平台。
+- 不做 fine-tuning 平台。
+- 不做模型训练或模型托管平台。
+- 不支持 Custom Provider / 任意自定义 endpoint。
+- 不默认代理图像、音频、视频生成端点。
+- 不绕过 Provider ToS 或反爬限制。
+- 不保证所有商业 Agent 的全部原生功能可通过 Gateway endpoint 保留；OpenClaw 支持范围以其可配置 endpoint 能力为准。

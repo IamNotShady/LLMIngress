@@ -365,7 +365,7 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - GLM Coding Plan。
 - OpenCode Go。
 
-Subscription Provider 属于高风险探索能力，不进入 MVP 默认范围。涉及 ChatGPT Plus / Pro、Claude Pro / Max、GitHub Copilot 等消费级订阅时，必须明确标注 ToS、封号和协议变更风险。若 Provider 不允许 API 转发，系统应禁用该 Provider 类型，并降级使用官方 API Key Provider 或 Local Provider。
+Subscription Provider 属于 V2 高风险探索能力，不进入 MVP / V1 范围。涉及 ChatGPT Plus / Pro、Claude Pro / Max、GitHub Copilot 等消费级订阅时，必须明确标注 ToS、封号和协议变更风险。若 Provider 不允许 API 转发，系统应禁用该 Provider 类型，并降级使用官方 API Key Provider 或 Local Provider。
 
 ### 8.4 Local Provider
 
@@ -894,10 +894,9 @@ V2：
 - 可选 LLM 分类器。
 - 可选质量 judge。
 - Semantic cache。
+- Subscription Provider（高风险探索能力）。
 - Quota-aware key balancing。
 - 更多 Agent 专用接入模板。
-
-Subscription Provider 属于探索项，不纳入当前版本规划。
 
 ## 18. 产品边界
 

@@ -257,7 +257,6 @@ Agent 分类围绕 AI Agent 的使用形态：
 - API Key Provider。
 - Subscription Provider。
 - Local Provider。
-- Custom Provider。
 
 ### 8.2 API Key Provider
 
@@ -300,17 +299,6 @@ Agent 分类围绕 AI Agent 的使用形态：
 - llama.cpp。
 - 任意 OpenAI-compatible server。
 
-### 8.5 Custom Provider
-
-支持个人用户接入自定义 endpoint：
-
-- 配置 Provider 名称。
-- 配置 Base URL。
-- 配置 API Key。
-- 选择 OpenAI-compatible 类型。
-- 探测模型列表。
-- 手动维护模型列表。
-- 将自定义模型加入路由和 Fallback。
 
 ### 8.6 Provider 管理
 

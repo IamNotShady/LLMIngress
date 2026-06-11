@@ -107,7 +107,7 @@ Gateway Service 包含以下核心能力：
 - 接收来自不同 AI Agent 的请求，优先提供 OpenAI-compatible API。
 - 识别请求来自哪个 Agent，并校验 Agent API Key。
 - 兼容不同 Agent 的请求协议，并统一转发到后端 Provider。
-- 根据 Agent API Key、Virtual Model Name、上下文长度、工具调用和成本偏好匹配 Route Policy。
+- 根据 Agent API Key、Virtual Model Name、任务类型、复杂度、上下文长度、工具调用和成本偏好匹配 Route Policy。
 - 为每次请求选择真实 Provider 和真实模型。
 - 把请求转发到 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、Ollama。
 - 支持流式响应，并把 Provider 返回结果转发给原始 Agent。
@@ -236,8 +236,6 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - 查看当前 Agent API Key 可使用的 Virtual Model Name。
 - 设置 Agent API Key 的默认 Virtual Model Name。
 
-OpenClaw 作为首批支持 Agent 接入。若 OpenClaw 支持 OpenAI-compatible endpoint，则通过上述通用 Agent 接入方式接入 LLMIngress。
-
 ### 6.5 Agent 状态
 
 - 未配置。
@@ -319,6 +317,13 @@ OpenClaw 作为首批支持 Agent 接入。若 OpenClaw 支持 OpenAI-compatible
 - Gateway 返回统一格式的错误，Agent 端可以区分错误类别。
 - 错误至少可区分：Key 无效、无权使用该 Virtual Model、超出预算、超出频率限制、上游 Provider 不可用、Fallback 全部失败、请求超时。
 - 每个错误附带 request id，可在 Activity 中定位到对应请求。
+
+### 7.7 Observability Export
+
+- Prometheus metrics。
+- OpenTelemetry traces。
+- Webhook events。
+- JSONL request logs。
 
 ## 8. Provider 能力
 
@@ -438,7 +443,6 @@ Subscription Provider 属于高风险探索能力，不进入 MVP 默认范围�
 - 支持用户手动覆盖价格。
 - 支持从 Provider 或模型 registry 同步价格。
 - 未知价格模型不参与成本优化路由，除非用户手动确认价格。
-- Prompt caching、cached input token、reasoning token 需要单独记录。
 
 ## 10. Virtual Model / Routing 能力
 
@@ -502,7 +506,7 @@ V1 路由采用确定性规则引擎，不默认额外调用 LLM 分类器。V2 
 
 成本偏好语义：
 
-- 省钱优先：在满足硬约束的前提下优先最低成本模型。
+- 省钱优先：在满足请求的基本要求，例如上下文长度和工具调用能力的前提下，优先最低成本模型。
 - 平衡：综合模型能力、价格、延迟和健康状态。
 - 质量优先：优先高能力模型，仅在成本或预算受限时降级。
 
@@ -565,11 +569,14 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 
 ## 12. 用量与预算
 
+成本统计优先采用 Provider 实际计费数据；无法获得实际数据时使用估算值，估算值在界面上明确标注。
+
 ### 12.1 Agent / API Key 用量统计
 
 - 按 Agent 统计请求数、Tokens、成本、失败率和平均延迟。
 - 按 Agent API Key 统计请求数、Tokens、成本、失败率和平均延迟。
 - 按 Agent API Key 记录 Budget / Limit 使用情况。
+- 单独记录 Prompt caching、cached input token 和 reasoning token。
 
 ### 12.2 Virtual Model / Provider / Model 统计
 
@@ -589,7 +596,6 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 - 支持达到阈值后阻断请求。
 - 支持手动重置或修改限制。
 - 支持限制 Agent API Key 可使用的 Virtual Model Name。
-- 成本统计优先采用 Provider 实际计费数据；无法获得实际数据时使用估算值，估算值在界面上明确标注。
 
 ### 12.4 Rate Limiting
 
@@ -747,7 +753,6 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 - Fallback Chain 耗尽。
 - Budget 接近阈值。
 - Rate Limit 高频触发。
-- Gateway 暴露公网但未配置 Console 鉴权。
 
 ### 14.8 Playground 页面
 
@@ -758,13 +763,6 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 - 查看模型响应。
 - 查看 routing metadata。
 - 对比不同 Virtual Model Name / Route Policy 的输出。
-
-### 14.9 Observability Export
-
-- Prometheus metrics。
-- OpenTelemetry traces。
-- Webhook events。
-- JSONL request logs。
 
 ## 15. 部署与数据
 
@@ -889,7 +887,7 @@ V1：
 - Prometheus / OpenTelemetry / Webhook export。
 - 配置导入导出。
 - Prompt caching 成本核算。
-- OpenClaw 专用接入模板。
+- 首批 Agent 专用接入模板，例如 Codex、Claude Code、Cursor、OpenClaw 等。
 
 V2：
 
@@ -898,6 +896,8 @@ V2：
 - Semantic cache。
 - Quota-aware key balancing。
 - 更多 Agent 专用接入模板。
+
+Subscription Provider 属于探索项，不纳入当前版本规划。
 
 ## 18. 产品边界
 
@@ -920,4 +920,4 @@ Non-goals：
 - 不支持 Custom Provider / 任意自定义 endpoint。
 - 不默认代理图像、音频、视频生成端点。
 - 不绕过 Provider ToS 或反爬限制。
-- 不保证所有商业 Agent 的全部原生功能可通过 Gateway endpoint 保留；OpenClaw 支持范围以其可配置 endpoint 能力为准。
+- 不保证所有商业 Agent 的全部原生功能可通过 Gateway endpoint 保留；支持范围以各 Agent 可配置 endpoint 能力为准。

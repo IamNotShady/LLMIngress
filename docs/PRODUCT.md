@@ -1,26 +1,26 @@
 # LLMIngress Product Design
 
-> LLMIngress 是一个面向本地 AI Agent 的 AI Gateway。AI Agent 只需要接入 LLMIngress 一个本地 endpoint；LLMIngress 在后端连接多个 Provider 和模型，并根据请求参数、上下文和使用场景自动匹配合适的模型。
+> LLMIngress 是一个面向 AI Agent 的 AI Gateway。AI Agent 只需要接入 LLMIngress 一个统一 endpoint；LLMIngress 在后端连接多个 Provider 和模型，并根据请求参数、上下文和使用场景自动匹配合适的模型。
 
 ## 1. 产品定位
 
-LLMIngress 是运行在本地的 AI Agent 模型入口层。用户把 Codex、CloudCode、Cursor、OpenCloud、Hermes 等不同 AI Agent 的模型请求接入 LLMIngress，再由 LLMIngress 统一完成 Provider 接入、模型选择、Fallback、成本记录和用量控制。
+LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、CloudCode、Cursor、OpenCloud、Hermes 等不同 AI Agent 的模型请求接入 LLMIngress，再由 LLMIngress 统一完成 Provider 接入、模型选择、Fallback、成本记录和用量控制。
 
 核心目标：
 
-- 让本地 AI Agent 只接入一个统一 Gateway。
+- 让 AI Agent 只接入一个统一 Gateway。
 - 让不同 AI Agent 复用同一套模型 Provider、API Key、订阅额度和本地模型。
 - 根据 AI Agent 请求的参数、上下文和使用场景自动匹配合适模型。
 - 降低 AI Agent 的模型使用成本。
-- 在一个本地控制台里看清每个 Agent 的模型、请求、Tokens、成本和失败情况。
+- 在一个控制台里看清每个 Agent 的模型、请求、Tokens、成本和失败情况。
 
 ## 2. 产品范围
 
 ### 2.1 核心范围
 
-- 多个本地 AI Agent 接入。
-- 本机运行的 Gateway。
-- 本机 Dashboard / Control Panel。
+- 多个 AI Agent 接入。
+- 可部署在个人电脑、本地服务器或云端服务器的 Gateway。
+- Dashboard / Control Panel。
 - Provider Key、订阅 Token、本地模型服务管理。
 - Agent 维度的路由、Fallback、预算、日志和统计。
 - 基于请求参数、任务类型、上下文长度、工具调用和模型能力的自动路由。
@@ -42,7 +42,7 @@ LLMIngress 是运行在本地的 AI Agent 模型入口层。用户把 Codex、Cl
 
 ### 3.2 典型 Agent
 
-优先面向这些本地 AI Agent：
+优先面向这些 AI Agent：
 
 - Codex。
 - CloudCode。
@@ -55,7 +55,7 @@ LLMIngress 是运行在本地的 AI Agent 模型入口层。用户把 Codex、Cl
 
 ### 4.1 接入多个 Agent
 
-作为个人用户，我希望把 Codex、CloudCode、Cursor、OpenCloud、Hermes 接到同一个本地 Gateway，这样我不需要分别在每个 Agent 里维护复杂的模型和 Key 配置。
+作为个人用户，我希望把 Codex、CloudCode、Cursor、OpenCloud、Hermes 接到同一个 Gateway，这样我不需要分别在每个 Agent 里维护复杂的模型和 Key 配置。
 
 ### 4.2 统一管理 Provider
 
@@ -79,7 +79,7 @@ LLMIngress 是运行在本地的 AI Agent 模型入口层。用户把 Codex、Cl
 
 ## 5. 产品信息架构
 
-本地控制台包含以下一级模块：
+控制台包含以下一级模块：
 
 - Agents：管理接入的个人 AI Agent。
 - Providers：管理模型 Provider、API Key、订阅 Token、本地模型。
@@ -109,7 +109,7 @@ LLMIngress 是运行在本地的 AI Agent 模型入口层。用户把 Codex、Cl
 
 ### 6.2 Agent 类型
 
-Agent 分类围绕本地 AI Agent 的使用形态：
+Agent 分类围绕 AI Agent 的使用形态：
 
 - Coding Agent。
 - Desktop Agent。
@@ -128,7 +128,7 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 
 ### 6.4 Agent 接入方式
 
-- 提供本地 Gateway Base URL。
+- 提供 Gateway Base URL。
 - 提供 Agent 专属 API Key。
 - 提供模型名，例如 `llmingress/auto` 或 `auto`。
 - 为不同 Agent 输出接入说明。
@@ -149,7 +149,7 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 
 ### 7.1 统一入口
 
-- 提供本机 OpenAI-compatible endpoint。
+- 提供 OpenAI-compatible endpoint。
 - 支持 `POST /v1/chat/completions`。
 - 支持 `POST /v1/responses`。
 - 支持 `GET /v1/models`。
@@ -192,7 +192,7 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 ### 7.5 Gateway 鉴权
 
 - 每个 Agent 使用独立 API Key。
-- API Key 只用于本机 Gateway。
+- API Key 只用于 LLMIngress Gateway。
 - Key 前缀建议使用 `llmi_`。
 - Dashboard 显示 key prefix。
 - 支持 key 轮换。
@@ -202,7 +202,7 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 
 ### 8.1 Provider 类型
 
-支持本地 AI Agent 常见 Provider 来源：
+支持 AI Agent 常见 Provider 来源：
 
 - API Key Provider。
 - Subscription Provider。
@@ -243,12 +243,12 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 
 ### 8.4 Local Provider
 
-支持个人本机模型服务：
+支持本地或自托管模型服务：
 
 - Ollama。
 - LM Studio。
 - llama.cpp。
-- 任意本机 OpenAI-compatible server。
+- 任意 OpenAI-compatible server。
 
 ### 8.5 Custom Provider
 
@@ -353,7 +353,7 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 
 ### 10.4 Task-specific Routing
 
-支持本地 AI Agent 常见任务类型：
+支持 AI Agent 常见任务类型：
 
 - Coding。
 - Reasoning。
@@ -480,7 +480,7 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 
 ### 14.1 首页
 
-- 显示本机 Gateway 状态。
+- 显示 Gateway 状态。
 - 显示最近请求。
 - 显示今日成本。
 - 显示今日 Tokens。
@@ -550,18 +550,18 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 - 查看 routing metadata。
 - 对比不同 route 的输出。
 
-## 15. 本机运行与数据
+## 15. 部署与数据
 
-### 15.1 本机 Gateway
+### 15.1 Gateway 部署
 
-- LLMIngress 在用户本机运行。
-- 默认监听 localhost。
+- LLMIngress 可以运行在个人电脑、本地服务器或云端服务器上。
+- 个人电脑部署时默认监听 localhost；服务器部署时可按需绑定内网或公网地址。
 - 默认不暴露到公网。
 - 支持自定义端口。
 - 支持开机自启。
 - 支持菜单栏或托盘状态显示。
 
-### 15.2 本地数据
+### 15.2 数据存储
 
 - 保存 Agent 配置。
 - 保存 Provider 配置。
@@ -588,17 +588,17 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 - Dashboard 不默认展示完整 Provider Key。
 - 支持轮换 Agent Key。
 
-### 16.2 本机优先
+### 16.2 用户自主管理
 
-- 默认所有配置和日志保存在本机。
-- 本地模型请求不离开本机。
+- 配置和日志保存在用户选择的部署环境中。
+- 本地模型请求不离开用户配置的本地或自托管模型服务。
 - 用户可选择是否记录 prompt / response。
 - 默认不上传请求内容。
 
 ### 16.3 网络安全
 
-- 默认只监听 `127.0.0.1`。
-- 用户显式开启后才允许 LAN 访问。
+- 个人电脑部署默认只监听 `127.0.0.1`；服务器部署可显式配置监听地址。
+- 用户显式配置后才允许 LAN 或公网访问。
 - Custom Provider URL 需要校验。
 - Cloud Provider 请求只发送到用户配置的 Provider。
 
@@ -626,12 +626,12 @@ Agent 分类围绕本地 AI Agent 的使用形态：
 
 ## 18. 产品边界
 
-LLMIngress 是本地 AI Agent Gateway。
+LLMIngress 是 AI Agent Gateway。
 
 产品焦点：
 
-- 让 AI Agent 通过一个本地 endpoint 接入模型能力。
+- 让 AI Agent 通过一个统一 endpoint 接入模型能力。
 - 在 Gateway 后方统一管理多个 Provider 和模型。
 - 根据请求参数、上下文、任务类型、工具调用和模型能力自动匹配合适模型。
 - 为 AI Agent 提供 Fallback、用量统计、成本控制和请求可观测性。
-- 保持本地优先的数据与凭据管理方式。
+- 保持用户自主管理的数据与凭据方式。

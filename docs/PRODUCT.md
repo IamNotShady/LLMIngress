@@ -49,10 +49,12 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 优先面向这些 AI Agent：
 
 - Codex。
-- CloudCode。
+- Claude Code。
 - Cursor。
-- OpenCloud。
+- OpenCode。
 - Hermes。
+- OpenClaw
+- GitHub Copilot
 - 其他可配置 OpenAI-compatible endpoint 的 AI Agent。
 
 ## 4. 核心用户故事
@@ -166,11 +168,12 @@ Agent 分类围绕 AI Agent 的使用形态：
 
 ### 6.3 首批接入对象
 
-- Codex。
-- CloudCode。
-- Cursor。
-- OpenCloud。
-- Hermes。
+- Codex
+- Claude Code
+- Cursor
+- GitHub Copilot
+- Hermes
+- OpenClaw
 - OpenAI-compatible custom agent。
 
 ### 6.4 Agent 接入方式

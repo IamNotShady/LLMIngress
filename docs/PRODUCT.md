@@ -21,13 +21,14 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 
 ### 2.1 核心范围
 
-- 多个 AI Agent 接入。
-- 可部署在个人电脑、本地服务器或云端服务器的 Gateway。
-- Dashboard / Control Panel。
-- Provider Key、订阅 Token、本地模型服务管理。
-- Agent 维度的路由、Fallback、预算、日志和统计。
-- 基于请求参数、任务类型、上下文长度、工具调用和模型能力的自动路由。
-- Provider 失败、限流或超时后的自动 Fallback。
+- AI Agent 统一接入：为多个 AI Agent 提供统一 Gateway endpoint、虚拟模型名和 Agent API Key。
+- 自动模型路由：基于请求参数、上下文长度、任务类型、工具调用、模型能力和使用场景选择真实 Provider 与模型。
+- Provider 与模型资源管理：集中管理 API Key、订阅额度、本地模型、自定义模型服务和多个 Provider 下的模型列表。
+- Agent 场景路由策略：覆盖 coding、repo 理解、terminal / shell、long context、reasoning、tool calling 等 AI Agent 高频场景。
+- 稳定性与 Fallback：在 Provider 限流、失败、超时或模型不可用时自动切换备用模型。
+- Agent 级可观测性：按 Agent 记录请求、模型命中、Tokens、成本、失败原因、Fallback 情况和延迟表现。
+- 接入配置引导：为不同 Agent 提供 Gateway URL、API Key、模型名和配置示例，降低接入成本。
+- 用户自主管理部署与数据：支持部署在个人电脑、本地服务器或云端服务器，并由用户掌控 Provider Key、模型配置、请求日志和数据存储位置。
 
 ## 3. 目标用户
 

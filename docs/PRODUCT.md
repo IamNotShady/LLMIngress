@@ -8,11 +8,14 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 
 核心目标：
 
-- 让 AI Agent 只接入一个统一 Gateway。
-- 让不同 AI Agent 复用同一套模型 Provider、API Key、订阅额度和本地模型。
-- 根据 AI Agent 请求的参数、上下文和使用场景自动匹配合适模型。
-- 降低 AI Agent 的模型使用成本。
-- 在一个控制台里看清每个 Agent 的模型、请求、Tokens、成本和失败情况。
+- 统一 AI Agent 接入入口：让 Codex、CloudCode、Cursor、OpenCode、Hermes 等不同 AI Agent 只接入一个 LLMIngress Gateway。
+- 自动匹配合适模型：根据请求参数、上下文长度、任务类型、工具调用、模型能力和使用场景选择真实 Provider 与模型。
+- 多 Provider / 多模型统一管理：集中管理 API Key、订阅额度、本地模型和自定义模型服务，让多个 AI Agent 复用同一套模型资源。
+- 面向 AI Agent 的路由策略：围绕 coding、repo 理解、terminal / shell、long context、reasoning、tool calling 等 Agent 高频场景设计路由规则。
+- 提升请求稳定性：当 Provider 限流、失败、超时或模型不可用时，自动切换到备用模型，减少 AI Agent 工作流中断。
+- Agent 级可观测性：按 Agent 查看请求、模型命中、Tokens、成本、失败原因、Fallback 情况和延迟表现。
+- 降低接入配置成本：为每个 Agent 提供清晰的 Gateway URL、API Key、模型名和配置示例，让接入过程尽量简单。
+- 用户自主管理部署与数据：支持部署在个人电脑、本地服务器或云端服务器，由用户掌控 Provider Key、模型配置、请求日志和数据存储位置。
 
 ## 2. 产品范围
 

@@ -1,311 +1,357 @@
 # LLMIngress Product Design
 
-> 本文是 LLMIngress 的产品设计文档，聚焦产品能力、用户场景和功能边界，不展开工程实现、CI、测试或发布流水线。
+> LLMIngress V1 是一个面向个人桌面端 AI Agent 的本地 AI Gateway。当前版本只服务个人用户把多个 AI Agent 接入统一网关，暂不面向企业、多用户团队、内部业务系统或通用 AI 应用 SDK 场景。
 
 ## 1. 产品定位
 
-LLMIngress 是一个面向 AI agents、AI applications、coding assistants 和自动化工作流的 AI Gateway / LLM Router。它位于客户端和模型供应商之间，把调用统一接入到 LLMIngress，再由 LLMIngress 根据路由规则、模型成本、任务类型、可用性和限额策略决定实际请求哪个模型。
+LLMIngress 是个人用户本机上的 AI Agent 入口层。用户把 Codex、CloudCode、Cursor、OpenCloud、Hermes 等不同 AI Agent 的模型请求接入 LLMIngress，再由 LLMIngress 统一完成 Provider 接入、模型选择、Fallback、成本记录和用量控制。
 
-核心产品目标：
+V1 的核心目标：
 
-- 降低 AI inference 成本。
-- 复用已有的 API key、订阅计划、本地模型和自定义模型服务。
-- 为不同 agent / app / coding assistant 提供统一的模型接入层。
-- 在一个 Dashboard 中配置路由、Provider、Fallback、Limits、Playground、模型价格和调用记录。
-- 支持 Cloud 版和 Self-hosted 版。
+- 让个人用户用一个本地网关管理多个 AI Agent。
+- 让不同 AI Agent 复用同一套模型 Provider、API Key、订阅额度和本地模型。
+- 降低个人 AI Agent 的模型使用成本。
+- 在一个桌面端控制台里看清每个 Agent 的模型、请求、Tokens、成本和失败情况。
+- 为后续企业版、团队版和应用接入版保留产品扩展空间，但不在 V1 实现。
 
-## 2. Gateway / Proxy 能力
+## 2. V1 产品范围
 
-### 2.1 统一 AI Gateway 入口
+### 2.1 当前版本只支持
 
-- 提供 OpenAI-compatible Chat Completions 入口：`POST /v1/chat/completions`。
-- 提供 OpenAI Responses 入口：`POST /v1/responses`。
-- 提供 Anthropic Messages 入口：`POST /v1/messages`。
-- 提供模型列表入口：`GET /v1/models`，返回 LLMIngress Auto 模型。
-- 客户端可以使用 `llmingress/auto` 或 `auto`，由 LLMIngress 在后端解析真实模型。
-- 同一个 Gateway 可以代理 API key provider、subscription provider、custom provider 和 local provider。
-- 支持把 OpenAI 形状请求转发到 Anthropic-only 模型，也支持 Anthropic 形状请求转发到对应供应商。
+- 个人桌面端使用。
+- 单个本机用户。
+- 多个个人 AI Agent 接入。
+- 本机运行的 Gateway。
+- 本机 Dashboard / Desktop Control Panel。
+- 个人 Provider Key、订阅 Token、本地模型服务管理。
+- Agent 维度的路由、Fallback、预算、日志和统计。
 
-### 2.2 请求透传
+### 2.2 当前版本不支持
 
-- 支持标准 OpenAI 请求字段透传，例如 `temperature`、`max_tokens`、`tools`、`tool_choice`、`response_format`、`stream`。
-- 支持 Anthropic Messages API 所需的 `anthropic-version`。
-- 支持工具调用相关字段。
-- 支持 provider-specific 请求参数配置。
-- 支持 buffered 和 stream 两种响应模式。
+- 企业组织管理。
+- 团队、多成员、RBAC、SSO。
+- 企业内部应用接入。
+- 面向 SaaS / Web App / Backend App 的通用 AI Gateway。
+- 多租户计费。
+- 企业审计、审批、合规报表。
+- Workspace 间资源共享。
+- 组织级 Provider 池。
+- 企业私有部署控制台。
 
-### 2.3 Streaming
+### 2.3 后续版本再考虑
 
-- 支持流式响应。
-- OpenAI endpoint 返回 OpenAI 风格 SSE chunk。
-- Anthropic endpoint 返回 Anthropic event block。
-- Routing 和 Fallback 可以与 streaming 一起工作。
-- 如果主模型在第一个 chunk 前失败，可以切换 fallback。
-- 如果主模型在 stream 中途失败，不做静默中途重试，连接会关闭。
+- 企业版。
+- 团队协作。
+- 组织级 Agent 管理。
+- 应用 SDK 接入。
+- 统一审计和权限体系。
+- Cloud 托管版。
 
-### 2.4 Gateway 鉴权
+## 3. 目标用户
 
-- 每个 agent 有自己的 LLMIngress API key。
-- Gateway 请求使用 `Authorization: Bearer llmi_...`。
-- 支持创建 agent 时生成 key。
-- 支持查看 key prefix。
-- 支持在可解密时返回完整 agent key。
-- 支持 rotate agent key。
-- Agent key 存储包含 hash、prefix、active 状态、过期时间和 last-used 时间。
+### 3.1 V1 Primary User
 
-### 2.5 Gateway 可观测响应头
+个人开发者、AI power user、独立开发者、重度 AI Agent 用户。
 
-每次请求可以通过响应头看到路由结果：
+典型特征：
 
-- `X-LLMIngress-Tier`：最终复杂度 tier。
-- `X-LLMIngress-Model`：实际服务请求的模型。
-- `X-LLMIngress-Provider`：实际供应商。
-- `X-LLMIngress-Confidence`：路由置信度。
-- `X-LLMIngress-Reason`：路由原因。
-- `X-LLMIngress-Specificity`：任务类型路由分类。
-- `X-LLMIngress-Fallback-From`：fallback 成功时的原始失败模型。
-- `X-LLMIngress-Fallback-Index`：fallback 链中命中的序号。
-- `X-LLMIngress-Fallback-Exhausted`：fallback 全部失败时标记。
+- 同时使用多个 AI coding agent 或 desktop agent。
+- 有多个模型账号或订阅，例如 OpenAI、Claude、Gemini、Copilot、本地模型。
+- 经常切换模型或 Provider。
+- 想知道每个 Agent 花了多少钱、用了多少 Token、失败率如何。
+- 希望简单请求走便宜模型，复杂任务走强模型。
 
-### 2.6 Gateway 错误体系
+### 3.2 典型 Agent
 
-产品侧有明确错误分类：
+V1 优先面向这些个人 Agent：
 
-- 认证错误：缺失 Authorization、空 Bearer token、key 格式错误、key 过期、key 不存在。
-- Provider 错误：缺少 provider key、未配置 provider。
-- Limits 错误：使用量超限、用户/IP rate limit、并发超限。
-- 请求校验错误：缺少 messages、messages 过长。
-- 服务端错误：内部错误。
+- Codex。
+- CloudCode。
+- Cursor。
+- OpenCloud。
+- Hermes。
+- 其他可配置 OpenAI-compatible endpoint 的 AI Agent。
 
-## 3. Agent / Client 接入能力
+### 3.3 非目标用户
 
-### 3.1 Agent 创建与管理
+V1 不优先服务：
 
-- 创建 agent。
-- Agent 名称自动 slug 化。
-- 设置 display name。
-- 设置 agent category。
-- 设置 agent platform。
-- 查看 agent 列表。
-- 查看单个 agent 信息。
-- 重命名 agent。
-- 修改 agent 类型。
-- 删除 agent。
-- 复制 agent，并复制相关配置。
-- 创建 agent 时生成 API key。
-- 旋转 agent API key。
-- 单个 agent 可独立配置 provider、routing、limits、recording。
+- 企业管理员。
+- 团队负责人。
+- 内部平台团队。
+- SaaS 应用开发者。
+- 需要组织级权限、审计、合规和集中结算的用户。
 
-### 3.2 Agent 分类
+## 4. 核心用户故事
 
-内置三类 agent：
+### 4.1 接入多个 Agent
 
-- AI agents。
-- App AI SDK。
-- Coding Assistant。
+作为个人用户，我希望把 Codex、CloudCode、Cursor、OpenCloud、Hermes 接到同一个本地 Gateway，这样我不需要分别在每个 Agent 里维护复杂的模型和 Key 配置。
 
-### 3.3 内置接入平台
+### 4.2 统一管理 Provider
 
-代码中内置的接入平台：
+作为个人用户，我希望在一个地方配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、本地 Ollama 等 Provider，这样所有 Agent 都可以复用这些模型能力。
 
-- OpenClaw。
-- Hermes Agent。
-- Nanobot。
-- Craft Agent。
-- Claude Code。
-- OpenCode。
-- OpenAI SDK。
-- Anthropic SDK。
-- Vercel AI SDK。
-- LangChain。
-- cURL。
-- Other。
+### 4.3 自动选择合适模型
 
-### 3.4 接入引导
+作为个人用户，我希望简单任务自动走便宜模型，复杂任务自动走更强模型，这样可以降低成本，同时不牺牲关键任务质量。
 
-Dashboard 中有 Connect Agent / setup 类页面和组件，面向不同 agent 或 SDK 生成接入说明，包括：
+### 4.4 Provider 失败自动切换
 
-- OpenClaw setup。
-- Hermes setup。
-- Nanobot setup。
-- Craft setup。
-- Claude Code setup。
-- OpenCode setup。
-- OpenAI SDK / Anthropic SDK / Vercel AI SDK / LangChain / cURL snippets。
-- API key 展示和复制。
+作为个人用户，我希望某个模型失败、限流或不可用时，Agent 请求能自动切换到备用模型，避免当前工作流中断。
 
-## 4. Provider 接入能力
+### 4.5 看清 Agent 消费
 
-### 4.1 Provider 类型
+作为个人用户，我希望按 Agent 查看 Tokens、成本、模型使用分布和请求历史，这样我能知道哪个 Agent 花费最高、哪些模型最常用。
 
-LLMIngress 支持四类 provider：
+### 4.6 控制预算
 
-- API key provider：用户使用自己的 provider API key。
-- Subscription provider：复用已有付费订阅或 token plan。
-- Custom provider：接入 OpenAI-compatible 或 Anthropic-compatible 私有/第三方 endpoint。
-- Local provider：接入本机或自托管环境中的本地模型服务。
+作为个人用户，我希望给单个 Agent 设置成本或 Token 上限，避免某个 Agent 因循环调用或错误配置造成过量消耗。
 
-### 4.2 内置 Provider Registry
+## 5. 产品信息架构
 
-默认支持的 provider：
+V1 桌面端控制台包含以下一级模块：
 
-- Alibaba Cloud / Qwen。
-- Anthropic。
-- BytePlus。
-- DeepSeek。
-- Fireworks AI。
-- Groq。
-- Kilo。
-- GitHub Copilot。
-- Command Code。
-- Google。
-- Kiro。
-- MiniMax。
-- Xiaomi MiMo。
-- Mistral。
-- Moonshot / Kimi。
-- NVIDIA NIM。
-- llama.cpp。
-- LM Studio。
-- Ollama。
-- Ollama Cloud。
+- Agents：管理接入的个人 AI Agent。
+- Providers：管理模型 Provider、API Key、订阅 Token、本地模型。
+- Routing：配置模型路由、复杂度分层、任务类型路由和 Fallback。
+- Activity：查看请求日志、消息详情、失败原因和响应元数据。
+- Usage：查看 Tokens、成本、模型分布和节省情况。
+- Limits：配置 Agent 级预算和用量限制。
+- Playground：在 LLMIngress 内测试路由和模型响应。
+- Settings：本机服务、端口、数据目录、安全和导出设置。
+
+## 6. Agent 接入能力
+
+### 6.1 Agent 管理
+
+- 创建 Agent。
+- 设置 Agent 名称。
+- 设置 Agent 类型。
+- 设置 Agent 接入平台。
+- 查看 Agent 列表。
+- 查看 Agent 状态。
+- 重命名 Agent。
+- 删除 Agent。
+- 复制 Agent 配置。
+- 为 Agent 生成专属 API Key。
+- 轮换 Agent API Key。
+- 开启或关闭 Agent 请求记录。
+
+### 6.2 Agent 类型
+
+V1 使用个人 Agent 分类，不引入企业或应用分类：
+
+- Coding Agent。
+- Desktop Agent。
+- Terminal Agent。
+- IDE Agent。
+- Other Agent。
+
+### 6.3 首批接入对象
+
+- Codex。
+- CloudCode。
+- Cursor。
+- OpenCloud。
+- Hermes。
+- OpenAI-compatible custom agent。
+
+### 6.4 Agent 接入方式
+
+- 提供本地 Gateway Base URL。
+- 提供 Agent 专属 API Key。
+- 提供模型名，例如 `llmingress/auto` 或 `auto`。
+- 为不同 Agent 输出接入说明。
+- 支持复制配置片段。
+- 支持校验 Agent 是否已经成功发起请求。
+
+### 6.5 Agent 状态
+
+- 未配置。
+- 已创建但未连接。
+- 已连接。
+- 最近有请求。
+- 最近请求失败。
+- Provider 不可用。
+- 超出预算限制。
+
+## 7. Gateway 能力
+
+### 7.1 统一入口
+
+- 提供本机 OpenAI-compatible endpoint。
+- 支持 `POST /v1/chat/completions`。
+- 支持 `POST /v1/responses`。
+- 支持 `GET /v1/models`。
+- V1 优先保证主流 Agent 能够用 OpenAI-compatible 方式接入。
+- Anthropic-compatible endpoint 可作为增强能力，但不是 V1 接入主路径。
+
+### 7.2 模型抽象
+
+- 默认模型为 `llmingress/auto`。
+- Agent 只需要配置一个虚拟模型名。
+- LLMIngress 根据路由结果选择真实 Provider 和真实模型。
+- 支持固定指定某个真实模型。
+- 支持按 Agent 配置默认模型。
+
+### 7.3 请求能力
+
+- 支持普通文本请求。
+- 支持 streaming 响应。
+- 支持 tools / function calling 透传。
+- 支持常用采样参数透传。
+- 支持 max tokens、temperature、top p 等参数。
+- 支持 provider-specific 参数。
+- 支持请求超时控制。
+- 支持客户端主动取消请求。
+
+### 7.4 响应元数据
+
+每次响应应返回可观测信息：
+
+- 实际命中的 Provider。
+- 实际命中的模型。
+- 路由 tier。
+- 路由原因。
+- Fallback 命中情况。
+- 估算输入 Tokens。
+- 估算输出 Tokens。
+- 估算成本。
+- 请求耗时。
+
+### 7.5 Gateway 鉴权
+
+- 每个 Agent 使用独立 API Key。
+- API Key 只用于本机 Gateway。
+- Key 前缀建议使用 `llmi_`。
+- Dashboard 显示 key prefix。
+- 支持 key 轮换。
+- 支持禁用旧 key。
+
+## 8. Provider 能力
+
+### 8.1 Provider 类型
+
+V1 支持个人用户常见 Provider 来源：
+
+- API Key Provider。
+- Subscription Provider。
+- Local Provider。
+- Custom Provider。
+
+### 8.2 API Key Provider
+
+支持个人用户输入自己的模型 API Key：
+
 - OpenAI。
-- OpenCode Go。
-- OpenCode Zen。
+- Anthropic。
+- Google Gemini。
 - OpenRouter。
+- DeepSeek。
 - xAI。
+- Mistral。
+- Qwen。
+- Moonshot / Kimi。
+- MiniMax。
+- Groq。
+- Fireworks AI。
 - Z.ai。
+- 其他兼容 Provider。
 
-### 4.3 Provider 连接管理
+### 8.3 Subscription Provider
 
-- 为指定 agent 添加 provider。
-- 保存 provider credential。
-- Provider credential 支持加密存储。
-- 返回 provider 状态时不暴露原始密钥。
-- 查看已连接 providers。
-- 查看 provider 是否 active。
-- 查看 provider key prefix。
-- 查看 provider label。
-- 查看 provider priority。
-- 查看 provider region。
-- 查看 model fetch 时间和 cached model count。
-- 删除 provider。
-- 一键 deactivate 当前 agent 所有 providers。
-- 支持同一个 provider 下多 key / 多 credential。
-- 支持 provider key 重命名。
-- 支持 provider key 排序。
-- 支持不同 auth type：`api_key`、`subscription`、`local`。
+支持复用个人已有订阅或 Token Plan：
 
-### 4.4 API Key Provider
-
-- 支持输入 provider API key。
-- 支持 key prefix / key length 等基本校验提示。
-- 支持连接后自动发现模型。
-- 支持连接后重新计算 tier assignment。
-- 支持刷新单个 provider 的模型列表。
-- 支持刷新当前 agent 下全部 provider 的模型列表。
-
-### 4.5 Subscription Provider
-
-可复用订阅或 token plan，把订阅额度作为 primary route，再用 API key provider 做 fallback。
-
-代码中存在订阅配置的 provider 包括：
-
-- Anthropic / Claude Max 或 Pro。
-- BytePlus / ModelArk Coding Plan。
-- OpenAI / ChatGPT Plus、Pro、Team。
-- MiniMax Coding Plan。
-- Xiaomi MiMo Token Plan。
-- Qwen Token Plan。
-- Moonshot / Kimi Coding Plan。
-- Ollama Cloud。
-- Kiro subscription。
-- Z.ai / GLM Coding Plan。
-- OpenCode Go。
+- ChatGPT Plus / Pro / Team。
+- Claude Pro / Max。
+- GitHub Copilot。
 - Gemini / Google sign-in。
-- xAI / Grok subscription。
-- GitHub Copilot subscription。
-- Command Code subscription。
+- Kimi Coding Plan。
+- GLM Coding Plan。
+- OpenCode Go。
+- 其他可通过 Token、OAuth 或 Device Code 接入的订阅。
 
-订阅接入模式包括：
+### 8.4 Local Provider
 
-- OAuth popup。
-- Device code。
-- Subscription token。
-- Provider-specific token。
-
-### 4.6 Custom Provider
-
-- 支持添加自定义 provider。
-- 支持 OpenAI-compatible `POST /v1/chat/completions`。
-- 支持 Anthropic-compatible `POST /v1/messages`。
-- 支持配置 base URL。
-- 支持配置 provider name。
-- 支持可选 API key。
-- 支持探测模型列表。
-- 支持手动保存模型列表。
-- 支持更新自定义 provider。
-- 支持删除自定义 provider。
-- 支持把 custom provider 当成普通 route / fallback 使用。
-- 支持自定义 provider 的模型显示名。
-- 自定义 provider 请求仍会记录 token、latency 等指标；未知模型 cost 可能为 0。
-
-### 4.7 Local Model Provider
-
-自托管场景支持本地模型：
+支持个人本机模型服务：
 
 - Ollama。
 - LM Studio。
 - llama.cpp。
+- 任意本机 OpenAI-compatible server。
 
-能力包括：
+### 8.5 Custom Provider
 
-- 探测本地服务。
-- 获取本地模型列表。
-- 同步 Ollama 模型。
-- 将本地模型绑定到 tier、specificity 或 fallback。
-- 与 cloud provider 混用。
-- 本地模型 API cost 记录为 0。
-- 本地请求不需要离开用户机器或基础设施。
+支持个人用户接入自定义 endpoint：
 
-### 4.8 Model Discovery
+- 配置 Provider 名称。
+- 配置 Base URL。
+- 配置 API Key。
+- 选择 OpenAI-compatible 类型。
+- 探测模型列表。
+- 手动维护模型列表。
+- 将自定义模型加入路由和 Fallback。
 
-- 连接 provider 后自动发现可用模型。
-- 支持按 agent 获取 available models。
-- 支持 provider model cache。
-- 支持模型价格、上下文窗口、quality score、capabilities、input modalities。
-- 支持从 provider 原生模型列表、OpenRouter pricing cache、models.dev、内置 fallback 数据中合并模型信息。
-- 支持 OpenCode Go 等 gateway model 映射到底层模型身份。
-- 支持模型能力标记，例如 reasoning、code、stream、tools、text/image/audio/video modality。
+### 8.6 Provider 管理
 
-### 4.9 Model Prices
+- 添加 Provider。
+- 删除 Provider。
+- 启用或禁用 Provider。
+- 刷新模型列表。
+- 查看 Provider 可用模型。
+- 查看 Provider 最近连接状态。
+- 为同一 Provider 保存多个 Key。
+- 给 Key 设置 label。
+- 调整 Key 优先级。
+- 查看 Key prefix，不展示完整密钥。
 
-- Dashboard 可查看模型价格。
-- 后端提供 `GET /api/v1/model-prices`。
-- 支持 pricing health。
-- 支持手动刷新 pricing cache。
-- 支持按模型展示 input/output token 价格。
-- 支持 provider/model 价格用于成本统计和路由参考。
+## 9. 模型发现与模型库
 
-### 4.10 Free Models
+### 9.1 模型发现
 
-- Dashboard 有 Free Models 页面。
-- 后端提供 free models 数据接口。
-- 支持展示免费模型及免费 provider。
-- 支持把免费模型与付费模型混合进 routing 和 fallback。
+- 连接 Provider 后自动拉取模型列表。
+- 支持手动刷新模型。
+- 支持本地模型同步。
+- 支持自定义模型手动添加。
+- 支持模型不可用提示。
 
-## 5. Routing 能力
+### 9.2 模型元数据
 
-### 5.1 Default Routing
+每个模型应尽量展示：
 
-- 每个 agent 有 default model。
-- 当 complexity routing 关闭，或没有命中其他路由规则时走 default。
-- Dashboard 可切换 default route。
-- Default route 可作为最终兜底。
+- Provider。
+- Model ID。
+- Display name。
+- Context window。
+- 输入价格。
+- 输出价格。
+- 是否支持 streaming。
+- 是否支持 tools。
+- 是否适合 coding。
+- 是否适合 reasoning。
+- 是否支持多模态输入。
 
-### 5.2 Complexity Routing
+### 9.3 模型价格
 
-支持按请求复杂度自动路由到不同 tier：
+- 展示模型价格。
+- 标记免费模型。
+- 标记本地模型成本为 0。
+- 用价格估算 Agent 消费。
+- 用价格参与路由建议。
+
+## 10. Routing 能力
+
+### 10.1 Default Routing
+
+- 每个 Agent 有一个默认 route。
+- 默认 route 可以是 `auto`。
+- 默认 route 也可以固定到某个 Provider / Model。
+- 当其他规则都不命中时使用默认 route。
+
+### 10.2 Complexity Routing
+
+V1 支持按请求复杂度分层：
 
 - Simple。
 - Standard。
@@ -314,605 +360,316 @@ LLMIngress 支持四类 provider：
 
 能力包括：
 
-- 对每个 incoming prompt 打分。
-- 根据分数映射到 tier。
-- 每个 tier 可绑定不同 primary model。
-- 简单请求路由到便宜模型。
-- 复杂请求路由到高质量模型。
-- 支持开启/关闭 complexity routing。
-- 支持查看当前 complexity routing 状态。
-- 支持 reset all tier overrides。
+- 判断请求复杂度。
+- 简单任务走低成本模型。
+- 常规任务走平衡模型。
+- 复杂任务走高质量模型。
+- 推理任务走 reasoning 模型。
+- 每个 tier 可配置 primary model。
+- 每个 tier 可配置 fallback chain。
+- 支持关闭 complexity routing。
 
-### 5.3 Scoring
+### 10.3 Coding-oriented Routing
 
-Scoring 需要覆盖多维度请求特征。能力包括：
+因为 V1 面向 AI Agent，尤其是 coding agent，需要优先支持 coding 场景：
 
-- Keyword-based signals。
-- Structural signals。
-- Contextual signals。
-- 复杂度关键词识别。
-- token count、嵌套深度、code/prose ratio、条件逻辑、constraint density 等结构信号。
-- expected output length、repetition、tool count、conversation depth 等上下文信号。
-- 返回 tier、score、confidence、reason。
+- 识别代码生成。
+- 识别代码解释。
+- 识别代码修复。
+- 识别测试生成。
+- 识别 repo / file 相关请求。
+- 识别 terminal / shell 相关请求。
+- 识别长上下文任务。
+- 将 coding 请求路由到更适合代码的模型。
 
-### 5.4 Session Momentum
+### 10.4 Task-specific Routing
 
-- 记录最近 tier 分配。
-- 短 follow-up 消息可继承上一轮上下文 momentum。
-- 避免 `"yes"`、`"do it"` 等短消息被错误降级到过低 tier。
-
-### 5.5 Tier Override
-
-- 每个 tier 可手动绑定指定 model route。
-- 可设置 provider。
-- 可设置 auth type。
-- 可指定 provider key label。
-- 可清除 tier override。
-- 可为每个 tier 设置 response mode。
-- 可为每个 tier 设置 fallback chain。
-
-### 5.6 Task-specific / Specificity Routing
-
-在 complexity 之上，支持任务类型路由。内置任务类型：
+V1 可保留个人 Agent 常见任务类型：
 
 - Coding。
+- Reasoning。
 - Web browsing。
 - Data analysis。
-- Image generation。
-- Video generation。
-- Social media。
-- Email management。
-- Calendar management。
-- Trading。
+- Writing。
+- Terminal / shell。
+- Long context。
 
-能力包括：
+不优先支持面向企业流程的任务类型，例如 CRM、客服、内部审批等。
 
-- 根据关键词和工具名检测任务类型。
-- 每个 category 可单独启用或关闭。
-- 每个 category 可绑定指定 model route。
-- 每个 category 可配置 response mode。
-- 每个 category 可配置 fallback chain。
-- 每个 category 可清除 override。
-- 支持 reset all specificity settings。
-- 用户可以在消息记录中标记 miscategorized，用于反馈分类错误。
+### 10.5 Header Routing
 
-### 5.7 Header / Custom Routing
+部分 Agent 允许自定义 header 时，可以通过 header 强制路由：
 
-LLMIngress 支持基于 HTTP header 的自定义路由。产品能力包括：
+- `x-llmingress-tier`。
+- `x-llmingress-task`。
+- `x-llmingress-model`。
 
-- 创建 header tier。
-- 配置 header key。
-- 配置 header value。
-- 设置 header tier 名称。
-- 设置 badge color。
-- 启用/禁用 header tier。
-- 更新 header tier。
-- 删除 header tier。
-- 对 header tier 排序。
-- 为 header tier 设置 model override。
-- 为 header tier 设置 response mode。
-- 为 header tier 设置 fallback chain。
-- 清除 header tier override。
-- 清除 header tier fallbacks。
-- 查看已见过的 headers。
-- 支持跨 agent 复用 seen headers。
+如果某些 Agent 不支持自定义 header，则使用默认 route 或 Agent 级配置。
 
-### 5.8 Request Header Override
+## 11. Fallback 能力
 
-客户端可直接通过 request header 强制路由：
-
-- `x-llmingress-tier`：强制指定 complexity tier。
-- `x-llmingress-specificity`：强制指定任务类型。
-- Header override 会跳过自动 scoring / detection。
-- Header override 的 confidence 为 1.0。
-
-### 5.9 Response Mode
-
-- 当前支持 `buffered`。
-- 当前支持 `stream`。
-- Tier、specificity、header tier 都可以配置 response mode。
-
-### 5.10 Output Modality
-
-- 当前共享类型中默认 output modality 为 text。
-- 模型 discovery 中会识别 input modality 和模型 capability。
-- 当前 route 输出侧产品能力主要聚焦文本响应。
-
-## 6. Fallback 能力
-
-### 6.1 Fallback Chain
+### 11.1 Fallback Chain
 
 - 每个 tier 可配置 fallback models。
-- 每个 specificity category 可配置 fallback models。
-- 每个 header tier 可配置 fallback models。
-- Fallback 按配置顺序执行。
-- 每个 tier 最多可配置 5 个 fallback model。
-- Fallback model 可以来自不同 provider。
-- Local model 和 cloud model 可混合在同一 chain。
-- Subscription primary 可搭配 API key provider fallback。
+- 每个 Agent 可配置全局 fallback。
+- 每个 Provider 可配置备用 Provider。
+- Fallback 按顺序尝试。
+- 每条链最多建议 5 个备用模型。
+- 可混合 API Key、Subscription、本地模型和 Custom Provider。
 
-### 6.2 Fallback 触发条件
+### 11.2 触发条件
 
-- Provider 返回 HTTP 4xx 或 5xx 时可触发 fallback。
-- Rate limit、provider outage、bad request、overload 等都可触发。
-- 424 表示 LLMIngress 自己的 fallback chain exhausted，不再触发新的 fallback。
-- Provider 连接打开但超时，也可通过 per-attempt timeout 进入 fallback。
+- Provider 5xx。
+- Provider 429。
+- Provider timeout。
+- Provider 认证失败。
+- 模型不可用。
+- 请求被 Provider 拒绝。
+- Streaming 首包前失败。
 
-### 6.3 Fallback 结果记录
+### 11.3 用户可见结果
 
-- 记录 primary failure。
-- 记录 fallback success。
-- 响应头展示 fallback 来源和命中序号。
-- Fallback 全部失败时返回 424 并带 exhausted 标记。
+- 展示原始失败模型。
+- 展示最终成功模型。
+- 展示 fallback 次数。
+- 展示每次失败原因。
+- 在 Activity 中记录 fallback 事件。
 
-## 7. Limits / Notifications 能力
+## 12. 用量与预算
 
-### 7.1 Usage Limits
+### 12.1 Agent 级用量统计
 
-可按 agent 设置用量规则：
+- 按 Agent 统计请求数。
+- 按 Agent 统计输入 Tokens。
+- 按 Agent 统计输出 Tokens。
+- 按 Agent 统计成本。
+- 按 Agent 统计失败率。
+- 按 Agent 统计平均延迟。
 
-- Metric：tokens。
-- Metric：cost。
-- Period：hour。
-- Period：day。
-- Period：week。
-- Period：month。
-- Threshold：用户自定义阈值。
+### 12.2 Provider / Model 统计
 
-### 7.2 Rule Action
+- 按 Provider 查看成本。
+- 按 Model 查看成本。
+- 查看最常用模型。
+- 查看最贵模型。
+- 查看失败最多的模型。
 
-规则 action 支持：
+### 12.3 预算限制
 
-- `notify`：发送通知。
-- `block`：达到阈值后阻断请求。
-- `both`：通知并阻断。
+- 给单个 Agent 设置 Token 上限。
+- 给单个 Agent 设置成本上限。
+- 支持小时、天、周、月周期。
+- 支持达到阈值后提醒。
+- 支持达到阈值后阻断请求。
+- 支持手动重置或修改限制。
 
-### 7.3 Hard Limit
+### 12.4 成本节省
 
-- Hard limit 命中后，后续 proxy 请求返回 HTTP 429。
-- block 规则在每次请求时检查。
-- block 在下一个周期重置。
+- 估算 auto routing 相比固定强模型节省的成本。
+- 展示节省金额。
+- 展示节省百分比。
+- 展示低成本模型命中比例。
 
-### 7.4 Email Alert
+## 13. Activity / Logs
 
-- 支持配置通知邮箱。
-- 支持邮件服务商配置。
-- 支持测试邮件服务商配置。
-- 支持测试已保存配置。
-- 支持删除邮件服务商配置。
-- 支持查看 notification logs。
-- 支持手动触发 threshold check。
+### 13.1 请求日志
 
-### 7.5 Email Provider
-
-邮件发送 provider 支持：
-
-- Resend。
-- Mailgun。
-- SendGrid。
-
-## 8. Observability / Analytics 能力
-
-### 8.1 Overview Dashboard
-
-Dashboard 概览能力包括：
-
-- 今日 token。
-- 今日 cost。
-- message 数量。
-- token usage timeseries。
-- cost usage timeseries。
-- message usage timeseries。
-- cost by model。
-- recent activity。
-- active skills / active activity。
-- 是否已有数据。
-- 是否已连接 provider。
-
-### 8.2 Token Analytics
-
-- 支持按时间范围查看 token 使用。
-- 支持 hourly 和 daily token timeseries。
-- 支持 input tokens 和 output tokens 拆分。
-- 支持与上一周期计算 trend percentage。
-- 支持按 agent 过滤。
-
-### 8.3 Cost Analytics
-
-- 支持按时间范围查看 cost。
-- 支持 hourly 和 daily cost timeseries。
-- 支持 cost by model。
-- 支持 weekly cost summary。
-- 支持 trend percentage。
-- 支持按 agent 过滤。
-
-### 8.4 Savings Analytics
-
-- 支持 savings 汇总。
-- 支持 savings timeseries。
-- 支持 baseline candidates。
-- 支持指定 baseline 计算节省。
-- 支持按 agent 过滤。
-
-### 8.5 Agent-level Analytics API
-
-- Agent 可用自己的 API key 查询 usage。
-- Agent 可用自己的 API key 查询 costs。
-- 返回当前 agentName。
-
-### 8.6 Public Stats
-
-可选公开统计接口，默认关闭：
-
-- public usage。
-- public free models。
-- provider tokens。
-- agent tokens。
-- free providers。
-
-该能力主要用于 LLMIngress Cloud / 公开状态页 / 产品展示类场景。
-
-### 8.7 Real-time Dashboard Updates
-
-- Dashboard 通过 SSE 接收事件。
-- 支持 agent、ingest 等事件类型。
-- 兼容 legacy ping 事件。
-- 用于让 Dashboard 在 agent/provider/message 状态变化后刷新。
-
-## 9. Messages / Recording 能力
-
-### 9.1 Message Log
-
-Dashboard 支持消息日志查询：
-
-- 按时间范围筛选。
-- 按 provider 筛选。
-- 按 service type 筛选。
-- 按 cost min / max 筛选。
+- 查看所有 Agent 请求。
+- 按 Agent 筛选。
+- 按 Provider 筛选。
+- 按 Model 筛选。
 - 按状态筛选。
-- 按是否 recorded 筛选。
+- 按时间范围筛选。
+- 按成本范围筛选。
 - 按 routing tier 筛选。
-- 按 specificity category 筛选。
-- 按 header tier 筛选。
-- Cursor pagination。
-- 单页 limit 上限保护。
 
-### 9.2 Message Details
+### 13.2 请求详情
 
-- 查看单条 message details。
-- 查看请求/响应相关记录。
+详情页展示：
+
+- Agent。
+- Provider。
+- Model。
+- Routing tier。
+- Routing reason。
+- Fallback 信息。
+- Tokens。
+- Cost。
+- Latency。
+- Status。
+- Error message。
+- Request metadata。
+- Response metadata。
+
+### 13.3 内容记录
+
+- 默认可只记录 metadata。
+- 用户可选择是否记录 prompt / response 内容。
+- 可按 Agent 开关内容记录。
+- 可删除单条记录。
+- 可一键清空某个 Agent 的记录。
+
+## 14. Desktop Dashboard
+
+### 14.1 首页
+
+- 显示本机 Gateway 状态。
+- 显示最近请求。
+- 显示今日成本。
+- 显示今日 Tokens。
+- 显示活跃 Agent。
+- 显示 Provider 健康状态。
+
+### 14.2 Agents 页面
+
+- Agent 列表。
+- 创建 Agent。
+- Agent 连接状态。
+- Agent API Key。
+- Agent 接入说明。
+- Agent 用量摘要。
+- Agent 设置入口。
+
+### 14.3 Providers 页面
+
+- Provider 列表。
+- 添加 Provider。
+- Provider Key 管理。
+- 本地模型状态。
+- 模型列表刷新。
+- Provider 连接测试。
+
+### 14.4 Routing 页面
+
+- Default route。
+- Complexity tier route。
+- Coding task route。
+- Fallback chain。
+- Model picker。
+- Provider picker。
+- 参数配置。
+
+### 14.5 Usage 页面
+
+- Token chart。
+- Cost chart。
+- Agent cost breakdown。
+- Model cost breakdown。
+- Provider cost breakdown。
+- Savings summary。
+
+### 14.6 Activity 页面
+
+- 请求列表。
+- 请求详情。
+- Fallback 事件。
+- Error 事件。
+- Recording 管理。
+
+### 14.7 Limits 页面
+
+- Agent limit rules。
+- 成本限制。
+- Token 限制。
+- 通知配置。
+- 阻断策略。
+
+### 14.8 Playground 页面
+
+- 在 LLMIngress 内测试 prompt。
+- 选择 Agent。
+- 选择 route。
+- 查看模型响应。
 - 查看 routing metadata。
-- 查看 provider、model、tier、cost、tokens、latency 等信息。
+- 对比不同 route 的输出。
 
-### 9.3 Message Recording
+## 15. 本机运行与数据
 
-- 每个 agent 可开启或关闭 record messages。
-- Proxy 请求时可捕获请求与响应内容。
-- Dashboard 有 recorded message drawer / viewer。
-- 支持删除单条 message recording。
+### 15.1 本机 Gateway
 
-### 9.4 Message Feedback
-
-- 支持对 message 设置 feedback rating。
-- 支持 feedback tags。
-- 支持 feedback details。
-- 支持清除 feedback。
-
-### 9.5 Specificity Feedback
-
-- 支持标记某条消息任务分类错误。
-- 支持清除 miscategorized 标记。
-
-## 10. Playground 能力
-
-### 10.1 Playground Run
-
-- Dashboard 内置 Playground。
-- 支持从 Playground 发起模型请求。
-- Playground 请求走 LLMIngress routing 能力。
-- 支持 streaming run。
-- 支持自定义 request headers。
-- 支持展示响应 headers。
-- Playground run 会被记录为 playground tier。
-
-### 10.2 Playground Columns
-
-- 支持多列对比式 Playground。
-- 支持为不同 column 选择模型或 route。
-- 支持运行结果对比。
-
-### 10.3 Playground History
-
-- 查看 Playground run 历史。
-- 查看单次 run 详情。
-- Star / unstar run。
-- 标记 best column。
-
-## 11. Model Parameter 能力
-
-### 11.1 Provider-specific 参数
-
-LLMIngress 有模型参数 schema 能力，支持给 route 配置 provider/model 兼容参数。
-
-参数分组包括：
-
-- generation_length。
-- sampling。
-- reasoning。
-- tooling。
-- output_format。
-- observability。
-- provider_metadata。
-
-### 11.2 参数配置范围
-
-- 可查询某个 provider/auth/model 的参数规格。
-- 可查询有哪些模型支持可配置参数。
-- 可列出当前 agent 已配置的 model params。
-- 可为 route 保存 model params。
-- 可删除 route 的 model params。
-- 保存时会校验参数是否为 JSON object。
-- 保存时会按 provider/model specs 裁剪不兼容参数。
-- 保存时会校验 boolean、enum、integer、number、string 等类型。
-
-## 12. Dashboard / 管理后台能力
-
-### 12.1 Workspace
-
-- 展示用户 workspace。
-- 展示 agent 列表。
-- 创建 agent。
-- 进入指定 agent 的管理视图。
-
-### 12.2 Routing 页面
-
-- 配置 default route。
-- 配置 complexity tiers。
-- 配置 specificity routing。
-- 配置 header tiers。
-- 选择 model。
-- 查看 provider / model capability badges。
-- 配置 response mode。
-- 配置 fallback list。
-- 配置 model params。
-- 刷新模型。
-- 查看 routing status。
-- 查看 connect provider 状态。
-
-### 12.3 Provider 连接页面
-
-- 添加 provider。
-- 选择 API key tab。
-- 选择 subscription tab。
-- 选择 local tab。
-- 连接 custom provider。
-- 查看 OAuth / device code / token flow 的 detail view。
-- 配置 region。
-- 配置 provider key label。
-- 展示 provider icon 和 provider banner。
-
-### 12.4 Overview 页面
-
-- 展示成本、token、message 等核心指标。
-- 展示 usage chart。
-- 展示 cost chart。
-- 展示 cost by model。
-- 展示 savings。
-- 展示 recent activity。
-
-### 12.5 Messages 页面
-
-- 展示消息表。
-- 打开消息详情。
-- 展示 recorded request / response。
-- 反馈消息质量。
-- 标记分类错误。
-- 删除 recording。
-
-### 12.6 Limits 页面
-
-- 展示 limit rules。
-- 创建 rule。
-- 编辑 rule。
-- 删除 rule。
-- 查看 limit history / notification logs。
-- 配置 email provider。
-- 配置 notification email。
-
-### 12.7 Playground 页面
-
-- 多列请求测试。
-- 选择模型。
-- 输入 prompt。
-- 配置请求 headers。
-- 查看响应。
-- 查看 run history。
-- 标记 starred / best。
-
-### 12.8 Model Prices 页面
-
-- 展示模型价格。
-- 展示模型 provider。
-- 支持模型价格筛选。
-
-### 12.9 Free Models 页面
-
-- 展示免费模型列表。
-- 展示免费 provider 信息。
-- 作为低成本路由选型入口。
-
-### 12.10 Settings 页面
-
-- Agent 相关设置。
-- Agent 重命名。
-- Agent 类型修改。
-- Message recording 开关。
-- Agent key 查看 / rotate。
-- Agent 删除。
-
-### 12.11 Account / Auth 页面
-
-- Login。
-- Register。
-- Reset password。
-- Account 页面。
-- Setup 页面。
-- First admin 创建。
-
-## 13. Authentication / Account 能力
-
-### 13.1 登录方式
-
-- Email/password。
-- Google OAuth。
-- GitHub OAuth。
-- Discord OAuth。
-
-OAuth provider 是否启用取决于对应环境变量是否配置。
-
-### 13.2 邮箱验证与重置密码
-
-- 支持 signup verification email。
-- 支持 reset password email。
-- 是否强制 email verification 取决于生产环境和 email provider 配置。
-- 支持 auto sign-in after verification。
-
-### 13.3 首次安装 Setup
-
-- 判断是否需要 setup。
-- 第一个创建的账号成为 admin。
-- Setup status 返回 self-hosted 状态。
-- Setup status 返回已启用 social providers。
-- Setup status 返回 Ollama 是否可用。
-- Setup status 返回 local LLM host。
-
-### 13.4 Auth Rate Limit
-
-产品上对敏感认证接口有 rate limit：
-
-- sign-in。
-- sign-up。
-- forget-password / forgot-password / reset-password。
-- verify-email / send-verification-email。
-
-## 14. Self-hosted / Cloud 能力
-
-### 14.1 Cloud
-
-- 用户可以使用 LLMIngress Cloud。
-- Cloud 由 LLMIngress 托管，降低部署门槛。
-- Cloud 版提供 sign in / sign up。
-- Cloud rate limit 与 plan 相关，并在 dashboard 中展示。
-
-### 14.2 Self-hosted
-
-- 支持 Docker self-hosted。
-- 支持 quick install script。
-- 支持 Docker Compose。
-- 支持 Docker Run + BYO PostgreSQL。
-- 默认端口为 2099。
-- 默认绑定 localhost，避免直接暴露到 LAN。
+- LLMIngress 在用户本机运行。
+- 默认监听 localhost。
+- 默认不暴露到公网。
 - 支持自定义端口。
-- 支持 LAN 暴露配置。
-- 支持 PostgreSQL 持久化。
-- 支持自动数据库迁移。
-- 支持升级 Docker image 后保留数据。
-- 支持本地模型 provider。
+- 支持开机自启。
+- 支持菜单栏或托盘状态显示。
 
-### 14.3 部署配置能力
+### 15.2 本地数据
 
-Self-hosted / backend 支持通过环境变量配置：
+- 保存 Agent 配置。
+- 保存 Provider 配置。
+- 保存模型缓存。
+- 保存请求 metadata。
+- 保存可选请求内容。
+- 保存统计数据。
 
-- PostgreSQL。
-- Auth secret。
-- Public URL。
-- Port。
-- Bind address。
-- CORS origin。
-- Rate limit。
-- DB pool。
-- Email provider。
-- OAuth login providers。
-- Telemetry opt-out。
-- Public stats 开关。
-- Local LLM host。
-- Dedicated encryption key。
+### 15.3 数据导出与清理
 
-### 14.4 健康检查
+- 导出请求记录。
+- 导出成本报表。
+- 清空日志。
+- 删除 Agent 数据。
+- 删除 Provider 凭据。
 
-- 提供 `GET /api/v1/health`。
-- 返回 `status: healthy`。
-- 返回 uptime seconds。
+## 16. 安全与隐私
 
-## 15. Security / Privacy 相关产品能力
+### 16.1 凭据保护
 
-### 15.1 凭据保护
+- Provider API Key 加密存储。
+- Subscription Token 加密存储。
+- Agent API Key hash 存储。
+- Dashboard 不默认展示完整 Provider Key。
+- 支持轮换 Agent Key。
 
-- Provider API key 加密存储。
-- OAuth / subscription token blob 加密存储。
-- Email provider API key 加密存储。
-- Agent API key 以 hash + prefix 存储，同时可保存加密 key 以便展示。
-- 可使用 `LLMINGRESS_ENCRYPTION_KEY` 作为独立加密密钥。
-- 未设置独立加密密钥时可回退到 `BETTER_AUTH_SECRET`。
+### 16.2 本机优先
 
-### 15.2 自托管隐私
+- 默认所有配置和日志保存在本机。
+- 本地模型请求不离开本机。
+- 用户可选择是否记录 prompt / response。
+- 默认不上传请求内容。
 
-- Self-hosted 请求经过用户自己的 LLMIngress 实例。
-- Local model 请求可以留在用户机器或内网。
-- Dashboard 默认同源部署，生产环境不开放泛 CORS。
-- Self-hosted local/custom provider 可以访问用户基础设施内的服务。
+### 16.3 网络安全
 
-### 15.3 Custom Provider SSRF 防护
+- 默认只监听 `127.0.0.1`。
+- 用户显式开启后才允许 LAN 访问。
+- Custom Provider URL 需要校验。
+- Cloud Provider 请求只发送到用户配置的 Provider。
 
-- 自定义 provider URL 会进行校验。
-- Cloud 场景下限制私有 IP 范围。
-- Self-hosted 场景允许访问本地或内网 provider。
+## 17. V1 关键指标
 
-### 15.4 请求限流与并发保护
+### 17.1 激活指标
 
-- 每个 agent 有默认 rate limit。
-- 支持用户级 rate limit。
-- 支持 IP 级 rate limit。
-- 支持并发请求 slot 限制。
-- Auth 接口有单独限流。
+- 用户创建第一个 Agent。
+- 用户成功连接第一个 Provider。
+- 用户完成第一次 Agent 请求。
 
-## 16. 主要用户场景
+### 17.2 留存指标
 
-### 16.1 个人 Agent 成本控制
+- 每日活跃 Agent 数。
+- 每日 Gateway 请求数。
+- 每周查看 Usage 页次数。
+- 每周至少一次路由配置调整。
 
-- 接入 OpenClaw / Hermes / Nanobot / Craft。
-- 使用已有订阅作为 primary。
-- 配置 API key provider 做 fallback。
-- 为简单任务路由到免费或低价模型。
-- 为复杂任务路由到高质量模型。
-- 设置预算阈值和通知。
+### 17.3 成本价值指标
 
-### 16.2 AI 应用统一模型层
+- Auto routing 命中低成本模型比例。
+- Fallback 成功次数。
+- 估算节省金额。
+- 超预算阻断次数。
 
-- 应用只接入 LLMIngress endpoint。
-- LLMIngress 负责 provider key、model routing、fallback、cost tracking。
-- 支持 OpenAI SDK、Anthropic SDK、Vercel AI SDK、LangChain 和自定义 HTTP 客户端。
-- 支持通过 header 把应用内部任务强制路由到指定模型。
+## 18. V1 产品边界
 
-### 16.3 Coding Assistant Provider 解耦
+LLMIngress V1 是个人桌面端 AI Agent Gateway。
 
-- 接入 Claude Code、OpenCode 或其他 coding assistant。
-- 使用用户偏好的模型和 provider。
-- 接入 GitHub Copilot、OpenCode Go、Claude、OpenAI、Gemini 等订阅或 API。
-- 查看 coding assistant 的消费和消息记录。
+V1 明确不做：
 
-### 16.4 企业或自托管场景
+- 企业控制台。
+- 团队 workspace。
+- 企业 SSO。
+- 组织级 RBAC。
+- 企业审计。
+- 面向业务应用的 AI SDK Gateway。
+- 多租户 Cloud 平台。
+- 面向服务器端生产应用的高可用网关。
 
-- Docker 部署到自己的机器或基础设施。
-- 使用自己的 PostgreSQL。
-- 连接内网自定义模型服务。
-- 接入本地 Ollama / LM Studio / llama.cpp。
-- 保留调用日志和 provider credentials 在自己的环境中。
-
-## 17. 当前产品边界
-
-- 它是 AI Gateway / Router，不是模型训练平台。
-- 它不自己提供基础模型推理能力，除非连接本地模型服务或 provider。
-- 它的生产 self-hosted bundle 包含 Dashboard 和 backend；开发调试用的 gateway tester 可以作为独立辅助工具规划，不属于核心生产包。
-- 当前共享 output modality 主要是 text；虽然模型 capability 会识别 image/audio/video 输入能力，但产品路由输出侧仍以文本响应为核心。
-- 免费模型、模型价格、provider 列表和订阅支持会随上游 provider 与代码版本变化。
+未来版本可以在 V1 的 Agent Gateway 基础上扩展企业版和应用接入版，但 V1 只聚焦个人 AI Agent。

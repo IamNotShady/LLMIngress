@@ -1,10 +1,10 @@
-# Manifest Product Capability Map
+# LLMIngress Product Design
 
-> 本文基于 Manifest 官网、官方文档，以及 `mnfst/manifest` 代码库当前 `main` 快照整理。目标是只梳理产品功能能力，不展开工程实现、CI、测试、发布流水线等非产品内容。
+> 本文是 LLMIngress 的产品设计文档，聚焦产品能力、用户场景和功能边界，不展开工程实现、CI、测试或发布流水线。
 
 ## 1. 产品定位
 
-Manifest 是一个面向 AI agents、AI applications、coding assistants 和自动化工作流的 AI Gateway / LLM Router。它位于客户端和模型供应商之间，把调用统一接入到 Manifest，再由 Manifest 根据路由规则、模型成本、任务类型、可用性和限额策略决定实际请求哪个模型。
+LLMIngress 是一个面向 AI agents、AI applications、coding assistants 和自动化工作流的 AI Gateway / LLM Router。它位于客户端和模型供应商之间，把调用统一接入到 LLMIngress，再由 LLMIngress 根据路由规则、模型成本、任务类型、可用性和限额策略决定实际请求哪个模型。
 
 核心产品目标：
 
@@ -21,8 +21,8 @@ Manifest 是一个面向 AI agents、AI applications、coding assistants 和自�
 - 提供 OpenAI-compatible Chat Completions 入口：`POST /v1/chat/completions`。
 - 提供 OpenAI Responses 入口：`POST /v1/responses`。
 - 提供 Anthropic Messages 入口：`POST /v1/messages`。
-- 提供模型列表入口：`GET /v1/models`，返回 Manifest Auto 模型。
-- 客户端可以使用 `manifest/auto` 或 `auto`，由 Manifest 在后端解析真实模型。
+- 提供模型列表入口：`GET /v1/models`，返回 LLMIngress Auto 模型。
+- 客户端可以使用 `llmingress/auto` 或 `auto`，由 LLMIngress 在后端解析真实模型。
 - 同一个 Gateway 可以代理 API key provider、subscription provider、custom provider 和 local provider。
 - 支持把 OpenAI 形状请求转发到 Anthropic-only 模型，也支持 Anthropic 形状请求转发到对应供应商。
 
@@ -45,8 +45,8 @@ Manifest 是一个面向 AI agents、AI applications、coding assistants 和自�
 
 ### 2.4 Gateway 鉴权
 
-- 每个 agent 有自己的 Manifest API key。
-- Gateway 请求使用 `Authorization: Bearer mnfst_...`。
+- 每个 agent 有自己的 LLMIngress API key。
+- Gateway 请求使用 `Authorization: Bearer llmi_...`。
 - 支持创建 agent 时生成 key。
 - 支持查看 key prefix。
 - 支持在可解密时返回完整 agent key。
@@ -57,15 +57,15 @@ Manifest 是一个面向 AI agents、AI applications、coding assistants 和自�
 
 每次请求可以通过响应头看到路由结果：
 
-- `X-Manifest-Tier`：最终复杂度 tier。
-- `X-Manifest-Model`：实际服务请求的模型。
-- `X-Manifest-Provider`：实际供应商。
-- `X-Manifest-Confidence`：路由置信度。
-- `X-Manifest-Reason`：路由原因。
-- `X-Manifest-Specificity`：任务类型路由分类。
-- `X-Manifest-Fallback-From`：fallback 成功时的原始失败模型。
-- `X-Manifest-Fallback-Index`：fallback 链中命中的序号。
-- `X-Manifest-Fallback-Exhausted`：fallback 全部失败时标记。
+- `X-LLMIngress-Tier`：最终复杂度 tier。
+- `X-LLMIngress-Model`：实际服务请求的模型。
+- `X-LLMIngress-Provider`：实际供应商。
+- `X-LLMIngress-Confidence`：路由置信度。
+- `X-LLMIngress-Reason`：路由原因。
+- `X-LLMIngress-Specificity`：任务类型路由分类。
+- `X-LLMIngress-Fallback-From`：fallback 成功时的原始失败模型。
+- `X-LLMIngress-Fallback-Index`：fallback 链中命中的序号。
+- `X-LLMIngress-Fallback-Exhausted`：fallback 全部失败时标记。
 
 ### 2.6 Gateway 错误体系
 
@@ -138,7 +138,7 @@ Dashboard 中有 Connect Agent / setup 类页面和组件，面向不同 agent �
 
 ### 4.1 Provider 类型
 
-Manifest 支持四类 provider：
+LLMIngress 支持四类 provider：
 
 - API key provider：用户使用自己的 provider API key。
 - Subscription provider：复用已有付费订阅或 token plan。
@@ -147,7 +147,7 @@ Manifest 支持四类 provider：
 
 ### 4.2 内置 Provider Registry
 
-代码库当前内置 provider：
+默认支持的 provider：
 
 - Alibaba Cloud / Qwen。
 - Anthropic。
@@ -325,7 +325,7 @@ Manifest 支持四类 provider：
 
 ### 5.3 Scoring
 
-文档说明 scoring 覆盖 23 个维度，源码中也有独立 scoring 模块。能力包括：
+Scoring 需要覆盖多维度请求特征。能力包括：
 
 - Keyword-based signals。
 - Structural signals。
@@ -378,7 +378,7 @@ Manifest 支持四类 provider：
 
 ### 5.7 Header / Custom Routing
 
-Manifest 支持基于 HTTP header 的自定义路由。产品能力包括：
+LLMIngress 支持基于 HTTP header 的自定义路由。产品能力包括：
 
 - 创建 header tier。
 - 配置 header key。
@@ -401,8 +401,8 @@ Manifest 支持基于 HTTP header 的自定义路由。产品能力包括：
 
 客户端可直接通过 request header 强制路由：
 
-- `x-manifest-tier`：强制指定 complexity tier。
-- `x-manifest-specificity`：强制指定任务类型。
+- `x-llmingress-tier`：强制指定 complexity tier。
+- `x-llmingress-specificity`：强制指定任务类型。
 - Header override 会跳过自动 scoring / detection。
 - Header override 的 confidence 为 1.0。
 
@@ -426,7 +426,7 @@ Manifest 支持基于 HTTP header 的自定义路由。产品能力包括：
 - 每个 specificity category 可配置 fallback models。
 - 每个 header tier 可配置 fallback models。
 - Fallback 按配置顺序执行。
-- 官方文档说明每个 tier 最多可配置 5 个 fallback model。
+- 每个 tier 最多可配置 5 个 fallback model。
 - Fallback model 可以来自不同 provider。
 - Local model 和 cloud model 可混合在同一 chain。
 - Subscription primary 可搭配 API key provider fallback。
@@ -435,7 +435,7 @@ Manifest 支持基于 HTTP header 的自定义路由。产品能力包括：
 
 - Provider 返回 HTTP 4xx 或 5xx 时可触发 fallback。
 - Rate limit、provider outage、bad request、overload 等都可触发。
-- 424 表示 Manifest 自己的 fallback chain exhausted，不再触发新的 fallback。
+- 424 表示 LLMIngress 自己的 fallback chain exhausted，不再触发新的 fallback。
 - Provider 连接打开但超时，也可通过 per-attempt timeout 进入 fallback。
 
 ### 6.3 Fallback 结果记录
@@ -550,7 +550,7 @@ Dashboard 概览能力包括：
 - agent tokens。
 - free providers。
 
-该能力主要用于 Manifest Cloud / 官网展示类场景。
+该能力主要用于 LLMIngress Cloud / 公开状态页 / 产品展示类场景。
 
 ### 8.7 Real-time Dashboard Updates
 
@@ -609,7 +609,7 @@ Dashboard 支持消息日志查询：
 
 - Dashboard 内置 Playground。
 - 支持从 Playground 发起模型请求。
-- Playground 请求走 Manifest routing 能力。
+- Playground 请求走 LLMIngress routing 能力。
 - 支持 streaming run。
 - 支持自定义 request headers。
 - 支持展示响应 headers。
@@ -632,7 +632,7 @@ Dashboard 支持消息日志查询：
 
 ### 11.1 Provider-specific 参数
 
-Manifest 有模型参数 schema 能力，支持给 route 配置 provider/model 兼容参数。
+LLMIngress 有模型参数 schema 能力，支持给 route 配置 provider/model 兼容参数。
 
 参数分组包括：
 
@@ -799,9 +799,9 @@ OAuth provider 是否启用取决于对应环境变量是否配置。
 
 ### 14.1 Cloud
 
-- 用户可以使用 Manifest Cloud。
-- Cloud 由 Manifest 托管，降低部署门槛。
-- 官网提供 sign in / sign up。
+- 用户可以使用 LLMIngress Cloud。
+- Cloud 由 LLMIngress 托管，降低部署门槛。
+- Cloud 版提供 sign in / sign up。
 - Cloud rate limit 与 plan 相关，并在 dashboard 中展示。
 
 ### 14.2 Self-hosted
@@ -852,12 +852,12 @@ Self-hosted / backend 支持通过环境变量配置：
 - OAuth / subscription token blob 加密存储。
 - Email provider API key 加密存储。
 - Agent API key 以 hash + prefix 存储，同时可保存加密 key 以便展示。
-- 可使用 `MANIFEST_ENCRYPTION_KEY` 作为独立加密密钥。
+- 可使用 `LLMINGRESS_ENCRYPTION_KEY` 作为独立加密密钥。
 - 未设置独立加密密钥时可回退到 `BETTER_AUTH_SECRET`。
 
 ### 15.2 自托管隐私
 
-- Self-hosted 请求经过用户自己的 Manifest 实例。
+- Self-hosted 请求经过用户自己的 LLMIngress 实例。
 - Local model 请求可以留在用户机器或内网。
 - Dashboard 默认同源部署，生产环境不开放泛 CORS。
 - Self-hosted local/custom provider 可以访问用户基础设施内的服务。
@@ -889,8 +889,8 @@ Self-hosted / backend 支持通过环境变量配置：
 
 ### 16.2 AI 应用统一模型层
 
-- 应用只接入 Manifest endpoint。
-- Manifest 负责 provider key、model routing、fallback、cost tracking。
+- 应用只接入 LLMIngress endpoint。
+- LLMIngress 负责 provider key、model routing、fallback、cost tracking。
 - 支持 OpenAI SDK、Anthropic SDK、Vercel AI SDK、LangChain 和自定义 HTTP 客户端。
 - 支持通过 header 把应用内部任务强制路由到指定模型。
 
@@ -913,44 +913,6 @@ Self-hosted / backend 支持通过环境变量配置：
 
 - 它是 AI Gateway / Router，不是模型训练平台。
 - 它不自己提供基础模型推理能力，除非连接本地模型服务或 provider。
-- 它的生产 self-hosted bundle 包含 Dashboard 和 backend，但 dev-only Wingman gateway tester 在独立仓库。
+- 它的生产 self-hosted bundle 包含 Dashboard 和 backend；开发调试用的 gateway tester 可以作为独立辅助工具规划，不属于核心生产包。
 - 当前共享 output modality 主要是 text；虽然模型 capability 会识别 image/audio/video 输入能力，但产品路由输出侧仍以文本响应为核心。
 - 免费模型、模型价格、provider 列表和订阅支持会随上游 provider 与代码版本变化。
-
-## 18. 来源与核对范围
-
-官网与文档：
-
-- `https://manifest.build/`
-- `https://manifest.build/docs/introduction`
-- `https://manifest.build/docs/routing`
-- `https://manifest.build/docs/fallback`
-- `https://manifest.build/docs/set-limits`
-- `https://manifest.build/docs/providers/api-key-providers`
-- `https://manifest.build/docs/providers/subscription-based-providers`
-- `https://manifest.build/docs/providers/custom-providers`
-- `https://manifest.build/docs/providers/local-models`
-- `https://manifest.build/docs/reference/api`
-- `https://manifest.build/docs/reference/headers`
-- `https://manifest.build/docs/self-hosted`
-
-源码快照：
-
-- Repository: `https://github.com/mnfst/manifest`
-- Snapshot read locally: `main` at `2670e68`
-- Main product code reviewed:
-  - `packages/frontend/src/pages`
-  - `packages/frontend/src/components`
-  - `packages/backend/src/routing`
-  - `packages/backend/src/analytics`
-  - `packages/backend/src/notifications`
-  - `packages/backend/src/playground`
-  - `packages/backend/src/model-prices`
-  - `packages/backend/src/free-models`
-  - `packages/backend/src/auth`
-  - `packages/backend/src/setup`
-  - `packages/shared/src/providers.ts`
-  - `packages/shared/src/agent-type.ts`
-  - `packages/shared/src/tiers.ts`
-  - `packages/shared/src/specificity.ts`
-  - `packages/shared/src/subscription/configs.ts`

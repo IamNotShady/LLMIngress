@@ -114,7 +114,7 @@ Gateway Service 包含以下核心能力：
 - 当 Provider 失败、限流、超时或模型不可用时，自动切换备用模型。
 - 记录 Agent、Agent API Key、Virtual Model Name / Route Policy、实际命中的 Provider、实际命中的 Model、Tokens、成本、延迟、失败原因和 Fallback 过程。
 - 检查 Agent API Key 级 Token 限制、成本限制、Rate Limit 和预算策略。
-- Console 中的配置修改对新请求即时生效。
+- Console 中的配置修改在 Gateway 热加载成功后对新请求生效。
 - 展示 Gateway 健康状态、Provider 连通性、运行地址、版本和最近错误。
 
 ### 5.2 Console
@@ -132,7 +132,7 @@ Console 包含以下一级模块：
 - Usage & Cost：按 Agent、Agent API Key、Virtual Model Name、Provider、Model 和时间维度分析 Tokens、成本、模型分布和节省效果。
 - Limits：配置 Agent API Key 级 Token 上限、成本上限、小时 / 日 / 周 / 月预算、RPM、TPM、并发请求数和超限处理方式。
 - Gateway Runtime：查看 Gateway Service 的运行地址、版本、健康检查、Provider 连通性和最近运行错误。
-- Playground：模拟 Agent 请求，测试请求会被路由到哪个 Provider 和模型，并查看选择原因。
+- Playground：使用 Gateway Public API 真实测试 Agent 请求，查看请求会被路由到哪个 Provider 和模型，并查看选择原因。
 - Settings：管理服务端口、数据目录、日志保留、安全设置、导入导出和部署相关配置。
 
 ### 5.3 模块关系
@@ -741,11 +741,12 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 - 通知配置。
 - 阻断策略。
 
-通知渠道支持：
+V1 通知渠道支持：
 
-- Desktop notification。
 - Email。
 - Webhook。
+
+Desktop notification / 本机系统通知暂不纳入 V1；后续如需支持，再单独定义。
 
 告警事件包括：
 
@@ -756,13 +757,14 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 
 ### 14.8 Playground 页面
 
-- 在 LLMIngress 内测试 prompt。
-- 选择 Agent。
-- 选择 Agent API Key。
-- 选择 Virtual Model Name。
-- 查看模型响应。
-- 查看 routing metadata。
-- 对比不同 Virtual Model Name / Route Policy 的输出。
+- 在浏览器中通过 Gateway Public API 测试 prompt。
+- 用户手动粘贴 Agent API Key；该 key 只保存在页面内存中，不由 Console 后端保存或代发。
+- 根据用户输入的 Agent API Key 调用 `GET /v1/models`，展示该 key 被授权使用的 Virtual Model Name。
+- 选择 Virtual Model Name 作为请求中的 `model`。
+- 查看模型响应、routing metadata、request id 和成本 / token 信息。
+- 可以对比不同 Virtual Model Name / Route Policy 的输出，但每次测试都是 live 请求，会产生真实 Provider 成本，并计入该 Agent API Key 的 Budget / Rate Limit / Usage。
+
+由于 Agent API Key 只保存 hash，Console 不能在 Playground 中直接使用已有 key 明文。创建或轮换 Agent API Key 时用户需要自行复制保存；后续 Playground 测试需要再次粘贴。
 
 ## 15. 部署与数据
 
@@ -773,13 +775,13 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 - 默认不暴露到公网。
 - 支持自定义端口。
 - 支持开机自启。
-- 支持菜单栏或托盘状态显示。
+- V1 默认一个 active Gateway 进程处理请求；多 Gateway 实例属于后续扩展能力。
 
 部署形态：
 
-- Desktop app：面向个人电脑，默认监听 `127.0.0.1`，可提供菜单栏或托盘状态。
+- Local / single-node：面向个人电脑或本地服务器，默认监听 `127.0.0.1`，需要连接 PostgreSQL。
 - Docker / server：面向本地服务器或云服务器，默认不暴露公网。
-- Single binary：面向轻量自托管部署。
+- Single binary：面向轻量自托管部署，但仍需要外部 PostgreSQL 或由 supervisor / compose 管理的 PostgreSQL sidecar，不是零依赖单文件数据库形态。
 
 开源许可、商业许可和分发方式由 README / LICENSE 单独定义，PRODUCT.md 不默认承诺。
 
@@ -816,6 +818,7 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 - Provider API Key 加密存储。
 - Subscription Token 加密存储。
 - Agent API Key hash 存储。
+- Agent API Key 明文只在创建或轮换时展示一次；Playground 测试需要用户重新粘贴明文 key。
 - Dashboard 不默认展示完整 Provider Key。
 - 支持轮换 Agent Key。
 
@@ -849,7 +852,7 @@ Console 必须支持访问控制，尤其是服务器或公网部署场景。
 - V1 路由决策不额外调用 LLM。
 - Gateway 规则路由额外延迟目标：p95 小于 100ms，不包含上游 Provider 延迟。
 - Streaming 首包代理额外延迟目标：p95 小于 200ms，不包含上游 Provider 首包时间。
-- 配置修改后对新请求即时生效，不影响进行中的请求。
+- 配置修改经 Gateway 热加载成功后对新请求近实时生效，不影响进行中的请求。
 - 服务器部署必须支持 Console 鉴权。
 - 默认不记录 prompt / response 内容。
 

@@ -57,29 +57,33 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 
 ## 4. 核心用户故事
 
-### 4.1 接入多个 Agent
+### 4.1 统一接入多个 AI Agent
 
-作为个人用户，我希望把 Codex、CloudCode、Cursor、OpenCloud、Hermes 接到同一个 Gateway，这样我不需要分别在每个 Agent 里维护复杂的模型和 Key 配置。
+作为个人 AI Agent 用户，我希望把 Codex、Claude Code、Cursor、OpenCode、Hermes、GitHub Copilot 等 Agent 接到同一个 Gateway，这样每个 Agent 都可以通过统一 endpoint 使用我的模型资源，而不是在不同工具里反复配置 Provider、API Key 和模型名。
 
-### 4.2 统一管理 Provider
+### 4.2 统一管理模型资源
 
-作为个人用户，我希望在一个地方配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、本地 Ollama 等 Provider，这样所有 Agent 都可以复用这些模型能力。
+作为个人 AI Agent 用户，我希望在一个地方配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、本地 Ollama 和自定义模型服务，这样所有 Agent 都可以复用同一套模型资源、订阅额度和本地模型能力。
 
-### 4.3 自动选择合适模型
+### 4.3 任务感知的模型选择
 
-作为个人用户，我希望简单任务自动走便宜模型，复杂任务自动走更强模型，这样可以降低成本，同时不牺牲关键任务质量。
+作为个人 AI Agent 用户，我希望 LLMIngress 能根据我当前任务的复杂度、上下文长度、工具调用、响应质量要求和使用场景，自动选择最合适的真实模型，这样我不需要每次手动判断该用哪个模型。
 
-### 4.4 Provider 失败自动切换
+### 4.4 成本优化
 
-作为个人用户，我希望某个模型失败、限流或不可用时，Agent 请求能自动切换到备用模型，避免当前工作流中断。
+作为个人 AI Agent 用户，我希望简单任务、小改动和低风险请求优先使用低成本模型、本地模型或订阅内模型，只有复杂推理、长上下文分析、关键代码修改等任务才使用更强模型，这样可以避免每次都默认使用最贵最强的模型，减少不必要的模型费用。
 
-### 4.5 看清 Agent 消费
+### 4.5 质量兜底与自动切换
 
-作为个人用户，我希望按 Agent 查看 Tokens、成本、模型使用分布和请求历史，这样我能知道哪个 Agent 花费最高、哪些模型最常用。
+作为个人 AI Agent 用户，我希望当低成本模型无法满足任务、请求失败、Provider 限流或模型不可用时，Agent 请求能自动切换到更合适的备用模型，避免当前工作流中断，并保证关键任务的完成质量。
 
-### 4.6 控制预算
+### 4.6 看清选择原因和节省效果
 
-作为个人用户，我希望给单个 Agent 设置成本或 Token 上限，避免某个 Agent 因循环调用或错误配置造成过量消耗。
+作为个人 AI Agent 用户，我希望按 Agent 查看每次请求命中的模型、选择原因、Tokens、成本、Fallback 情况和相对固定使用高价模型的节省效果，这样我能理解 LLMIngress 如何帮我平衡质量和费用。
+
+### 4.7 控制预算
+
+作为个人 AI Agent 用户，我希望给单个 Agent 设置成本或 Token 上限，并选择省钱优先、平衡或质量优先的路由偏好，这样可以避免某个 Agent 因循环调用、错误配置或过度使用高价模型造成过量消耗。
 
 ## 5. 产品信息架构
 

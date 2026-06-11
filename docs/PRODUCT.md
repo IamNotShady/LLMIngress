@@ -87,16 +87,55 @@ LLMIngress 是用户部署的 AI Agent 模型入口层。用户把 Codex、Cloud
 
 ## 5. 产品信息架构
 
-控制台包含以下一级模块：
+LLMIngress 由两大一级产品模块组成：
 
-- Agents：管理接入的个人 AI Agent。
-- Providers：管理模型 Provider、API Key、订阅 Token、本地模型。
-- Routing：配置模型路由、复杂度分层、任务类型路由和 Fallback。
-- Activity：查看请求日志、消息详情、失败原因和响应元数据。
-- Usage：查看 Tokens、成本、模型分布和节省情况。
-- Limits：配置 Agent 级预算和用量限制。
-- Playground：在 LLMIngress 内测试路由和模型响应。
-- Settings：本机服务、端口、数据目录、安全和导出设置。
+- Gateway Service：运行时网关服务，负责接收 AI Agent 请求、执行路由策略、转发到真实 Provider，并把 Provider 返回结果交还给 Agent。
+- Console：管理控制台，负责 Agent 接入、Provider 配置、模型管理、路由策略、请求观测、成本分析和预算控制。
+
+### 5.1 Gateway Service
+
+Gateway Service 是 LLMIngress 的运行时模块，也是实际处理 Agent 请求的数据面。它可以部署在个人电脑、本地服务器或云端服务器上，对外提供统一 Gateway endpoint。
+
+Gateway Service 包含以下核心能力：
+
+- Agent Request Ingress：接收来自不同 AI Agent 的请求，优先提供 OpenAI-compatible API。
+- Agent Authentication：识别请求来自哪个 Agent，并校验 Agent API Key。
+- Request Normalization：把不同 Agent 或协议风格的请求转换成内部统一请求结构。
+- Policy Evaluation：根据 Agent、虚拟模型名、任务复杂度、上下文长度、工具调用、成本偏好和预算限制匹配路由策略。
+- Model Selection：选择真实 Provider 和真实模型。
+- Provider Dispatch：把请求转发到 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、Ollama 或自定义 Provider。
+- Streaming Proxy：支持流式响应，并把 Provider 返回结果转发给原始 Agent。
+- Fallback & Retry：当 Provider 失败、限流、超时或模型不可用时，自动切换备用模型。
+- Usage Metering：记录 Agent、Provider、模型、Tokens、成本、延迟、失败原因和 Fallback 过程。
+- Budget Guard：在请求前或请求后检查 Agent 级 Token 限制、成本限制和预算策略。
+- Runtime Config Loader：加载 Console 中配置的 Agents、Providers、Models、Routing 和 Limits，并支持配置更新。
+- Health & Diagnostics：暴露 Gateway 健康状态、Provider 连通性、运行地址、版本和最近错误。
+
+### 5.2 Console
+
+Console 是 LLMIngress 的管理模块，也是用户配置和观察 Gateway 行为的控制面。Console 不直接处理 Agent 请求，而是管理 Gateway Service 所需的配置，并展示 Gateway Service 产生的运行数据。
+
+Console 包含以下一级模块：
+
+- Overview：查看 Gateway 状态、今日请求量、今日成本、失败率、节省效果和活跃 Agent。
+- Agents：管理接入的 AI Agent，包括 Agent 类型、Gateway URL、Agent API Key、默认模型、默认路由偏好和接入说明。
+- Providers：配置 OpenAI、Anthropic、Google、OpenRouter、GitHub Copilot、Ollama 和自定义 Provider。
+- Models：管理可用模型、模型能力、上下文长度、价格、Provider 归属和是否参与自动路由。
+- Routing：配置自动模型选择策略，包括省钱优先、平衡、质量优先、任务类型路由、复杂度分层和 Fallback 链。
+- Activity：查看每次请求的 Agent、Provider、命中模型、延迟、Tokens、成本、失败原因和 Fallback 过程。
+- Usage & Cost：按 Agent、Provider、Model 和时间维度分析 Tokens、成本、模型分布和节省效果。
+- Limits：配置 Agent 级 Token 上限、成本上限、每日预算、月度预算和超限处理方式。
+- Gateway Runtime：查看 Gateway Service 的运行地址、版本、健康检查、Provider 连通性和最近运行错误。
+- Playground：模拟 Agent 请求，测试请求会被路由到哪个 Provider 和模型，并查看选择原因。
+- Settings：管理服务端口、数据目录、日志保留、安全设置、导入导出和部署相关配置。
+
+### 5.3 模块关系
+
+- 用户在 Console 中创建 Agent，并获得 Gateway URL、Agent API Key 和虚拟模型名。
+- AI Agent 把模型请求发送到 Gateway Service。
+- Gateway Service 根据 Console 配置的 Providers、Models、Routing 和 Limits 执行请求转发。
+- Provider 返回结果后，Gateway Service 将结果返回给原始 AI Agent。
+- Gateway Service 记录请求日志、用量、成本和错误信息，Console 负责展示和分析这些数据。
 
 ## 6. Agent 接入能力
 

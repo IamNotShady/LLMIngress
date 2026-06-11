@@ -1,55 +1,34 @@
 # LLMIngress Product Design
 
-> LLMIngress V1 是一个面向个人桌面端 AI Agent 的本地 AI Gateway。当前版本只服务个人用户把多个 AI Agent 接入统一网关，暂不面向企业、多用户团队、内部业务系统或通用 AI 应用 SDK 场景。
+> LLMIngress 是一个面向本地 AI Agent 的 AI Gateway。AI Agent 只需要接入 LLMIngress 一个本地 endpoint；LLMIngress 在后端连接多个 Provider 和模型，并根据请求参数、上下文和使用场景自动匹配合适的模型。
 
 ## 1. 产品定位
 
-LLMIngress 是个人用户本机上的 AI Agent 入口层。用户把 Codex、CloudCode、Cursor、OpenCloud、Hermes 等不同 AI Agent 的模型请求接入 LLMIngress，再由 LLMIngress 统一完成 Provider 接入、模型选择、Fallback、成本记录和用量控制。
+LLMIngress 是运行在本地的 AI Agent 模型入口层。用户把 Codex、CloudCode、Cursor、OpenCloud、Hermes 等不同 AI Agent 的模型请求接入 LLMIngress，再由 LLMIngress 统一完成 Provider 接入、模型选择、Fallback、成本记录和用量控制。
 
-V1 的核心目标：
+核心目标：
 
-- 让个人用户用一个本地网关管理多个 AI Agent。
+- 让本地 AI Agent 只接入一个统一 Gateway。
 - 让不同 AI Agent 复用同一套模型 Provider、API Key、订阅额度和本地模型。
-- 降低个人 AI Agent 的模型使用成本。
-- 在一个桌面端控制台里看清每个 Agent 的模型、请求、Tokens、成本和失败情况。
-- 为后续企业版、团队版和应用接入版保留产品扩展空间，但不在 V1 实现。
+- 根据 AI Agent 请求的参数、上下文和使用场景自动匹配合适模型。
+- 降低 AI Agent 的模型使用成本。
+- 在一个本地控制台里看清每个 Agent 的模型、请求、Tokens、成本和失败情况。
 
-## 2. V1 产品范围
+## 2. 产品范围
 
-### 2.1 当前版本只支持
+### 2.1 核心范围
 
-- 个人桌面端使用。
-- 单个本机用户。
-- 多个个人 AI Agent 接入。
+- 多个本地 AI Agent 接入。
 - 本机运行的 Gateway。
-- 本机 Dashboard / Desktop Control Panel。
-- 个人 Provider Key、订阅 Token、本地模型服务管理。
+- 本机 Dashboard / Control Panel。
+- Provider Key、订阅 Token、本地模型服务管理。
 - Agent 维度的路由、Fallback、预算、日志和统计。
-
-### 2.2 当前版本不支持
-
-- 企业组织管理。
-- 团队、多成员、RBAC、SSO。
-- 企业内部应用接入。
-- 面向 SaaS / Web App / Backend App 的通用 AI Gateway。
-- 多租户计费。
-- 企业审计、审批、合规报表。
-- Workspace 间资源共享。
-- 组织级 Provider 池。
-- 企业私有部署控制台。
-
-### 2.3 后续版本再考虑
-
-- 企业版。
-- 团队协作。
-- 组织级 Agent 管理。
-- 应用 SDK 接入。
-- 统一审计和权限体系。
-- Cloud 托管版。
+- 基于请求参数、任务类型、上下文长度、工具调用和模型能力的自动路由。
+- Provider 失败、限流或超时后的自动 Fallback。
 
 ## 3. 目标用户
 
-### 3.1 V1 Primary User
+### 3.1 Primary User
 
 个人开发者、AI power user、独立开发者、重度 AI Agent 用户。
 
@@ -63,7 +42,7 @@ V1 的核心目标：
 
 ### 3.2 典型 Agent
 
-V1 优先面向这些个人 Agent：
+优先面向这些本地 AI Agent：
 
 - Codex。
 - CloudCode。
@@ -71,16 +50,6 @@ V1 优先面向这些个人 Agent：
 - OpenCloud。
 - Hermes。
 - 其他可配置 OpenAI-compatible endpoint 的 AI Agent。
-
-### 3.3 非目标用户
-
-V1 不优先服务：
-
-- 企业管理员。
-- 团队负责人。
-- 内部平台团队。
-- SaaS 应用开发者。
-- 需要组织级权限、审计、合规和集中结算的用户。
 
 ## 4. 核心用户故事
 
@@ -110,7 +79,7 @@ V1 不优先服务：
 
 ## 5. 产品信息架构
 
-V1 桌面端控制台包含以下一级模块：
+本地控制台包含以下一级模块：
 
 - Agents：管理接入的个人 AI Agent。
 - Providers：管理模型 Provider、API Key、订阅 Token、本地模型。
@@ -140,7 +109,7 @@ V1 桌面端控制台包含以下一级模块：
 
 ### 6.2 Agent 类型
 
-V1 使用个人 Agent 分类，不引入企业或应用分类：
+Agent 分类围绕本地 AI Agent 的使用形态：
 
 - Coding Agent。
 - Desktop Agent。
@@ -184,8 +153,8 @@ V1 使用个人 Agent 分类，不引入企业或应用分类：
 - 支持 `POST /v1/chat/completions`。
 - 支持 `POST /v1/responses`。
 - 支持 `GET /v1/models`。
-- V1 优先保证主流 Agent 能够用 OpenAI-compatible 方式接入。
-- Anthropic-compatible endpoint 可作为增强能力，但不是 V1 接入主路径。
+- 优先保证主流 Agent 能够用 OpenAI-compatible 方式接入。
+- Anthropic-compatible endpoint 可作为增强能力。
 
 ### 7.2 模型抽象
 
@@ -233,7 +202,7 @@ V1 使用个人 Agent 分类，不引入企业或应用分类：
 
 ### 8.1 Provider 类型
 
-V1 支持个人用户常见 Provider 来源：
+支持本地 AI Agent 常见 Provider 来源：
 
 - API Key Provider。
 - Subscription Provider。
@@ -351,7 +320,7 @@ V1 支持个人用户常见 Provider 来源：
 
 ### 10.2 Complexity Routing
 
-V1 支持按请求复杂度分层：
+支持按请求复杂度分层：
 
 - Simple。
 - Standard。
@@ -371,7 +340,7 @@ V1 支持按请求复杂度分层：
 
 ### 10.3 Coding-oriented Routing
 
-因为 V1 面向 AI Agent，尤其是 coding agent，需要优先支持 coding 场景：
+因为 LLMIngress 面向 AI Agent，尤其是 coding agent，需要重点支持 coding 场景：
 
 - 识别代码生成。
 - 识别代码解释。
@@ -384,7 +353,7 @@ V1 支持按请求复杂度分层：
 
 ### 10.4 Task-specific Routing
 
-V1 可保留个人 Agent 常见任务类型：
+支持本地 AI Agent 常见任务类型：
 
 - Coding。
 - Reasoning。
@@ -394,8 +363,6 @@ V1 可保留个人 Agent 常见任务类型：
 - Terminal / shell。
 - Long context。
 
-不优先支持面向企业流程的任务类型，例如 CRM、客服、内部审批等。
-
 ### 10.5 Header Routing
 
 部分 Agent 允许自定义 header 时，可以通过 header 强制路由：
@@ -404,7 +371,7 @@ V1 可保留个人 Agent 常见任务类型：
 - `x-llmingress-task`。
 - `x-llmingress-model`。
 
-如果某些 Agent 不支持自定义 header，则使用默认 route 或 Agent 级配置。
+对无法设置自定义 header 的 Agent，使用默认 route 或 Agent 级配置。
 
 ## 11. Fallback 能力
 
@@ -635,7 +602,7 @@ V1 可保留个人 Agent 常见任务类型：
 - Custom Provider URL 需要校验。
 - Cloud Provider 请求只发送到用户配置的 Provider。
 
-## 17. V1 关键指标
+## 17. 关键指标
 
 ### 17.1 激活指标
 
@@ -657,19 +624,14 @@ V1 可保留个人 Agent 常见任务类型：
 - 估算节省金额。
 - 超预算阻断次数。
 
-## 18. V1 产品边界
+## 18. 产品边界
 
-LLMIngress V1 是个人桌面端 AI Agent Gateway。
+LLMIngress 是本地 AI Agent Gateway。
 
-V1 明确不做：
+产品焦点：
 
-- 企业控制台。
-- 团队 workspace。
-- 企业 SSO。
-- 组织级 RBAC。
-- 企业审计。
-- 面向业务应用的 AI SDK Gateway。
-- 多租户 Cloud 平台。
-- 面向服务器端生产应用的高可用网关。
-
-未来版本可以在 V1 的 Agent Gateway 基础上扩展企业版和应用接入版，但 V1 只聚焦个人 AI Agent。
+- 让 AI Agent 通过一个本地 endpoint 接入模型能力。
+- 在 Gateway 后方统一管理多个 Provider 和模型。
+- 根据请求参数、上下文、任务类型、工具调用和模型能力自动匹配合适模型。
+- 为 AI Agent 提供 Fallback、用量统计、成本控制和请求可观测性。
+- 保持本地优先的数据与凭据管理方式。

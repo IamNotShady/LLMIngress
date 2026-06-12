@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 23:08 AWST
-**Active Feature:** None (feat-003 through feat-007 completed)
+**Last Updated:** 2026-06-12 23:58 AWST
+**Active Feature:** None (feat-003 through feat-008 completed)
 
 ## Status
 
@@ -55,6 +55,11 @@
   - Added `pnpm run db:migrate` as the explicit migration command.
   - Added initial `0001_create_schema_version.sql` migration for `migration_history` and singleton `schema_version`.
   - Runner applies pending migrations in a transaction with a PostgreSQL advisory lock and skips already-applied matching checksums.
+- [x] **feat-008 — Core Configuration Schema (passing)**:
+  - Added `0002_core_config_schema.sql` for core configuration tables: providers, provider models, agents, agent API keys, virtual models, route policies, route candidates, agent limits, config versions, and config change events.
+  - Added foreign key constraints so valid configuration graphs insert successfully and broken references are rejected by PostgreSQL.
+  - Added feat-008 unit and E2E tests; both were observed failing before implementation and passing after implementation.
+  - Repaired feat-007 migration E2E so it asserts the current migration set instead of assuming only `0001` exists.
 
 ### What's In Progress
 
@@ -62,8 +67,8 @@
 
 ### What's Next
 
-1. `feat-008` — Core Configuration Schema.
-2. `feat-009` — Runtime Records and Jobs Schema.
+1. `feat-009` — Runtime Records and Jobs Schema.
+2. `feat-010` — Master Key and Secret Encryption.
 3. `feat-055` — CI Migration Validation after `feat-007` produces the migration command.
 
 ## Blockers / Risks
@@ -137,6 +142,11 @@
 - `tests/features/feat-007-migration-runner.unit.test.ts` - New migration loader unit tests.
 - `tests/e2e/feat-007-migration-runner.e2e.spec.ts` - New real Postgres migration command E2E.
 - `feature_list.json` - feat-007 marked `passing` with verification evidence.
+- `packages/db/migrations/0002_core_config_schema.sql` - New core configuration schema migration.
+- `tests/features/feat-008-config-schema.unit.test.ts` - New migration contract unit tests for feat-008.
+- `tests/e2e/feat-008-config-schema.e2e.spec.ts` - New real Postgres config schema E2E.
+- `tests/e2e/feat-007-migration-runner.e2e.spec.ts` - Updated to assert the current migration set and latest schema version.
+- `feature_list.json` - feat-008 marked `passing`; feat-005 and feat-007 evidence updated with regression repair notes.
 
 ## Evidence of Completion
 
@@ -213,6 +223,19 @@
   - `pnpm run verify` passed after feat-007 implementation.
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 7/7 E2E tests executed.
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 7 passing features after marking feat-007 passing.
+- [x] feat-008 red phase observed:
+  - `pnpm exec vitest run tests/features/feat-008-config-schema.unit.test.ts` failed because `0002_core_config_schema` was missing.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-008-config-schema.e2e.spec.ts --grep 'core config schema accepts valid graph and rejects broken references'` failed because only `0001` applied.
+- [x] feat-008 verification passed:
+  - `pnpm exec vitest run tests/features/feat-008-config-schema.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-008-config-schema.e2e.spec.ts --grep 'core config schema accepts valid graph and rejects broken references'` → 1 passed.
+  - `pnpm run verify` passed after feat-008 implementation.
+- [x] Regression repair after marking feat-008:
+  - First `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` caught feat-007's stale E2E expectation for one migration / schema version `0001`; feat-005 also failed because its full E2E smoke included that regressed test.
+  - Updated feat-007 E2E to assert `loadSqlMigrations()` current count, IDs, names, and latest schema version.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres'` feat-007 verification passed again.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres'` feat-005 verification passed again with 8/8 E2E tests.
+  - Final `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 8 passing features.
 
 ## Notes for Next Session
 

@@ -52,7 +52,7 @@
         "feat-002"
       ],
       "status": "passing",
-      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82."
+      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82. 2026-06-12 regression during feat-008 verify:features: feat-005 verification failed while the full pnpm test:e2e smoke included a regressed feat-007 migration E2E assertion; repaired by making feat-007 migration E2E assert the current migration set, then rerunning feat-005 verification successfully with 8/8 E2E tests."
     },
     {
       "id": "feat-006",
@@ -76,7 +76,7 @@
         "feat-006"
       ],
       "status": "passing",
-      "evidence": "2026-06-12: TDD red observed for feat-007 unit tests because loadSqlMigrations was missing and E2E because pnpm run db:migrate was missing. Verification passed with TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' — feat-007 unit test 3 passed, feat-007 Playwright E2E 1 passed, and pnpm run verify passed."
+      "evidence": "2026-06-12: TDD red observed for feat-007 unit tests because loadSqlMigrations was missing and E2E because pnpm run db:migrate was missing. Verification passed with TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' — feat-007 unit test 3 passed, feat-007 Playwright E2E 1 passed, and pnpm run verify passed. 2026-06-12 regression during feat-008 verify:features: feat-007 E2E still expected only one migration and schema_version 0001 after 0002 was added; repaired by asserting loadSqlMigrations() current IDs/count and latest schema_version, then feat-007 verification passed again."
     },
     {
       "id": "feat-008",
@@ -86,8 +86,8 @@
       "dependencies": [
         "feat-007"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-12: TDD red observed for feat-008 unit tests because 0002_core_config_schema migration was missing, and E2E because only 0001 applied. Verification passed with TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' — feat-008 unit test 3 passed, Playwright E2E 1 passed, and pnpm run verify passed."
     },
     {
       "id": "feat-009",

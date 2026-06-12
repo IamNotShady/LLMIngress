@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { createTestPostgresFixture } from "../../packages/db/src/index";
+import { createTestPostgresFixture, loadSqlMigrations } from "../../packages/db/src/index";
 
 test("migration runner creates schema version and rerun is idempotent", async () => {
   const fixture = await createTestPostgresFixture({
@@ -9,23 +9,30 @@ test("migration runner creates schema version and rerun is idempotent", async ()
   });
 
   try {
+    const migrations = loadSqlMigrations();
+    const latestMigration = migrations.at(-1);
+
     const firstRun = runMigrateCommand(fixture.databaseUrl);
     expect(firstRun.status, firstRun.stderr || firstRun.stdout).toBe(0);
-    expect(firstRun.stdout).toContain("Applied 1 migration");
+    expect(firstRun.stdout).toContain(`Applied ${migrations.length} migrations`);
 
     const schemaVersion = await fixture.query<{ version: string }>(
       "select version from schema_version where id = 1",
     );
-    expect(schemaVersion.rows).toEqual([{ version: "0001" }]);
+    expect(schemaVersion.rows).toEqual([{ version: latestMigration?.id }]);
 
     const historyAfterFirstRun = await fixture.query<{ id: string; name: string; count: string }>(`
       select id, name, count(*) over ()::text as count
       from migration_history
       order by id
     `);
-    expect(historyAfterFirstRun.rows).toEqual([
-      { id: "0001", name: "create_schema_version", count: "1" },
-    ]);
+    expect(historyAfterFirstRun.rows).toEqual(
+      migrations.map((migration) => ({
+        id: migration.id,
+        name: migration.name,
+        count: String(migrations.length),
+      })),
+    );
 
     const secondRun = runMigrateCommand(fixture.databaseUrl);
     expect(secondRun.status, secondRun.stderr || secondRun.stdout).toBe(0);
@@ -34,7 +41,7 @@ test("migration runner creates schema version and rerun is idempotent", async ()
     const historyAfterSecondRun = await fixture.query<{ count: string }>(
       "select count(*)::text as count from migration_history",
     );
-    expect(historyAfterSecondRun.rows).toEqual([{ count: "1" }]);
+    expect(historyAfterSecondRun.rows).toEqual([{ count: String(migrations.length) }]);
   } finally {
     await fixture.dispose();
   }

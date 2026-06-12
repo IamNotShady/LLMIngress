@@ -50,7 +50,7 @@
       "name": "Bootstrap Runtime Configuration",
       "description": "Gateway, Console, and Worker read ports, PostgreSQL URL, and master key source from environment or bootstrap config; invalid required values stop startup with a clear error.",
       "verification": "pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts && pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts --grep 'env and bootstrap config load ports database url master key and reject invalid config'",
-      "dependencies": ["feat-001"],
+      "dependencies": ["feat-001", "feat-002"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -221,7 +221,7 @@
       "name": "Model Availability Soft Delete",
       "description": "When refresh no longer returns a model referenced by a route policy, the model row remains, availability becomes unavailable, routing excludes it, and Console can show the affected route warning.",
       "verification": "pnpm exec vitest run tests/features/feat-025-model-soft-delete.unit.test.ts && pnpm test:e2e tests/e2e/feat-025-model-soft-delete.e2e.spec.ts --grep 'missing referenced model marked unavailable excluded from routing and warning visible'",
-      "dependencies": ["feat-011", "feat-023"],
+      "dependencies": ["feat-011", "feat-023", "feat-032"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -374,7 +374,7 @@
       "name": "Token and Cost Budget Enforcement",
       "description": "Gateway reserves token and cost budget before provider calls, finalizes actual usage after completion, rejects over-budget requests with 402 and a stable error code, and refuses cost-budget enforcement for unknown-price models until a manual price exists.",
       "verification": "pnpm exec vitest run tests/features/feat-042-budget-enforcement.unit.test.ts && pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'",
-      "dependencies": ["feat-014", "feat-031", "feat-040"],
+      "dependencies": ["feat-009", "feat-014", "feat-031", "feat-040"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -434,7 +434,7 @@
       "name": "Gateway Runtime Status Page",
       "description": "Console Runtime page shows Gateway heartbeat status, applied config version, last reload success or failure, and recent runtime error entries from PostgreSQL.",
       "verification": "pnpm exec vitest run tests/features/feat-048-runtime-page.unit.test.ts && pnpm test:e2e tests/e2e/feat-048-runtime-page.e2e.spec.ts --grep 'runtime page shows heartbeat config version reload result and recent errors'",
-      "dependencies": ["feat-009", "feat-013"],
+      "dependencies": ["feat-009", "feat-012", "feat-013"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -443,7 +443,7 @@
       "name": "Playground Live Public API Test",
       "description": "Console Playground accepts a user-pasted Agent API key, keeps it only in browser memory, sends a live request directly to Gateway Public API, and the request is counted in Usage.",
       "verification": "pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts && pnpm test:e2e tests/e2e/feat-049-playground.e2e.spec.ts --grep 'playground uses pasted key in memory direct gateway call and usage increments'",
-      "dependencies": ["feat-027", "feat-030", "feat-036", "feat-038"],
+      "dependencies": ["feat-027", "feat-030", "feat-036", "feat-038", "feat-045"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },

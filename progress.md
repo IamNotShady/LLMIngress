@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 17:11 AWST
+**Last Updated:** 2026-06-12 17:20 AWST
 **Active Feature:** None (feat-002 completed)
 
 ## Status
@@ -21,6 +21,9 @@
   - `feat-005` remains the early base CI gate.
   - New `feat-055` owns adding migration validation to CI after `feat-007` exists.
   - `feat-054` now waits for `feat-055` before local deployment smoke.
+- [x] Re-audited feature dependency graph after CI migration split:
+  - `feat-006` now depends on `feat-002`, so `feat-010` reaches the E2E harness transitively.
+  - Added semantic dependencies for budget reservations, model soft delete routing, runtime reload status, and Playground usage recording.
 
 ### What's In Progress
 
@@ -53,6 +56,9 @@
 - **CI migration validation is not part of base CI**:
   - Context: base CI should land early, but migration validation needs the PostgreSQL fixture and migration runner.
   - Decision: `feat-005` covers install/lint/typecheck/unit/E2E/build; `feat-055` later wires migration validation into CI.
+- **Feature dependencies must cover their verification harness and referenced runtime data**:
+  - Context: `feat-006` and `feat-010` verification commands run `pnpm test:e2e`, but the dependency graph previously allowed them before `feat-002`.
+  - Decision: `feat-006` now depends on `feat-002`; semantic dependencies were added where descriptions or verification depend on earlier schema/runtime outputs.
 
 ## Files Modified This Session
 
@@ -62,6 +68,7 @@
 - `tests/e2e/feat-002-test-harness.e2e.spec.ts` - New E2E spec proving missing tests fail and commands are separate.
 - `feature_list.json` - feat-002 marked `passing` with evidence.
 - `feature_list.json` - Split migration validation from `feat-005` into new `feat-055`.
+- `feature_list.json` - Added dependency closure fixes for `feat-006`, `feat-025`, `feat-042`, `feat-048`, and `feat-049`.
 - `pnpm-lock.yaml` - Lockfile update for `@playwright/test`.
 
 ## Evidence of Completion
@@ -76,6 +83,10 @@
 - [x] Dependency graph check after adding `feat-055`: `55 features`, no missing dependencies, no self-dependencies, no cycles.
 - [x] Full gate clean after split: `pnpm run verify` passed.
 - [x] E2E smoke after split: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
+- [x] Baseline before dependency audit: `pnpm run verify` passed.
+- [x] Dependency graph check after audit: `55 features`, no missing deps, no self-deps, no cycles, no E2E verification outside `feat-002` closure.
+- [x] Full gate clean after dependency audit: `pnpm run verify` passed.
+- [x] E2E smoke after dependency audit: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
 
 ## Notes for Next Session
 

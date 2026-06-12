@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 19:37 AWST
-**Active Feature:** feat-004 next (feat-003 completed)
+**Last Updated:** 2026-06-12 19:40 AWST
+**Active Feature:** feat-005 next (feat-004 completed)
 
 ## Status
 
@@ -34,6 +34,10 @@
   - Added `packages/db` test fixture helpers for `TEST_DATABASE_URL`, isolated database creation, fixture migration, reset, and cleanup.
   - Added feat-003 unit and E2E tests; both were observed failing before implementation and passing after implementation.
   - Verified against Docker Postgres on `127.0.0.1:55432`.
+- [x] **feat-004 — Fake Provider Test Server (passing)**:
+  - Added a reusable fake provider test server with deterministic JSON, streaming, error, timeout, and first-byte-failure modes.
+  - Request capture records method, path, mode, headers, raw body, and parsed JSON body.
+  - Added feat-004 unit and E2E tests; both were observed failing before implementation and passing after implementation.
 
 ### What's In Progress
 
@@ -41,9 +45,9 @@
 
 ### What's Next
 
-1. `feat-004` — Fake Provider Test Server (deterministic modes incl. streaming/timeout/first-byte failure).
-2. `feat-005` — CI Verification Pipeline (now unblocked since `pnpm test:e2e` exists).
-3. `feat-006` — Bootstrap Runtime Configuration.
+1. `feat-005` — CI Verification Pipeline (now unblocked since `pnpm test:e2e` exists).
+2. `feat-006` — Bootstrap Runtime Configuration.
+3. `feat-007` — PostgreSQL Connection and Migration Runner.
 4. `feat-055` — CI Migration Validation after `feat-007` produces the migration check command.
 
 ## Blockers / Risks
@@ -90,6 +94,9 @@
 - `tests/features/feat-003-postgres-fixture.unit.test.ts` - New unit contract tests for test database URL handling.
 - `tests/e2e/feat-003-postgres-fixture.e2e.spec.ts` - New E2E fixture smoke test against real PostgreSQL.
 - `packages/db/package.json` - Added `pg` dependency.
+- `tests/support/fake-provider.ts` - New reusable fake provider server for feature tests.
+- `tests/features/feat-004-fake-provider.unit.test.ts` - New unit contract tests for fake provider behavior.
+- `tests/e2e/feat-004-fake-provider.e2e.spec.ts` - New E2E fake provider mode test.
 - `pnpm-lock.yaml` - Lockfile updates for `@playwright/test`, `pg`, and `@types/pg`.
 
 ## Evidence of Completion
@@ -122,6 +129,13 @@
 - [x] feat-003 verification passed:
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' bash -lc 'test -n "$TEST_DATABASE_URL"' && pnpm exec vitest run tests/features/feat-003-postgres-fixture.unit.test.ts && TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-003-postgres-fixture.e2e.spec.ts --grep 'postgres fixture migrates resets and prevents leaked rows'`.
   - `pnpm run verify` passed after feat-003 implementation.
+- [x] feat-004 red phase observed:
+  - `pnpm exec vitest run tests/features/feat-004-fake-provider.unit.test.ts` failed because `tests/support/fake-provider` was missing.
+  - `pnpm test:e2e tests/e2e/feat-004-fake-provider.e2e.spec.ts --grep 'fake provider returns fixed body stream error timeout and first byte failure'` failed because `tests/support/fake-provider` was missing.
+- [x] feat-004 verification passed:
+  - `pnpm exec vitest run tests/features/feat-004-fake-provider.unit.test.ts` → 2 passed.
+  - `pnpm test:e2e tests/e2e/feat-004-fake-provider.e2e.spec.ts --grep 'fake provider returns fixed body stream error timeout and first byte failure'` → 1 passed.
+  - `pnpm run verify` passed after feat-004 implementation.
 
 ## Notes for Next Session
 

@@ -1,0 +1,174 @@
+import { createServer, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
+import type { AddressInfo } from "node:net";
+
+export type FakeProviderMode = "json" | "stream" | "error" | "timeout" | "first-byte-failure";
+
+export type CapturedFakeProviderRequest = {
+  method: string;
+  path: string;
+  mode: FakeProviderMode;
+  headers: IncomingHttpHeaders;
+  bodyRaw: string;
+  bodyJson: unknown;
+};
+
+export type FakeProviderServer = {
+  url: string;
+  requests: CapturedFakeProviderRequest[];
+  close: () => Promise<void>;
+};
+
+type FakeProviderServerOptions = {
+  timeoutMs?: number;
+};
+
+export async function createFakeProviderServer(
+  options: FakeProviderServerOptions = {},
+): Promise<FakeProviderServer> {
+  const requests: CapturedFakeProviderRequest[] = [];
+  const timeoutMs = options.timeoutMs ?? 30_000;
+
+  const server = createServer((request, response) => {
+    void handleRequest(request, response, requests, timeoutMs);
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  const address = server.address() as AddressInfo;
+
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    requests,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
+}
+
+async function handleRequest(
+  request: IncomingMessage,
+  response: Parameters<Parameters<typeof createServer>[0]>[1],
+  requests: CapturedFakeProviderRequest[],
+  timeoutMs: number,
+): Promise<void> {
+  try {
+    const url = new URL(request.url ?? "/", "http://fake-provider.local");
+    const mode = readMode(url);
+    const bodyRaw = await readBody(request);
+    const bodyJson = parseJsonBody(bodyRaw);
+
+    requests.push({
+      method: request.method ?? "GET",
+      path: url.pathname,
+      mode,
+      headers: request.headers,
+      bodyRaw,
+      bodyJson,
+    });
+
+    if (mode === "json") {
+      writeJson(response, 200, {
+        id: "fake-provider-response",
+        object: "chat.completion",
+        choices: [{ index: 0, message: { role: "assistant", content: "fake provider response" } }],
+      });
+      return;
+    }
+
+    if (mode === "stream") {
+      response.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+      });
+      response.write('data: {"delta":"fake"}\n\n');
+      response.write('data: {"delta":" stream"}\n\n');
+      response.end("data: [DONE]\n\n");
+      return;
+    }
+
+    if (mode === "error") {
+      writeJson(response, 503, {
+        error: {
+          code: "fake_provider_error",
+          message: "Fake provider error",
+        },
+      });
+      return;
+    }
+
+    if (mode === "timeout") {
+      const timer = setTimeout(() => {
+        if (!response.destroyed) {
+          writeJson(response, 504, {
+            error: {
+              code: "fake_provider_timeout",
+              message: "Fake provider timeout",
+            },
+          });
+        }
+      }, timeoutMs);
+      timer.unref();
+      response.once("close", () => clearTimeout(timer));
+      return;
+    }
+
+    request.socket.destroy();
+  } catch (error) {
+    response.destroy(error instanceof Error ? error : undefined);
+  }
+}
+
+function readMode(url: URL): FakeProviderMode {
+  const mode = url.searchParams.get("mode") ?? "json";
+  if (
+    mode === "json" ||
+    mode === "stream" ||
+    mode === "error" ||
+    mode === "timeout" ||
+    mode === "first-byte-failure"
+  ) {
+    return mode;
+  }
+  return "json";
+}
+
+function writeJson(
+  response: Parameters<Parameters<typeof createServer>[0]>[1],
+  status: number,
+  body: unknown,
+): void {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(body));
+}
+
+async function readBody(request: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function parseJsonBody(bodyRaw: string): unknown {
+  if (!bodyRaw) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(bodyRaw);
+  } catch {
+    return undefined;
+  }
+}

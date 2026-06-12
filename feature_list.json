@@ -33,8 +33,8 @@
       "description": "Fake Provider exposes deterministic non-streaming, streaming, error, timeout, and first-byte-failure modes with request capture for assertions.",
       "verification": "pnpm exec vitest run tests/features/feat-004-fake-provider.unit.test.ts && pnpm test:e2e tests/e2e/feat-004-fake-provider.e2e.spec.ts --grep 'fake provider returns fixed body stream error timeout and first byte failure'",
       "dependencies": ["feat-002"],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-12: TDD red observed for feat-004 unit and E2E tests before implementation; verification passed — feat-004 unit test (2 passed) and feat-004 Playwright E2E (1 passed) covering fixed JSON, stream, structured error, timeout, first-byte failure, and request capture."
     },
     {
       "id": "feat-005",

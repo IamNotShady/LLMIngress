@@ -7,10 +7,14 @@
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
     "test": "vitest run",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
     "init": "bash init.sh"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "@types/node": "^25.9.3",
     "tsx": "^4.22.4",
     "turbo": "^2.9.18",

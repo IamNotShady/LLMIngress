@@ -9,7 +9,7 @@ Before writing code:
 1. **Confirm working directory** with `pwd`
 2. **Read this file** completely
 3. **Read project docs if present** (`docs/ARCHITECTURE.md`, `docs/PRODUCT.md`, README, or equivalent)
-4. **Run `./init.sh`** to verify environment is healthy
+4. **Run `pnpm run verify`** to confirm the workspace is healthy (lint → typecheck → test → build; exits when done). Use `./init.sh` only when you also want the dev servers running — it verifies first, then launches and blocks.
 5. **Read `feature_list.json`** to see current feature state
 6. **Review recent commits** with `git log --oneline -5`
 
@@ -20,6 +20,7 @@ If baseline verification is failing, repair that first before adding new scope.
 - **One feature at a time**: Pick exactly one unfinished feature from `feature_list.json`
 - **TDD first**: Before implementing any feature, write the expected unit test and E2E test cases first; only start implementation after the tests exist, and finish the feature only after those tests pass
 - **Verification required**: Don't claim done without running verification commands
+- **Coding Rule**: Before writing code for any feature, read `docs/karpathy-guidelines.md`.
 - **Update artifacts**: Before ending session, update `progress.md` and `feature_list.json`
 - **Stay in scope**: Don't modify files unrelated to the current feature
 - **Leave clean state**: Next session must be able to run `./init.sh` immediately
@@ -28,7 +29,8 @@ If baseline verification is failing, repair that first before adding new scope.
 
 - `feature_list.json` — Feature state tracker (source of truth)
 - `progress.md` — Session continuity log
-- `init.sh` — Standard startup and verification path
+- `pnpm run verify` — Verification path (lint → typecheck → test → build; exits)
+- `init.sh` — Verifies, then launches the dev servers (blocks)
 - `session-handoff.md` — Optional, for larger sessions
 
 ## Definition of Done
@@ -53,16 +55,15 @@ Before ending a session:
 
 ## Verification Commands
 
+`pnpm run verify` runs `lint → typecheck → test → build` and exits — use it as
+the health check. (`./init.sh` runs the same gate, then launches the dev servers
+and blocks.)
+
 ```bash
-# Full verification (recommended)
-./init.sh
+pnpm run verify
 ```
 
-Required checks:
-- `pnpm install`
-- `pnpm run typecheck`
-- `pnpm test`
-- `pnpm run build`
+Lint is Biome (`biome.json`); use `pnpm run lint:fix` to auto-fix before committing.
 
 ## Escalation
 

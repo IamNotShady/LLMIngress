@@ -13,6 +13,16 @@ if [ ! -d "node_modules" ]; then
   pnpm install
 fi
 
+# Verification gate: must pass before any dev server starts.
+# Set SKIP_VERIFY=1 for fast restarts during iteration.
+if [ "${SKIP_VERIFY:-0}" != "1" ]; then
+  echo "Verifying workspace (lint -> typecheck -> test -> build)..."
+  pnpm run verify
+  echo "Verification passed."
+else
+  echo "SKIP_VERIFY=1 set; skipping verification gate."
+fi
+
 export GATEWAY_PORT="${GATEWAY_PORT:-4000}"
 export CONSOLE_PORT="${CONSOLE_PORT:-3000}"
 export WORKER_HEARTBEAT_MS="${WORKER_HEARTBEAT_MS:-30000}"

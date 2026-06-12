@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "LLMIngress Console",
-  description: "LLMIngress management console"
+  description: "LLMIngress management console",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

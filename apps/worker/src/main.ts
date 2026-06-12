@@ -12,7 +12,7 @@ export function startWorker() {
     stop() {
       clearInterval(timer);
       console.log("[worker] stopped");
-    }
+    },
   };
 }
 

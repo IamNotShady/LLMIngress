@@ -33,7 +33,7 @@
 1. Read `AGENTS.md`.
 2. Read `feature_list.json` and `progress.md`.
 3. Review this handoff.
-4. Run `./init.sh` or the documented verification command before editing.
+4. Run `pnpm run verify` before editing (use `./init.sh` only to launch the app).
 
 ## Recommended Next Step
 

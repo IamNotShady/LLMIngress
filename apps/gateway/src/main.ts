@@ -3,12 +3,12 @@ import Fastify from "fastify";
 
 export function createGatewayApp() {
   const app = Fastify({
-    logger: true
+    logger: true,
   });
 
   app.get("/health", async () => ({
     service: "gateway",
-    status: "ok"
+    status: "ok",
   }));
 
   return app;
@@ -20,7 +20,7 @@ async function startGateway() {
 
   await app.listen({
     host: "0.0.0.0",
-    port
+    port,
   });
 }
 

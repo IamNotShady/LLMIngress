@@ -1,4 +1,4 @@
-import { statSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -18,20 +18,20 @@ const projects = [
     name: "@llmingress/gateway",
     packagePath: "apps/gateway/package.json",
     entryPath: "apps/gateway/src/main.ts",
-    requiredScripts: ["dev", "build", "start", "typecheck"]
+    requiredScripts: ["dev", "build", "start", "typecheck"],
   },
   {
     name: "@llmingress/console",
     packagePath: "apps/console/package.json",
     entryPath: "apps/console/src/app/page.tsx",
-    requiredScripts: ["dev", "build", "start", "typecheck"]
+    requiredScripts: ["dev", "build", "start", "typecheck"],
   },
   {
     name: "@llmingress/worker",
     packagePath: "apps/worker/package.json",
     entryPath: "apps/worker/src/main.ts",
-    requiredScripts: ["dev", "build", "start", "typecheck"]
-  }
+    requiredScripts: ["dev", "build", "start", "typecheck"],
+  },
 ];
 
 const sharedPackages = [
@@ -39,20 +39,20 @@ const sharedPackages = [
     name: "@llmingress/domain",
     packagePath: "packages/domain/package.json",
     entryPath: "packages/domain/src/index.ts",
-    requiredScripts: ["build", "typecheck"]
+    requiredScripts: ["build", "typecheck"],
   },
   {
     name: "@llmingress/config",
     packagePath: "packages/config/package.json",
     entryPath: "packages/config/src/index.ts",
-    requiredScripts: ["build", "typecheck"]
+    requiredScripts: ["build", "typecheck"],
   },
   {
     name: "@llmingress/db",
     packagePath: "packages/db/package.json",
     entryPath: "packages/db/src/index.ts",
-    requiredScripts: ["build", "typecheck"]
-  }
+    requiredScripts: ["build", "typecheck"],
+  },
 ];
 
 describe("workspace scaffold", () => {
@@ -61,6 +61,12 @@ describe("workspace scaffold", () => {
 
     expect(workspace).toContain('"apps/*"');
     expect(workspace).toContain('"packages/*"');
+  });
+
+  it("fails when a requested test file is missing", () => {
+    const vitestConfig = readFileSync(path.join(root, "vitest.config.ts"), "utf8");
+
+    expect(vitestConfig).toContain("passWithNoTests: false");
   });
 
   it.each(projects)("$name has package metadata, scripts, and an entrypoint", (project) => {

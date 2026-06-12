@@ -10,7 +10,7 @@ Before writing code:
 2. **Read this file** completely
 3. **Read project docs if present** (`docs/ARCHITECTURE.md`, `docs/PRODUCT.md`, README, or equivalent)
 4. **Run `pnpm run verify`** to confirm the workspace is healthy (lint → typecheck → test → build; exits when done). Use `./init.sh` only when you also want the dev servers running — it verifies first, then launches and blocks.
-5. **Read `feature_list.json`** to see current feature state
+5. **Read `feature_list.json`** to see current feature status
 6. **Review recent commits** with `git log --oneline -5`
 
 If baseline verification is failing, repair that first before adding new scope.
@@ -27,11 +27,14 @@ If baseline verification is failing, repair that first before adding new scope.
 
 ## Required Artifacts
 
-- `feature_list.json` — Feature state tracker (source of truth)
+- `feature_list.json` — Feature status tracker (source of truth)
 - `progress.md` — Session continuity log
 - `pnpm run verify` — Verification path (lint → typecheck → test → build; exits)
 - `init.sh` — Verifies, then launches the dev servers (blocks)
 - `session-handoff.md` — Optional, for larger sessions
+
+`feature_list.json` entries use this schema: `id`, `name`, `description`,
+`verification`, `dependencies`, `status`, and `evidence`.
 
 ## Definition of Done
 

@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 13:40 AWST
+**Last Updated:** 2026-06-12 15:49 AWST
 **Active Feature:** None
 
 ## Status
@@ -13,11 +13,12 @@
 - [x] Moved the startup script to root-level `init.sh`; `pnpm run init` now calls `bash init.sh`.
 - [x] Added scaffold tests for app/package structure, root startup script, and Vitest missing-test behavior.
 - [x] Reworked `feature_list.json` into harness-friendly feature primitives:
-  - `behavior`
+  - `description`
   - `verification`
   - `dependencies`
-  - `state`
+  - `status`
   - `evidence`
+- [x] Standardized feature tracker schema on `description` / `status` and added a scaffold test that rejects legacy `behavior` / `state` fields.
 - [x] Split the MVP scope from `docs/PLAN.md` into 54 independently developable and testable features.
 - [x] Updated verification contracts so missing feature tests fail instead of silently passing.
 
@@ -40,7 +41,7 @@
 
 - **Feature list is the MVP source of execution truth**:
   - Context: `docs/PLAN.md` defines MVP scope; `feature_list.json` breaks it into independently verifiable work items.
-  - Decision: Each item has a concrete `behavior` and `verification`, not just a task description.
+  - Decision: Each item has a concrete `description`, `verification`, `dependencies`, `status`, and `evidence`.
 - **Missing tests must fail**:
   - Context: Feature verification should not pass when a future test file is absent.
   - Decision: `vitest.config.ts` sets `passWithNoTests: false`; scaffold tests assert this.
@@ -50,17 +51,24 @@
 
 ## Files Modified This Session
 
+- `AGENTS.md` - Documented the canonical `feature_list.json` schema.
+- `feature_list.json` - Renamed feature fields from `behavior` / `state` to `description` / `status`.
 - `feature_list.json` - Replaced examples with 54 MVP feature primitives and strict verification contracts.
 - `vitest.config.ts` - Added `passWithNoTests: false`.
 - `tests/scaffold.test.ts` - Added scaffold assertion for missing-test failure behavior.
+- `tests/scaffold.test.ts` - Added feature tracker schema assertion for `description` / `status`.
 - `.gitignore` - Added Turborepo cache ignore rules.
 
 ## Evidence of Completion
 
 - [x] Feature list schema check: `54 features`, `passing=1`, `not_started=53`.
+- [x] Feature list schema check now requires `description` / `status` and rejects legacy `behavior` / `state`.
+- [x] Harness validator: `100/100`, including state subsystem `5/5`.
+- [x] Targeted scaffold test: `pnpm exec vitest run tests/scaffold.test.ts` reports `10 passed` tests.
 - [x] Missing test behavior: `pnpm exec vitest run tests/features/__missing__.unit.test.ts` exits with code `1`.
-- [x] Tests pass: `pnpm test` reports `1 passed` test file and `9 passed` tests.
+- [x] Tests pass: `pnpm test` reports `1 passed` test file and `10 passed` tests.
 - [x] Type check clean: `pnpm typecheck` reports `6 successful` packages.
+- [x] Full verification clean: `pnpm run verify` passed.
 - [x] Diff check clean: `git diff --check` passed for edited files.
 
 ## Notes for Next Session

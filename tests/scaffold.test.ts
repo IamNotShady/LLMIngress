@@ -13,6 +13,10 @@ type PackageJson = {
   scripts?: Record<string, string>;
 };
 
+type FeatureList = {
+  features: Array<Record<string, unknown>>;
+};
+
 const projects = [
   {
     name: "@llmingress/gateway",
@@ -67,6 +71,18 @@ describe("workspace scaffold", () => {
     const vitestConfig = readFileSync(path.join(root, "vitest.config.ts"), "utf8");
 
     expect(vitestConfig).toContain("passWithNoTests: false");
+  });
+
+  it("uses description and status fields for feature tracking", () => {
+    const featureList = readJson<FeatureList>("feature_list.json");
+
+    expect(featureList.features.length).toBeGreaterThan(0);
+    for (const feature of featureList.features) {
+      expect(feature.description).toBeTypeOf("string");
+      expect(feature.status).toBeTypeOf("string");
+      expect(feature).not.toHaveProperty("behavior");
+      expect(feature).not.toHaveProperty("state");
+    }
   });
 
   it.each(projects)("$name has package metadata, scripts, and an entrypoint", (project) => {

@@ -51,8 +51,8 @@
       "description": "Gateway, Console, and Worker read ports, PostgreSQL URL, and master key source from environment or bootstrap config; invalid required values stop startup with a clear error.",
       "verification": "pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts && pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts --grep 'env and bootstrap config load ports database url master key and reject invalid config'",
       "dependencies": ["feat-001", "feat-002"],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-12: TDD red observed for feat-006 unit and E2E tests before implementation; verification passed — feat-006 unit test (3 passed) and feat-006 Playwright E2E (1 passed) covering env config, bootstrap config file, env override, database URL validation, and master key source validation."
     },
     {
       "id": "feat-007",

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 19:44 AWST
-**Active Feature:** feat-006 next (feat-005 completed)
+**Last Updated:** 2026-06-12 19:46 AWST
+**Active Feature:** None (feat-003 through feat-006 completed)
 
 ## Status
 
@@ -42,6 +42,10 @@
   - Added GitHub Actions workflow for install, lint, typecheck, unit tests, E2E smoke, and build.
   - Kept migration validation out of base CI; `feat-055` still owns that later.
   - Made the PostgreSQL fixture E2E opt-in when `TEST_DATABASE_URL` is absent so the base E2E smoke command can run without a database.
+- [x] **feat-006 — Bootstrap Runtime Configuration (passing)**:
+  - Added `packages/config` bootstrap runtime loader for environment and JSON bootstrap config files.
+  - Covers gateway/console ports, worker heartbeat, PostgreSQL `DATABASE_URL`, and inline/file master key sources.
+  - Invalid ports, database URLs, and missing master key sources fail with explicit errors.
 
 ### What's In Progress
 
@@ -49,9 +53,9 @@
 
 ### What's Next
 
-1. `feat-006` — Bootstrap Runtime Configuration.
-2. `feat-007` — PostgreSQL Connection and Migration Runner.
-3. `feat-008` — Core Configuration Schema.
+1. `feat-007` — PostgreSQL Connection and Migration Runner.
+2. `feat-008` — Core Configuration Schema.
+3. `feat-009` — Runtime Records and Jobs Schema.
 4. `feat-055` — CI Migration Validation after `feat-007` produces the migration check command.
 
 ## Blockers / Risks
@@ -105,6 +109,9 @@
 - `tests/features/feat-005-ci-pipeline.unit.test.ts` - New CI workflow unit checks.
 - `tests/e2e/feat-005-ci-pipeline.e2e.spec.ts` - New CI workflow E2E smoke check.
 - `tests/e2e/feat-003-postgres-fixture.e2e.spec.ts` - Added opt-in skip when `TEST_DATABASE_URL` is absent.
+- `packages/config/src/index.ts` - Added bootstrap runtime config loader.
+- `tests/features/feat-006-bootstrap-config.unit.test.ts` - New config unit tests.
+- `tests/e2e/feat-006-bootstrap-config.e2e.spec.ts` - New config E2E smoke test.
 - `pnpm-lock.yaml` - Lockfile updates for `@playwright/test`, `pg`, and `@types/pg`.
 
 ## Evidence of Completion
@@ -151,6 +158,14 @@
   - `pnpm exec vitest run tests/features/feat-005-ci-pipeline.unit.test.ts` → 3 passed.
   - `pnpm test:e2e tests/e2e/feat-005-ci-pipeline.e2e.spec.ts --grep 'ci workflow contains install lint typecheck unit e2e and build gates'` → 1 passed.
   - Full feat-005 verification passed: workflow checks, `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm build`.
+- [x] feat-006 red phase observed:
+  - `pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts` failed because `loadBootstrapRuntimeConfig` was missing.
+  - `pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts --grep 'env and bootstrap config load ports database url master key and reject invalid config'` failed because `loadBootstrapRuntimeConfig` was missing.
+- [x] feat-006 verification passed:
+  - `pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts` → 3 passed.
+  - `pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts --grep 'env and bootstrap config load ports database url master key and reject invalid config'` → 1 passed.
+- [x] Final full gate after feat-003 through feat-006: `pnpm run verify` passed.
+- [x] Final E2E smoke after feat-003 through feat-006: `pnpm test:e2e` passed with 4 passed and 1 skipped (PostgreSQL fixture remains opt-in without `TEST_DATABASE_URL`).
 
 ## Notes for Next Session
 

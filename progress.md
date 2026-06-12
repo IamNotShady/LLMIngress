@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 19:11 AWST
-**Active Feature:** None (feat-002 completed)
+**Last Updated:** 2026-06-12 19:37 AWST
+**Active Feature:** feat-004 next (feat-003 completed)
 
 ## Status
 
@@ -30,6 +30,10 @@
 - [x] Clarified `feat-003` test PostgreSQL configuration contract:
   - `feat-003` now explicitly reads `TEST_DATABASE_URL`.
   - Its verification command checks the env var before running unit and E2E tests.
+- [x] **feat-003 — Test PostgreSQL Fixture (passing)**:
+  - Added `packages/db` test fixture helpers for `TEST_DATABASE_URL`, isolated database creation, fixture migration, reset, and cleanup.
+  - Added feat-003 unit and E2E tests; both were observed failing before implementation and passing after implementation.
+  - Verified against Docker Postgres on `127.0.0.1:55432`.
 
 ### What's In Progress
 
@@ -37,15 +41,14 @@
 
 ### What's Next
 
-1. `feat-003` — Test PostgreSQL Fixture (isolated DB per test, migrate, reset, no leaked rows).
-2. `feat-004` — Fake Provider Test Server (deterministic modes incl. streaming/timeout/first-byte failure).
-3. `feat-005` — CI Verification Pipeline (now unblocked since `pnpm test:e2e` exists).
+1. `feat-004` — Fake Provider Test Server (deterministic modes incl. streaming/timeout/first-byte failure).
+2. `feat-005` — CI Verification Pipeline (now unblocked since `pnpm test:e2e` exists).
+3. `feat-006` — Bootstrap Runtime Configuration.
 4. `feat-055` — CI Migration Validation after `feat-007` produces the migration check command.
 
 ## Blockers / Risks
 
 - [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
-- [ ] PostgreSQL fixture not implemented; database-backed feature work must wait for `feat-003`.
 - [ ] `apps/console/next-env.d.ts` is now gitignored (generated, rewritten by `next dev`/`next build`). It imports types from `.next/`, so Console `typecheck` implicitly requires a prior dev/build. feat-005 CI must run `next typegen` (or a build) before typecheck on a clean checkout.
 
 ## Decisions Made
@@ -83,7 +86,11 @@
 - `feature_list.json` - Added dependency closure fixes for `feat-006`, `feat-025`, `feat-042`, `feat-048`, and `feat-049`.
 - `feature_list.json` - Added price-system dependencies to `feat-031`.
 - `feature_list.json` - Clarified that `feat-003` reads `TEST_DATABASE_URL`.
-- `pnpm-lock.yaml` - Lockfile update for `@playwright/test`.
+- `packages/db/src/index.ts` - Added Test PostgreSQL fixture helpers.
+- `tests/features/feat-003-postgres-fixture.unit.test.ts` - New unit contract tests for test database URL handling.
+- `tests/e2e/feat-003-postgres-fixture.e2e.spec.ts` - New E2E fixture smoke test against real PostgreSQL.
+- `packages/db/package.json` - Added `pg` dependency.
+- `pnpm-lock.yaml` - Lockfile updates for `@playwright/test`, `pg`, and `@types/pg`.
 
 ## Evidence of Completion
 
@@ -109,6 +116,12 @@
 - [x] Dependency graph check after `feat-003` config contract audit: `feat-003` description and verification mention `TEST_DATABASE_URL`; `55 features`, no missing deps, no self-deps, no cycles, no E2E verification outside `feat-002` closure.
 - [x] Full gate clean after `feat-003` config contract audit: `pnpm run verify` passed.
 - [x] E2E smoke after `feat-003` config contract audit: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
+- [x] feat-003 red phase observed:
+  - `pnpm exec vitest run tests/features/feat-003-postgres-fixture.unit.test.ts` failed because fixture exports were missing.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-003-postgres-fixture.e2e.spec.ts --grep 'postgres fixture migrates resets and prevents leaked rows'` failed because fixture export was missing.
+- [x] feat-003 verification passed:
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' bash -lc 'test -n "$TEST_DATABASE_URL"' && pnpm exec vitest run tests/features/feat-003-postgres-fixture.unit.test.ts && TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-003-postgres-fixture.e2e.spec.ts --grep 'postgres fixture migrates resets and prevents leaked rows'`.
+  - `pnpm run verify` passed after feat-003 implementation.
 
 ## Notes for Next Session
 

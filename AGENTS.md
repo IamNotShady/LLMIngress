@@ -19,6 +19,8 @@ If baseline verification is failing, repair that first before adding new scope.
 
 - **One feature at a time**: Pick exactly one unfinished feature from `feature_list.json`
 - **TDD first**: Before implementing any feature, write the expected unit test and E2E test cases first; only start implementation after the tests exist, and finish the feature only after those tests pass
+- **Verification altitude**: Every observable behavior named in a feature's `description` must be asserted by its tests at the same level it is described. If the description says a process stops at startup, the E2E test must launch the real process and assert the exit — not call a library function the apps never import. Before writing tests, reconcile `description` against `verification`; if the verification is weaker than the description, fix the verification (or explicitly narrow the description) first
+- **Regression after every pass**: After a feature's verification passes and before marking it `passing`, run `pnpm run verify:features` to re-verify all previously passing features. If any regress, set that feature's `status` to `failing`, record the regression in its `evidence`, and repair it before starting new scope
 - **Verification required**: Don't claim done without running verification commands
 - **Coding Rule**: Before writing code for any feature, read `docs/CODING_GUIDE.md`.
 - **Update artifacts**: Before ending session, update `progress.md` and `feature_list.json`
@@ -30,6 +32,7 @@ If baseline verification is failing, repair that first before adding new scope.
 - `feature_list.json` — Feature status tracker (source of truth)
 - `progress.md` — Session continuity log
 - `pnpm run verify` — Verification path (lint → typecheck → test → build; exits)
+- `pnpm run verify:features` — Full feature regression (re-runs the `verification` command of every `passing` feature in `feature_list.json`; exits non-zero on any regression)
 - `init.sh` — Verifies, then launches the dev servers (blocks)
 - `session-handoff.md` — Optional, for larger sessions
 
@@ -41,8 +44,9 @@ If baseline verification is failing, repair that first before adding new scope.
 A feature is done only when ALL of the following are true:
 
 - [ ] Target behavior is implemented
-- [ ] Unit tests and E2E tests for the feature pass
+- [ ] Unit tests and E2E tests for the feature pass, and they assert the behavior at the altitude the `description` states it
 - [ ] Required verification actually ran (tests / lint / type-check)
+- [ ] Full feature regression passed: `pnpm run verify:features` re-verifies all previously passing features; any regressed feature has its `status` set to `failing` and the failure recorded in `evidence`
 - [ ] Evidence recorded in `feature_list.json` or `progress.md`
 - [ ] Repository remains restartable from standard startup path
 
@@ -64,7 +68,13 @@ and blocks.)
 
 ```bash
 pnpm run verify
+pnpm run verify:features
 ```
+
+Database-backed verifications require `TEST_DATABASE_URL` pointing at the local
+test PostgreSQL (e.g. `postgresql://postgres:postgres@127.0.0.1:55432/postgres`
+from the `llmingress-postgres` Docker container). Features guarded by it fail
+loudly — never silently skip — when the variable is missing.
 
 Lint is Biome (`biome.json`); use `pnpm run lint:fix` to auto-fix before committing.
 

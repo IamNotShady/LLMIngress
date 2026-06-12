@@ -275,7 +275,7 @@
       "name": "Agent API Key Limit Configuration",
       "description": "A user can configure Budget, RPM, TPM, and Token Limit rules for an Agent API key; Console blocks enabling a cost budget for a model with unknown price until a manual price is provided.",
       "verification": "pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form blocks cost budget when selected model has unknown price'",
-      "dependencies": ["feat-027"],
+      "dependencies": ["feat-014", "feat-015", "feat-027"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },

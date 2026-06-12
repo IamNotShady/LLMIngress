@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 17:20 AWST
+**Last Updated:** 2026-06-12 19:02 AWST
 **Active Feature:** None (feat-002 completed)
 
 ## Status
@@ -24,6 +24,9 @@
 - [x] Re-audited feature dependency graph after CI migration split:
   - `feat-006` now depends on `feat-002`, so `feat-010` reaches the E2E harness transitively.
   - Added semantic dependencies for budget reservations, model soft delete routing, runtime reload status, and Playground usage recording.
+- [x] Re-audited `feat-031` price-system dependencies:
+  - `feat-031` now depends on `feat-014` for `unknown_price` classification.
+  - `feat-031` now depends on `feat-015` for manual price override before enabling cost budgets.
 
 ### What's In Progress
 
@@ -59,6 +62,9 @@
 - **Feature dependencies must cover their verification harness and referenced runtime data**:
   - Context: `feat-006` and `feat-010` verification commands run `pnpm test:e2e`, but the dependency graph previously allowed them before `feat-002`.
   - Decision: `feat-006` now depends on `feat-002`; semantic dependencies were added where descriptions or verification depend on earlier schema/runtime outputs.
+- **Cost budget configuration depends on the price system**:
+  - Context: `feat-031` blocks cost budgets for unknown-price models until a manual price exists.
+  - Decision: `feat-031` depends on both `feat-014` and `feat-015`, so its E2E setup can classify unknown prices and exercise manual price override.
 
 ## Files Modified This Session
 
@@ -69,6 +75,7 @@
 - `feature_list.json` - feat-002 marked `passing` with evidence.
 - `feature_list.json` - Split migration validation from `feat-005` into new `feat-055`.
 - `feature_list.json` - Added dependency closure fixes for `feat-006`, `feat-025`, `feat-042`, `feat-048`, and `feat-049`.
+- `feature_list.json` - Added price-system dependencies to `feat-031`.
 - `pnpm-lock.yaml` - Lockfile update for `@playwright/test`.
 
 ## Evidence of Completion
@@ -87,6 +94,10 @@
 - [x] Dependency graph check after audit: `55 features`, no missing deps, no self-deps, no cycles, no E2E verification outside `feat-002` closure.
 - [x] Full gate clean after dependency audit: `pnpm run verify` passed.
 - [x] E2E smoke after dependency audit: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
+- [x] Baseline before `feat-031` dependency audit: `pnpm run verify` passed.
+- [x] Dependency graph check after `feat-031` audit: `feat-031` directly depends on `feat-014` and `feat-015`; `55 features`, no missing deps, no self-deps, no cycles, no E2E verification outside `feat-002` closure.
+- [x] Full gate clean after `feat-031` dependency audit: `pnpm run verify` passed.
+- [x] E2E smoke after `feat-031` dependency audit: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
 
 ## Notes for Next Session
 

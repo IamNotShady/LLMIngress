@@ -20,7 +20,7 @@ If baseline verification is failing, repair that first before adding new scope.
 - **One feature at a time**: Pick exactly one unfinished feature from `feature_list.json`
 - **TDD first**: Before implementing any feature, write the expected unit test and E2E test cases first; only start implementation after the tests exist, and finish the feature only after those tests pass
 - **Verification required**: Don't claim done without running verification commands
-- **Coding Rule**: Before writing code for any feature, read `docs/karpathy-guidelines.md`.
+- **Coding Rule**: Before writing code for any feature, read `docs/CODING_GUIDE.md`.
 - **Update artifacts**: Before ending session, update `progress.md` and `feature_list.json`
 - **Stay in scope**: Don't modify files unrelated to the current feature
 - **Leave clean state**: Next session must be able to run `./init.sh` immediately

@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 19:02 AWST
+**Last Updated:** 2026-06-12 19:11 AWST
 **Active Feature:** None (feat-002 completed)
 
 ## Status
@@ -27,6 +27,9 @@
 - [x] Re-audited `feat-031` price-system dependencies:
   - `feat-031` now depends on `feat-014` for `unknown_price` classification.
   - `feat-031` now depends on `feat-015` for manual price override before enabling cost budgets.
+- [x] Clarified `feat-003` test PostgreSQL configuration contract:
+  - `feat-003` now explicitly reads `TEST_DATABASE_URL`.
+  - Its verification command checks the env var before running unit and E2E tests.
 
 ### What's In Progress
 
@@ -65,6 +68,9 @@
 - **Cost budget configuration depends on the price system**:
   - Context: `feat-031` blocks cost budgets for unknown-price models until a manual price exists.
   - Decision: `feat-031` depends on both `feat-014` and `feat-015`, so its E2E setup can classify unknown prices and exercise manual price override.
+- **Test PostgreSQL fixture uses test-specific config, not runtime bootstrap config**:
+  - Context: `feat-003` is earlier than `feat-006`, so it cannot depend on the runtime bootstrap configuration feature.
+  - Decision: `feat-003` reads `TEST_DATABASE_URL` directly as a test-only Postgres connection string.
 
 ## Files Modified This Session
 
@@ -76,6 +82,7 @@
 - `feature_list.json` - Split migration validation from `feat-005` into new `feat-055`.
 - `feature_list.json` - Added dependency closure fixes for `feat-006`, `feat-025`, `feat-042`, `feat-048`, and `feat-049`.
 - `feature_list.json` - Added price-system dependencies to `feat-031`.
+- `feature_list.json` - Clarified that `feat-003` reads `TEST_DATABASE_URL`.
 - `pnpm-lock.yaml` - Lockfile update for `@playwright/test`.
 
 ## Evidence of Completion
@@ -98,6 +105,10 @@
 - [x] Dependency graph check after `feat-031` audit: `feat-031` directly depends on `feat-014` and `feat-015`; `55 features`, no missing deps, no self-deps, no cycles, no E2E verification outside `feat-002` closure.
 - [x] Full gate clean after `feat-031` dependency audit: `pnpm run verify` passed.
 - [x] E2E smoke after `feat-031` dependency audit: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
+- [x] Baseline before `feat-003` config contract audit: `pnpm run verify` passed.
+- [x] Dependency graph check after `feat-003` config contract audit: `feat-003` description and verification mention `TEST_DATABASE_URL`; `55 features`, no missing deps, no self-deps, no cycles, no E2E verification outside `feat-002` closure.
+- [x] Full gate clean after `feat-003` config contract audit: `pnpm run verify` passed.
+- [x] E2E smoke after `feat-003` config contract audit: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
 
 ## Notes for Next Session
 

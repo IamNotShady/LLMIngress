@@ -21,8 +21,8 @@
     {
       "id": "feat-003",
       "name": "Test PostgreSQL Fixture",
-      "description": "A test can create an isolated PostgreSQL database, run migrations, insert data, reset the database, and prove the next test starts with no leaked rows.",
-      "verification": "pnpm exec vitest run tests/features/feat-003-postgres-fixture.unit.test.ts && pnpm test:e2e tests/e2e/feat-003-postgres-fixture.e2e.spec.ts --grep 'postgres fixture migrates resets and prevents leaked rows'",
+      "description": "A test fixture reads TEST_DATABASE_URL, creates an isolated PostgreSQL database, runs migrations, inserts data, resets the database, and proves the next test starts with no leaked rows.",
+      "verification": "bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm exec vitest run tests/features/feat-003-postgres-fixture.unit.test.ts && pnpm test:e2e tests/e2e/feat-003-postgres-fixture.e2e.spec.ts --grep 'postgres fixture migrates resets and prevents leaked rows'",
       "dependencies": ["feat-001", "feat-002"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."

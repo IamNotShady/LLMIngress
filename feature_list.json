@@ -42,8 +42,8 @@
       "description": "A pushed commit runs the same install, lint, typecheck, unit test, E2E smoke, and build commands that developers run locally.",
       "verification": "test -f .github/workflows/ci.yml && grep -q 'pnpm install' .github/workflows/ci.yml && grep -q 'pnpm run lint' .github/workflows/ci.yml && grep -q 'pnpm typecheck' .github/workflows/ci.yml && grep -q 'pnpm test' .github/workflows/ci.yml && grep -q 'pnpm test:e2e' .github/workflows/ci.yml && grep -q 'pnpm build' .github/workflows/ci.yml && pnpm install --frozen-lockfile && pnpm run lint && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
       "dependencies": ["feat-002"],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation; verification passed — .github/workflows/ci.yml includes install, lint, typecheck, unit test, E2E smoke, and build gates; local full verification command passed with pnpm install --frozen-lockfile, lint, typecheck, test, test:e2e, and build."
     },
     {
       "id": "feat-006",

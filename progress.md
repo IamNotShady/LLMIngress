@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 19:40 AWST
-**Active Feature:** feat-005 next (feat-004 completed)
+**Last Updated:** 2026-06-12 19:44 AWST
+**Active Feature:** feat-006 next (feat-005 completed)
 
 ## Status
 
@@ -38,6 +38,10 @@
   - Added a reusable fake provider test server with deterministic JSON, streaming, error, timeout, and first-byte-failure modes.
   - Request capture records method, path, mode, headers, raw body, and parsed JSON body.
   - Added feat-004 unit and E2E tests; both were observed failing before implementation and passing after implementation.
+- [x] **feat-005 — CI Verification Pipeline (passing)**:
+  - Added GitHub Actions workflow for install, lint, typecheck, unit tests, E2E smoke, and build.
+  - Kept migration validation out of base CI; `feat-055` still owns that later.
+  - Made the PostgreSQL fixture E2E opt-in when `TEST_DATABASE_URL` is absent so the base E2E smoke command can run without a database.
 
 ### What's In Progress
 
@@ -45,9 +49,9 @@
 
 ### What's Next
 
-1. `feat-005` — CI Verification Pipeline (now unblocked since `pnpm test:e2e` exists).
-2. `feat-006` — Bootstrap Runtime Configuration.
-3. `feat-007` — PostgreSQL Connection and Migration Runner.
+1. `feat-006` — Bootstrap Runtime Configuration.
+2. `feat-007` — PostgreSQL Connection and Migration Runner.
+3. `feat-008` — Core Configuration Schema.
 4. `feat-055` — CI Migration Validation after `feat-007` produces the migration check command.
 
 ## Blockers / Risks
@@ -97,6 +101,10 @@
 - `tests/support/fake-provider.ts` - New reusable fake provider server for feature tests.
 - `tests/features/feat-004-fake-provider.unit.test.ts` - New unit contract tests for fake provider behavior.
 - `tests/e2e/feat-004-fake-provider.e2e.spec.ts` - New E2E fake provider mode test.
+- `.github/workflows/ci.yml` - New base CI workflow.
+- `tests/features/feat-005-ci-pipeline.unit.test.ts` - New CI workflow unit checks.
+- `tests/e2e/feat-005-ci-pipeline.e2e.spec.ts` - New CI workflow E2E smoke check.
+- `tests/e2e/feat-003-postgres-fixture.e2e.spec.ts` - Added opt-in skip when `TEST_DATABASE_URL` is absent.
 - `pnpm-lock.yaml` - Lockfile updates for `@playwright/test`, `pg`, and `@types/pg`.
 
 ## Evidence of Completion
@@ -136,6 +144,13 @@
   - `pnpm exec vitest run tests/features/feat-004-fake-provider.unit.test.ts` → 2 passed.
   - `pnpm test:e2e tests/e2e/feat-004-fake-provider.e2e.spec.ts --grep 'fake provider returns fixed body stream error timeout and first byte failure'` → 1 passed.
   - `pnpm run verify` passed after feat-004 implementation.
+- [x] feat-005 red phase observed:
+  - `pnpm exec vitest run tests/features/feat-005-ci-pipeline.unit.test.ts` failed because `.github/workflows/ci.yml` was missing and the DB E2E was not opt-in.
+  - `pnpm test:e2e tests/e2e/feat-005-ci-pipeline.e2e.spec.ts --grep 'ci workflow contains install lint typecheck unit e2e and build gates'` failed because `.github/workflows/ci.yml` was missing.
+- [x] feat-005 verification passed:
+  - `pnpm exec vitest run tests/features/feat-005-ci-pipeline.unit.test.ts` → 3 passed.
+  - `pnpm test:e2e tests/e2e/feat-005-ci-pipeline.e2e.spec.ts --grep 'ci workflow contains install lint typecheck unit e2e and build gates'` → 1 passed.
+  - Full feat-005 verification passed: workflow checks, `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm build`.
 
 ## Notes for Next Session
 

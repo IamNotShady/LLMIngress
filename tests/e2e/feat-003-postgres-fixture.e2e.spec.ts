@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture } from "../../packages/db/src/index";
 
+test.skip(
+  !process.env.TEST_DATABASE_URL,
+  "TEST_DATABASE_URL is required for PostgreSQL fixture E2E",
+);
+
 test("postgres fixture migrates resets and prevents leaked rows", async () => {
   const first = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_e2e_${randomUUID().replaceAll("-", "_")}`,

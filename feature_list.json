@@ -14,7 +14,9 @@
       "name": "Unit and E2E Test Harness",
       "description": "Running a missing feature test must fail instead of silently passing; real unit tests and E2E tests must have separate commands and directories.",
       "verification": "bash -lc '! pnpm exec vitest run tests/features/__missing__.unit.test.ts' && bash -lc '! rg -n \"passWithNoTests.*true\" vitest.config.ts package.json' && test -d tests/features && test -d tests/e2e && pnpm exec vitest run tests/features/feat-002-test-harness.unit.test.ts && pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'",
-      "dependencies": ["feat-001"],
+      "dependencies": [
+        "feat-001"
+      ],
       "status": "passing",
       "evidence": "2026-06-12: full verification chain passed — vitest on missing test file exits nonzero, no passWithNoTests true in vitest.config.ts/package.json, tests/features and tests/e2e exist, feat-002 unit test passed (vitest), feat-002 e2e spec passed via pnpm test:e2e (Playwright) with --grep; pnpm run verify green."
     },
@@ -23,7 +25,10 @@
       "name": "Test PostgreSQL Fixture",
       "description": "A test fixture reads TEST_DATABASE_URL, creates an isolated PostgreSQL database, runs migrations, inserts data, resets the database, and proves the next test starts with no leaked rows.",
       "verification": "bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm exec vitest run tests/features/feat-003-postgres-fixture.unit.test.ts && pnpm test:e2e tests/e2e/feat-003-postgres-fixture.e2e.spec.ts --grep 'postgres fixture migrates resets and prevents leaked rows'",
-      "dependencies": ["feat-001", "feat-002"],
+      "dependencies": [
+        "feat-001",
+        "feat-002"
+      ],
       "status": "passing",
       "evidence": "2026-06-12: TDD red observed for feat-003 unit and E2E tests before implementation; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' verification passed — env check, feat-003 unit test (3 passed), and feat-003 Playwright E2E (1 passed)."
     },
@@ -32,7 +37,9 @@
       "name": "Fake Provider Test Server",
       "description": "Fake Provider exposes deterministic non-streaming, streaming, error, timeout, and first-byte-failure modes with request capture for assertions.",
       "verification": "pnpm exec vitest run tests/features/feat-004-fake-provider.unit.test.ts && pnpm test:e2e tests/e2e/feat-004-fake-provider.e2e.spec.ts --grep 'fake provider returns fixed body stream error timeout and first byte failure'",
-      "dependencies": ["feat-002"],
+      "dependencies": [
+        "feat-002"
+      ],
       "status": "passing",
       "evidence": "2026-06-12: TDD red observed for feat-004 unit and E2E tests before implementation; verification passed — feat-004 unit test (2 passed) and feat-004 Playwright E2E (1 passed) covering fixed JSON, stream, structured error, timeout, first-byte failure, and request capture."
     },
@@ -40,8 +47,10 @@
       "id": "feat-005",
       "name": "CI Verification Pipeline",
       "description": "A pushed commit runs the same install, lint, typecheck, unit test, E2E smoke, and build commands that developers run locally.",
-      "verification": "test -f .github/workflows/ci.yml && grep -q 'pnpm install' .github/workflows/ci.yml && grep -q 'pnpm run lint' .github/workflows/ci.yml && grep -q 'pnpm typecheck' .github/workflows/ci.yml && grep -q 'pnpm test' .github/workflows/ci.yml && grep -q 'pnpm test:e2e' .github/workflows/ci.yml && grep -q 'pnpm build' .github/workflows/ci.yml && grep -q 'postgres:' .github/workflows/ci.yml && grep -q 'TEST_DATABASE_URL' .github/workflows/ci.yml && pnpm install --frozen-lockfile && pnpm run lint && pnpm typecheck && pnpm test && bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm test:e2e && pnpm build",
-      "dependencies": ["feat-002"],
+      "verification": "test -f .github/workflows/ci.yml && grep -q 'pnpm install' .github/workflows/ci.yml && grep -q 'pnpm run lint' .github/workflows/ci.yml && grep -q 'pnpm typecheck' .github/workflows/ci.yml && grep -q 'pnpm test' .github/workflows/ci.yml && grep -q 'pnpm test:e2e' .github/workflows/ci.yml && grep -q 'pnpm build' .github/workflows/ci.yml && grep -q 'postgres:' .github/workflows/ci.yml && grep -q 'TEST_DATABASE_URL' .github/workflows/ci.yml && pnpm install --frozen-lockfile && pnpm run lint && pnpm typecheck && pnpm test && bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm test:e2e && pnpm build && bash -lc \"gh run list --workflow ci.yml --branch main --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success\"",
+      "dependencies": [
+        "feat-002"
+      ],
       "status": "passing",
       "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82."
     },
@@ -50,7 +59,10 @@
       "name": "Bootstrap Runtime Configuration",
       "description": "Gateway, Console, and Worker read ports, PostgreSQL URL, and master key source from environment or bootstrap config; invalid required values stop startup with a clear error.",
       "verification": "pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts && pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts",
-      "dependencies": ["feat-001", "feat-002"],
+      "dependencies": [
+        "feat-001",
+        "feat-002"
+      ],
       "status": "passing",
       "evidence": "2026-06-12: TDD red observed for feat-006 unit and E2E tests before implementation. 2026-06-12 review fix: Gateway, Worker, and Console startup entries now call loadBootstrapRuntimeConfig; strict integer parsing rejects trailing garbage; updated feat-006 unit tests passed with 5 tests and Playwright E2E passed with 2 startup/config tests."
     },
@@ -59,7 +71,10 @@
       "name": "PostgreSQL Connection and Migration Runner",
       "description": "Running the migration command against an empty PostgreSQL database creates the expected schema version row, and running it again is idempotent.",
       "verification": "pnpm exec vitest run tests/features/feat-007-migration-runner.unit.test.ts && pnpm test:e2e tests/e2e/feat-007-migration-runner.e2e.spec.ts --grep 'migration runner creates schema version and rerun is idempotent'",
-      "dependencies": ["feat-003", "feat-006"],
+      "dependencies": [
+        "feat-003",
+        "feat-006"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -68,7 +83,9 @@
       "name": "Core Configuration Schema",
       "description": "After migration, database constraints allow valid providers, provider models, agents, API keys, virtual models, route policies, limits, and config versions, and reject broken references.",
       "verification": "pnpm exec vitest run tests/features/feat-008-config-schema.unit.test.ts && pnpm test:e2e tests/e2e/feat-008-config-schema.e2e.spec.ts --grep 'core config schema accepts valid graph and rejects broken references'",
-      "dependencies": ["feat-007"],
+      "dependencies": [
+        "feat-007"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -76,8 +93,10 @@
       "id": "feat-009",
       "name": "Runtime Records and Jobs Schema",
       "description": "After migration, runtime tables can persist request activity, usage records, budget reservations, jobs, provider health events, and gateway runtime status with required indexes.",
-      "verification": "pnpm exec vitest run tests/features/feat-009-runtime-schema.unit.test.ts && pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts --grep 'runtime schema persists activity usage reservations jobs health and gateway status'",
-      "dependencies": ["feat-007"],
+      "verification": "pnpm exec vitest run tests/features/feat-009-runtime-schema.unit.test.ts && pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts --grep 'runtime schema persists activity usage reservations jobs health and gateway status with required indexes'",
+      "dependencies": [
+        "feat-007"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -86,7 +105,9 @@
       "name": "Master Key and Secret Encryption",
       "description": "Given a master key source, secrets encrypt to non-plaintext ciphertext, decrypt with the same master key, fail with a different key, and never log plaintext.",
       "verification": "pnpm exec vitest run tests/features/feat-010-secret-encryption.unit.test.ts && pnpm test:e2e tests/e2e/feat-010-secret-encryption.e2e.spec.ts --grep 'provider secret encrypts decrypts rejects wrong key and hides plaintext'",
-      "dependencies": ["feat-006"],
+      "dependencies": [
+        "feat-006"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -94,8 +115,11 @@
       "id": "feat-011",
       "name": "Config Publisher and Postgres Notifications",
       "description": "A routing-visible config write commits data and config version in one transaction and emits one Postgres notification containing the new version.",
-      "verification": "pnpm exec vitest run tests/features/feat-011-config-publisher.unit.test.ts && pnpm test:e2e tests/e2e/feat-011-config-publisher.e2e.spec.ts --grep 'config publisher commits version and sends one notify'",
-      "dependencies": ["feat-007", "feat-008"],
+      "verification": "pnpm exec vitest run tests/features/feat-011-config-publisher.unit.test.ts && pnpm test:e2e tests/e2e/feat-011-config-publisher.e2e.spec.ts --grep 'config publisher commits data and version in one transaction and sends one notify'",
+      "dependencies": [
+        "feat-007",
+        "feat-008"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -103,8 +127,10 @@
       "id": "feat-012",
       "name": "Gateway Config Snapshot Reload",
       "description": "Gateway starts with the latest config snapshot, applies a newer notified config version without restart, and catches up by reconcile when a notification is missed.",
-      "verification": "pnpm exec vitest run tests/features/feat-012-config-reload.unit.test.ts && pnpm test:e2e tests/e2e/feat-012-config-reload.e2e.spec.ts --grep 'gateway applies notified config and reconcile catches missed version'",
-      "dependencies": ["feat-011"],
+      "verification": "pnpm exec vitest run tests/features/feat-012-config-reload.unit.test.ts && pnpm test:e2e tests/e2e/feat-012-config-reload.e2e.spec.ts --grep 'gateway starts from latest snapshot applies notified config and reconcile catches missed version'",
+      "dependencies": [
+        "feat-011"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -113,7 +139,9 @@
       "name": "Console First Run and Login",
       "description": "Before initialization, Console shows first-run setup; after creating admin credentials, protected pages require login and valid login reaches the dashboard.",
       "verification": "pnpm exec vitest run tests/features/feat-013-console-auth.unit.test.ts && pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'",
-      "dependencies": ["feat-007"],
+      "dependencies": [
+        "feat-007"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -122,7 +150,9 @@
       "name": "Static Price Registry",
       "description": "Known MVP models resolve input and output token prices from the built-in registry; unknown models return an explicit unknown_price result instead of zero cost.",
       "verification": "pnpm exec vitest run tests/features/feat-014-price-registry.unit.test.ts && pnpm test:e2e tests/e2e/feat-014-price-registry.e2e.spec.ts --grep 'known model returns token prices unknown model returns unknown price'",
-      "dependencies": ["feat-008"],
+      "dependencies": [
+        "feat-008"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -130,8 +160,11 @@
       "id": "feat-015",
       "name": "Model Price Override Management",
       "description": "Console shows built-in prices, lets a user save a manual price override, and subsequent cost estimates use the override instead of the built-in value.",
-      "verification": "pnpm exec vitest run tests/features/feat-015-price-override.unit.test.ts && pnpm test:e2e tests/e2e/feat-015-price-override.e2e.spec.ts --grep 'manual price override changes subsequent cost estimate'",
-      "dependencies": ["feat-013", "feat-014"],
+      "verification": "pnpm exec vitest run tests/features/feat-015-price-override.unit.test.ts && pnpm test:e2e tests/e2e/feat-015-price-override.e2e.spec.ts --grep 'console shows built-in prices and manual price override changes subsequent cost estimate'",
+      "dependencies": [
+        "feat-013",
+        "feat-014"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -140,7 +173,10 @@
       "name": "Provider CRUD and Enablement",
       "description": "Console can create, edit, enable, disable, and list Provider configurations, and disabled providers are excluded from routing-visible config snapshots.",
       "verification": "pnpm exec vitest run tests/features/feat-016-provider-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-016-provider-crud.e2e.spec.ts --grep 'provider crud enable disable and disabled provider leaves routing snapshot'",
-      "dependencies": ["feat-008", "feat-013"],
+      "dependencies": [
+        "feat-008",
+        "feat-013"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -148,8 +184,11 @@
       "id": "feat-017",
       "name": "Provider Key Secure Storage",
       "description": "When a Provider API key is created or rotated, plaintext is shown once, only ciphertext is stored, and later reads expose prefix and metadata without plaintext.",
-      "verification": "pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts && pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once ciphertext stored metadata only after reload'",
-      "dependencies": ["feat-010", "feat-016"],
+      "verification": "pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts && pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once on create and rotate ciphertext stored metadata only after reload'",
+      "dependencies": [
+        "feat-010",
+        "feat-016"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -158,7 +197,10 @@
       "name": "OpenAI Provider Adapter",
       "description": "Given a normalized request, the OpenAI adapter sends the expected OpenAI-compatible payload and auth header to the fake provider and maps the response or provider error into Gateway format.",
       "verification": "pnpm exec vitest run tests/features/feat-018-openai-adapter.unit.test.ts && pnpm test:e2e tests/e2e/feat-018-openai-adapter.e2e.spec.ts --grep 'openai adapter sends compatible payload auth header and maps response error'",
-      "dependencies": ["feat-004", "feat-017"],
+      "dependencies": [
+        "feat-004",
+        "feat-017"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -167,7 +209,10 @@
       "name": "Anthropic Provider Adapter",
       "description": "Given a normalized messages request, the Anthropic adapter sends the expected Anthropic payload and auth headers to the fake provider and maps the message response or provider error into Gateway format.",
       "verification": "pnpm exec vitest run tests/features/feat-019-anthropic-adapter.unit.test.ts && pnpm test:e2e tests/e2e/feat-019-anthropic-adapter.e2e.spec.ts --grep 'anthropic adapter sends messages payload auth headers and maps response error'",
-      "dependencies": ["feat-004", "feat-017"],
+      "dependencies": [
+        "feat-004",
+        "feat-017"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -176,7 +221,10 @@
       "name": "Generic OpenAI-Compatible Provider Template",
       "description": "A whitelisted OpenAI-compatible Provider template creates a provider with fixed remote base URL and capabilities; arbitrary custom endpoints are rejected.",
       "verification": "pnpm exec vitest run tests/features/feat-020-openai-compatible-template.unit.test.ts && pnpm test:e2e tests/e2e/feat-020-openai-compatible-template.e2e.spec.ts --grep 'whitelisted template accepted arbitrary custom endpoint rejected'",
-      "dependencies": ["feat-004", "feat-017"],
+      "dependencies": [
+        "feat-004",
+        "feat-017"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -185,7 +233,10 @@
       "name": "Ollama Local Provider Adapter",
       "description": "A user-configured Ollama base URL on loopback or private network addresses is accepted for the Ollama template, model list and chat calls use template-defined paths, and public network URLs require an explicit risk confirmation.",
       "verification": "pnpm exec vitest run tests/features/feat-021-ollama-adapter.unit.test.ts && pnpm test:e2e tests/e2e/feat-021-ollama-adapter.e2e.spec.ts --grep 'ollama loopback private network url accepted template paths used public url requires confirmation'",
-      "dependencies": ["feat-004", "feat-016"],
+      "dependencies": [
+        "feat-004",
+        "feat-016"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -194,7 +245,9 @@
       "name": "Worker Job Runner",
       "description": "Worker claims one pending job with a lease, wakes on job_created notification, retries failed jobs with backoff, and persists success or failure result exactly once.",
       "verification": "pnpm exec vitest run tests/features/feat-022-job-runner.unit.test.ts && pnpm test:e2e tests/e2e/feat-022-job-runner.e2e.spec.ts --grep 'worker leases job wakes on notify retries with backoff and records result once'",
-      "dependencies": ["feat-009"],
+      "dependencies": [
+        "feat-009"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -202,8 +255,13 @@
       "id": "feat-023",
       "name": "Provider Model Refresh Job",
       "description": "Given a fake provider model list change, model_refresh writes the new derived model rows, marks missing referenced models unavailable, and publishes a new config version only when routing-visible data changed.",
-      "verification": "pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts && pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'model refresh publishes config version on routing-visible model change'",
-      "dependencies": ["feat-011", "feat-004", "feat-018", "feat-022"],
+      "verification": "pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts && pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'model refresh writes derived rows marks missing referenced models unavailable and publishes config version only on routing-visible change'",
+      "dependencies": [
+        "feat-011",
+        "feat-004",
+        "feat-018",
+        "feat-022"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -212,7 +270,11 @@
       "name": "Provider Connectivity Check Job",
       "description": "A manual provider_connectivity_check job returns success for a reachable fake provider, returns a structured failure for bad credentials or timeout, and stores the result on the job record.",
       "verification": "pnpm exec vitest run tests/features/feat-024-connectivity-check.unit.test.ts && pnpm test:e2e tests/e2e/feat-024-connectivity-check.e2e.spec.ts --grep 'manual provider connectivity check records success and failure results'",
-      "dependencies": ["feat-004", "feat-018", "feat-022"],
+      "dependencies": [
+        "feat-004",
+        "feat-018",
+        "feat-022"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -221,7 +283,11 @@
       "name": "Model Availability Soft Delete",
       "description": "When refresh no longer returns a model referenced by a route policy, the model row remains, availability becomes unavailable, routing excludes it, and Console can show the affected route warning.",
       "verification": "pnpm exec vitest run tests/features/feat-025-model-soft-delete.unit.test.ts && pnpm test:e2e tests/e2e/feat-025-model-soft-delete.e2e.spec.ts --grep 'missing referenced model marked unavailable excluded from routing and warning visible'",
-      "dependencies": ["feat-011", "feat-023", "feat-032"],
+      "dependencies": [
+        "feat-011",
+        "feat-023",
+        "feat-032"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -230,7 +296,10 @@
       "name": "Agent CRUD",
       "description": "Console can create, edit, list, and delete Agents, and deleting an Agent with active API keys or request attribution is blocked with a dependency error.",
       "verification": "pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with active dependencies is blocked'",
-      "dependencies": ["feat-008", "feat-013"],
+      "dependencies": [
+        "feat-008",
+        "feat-013"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -239,7 +308,10 @@
       "name": "Agent API Key Lifecycle",
       "description": "Console can create, rotate, disable, and delete Agent API keys; plaintext appears only once, and only hash, prefix, status, and metadata persist afterward.",
       "verification": "pnpm exec vitest run tests/features/feat-027-agent-key-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/feat-027-agent-key-lifecycle.e2e.spec.ts --grep 'agent key plaintext once hash prefix status metadata persisted after rotate disable delete'",
-      "dependencies": ["feat-010", "feat-026"],
+      "dependencies": [
+        "feat-010",
+        "feat-026"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -248,7 +320,10 @@
       "name": "Virtual Model CRUD",
       "description": "Console can create, edit, list, and delete Virtual Model Names; duplicate names are rejected and deleting a referenced Virtual Model is blocked.",
       "verification": "pnpm exec vitest run tests/features/feat-028-virtual-model-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-028-virtual-model-crud.e2e.spec.ts --grep 'virtual model crud rejects duplicate name and blocks referenced delete'",
-      "dependencies": ["feat-008", "feat-013"],
+      "dependencies": [
+        "feat-008",
+        "feat-013"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -257,7 +332,10 @@
       "name": "Route Policy CRUD",
       "description": "A user can create, edit, read, and delete a route policy using seeded provider/model candidates, cost preference, route reason metadata, and fallback chain configuration.",
       "verification": "pnpm exec vitest run tests/features/feat-029-route-policy-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-029-route-policy-crud.e2e.spec.ts --grep 'route policy CRUD persists candidates cost preference and fallback chain'",
-      "dependencies": ["feat-016", "feat-028"],
+      "dependencies": [
+        "feat-016",
+        "feat-028"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -266,7 +344,10 @@
       "name": "Allowed and Default Virtual Models",
       "description": "Console can assign allowed Virtual Model Names and one default Virtual Model to an Agent API key; the default must be one of the allowed names.",
       "verification": "pnpm exec vitest run tests/features/feat-030-allowed-default-models.unit.test.ts && pnpm test:e2e tests/e2e/feat-030-allowed-default-models.e2e.spec.ts --grep 'default virtual model must be in allowed list'",
-      "dependencies": ["feat-027", "feat-028"],
+      "dependencies": [
+        "feat-027",
+        "feat-028"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -274,8 +355,12 @@
       "id": "feat-031",
       "name": "Agent API Key Limit Configuration",
       "description": "A user can configure Budget, RPM, TPM, and Token Limit rules for an Agent API key; Console blocks enabling a cost budget for a model with unknown price until a manual price is provided.",
-      "verification": "pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form blocks cost budget when selected model has unknown price'",
-      "dependencies": ["feat-014", "feat-015", "feat-027"],
+      "verification": "pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form saves budget rpm tpm token rules and blocks cost budget when selected model has unknown price'",
+      "dependencies": [
+        "feat-014",
+        "feat-015",
+        "feat-027"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -284,7 +369,11 @@
       "name": "Deterministic Route Engine",
       "description": "For the same request and config snapshot, fixed-model routing always selects the fixed target, cost-first routing selects the cheapest eligible candidate, and every decision includes a route reason.",
       "verification": "pnpm exec vitest run tests/features/feat-032-route-engine.unit.test.ts && pnpm test:e2e tests/e2e/feat-032-route-engine.e2e.spec.ts --grep 'fixed routing and cost first routing are deterministic with route reason'",
-      "dependencies": ["feat-012", "feat-014", "feat-029"],
+      "dependencies": [
+        "feat-012",
+        "feat-014",
+        "feat-029"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -293,7 +382,11 @@
       "name": "Fallback Chain Execution",
       "description": "When the first route candidate fails before the first response chunk, Gateway tries the next fallback candidate, returns the successful response, and records each failed provider/model attempt.",
       "verification": "pnpm exec vitest run tests/features/feat-033-fallback-chain.unit.test.ts && pnpm test:e2e tests/e2e/feat-033-fallback-chain.e2e.spec.ts --grep 'first-byte failure falls back and records failed attempt'",
-      "dependencies": ["feat-004", "feat-018", "feat-032"],
+      "dependencies": [
+        "feat-004",
+        "feat-018",
+        "feat-032"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -301,8 +394,11 @@
       "id": "feat-034",
       "name": "Gateway API Key Authentication",
       "description": "For any public Gateway endpoint, a valid enabled Agent API key is accepted; missing, invalid, or disabled keys return 401 with a stable error code and request id before routing runs.",
-      "verification": "pnpm exec vitest run tests/features/feat-034-auth.unit.test.ts && pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with request id'",
-      "dependencies": ["feat-012", "feat-027"],
+      "verification": "pnpm exec vitest run tests/features/feat-034-auth.unit.test.ts && pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'",
+      "dependencies": [
+        "feat-012",
+        "feat-027"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -311,7 +407,10 @@
       "name": "Gateway Virtual Model Access Contract",
       "description": "GET /v1/models returns only allowed Virtual Model Names; POST requests using a disallowed Virtual Model return 403 with a stable error code and request id; POST requests without model use the Agent API key default Virtual Model or return 400 when no default is configured.",
       "verification": "pnpm exec vitest run tests/features/feat-035-virtual-model-access.unit.test.ts && pnpm test:e2e tests/e2e/feat-035-virtual-model-access.e2e.spec.ts --grep 'models list allowed names disallowed post returns 403 missing model uses default or returns 400'",
-      "dependencies": ["feat-030", "feat-034"],
+      "dependencies": [
+        "feat-030",
+        "feat-034"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -319,8 +418,12 @@
       "id": "feat-036",
       "name": "OpenAI Chat Completions Endpoint",
       "description": "POST /v1/chat/completions with a valid key and allowed Virtual Model returns 200 with an OpenAI-compatible response from the selected provider; a disallowed Virtual Model returns 403 and does not call the provider.",
-      "verification": "pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts && pnpm test:e2e tests/e2e/feat-036-chat-completions.e2e.spec.ts --grep 'chat completions returns provider response and rejects disallowed virtual model'",
-      "dependencies": ["feat-018", "feat-032", "feat-035"],
+      "verification": "pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts && pnpm test:e2e tests/e2e/feat-036-chat-completions.e2e.spec.ts --grep 'chat completions returns provider response and rejects disallowed virtual model without calling provider'",
+      "dependencies": [
+        "feat-018",
+        "feat-032",
+        "feat-035"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -329,7 +432,11 @@
       "name": "OpenAI Responses Stateless Endpoint",
       "description": "POST /v1/responses with a valid key and allowed Virtual Model returns 200 for stateless requests; requests with previous_response_id or store=true return 400 with an explicit unsupported_stateful_responses error.",
       "verification": "pnpm exec vitest run tests/features/feat-037-responses-stateless.unit.test.ts && pnpm test:e2e tests/e2e/feat-037-responses-stateless.e2e.spec.ts --grep 'responses stateless succeeds stateful fields return 400'",
-      "dependencies": ["feat-018", "feat-032", "feat-035"],
+      "dependencies": [
+        "feat-018",
+        "feat-032",
+        "feat-035"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -337,8 +444,12 @@
       "id": "feat-038",
       "name": "Anthropic Messages Endpoint",
       "description": "POST /v1/messages with a valid key and allowed Virtual Model returns 200 with an Anthropic-compatible message response from the selected provider; a disallowed Virtual Model returns 403 and does not call the provider.",
-      "verification": "pnpm exec vitest run tests/features/feat-038-anthropic-messages.unit.test.ts && pnpm test:e2e tests/e2e/feat-038-anthropic-messages.e2e.spec.ts --grep 'messages returns provider response and rejects disallowed virtual model'",
-      "dependencies": ["feat-019", "feat-032", "feat-035"],
+      "verification": "pnpm exec vitest run tests/features/feat-038-anthropic-messages.unit.test.ts && pnpm test:e2e tests/e2e/feat-038-anthropic-messages.e2e.spec.ts --grep 'messages returns provider response and rejects disallowed virtual model without calling provider'",
+      "dependencies": [
+        "feat-019",
+        "feat-032",
+        "feat-035"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -346,8 +457,13 @@
       "id": "feat-039",
       "name": "Streaming Response Passthrough",
       "description": "Streaming chat/completions, responses, and messages requests forward provider chunks to the Agent without buffering the full response, preserve chunk order, and record mid-stream errors without replaying the request.",
-      "verification": "pnpm exec vitest run tests/features/feat-039-streaming.unit.test.ts && pnpm test:e2e tests/e2e/feat-039-streaming.e2e.spec.ts --grep 'streaming chat responses and messages preserve chunk order and record midstream error'",
-      "dependencies": ["feat-004", "feat-036", "feat-037", "feat-038"],
+      "verification": "pnpm exec vitest run tests/features/feat-039-streaming.unit.test.ts && pnpm test:e2e tests/e2e/feat-039-streaming.e2e.spec.ts --grep 'streaming chat responses and messages forward first chunk before provider completes preserve chunk order and record midstream error without replay'",
+      "dependencies": [
+        "feat-004",
+        "feat-036",
+        "feat-037",
+        "feat-038"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -355,8 +471,12 @@
       "id": "feat-040",
       "name": "Request Metadata and Token Estimation",
       "description": "Gateway extracts model, protocol, stream flag, message count, tool usage, and estimated input/output tokens from chat, responses, and messages requests before rate and budget checks.",
-      "verification": "pnpm exec vitest run tests/features/feat-040-request-metadata.unit.test.ts && pnpm test:e2e tests/e2e/feat-040-request-metadata.e2e.spec.ts --grep 'chat responses and messages metadata includes model stream tools and token estimates'",
-      "dependencies": ["feat-036", "feat-037", "feat-038"],
+      "verification": "pnpm exec vitest run tests/features/feat-040-request-metadata.unit.test.ts && pnpm test:e2e tests/e2e/feat-040-request-metadata.e2e.spec.ts --grep 'chat responses and messages metadata includes model stream message count tools and token estimates'",
+      "dependencies": [
+        "feat-036",
+        "feat-037",
+        "feat-038"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -364,8 +484,12 @@
       "id": "feat-041",
       "name": "RPM and TPM Enforcement",
       "description": "When an Agent API key exceeds configured RPM or TPM windows, Gateway returns 429 with a stable error code, request id, and retry-after metadata; requests after the reset window are accepted.",
-      "verification": "pnpm exec vitest run tests/features/feat-041-rate-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-041-rate-limits.e2e.spec.ts --grep 'rpm and tpm over limit return 429 and reset window allows later request'",
-      "dependencies": ["feat-031", "feat-034", "feat-040"],
+      "verification": "pnpm exec vitest run tests/features/feat-041-rate-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-041-rate-limits.e2e.spec.ts --grep 'rpm and tpm over limit return 429 with retry-after and reset window allows later request'",
+      "dependencies": [
+        "feat-031",
+        "feat-034",
+        "feat-040"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -374,7 +498,12 @@
       "name": "Token and Cost Budget Enforcement",
       "description": "Gateway reserves token and cost budget before provider calls, finalizes actual usage after completion, rejects over-budget requests with 402 and a stable error code, and refuses cost-budget enforcement for unknown-price models until a manual price exists.",
       "verification": "pnpm exec vitest run tests/features/feat-042-budget-enforcement.unit.test.ts && pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'",
-      "dependencies": ["feat-009", "feat-014", "feat-031", "feat-040"],
+      "dependencies": [
+        "feat-009",
+        "feat-014",
+        "feat-031",
+        "feat-040"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -383,7 +512,10 @@
       "name": "Stale Budget Reservation Cleanup Job",
       "description": "stale_reservation_cleanup releases expired pending budget reservations, keeps active reservations, and records how many reservations were released.",
       "verification": "pnpm exec vitest run tests/features/feat-043-stale-reservations.unit.test.ts && pnpm test:e2e tests/e2e/feat-043-stale-reservations.e2e.spec.ts --grep 'cleanup releases expired reservations keeps active reservations and reports count'",
-      "dependencies": ["feat-022", "feat-042"],
+      "dependencies": [
+        "feat-022",
+        "feat-042"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -407,7 +539,11 @@
       "name": "Usage Cost Baseline and Savings Recorder",
       "description": "After a completed request, usage records contain input/output tokens, actual request cost, baseline cost, and savings amount; unknown-price requests are marked as estimated unavailable.",
       "verification": "pnpm exec vitest run tests/features/feat-045-usage-cost-recorder.unit.test.ts && pnpm test:e2e tests/e2e/feat-045-usage-cost-recorder.e2e.spec.ts --grep 'usage record includes tokens actual cost baseline cost savings and unknown price marker'",
-      "dependencies": ["feat-014", "feat-040", "feat-044"],
+      "dependencies": [
+        "feat-014",
+        "feat-040",
+        "feat-044"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -416,7 +552,10 @@
       "name": "Activity Console Page",
       "description": "Console Activity page lists recent requests and a detail view shows provider/model hit, tokens, cost, route reason, fallback attempts, and error code for a selected request.",
       "verification": "pnpm exec vitest run tests/features/feat-046-activity-page.unit.test.ts && pnpm test:e2e tests/e2e/feat-046-activity-page.e2e.spec.ts --grep 'activity page lists request and detail shows model cost route fallback error'",
-      "dependencies": ["feat-013", "feat-044"],
+      "dependencies": [
+        "feat-013",
+        "feat-044"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -425,7 +564,10 @@
       "name": "Usage and Cost Console Page",
       "description": "Console Usage page summarizes request count, token usage, cost total, and model/provider breakdowns for a selected time window using recorded MVP traffic.",
       "verification": "pnpm exec vitest run tests/features/feat-047-usage-page.unit.test.ts && pnpm test:e2e tests/e2e/feat-047-usage-page.e2e.spec.ts --grep 'usage page shows counts tokens cost and provider model breakdown'",
-      "dependencies": ["feat-013", "feat-045"],
+      "dependencies": [
+        "feat-013",
+        "feat-045"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -434,7 +576,11 @@
       "name": "Gateway Runtime Status Page",
       "description": "Console Runtime page shows Gateway heartbeat status, applied config version, last reload success or failure, and recent runtime error entries from PostgreSQL.",
       "verification": "pnpm exec vitest run tests/features/feat-048-runtime-page.unit.test.ts && pnpm test:e2e tests/e2e/feat-048-runtime-page.e2e.spec.ts --grep 'runtime page shows heartbeat config version reload result and recent errors'",
-      "dependencies": ["feat-009", "feat-012", "feat-013"],
+      "dependencies": [
+        "feat-009",
+        "feat-012",
+        "feat-013"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -443,7 +589,13 @@
       "name": "Playground Live Public API Test",
       "description": "Console Playground accepts a user-pasted Agent API key, keeps it only in browser memory, sends a live request directly to Gateway Public API, and the request is counted in Usage.",
       "verification": "pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts && pnpm test:e2e tests/e2e/feat-049-playground.e2e.spec.ts --grep 'playground uses pasted key in memory direct gateway call and usage increments'",
-      "dependencies": ["feat-027", "feat-030", "feat-036", "feat-038", "feat-045"],
+      "dependencies": [
+        "feat-027",
+        "feat-030",
+        "feat-036",
+        "feat-038",
+        "feat-045"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -469,7 +621,10 @@
       "name": "MVP Streaming E2E",
       "description": "An MVP streaming request receives at least two ordered chunks before completion, returns HTTP 200, and Activity records stream completion metadata.",
       "verification": "pnpm exec vitest run tests/features/feat-051-mvp-streaming.unit.test.ts && pnpm test:e2e tests/e2e/feat-051-mvp-streaming.e2e.spec.ts --grep 'streaming request receives ordered chunks and activity records stream completion'",
-      "dependencies": ["feat-039", "feat-050"],
+      "dependencies": [
+        "feat-039",
+        "feat-050"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -478,7 +633,11 @@
       "name": "Claude Code Messages E2E",
       "description": "A Claude Code style /v1/messages request with valid Agent key returns HTTP 200 from the Anthropic provider path and Activity records the Anthropic provider/model hit.",
       "verification": "pnpm exec vitest run tests/features/feat-052-claude-code-messages.unit.test.ts && pnpm test:e2e tests/e2e/feat-052-claude-code-messages.e2e.spec.ts --grep 'claude code messages request returns 200 and records anthropic model hit'",
-      "dependencies": ["feat-019", "feat-038", "feat-050"],
+      "dependencies": [
+        "feat-019",
+        "feat-038",
+        "feat-050"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -487,7 +646,12 @@
       "name": "Limits and Fallback E2E",
       "description": "E2E requests over Budget, RPM, TPM, and Token Limit return the expected error status and code, while a first-byte provider failure returns a successful fallback response and records fallback attempts.",
       "verification": "pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts && pnpm test:e2e tests/e2e/feat-053-limits-fallback.e2e.spec.ts --grep 'limits return expected errors and first byte failure falls back successfully'",
-      "dependencies": ["feat-033", "feat-041", "feat-042", "feat-050"],
+      "dependencies": [
+        "feat-033",
+        "feat-041",
+        "feat-042",
+        "feat-050"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     },
@@ -511,8 +675,12 @@
       "id": "feat-055",
       "name": "CI Migration Validation",
       "description": "A pushed commit runs the migration validation command against the test PostgreSQL fixture as part of CI after the migration runner exists.",
-      "verification": "test -f .github/workflows/ci.yml && grep -q 'migration' .github/workflows/ci.yml && pnpm run db:migrate:check",
-      "dependencies": ["feat-003", "feat-005", "feat-007"],
+      "verification": "test -f .github/workflows/ci.yml && grep -q 'db:migrate:check' .github/workflows/ci.yml && pnpm run db:migrate:check && bash -lc \"gh run list --workflow ci.yml --branch main --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success\"",
+      "dependencies": [
+        "feat-003",
+        "feat-005",
+        "feat-007"
+      ],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     }

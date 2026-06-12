@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "verify": "pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
     "verify:features": "node scripts/verify-features.mjs",
+    "db:migrate": "tsx scripts/migrate.ts",
     "init": "bash init.sh"
   },
   "devDependencies": {

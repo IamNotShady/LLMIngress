@@ -70,13 +70,13 @@
       "id": "feat-007",
       "name": "PostgreSQL Connection and Migration Runner",
       "description": "Running the migration command against an empty PostgreSQL database creates the expected schema version row, and running it again is idempotent.",
-      "verification": "pnpm exec vitest run tests/features/feat-007-migration-runner.unit.test.ts && pnpm test:e2e tests/e2e/feat-007-migration-runner.e2e.spec.ts --grep 'migration runner creates schema version and rerun is idempotent'",
+      "verification": "bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm exec vitest run tests/features/feat-007-migration-runner.unit.test.ts && pnpm test:e2e tests/e2e/feat-007-migration-runner.e2e.spec.ts --grep 'migration runner creates schema version and rerun is idempotent'",
       "dependencies": [
         "feat-003",
         "feat-006"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-12: TDD red observed for feat-007 unit tests because loadSqlMigrations was missing and E2E because pnpm run db:migrate was missing. Verification passed with TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' — feat-007 unit test 3 passed, feat-007 Playwright E2E 1 passed, and pnpm run verify passed."
     },
     {
       "id": "feat-008",

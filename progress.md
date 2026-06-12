@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 22:09 AWST
-**Active Feature:** None (feat-003 through feat-006 completed)
+**Last Updated:** 2026-06-12 23:08 AWST
+**Active Feature:** None (feat-003 through feat-007 completed)
 
 ## Status
 
@@ -50,6 +50,11 @@
   - Invalid ports, database URLs, and missing master key sources fail with explicit errors.
   - Wired the loader into Gateway, Worker, and Console startup paths.
   - Tightened integer parsing so values like `4101abc` fail instead of being truncated.
+- [x] **feat-007 — PostgreSQL Connection and Migration Runner (passing)**:
+  - Added SQL migration discovery with ordered IDs, duplicate-ID rejection, and SHA-256 checksums.
+  - Added `pnpm run db:migrate` as the explicit migration command.
+  - Added initial `0001_create_schema_version.sql` migration for `migration_history` and singleton `schema_version`.
+  - Runner applies pending migrations in a transaction with a PostgreSQL advisory lock and skips already-applied matching checksums.
 
 ### What's In Progress
 
@@ -57,10 +62,9 @@
 
 ### What's Next
 
-1. `feat-007` — PostgreSQL Connection and Migration Runner.
-2. `feat-008` — Core Configuration Schema.
-3. `feat-009` — Runtime Records and Jobs Schema.
-4. `feat-055` — CI Migration Validation after `feat-007` produces the migration check command.
+1. `feat-008` — Core Configuration Schema.
+2. `feat-009` — Runtime Records and Jobs Schema.
+3. `feat-055` — CI Migration Validation after `feat-007` produces the migration command.
 
 ## Blockers / Risks
 
@@ -125,6 +129,14 @@
 - `tests/features/feat-006-bootstrap-config.unit.test.ts` - New config unit tests.
 - `tests/e2e/feat-006-bootstrap-config.e2e.spec.ts` - New config E2E smoke test.
 - `pnpm-lock.yaml` - Lockfile updates for `@playwright/test`, `pg`, `@types/pg`, and workspace app dependencies.
+- `package.json` - Added `db:migrate` script.
+- `scripts/migrate.ts` - New explicit migration CLI.
+- `packages/db/src/index.ts` - Added SQL migration loader and transactional runner.
+- `packages/db/package.json` - Export now resolves to source for pre-build workspace consumers.
+- `packages/db/migrations/0001_create_schema_version.sql` - Initial schema version migration.
+- `tests/features/feat-007-migration-runner.unit.test.ts` - New migration loader unit tests.
+- `tests/e2e/feat-007-migration-runner.e2e.spec.ts` - New real Postgres migration command E2E.
+- `feature_list.json` - feat-007 marked `passing` with verification evidence.
 
 ## Evidence of Completion
 
@@ -190,6 +202,17 @@
 - [x] Review fix final gate: `pnpm run verify` passed.
 - [x] Review fix database E2E gate: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 6/6 tests executed.
 - [x] Real GitHub Actions run after push: CI run `27420889988` passed on commit `bc9fe82` with install, lint, typecheck, unit tests, E2E smoke, and build green.
+- [x] Baseline before feat-007: `pnpm run verify` passed.
+- [x] Passing feature regression before feat-007: first `pnpm run verify:features` hit a transient `api.github.com` connection error in feat-005's final `gh` check; immediate `gh run list` succeeded, and the full rerun of `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 6 prior passing features.
+- [x] feat-007 red phase observed:
+  - `pnpm exec vitest run tests/features/feat-007-migration-runner.unit.test.ts` failed because `loadSqlMigrations` was missing.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-007-migration-runner.e2e.spec.ts --grep 'migration runner creates schema version and rerun is idempotent'` failed because `pnpm run db:migrate` was missing.
+- [x] feat-007 verification passed:
+  - `pnpm exec vitest run tests/features/feat-007-migration-runner.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-007-migration-runner.e2e.spec.ts --grep 'migration runner creates schema version and rerun is idempotent'` → 1 passed.
+  - `pnpm run verify` passed after feat-007 implementation.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 7/7 E2E tests executed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 7 passing features after marking feat-007 passing.
 
 ## Notes for Next Session
 

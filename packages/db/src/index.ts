@@ -1,4 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { Client, type QueryResult, type QueryResultRow } from "pg";
 
 type TestPostgresEnvironment = Record<string, string | undefined>;
@@ -21,6 +23,31 @@ export type TestPostgresFixture = {
   dispose: () => Promise<void>;
 };
 
+export type SqlMigration = {
+  id: string;
+  name: string;
+  filename: string;
+  sql: string;
+  checksum: string;
+};
+
+type LoadSqlMigrationsOptions = {
+  migrationsDirectory?: string;
+};
+
+type RunMigrationsOptions = {
+  databaseUrl: string;
+  migrationsDirectory?: string;
+};
+
+export type MigrationRunResult = {
+  applied: SqlMigration[];
+  skipped: SqlMigration[];
+};
+
+const migrationFilePattern = /^(\d{4,})_([a-z0-9][a-z0-9_]*)\.sql$/;
+const migrationAdvisoryLockId = 7_790_077;
+
 export function readTestDatabaseUrl(env: TestPostgresEnvironment = process.env): string {
   const url = env.TEST_DATABASE_URL?.trim();
   if (!url) {
@@ -33,6 +60,88 @@ export function buildIsolatedDatabaseUrl(maintenanceUrl: string, databaseName: s
   const url = new URL(maintenanceUrl);
   url.pathname = `/${databaseName}`;
   return url.toString();
+}
+
+export function getDefaultMigrationsDirectory(): string {
+  return resolve(process.cwd(), "packages/db/migrations");
+}
+
+export function loadSqlMigrations(options: LoadSqlMigrationsOptions = {}): SqlMigration[] {
+  const migrationsDirectory = options.migrationsDirectory ?? getDefaultMigrationsDirectory();
+  const seenIds = new Set<string>();
+
+  return readdirSync(migrationsDirectory)
+    .filter((filename) => filename.endsWith(".sql"))
+    .sort()
+    .map((filename) => {
+      const parsed = parseMigrationFilename(filename);
+      if (seenIds.has(parsed.id)) {
+        throw new Error(`Duplicate migration id: ${parsed.id}`);
+      }
+      seenIds.add(parsed.id);
+
+      const fullPath = join(migrationsDirectory, filename);
+      const sql = readFileSync(fullPath, "utf8");
+
+      return {
+        ...parsed,
+        filename,
+        sql,
+        checksum: createHash("sha256").update(sql).digest("hex"),
+      };
+    });
+}
+
+export async function runMigrations(options: RunMigrationsOptions): Promise<MigrationRunResult> {
+  const migrations = loadSqlMigrations({
+    migrationsDirectory: options.migrationsDirectory,
+  });
+
+  return withClient(options.databaseUrl, async (client) => {
+    await client.query("begin");
+
+    try {
+      await client.query("select pg_advisory_xact_lock($1)", [migrationAdvisoryLockId]);
+      await client.query(createMigrationHistoryTableSql);
+
+      const appliedRows = await client.query<{ id: string; checksum: string }>(
+        "select id, checksum from migration_history",
+      );
+      const appliedChecksums = new Map(
+        appliedRows.rows.map((row): [string, string] => [row.id, row.checksum]),
+      );
+      const applied: SqlMigration[] = [];
+      const skipped: SqlMigration[] = [];
+
+      for (const migration of migrations) {
+        const existingChecksum = appliedChecksums.get(migration.id);
+        if (existingChecksum === migration.checksum) {
+          skipped.push(migration);
+          continue;
+        }
+
+        if (existingChecksum) {
+          throw new Error(`Migration ${migration.id} checksum mismatch.`);
+        }
+
+        await client.query(migration.sql);
+        await client.query(
+          `
+            insert into migration_history (id, name, checksum)
+            values ($1, $2, $3)
+          `,
+          [migration.id, migration.name, migration.checksum],
+        );
+        applied.push(migration);
+      }
+
+      await client.query("commit");
+      return { applied, skipped };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    }
+  });
 }
 
 export async function createTestPostgresFixture(
@@ -160,3 +269,24 @@ async function withClient<T>(
     await client.end();
   }
 }
+
+function parseMigrationFilename(filename: string): Pick<SqlMigration, "id" | "name"> {
+  const match = migrationFilePattern.exec(filename);
+  if (!match?.[1] || !match[2]) {
+    throw new Error(`Invalid migration filename: ${filename}`);
+  }
+
+  return {
+    id: match[1],
+    name: match[2],
+  };
+}
+
+const createMigrationHistoryTableSql = `
+  create table if not exists migration_history (
+    id text primary key,
+    name text not null,
+    checksum text not null,
+    applied_at timestamptz not null default now()
+  )
+`;

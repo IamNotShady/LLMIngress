@@ -81,7 +81,7 @@ web_modules/
 # Next.js build output
 .next
 out
-
+apps/console/next-env.d.ts
 # Nuxt.js build / generate output
 .nuxt
 dist
@@ -152,3 +152,6 @@ vite.config.ts.timestamp-*
 # Playwright output
 test-results/
 playwright-report/
+
+# Next.js generated types entry (rewritten by next dev/build)
+next-env.d.ts

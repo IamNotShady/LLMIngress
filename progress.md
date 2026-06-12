@@ -32,6 +32,7 @@
 
 - [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
 - [ ] PostgreSQL fixture not implemented; database-backed feature work must wait for `feat-003`.
+- [ ] `apps/console/next-env.d.ts` is now gitignored (generated, rewritten by `next dev`/`next build`). It imports types from `.next/`, so Console `typecheck` implicitly requires a prior dev/build. feat-005 CI must run `next typegen` (or a build) before typecheck on a clean checkout.
 
 ## Decisions Made
 

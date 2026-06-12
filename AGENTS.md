@@ -20,6 +20,7 @@ If baseline verification is failing, repair that first before adding new scope.
 - **TDD first**: Before implementing any feature, write the expected unit test and E2E test cases first; only start implementation after the tests exist, and finish the feature only after those tests pass
 - **Verification altitude**: Tests must assert each behavior at the level the `description` states it ("stops at startup" means launching the real process, not calling a library function); if `verification` is weaker than `description`, fix it before writing tests
 - **Regression after every pass**: Run `pnpm run verify:features` before marking a feature `passing`; a regressed feature gets `status: failing` plus the failure in its `evidence`, and is repaired before new scope
+- **Feature review**: A passing feature's diff is reviewed before any feature that depends on it starts
 - **Verification required**: Don't claim done without running verification commands
 - **Coding Rule**: Before writing code for any feature, read `docs/CODING_GUIDE.md`.
 - **Update artifacts**: Before ending session, update `progress.md` and `feature_list.json`

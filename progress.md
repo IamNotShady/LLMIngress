@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 16:10 AWST
+**Last Updated:** 2026-06-12 17:11 AWST
 **Active Feature:** None (feat-002 completed)
 
 ## Status
@@ -17,6 +17,10 @@
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
   - Vitest stays scoped to `tests/**/*.test.ts` with `passWithNoTests: false`, so a missing feature test fails instead of silently passing.
   - TDD: unit test and E2E spec were written first and observed failing before implementation.
+- [x] Split CI migration validation into a separate future feature:
+  - `feat-005` remains the early base CI gate.
+  - New `feat-055` owns adding migration validation to CI after `feat-007` exists.
+  - `feat-054` now waits for `feat-055` before local deployment smoke.
 
 ### What's In Progress
 
@@ -27,6 +31,7 @@
 1. `feat-003` — Test PostgreSQL Fixture (isolated DB per test, migrate, reset, no leaked rows).
 2. `feat-004` — Fake Provider Test Server (deterministic modes incl. streaming/timeout/first-byte failure).
 3. `feat-005` — CI Verification Pipeline (now unblocked since `pnpm test:e2e` exists).
+4. `feat-055` — CI Migration Validation after `feat-007` produces the migration check command.
 
 ## Blockers / Risks
 
@@ -45,6 +50,9 @@
 - **Feature list is the MVP source of execution truth** (unchanged from previous session).
 - **Missing tests must fail**: `passWithNoTests: false` retained; now also asserted by feat-002's own tests.
 - **Gateway auth behavior is owned by `feat-034`** (unchanged from previous session).
+- **CI migration validation is not part of base CI**:
+  - Context: base CI should land early, but migration validation needs the PostgreSQL fixture and migration runner.
+  - Decision: `feat-005` covers install/lint/typecheck/unit/E2E/build; `feat-055` later wires migration validation into CI.
 
 ## Files Modified This Session
 
@@ -53,6 +61,7 @@
 - `tests/features/feat-002-test-harness.unit.test.ts` - New unit test for harness separation rules.
 - `tests/e2e/feat-002-test-harness.e2e.spec.ts` - New E2E spec proving missing tests fail and commands are separate.
 - `feature_list.json` - feat-002 marked `passing` with evidence.
+- `feature_list.json` - Split migration validation from `feat-005` into new `feat-055`.
 - `pnpm-lock.yaml` - Lockfile update for `@playwright/test`.
 
 ## Evidence of Completion
@@ -64,6 +73,9 @@
   - `pnpm exec vitest run tests/features/feat-002-test-harness.unit.test.ts` → 4 passed.
   - `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` → 1 passed.
 - [x] Full gate clean: `pnpm run verify` (lint → typecheck → test → build) passed after the change.
+- [x] Dependency graph check after adding `feat-055`: `55 features`, no missing dependencies, no self-dependencies, no cycles.
+- [x] Full gate clean after split: `pnpm run verify` passed.
+- [x] E2E smoke after split: `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` passed.
 
 ## Notes for Next Session
 

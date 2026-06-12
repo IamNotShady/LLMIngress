@@ -39,8 +39,8 @@
     {
       "id": "feat-005",
       "name": "CI Verification Pipeline",
-      "description": "A pushed commit runs the same install, typecheck, unit test, E2E smoke, build, and migration validation commands that developers run locally.",
-      "verification": "test -f .github/workflows/ci.yml && grep -q 'pnpm install' .github/workflows/ci.yml && grep -q 'pnpm typecheck' .github/workflows/ci.yml && grep -q 'pnpm test' .github/workflows/ci.yml && grep -q 'pnpm test:e2e' .github/workflows/ci.yml && grep -q 'pnpm build' .github/workflows/ci.yml && pnpm install --frozen-lockfile && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
+      "description": "A pushed commit runs the same install, lint, typecheck, unit test, E2E smoke, and build commands that developers run locally.",
+      "verification": "test -f .github/workflows/ci.yml && grep -q 'pnpm install' .github/workflows/ci.yml && grep -q 'pnpm run lint' .github/workflows/ci.yml && grep -q 'pnpm typecheck' .github/workflows/ci.yml && grep -q 'pnpm test' .github/workflows/ci.yml && grep -q 'pnpm test:e2e' .github/workflows/ci.yml && grep -q 'pnpm build' .github/workflows/ci.yml && pnpm install --frozen-lockfile && pnpm run lint && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
       "dependencies": ["feat-002"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
@@ -498,11 +498,21 @@
       "verification": "pnpm exec vitest run tests/features/feat-054-local-deployment-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-054-local-deployment-smoke.e2e.spec.ts --grep 'clean local deployment records startup duration and completes one routed request' && bash -lc 'GATEWAY_PORT=4101 CONSOLE_PORT=3101 WORKER_HEARTBEAT_MS=100000 ./init.sh & pid=$!; start=$(date +%s); sleep 5; curl -fsS http://localhost:4101/health; curl -fsS -I http://localhost:3101; end=$(date +%s); echo startup_smoke_seconds=$((end-start)); kill $pid; wait $pid || true'",
       "dependencies": [
         "feat-005",
+        "feat-055",
         "feat-050",
         "feat-051",
         "feat-052",
         "feat-053"
       ],
+      "status": "not_started",
+      "evidence": "No verification evidence yet; feature is not_started."
+    },
+    {
+      "id": "feat-055",
+      "name": "CI Migration Validation",
+      "description": "A pushed commit runs the migration validation command against the test PostgreSQL fixture as part of CI after the migration runner exists.",
+      "verification": "test -f .github/workflows/ci.yml && grep -q 'migration' .github/workflows/ci.yml && pnpm run db:migrate:check",
+      "dependencies": ["feat-003", "feat-005", "feat-007"],
       "status": "not_started",
       "evidence": "No verification evidence yet; feature is not_started."
     }

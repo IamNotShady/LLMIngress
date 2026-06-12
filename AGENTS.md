@@ -9,9 +9,8 @@ Before writing code:
 1. **Confirm working directory** with `pwd`
 2. **Read this file** completely
 3. **Read project docs if present** (`docs/ARCHITECTURE.md`, `docs/PRODUCT.md`, README, or equivalent)
-4. **Run `pnpm run verify`** to confirm the workspace is healthy (lint → typecheck → test → build; exits when done). Use `./init.sh` only when you also want the dev servers running — it verifies first, then launches and blocks.
-5. **Read `feature_list.json`** to see current feature status
-6. **Review recent commits** with `git log --oneline -5`
+4. **Read `feature_list.json`** to see current feature status
+5. **Review recent commits** with `git log --oneline -5`
 
 If baseline verification is failing, repair that first before adding new scope.
 
@@ -19,8 +18,8 @@ If baseline verification is failing, repair that first before adding new scope.
 
 - **One feature at a time**: Pick exactly one unfinished feature from `feature_list.json`
 - **TDD first**: Before implementing any feature, write the expected unit test and E2E test cases first; only start implementation after the tests exist, and finish the feature only after those tests pass
-- **Verification altitude**: Every observable behavior named in a feature's `description` must be asserted by its tests at the same level it is described. If the description says a process stops at startup, the E2E test must launch the real process and assert the exit — not call a library function the apps never import. Before writing tests, reconcile `description` against `verification`; if the verification is weaker than the description, fix the verification (or explicitly narrow the description) first
-- **Regression after every pass**: After a feature's verification passes and before marking it `passing`, run `pnpm run verify:features` to re-verify all previously passing features. If any regress, set that feature's `status` to `failing`, record the regression in its `evidence`, and repair it before starting new scope
+- **Verification altitude**: Tests must assert each behavior at the level the `description` states it ("stops at startup" means launching the real process, not calling a library function); if `verification` is weaker than `description`, fix it before writing tests
+- **Regression after every pass**: Run `pnpm run verify:features` before marking a feature `passing`; a regressed feature gets `status: failing` plus the failure in its `evidence`, and is repaired before new scope
 - **Verification required**: Don't claim done without running verification commands
 - **Coding Rule**: Before writing code for any feature, read `docs/CODING_GUIDE.md`.
 - **Update artifacts**: Before ending session, update `progress.md` and `feature_list.json`
@@ -44,9 +43,9 @@ If baseline verification is failing, repair that first before adding new scope.
 A feature is done only when ALL of the following are true:
 
 - [ ] Target behavior is implemented
-- [ ] Unit tests and E2E tests for the feature pass, and they assert the behavior at the altitude the `description` states it
+- [ ] Unit tests and E2E tests for the feature pass at the `description`'s altitude
 - [ ] Required verification actually ran (tests / lint / type-check)
-- [ ] Full feature regression passed: `pnpm run verify:features` re-verifies all previously passing features; any regressed feature has its `status` set to `failing` and the failure recorded in `evidence`
+- [ ] Full feature regression passed (`pnpm run verify:features`)
 - [ ] Evidence recorded in `feature_list.json` or `progress.md`
 - [ ] Repository remains restartable from standard startup path
 
@@ -71,10 +70,8 @@ pnpm run verify
 pnpm run verify:features
 ```
 
-Database-backed verifications require `TEST_DATABASE_URL` pointing at the local
-test PostgreSQL (e.g. `postgresql://postgres:postgres@127.0.0.1:55432/postgres`
-from the `llmingress-postgres` Docker container). Features guarded by it fail
-loudly — never silently skip — when the variable is missing.
+Database-backed verifications require `TEST_DATABASE_URL` (local default:
+`postgresql://postgres:postgres@127.0.0.1:55432/postgres`); they fail loudly when it is missing.
 
 Lint is Biome (`biome.json`); use `pnpm run lint:fix` to auto-fix before committing.
 

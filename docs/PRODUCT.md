@@ -259,6 +259,7 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - 优先保证主流 Agent 能够用 OpenAI-compatible 方式接入。
 - 为支持 Claude Code，Anthropic-compatible `/v1/messages` endpoint 属于核心接入能力。
 - `GET /v1/models` 返回当前 Agent API Key 被授权使用的 Virtual Model Name 列表，而不直接暴露真实 Provider 模型列表。
+- `/v1/responses` V1 支持无状态请求子集；`previous_response_id`、server-side `store` 等有状态链式调用不作为 V1 默认跨 Provider 能力。
 
 ### 7.2 Virtual Model 抽象
 
@@ -352,6 +353,8 @@ Agent API Key 用于识别请求来自哪个 Agent，并承载该 Agent 的权�
 - Groq。
 - Fireworks AI。
 - Z.ai。
+
+DeepSeek、xAI、Mistral、Qwen、Moonshot、MiniMax、Groq、Fireworks AI、Z.ai 等 OpenAI-compatible Provider 可以通过系统内置的白名单 Provider template 复用通用 OpenAI-compatible adapter；V1 不开放用户任意填写自定义 endpoint。
 
 ### 8.3 Subscription Provider
 
@@ -845,7 +848,7 @@ Console 必须支持访问控制，尤其是服务器或公网部署场景。
 - 支持禁用公网访问。
 - 所有 Provider Key、Subscription Token、Agent API Key 操作需要鉴权。
 
-## 17. 非功能需求、成功指标与版本规划
+## 17. 非功能需求与成功指标
 
 ### 17.1 非功能需求
 
@@ -867,39 +870,9 @@ Console 必须支持访问控制，尤其是服务器或公网部署场景。
 - Budget / Rate Limit 阻断次数。
 - Provider 平均延迟和失败率。
 
-### 17.3 版本规划
+### 17.3 版本实现规划
 
-MVP：
-
-- OpenAI-compatible `/v1/chat/completions`、`/v1/responses`。
-- Anthropic-compatible `/v1/messages`。
-- Agent API Key。
-- Virtual Model Name / Route Policy。
-- API Key Provider。
-- Local Provider。
-- 确定性规则路由。
-- Fallback Chain。
-- Usage / Cost / Activity。
-- Budget、Token Limit、RPM、TPM。
-- Console 鉴权。
-
-V1：
-
-- Embeddings endpoint。
-- Provider 多 Key failover。
-- Prometheus / OpenTelemetry / Webhook export。
-- 配置导入导出。
-- Prompt caching 成本核算。
-- 首批 Agent 专用接入模板，例如 Codex、Claude Code、Cursor、OpenClaw 等。
-
-V2：
-
-- 可选 LLM 分类器。
-- 可选质量 judge。
-- Semantic cache。
-- Subscription Provider（高风险探索能力）。
-- Quota-aware key balancing。
-- 更多 Agent 专用接入模板。
+版本实现规划已迁移到 [`docs/ROADMAP.md`](ROADMAP.md)，按 MVP、V1、V2、V3 四个阶段拆分实现范围、交付功能和验收标准。
 
 ## 18. 产品边界
 

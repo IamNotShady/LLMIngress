@@ -146,6 +146,7 @@ Gateway Service
 ├── Observability Runtime
 │   ├── Activity recorder
 │   ├── Usage / cost recorder
+│   ├── Baseline / savings recorder
 │   ├── Error / fallback recorder
 │   ├── Metrics exporter
 │   └── Trace exporter
@@ -170,6 +171,13 @@ Gateway 对 AI Agent 暴露统一 endpoint，优先覆盖：
 其中 `GET /v1/models` 返回当前 Agent API Key 被授权使用的 Virtual Model Name，不直接暴露真实 Provider 模型列表。
 
 Public API 的默认调用方是 AI Agent。Playground 需要从浏览器直接调用 Gateway Public API 时，Gateway 只允许配置过的 Console origin 通过 CORS 访问；默认本机部署可允许 Console localhost origin，server 部署必须显式配置 allowed origins。Playground 使用的 Gateway Base URL 来自 Console 中展示给 Agent 的 Gateway URL / runtime setting；如果 Console 与 Gateway 不同端口或域名，用户必须配置浏览器可访问的 Gateway Base URL。
+
+`/v1/responses` 的 V1 支持范围：
+
+- V1 支持无状态 Responses API 子集，用于兼容使用 OpenAI-compatible `/v1/responses` 的 Agent。
+- V1 不默认实现跨 Provider 的 `previous_response_id`、server-side `store`、response state replay 或 provider state migration。
+- 如果请求包含 `previous_response_id` 或要求 `store = true`，V1 默认返回明确的 unsupported error；未来可以在单 Provider passthrough 模式下扩展。
+- Gateway 内部仍把无状态 responses 请求归一化为 normalized request，再路由到支持对应输入 / 输出能力的 Provider adapter。
 
 ### 4.2 Routing Runtime
 
@@ -242,6 +250,39 @@ Provider health 的合并规则：
 - Console 展示完整 `provider_health_events` 和当前 `provider_health_summary`；这些表不是每次路由的同步查询来源。
 
 Postgres 是运行时状态的持久化 owner，Gateway 是请求路径上低延迟 in-memory view 的 owner。Gateway 可以用内存计数支撑单实例低延迟检查，并把可恢复状态写入 Postgres；如果未来运行多个 Gateway 实例，RPM / TPM / concurrency 需要迁移到 Postgres 原子更新、advisory lock 或 Redis 等共享状态组件，不能继续只依赖单进程内存。
+
+### 4.5 Savings 计算归属
+
+成本节省是请求级可观测数据，owner 是 Gateway 的 Observability Runtime，而不是 Console 查询时临时反推。
+
+Gateway 在完成路由决策并拿到实际 usage 后，同步写入：
+
+- actual provider / model cost：本次真实命中的 Provider / Model 成本。
+- baseline provider / model：该 Virtual Model 的基线模型，来自用户显式配置；如果用户未配置，则使用该 Virtual Model 的质量优先默认模型。
+- baseline hypothetical cost：按同一输入 / 输出 token 和 baseline 模型价格计算的假想成本。
+- savings amount / percent：`baseline hypothetical cost - actual cost` 及百分比。
+- price source / price version：记录本次计算使用的价格来源，避免后续价格同步后历史 savings 被重算漂移。
+
+这样 Overview 和 Usage 页面可以直接聚合 `request_savings` 或 `request_costs` 中的 baseline 字段，不需要在查询时重新跑一遍历史路由逻辑。Worker 的 billing reconciliation 可以更新 actual cost，但不改变原始 route decision；如果 actual cost 被对账修正，Worker 可以按同一 baseline 重新计算 savings 并标记 reconciled。
+
+### 4.6 Provider Adapter Strategy
+
+Provider adapter 不按每个长尾 Provider 都实现一套独立 adapter。V1 采用两层策略：
+
+- Native adapter：用于 OpenAI、Anthropic、Google Gemini、OpenRouter、Ollama 等协议或行为差异明显的 Provider。
+- Generic OpenAI-compatible adapter：用于 DeepSeek、xAI、Mistral、Qwen、Moonshot / Kimi、MiniMax、Groq、Fireworks AI、Z.ai、LM Studio、llama.cpp 等兼容 OpenAI API 形态的 Provider。
+
+通用 OpenAI-compatible adapter 不能变成任意自定义 endpoint。它只能通过内置白名单 Provider template 启用，template 分为两类：
+
+- Provider id、display name 和类别。
+- 远程 Provider template 固定 base URL 和 endpoint path，例如 DeepSeek、Groq、Fireworks AI。
+- Local Provider template 固定 endpoint path、协议形态和能力声明，但 base URL 由用户在 Provider 配置中填写，例如 LM Studio、llama.cpp；这仍然受该 local provider template 约束，不等同于任意自定义 endpoint。
+- auth header / key placement。
+- 支持的 endpoint 子集，例如 chat completions、responses stateless subset、embeddings。
+- streaming、tools、JSON mode、max context 等能力声明。
+- 模型发现方式：provider model list API、静态 registry，或 local provider probe。
+
+这样可以覆盖产品清单里的长尾 Provider，同时保持“V1 不支持任意自定义 endpoint”的产品边界。
 
 ## 5. Console 架构
 
@@ -655,6 +696,7 @@ PostgreSQL database
 │   ├── request_activity
 │   ├── request_usage
 │   ├── request_costs
+│   ├── request_savings
 │   ├── fallback_events
 │   ├── provider_health_events
 │   ├── provider_health_summary
@@ -788,7 +830,8 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   │       │   ├── runtime-counters.ts
 │   │       │   ├── health-view.ts
 │   │       │   ├── usage-recorder.ts
-│   │       │   └── cost-recorder.ts
+│   │       │   ├── cost-recorder.ts
+│   │       │   └── savings-recorder.ts
 │   │       ├── coordination/ # Gateway 与 Postgres 协调通道
 │   │       │   ├── postgres-listener.ts
 │   │       │   ├── config-reload.ts
@@ -896,6 +939,8 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   ├── providers/ # 真实 Provider adapter 实现
 │   │   └── src/ # providers package 源码目录
 │   │       ├── provider-adapter.ts
+│   │       ├── provider-templates/ # 白名单 Provider 模板
+│   │       ├── openai-compatible/ # 通用 OpenAI-compatible adapter
 │   │       ├── openai/ # OpenAI Provider adapter
 │   │       ├── anthropic/ # Anthropic Provider adapter
 │   │       ├── google/ # Google Gemini Provider adapter
@@ -930,6 +975,7 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   │   └── src/ # billing package 源码目录
 │   │       ├── cost-estimator.ts
 │   │       ├── price-registry.ts
+│   │       ├── savings.ts
 │   │       └── reconciliation.ts
 │   │
 │   ├── notifications/ # 告警规则和通知目标模型
@@ -961,7 +1007,8 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │
 ├── docs/ # 产品、架构和设计文档
 │   ├── PRODUCT.md
-│   └── ARCHITECTURE.md
+│   ├── ARCHITECTURE.md
+│   └── ROADMAP.md
 │
 ├── scripts/ # 本地开发、迁移和维护脚本
 │   ├── dev.ts
@@ -1032,10 +1079,13 @@ Agent 协议、Provider 协议、Route Policy、配置发布、配置校验、Po
 - Console 对 Gateway 的控制反馈是异步最终一致的，以 Postgres 中的 applied config version、heartbeat 和 failure event 为准。
 - V1 只支持单 active Gateway 进程；多 Gateway 需要先引入共享限流、预算和并发计数状态。
 - Gateway 使用 immutable config snapshot，新请求即时使用新配置，进行中的请求不受影响。
+- `/v1/responses` V1 支持无状态子集，不默认实现跨 Provider response state。
 - Console 不进入 Agent 请求路径，Gateway 在 Console 暂时不可用时仍应能继续处理请求。
 - Provider 派生模型数据采用 soft-delete / availability marker；硬删除必须经 Console 依赖检查。
+- OpenAI-compatible 长尾 Provider 通过内置白名单 template 复用通用 adapter，不开放任意自定义 endpoint。
 - Playground 使用 Gateway Public API 测试；用户手动输入 Agent API Key 并选择 Virtual Model Name，Console 后端不代理请求也不保存该 key。
 - Gateway 拥有同步限流、预算预留、并发计数和 in-memory health view；数据库保存可恢复的窗口、预算周期累计、健康事件和 health summary。
+- Gateway 在请求路径记录 baseline cost 和 request savings；Console 聚合展示，Worker 只在成本对账后修正 actual cost / savings。
 - Runtime settings 区分 hot-reloadable 与 restart-required；监听地址、端口、数据目录等由 supervisor 重启生效。
 - master key 存储在数据库之外，由 Gateway、Console、Worker 共享加载；Postgres 连接凭据与 master key 分离。
 - Migration 和升级前备份是部署期 / supervisor 关注点，不属于 Console 私有服务。

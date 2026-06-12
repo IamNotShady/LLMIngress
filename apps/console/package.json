@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port ${CONSOLE_PORT:-3000}",
+    "dev": "tsx src/main.ts dev",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0 --port ${CONSOLE_PORT:-3000}",
+    "start": "tsx src/main.ts start",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@llmingress/config": "workspace:*",
     "next": "^16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

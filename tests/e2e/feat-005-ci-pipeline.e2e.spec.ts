@@ -14,6 +14,8 @@ test("ci workflow contains install lint typecheck unit e2e and build gates", () 
         "grep -q 'pnpm test' .github/workflows/ci.yml",
         "grep -q 'pnpm test:e2e' .github/workflows/ci.yml",
         "grep -q 'pnpm build' .github/workflows/ci.yml",
+        "grep -q 'postgres:' .github/workflows/ci.yml",
+        "grep -q 'TEST_DATABASE_URL' .github/workflows/ci.yml",
       ].join(" && "),
     ],
     { cwd: process.cwd(), encoding: "utf8", timeout: 30_000 },

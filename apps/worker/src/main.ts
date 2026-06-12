@@ -1,10 +1,11 @@
 import { pathToFileURL } from "node:url";
+import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 
 export function startWorker() {
-  const heartbeatMs = Number.parseInt(process.env.WORKER_HEARTBEAT_MS ?? "30000", 10);
+  const config = loadBootstrapRuntimeConfig();
   const timer = setInterval(() => {
     console.log("[worker] heartbeat");
-  }, heartbeatMs);
+  }, config.workerHeartbeatMs);
 
   console.log("[worker] started");
 

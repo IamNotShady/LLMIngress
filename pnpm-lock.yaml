@@ -35,6 +35,9 @@ importers:
 
   apps/console:
     dependencies:
+      '@llmingress/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -54,11 +57,18 @@ importers:
 
   apps/gateway:
     dependencies:
+      '@llmingress/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
 
-  apps/worker: {}
+  apps/worker:
+    dependencies:
+      '@llmingress/config':
+        specifier: workspace:*
+        version: link:../../packages/config
 
   packages/config: {}
 

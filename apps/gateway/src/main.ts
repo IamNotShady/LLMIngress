@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import Fastify from "fastify";
 
 export function createGatewayApp() {
@@ -14,13 +15,13 @@ export function createGatewayApp() {
   return app;
 }
 
-async function startGateway() {
-  const port = Number.parseInt(process.env.GATEWAY_PORT ?? "4000", 10);
+export async function startGateway() {
+  const config = loadBootstrapRuntimeConfig();
   const app = createGatewayApp();
 
   await app.listen({
     host: "0.0.0.0",
-    port,
+    port: config.gatewayPort,
   });
 }
 

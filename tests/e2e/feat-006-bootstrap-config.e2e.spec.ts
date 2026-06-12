@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -49,5 +50,46 @@ test("env and bootstrap config load ports database url master key and reject inv
     ).toThrow(/DATABASE_URL/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("app startup entries reject invalid bootstrap config before serving", () => {
+  const appCommands = [
+    {
+      name: "gateway",
+      command: "pnpm --filter @llmingress/gateway exec tsx src/main.ts",
+    },
+    {
+      name: "worker",
+      command: "pnpm --filter @llmingress/worker exec tsx src/main.ts",
+    },
+    {
+      name: "console",
+      command: "pnpm --filter @llmingress/console exec tsx src/main.ts dev",
+    },
+  ];
+
+  for (const appCommand of appCommands) {
+    const result = spawnSync("bash", ["-lc", appCommand.command], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        CONSOLE_PORT: "3101",
+        DATABASE_URL: "not-a-url",
+        GATEWAY_PORT: "4101abc",
+        MASTER_KEY: "test-master-key",
+        WORKER_HEARTBEAT_MS: "1500ms",
+      },
+      timeout: 5000,
+    });
+
+    expect(result.error?.message, `${appCommand.name} should exit instead of timing out`).toBe(
+      undefined,
+    );
+    expect(result.status, result.stderr || result.stdout).not.toBe(0);
+    expect(`${result.stderr}\n${result.stdout}`).toMatch(
+      /DATABASE_URL|GATEWAY_PORT|WORKER_HEARTBEAT_MS/,
+    );
   }
 });

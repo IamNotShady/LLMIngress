@@ -33,4 +33,14 @@ describe("feat-005 CI verification pipeline", () => {
     expect(postgresE2e).toContain("TEST_DATABASE_URL");
     expect(postgresE2e).toMatch(/test\.skip\(\s*!process\.env\.TEST_DATABASE_URL/);
   });
+
+  it("provides PostgreSQL to CI so database E2E tests do not silently skip", () => {
+    const workflow = readFileSync(workflowPath, "utf8");
+
+    expect(workflow).toContain("services:");
+    expect(workflow).toContain("postgres:");
+    expect(workflow).toContain("POSTGRES_PASSWORD: postgres");
+    expect(workflow).toContain("TEST_DATABASE_URL");
+    expect(workflow).toContain("postgresql://postgres:postgres@127.0.0.1:55432/postgres");
+  });
 });

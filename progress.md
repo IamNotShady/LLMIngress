@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 19:46 AWST
+**Last Updated:** 2026-06-12 22:03 AWST
 **Active Feature:** None (feat-003 through feat-006 completed)
 
 ## Status
@@ -40,12 +40,15 @@
   - Added feat-004 unit and E2E tests; both were observed failing before implementation and passing after implementation.
 - [x] **feat-005 — CI Verification Pipeline (passing)**:
   - Added GitHub Actions workflow for install, lint, typecheck, unit tests, E2E smoke, and build.
+  - Added CI PostgreSQL service and `TEST_DATABASE_URL`, so database-backed E2E tests execute in CI instead of silently skipping.
+  - Added pnpm setup/cache in the workflow.
   - Kept migration validation out of base CI; `feat-055` still owns that later.
-  - Made the PostgreSQL fixture E2E opt-in when `TEST_DATABASE_URL` is absent so the base E2E smoke command can run without a database.
 - [x] **feat-006 — Bootstrap Runtime Configuration (passing)**:
   - Added `packages/config` bootstrap runtime loader for environment and JSON bootstrap config files.
   - Covers gateway/console ports, worker heartbeat, PostgreSQL `DATABASE_URL`, and inline/file master key sources.
   - Invalid ports, database URLs, and missing master key sources fail with explicit errors.
+  - Wired the loader into Gateway, Worker, and Console startup paths.
+  - Tightened integer parsing so values like `4101abc` fail instead of being truncated.
 
 ### What's In Progress
 
@@ -61,7 +64,8 @@
 ## Blockers / Risks
 
 - [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
-- [ ] `apps/console/next-env.d.ts` is now gitignored (generated, rewritten by `next dev`/`next build`). It imports types from `.next/`, so Console `typecheck` implicitly requires a prior dev/build. feat-005 CI must run `next typegen` (or a build) before typecheck on a clean checkout.
+- [ ] Real GitHub Actions evidence for `feat-005` still requires pushing the current commit and observing the workflow run on GitHub.
+- [ ] Console page E2E features (feat-013+) will need Playwright browser installation before browser-driven tests are added.
 
 ## Decisions Made
 
@@ -108,11 +112,19 @@
 - `.github/workflows/ci.yml` - New base CI workflow.
 - `tests/features/feat-005-ci-pipeline.unit.test.ts` - New CI workflow unit checks.
 - `tests/e2e/feat-005-ci-pipeline.e2e.spec.ts` - New CI workflow E2E smoke check.
+- `.github/workflows/ci.yml` - Added PostgreSQL service, `TEST_DATABASE_URL`, and pnpm cache setup.
+- `apps/gateway/src/main.ts` - Startup now loads bootstrap runtime config before listening.
+- `apps/gateway/package.json` - Added workspace dependency on `@llmingress/config`.
+- `apps/worker/src/main.ts` - Startup now loads bootstrap runtime config before heartbeat scheduling.
+- `apps/worker/package.json` - Added workspace dependency on `@llmingress/config`.
+- `apps/console/src/main.ts` - New Console startup wrapper that validates bootstrap runtime config before launching Next.
+- `apps/console/package.json` - Routed dev/start scripts through the Console startup wrapper and added `@llmingress/config`.
+- `packages/config/package.json` - Export now resolves to source for pre-build workspace consumers.
 - `tests/e2e/feat-003-postgres-fixture.e2e.spec.ts` - Added opt-in skip when `TEST_DATABASE_URL` is absent.
 - `packages/config/src/index.ts` - Added bootstrap runtime config loader.
 - `tests/features/feat-006-bootstrap-config.unit.test.ts` - New config unit tests.
 - `tests/e2e/feat-006-bootstrap-config.e2e.spec.ts` - New config E2E smoke test.
-- `pnpm-lock.yaml` - Lockfile updates for `@playwright/test`, `pg`, and `@types/pg`.
+- `pnpm-lock.yaml` - Lockfile updates for `@playwright/test`, `pg`, `@types/pg`, and workspace app dependencies.
 
 ## Evidence of Completion
 
@@ -158,14 +170,25 @@
   - `pnpm exec vitest run tests/features/feat-005-ci-pipeline.unit.test.ts` → 3 passed.
   - `pnpm test:e2e tests/e2e/feat-005-ci-pipeline.e2e.spec.ts --grep 'ci workflow contains install lint typecheck unit e2e and build gates'` → 1 passed.
   - Full feat-005 verification passed: workflow checks, `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm build`.
+- [x] feat-005 review fix verification passed:
+  - Red phase: updated workflow unit test failed because CI lacked `services: postgres` and `TEST_DATABASE_URL`.
+  - `pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts tests/features/feat-005-ci-pipeline.unit.test.ts` → 9 passed.
+  - `pnpm test:e2e tests/e2e/feat-005-ci-pipeline.e2e.spec.ts --grep 'ci workflow contains install lint typecheck unit e2e and build gates'` → 1 passed.
+  - `pnpm install --frozen-lockfile` passed.
 - [x] feat-006 red phase observed:
   - `pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts` failed because `loadBootstrapRuntimeConfig` was missing.
   - `pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts --grep 'env and bootstrap config load ports database url master key and reject invalid config'` failed because `loadBootstrapRuntimeConfig` was missing.
 - [x] feat-006 verification passed:
   - `pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts` → 3 passed.
   - `pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts --grep 'env and bootstrap config load ports database url master key and reject invalid config'` → 1 passed.
+- [x] feat-006 review fix verification passed:
+  - Red phase: updated tests failed because trailing-garbage integers were accepted and Gateway startup timed out instead of rejecting invalid bootstrap config.
+  - `pnpm exec vitest run tests/features/feat-006-bootstrap-config.unit.test.ts tests/features/feat-005-ci-pipeline.unit.test.ts` → 9 passed.
+  - `pnpm test:e2e tests/e2e/feat-006-bootstrap-config.e2e.spec.ts --grep 'app startup entries reject invalid bootstrap config before serving'` → 1 passed.
 - [x] Final full gate after feat-003 through feat-006: `pnpm run verify` passed.
 - [x] Final E2E smoke after feat-003 through feat-006: `pnpm test:e2e` passed with 4 passed and 1 skipped (PostgreSQL fixture remains opt-in without `TEST_DATABASE_URL`).
+- [x] Review fix final gate: `pnpm run verify` passed.
+- [x] Review fix database E2E gate: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 6/6 tests executed.
 
 ## Notes for Next Session
 

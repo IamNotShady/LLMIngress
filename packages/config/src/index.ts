@@ -88,7 +88,7 @@ function readPositiveInteger(
     typeof rawValue === "number"
       ? rawValue
       : typeof rawValue === "string"
-        ? Number.parseInt(rawValue, 10)
+        ? Number(rawValue)
         : Number.NaN;
 
   if (!Number.isInteger(value) || value <= 0) {

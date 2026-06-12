@@ -8,7 +8,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
-    "init": "bash scripts/init.sh"
+    "init": "bash init.sh"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

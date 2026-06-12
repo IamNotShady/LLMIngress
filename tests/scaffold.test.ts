@@ -84,11 +84,13 @@ describe("workspace scaffold", () => {
   });
 
   it("provides an executable init script that starts all three projects", () => {
-    const initPath = path.join(root, "scripts/init.sh");
+    const initPath = path.join(root, "init.sh");
     const initScript = readFileSync(initPath, "utf8");
+    const packageJson = readJson<PackageJson>("package.json");
     const mode = statSync(initPath).mode;
 
     expect(mode & 0o111).not.toBe(0);
+    expect(packageJson.scripts?.init).toBe("bash init.sh");
     expect(initScript).toContain("--filter @llmingress/gateway dev");
     expect(initScript).toContain("--filter @llmingress/console dev");
     expect(initScript).toContain("--filter @llmingress/worker dev");

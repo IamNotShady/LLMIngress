@@ -1,0 +1,20 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Project Setup",
+      "description": "Confirm the project can install dependencies, run verification, and start from a clean checkout",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-002",
+      "name": "First User-Facing Feature",
+      "description": "Replace this placeholder with the first concrete behavior the agent should implement",
+      "dependencies": ["feat-001"],
+      "status": "not-started",
+      "evidence": ""
+    }
+  ]
+}

@@ -1,8 +1,8 @@
-# LLMIngress Implementation Roadmap
+# LLMIngress Implementation PLAN
 
 > 本文从 `docs/PRODUCT.md` 拆出版本实现规划，用于指导 MVP 到 V3 的阶段化开发。产品定义仍以 `docs/PRODUCT.md` 为准；架构边界仍以 `docs/ARCHITECTURE.md` 为准；版本范围以本文为唯一事实源。
 
-## 1. Roadmap 原则
+## 1. PLAN 原则
 
 - 每个阶段都必须产出可运行、可测试、可回归的版本。
 - 按 TDD 开发：先写失败测试，再写最小实现，再重构。

@@ -1008,7 +1008,7 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 ├── docs/ # 产品、架构和设计文档
 │   ├── PRODUCT.md
 │   ├── ARCHITECTURE.md
-│   └── ROADMAP.md
+│   └── PLAN.md
 │
 ├── scripts/ # 本地开发、迁移和维护脚本
 │   ├── dev.ts

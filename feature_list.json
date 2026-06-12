@@ -43,7 +43,7 @@
       "verification": "test -f .github/workflows/ci.yml && grep -q 'pnpm install' .github/workflows/ci.yml && grep -q 'pnpm run lint' .github/workflows/ci.yml && grep -q 'pnpm typecheck' .github/workflows/ci.yml && grep -q 'pnpm test' .github/workflows/ci.yml && grep -q 'pnpm test:e2e' .github/workflows/ci.yml && grep -q 'pnpm build' .github/workflows/ci.yml && grep -q 'postgres:' .github/workflows/ci.yml && grep -q 'TEST_DATABASE_URL' .github/workflows/ci.yml && pnpm install --frozen-lockfile && pnpm run lint && pnpm typecheck && pnpm test && bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm test:e2e && pnpm build",
       "dependencies": ["feat-002"],
       "status": "passing",
-      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, and pnpm cache; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed."
+      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82."
     },
     {
       "id": "feat-006",

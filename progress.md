@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 22:03 AWST
+**Last Updated:** 2026-06-12 22:09 AWST
 **Active Feature:** None (feat-003 through feat-006 completed)
 
 ## Status
@@ -42,6 +42,7 @@
   - Added GitHub Actions workflow for install, lint, typecheck, unit tests, E2E smoke, and build.
   - Added CI PostgreSQL service and `TEST_DATABASE_URL`, so database-backed E2E tests execute in CI instead of silently skipping.
   - Added pnpm setup/cache in the workflow.
+  - Added GitHub Actions Node 24 opt-in to avoid the upcoming Node 20 action runtime deprecation window.
   - Kept migration validation out of base CI; `feat-055` still owns that later.
 - [x] **feat-006 — Bootstrap Runtime Configuration (passing)**:
   - Added `packages/config` bootstrap runtime loader for environment and JSON bootstrap config files.
@@ -64,7 +65,6 @@
 ## Blockers / Risks
 
 - [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
-- [ ] Real GitHub Actions evidence for `feat-005` still requires pushing the current commit and observing the workflow run on GitHub.
 - [ ] Console page E2E features (feat-013+) will need Playwright browser installation before browser-driven tests are added.
 
 ## Decisions Made
@@ -112,7 +112,7 @@
 - `.github/workflows/ci.yml` - New base CI workflow.
 - `tests/features/feat-005-ci-pipeline.unit.test.ts` - New CI workflow unit checks.
 - `tests/e2e/feat-005-ci-pipeline.e2e.spec.ts` - New CI workflow E2E smoke check.
-- `.github/workflows/ci.yml` - Added PostgreSQL service, `TEST_DATABASE_URL`, and pnpm cache setup.
+- `.github/workflows/ci.yml` - Added PostgreSQL service, `TEST_DATABASE_URL`, pnpm cache setup, and Node 24 action opt-in.
 - `apps/gateway/src/main.ts` - Startup now loads bootstrap runtime config before listening.
 - `apps/gateway/package.json` - Added workspace dependency on `@llmingress/config`.
 - `apps/worker/src/main.ts` - Startup now loads bootstrap runtime config before heartbeat scheduling.
@@ -189,6 +189,7 @@
 - [x] Final E2E smoke after feat-003 through feat-006: `pnpm test:e2e` passed with 4 passed and 1 skipped (PostgreSQL fixture remains opt-in without `TEST_DATABASE_URL`).
 - [x] Review fix final gate: `pnpm run verify` passed.
 - [x] Review fix database E2E gate: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 6/6 tests executed.
+- [x] Real GitHub Actions run after push: CI run `27420889988` passed on commit `bc9fe82` with install, lint, typecheck, unit tests, E2E smoke, and build green.
 
 ## Notes for Next Session
 

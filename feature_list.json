@@ -15,8 +15,8 @@
       "description": "Running a missing feature test must fail instead of silently passing; real unit tests and E2E tests must have separate commands and directories.",
       "verification": "bash -lc '! pnpm exec vitest run tests/features/__missing__.unit.test.ts' && bash -lc '! rg -n \"passWithNoTests.*true\" vitest.config.ts package.json' && test -d tests/features && test -d tests/e2e && pnpm exec vitest run tests/features/feat-002-test-harness.unit.test.ts && pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'",
       "dependencies": ["feat-001"],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-12: full verification chain passed — vitest on missing test file exits nonzero, no passWithNoTests true in vitest.config.ts/package.json, tests/features and tests/e2e exist, feat-002 unit test passed (vitest), feat-002 e2e spec passed via pnpm test:e2e (Playwright) with --grep; pnpm run verify green."
     },
     {
       "id": "feat-003",

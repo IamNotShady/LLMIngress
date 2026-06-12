@@ -2,25 +2,21 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 15:49 AWST
-**Active Feature:** None
+**Last Updated:** 2026-06-12 16:10 AWST
+**Active Feature:** None (feat-002 completed)
 
 ## Status
 
 ### What's Done
 
-- [x] Built the minimum monorepo scaffold for Gateway, Console, Worker, and shared packages.
-- [x] Moved the startup script to root-level `init.sh`; `pnpm run init` now calls `bash init.sh`.
-- [x] Added scaffold tests for app/package structure, root startup script, and Vitest missing-test behavior.
-- [x] Reworked `feature_list.json` into harness-friendly feature primitives:
-  - `description`
-  - `verification`
-  - `dependencies`
-  - `status`
-  - `evidence`
-- [x] Standardized feature tracker schema on `description` / `status` and added a scaffold test that rejects legacy `behavior` / `state` fields.
+- [x] Built the minimum monorepo scaffold for Gateway, Console, Worker, and shared packages (feat-001).
 - [x] Split the MVP scope from `docs/PLAN.md` into 54 independently developable and testable features.
-- [x] Updated verification contracts so missing feature tests fail instead of silently passing.
+- [x] Standardized feature tracker schema on `description` / `status` with strict verification contracts.
+- [x] **feat-002 — Unit and E2E Test Harness (passing)**:
+  - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
+  - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
+  - Vitest stays scoped to `tests/**/*.test.ts` with `passWithNoTests: false`, so a missing feature test fails instead of silently passing.
+  - TDD: unit test and E2E spec were written first and observed failing before implementation.
 
 ### What's In Progress
 
@@ -28,49 +24,46 @@
 
 ### What's Next
 
-1. Start `feat-002` — Unit and E2E Test Harness.
-2. Add real `tests/features/` and `tests/e2e/` structure plus `pnpm test:e2e`.
-3. Keep TDD discipline: write each feature's unit and E2E tests before implementation.
+1. `feat-003` — Test PostgreSQL Fixture (isolated DB per test, migrate, reset, no leaked rows).
+2. `feat-004` — Fake Provider Test Server (deterministic modes incl. streaming/timeout/first-byte failure).
+3. `feat-005` — CI Verification Pipeline (now unblocked since `pnpm test:e2e` exists).
 
 ## Blockers / Risks
 
-- [ ] `feat-002` is still `not_started`; most feature verification commands intentionally point to future test files and must fail until those tests are created.
-- [ ] PostgreSQL fixture and CI pipeline are not implemented yet, so later database-backed feature work should not start before `feat-003` and `feat-005`.
+- [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
+- [ ] PostgreSQL fixture not implemented; database-backed feature work must wait for `feat-003`.
 
 ## Decisions Made
 
-- **Feature list is the MVP source of execution truth**:
-  - Context: `docs/PLAN.md` defines MVP scope; `feature_list.json` breaks it into independently verifiable work items.
-  - Decision: Each item has a concrete `description`, `verification`, `dependencies`, `status`, and `evidence`.
-- **Missing tests must fail**:
-  - Context: Feature verification should not pass when a future test file is absent.
-  - Decision: `vitest.config.ts` sets `passWithNoTests: false`; scaffold tests assert this.
-- **Gateway auth behavior is owned by `feat-034`**:
-  - Context: `feat-027` handles API key lifecycle only.
-  - Decision: Disabled-key request rejection stays in `feat-034` to keep a single source of truth.
+- **`test:e2e` is Playwright, not a second vitest config**:
+  - Context: feature verification commands use `--grep '<scenario>'`, which is Playwright CLI syntax (vitest uses `-t`); Console-page features need a real browser later.
+  - Decision: `"test:e2e": "playwright test"` with `playwright.config.ts` scoped to `tests/e2e/**/*.e2e.spec.ts`.
+- **File naming keeps runners disjoint**:
+  - Unit: `tests/features/feat-XXX-<slug>.unit.test.ts` (matches vitest `tests/**/*.test.ts`).
+  - E2E: `tests/e2e/feat-XXX-<slug>.e2e.spec.ts` (matches only Playwright's testMatch).
+- **Feature list is the MVP source of execution truth** (unchanged from previous session).
+- **Missing tests must fail**: `passWithNoTests: false` retained; now also asserted by feat-002's own tests.
+- **Gateway auth behavior is owned by `feat-034`** (unchanged from previous session).
 
 ## Files Modified This Session
 
-- `AGENTS.md` - Documented the canonical `feature_list.json` schema.
-- `feature_list.json` - Renamed feature fields from `behavior` / `state` to `description` / `status`.
-- `feature_list.json` - Replaced examples with 54 MVP feature primitives and strict verification contracts.
-- `vitest.config.ts` - Added `passWithNoTests: false`.
-- `tests/scaffold.test.ts` - Added scaffold assertion for missing-test failure behavior.
-- `tests/scaffold.test.ts` - Added feature tracker schema assertion for `description` / `status`.
-- `.gitignore` - Added Turborepo cache ignore rules.
+- `package.json` - Added `test:e2e` script and `@playwright/test` dev dependency.
+- `playwright.config.ts` - New Playwright config scoped to `tests/e2e`.
+- `tests/features/feat-002-test-harness.unit.test.ts` - New unit test for harness separation rules.
+- `tests/e2e/feat-002-test-harness.e2e.spec.ts` - New E2E spec proving missing tests fail and commands are separate.
+- `feature_list.json` - feat-002 marked `passing` with evidence.
+- `pnpm-lock.yaml` - Lockfile update for `@playwright/test`.
 
 ## Evidence of Completion
 
-- [x] Feature list schema check: `54 features`, `passing=1`, `not_started=53`.
-- [x] Feature list schema check now requires `description` / `status` and rejects legacy `behavior` / `state`.
-- [x] Harness validator: `100/100`, including state subsystem `5/5`.
-- [x] Targeted scaffold test: `pnpm exec vitest run tests/scaffold.test.ts` reports `10 passed` tests.
-- [x] Missing test behavior: `pnpm exec vitest run tests/features/__missing__.unit.test.ts` exits with code `1`.
-- [x] Tests pass: `pnpm test` reports `1 passed` test file and `10 passed` tests.
-- [x] Type check clean: `pnpm typecheck` reports `6 successful` packages.
-- [x] Full verification clean: `pnpm run verify` passed.
-- [x] Diff check clean: `git diff --check` passed for edited files.
+- [x] feat-002 verification chain passed end to end on 2026-06-12:
+  - `! pnpm exec vitest run tests/features/__missing__.unit.test.ts` (missing test exits nonzero).
+  - `! rg -n "passWithNoTests.*true" vitest.config.ts package.json` (no silent-pass config).
+  - `test -d tests/features && test -d tests/e2e`.
+  - `pnpm exec vitest run tests/features/feat-002-test-harness.unit.test.ts` → 4 passed.
+  - `pnpm test:e2e tests/e2e/feat-002-test-harness.e2e.spec.ts --grep 'missing tests fail and unit e2e commands are separate'` → 1 passed.
+- [x] Full gate clean: `pnpm run verify` (lint → typecheck → test → build) passed after the change.
 
 ## Notes for Next Session
 
-Start with `feat-002`. Do not implement application business logic before the unit/E2E harness is real. Existing feature verification commands are intentionally strict and will fail until their corresponding tests are written.
+`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`.

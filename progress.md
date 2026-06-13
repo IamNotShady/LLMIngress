@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 21:19 AWST
-**Active Feature:** None (feat-003 through feat-011 completed)
+**Last Updated:** 2026-06-13 21:33 AWST
+**Active Feature:** None (feat-003 through feat-012 completed)
 
 ## Status
 
@@ -74,6 +74,10 @@
   - Added shared `@llmingress/config` config publisher for routing-visible writes, config versions, change events, and `config_changed` Postgres notifications.
   - Publisher wraps the caller's config write, `config_versions`, `config_change_events`, and `pg_notify` in one transaction, with rollback and no notify on write failure.
   - Code review fix narrowed NOTIFY payload to version metadata and hardened listener payload parsing.
+- [x] **feat-012 — Gateway Config Snapshot Reload (passing)**:
+  - Added Gateway config snapshot runtime that loads the latest PostgreSQL config on startup, applies newer `config_changed` notifications without restart, and reconciles missed versions.
+  - Gateway `/health` now reports the active config version and provider count.
+  - Code review P2+ fix covered concurrent notifications while a reload is in flight so a newer version is not dropped until the next reconcile.
 
 ### What's In Progress
 
@@ -81,9 +85,9 @@
 
 ### What's Next
 
-1. `feat-012` — Gateway Config Snapshot Reload.
-2. `feat-013` — Console First Run and Login.
-3. `feat-014` — Static Price Registry.
+1. `feat-013` — Console First Run and Login.
+2. `feat-014` — Static Price Registry.
+3. `feat-015` — Manual Price Override.
 
 ## Blockers / Risks
 
@@ -212,6 +216,14 @@
 - `pnpm-lock.yaml` - Added `pg` dependency under the config package importer.
 - `feature_list.json` - feat-011 marked `passing` with verification and review evidence.
 - `progress.md` - feat-011 session evidence updated.
+- `apps/gateway/package.json` - Added direct `pg` dependency for Gateway config snapshot reload.
+- `apps/gateway/src/config-reload.ts` - New Gateway config snapshot loader, notification listener wiring, reconcile loop, and in-flight reload handling.
+- `apps/gateway/src/main.ts` - Gateway health now exposes config version and provider count from the runtime snapshot.
+- `tests/features/feat-012-config-reload.unit.test.ts` - New config reload unit tests, including the P2 concurrent notification review case.
+- `tests/e2e/feat-012-config-reload.e2e.spec.ts` - New real Gateway process E2E for startup snapshot, notification reload, and reconcile catch-up.
+- `pnpm-lock.yaml` - Added `pg` dependency under the Gateway package importer.
+- `feature_list.json` - feat-012 marked `passing` with verification and review evidence.
+- `progress.md` - feat-012 session evidence updated.
 
 ## Evidence of Completion
 

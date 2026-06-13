@@ -131,8 +131,8 @@
       "dependencies": [
         "feat-011"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-012 unit tests because createGatewayConfigRuntime was missing and E2E because Gateway health did not expose a runtime config version. Added Gateway config snapshot runtime that loads latest config from PostgreSQL on startup, listens for config_changed notifications, ignores stale versions, and reconciles missed versions. Review fix for P2+ only: added coverage and handling for a newer notification arriving while a reload is already in flight, so the runtime does not stall on the older in-flight version. Verification passed — feat-012 unit tests 2 passed, real Gateway Playwright E2E 1 passed, pnpm run verify passed, existing passing feature regression passed before marking feat-012 passing, and final verify:features passed all 12 passing features after marking."
     },
     {
       "id": "feat-013",

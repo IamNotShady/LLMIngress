@@ -440,3 +440,13 @@
   - `pnpm run verify` passed.
   - Before marking feat-018 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 17 prior passing features.
   - Local P2+ code review found no blocking issues.
+
+- [x] feat-019 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-019-anthropic-adapter.unit.test.ts` failed because `apps/gateway/src/provider-adapters/anthropic` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-019-anthropic-adapter.e2e.spec.ts --grep 'anthropic adapter sends messages payload auth headers and maps response error'` failed because the adapter module was missing.
+  - Implemented a Gateway Anthropic messages adapter with `x-api-key`, `anthropic-version`, normalized messages payload mapping, success mapping, and provider error mapping; extended the fake provider with Anthropic-shaped `/v1/messages` JSON success responses.
+  - `pnpm exec vitest run tests/features/feat-019-anthropic-adapter.unit.test.ts` → 2 passed.
+  - `pnpm test:e2e tests/e2e/feat-019-anthropic-adapter.e2e.spec.ts --grep 'anthropic adapter sends messages payload auth headers and maps response error'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-019 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 18 prior passing features.
+  - Local P2+ code review found no blocking issues.

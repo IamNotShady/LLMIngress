@@ -213,8 +213,8 @@
         "feat-004",
         "feat-017"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-019 unit and E2E tests because the Gateway Anthropic provider adapter module was missing. Added a minimal Anthropic messages adapter that accepts a normalized messages request and provider target, sends POST /messages to the configured base URL with x-api-key and anthropic-version headers, maps 2xx JSON message responses into Gateway success results, maps Anthropic/fake provider HTTP or network failures into Gateway error results, and extended the fake provider with Anthropic-shaped /v1/messages success responses. Verification passed — feat-019 unit tests 2 passed, fake-provider Playwright E2E 1 passed, pnpm run verify passed, verify:features passed all 18 prior passing features before marking feat-019 passing, and local P2+ code review found no blocking issues."
     },
     {
       "id": "feat-020",

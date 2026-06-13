@@ -79,6 +79,16 @@ async function handleRequest(
       bodyJson,
     });
 
+    if (mode === "json" && url.pathname.endsWith("/messages")) {
+      writeJson(response, 200, {
+        id: "fake-provider-message",
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: "fake provider response" }],
+      });
+      return;
+    }
+
     if (mode === "json") {
       writeJson(response, 200, {
         id: "fake-provider-response",

@@ -4,8 +4,10 @@ import {
   sessionCookieName,
   verifyConsoleSession,
 } from "../../../server/auth";
+import { normalizeProviderTemplateFormInput } from "../../../server/provider-templates";
 import {
   createProvider,
+  createProviderFromTemplate,
   normalizeProviderFormInput,
   setProviderEnabled,
   updateProvider,
@@ -32,6 +34,14 @@ export async function POST(request: NextRequest) {
           displayName: readText(form, "displayName"),
           providerKey: readText(form, "providerKey"),
           providerType: readText(form, "providerType"),
+        }),
+      });
+    } else if (action === "createFromTemplate") {
+      await createProviderFromTemplate({
+        databaseUrl,
+        template: normalizeProviderTemplateFormInput({
+          baseUrl: readText(form, "baseUrl"),
+          templateId: readText(form, "templateId"),
         }),
       });
     } else if (action === "update") {

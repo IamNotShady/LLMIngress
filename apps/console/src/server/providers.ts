@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
+import type { OpenAICompatibleProviderTemplate } from "./provider-templates";
 
 export type ProviderType = "api_key" | "local";
 
@@ -21,6 +22,7 @@ export type NormalizedProviderFormInput = {
 export type ConsoleProvider = NormalizedProviderFormInput & {
   enabled: boolean;
   id: string;
+  providerTemplateId: string | null;
 };
 
 type ProviderRow = QueryResultRow & {
@@ -29,8 +31,15 @@ type ProviderRow = QueryResultRow & {
   enabled: boolean;
   id: string;
   provider_key: string;
+  provider_template_id: string | null;
   provider_type: ProviderType;
 };
+
+const fixedApiKeyProviderBaseUrls = new Map([
+  ["anthropic", "https://api.anthropic.com/v1"],
+  ["openai", "https://api.openai.com/v1"],
+  ["openrouter", "https://openrouter.ai/api/v1"],
+]);
 
 export function normalizeProviderFormInput(input: ProviderFormInput): NormalizedProviderFormInput {
   const providerKey = input.providerKey?.trim().toLowerCase();
@@ -56,6 +65,7 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
 
   if (baseUrl) {
     assertUrl(baseUrl);
+    assertProviderBaseUrlAllowed(providerKey, providerType, baseUrl);
   }
 
   return {
@@ -73,6 +83,7 @@ export async function listProviders(databaseUrl: string): Promise<ConsoleProvide
         select id::text,
                provider_type,
                provider_key,
+               provider_template_id,
                display_name,
                base_url,
                enabled
@@ -111,6 +122,7 @@ export async function createProvider(input: {
           returning id::text,
                     provider_type,
                     provider_key,
+                    provider_template_id,
                     display_name,
                     base_url,
                     enabled
@@ -121,6 +133,55 @@ export async function createProvider(input: {
           input.provider.providerKey,
           input.provider.displayName,
           input.provider.baseUrl,
+        ],
+      );
+      provider = rowToConsoleProvider(requireRow(result.rows[0]));
+    },
+  });
+
+  return requireSavedProvider(provider);
+}
+
+export async function createProviderFromTemplate(input: {
+  databaseUrl: string;
+  template: OpenAICompatibleProviderTemplate;
+}): Promise<ConsoleProvider> {
+  const providerId = randomUUID();
+  let provider: ConsoleProvider | undefined;
+
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `Create provider template ${input.template.id}`,
+    changes: [{ table: "providers", recordId: providerId }],
+    write: async (client) => {
+      const result = await client.query<ProviderRow>(
+        `
+          insert into providers (
+            id,
+            provider_type,
+            provider_key,
+            provider_template_id,
+            display_name,
+            base_url,
+            enabled
+          )
+          values ($1, $2, $3, $4, $5, $6, true)
+          returning id::text,
+                    provider_type,
+                    provider_key,
+                    provider_template_id,
+                    display_name,
+                    base_url,
+                    enabled
+        `,
+        [
+          providerId,
+          input.template.providerType,
+          input.template.providerKey,
+          input.template.id,
+          input.template.displayName,
+          input.template.baseUrl,
         ],
       );
       provider = rowToConsoleProvider(requireRow(result.rows[0]));
@@ -152,6 +213,26 @@ export async function updateProvider(input: {
     description: `Update provider ${input.id}`,
     changes: [{ table: "providers", recordId: input.id }],
     write: async (client) => {
+      const existing = requireRow(
+        (
+          await client.query<ProviderRow>(
+            `
+              select id::text,
+                     provider_type,
+                     provider_key,
+                     provider_template_id,
+                     display_name,
+                     base_url,
+                     enabled
+              from providers
+              where id = $1
+              for update
+            `,
+            [input.id],
+          )
+        ).rows[0],
+      );
+      const nextBaseUrl = resolveUpdatedBaseUrl(existing, baseUrl);
       const result = await client.query<ProviderRow>(
         `
           update providers
@@ -162,11 +243,12 @@ export async function updateProvider(input: {
           returning id::text,
                     provider_type,
                     provider_key,
+                    provider_template_id,
                     display_name,
                     base_url,
                     enabled
         `,
-        [input.id, displayName, baseUrl],
+        [input.id, displayName, nextBaseUrl],
       );
       provider = rowToConsoleProvider(requireRow(result.rows[0]));
     },
@@ -196,6 +278,7 @@ export async function setProviderEnabled(input: {
           returning id::text,
                     provider_type,
                     provider_key,
+                    provider_template_id,
                     display_name,
                     base_url,
                     enabled
@@ -216,8 +299,54 @@ function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
     enabled: row.enabled,
     id: row.id,
     providerKey: row.provider_key,
+    providerTemplateId: row.provider_template_id,
     providerType: row.provider_type,
   };
+}
+
+function resolveUpdatedBaseUrl(
+  existing: ProviderRow,
+  requestedBaseUrl: string | null,
+): string | null {
+  if (existing.provider_template_id) {
+    if (requestedBaseUrl && requestedBaseUrl !== existing.base_url) {
+      throw new Error("Template provider base URL cannot be changed.");
+    }
+
+    return existing.base_url;
+  }
+
+  if (requestedBaseUrl) {
+    assertProviderBaseUrlAllowed(existing.provider_key, existing.provider_type, requestedBaseUrl);
+  }
+
+  return requestedBaseUrl;
+}
+
+function assertProviderBaseUrlAllowed(
+  providerKey: string,
+  providerType: ProviderType,
+  baseUrl: string,
+): void {
+  if (providerType === "local") {
+    return;
+  }
+
+  const fixedBaseUrl = fixedApiKeyProviderBaseUrls.get(providerKey);
+  if (fixedBaseUrl && normalizeUrlForComparison(baseUrl) === fixedBaseUrl) {
+    return;
+  }
+
+  throw new Error("Custom OpenAI-compatible endpoints are not allowed.");
+}
+
+function normalizeUrlForComparison(value: string): string {
+  const url = new URL(value);
+  const pathname =
+    url.pathname.length > 1 && url.pathname.endsWith("/")
+      ? url.pathname.slice(0, -1)
+      : url.pathname;
+  return `${url.origin}${pathname}`;
 }
 
 function requireRow(row: ProviderRow | undefined): ProviderRow {

@@ -450,3 +450,13 @@
   - `pnpm run verify` passed.
   - Before marking feat-019 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 18 prior passing features.
   - Local P2+ code review found no blocking issues.
+
+- [x] feat-020 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-020-openai-compatible-template.unit.test.ts` failed because `apps/console/src/server/provider-templates` and migration `0007` were missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-020-openai-compatible-template.e2e.spec.ts --grep 'whitelisted template accepted arbitrary custom endpoint rejected'` failed because Console had no Provider template control.
+  - Implemented 0007 `provider_template_id`, the whitelisted DeepSeek OpenAI-compatible template with fixed base URL/capabilities, Console template creation, and base URL locking for template providers.
+  - P2+ review found a legacy create/update bypass for arbitrary API-key base URLs; added tests and fixed `normalizeProviderFormInput` / `updateProvider` to reject custom OpenAI-compatible endpoints outside fixed native providers or whitelisted templates.
+  - `pnpm exec vitest run tests/features/feat-020-openai-compatible-template.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-020-openai-compatible-template.e2e.spec.ts --grep 'whitelisted template accepted arbitrary custom endpoint rejected'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-020 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 19 prior passing features.

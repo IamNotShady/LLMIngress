@@ -17,7 +17,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -68,7 +69,8 @@ label {
   font-weight: 600;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 44px;
   border: 1px solid #98a2b3;
@@ -200,6 +202,7 @@ dd {
 
 .provider-create-form,
 .provider-edit-form,
+.provider-template-form,
 .provider-key-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
@@ -209,6 +212,10 @@ dd {
 
 .provider-create-form {
   margin-top: 20px;
+}
+
+.provider-template-form {
+  margin-top: 12px;
 }
 
 .provider-list {
@@ -279,6 +286,7 @@ dd {
   .price-form,
   .provider-create-form,
   .provider-edit-form,
+  .provider-template-form,
   .provider-key-form {
     display: grid;
     grid-template-columns: 1fr;

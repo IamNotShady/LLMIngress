@@ -6,10 +6,12 @@ import { cookies } from "next/headers";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
 import { listProviderApiKeyMetadata } from "../server/provider-keys";
+import { listOpenAICompatibleProviderTemplates } from "../server/provider-templates";
 import { listProviders } from "../server/providers";
 
 const previewProviderKey = "openai";
 const previewModelId = "gpt-4.1-mini";
+const providerTemplates = listOpenAICompatibleProviderTemplates();
 
 export default async function Home() {
   const cookieStore = await cookies();
@@ -153,6 +155,18 @@ export default async function Home() {
           <input id="provider-base-url" name="baseUrl" type="url" />
           <button type="submit">Create provider</button>
         </form>
+        <form className="provider-template-form" action="/api/providers" method="post">
+          <input type="hidden" name="action" value="createFromTemplate" />
+          <label htmlFor="provider-template">Provider template</label>
+          <select id="provider-template" name="templateId" required>
+            {providerTemplates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.displayName}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Add template provider</button>
+        </form>
         <div className="provider-list">
           {providers.length === 0 ? (
             <p>No providers configured.</p>
@@ -183,13 +197,21 @@ export default async function Home() {
                       defaultValue={provider.displayName}
                       required
                     />
-                    <label htmlFor={`provider-base-${provider.id}`}>Edit provider base URL</label>
-                    <input
-                      id={`provider-base-${provider.id}`}
-                      name="baseUrl"
-                      type="url"
-                      defaultValue={provider.baseUrl ?? ""}
-                    />
+                    {provider.providerTemplateId ? (
+                      <p>Template provider base URL: {provider.baseUrl}</p>
+                    ) : (
+                      <>
+                        <label htmlFor={`provider-base-${provider.id}`}>
+                          Edit provider base URL
+                        </label>
+                        <input
+                          id={`provider-base-${provider.id}`}
+                          name="baseUrl"
+                          type="url"
+                          defaultValue={provider.baseUrl ?? ""}
+                        />
+                      </>
+                    )}
                     <button type="submit">Save provider</button>
                   </form>
                   <div className="provider-key-metadata">

@@ -14,7 +14,7 @@ test("core config schema accepts valid graph and rejects broken references", asy
     expect(migration.status, migration.stderr || migration.stdout).toBe(0);
     expect(migration.stdout).toContain(`Applied ${migrations.length} migrations`);
 
-    await insertValidCoreConfigGraph((text, values) => fixture.query(text, values));
+    const graph = await insertValidCoreConfigGraph((text, values) => fixture.query(text, values));
 
     const coreMigration = await fixture.query<{ count: string }>(
       "select count(*)::text as count from migration_history where id = '0002' and name = 'core_config_schema'",
@@ -98,6 +98,33 @@ test("core config schema accepts valid graph and rejects broken references", asy
         [randomUUID(), 99_999, "console", "providers", randomUUID()],
       ),
     );
+
+    const extraVirtualModelId = randomUUID();
+    await expectBrokenReference(
+      fixture.query(
+        "insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id) values ($1, $2, $3, $4, $5)",
+        [
+          randomUUID(),
+          graph.agentId,
+          "llmi_bad_default",
+          "sha256:bad-default",
+          extraVirtualModelId,
+        ],
+      ),
+    );
+
+    await expectConstraintViolation(
+      fixture.query("delete from virtual_models where id = $1", [graph.virtualModelId]),
+    );
+    await expectConstraintViolation(
+      fixture.query("delete from agents where id = $1", [graph.agentId]),
+    );
+    await expectConstraintViolation(
+      fixture.query(
+        "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order, is_fallback) values ($1, $2, $3, $4, $5)",
+        [randomUUID(), graph.routePolicyId, graph.providerModelId, 2, true],
+      ),
+    );
   } finally {
     await fixture.dispose();
   }
@@ -105,7 +132,14 @@ test("core config schema accepts valid graph and rejects broken references", asy
 
 type Query = Awaited<ReturnType<typeof createTestPostgresFixture>>["query"];
 
-async function insertValidCoreConfigGraph(query: Query): Promise<void> {
+type CoreConfigGraphIds = {
+  agentId: string;
+  providerModelId: string;
+  routePolicyId: string;
+  virtualModelId: string;
+};
+
+async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraphIds> {
   const providerId = randomUUID();
   const providerModelId = randomUUID();
   const agentId = randomUUID();
@@ -163,10 +197,23 @@ async function insertValidCoreConfigGraph(query: Query): Promise<void> {
     "insert into config_change_events (id, config_version_id, source, changed_table, changed_record_id) values ($1, $2, $3, $4, $5)",
     [configChangeEventId, configVersion.rows[0]?.id, "console", "providers", providerId],
   );
+
+  return {
+    agentId,
+    providerModelId,
+    routePolicyId,
+    virtualModelId,
+  };
 }
 
 async function expectBrokenReference(promise: Promise<unknown>): Promise<void> {
   await expect(promise).rejects.toMatchObject({ code: "23503" });
+}
+
+async function expectConstraintViolation(promise: Promise<unknown>): Promise<void> {
+  await expect(promise).rejects.toMatchObject({
+    code: expect.stringMatching(/^2350[235]$/),
+  });
 }
 
 function runMigrateCommand(databaseUrl: string) {

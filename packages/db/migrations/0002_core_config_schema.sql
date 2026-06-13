@@ -45,7 +45,7 @@ create table if not exists virtual_models (
 
 create table if not exists route_policies (
   id uuid primary key,
-  virtual_model_id uuid not null unique references virtual_models (id) on delete cascade,
+  virtual_model_id uuid not null unique references virtual_models (id) on delete restrict,
   strategy text not null check (strategy in ('fixed', 'cost_first', 'balanced', 'quality_first')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -58,12 +58,13 @@ create table if not exists route_policy_candidates (
   candidate_order integer not null check (candidate_order > 0),
   is_fallback boolean not null default false,
   created_at timestamptz not null default now(),
-  unique (route_policy_id, candidate_order)
+  unique (route_policy_id, candidate_order),
+  unique (route_policy_id, provider_model_id)
 );
 
 create table if not exists agent_api_keys (
   id uuid primary key,
-  agent_id uuid not null references agents (id) on delete cascade,
+  agent_id uuid not null references agents (id) on delete restrict,
   key_prefix text not null unique,
   key_hash text not null unique,
   default_virtual_model_id uuid references virtual_models (id) on delete restrict,

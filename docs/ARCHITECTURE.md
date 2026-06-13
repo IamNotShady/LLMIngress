@@ -40,7 +40,7 @@ LLMIngress 使用 TypeScript 统一 Gateway、Console 和共享领域模型，�
 | Client state | TanStack Query | Console 页面读取配置、状态、Activity 与 Usage 数据 |
 | Chart | Recharts | Usage、Cost、Latency、Fallback 等图表 |
 | Schema / validation | Zod | 共享请求、配置、路由策略、Provider 配置与 Console 表单校验 |
-| Database access | Drizzle ORM | TypeScript-first schema、migration、查询类型约束 |
+| Database access | SQL migrations now, Drizzle schema later | 当前迁移以 `packages/db/migrations/*.sql` 为 source of truth；后续可补 Drizzle schema 和查询类型约束 |
 | Logging | Pino | Gateway 请求日志、运行日志、错误日志 |
 | Observability | OpenTelemetry + Prometheus exporter | traces、metrics、Provider latency、Gateway runtime 指标 |
 
@@ -683,8 +683,7 @@ PostgreSQL database
 │   ├── virtual_models
 │   ├── route_policies
 │   ├── route_policy_rules
-│   ├── route_policy_candidates
-│   └── fallback_chain_items
+│   └── route_policy_candidates
 │
 ├── Limits
 │   ├── agent_limits
@@ -915,8 +914,8 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   │
 │   ├── db/ # 数据库 schema、migration 和 repository
 │   │   └── src/ # db package 源码目录
-│   │       ├── schema/ # Drizzle schema 定义
-│   │       ├── migrations/ # 数据库迁移文件
+│   │       ├── schema/ # 后续 Drizzle schema 定义
+│   │       ├── migrations/ # SQL 数据库迁移文件
 │   │       ├── repositories/ # 数据访问封装
 │   │       ├── connection.ts
 │   │       └── schema-version.ts
@@ -1082,6 +1081,7 @@ Agent 协议、Provider 协议、Route Policy、配置发布、配置校验、Po
 - `/v1/responses` V1 支持无状态子集，不默认实现跨 Provider response state。
 - Console 不进入 Agent 请求路径，Gateway 在 Console 暂时不可用时仍应能继续处理请求。
 - Provider 派生模型数据采用 soft-delete / availability marker；硬删除必须经 Console 依赖检查。
+- Route Policy 的主候选和 fallback chain 当前统一存放在 `route_policy_candidates`，用 `candidate_order` 和 `is_fallback` 表达顺序与 fallback 语义；不单独维护 `fallback_chain_items` 表。
 - OpenAI-compatible 长尾 Provider 通过内置白名单 template 复用通用 adapter，不开放任意自定义 endpoint。
 - Playground 使用 Gateway Public API 测试；用户手动输入 Agent API Key 并选择 Virtual Model Name，Console 后端不代理请求也不保存该 key。
 - Gateway 拥有同步限流、预算预留、并发计数和 in-memory health view；数据库保存可恢复的窗口、预算周期累计、健康事件和 health summary。

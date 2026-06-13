@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-12 23:58 AWST
+**Last Updated:** 2026-06-13 09:54 AWST
 **Active Feature:** None (feat-003 through feat-008 completed)
 
 ## Status
@@ -60,6 +60,7 @@
   - Added foreign key constraints so valid configuration graphs insert successfully and broken references are rejected by PostgreSQL.
   - Added feat-008 unit and E2E tests; both were observed failing before implementation and passing after implementation.
   - Repaired feat-007 migration E2E so it asserts the current migration set instead of assuming only `0001` exists.
+  - Review follow-up: `agents` and `virtual_models` owner deletes now use restrict semantics, `default_virtual_model_id` has explicit bad-reference coverage, duplicate provider-model route candidates are rejected, and ARCHITECTURE now documents SQL migrations plus `route_policy_candidates.is_fallback`.
 
 ### What's In Progress
 
@@ -75,6 +76,7 @@
 
 - [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
 - [ ] Console page E2E features (feat-013+) will need Playwright browser installation before browser-driven tests are added.
+- [ ] Review debt to resolve before related features: clarify or rename `PostgresFixture.migrate()` test-only fixture helper, make migration directory resolution independent of `process.cwd()` before app-start migration usage, revisit `config_change_events.changed_record_id` typing when non-UUID config tables are introduced, and add semantic validation for `agent_limits` combinations in feat-031.
 
 ## Decisions Made
 
@@ -147,6 +149,10 @@
 - `tests/e2e/feat-008-config-schema.e2e.spec.ts` - New real Postgres config schema E2E.
 - `tests/e2e/feat-007-migration-runner.e2e.spec.ts` - Updated to assert the current migration set and latest schema version.
 - `feature_list.json` - feat-008 marked `passing`; feat-005 and feat-007 evidence updated with regression repair notes.
+- `docs/ARCHITECTURE.md` - Updated to record SQL migrations as the current schema source of truth and `route_policy_candidates.is_fallback` as the fallback-chain representation.
+- `packages/db/migrations/0002_core_config_schema.sql` - Review fix: owner deletes now restrict, and duplicate route candidates for the same provider model are rejected.
+- `tests/features/feat-008-config-schema.unit.test.ts` - Review fix: table-specific FK assertions and route candidate duplicate constraint coverage.
+- `tests/e2e/feat-008-config-schema.e2e.spec.ts` - Review fix: real Postgres coverage for blocked owner deletes, bad default virtual model reference, and duplicate route candidates.
 
 ## Evidence of Completion
 
@@ -236,6 +242,12 @@
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres'` feat-007 verification passed again.
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres'` feat-005 verification passed again with 8/8 E2E tests.
   - Final `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 8 passing features.
+- [x] feat-008 review fix verification passed:
+  - Red phase: updated feat-008 unit tests failed on `agent_api_keys.agent_id on delete cascade` and missing `unique (route_policy_id, provider_model_id)`; updated E2E failed because deleting a referenced Virtual Model resolved instead of rejecting.
+  - `pnpm exec vitest run tests/features/feat-008-config-schema.unit.test.ts` → 4 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-008-config-schema.e2e.spec.ts --grep 'core config schema accepts valid graph and rejects broken references'` → 1 passed.
+  - `pnpm run verify` passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 8 passing features.
 
 ## Notes for Next Session
 

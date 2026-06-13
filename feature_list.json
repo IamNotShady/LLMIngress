@@ -87,7 +87,7 @@
         "feat-007"
       ],
       "status": "passing",
-      "evidence": "2026-06-12: TDD red observed for feat-008 unit tests because 0002_core_config_schema migration was missing, and E2E because only 0001 applied. Verification passed with TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' — feat-008 unit test 3 passed, Playwright E2E 1 passed, and pnpm run verify passed."
+      "evidence": "2026-06-12: TDD red observed for feat-008 unit tests because 0002_core_config_schema migration was missing, and E2E because only 0001 applied. Verification passed with TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' — feat-008 unit test 3 passed, Playwright E2E 1 passed, and pnpm run verify passed. 2026-06-13 review fix: TDD red observed for cascade delete behavior, default_virtual_model_id coverage, and duplicate route candidates; fixed Agent and Virtual Model owner FKs to restrict, added duplicate provider-model route candidate constraint, tightened unit table-block checks, updated architecture notes, and reran pnpm run verify plus verify:features successfully."
     },
     {
       "id": "feat-009",

@@ -201,8 +201,8 @@
         "feat-004",
         "feat-017"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-018 unit and E2E tests because the Gateway OpenAI provider adapter module was missing. Added a minimal OpenAI-compatible chat completions adapter that accepts a normalized chat request and provider target, sends POST /chat/completions to the configured base URL with Bearer auth, maps 2xx JSON responses into Gateway success results, and maps provider HTTP/network failures into Gateway error results. Verification passed — feat-018 unit tests 2 passed, fake-provider Playwright E2E 1 passed, pnpm run verify passed, verify:features passed all 17 prior passing features before marking feat-018 passing, and local P2+ code review found no blocking issues."
     },
     {
       "id": "feat-019",

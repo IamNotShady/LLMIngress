@@ -430,3 +430,13 @@
   - `pnpm run verify` passed.
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 17/17 E2E tests.
   - Before marking feat-017 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 16 prior passing features.
+
+- [x] feat-018 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-018-openai-adapter.unit.test.ts` failed because `apps/gateway/src/provider-adapters/openai` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-018-openai-adapter.e2e.spec.ts --grep 'openai adapter sends compatible payload auth header and maps response error'` failed because the adapter module was missing.
+  - Implemented a Gateway OpenAI chat-completions adapter that sends normalized requests to an OpenAI-compatible fake provider with Bearer auth and maps success / provider error responses into Gateway result objects.
+  - `pnpm exec vitest run tests/features/feat-018-openai-adapter.unit.test.ts` → 2 passed.
+  - `pnpm test:e2e tests/e2e/feat-018-openai-adapter.e2e.spec.ts --grep 'openai adapter sends compatible payload auth header and maps response error'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-018 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 17 prior passing features.
+  - Local P2+ code review found no blocking issues.

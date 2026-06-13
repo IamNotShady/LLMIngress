@@ -97,8 +97,8 @@
       "dependencies": [
         "feat-007"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-009 unit tests because 0003_runtime_records_jobs_schema was missing, and E2E because request_activity did not exist after migration. Added 0003 runtime records/jobs migration for request activity, usage/cost/savings, fallback events, rate/budget runtime state, jobs/job attempts, provider health, gateway runtime status, process heartbeats, runtime errors, and required lookup/claim/cleanup indexes. Verification passed — feat-009 unit test 4 passed, real PostgreSQL Playwright E2E 1 passed, pnpm run verify passed, existing passing feature regression passed before marking feat-009 passing, and final verify:features passed all 9 passing features after marking."
     },
     {
       "id": "feat-010",

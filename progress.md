@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 19:11 AWST
-**Active Feature:** None (feat-003 through feat-008 completed)
+**Last Updated:** 2026-06-13 19:22 AWST
+**Active Feature:** None (feat-003 through feat-009 completed)
 
 ## Status
 
@@ -61,6 +61,10 @@
   - Added feat-008 unit and E2E tests; both were observed failing before implementation and passing after implementation.
   - Repaired feat-007 migration E2E so it asserts the current migration set instead of assuming only `0001` exists.
   - Review follow-up: `agents` and `virtual_models` owner deletes now use restrict semantics, `default_virtual_model_id` has explicit bad-reference coverage, duplicate provider-model route candidates are rejected, and ARCHITECTURE now documents SQL migrations plus `route_policy_candidates.is_fallback`.
+- [x] **feat-009 — Runtime Records and Jobs Schema (passing)**:
+  - Added `0003_runtime_records_jobs_schema.sql` for request activity, usage, cost, savings, fallback events, rate limit windows, budget periods/reservations, jobs, job attempts, provider health, gateway runtime status, process heartbeats, and runtime errors.
+  - Added indexes for Activity/Usage list queries, budget reservation cleanup, worker job claiming, provider health lookups, Gateway heartbeat lookup, and runtime error lookup.
+  - Added feat-009 unit and real PostgreSQL E2E tests; both were observed failing before implementation and passing after implementation.
 
 ### What's In Progress
 
@@ -68,8 +72,8 @@
 
 ### What's Next
 
-1. `feat-009` — Runtime Records and Jobs Schema.
-2. `feat-010` — Master Key and Secret Encryption.
+1. `feat-010` — Master Key and Secret Encryption.
+2. `feat-011` — Config Publisher and Postgres Notifications.
 3. `feat-055` — CI Migration Validation after `feat-007` produces the migration command.
 
 ## Blockers / Risks
@@ -172,6 +176,10 @@
 - `packages/db/migrations/0002_core_config_schema.sql` - Review fix: owner deletes now restrict, and duplicate route candidates for the same provider model are rejected.
 - `tests/features/feat-008-config-schema.unit.test.ts` - Review fix: table-specific FK assertions and route candidate duplicate constraint coverage.
 - `tests/e2e/feat-008-config-schema.e2e.spec.ts` - Review fix: real Postgres coverage for blocked owner deletes, bad default virtual model reference, and duplicate route candidates.
+- `packages/db/migrations/0003_runtime_records_jobs_schema.sql` - New runtime records and jobs schema migration for feat-009.
+- `tests/features/feat-009-runtime-schema.unit.test.ts` - New migration contract unit tests for feat-009.
+- `tests/e2e/feat-009-runtime-schema.e2e.spec.ts` - New real Postgres runtime schema E2E for feat-009.
+- `feature_list.json` - feat-009 marked `passing` with verification evidence.
 
 ## Evidence of Completion
 
@@ -267,7 +275,15 @@
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-008-config-schema.e2e.spec.ts --grep 'core config schema accepts valid graph and rejects broken references'` → 1 passed.
   - `pnpm run verify` passed.
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 8 passing features.
+- [x] feat-009 verification passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-009-runtime-schema.unit.test.ts` failed because `0003_runtime_records_jobs_schema` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts --grep 'runtime schema persists activity usage reservations jobs health and gateway status with required indexes'` failed on missing `request_activity` after migration.
+  - `pnpm exec vitest run tests/features/feat-009-runtime-schema.unit.test.ts` → 4 passed.
+  - `pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts --grep 'runtime schema persists activity usage reservations jobs health and gateway status with required indexes'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-009 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 8 prior passing features.
+  - After marking feat-009 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 passing features.
 
 ## Notes for Next Session
 
-`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`.
+`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next likely feature is `feat-010` unless the user explicitly picks a different unblocked feature.

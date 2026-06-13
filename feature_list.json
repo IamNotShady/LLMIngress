@@ -120,8 +120,8 @@
         "feat-007",
         "feat-008"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-011 unit tests because createConfigPublisher was missing and E2E because createConfigChangedListener was missing. Added shared config publisher in @llmingress/config that executes routing-visible writes, config_versions, config_change_events, and pg_notify('config_changed', payload) inside one PostgreSQL transaction with rollback on write failure. Added config_changed listener helper for the shared notification contract. Verification passed — feat-011 unit test 3 passed, real PostgreSQL Playwright E2E 1 passed, pnpm run verify passed, existing passing feature regression passed before marking feat-011 passing, code review fixes narrowed NOTIFY payload to version metadata and hardened listener payload parsing, and final verify:features passed all 11 passing features after marking."
     },
     {
       "id": "feat-012",

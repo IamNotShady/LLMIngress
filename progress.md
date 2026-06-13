@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 21:05 AWST
-**Active Feature:** None (feat-003 through feat-010 completed)
+**Last Updated:** 2026-06-13 21:19 AWST
+**Active Feature:** None (feat-003 through feat-011 completed)
 
 ## Status
 
@@ -70,6 +70,10 @@
   - Added `@llmingress/security` for inline/file master key loading and AES-256-GCM secret encryption envelopes.
   - Covered same-key decrypt, wrong-key failure, non-plaintext ciphertext, file-backed master key source, and no plaintext console logging.
   - Code review found no blocking issues after removing generated build artifacts from the diff.
+- [x] **feat-011 — Config Publisher and Postgres Notifications (passing)**:
+  - Added shared `@llmingress/config` config publisher for routing-visible writes, config versions, change events, and `config_changed` Postgres notifications.
+  - Publisher wraps the caller's config write, `config_versions`, `config_change_events`, and `pg_notify` in one transaction, with rollback and no notify on write failure.
+  - Code review fix narrowed NOTIFY payload to version metadata and hardened listener payload parsing.
 
 ### What's In Progress
 
@@ -77,9 +81,9 @@
 
 ### What's Next
 
-1. `feat-011` — Config Publisher and Postgres Notifications.
-2. `feat-012` — Gateway Config Snapshot Reload.
-3. `feat-013` — Console First Run and Login.
+1. `feat-012` — Gateway Config Snapshot Reload.
+2. `feat-013` — Console First Run and Login.
+3. `feat-014` — Static Price Registry.
 
 ## Blockers / Risks
 
@@ -200,6 +204,14 @@
 - `pnpm-lock.yaml` - Workspace importer entry for `@llmingress/security`.
 - `feature_list.json` - feat-010 marked `passing` with verification and review evidence.
 - `progress.md` - feat-010 session evidence updated.
+- `packages/config/package.json` - Added direct `pg` dependency for the shared config publisher.
+- `packages/config/src/config-publisher.ts` - New transactional config publisher and `config_changed` listener helper.
+- `packages/config/src/index.ts` - Exported config publisher types and functions.
+- `tests/features/feat-011-config-publisher.unit.test.ts` - New publisher transaction and rollback unit tests.
+- `tests/e2e/feat-011-config-publisher.e2e.spec.ts` - New real Postgres config publisher notification E2E.
+- `pnpm-lock.yaml` - Added `pg` dependency under the config package importer.
+- `feature_list.json` - feat-011 marked `passing` with verification and review evidence.
+- `progress.md` - feat-011 session evidence updated.
 
 ## Evidence of Completion
 
@@ -319,7 +331,16 @@
   - Before marking feat-010 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 prior passing features.
   - Code review found generated build artifacts in the diff; removed them before proceeding. No remaining blocking review issues were found.
   - After marking feat-010 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 10 passing features.
+- [x] feat-011 verification and review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-011-config-publisher.unit.test.ts` failed because `createConfigPublisher` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-011-config-publisher.e2e.spec.ts --grep 'config publisher commits data and version in one transaction and sends one notify'` failed because `createConfigChangedListener` was missing.
+  - `pnpm exec vitest run tests/features/feat-011-config-publisher.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-011-config-publisher.e2e.spec.ts --grep 'config publisher commits data and version in one transaction and sends one notify'` → 1 passed.
+  - `pnpm run verify` passed after feat-011 implementation.
+  - Before marking feat-011 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 10 prior passing features.
+  - Code review found and fixed oversized NOTIFY payload risk and listener payload parsing hardening.
+  - After marking feat-011 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 11 passing features.
 
 ## Notes for Next Session
 
-`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next feature is `feat-011` unless the user explicitly picks a different unblocked feature.
+`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next feature is `feat-012` unless the user explicitly picks a different unblocked feature.

@@ -70,7 +70,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/config
 
-  packages/config: {}
+  packages/config:
+    dependencies:
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
 
   packages/db:
     dependencies:

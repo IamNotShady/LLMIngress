@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
         databaseUrl,
         template: normalizeProviderTemplateFormInput({
           baseUrl: readText(form, "baseUrl"),
+          publicNetworkRiskAccepted: readText(form, "publicNetworkRiskAccepted"),
           templateId: readText(form, "templateId"),
         }),
       });

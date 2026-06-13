@@ -79,6 +79,29 @@ async function handleRequest(
       bodyJson,
     });
 
+    if (mode === "json" && url.pathname.endsWith("/api/tags")) {
+      writeJson(response, 200, {
+        models: [
+          {
+            digest: "fake-ollama-digest",
+            modified_at: "2026-01-01T00:00:00Z",
+            name: "llama3.2:latest",
+            size: 123,
+          },
+        ],
+      });
+      return;
+    }
+
+    if (mode === "json" && url.pathname.endsWith("/api/chat")) {
+      writeJson(response, 200, {
+        done: true,
+        message: { role: "assistant", content: "fake provider response" },
+        model: "llama3.2",
+      });
+      return;
+    }
+
     if (mode === "json" && url.pathname.endsWith("/messages")) {
       writeJson(response, 200, {
         id: "fake-provider-message",

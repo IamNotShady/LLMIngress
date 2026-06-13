@@ -218,6 +218,22 @@ dd {
   margin-top: 12px;
 }
 
+.local-provider-template-form {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.checkbox-label {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-label input {
+  width: 18px;
+  min-height: 18px;
+}
+
 .provider-list {
   display: grid;
   gap: 12px;

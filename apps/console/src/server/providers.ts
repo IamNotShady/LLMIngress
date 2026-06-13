@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
-import type { OpenAICompatibleProviderTemplate } from "./provider-templates";
+import { isKnownProviderTemplateKey, type ProviderTemplateCreateInput } from "./provider-templates";
 
 export type ProviderType = "api_key" | "local";
 
@@ -59,8 +59,16 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
     throw new Error("Provider display name is required.");
   }
 
+  if (isKnownProviderTemplateKey(providerKey)) {
+    throw new Error(`${displayName} providers must be created from their provider template.`);
+  }
+
   if (!isProviderType(providerType)) {
     throw new Error("Provider type must be api_key or local.");
+  }
+
+  if (providerType === "local") {
+    throw new Error("Local providers must be created from a provider template.");
   }
 
   if (baseUrl) {
@@ -144,7 +152,7 @@ export async function createProvider(input: {
 
 export async function createProviderFromTemplate(input: {
   databaseUrl: string;
-  template: OpenAICompatibleProviderTemplate;
+  template: ProviderTemplateCreateInput;
 }): Promise<ConsoleProvider> {
   const providerId = randomUUID();
   let provider: ConsoleProvider | undefined;

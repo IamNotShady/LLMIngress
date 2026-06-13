@@ -460,3 +460,13 @@
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-020-openai-compatible-template.e2e.spec.ts --grep 'whitelisted template accepted arbitrary custom endpoint rejected'` → 1 passed.
   - `pnpm run verify` passed.
   - Before marking feat-020 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 19 prior passing features.
+
+- [x] feat-021 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-021-ollama-adapter.unit.test.ts` failed because `apps/gateway/src/provider-adapters/ollama` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-021-ollama-adapter.e2e.spec.ts --grep 'ollama loopback private network url accepted template paths used public url requires confirmation'` failed because the Ollama adapter module was missing.
+  - Implemented a native Ollama Gateway adapter using fixed `/api/tags` and `/api/chat` template paths, extended the fake provider with Ollama-shaped model-list/chat responses, added the Ollama local provider template and Console form/API handling, and added migration `0008_ollama_provider_template.sql`.
+  - P2+ review found and fixed IPv6 loopback/private URL misclassification plus legacy local-provider create bypasses that skipped the Ollama template and public-network risk confirmation.
+  - `pnpm exec vitest run tests/features/feat-021-ollama-adapter.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-021-ollama-adapter.e2e.spec.ts --grep 'ollama loopback private network url accepted template paths used public url requires confirmation'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-021 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 20 prior passing features.

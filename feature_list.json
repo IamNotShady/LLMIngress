@@ -237,8 +237,8 @@
         "feat-004",
         "feat-016"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-021 unit/E2E because the Ollama adapter module was missing. Added a native Ollama Gateway adapter using template-defined /api/tags and /api/chat paths, extended fake provider responses for Ollama model list/chat, added the Ollama local provider template with loopback/private base URL acceptance, public-network risk confirmation, and migration 0008 to whitelist the ollama provider_template_id. P2+ review found and fixed IPv6 loopback/private misclassification plus legacy local-provider create bypasses that skipped template/risk checks. Verification passed — feat-021 unit tests 3 passed, real Chromium E2E 1 passed, pnpm run verify passed, and verify:features passed all 20 prior passing features before marking feat-021 passing."
     },
     {
       "id": "feat-022",

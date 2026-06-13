@@ -1,22 +1,38 @@
 import type { ProviderType } from "./providers";
 
 export type OpenAICompatibleProviderTemplateId = "deepseek";
+export type OllamaProviderTemplateId = "ollama";
 
-export type OpenAICompatibleProviderTemplate = {
+export type ProviderTemplateCreateInput = {
   baseUrl: string;
+  displayName: string;
+  id: string;
+  providerKey: string;
+  providerTemplateId?: string;
+  providerType: ProviderType;
+};
+
+export type OpenAICompatibleProviderTemplate = ProviderTemplateCreateInput & {
   capabilities: {
     chatCompletions: boolean;
     streaming: boolean;
     tools: boolean;
   };
-  displayName: string;
   id: OpenAICompatibleProviderTemplateId;
+};
+
+export type OllamaProviderTemplate = {
+  chatPath: string;
+  displayName: string;
+  id: OllamaProviderTemplateId;
+  modelListPath: string;
   providerKey: string;
   providerType: ProviderType;
 };
 
 export type ProviderTemplateFormInput = {
   baseUrl?: string | null;
+  publicNetworkRiskAccepted?: boolean | string | null;
   templateId?: string | null;
 };
 
@@ -35,8 +51,21 @@ const templates: Record<OpenAICompatibleProviderTemplateId, OpenAICompatibleProv
   },
 };
 
+const ollamaTemplate: OllamaProviderTemplate = {
+  chatPath: "/api/chat",
+  displayName: "Ollama",
+  id: "ollama",
+  modelListPath: "/api/tags",
+  providerKey: "ollama",
+  providerType: "local",
+};
+
 export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProviderTemplate[] {
   return Object.values(templates).map(copyTemplate);
+}
+
+export function listOllamaProviderTemplates(): OllamaProviderTemplate[] {
+  return [copyOllamaTemplate(ollamaTemplate)];
 }
 
 export function getOpenAICompatibleProviderTemplate(
@@ -49,14 +78,57 @@ export function getOpenAICompatibleProviderTemplate(
   return copyTemplate(templates[templateId]);
 }
 
+export function getOllamaProviderTemplate(
+  templateId: string | null | undefined,
+): OllamaProviderTemplate {
+  if (templateId !== "ollama") {
+    throw new Error("Provider must use a whitelisted provider template.");
+  }
+
+  return copyOllamaTemplate(ollamaTemplate);
+}
+
 export function normalizeProviderTemplateFormInput(
   input: ProviderTemplateFormInput,
-): OpenAICompatibleProviderTemplate {
+): ProviderTemplateCreateInput {
+  if (input.templateId === "ollama") {
+    return normalizeOllamaTemplateFormInput(input);
+  }
+
   if (input.baseUrl?.trim()) {
     throw new Error("Custom OpenAI-compatible endpoints are not allowed.");
   }
 
   return getOpenAICompatibleProviderTemplate(input.templateId);
+}
+
+export function isKnownProviderTemplateKey(providerKey: string): boolean {
+  return providerKey === "deepseek" || providerKey === "ollama";
+}
+
+function normalizeOllamaTemplateFormInput(
+  input: ProviderTemplateFormInput,
+): ProviderTemplateCreateInput {
+  const template = getOllamaProviderTemplate(input.templateId);
+  const baseUrl = input.baseUrl?.trim();
+
+  if (!baseUrl) {
+    throw new Error("Ollama base URL is required.");
+  }
+
+  const url = readHttpUrl(baseUrl);
+  if (requiresPublicNetworkRiskConfirmation(url) && !readRiskAccepted(input)) {
+    throw new Error("Ollama public network URL requires explicit risk confirmation.");
+  }
+
+  return {
+    baseUrl: normalizeUrl(baseUrl),
+    displayName: template.displayName,
+    id: template.id,
+    providerKey: template.providerKey,
+    providerTemplateId: template.id,
+    providerType: template.providerType,
+  };
 }
 
 function isOpenAICompatibleProviderTemplateId(
@@ -72,4 +144,82 @@ function copyTemplate(
     ...template,
     capabilities: { ...template.capabilities },
   };
+}
+
+function copyOllamaTemplate(template: OllamaProviderTemplate): OllamaProviderTemplate {
+  return { ...template };
+}
+
+function readHttpUrl(value: string): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Provider base URL must be a valid URL.");
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Provider base URL must use http or https.");
+  }
+
+  return url;
+}
+
+function requiresPublicNetworkRiskConfirmation(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+
+  if (hostname === "localhost" || isPrivateIpv4(hostname) || isPrivateIpv6(hostname)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split(".");
+  if (parts.length !== 4) {
+    return false;
+  }
+
+  const octets = parts.map((part) => Number(part));
+  if (octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [first = -1, second = -1] = octets;
+  return (
+    first === 10 ||
+    first === 127 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 169 && second === 254) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+  if (!hostname.includes(":")) {
+    return false;
+  }
+
+  return (
+    hostname === "::1" ||
+    hostname.startsWith("fc") ||
+    hostname.startsWith("fd") ||
+    hostname.startsWith("fe80:")
+  );
+}
+
+function readRiskAccepted(input: ProviderTemplateFormInput): boolean {
+  return input.publicNetworkRiskAccepted === true || input.publicNetworkRiskAccepted === "true";
+}
+
+function normalizeUrl(value: string): string {
+  const url = new URL(value);
+  const pathname =
+    url.pathname === "/"
+      ? ""
+      : url.pathname.length > 1 && url.pathname.endsWith("/")
+        ? url.pathname.slice(0, -1)
+        : url.pathname;
+  return `${url.origin}${pathname}${url.search}`;
 }

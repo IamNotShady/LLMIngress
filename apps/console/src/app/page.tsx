@@ -6,12 +6,16 @@ import { cookies } from "next/headers";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
 import { listProviderApiKeyMetadata } from "../server/provider-keys";
-import { listOpenAICompatibleProviderTemplates } from "../server/provider-templates";
+import {
+  listOllamaProviderTemplates,
+  listOpenAICompatibleProviderTemplates,
+} from "../server/provider-templates";
 import { listProviders } from "../server/providers";
 
 const previewProviderKey = "openai";
 const previewModelId = "gpt-4.1-mini";
 const providerTemplates = listOpenAICompatibleProviderTemplates();
+const localProviderTemplates = listOllamaProviderTemplates();
 
 export default async function Home() {
   const cookieStore = await cookies();
@@ -167,6 +171,35 @@ export default async function Home() {
           </select>
           <button type="submit">Add template provider</button>
         </form>
+        {localProviderTemplates.map((template) => (
+          <form
+            className="provider-template-form local-provider-template-form"
+            action="/api/providers"
+            method="post"
+            key={template.id}
+          >
+            <input type="hidden" name="action" value="createFromTemplate" />
+            <input type="hidden" name="templateId" value={template.id} />
+            <label htmlFor={`${template.id}-base-url`}>{template.displayName} base URL</label>
+            <input
+              id={`${template.id}-base-url`}
+              name="baseUrl"
+              type="url"
+              placeholder="http://127.0.0.1:11434"
+              required
+            />
+            <label className="checkbox-label" htmlFor={`${template.id}-public-risk`}>
+              <input
+                id={`${template.id}-public-risk`}
+                name="publicNetworkRiskAccepted"
+                type="checkbox"
+                value="true"
+              />
+              Accept public network risk
+            </label>
+            <button type="submit">Add local provider</button>
+          </form>
+        ))}
         <div className="provider-list">
           {providers.length === 0 ? (
             <p>No providers configured.</p>

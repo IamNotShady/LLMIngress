@@ -153,8 +153,8 @@
       "dependencies": [
         "feat-008"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-014 unit and E2E tests because packages/billing was missing. Added @llmingress/billing with an MVP static price snapshot versioned as mvp-static-2026-06-13, sourced from official OpenAI and Anthropic pricing docs for GPT-4.1 and Claude 4.x/5 API models. Known models return input/output USD per 1M token prices; unknown models return explicit unknown_price, and cost estimation returns unavailable instead of zero for unknown prices. Verification passed — feat-014 unit tests 3 passed, Playwright E2E 1 passed, pnpm run verify passed, existing passing feature regression passed before marking feat-014 passing, local code review found no P2+ issues, and final verify:features passed all 14 passing features after marking."
     },
     {
       "id": "feat-015",

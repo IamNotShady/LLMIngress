@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 21:46 AWST
-**Active Feature:** None (feat-003 through feat-013 completed)
+**Last Updated:** 2026-06-13 21:54 AWST
+**Active Feature:** None (feat-003 through feat-014 completed)
 
 ## Status
 
@@ -82,6 +82,10 @@
   - Added Console auth schema for singleton admin credentials and hashed expiring sessions.
   - Added scrypt admin password hashing, setup/login/logout route handlers, and session-cookie protected dashboard rendering.
   - Real Chromium E2E covers first-run setup, post-setup login requirement, and valid login reaching the dashboard.
+- [x] **feat-014 — Static Price Registry (passing)**:
+  - Added `@llmingress/billing` with MVP static price snapshot `mvp-static-2026-06-13`.
+  - Built-in registry covers OpenAI GPT-4.1 / 4.1 mini / 4.1 nano and Anthropic Claude Fable 5, Opus 4.8, Sonnet 4.6, and Haiku 4.5 entries from official pricing docs.
+  - Unknown models return explicit `unknown_price`; cost estimation returns `unavailable` instead of zero when price is unknown.
 
 ### What's In Progress
 
@@ -89,9 +93,9 @@
 
 ### What's Next
 
-1. `feat-014` — Static Price Registry.
-2. `feat-015` — Manual Price Override.
-3. `feat-016` — Provider CRUD.
+1. `feat-015` — Manual Price Override.
+2. `feat-016` — Provider CRUD.
+3. `feat-017` — Model Library Refresh Job.
 
 ## Blockers / Risks
 
@@ -241,6 +245,15 @@
 - `pnpm-lock.yaml` - Added `pg` dependency under the Console package importer.
 - `feature_list.json` - feat-013 marked `passing` with verification and review evidence.
 - `progress.md` - feat-013 session evidence updated.
+- `packages/billing/package.json` - New billing workspace package.
+- `packages/billing/tsconfig.json` - TypeScript build configuration for the billing package.
+- `packages/billing/src/price-registry.ts` - New built-in static token price registry and cost estimator.
+- `packages/billing/src/index.ts` - Billing package exports.
+- `tests/features/feat-014-price-registry.unit.test.ts` - New unit tests for known prices, unknown prices, and cost estimation.
+- `tests/e2e/feat-014-price-registry.e2e.spec.ts` - New Playwright E2E smoke for known and unknown price resolution.
+- `pnpm-lock.yaml` - Added billing workspace importer.
+- `feature_list.json` - feat-014 marked `passing` with verification and review evidence.
+- `progress.md` - feat-014 session evidence updated.
 
 ## Evidence of Completion
 

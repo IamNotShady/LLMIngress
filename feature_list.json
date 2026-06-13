@@ -142,8 +142,8 @@
       "dependencies": [
         "feat-007"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-013 unit tests because Console auth helper was missing and E2E because the Console scaffold did not show first-run setup. Added console auth schema migration, scrypt admin password hashing, hashed session storage, setup/login/logout route handlers, and a dynamic Console home page that renders first-run setup, login, or dashboard based on database state and session cookie. Verification passed — feat-013 unit tests 2 passed, real Chromium Console E2E 1 passed, pnpm run verify passed, existing passing feature regression passed before marking feat-013 passing, local code review found no P2+ issues, and final verify:features passed all 13 passing features after marking."
     },
     {
       "id": "feat-014",

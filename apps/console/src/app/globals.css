@@ -16,15 +16,20 @@ body {
   background: #f6f7f9;
 }
 
-main {
+button,
+input {
+  font: inherit;
+}
+
+.auth-page {
   display: grid;
   min-height: 100vh;
   place-items: center;
   padding: 32px;
 }
 
-.shell {
-  width: min(720px, 100%);
+.auth-panel {
+  width: min(420px, 100%);
   border: 1px solid #d0d5dd;
   border-radius: 8px;
   background: #ffffff;
@@ -49,4 +54,89 @@ p {
   color: #475467;
   font-size: 16px;
   line-height: 1.6;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+label {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #101828;
+  padding: 10px 12px;
+}
+
+button {
+  min-height: 44px;
+  border: 1px solid #175cd3;
+  border-radius: 6px;
+  background: #175cd3;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 10px 14px;
+}
+
+button:hover {
+  background: #1849a9;
+}
+
+.console-page {
+  min-height: 100vh;
+  padding: 28px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #d0d5dd;
+  padding-bottom: 20px;
+}
+
+.secondary-button {
+  border-color: #d0d5dd;
+  background: #ffffff;
+  color: #344054;
+}
+
+.secondary-button:hover {
+  background: #f2f4f7;
+}
+
+.status-band {
+  margin-top: 24px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 20px;
+}
+
+@media (max-width: 560px) {
+  .auth-page,
+  .console-page {
+    padding: 20px;
+  }
+
+  .auth-panel {
+    padding: 24px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

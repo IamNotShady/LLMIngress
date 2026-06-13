@@ -41,6 +41,9 @@ importers:
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
       react:
         specifier: ^19.2.7
         version: 19.2.7

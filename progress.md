@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 21:33 AWST
-**Active Feature:** None (feat-003 through feat-012 completed)
+**Last Updated:** 2026-06-13 21:46 AWST
+**Active Feature:** None (feat-003 through feat-013 completed)
 
 ## Status
 
@@ -78,6 +78,10 @@
   - Added Gateway config snapshot runtime that loads the latest PostgreSQL config on startup, applies newer `config_changed` notifications without restart, and reconciles missed versions.
   - Gateway `/health` now reports the active config version and provider count.
   - Code review P2+ fix covered concurrent notifications while a reload is in flight so a newer version is not dropped until the next reconcile.
+- [x] **feat-013 — Console First Run and Login (passing)**:
+  - Added Console auth schema for singleton admin credentials and hashed expiring sessions.
+  - Added scrypt admin password hashing, setup/login/logout route handlers, and session-cookie protected dashboard rendering.
+  - Real Chromium E2E covers first-run setup, post-setup login requirement, and valid login reaching the dashboard.
 
 ### What's In Progress
 
@@ -85,14 +89,13 @@
 
 ### What's Next
 
-1. `feat-013` — Console First Run and Login.
-2. `feat-014` — Static Price Registry.
-3. `feat-015` — Manual Price Override.
+1. `feat-014` — Static Price Registry.
+2. `feat-015` — Manual Price Override.
+3. `feat-016` — Provider CRUD.
 
 ## Blockers / Risks
 
-- [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
-- [ ] Console page E2E features (feat-013+) will need Playwright browser installation before browser-driven tests are added.
+- [x] Playwright Chromium is installed locally; Console page E2E can run in this workspace.
 - [ ] Review debt to resolve before related features: clarify or rename `PostgresFixture.migrate()` test-only fixture helper, make migration directory resolution independent of `process.cwd()` before app-start migration usage, revisit `config_change_events.changed_record_id` typing when non-UUID config tables are introduced, and add semantic validation for `agent_limits` combinations in feat-031.
 - [ ] Before the final real-provider MVP smoke, re-check that the active Codex shell can still see both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; both were visible on 2026-06-13 19:11 AWST.
 
@@ -224,6 +227,20 @@
 - `pnpm-lock.yaml` - Added `pg` dependency under the Gateway package importer.
 - `feature_list.json` - feat-012 marked `passing` with verification and review evidence.
 - `progress.md` - feat-012 session evidence updated.
+- `packages/db/migrations/0004_console_auth_schema.sql` - New Console auth schema for singleton admin and hashed sessions.
+- `apps/console/src/server/auth.ts` - New Console auth helper for admin password hashing, session creation, verification, and cookie options.
+- `apps/console/src/app/api/auth/setup/route.ts` - New first-run admin creation endpoint.
+- `apps/console/src/app/api/auth/login/route.ts` - New admin login endpoint that issues a session cookie.
+- `apps/console/src/app/api/auth/logout/route.ts` - New logout endpoint that deletes the active session.
+- `apps/console/src/app/page.tsx` - Console home now renders first-run setup, login, or dashboard based on auth state.
+- `apps/console/src/app/globals.css` - Updated Console auth and dashboard layout styles.
+- `apps/console/src/main.ts` - Console startup passes the resolved database URL to the Next child process.
+- `apps/console/package.json` - Added direct `pg` dependency for Console server-side auth queries.
+- `tests/features/feat-013-console-auth.unit.test.ts` - New auth hashing and migration contract tests.
+- `tests/e2e/feat-013-console-auth.e2e.spec.ts` - New Chromium E2E for first-run setup and login.
+- `pnpm-lock.yaml` - Added `pg` dependency under the Console package importer.
+- `feature_list.json` - feat-013 marked `passing` with verification and review evidence.
+- `progress.md` - feat-013 session evidence updated.
 
 ## Evidence of Completion
 

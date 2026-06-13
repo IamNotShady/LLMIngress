@@ -133,6 +133,14 @@ button:hover {
   padding: 20px;
 }
 
+.providers-panel {
+  margin-top: 20px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 20px;
+}
+
 .section-heading {
   display: flex;
   align-items: flex-start;
@@ -190,6 +198,57 @@ dd {
   align-items: end;
 }
 
+.provider-create-form,
+.provider-edit-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.provider-create-form {
+  margin-top: 20px;
+}
+
+.provider-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.provider-item {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.provider-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.status-enabled,
+.status-disabled {
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 6px 10px;
+}
+
+.status-enabled {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.status-disabled {
+  background: #f2f4f7;
+  color: #667085;
+}
+
 @media (max-width: 560px) {
   .auth-page,
   .console-page {
@@ -206,7 +265,9 @@ dd {
   }
 
   .section-heading,
-  .price-form {
+  .price-form,
+  .provider-create-form,
+  .provider-edit-form {
     display: grid;
     grid-template-columns: 1fr;
   }

@@ -5,6 +5,7 @@ import {
 import { cookies } from "next/headers";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
+import { listProviders } from "../server/providers";
 
 const previewProviderKey = "openai";
 const previewModelId = "gpt-4.1-mini";
@@ -63,6 +64,7 @@ export default async function Home() {
   }
 
   const pricePanel = await getPricePanel(databaseUrl);
+  const providers = await listProviders(databaseUrl);
 
   return (
     <main className="console-page">
@@ -127,6 +129,76 @@ export default async function Home() {
           />
           <button type="submit">Save price override</button>
         </form>
+      </section>
+      <section className="providers-panel" aria-labelledby="providers-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Providers</p>
+            <h2 id="providers-title">Provider configurations</h2>
+          </div>
+        </div>
+        <form className="provider-create-form" action="/api/providers" method="post">
+          <input type="hidden" name="action" value="create" />
+          <input type="hidden" name="providerType" value="api_key" />
+          <label htmlFor="provider-key">Provider key</label>
+          <input id="provider-key" name="providerKey" required />
+          <label htmlFor="provider-display-name">Provider display name</label>
+          <input id="provider-display-name" name="displayName" required />
+          <label htmlFor="provider-base-url">Provider base URL</label>
+          <input id="provider-base-url" name="baseUrl" type="url" />
+          <button type="submit">Create provider</button>
+        </form>
+        <div className="provider-list">
+          {providers.length === 0 ? (
+            <p>No providers configured.</p>
+          ) : (
+            providers.map((provider) => (
+              <article className="provider-item" key={provider.id}>
+                <header className="provider-header">
+                  <div>
+                    <p className="eyebrow">{provider.providerKey}</p>
+                    <h2>{provider.displayName}</h2>
+                  </div>
+                  <p className={provider.enabled ? "status-enabled" : "status-disabled"}>
+                    {provider.enabled ? "Enabled" : "Disabled"}
+                  </p>
+                </header>
+                <form className="provider-edit-form" action="/api/providers" method="post">
+                  <input type="hidden" name="action" value="update" />
+                  <input type="hidden" name="id" value={provider.id} />
+                  <label htmlFor={`provider-display-${provider.id}`}>
+                    Edit provider display name
+                  </label>
+                  <input
+                    id={`provider-display-${provider.id}`}
+                    name="displayName"
+                    defaultValue={provider.displayName}
+                    required
+                  />
+                  <label htmlFor={`provider-base-${provider.id}`}>Edit provider base URL</label>
+                  <input
+                    id={`provider-base-${provider.id}`}
+                    name="baseUrl"
+                    type="url"
+                    defaultValue={provider.baseUrl ?? ""}
+                  />
+                  <button type="submit">Save provider</button>
+                </form>
+                <form action="/api/providers" method="post">
+                  <input type="hidden" name="id" value={provider.id} />
+                  <input
+                    type="hidden"
+                    name="action"
+                    value={provider.enabled ? "disable" : "enable"}
+                  />
+                  <button className="secondary-button" type="submit">
+                    {provider.enabled ? "Disable provider" : "Enable provider"}
+                  </button>
+                </form>
+              </article>
+            ))
+          )}
+        </div>
       </section>
     </main>
   );

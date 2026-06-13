@@ -177,8 +177,8 @@
         "feat-008",
         "feat-013"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-016 unit tests because Console provider helpers were missing and E2E because the Console dashboard had no Provider CRUD controls. Added provider form normalization, authenticated provider create/update/enable/disable API, Console provider list and edit UI, and shared config publisher integration for routing-visible provider changes. Verification passed — feat-016 unit tests 3 passed, real Chromium Console E2E 1 passed with create/edit/disable/enable, config_change_events coverage, and Gateway snapshot exclusion for disabled providers; pnpm run verify passed; existing passing feature regression passed before marking feat-016 passing; local code review found no P2+ issues; final verify:features passed all 16 passing features after marking."
     },
     {
       "id": "feat-017",

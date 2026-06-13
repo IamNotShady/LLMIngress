@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 22:46 AWST
-**Active Feature:** None (feat-003 through feat-015 completed)
+**Last Updated:** 2026-06-13 22:59 AWST
+**Active Feature:** None (feat-003 through feat-016 completed)
 
 ## Status
 
@@ -91,6 +91,10 @@
   - Console dashboard now shows the built-in `gpt-4.1-mini` price, accepts a manual override, and updates subsequent sample cost estimates.
   - Saving an override is authenticated and uses the shared config publisher so price changes emit routing-visible config change events.
   - Review follow-up fixed full E2E concurrency by serializing Console Next dev-server specs with a process lock.
+- [x] **feat-016 — Provider CRUD and Enablement (passing)**:
+  - Added authenticated Console provider create, edit, enable, disable, and list flows.
+  - Provider writes use the shared config publisher and record routing-visible config change events.
+  - Real Chromium E2E verifies disabled providers are excluded from Gateway config snapshots and re-enabled providers return.
 
 ### What's In Progress
 
@@ -98,9 +102,9 @@
 
 ### What's Next
 
-1. `feat-016` — Provider CRUD.
-2. `feat-017` — Model Library Refresh Job.
-3. `feat-018` — OpenAI Provider Adapter.
+1. `feat-017` — Model Library Refresh Job.
+2. `feat-018` — OpenAI Provider Adapter.
+3. `feat-019` — Anthropic Provider Adapter.
 
 ## Blockers / Risks
 
@@ -275,6 +279,14 @@
 - `tests/e2e/feat-013-console-auth.e2e.spec.ts` - Uses the Console dev-server process lock to avoid full-suite Next dev workspace conflicts.
 - `feature_list.json` - feat-015 marked `passing`; feat-005 evidence updated with the Console E2E concurrency regression repair.
 - `progress.md` - feat-015 session evidence updated.
+- `apps/console/src/server/providers.ts` - New provider list/create/update/enablement helpers using config publisher.
+- `apps/console/src/app/api/providers/route.ts` - New authenticated provider CRUD endpoint.
+- `apps/console/src/app/page.tsx` - Dashboard now lists providers and exposes create/edit/enable/disable controls.
+- `apps/console/src/app/globals.css` - Added provider panel and provider form styles.
+- `tests/features/feat-016-provider-crud.unit.test.ts` - New provider form normalization and schema contract tests.
+- `tests/e2e/feat-016-provider-crud.e2e.spec.ts` - New Console E2E for provider CRUD, config events, and disabled-provider snapshot exclusion.
+- `feature_list.json` - feat-016 marked `passing` with verification and review evidence.
+- `progress.md` - feat-016 session evidence updated.
 
 ## Evidence of Completion
 

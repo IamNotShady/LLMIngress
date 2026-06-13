@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 19:22 AWST
+**Last Updated:** 2026-06-13 20:37 AWST
 **Active Feature:** None (feat-003 through feat-009 completed)
 
 ## Status
@@ -65,6 +65,7 @@
   - Added `0003_runtime_records_jobs_schema.sql` for request activity, usage, cost, savings, fallback events, rate limit windows, budget periods/reservations, jobs, job attempts, provider health, gateway runtime status, process heartbeats, and runtime errors.
   - Added indexes for Activity/Usage list queries, budget reservation cleanup, worker job claiming, provider health lookups, Gateway heartbeat lookup, and runtime error lookup.
   - Added feat-009 unit and real PostgreSQL E2E tests; both were observed failing before implementation and passing after implementation.
+  - Review follow-up fixed P2+ schema issues only: nullable provider-level health summary uniqueness, large budget token counters, job lease pair integrity, and provider/model ownership mismatch checks.
 
 ### What's In Progress
 
@@ -180,6 +181,11 @@
 - `tests/features/feat-009-runtime-schema.unit.test.ts` - New migration contract unit tests for feat-009.
 - `tests/e2e/feat-009-runtime-schema.e2e.spec.ts` - New real Postgres runtime schema E2E for feat-009.
 - `feature_list.json` - feat-009 marked `passing` with verification evidence.
+- `packages/db/migrations/0003_runtime_records_jobs_schema.sql` - Review fix for feat-009 P2+ schema invariants.
+- `tests/features/feat-009-runtime-schema.unit.test.ts` - Added review-fix migration contract coverage.
+- `tests/e2e/feat-009-runtime-schema.e2e.spec.ts` - Added real Postgres coverage for review-fix invariants.
+- `feature_list.json` - feat-009 evidence updated with review-fix verification.
+- `progress.md` - Session state and review-fix evidence updated.
 
 ## Evidence of Completion
 
@@ -283,6 +289,13 @@
   - `pnpm run verify` passed.
   - Before marking feat-009 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 8 prior passing features.
   - After marking feat-009 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 passing features.
+- [x] feat-009 review-fix verification passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-009-runtime-schema.unit.test.ts` failed while `budget_periods.tokens_used` was still `integer`.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts` failed because a job lease with `lease_owner` and no `lease_expires_at` was accepted.
+  - `pnpm exec vitest run tests/features/feat-009-runtime-schema.unit.test.ts` → 5 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts` → 1 passed.
+  - `pnpm run verify` passed after the review fix.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 passing features.
 
 ## Notes for Next Session
 

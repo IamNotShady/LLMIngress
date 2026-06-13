@@ -93,6 +93,65 @@ test("runtime schema persists activity usage reservations jobs health and gatewa
         [randomUUID(), "model_refresh", "not-a-status", "manual", "{}"],
       ),
     );
+    await expectConstraintViolation(
+      fixture.query(
+        "insert into jobs (id, job_type, status, trigger, payload, lease_owner) values ($1, $2, $3, $4, $5, $6)",
+        [randomUUID(), "model_refresh", "pending", "manual", "{}", "worker-without-expiry"],
+      ),
+    );
+
+    const largeTokenCount = "2147483648";
+    const largeBudgetPeriod = await fixture.query<{
+      reserved_tokens: string;
+      tokens_used: string;
+    }>(
+      "insert into budget_periods (id, agent_api_key_id, period_type, period_start, period_end, tokens_used, reserved_tokens) values ($1, $2, $3, timestamp '2026-01-01', timestamp '2026-02-01', $4, $5) returning tokens_used::text, reserved_tokens::text",
+      [randomUUID(), graph.agentApiKeyId, "month", largeTokenCount, largeTokenCount],
+    );
+    expect(largeBudgetPeriod.rows).toEqual([
+      { tokens_used: largeTokenCount, reserved_tokens: largeTokenCount },
+    ]);
+
+    const wrongProviderId = randomUUID();
+    await fixture.query(
+      "insert into providers (id, provider_type, provider_key, display_name, enabled) values ($1, $2, $3, $4, $5)",
+      [wrongProviderId, "api_key", "anthropic", "Anthropic", true],
+    );
+    await expectBrokenReference(
+      fixture.query(
+        "insert into request_activity (id, request_id, agent_api_key_id, virtual_model_id, route_policy_id, provider_id, provider_model_id, agent_api_key_prefix, protocol, model, status) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+        [
+          randomUUID(),
+          "req_wrong_provider_model",
+          graph.agentApiKeyId,
+          graph.virtualModelId,
+          graph.routePolicyId,
+          wrongProviderId,
+          graph.providerModelId,
+          "llmi_runtime",
+          "chat_completions",
+          "coding-balanced",
+          "failed",
+        ],
+      ),
+    );
+
+    await fixture.query(
+      "insert into provider_health_summary (id, provider_id, provider_model_id, status) values ($1, $2, $3, $4)",
+      [randomUUID(), graph.providerId, null, "healthy"],
+    );
+    await expectConstraintViolation(
+      fixture.query(
+        "insert into provider_health_summary (id, provider_id, provider_model_id, status) values ($1, $2, $3, $4)",
+        [randomUUID(), graph.providerId, null, "degraded"],
+      ),
+    );
+    await expectBrokenReference(
+      fixture.query(
+        "insert into provider_health_summary (id, provider_id, provider_model_id, status) values ($1, $2, $3, $4)",
+        [randomUUID(), wrongProviderId, graph.providerModelId, "degraded"],
+      ),
+    );
 
     const indexes = await fixture.query<{ indexname: string }>(`
       select indexname

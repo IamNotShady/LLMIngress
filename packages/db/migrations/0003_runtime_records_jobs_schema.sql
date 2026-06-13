@@ -19,15 +19,18 @@ create table if not exists budget_periods (
   period_type text not null check (period_type in ('hour', 'day', 'week', 'month')),
   period_start timestamptz not null,
   period_end timestamptz not null,
-  tokens_used integer not null default 0 check (tokens_used >= 0),
+  tokens_used bigint not null default 0 check (tokens_used >= 0),
   cost_used_usd numeric(20, 8) not null default 0 check (cost_used_usd >= 0),
-  reserved_tokens integer not null default 0 check (reserved_tokens >= 0),
+  reserved_tokens bigint not null default 0 check (reserved_tokens >= 0),
   reserved_cost_usd numeric(20, 8) not null default 0 check (reserved_cost_usd >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (period_end > period_start),
   unique (agent_api_key_id, period_type, period_start)
 );
+
+create unique index if not exists uq_provider_models_provider_id_id
+  on provider_models (provider_id, id);
 
 create table if not exists request_activity (
   id uuid primary key,
@@ -52,7 +55,14 @@ create table if not exists request_activity (
   latency_ms integer check (latency_ms is null or latency_ms >= 0),
   started_at timestamptz not null default now(),
   completed_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint request_activity_provider_model_requires_provider check (
+    provider_model_id is null or provider_id is not null
+  ),
+  constraint request_activity_provider_model_provider_match foreign key (
+    provider_id,
+    provider_model_id
+  ) references provider_models (provider_id, id) on delete restrict
 );
 
 create table if not exists request_usage (
@@ -156,7 +166,8 @@ create table if not exists jobs (
   max_attempts integer not null default 3 check (max_attempts > 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  check ((lease_owner is null) = (lease_expires_at is null))
 );
 
 create table if not exists job_attempts (
@@ -184,7 +195,11 @@ create table if not exists provider_health_events (
   error_message text,
   latency_ms integer check (latency_ms is null or latency_ms >= 0),
   observed_at timestamptz not null default now(),
-  metadata jsonb not null default '{}'::jsonb
+  metadata jsonb not null default '{}'::jsonb,
+  constraint provider_health_events_model_provider_match foreign key (
+    provider_id,
+    provider_model_id
+  ) references provider_models (provider_id, id) on delete restrict
 );
 
 create table if not exists provider_health_summary (
@@ -197,8 +212,19 @@ create table if not exists provider_health_summary (
   last_success_at timestamptz,
   last_failure_at timestamptz,
   updated_at timestamptz not null default now(),
-  unique (provider_id, provider_model_id)
+  constraint provider_health_summary_model_provider_match foreign key (
+    provider_id,
+    provider_model_id
+  ) references provider_models (provider_id, id) on delete restrict
 );
+
+create unique index if not exists uq_provider_health_summary_provider
+  on provider_health_summary (provider_id)
+  where provider_model_id is null;
+
+create unique index if not exists uq_provider_health_summary_provider_model
+  on provider_health_summary (provider_id, provider_model_id)
+  where provider_model_id is not null;
 
 create table if not exists gateway_runtime_status (
   id uuid primary key,

@@ -62,6 +62,29 @@ describe("feat-009 runtime records and jobs schema migration", () => {
     );
   });
 
+  it("declares review-required invariants for provider attribution health summaries and job leases", () => {
+    const sql = readRuntimeSchemaMigrationSql();
+
+    expect(readCreateTableSql(sql, "budget_periods")).toContain(
+      "tokens_used bigint not null default 0 check (tokens_used >= 0)",
+    );
+    expect(readCreateTableSql(sql, "budget_periods")).toContain(
+      "reserved_tokens bigint not null default 0 check (reserved_tokens >= 0)",
+    );
+    expect(readCreateTableSql(sql, "jobs")).toContain(
+      "check ((lease_owner is null) = (lease_expires_at is null))",
+    );
+    expect(sql).toContain("request_activity_provider_model_provider_match");
+    expect(sql).toContain("provider_health_events_model_provider_match");
+    expect(sql).toContain("provider_health_summary_model_provider_match");
+    expect(sql).toContain("create unique index if not exists uq_provider_health_summary_provider");
+    expect(sql).toContain("where provider_model_id is null");
+    expect(sql).toContain(
+      "create unique index if not exists uq_provider_health_summary_provider_model",
+    );
+    expect(sql).toContain("where provider_model_id is not null");
+  });
+
   it("declares indexes for runtime list, reservation cleanup, job claiming, and health lookups", () => {
     const sql = readRuntimeSchemaMigrationSql();
 

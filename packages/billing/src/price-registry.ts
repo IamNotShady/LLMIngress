@@ -7,10 +7,10 @@ export type PricedModelTokenPrice = {
   inputUsdPerMillionTokens: number;
   modelId: string;
   outputUsdPerMillionTokens: number;
-  priceVersion: typeof BUILT_IN_PRICE_REGISTRY_VERSION;
-  providerKey: PriceProviderKey;
+  priceVersion: string;
+  providerKey: string;
   snapshotDate: "2026-06-13";
-  source: "built_in_static_snapshot";
+  source: "built_in_static_snapshot" | "manual_override";
   sourceUrl: string;
   status: "priced";
   unit: "per_1m_tokens";
@@ -29,6 +29,14 @@ export type ModelTokenPrice = PricedModelTokenPrice | UnknownModelTokenPrice;
 export type TokenUsage = {
   inputTokens: number;
   outputTokens: number;
+};
+
+export type ManualPriceOverride = {
+  inputUsdPerMillionTokens: number;
+  modelId: string;
+  outputUsdPerMillionTokens: number;
+  providerKey: string;
+  updatedAt: Date;
 };
 
 export type EstimatedTokenCost = {
@@ -128,6 +136,33 @@ export function resolveModelTokenPrice(input: {
   };
 }
 
+export function resolveEffectiveModelTokenPrice(input: {
+  manualOverride?: ManualPriceOverride | null;
+  modelId: string;
+  providerKey: string;
+}): ModelTokenPrice {
+  const providerKey = input.providerKey.trim().toLowerCase();
+  const modelId = input.modelId.trim();
+
+  if (matchesManualOverride(input.manualOverride, providerKey, modelId)) {
+    return {
+      currency: "USD",
+      inputUsdPerMillionTokens: input.manualOverride.inputUsdPerMillionTokens,
+      modelId,
+      outputUsdPerMillionTokens: input.manualOverride.outputUsdPerMillionTokens,
+      priceVersion: `manual:${input.manualOverride.updatedAt.toISOString()}`,
+      providerKey,
+      snapshotDate: "2026-06-13",
+      source: "manual_override",
+      sourceUrl: "manual://console/model-price-overrides",
+      status: "priced",
+      unit: "per_1m_tokens",
+    };
+  }
+
+  return resolveModelTokenPrice({ modelId, providerKey });
+}
+
 export function calculateTokenCostUsd(
   price: ModelTokenPrice,
   usage: TokenUsage,
@@ -184,6 +219,17 @@ function anthropic(
 
 function registryKey(providerKey: string, modelId: string): string {
   return `${providerKey}:${modelId}`;
+}
+
+function matchesManualOverride(
+  manualOverride: ManualPriceOverride | null | undefined,
+  providerKey: string,
+  modelId: string,
+): manualOverride is ManualPriceOverride {
+  return (
+    manualOverride?.providerKey.trim().toLowerCase() === providerKey &&
+    manualOverride.modelId.trim() === modelId
+  );
 }
 
 function costFromTokens(tokens: number, usdPerMillionTokens: number): number {

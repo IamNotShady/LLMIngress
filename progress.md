@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 21:54 AWST
-**Active Feature:** None (feat-003 through feat-014 completed)
+**Last Updated:** 2026-06-13 22:46 AWST
+**Active Feature:** None (feat-003 through feat-015 completed)
 
 ## Status
 
@@ -86,6 +86,11 @@
   - Added `@llmingress/billing` with MVP static price snapshot `mvp-static-2026-06-13`.
   - Built-in registry covers OpenAI GPT-4.1 / 4.1 mini / 4.1 nano and Anthropic Claude Fable 5, Opus 4.8, Sonnet 4.6, and Haiku 4.5 entries from official pricing docs.
   - Unknown models return explicit `unknown_price`; cost estimation returns `unavailable` instead of zero when price is unknown.
+- [x] **feat-015 — Model Price Override Management (passing)**:
+  - Added `model_price_overrides` schema and effective price resolution that prefers matching manual overrides over built-in prices.
+  - Console dashboard now shows the built-in `gpt-4.1-mini` price, accepts a manual override, and updates subsequent sample cost estimates.
+  - Saving an override is authenticated and uses the shared config publisher so price changes emit routing-visible config change events.
+  - Review follow-up fixed full E2E concurrency by serializing Console Next dev-server specs with a process lock.
 
 ### What's In Progress
 
@@ -93,9 +98,9 @@
 
 ### What's Next
 
-1. `feat-015` — Manual Price Override.
-2. `feat-016` — Provider CRUD.
-3. `feat-017` — Model Library Refresh Job.
+1. `feat-016` — Provider CRUD.
+2. `feat-017` — Model Library Refresh Job.
+3. `feat-018` — OpenAI Provider Adapter.
 
 ## Blockers / Risks
 
@@ -254,6 +259,22 @@
 - `pnpm-lock.yaml` - Added billing workspace importer.
 - `feature_list.json` - feat-014 marked `passing` with verification and review evidence.
 - `progress.md` - feat-014 session evidence updated.
+- `packages/db/migrations/0005_model_price_overrides.sql` - New manual model price override schema.
+- `packages/billing/src/price-registry.ts` - Added manual override-aware effective price resolution.
+- `packages/billing/src/index.ts` - Exported manual override price resolution types and helper.
+- `packages/billing/package.json` - Added direct price-registry subpath export for Next server usage.
+- `packages/config/package.json` - Added direct config-publisher subpath export for Next server usage.
+- `apps/console/package.json` - Added `@llmingress/billing` dependency.
+- `apps/console/src/server/price-overrides.ts` - New manual price override query/save helper using config publisher.
+- `apps/console/src/app/api/prices/override/route.ts` - New authenticated manual price override endpoint.
+- `apps/console/src/app/page.tsx` - Dashboard now shows built-in/manual price state and sample cost estimate.
+- `apps/console/src/app/globals.css` - Added price panel and override form styles.
+- `tests/features/feat-015-price-override.unit.test.ts` - New tests for override precedence and schema contract.
+- `tests/e2e/feat-015-price-override.e2e.spec.ts` - New Console E2E for built-in price display, manual override save, estimate update, and config event.
+- `tests/support/process-lock.ts` - New E2E helper to serialize Console Next dev-server specs.
+- `tests/e2e/feat-013-console-auth.e2e.spec.ts` - Uses the Console dev-server process lock to avoid full-suite Next dev workspace conflicts.
+- `feature_list.json` - feat-015 marked `passing`; feat-005 evidence updated with the Console E2E concurrency regression repair.
+- `progress.md` - feat-015 session evidence updated.
 
 ## Evidence of Completion
 

@@ -1,15 +1,15 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("first run creates admin protected pages require login valid login reaches dashboard", async ({
+test("console shows built-in prices and manual price override changes subsequent cost estimate", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_console_auth_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_price_override_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
@@ -25,24 +25,26 @@ test("first run creates admin protected pages require login valid login reaches 
         const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
-        const password = "correct horse battery staple";
 
         try {
           await waitForConsole(baseUrl, consoleApp);
-          await page.goto(baseUrl);
-          await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible();
-
-          await page.getByLabel("Admin password").fill(password);
-          await page.getByRole("button", { name: "Create admin" }).click();
-
-          await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-          await expect(page.getByRole("heading", { name: "Dashboard" })).not.toBeVisible();
-
-          await page.getByLabel("Admin password").fill(password);
-          await page.getByRole("button", { name: "Sign in" }).click();
+          await signInFromFirstRun(page, baseUrl);
 
           await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-          await expect(page.getByText("Signed in as admin")).toBeVisible();
+          await expect(page.getByText("Built-in price")).toBeVisible();
+          await expect(page.getByText("$0.40 / 1M input")).toBeVisible();
+          await expect(page.getByText("$1.60 / 1M output")).toBeVisible();
+          await expect(page.getByText("Sample estimate: $2.00")).toBeVisible();
+
+          await page.getByLabel("Override input price").fill("9");
+          await page.getByLabel("Override output price").fill("10");
+          await page.getByRole("button", { name: "Save price override" }).click();
+
+          await expect(page.getByText("Manual override")).toBeVisible();
+          await expect(page.getByText("$9.00 / 1M input")).toBeVisible();
+          await expect(page.getByText("$10.00 / 1M output")).toBeVisible();
+          await expect(page.getByText("Sample estimate: $19.00")).toBeVisible();
+          await expect.poll(async () => countPriceOverrideConfigChanges(fixture)).toBe(1);
         } finally {
           await context.close();
         }
@@ -61,6 +63,36 @@ type ConsoleProcess = {
   stderr: string[];
   stdout: string[];
 };
+
+type PriceOverrideConfigChangeCount = {
+  count: number;
+};
+
+async function countPriceOverrideConfigChanges(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+): Promise<number> {
+  const result = await fixture.query<PriceOverrideConfigChangeCount>(
+    `
+      select count(*)::integer as count
+      from config_change_events
+      where source = 'console'
+        and changed_table = 'model_price_overrides'
+    `,
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+async function signInFromFirstRun(page: Page, baseUrl: string) {
+  const password = "correct horse battery staple";
+
+  await page.goto(baseUrl);
+  await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible();
+  await page.getByLabel("Admin password").fill(password);
+  await page.getByRole("button", { name: "Create admin" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByLabel("Admin password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
 
 async function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -94,8 +126,7 @@ async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Prom
         }
       },
       {
-        message: () =>
-          `Console did not start.\nstdout:\n${consoleApp.stdout.join("")}\nstderr:\n${consoleApp.stderr.join("")}`,
+        message: "Console did not start.",
         timeout: 15_000,
       },
     )

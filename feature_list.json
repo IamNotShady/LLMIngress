@@ -52,7 +52,7 @@
         "feat-002"
       ],
       "status": "passing",
-      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82. 2026-06-12 regression during feat-008 verify:features: feat-005 verification failed while the full pnpm test:e2e smoke included a regressed feat-007 migration E2E assertion; repaired by making feat-007 migration E2E assert the current migration set, then rerunning feat-005 verification successfully with 8/8 E2E tests."
+      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82. 2026-06-12 regression during feat-008 verify:features: feat-005 verification failed while the full pnpm test:e2e smoke included a regressed feat-007 migration E2E assertion; repaired by making feat-007 migration E2E assert the current migration set, then rerunning feat-005 verification successfully with 8/8 E2E tests. 2026-06-13 regression during feat-015 verify:features: feat-005 full E2E smoke failed because two Console Playwright specs started Next dev concurrently against the same apps/console/.next workspace; repaired by adding a test process lock around Console dev-server E2E specs, then reran pnpm test:e2e and verify:features successfully."
     },
     {
       "id": "feat-006",
@@ -165,8 +165,8 @@
         "feat-013",
         "feat-014"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-015 unit tests because resolveEffectiveModelTokenPrice and migration 0005 were missing, and E2E because Console did not show built-in prices or manual override controls. Added model_price_overrides migration, effective price resolution that prefers matching manual overrides over built-in registry entries, authenticated Console price override API, dashboard price panel, and config publisher integration so manual price changes emit config_change_events. Review follow-up fixed the P2+ regression where full E2E could start multiple Next dev servers concurrently by adding a shared test process lock for Console E2E specs. Verification passed — feat-015 unit tests 3 passed, real Chromium Console E2E 1 passed including config change event coverage, pnpm test:e2e passed all 15 E2E tests, pnpm run verify passed, existing passing feature regression passed before marking feat-015 passing, local code review found no P2+ issues, and final verify:features passed all 15 passing features after marking."
     },
     {
       "id": "feat-016",

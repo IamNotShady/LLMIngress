@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./price-registry": {
+      "types": "./src/price-registry.ts",
+      "default": "./src/price-registry.ts"
     }
   },
   "scripts": {

@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 09:54 AWST
+**Last Updated:** 2026-06-13 19:11 AWST
 **Active Feature:** None (feat-003 through feat-008 completed)
 
 ## Status
@@ -77,6 +77,7 @@
 - [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
 - [ ] Console page E2E features (feat-013+) will need Playwright browser installation before browser-driven tests are added.
 - [ ] Review debt to resolve before related features: clarify or rename `PostgresFixture.migrate()` test-only fixture helper, make migration directory resolution independent of `process.cwd()` before app-start migration usage, revisit `config_change_events.changed_record_id` typing when non-UUID config tables are introduced, and add semantic validation for `agent_limits` combinations in feat-031.
+- [ ] Before the final real-provider MVP smoke, re-check that the active Codex shell can still see both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; both were visible on 2026-06-13 19:11 AWST.
 
 ## Decisions Made
 
@@ -101,6 +102,24 @@
 - **Test PostgreSQL fixture uses test-specific config, not runtime bootstrap config**:
   - Context: `feat-003` is earlier than `feat-006`, so it cannot depend on the runtime bootstrap configuration feature.
   - Decision: `feat-003` reads `TEST_DATABASE_URL` directly as a test-only Postgres connection string.
+- **Provider testing strategy**:
+  - Context: MVP should avoid real-provider spend during feature development but still prove the final path against real providers.
+  - Decision: complete feature-level provider and Gateway testing against Fake Provider first; final MVP smoke must call real OpenAI and Anthropic providers with a hard budget cap of USD 10.
+- **MVP price registry source**:
+  - Context: price-related features need stable expected values for tests and cost calculations.
+  - Decision: use official provider pricing pages to create a fixed MVP static price snapshot, then test against that checked-in snapshot rather than live pricing.
+- **GitHub Actions validation flow**:
+  - Context: CI validation should not push directly to `main` for future work.
+  - Decision: create a branch and pull request for CI-running features, then use the PR/branch CI result as evidence.
+- **Console login strategy**:
+  - Context: `feat-013` needs a default first-run/auth contract.
+  - Decision: first run creates an admin password; subsequent protected Console pages use session/cookie authentication.
+- **Current local workspace state**:
+  - Context: there was a prior local formatting change in `apps/worker/src/main.ts`.
+  - Decision: user handled it; future feature work should start from a clean working tree check.
+- **Remaining feature resource audit**:
+  - Context: remaining features from `feat-009` through `feat-055` were reviewed against the feature tracker and docs after the user confirmed provider keys, real-provider smoke policy, price source, CI flow, Console login policy, and local workspace handling.
+  - Decision: no additional user-provided resources are blocking the remaining MVP feature implementation; Codex should proceed one feature at a time, using fake provider tests first, official pricing pages for the static snapshot, PR/branch CI evidence for GitHub Actions validation, and the configured provider keys only for the final real-provider smoke.
 
 ## Files Modified This Session
 

@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { loadMasterKey, type MasterKey, type MasterKeySource } from "./master-key.js";
+import { loadMasterKey, type MasterKey, type MasterKeySource } from "./master-key.ts";
 
 export type EncryptedSecret = {
   version: 1;

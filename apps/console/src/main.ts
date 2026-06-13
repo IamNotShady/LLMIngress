@@ -12,6 +12,10 @@ type ConsoleCommand = {
 
 export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
+  const masterKeyEnv =
+    config.masterKeySource.kind === "inline"
+      ? { MASTER_KEY: config.masterKeySource.value }
+      : { MASTER_KEY_FILE: config.masterKeySource.path };
 
   return {
     command: "next",
@@ -19,6 +23,7 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
     env: {
       ...process.env,
       DATABASE_URL: config.databaseUrl,
+      ...masterKeyEnv,
     },
   };
 }

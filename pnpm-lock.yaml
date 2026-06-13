@@ -41,6 +41,9 @@ importers:
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

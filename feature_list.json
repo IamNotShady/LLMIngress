@@ -189,8 +189,8 @@
         "feat-010",
         "feat-016"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-017 unit tests because provider key storage helpers and 0006 migration were missing, and E2E because Console had no Provider API key storage UI. Added provider_api_keys ciphertext storage migration, provider key encryption/metadata helpers, authenticated Console provider-key save/rotate route with one-time plaintext response page, dashboard prefix/created/rotated metadata, Console master key propagation, and Next-compatible security package subpath exports. Review fix for P2+ only: rejected provider API keys shorter than the stored prefix so later metadata cannot expose the full plaintext. Verification passed — feat-017 unit tests 3 passed, real Chromium Console E2E 1 passed for create and rotate, pnpm run verify passed, full pnpm test:e2e passed 17/17, and verify:features passed all 16 prior passing features before marking feat-017 passing."
     },
     {
       "id": "feat-018",

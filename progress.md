@@ -419,3 +419,14 @@
 ## Notes for Next Session
 
 `pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next feature is `feat-012` unless the user explicitly picks a different unblocked feature.
+
+- [x] feat-017 verification and P2+ review passed:
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts` failed because `apps/console/src/server/provider-keys` and migration `0006` were missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once on create and rotate ciphertext stored metadata only after reload'` failed because the Console dashboard had no Provider API key controls.
+  - Implemented `provider_api_keys` ciphertext storage, encrypted save/rotate helper, authenticated Console route, one-time plaintext response page, dashboard metadata-only reads, and Console master-key propagation.
+  - Review fix: rejected Provider API keys too short to expose as a safe prefix, preventing later metadata from becoming full plaintext.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once on create and rotate ciphertext stored metadata only after reload'` → 1 passed.
+  - `pnpm run verify` passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 17/17 E2E tests.
+  - Before marking feat-017 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 16 prior passing features.

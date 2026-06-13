@@ -5,6 +5,7 @@ import {
 import { cookies } from "next/headers";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
+import { listProviderApiKeyMetadata } from "../server/provider-keys";
 import { listProviders } from "../server/providers";
 
 const previewProviderKey = "openai";
@@ -65,6 +66,10 @@ export default async function Home() {
 
   const pricePanel = await getPricePanel(databaseUrl);
   const providers = await listProviders(databaseUrl);
+  const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
+  const providerKeyByProviderId = new Map(
+    providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
+  );
 
   return (
     <main className="console-page">
@@ -152,51 +157,87 @@ export default async function Home() {
           {providers.length === 0 ? (
             <p>No providers configured.</p>
           ) : (
-            providers.map((provider) => (
-              <article className="provider-item" key={provider.id}>
-                <header className="provider-header">
-                  <div>
-                    <p className="eyebrow">{provider.providerKey}</p>
-                    <h2>{provider.displayName}</h2>
+            providers.map((provider) => {
+              const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
+
+              return (
+                <article className="provider-item" key={provider.id}>
+                  <header className="provider-header">
+                    <div>
+                      <p className="eyebrow">{provider.providerKey}</p>
+                      <h2>{provider.displayName}</h2>
+                    </div>
+                    <p className={provider.enabled ? "status-enabled" : "status-disabled"}>
+                      {provider.enabled ? "Enabled" : "Disabled"}
+                    </p>
+                  </header>
+                  <form className="provider-edit-form" action="/api/providers" method="post">
+                    <input type="hidden" name="action" value="update" />
+                    <input type="hidden" name="id" value={provider.id} />
+                    <label htmlFor={`provider-display-${provider.id}`}>
+                      Edit provider display name
+                    </label>
+                    <input
+                      id={`provider-display-${provider.id}`}
+                      name="displayName"
+                      defaultValue={provider.displayName}
+                      required
+                    />
+                    <label htmlFor={`provider-base-${provider.id}`}>Edit provider base URL</label>
+                    <input
+                      id={`provider-base-${provider.id}`}
+                      name="baseUrl"
+                      type="url"
+                      defaultValue={provider.baseUrl ?? ""}
+                    />
+                    <button type="submit">Save provider</button>
+                  </form>
+                  <div className="provider-key-metadata">
+                    {providerKeyMetadata ? (
+                      <>
+                        <p>Provider API key prefix: {providerKeyMetadata.keyPrefix}</p>
+                        <p>
+                          Provider API key created: {formatDateTime(providerKeyMetadata.createdAt)}
+                        </p>
+                        {providerKeyMetadata.rotatedAt ? (
+                          <p>
+                            Provider API key rotated:{" "}
+                            {formatDateTime(providerKeyMetadata.rotatedAt)}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p>No Provider API key saved.</p>
+                    )}
                   </div>
-                  <p className={provider.enabled ? "status-enabled" : "status-disabled"}>
-                    {provider.enabled ? "Enabled" : "Disabled"}
-                  </p>
-                </header>
-                <form className="provider-edit-form" action="/api/providers" method="post">
-                  <input type="hidden" name="action" value="update" />
-                  <input type="hidden" name="id" value={provider.id} />
-                  <label htmlFor={`provider-display-${provider.id}`}>
-                    Edit provider display name
-                  </label>
-                  <input
-                    id={`provider-display-${provider.id}`}
-                    name="displayName"
-                    defaultValue={provider.displayName}
-                    required
-                  />
-                  <label htmlFor={`provider-base-${provider.id}`}>Edit provider base URL</label>
-                  <input
-                    id={`provider-base-${provider.id}`}
-                    name="baseUrl"
-                    type="url"
-                    defaultValue={provider.baseUrl ?? ""}
-                  />
-                  <button type="submit">Save provider</button>
-                </form>
-                <form action="/api/providers" method="post">
-                  <input type="hidden" name="id" value={provider.id} />
-                  <input
-                    type="hidden"
-                    name="action"
-                    value={provider.enabled ? "disable" : "enable"}
-                  />
-                  <button className="secondary-button" type="submit">
-                    {provider.enabled ? "Disable provider" : "Enable provider"}
-                  </button>
-                </form>
-              </article>
-            ))
+                  <form className="provider-key-form" action="/api/provider-keys" method="post">
+                    <input type="hidden" name="providerId" value={provider.id} />
+                    <label htmlFor={`provider-api-key-${provider.id}`}>Provider API key</label>
+                    <input
+                      id={`provider-api-key-${provider.id}`}
+                      name="providerApiKey"
+                      type="password"
+                      autoComplete="off"
+                      required
+                    />
+                    <button type="submit">
+                      {providerKeyMetadata ? "Rotate provider API key" : "Store provider API key"}
+                    </button>
+                  </form>
+                  <form action="/api/providers" method="post">
+                    <input type="hidden" name="id" value={provider.id} />
+                    <input
+                      type="hidden"
+                      name="action"
+                      value={provider.enabled ? "disable" : "enable"}
+                    />
+                    <button className="secondary-button" type="submit">
+                      {provider.enabled ? "Disable provider" : "Enable provider"}
+                    </button>
+                  </form>
+                </article>
+              );
+            })
           )}
         </div>
       </section>
@@ -245,4 +286,8 @@ async function getPricePanel(databaseUrl: string) {
 
 function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`;
+}
+
+function formatDateTime(value: Date): string {
+  return value.toISOString();
 }

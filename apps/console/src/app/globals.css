@@ -199,7 +199,8 @@ dd {
 }
 
 .provider-create-form,
-.provider-edit-form {
+.provider-edit-form,
+.provider-key-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 12px;
@@ -228,6 +229,16 @@ dd {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 14px;
+}
+
+.provider-key-metadata {
+  display: grid;
+  gap: 4px;
+  margin: 14px 0;
+}
+
+.provider-key-form {
+  margin-bottom: 12px;
 }
 
 .status-enabled,
@@ -267,7 +278,8 @@ dd {
   .section-heading,
   .price-form,
   .provider-create-form,
-  .provider-edit-form {
+  .provider-edit-form,
+  .provider-key-form {
     display: grid;
     grid-template-columns: 1fr;
   }

@@ -108,8 +108,8 @@
       "dependencies": [
         "feat-006"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-13: TDD red observed for feat-010 unit and E2E tests because packages/security was missing. Added @llmingress/security with file/inline master key loading, AES-256-GCM secret envelopes, same-key decryption, wrong-key failure, and plaintext logging safeguards. Verification passed — feat-010 unit test 4 passed, real Playwright E2E 1 passed, pnpm run verify passed, existing passing feature regression passed before marking feat-010 passing, code review found no blocking issues after removing generated build artifacts, and final verify:features passed all 10 passing features after marking."
     },
     {
       "id": "feat-011",

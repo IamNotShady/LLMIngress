@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 20:37 AWST
-**Active Feature:** None (feat-003 through feat-009 completed)
+**Last Updated:** 2026-06-13 21:05 AWST
+**Active Feature:** None (feat-003 through feat-010 completed)
 
 ## Status
 
@@ -66,6 +66,10 @@
   - Added indexes for Activity/Usage list queries, budget reservation cleanup, worker job claiming, provider health lookups, Gateway heartbeat lookup, and runtime error lookup.
   - Added feat-009 unit and real PostgreSQL E2E tests; both were observed failing before implementation and passing after implementation.
   - Review follow-up fixed P2+ schema issues only: nullable provider-level health summary uniqueness, large budget token counters, job lease pair integrity, and provider/model ownership mismatch checks.
+- [x] **feat-010 — Master Key and Secret Encryption (passing)**:
+  - Added `@llmingress/security` for inline/file master key loading and AES-256-GCM secret encryption envelopes.
+  - Covered same-key decrypt, wrong-key failure, non-plaintext ciphertext, file-backed master key source, and no plaintext console logging.
+  - Code review found no blocking issues after removing generated build artifacts from the diff.
 
 ### What's In Progress
 
@@ -73,9 +77,9 @@
 
 ### What's Next
 
-1. `feat-010` — Master Key and Secret Encryption.
-2. `feat-011` — Config Publisher and Postgres Notifications.
-3. `feat-055` — CI Migration Validation after `feat-007` produces the migration command.
+1. `feat-011` — Config Publisher and Postgres Notifications.
+2. `feat-012` — Gateway Config Snapshot Reload.
+3. `feat-013` — Console First Run and Login.
 
 ## Blockers / Risks
 
@@ -186,6 +190,16 @@
 - `tests/e2e/feat-009-runtime-schema.e2e.spec.ts` - Added real Postgres coverage for review-fix invariants.
 - `feature_list.json` - feat-009 evidence updated with review-fix verification.
 - `progress.md` - Session state and review-fix evidence updated.
+- `packages/security/package.json` - New security workspace package for feat-010.
+- `packages/security/tsconfig.json` - TypeScript build configuration for the security package.
+- `packages/security/src/master-key.ts` - Master key source loading and stable key id derivation.
+- `packages/security/src/secret-encryption.ts` - AES-256-GCM secret envelope encryption and decryption.
+- `packages/security/src/index.ts` - Security package exports.
+- `tests/features/feat-010-secret-encryption.unit.test.ts` - New secret encryption unit tests.
+- `tests/e2e/feat-010-secret-encryption.e2e.spec.ts` - New bootstrap-to-encryption E2E test.
+- `pnpm-lock.yaml` - Workspace importer entry for `@llmingress/security`.
+- `feature_list.json` - feat-010 marked `passing` with verification and review evidence.
+- `progress.md` - feat-010 session evidence updated.
 
 ## Evidence of Completion
 
@@ -296,7 +310,16 @@
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts` → 1 passed.
   - `pnpm run verify` passed after the review fix.
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 passing features.
+- [x] feat-010 verification and review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-010-secret-encryption.unit.test.ts` failed because `packages/security` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-010-secret-encryption.e2e.spec.ts --grep 'provider secret encrypts decrypts rejects wrong key and hides plaintext'` failed because `packages/security` was missing.
+  - `pnpm exec vitest run tests/features/feat-010-secret-encryption.unit.test.ts` → 4 passed.
+  - `pnpm test:e2e tests/e2e/feat-010-secret-encryption.e2e.spec.ts --grep 'provider secret encrypts decrypts rejects wrong key and hides plaintext'` → 1 passed.
+  - `pnpm run verify` passed after feat-010 implementation.
+  - Before marking feat-010 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 prior passing features.
+  - Code review found generated build artifacts in the diff; removed them before proceeding. No remaining blocking review issues were found.
+  - After marking feat-010 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 10 passing features.
 
 ## Notes for Next Session
 
-`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next likely feature is `feat-010` unless the user explicitly picks a different unblocked feature.
+`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next feature is `feat-011` unless the user explicitly picks a different unblocked feature.

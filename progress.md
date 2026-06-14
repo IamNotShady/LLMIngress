@@ -518,3 +518,15 @@
   - `pnpm run verify` passed.
   - Before marking feat-026 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 24 prior passing features.
   - After marking feat-026 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 25 passing features.
+
+- [x] feat-027 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-027-agent-key-lifecycle.unit.test.ts` failed because `apps/console/src/server/agent-api-keys` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-027-agent-key-lifecycle.e2e.spec.ts --grep 'agent key plaintext once hash prefix status metadata persisted after rotate disable delete'` failed because Agent API key lifecycle was not implemented.
+  - Implemented Agent API key generation, SHA-256 hash storage, prefix/status/metadata listing, one-time plaintext create/rotate pages, rotate, disable, delete, and Dashboard controls.
+  - Delete is blocked when an Agent API key has request attribution, preserving activity history.
+  - P2+ review found no additional blocking issues after verifying plaintext does not persist in Dashboard, `agent_api_keys.key_hash`, metadata, or DB assertions.
+  - `pnpm exec vitest run tests/features/feat-027-agent-key-lifecycle.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-027-agent-key-lifecycle.e2e.spec.ts --grep 'agent key plaintext once hash prefix status metadata persisted after rotate disable delete'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-027 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 25 prior passing features.
+  - After marking feat-027 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 26 passing features.

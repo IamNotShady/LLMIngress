@@ -3,6 +3,7 @@ import {
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
 import { cookies } from "next/headers";
+import { listAgentApiKeyMetadata } from "../server/agent-api-keys";
 import { listAgents } from "../server/agents";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
@@ -73,11 +74,13 @@ export default async function Home() {
 
   const pricePanel = await getPricePanel(databaseUrl);
   const agents = await listAgents(databaseUrl);
+  const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
   const providers = await listProviders(databaseUrl);
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
+  const agentApiKeysByAgentId = groupByAgentId(agentApiKeys);
 
   return (
     <main className="console-page">
@@ -158,6 +161,46 @@ export default async function Home() {
                 </form>
                 <p>Active API keys: {agent.activeApiKeyCount}</p>
                 <p>Request attribution records: {agent.requestAttributionCount}</p>
+                <div className="provider-key-metadata">
+                  {(agentApiKeysByAgentId.get(agent.id) ?? []).length === 0 ? (
+                    <p>No Agent API keys saved.</p>
+                  ) : (
+                    (agentApiKeysByAgentId.get(agent.id) ?? []).map((agentApiKey) => (
+                      <div key={agentApiKey.id}>
+                        <p>Agent API key prefix: {agentApiKey.keyPrefix}</p>
+                        <p>Agent API key status: {agentApiKey.enabled ? "Enabled" : "Disabled"}</p>
+                        <p>Agent API key created: {formatDateTime(agentApiKey.createdAt)}</p>
+                        <p>Agent API key updated: {formatDateTime(agentApiKey.updatedAt)}</p>
+                        <form action="/api/agent-api-keys" method="post">
+                          <input type="hidden" name="action" value="rotate" />
+                          <input type="hidden" name="id" value={agentApiKey.id} />
+                          <button type="submit">Rotate Agent API key</button>
+                        </form>
+                        {agentApiKey.enabled ? (
+                          <form action="/api/agent-api-keys" method="post">
+                            <input type="hidden" name="action" value="disable" />
+                            <input type="hidden" name="id" value={agentApiKey.id} />
+                            <button className="secondary-button" type="submit">
+                              Disable Agent API key
+                            </button>
+                          </form>
+                        ) : null}
+                        <form action="/api/agent-api-keys" method="post">
+                          <input type="hidden" name="action" value="delete" />
+                          <input type="hidden" name="id" value={agentApiKey.id} />
+                          <button className="secondary-button" type="submit">
+                            Delete Agent API key
+                          </button>
+                        </form>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <form className="provider-key-form" action="/api/agent-api-keys" method="post">
+                  <input type="hidden" name="action" value="create" />
+                  <input type="hidden" name="agentId" value={agent.id} />
+                  <button type="submit">Create Agent API key</button>
+                </form>
                 <form action="/api/agents" method="post">
                   <input type="hidden" name="action" value="delete" />
                   <input type="hidden" name="id" value={agent.id} />
@@ -422,4 +465,14 @@ function formatUsd(value: number): string {
 
 function formatDateTime(value: Date): string {
   return value.toISOString();
+}
+
+function groupByAgentId<T extends { agentId: string }>(values: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const value of values) {
+    const group = grouped.get(value.agentId) ?? [];
+    group.push(value);
+    grouped.set(value.agentId, group);
+  }
+  return grouped;
 }

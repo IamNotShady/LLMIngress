@@ -399,8 +399,8 @@
         "feat-012",
         "feat-027"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-034 unit and E2E tests because apps/gateway/src/auth was missing. Added Gateway Agent API key authentication helpers using the same sha256:v1 scheme as Console Agent API key storage, stable 401 error bodies with requestId, and /v1/chat/completions authentication before any routing response. Missing, invalid, and disabled keys return 401 with stable error codes; valid enabled keys return 200 with the request id. P2+ review found no blocking issues after checking hash compatibility, disabled-key handling, request-id propagation, and that /health remains unauthenticated. Verification passed — feat-034 unit tests 3 passed, real Gateway/PostgreSQL E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 33 prior passing features before marking feat-034 passing, and final verify:features passed all 34 passing features after marking."
     },
     {
       "id": "feat-035",

@@ -622,3 +622,17 @@
   - `pnpm run verify` passed.
   - Before marking feat-033 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 32 prior passing features.
   - After marking feat-033 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 33 passing features.
+
+- [x] feat-034 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-034-auth.unit.test.ts` failed because `apps/gateway/src/auth` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` failed because Gateway API key authentication was not implemented.
+  - Added Gateway Agent API key auth helpers using the same `sha256:v1` hashing scheme as Console Agent API key storage.
+  - Added `/v1/chat/completions` authentication before routing response; missing, invalid, and disabled keys return 401 with stable error codes and request id, while valid enabled keys return 200.
+  - P2+ review found no blocking issues after checking hash compatibility, disabled-key handling, request-id propagation, and that `/health` remains unauthenticated.
+  - `pnpm exec vitest run tests/features/feat-034-auth.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-034 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 33 prior passing features.
+  - After marking feat-034 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 34 passing features.

@@ -1,10 +1,12 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import Fastify from "fastify";
+import { authenticateGatewayRequest } from "./auth.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
 
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
+  databaseUrl?: string;
 };
 
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
@@ -20,6 +22,24 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       providerCount: snapshot?.providers.length ?? 0,
       service: "gateway",
       status: "ok",
+    };
+  });
+
+  app.post("/v1/chat/completions", async (request, reply) => {
+    const databaseUrl = requireGatewayDatabaseUrl(options);
+    const auth = await authenticateGatewayRequest({
+      databaseUrl,
+      headers: request.headers,
+    });
+
+    if (!auth.ok) {
+      return reply.code(auth.statusCode).send(auth.body);
+    }
+
+    return {
+      agentApiKeyId: auth.agentApiKey.id,
+      requestId: auth.requestId,
+      status: "authenticated",
     };
   });
 
@@ -39,7 +59,7 @@ export async function startGateway() {
   });
   await configRuntime.start();
 
-  const app = createGatewayApp({ configRuntime });
+  const app = createGatewayApp({ configRuntime, databaseUrl: config.databaseUrl });
 
   await app.listen({
     host: "0.0.0.0",
@@ -66,6 +86,13 @@ function readNonNegativeIntegerEnv(name: string, fallback: number): number {
     throw new Error(`${name} must be a non-negative integer.`);
   }
   return parsed;
+}
+
+function requireGatewayDatabaseUrl(options: CreateGatewayAppOptions): string {
+  if (!options.databaseUrl) {
+    throw new Error("Gateway API endpoints require databaseUrl.");
+  }
+  return options.databaseUrl;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

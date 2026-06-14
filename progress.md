@@ -684,3 +684,17 @@
   - `pnpm run verify` passed.
   - Before marking feat-037 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 36 prior passing features.
   - After marking feat-037 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 37 passing features.
+
+- [x] feat-038 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-038-anthropic-messages.unit.test.ts` failed because `apps/gateway/src/messages` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-038-anthropic-messages.e2e.spec.ts --grep 'messages returns provider response and rejects disallowed virtual model without calling provider'` failed because `/v1/messages` returned 404.
+  - Added Gateway Anthropic messages normalization, `/v1/messages` auth plus Virtual Model access, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, and Anthropic provider adapter forwarding through the selected provider model.
+  - Disallowed Virtual Models return 403 `virtual_model_not_allowed` before any provider call.
+  - P2+ review found no blocking issues after checking disallowed no-call behavior, auth/access ordering, Anthropic provider path `/v1/messages`, `x-api-key` and `anthropic-version` forwarding, and existing Anthropic adapter compatibility.
+  - `pnpm exec vitest run tests/features/feat-038-anthropic-messages.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-038-anthropic-messages.e2e.spec.ts --grep 'messages returns provider response and rejects disallowed virtual model without calling provider'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-038 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 37 prior passing features.
+  - After marking feat-038 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 38 passing features.

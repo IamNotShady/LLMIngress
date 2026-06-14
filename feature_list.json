@@ -450,8 +450,8 @@
         "feat-032",
         "feat-035"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-038 unit tests because apps/gateway/src/messages was missing, and E2E failed because /v1/messages returned 404. Added Gateway Anthropic messages normalization, /v1/messages auth plus Virtual Model access, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, and Anthropic provider adapter forwarding through the selected provider model. Disallowed Virtual Models return 403 virtual_model_not_allowed before any provider call. P2+ review found no blocking issues after checking disallowed no-call behavior, auth/access ordering, Anthropic provider path /v1/messages, x-api-key and anthropic-version forwarding, and existing Anthropic adapter compatibility. Verification passed — feat-038 unit tests 2 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 37 prior passing features before marking feat-038 passing, and final verify:features passed all 38 passing features after marking."
     },
     {
       "id": "feat-039",

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
 import { Client } from "pg";
+import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
   type GatewayBudgetReservation,
@@ -35,6 +36,7 @@ export type GatewayStreamingResult =
   | {
       body: Readable;
       contentType: string;
+      activity?: GatewayRequestActivityRoute;
       headers?: Record<string, string>;
       ok: true;
       requestMetadata: GatewayRequestMetadata;
@@ -42,6 +44,7 @@ export type GatewayStreamingResult =
     }
   | {
       body: unknown;
+      activity?: GatewayRequestActivityRoute;
       headers?: Record<string, string>;
       ok: false;
       requestMetadata?: GatewayRequestMetadata;
@@ -112,6 +115,12 @@ export async function executeGatewayStreamingRequest(input: {
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
+    const activity = buildStreamingActivityRoute({
+      providerId: selectedCandidate.providerId,
+      providerModelId: selectedCandidate.providerModelId,
+      routePolicyId: routeDecision.routePolicyId,
+      routeReason: routeDecision.routeReason,
+    });
     const budget = await reserveGatewayBudget({
       agentApiKeyId: input.agentApiKeyId,
       databaseUrl: input.databaseUrl,
@@ -121,6 +130,7 @@ export async function executeGatewayStreamingRequest(input: {
     });
     if (!budget.ok) {
       return {
+        activity,
         body: budget.body,
         ok: false,
         requestMetadata: normalized.requestMetadata,
@@ -159,6 +169,7 @@ export async function executeGatewayStreamingRequest(input: {
       });
       budgetReservation = undefined;
       return {
+        activity,
         body: createGatewayStreamingErrorBody("provider_request_failed", input.requestId),
         ok: false,
         requestMetadata: normalized.requestMetadata,
@@ -190,6 +201,7 @@ export async function executeGatewayStreamingRequest(input: {
     budgetReservation = undefined;
 
     return {
+      activity,
       body,
       contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
       ok: true,
@@ -212,6 +224,52 @@ export async function executeGatewayStreamingRequest(input: {
       statusCode: 502,
     };
   }
+}
+
+export function wrapProviderStreamWithActivityCompletion(
+  source: Readable,
+  input: {
+    completeActivity: (completion: { statusCode: number }) => Promise<void>;
+    errorStatusCode?: number;
+    statusCode: number;
+  },
+): Readable {
+  const output = new PassThrough();
+  let settled = false;
+
+  source.on("data", (chunk) => {
+    output.write(chunk);
+  });
+  source.once("end", () => {
+    void settleActivity(input.statusCode)
+      .catch(() => undefined)
+      .finally(() => output.end());
+  });
+  source.once("error", (error) => {
+    void settleActivity(input.errorStatusCode ?? 502)
+      .catch(() => undefined)
+      .finally(() => {
+        output.destroy(error instanceof Error ? error : new Error("Provider stream failed."));
+      });
+  });
+  source.once("close", () => {
+    if (settled || source.readableEnded) {
+      return;
+    }
+    void settleActivity(input.errorStatusCode ?? 499)
+      .catch(() => undefined)
+      .finally(() => output.destroy());
+  });
+
+  async function settleActivity(statusCode: number): Promise<void> {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    await input.completeActivity({ statusCode });
+  }
+
+  return output;
 }
 
 export function wrapProviderStreamWithErrorRecording(
@@ -444,6 +502,21 @@ function requireSelectedCandidate(
     throw new Error(`Route policy ${routePolicy.id} selected candidate was not found.`);
   }
   return candidate;
+}
+
+function buildStreamingActivityRoute(input: {
+  providerId: string;
+  providerModelId: string;
+  routePolicyId: string;
+  routeReason: unknown;
+}): GatewayRequestActivityRoute {
+  return {
+    fallbackAttempts: [],
+    providerId: input.providerId,
+    providerModelId: input.providerModelId,
+    routePolicyId: input.routePolicyId,
+    routeReason: input.routeReason,
+  };
 }
 
 function createGatewayStreamingErrorBody(

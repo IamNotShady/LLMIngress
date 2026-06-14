@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 21:29 AWST
-**Active Feature:** feat-051 next (feat-001 through feat-050 completed)
+**Last Updated:** 2026-06-14 21:48 AWST
+**Active Feature:** feat-052 next (feat-001 through feat-051 completed)
 
 ## Status
 
@@ -39,6 +39,11 @@
   - Added a clean-run MVP happy path E2E covering Console setup, price configuration, Provider API key storage, Virtual Model, Route Policy, Agent, Agent API key access, limits, Gateway request, Activity/Usage visibility, and Route Policy hot reload without restarting Gateway.
   - The E2E pre-seeds the fake-provider-backed provider/model catalog because `feat-020` intentionally blocks arbitrary OpenAI-compatible custom endpoints in Console UI; Provider API key and the rest of the user-facing config still go through authenticated Console/Gateway paths.
   - Verification passed: feat-050 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-051 — MVP Streaming E2E (passing)**:
+  - Added streaming Activity recording for Gateway chat completions, Responses, and Messages.
+  - Successful streaming requests now create `request_activity` before provider execution and complete it when the provider stream ends, preserving selected provider/model route metadata.
+  - Pre-stream streaming failures now complete the started Activity row immediately with the returned status.
+  - Verification passed: feat-051 unit tests, real Gateway/PostgreSQL/fake-provider streaming E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -129,9 +134,9 @@
 
 ### What's Next
 
-1. `feat-051` — MVP Streaming E2E.
-2. `feat-052` — Claude Code Messages E2E.
-3. `feat-053` — Codex OpenAI-Compatible E2E.
+1. `feat-052` — Claude Code Messages E2E.
+2. `feat-053` — Codex OpenAI-Compatible E2E.
+3. `feat-054` — MVP Local Deployment Smoke.
 
 ## Blockers / Risks
 
@@ -856,3 +861,15 @@
   - `pnpm run verify` passed.
   - Before marking feat-050 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 49 prior passing features.
   - Next active feature: feat-051 MVP Streaming E2E.
+
+- [x] feat-051 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-051-mvp-streaming.unit.test.ts` failed because `wrapProviderStreamWithActivityCompletion` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-051-mvp-streaming.e2e.spec.ts --grep 'streaming request receives ordered chunks and activity records stream completion'` reached the fake-provider stream but found no completed `request_activity` row.
+  - Added Gateway streaming Activity recording for chat completions, Responses, and Messages.
+  - Streaming requests now create `request_activity` rows before provider execution, attach selected route metadata, complete pre-stream failures immediately, and complete successful rows when the provider stream ends.
+  - P2+ review fixed the Activity completion wrapper so failed completion writes cannot surface as unhandled rejections or break the client stream; no remaining blocking issues after checking stream completion timing, pre-stream failures, and route metadata.
+  - `pnpm exec vitest run tests/features/feat-051-mvp-streaming.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-051-mvp-streaming.e2e.spec.ts --grep 'streaming request receives ordered chunks and activity records stream completion'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-051 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 50 prior passing features.
+  - Next active feature: feat-052 Claude Code Messages E2E.

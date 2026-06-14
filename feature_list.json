@@ -625,8 +625,8 @@
         "feat-039",
         "feat-050"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-051 unit test because wrapProviderStreamWithActivityCompletion was missing, and the real Gateway/PostgreSQL/fake-provider E2E initially received ordered streaming chunks but found no completed request_activity row. Added streaming Activity recording for chat completions, Responses, and Messages: streaming requests now create request_activity rows before provider execution, attach selected route metadata, complete pre-stream failures immediately, and complete successful stream rows when the provider stream ends. P2+ review fixed the Activity completion wrapper so failed completion writes cannot surface as unhandled rejections or break the client stream. Verification passed — feat-051 unit tests 1 passed, real Gateway/PostgreSQL/fake-provider streaming E2E 1 passed, pnpm run verify passed, and verify:features passed all 50 prior passing features before marking feat-051 passing."
     },
     {
       "id": "feat-052",

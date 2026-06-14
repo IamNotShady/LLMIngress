@@ -23,6 +23,7 @@ import {
   executeGatewayStreamingRequest,
   type GatewayStreamingResult,
   readGatewayStreamingFlag,
+  wrapProviderStreamWithActivityCompletion,
 } from "./streaming.js";
 import {
   type GatewayUsageCostDetails,
@@ -94,14 +95,24 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     if (readGatewayStreamingFlag(request.body)) {
       return sendGatewayStreamingResponse(
         reply,
-        await executeGatewayStreamingRequest({
+        await executeRecordedGatewayStreamingRequest({
           agentApiKeyId: auth.agentApiKey.id,
+          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
           databaseUrl,
+          execute: () =>
+            executeGatewayStreamingRequest({
+              agentApiKeyId: auth.agentApiKey.id,
+              databaseUrl,
+              protocol: "chat_completions",
+              requestBody: request.body,
+              requestId: auth.requestId,
+              snapshot: requireGatewayConfigSnapshot(options),
+              virtualModel: virtualModelAccess.virtualModel,
+            }),
+          model: virtualModelAccess.virtualModel.name,
           protocol: "chat_completions",
-          requestBody: request.body,
           requestId: auth.requestId,
-          snapshot: requireGatewayConfigSnapshot(options),
-          virtualModel: virtualModelAccess.virtualModel,
+          virtualModelId: virtualModelAccess.virtualModel.id,
         }),
       );
     }
@@ -182,14 +193,24 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     if (readGatewayStreamingFlag(request.body)) {
       return sendGatewayStreamingResponse(
         reply,
-        await executeGatewayStreamingRequest({
+        await executeRecordedGatewayStreamingRequest({
           agentApiKeyId: auth.agentApiKey.id,
+          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
           databaseUrl,
+          execute: () =>
+            executeGatewayStreamingRequest({
+              agentApiKeyId: auth.agentApiKey.id,
+              databaseUrl,
+              protocol: "responses",
+              requestBody: request.body,
+              requestId: auth.requestId,
+              snapshot: requireGatewayConfigSnapshot(options),
+              virtualModel: virtualModelAccess.virtualModel,
+            }),
+          model: virtualModelAccess.virtualModel.name,
           protocol: "responses",
-          requestBody: request.body,
           requestId: auth.requestId,
-          snapshot: requireGatewayConfigSnapshot(options),
-          virtualModel: virtualModelAccess.virtualModel,
+          virtualModelId: virtualModelAccess.virtualModel.id,
         }),
       );
     }
@@ -243,14 +264,24 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     if (readGatewayStreamingFlag(request.body)) {
       return sendGatewayStreamingResponse(
         reply,
-        await executeGatewayStreamingRequest({
+        await executeRecordedGatewayStreamingRequest({
           agentApiKeyId: auth.agentApiKey.id,
+          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
           databaseUrl,
+          execute: () =>
+            executeGatewayStreamingRequest({
+              agentApiKeyId: auth.agentApiKey.id,
+              databaseUrl,
+              protocol: "messages",
+              requestBody: request.body,
+              requestId: auth.requestId,
+              snapshot: requireGatewayConfigSnapshot(options),
+              virtualModel: virtualModelAccess.virtualModel,
+            }),
+          model: virtualModelAccess.virtualModel.name,
           protocol: "messages",
-          requestBody: request.body,
           requestId: auth.requestId,
-          snapshot: requireGatewayConfigSnapshot(options),
-          virtualModel: virtualModelAccess.virtualModel,
+          virtualModelId: virtualModelAccess.virtualModel.id,
         }),
       );
     }
@@ -435,6 +466,56 @@ async function executeRecordedGatewayJsonRequest(input: {
     });
   }
   return response;
+}
+
+async function executeRecordedGatewayStreamingRequest(input: {
+  agentApiKeyId: string;
+  agentApiKeyPrefix: string;
+  databaseUrl: string;
+  execute: () => Promise<GatewayStreamingResult>;
+  model: string;
+  protocol: GatewayRequestActivityProtocol;
+  requestId: string;
+  virtualModelId: string;
+}): Promise<GatewayStreamingResult> {
+  const activity = await createGatewayRequestActivity({
+    agentApiKeyId: input.agentApiKeyId,
+    agentApiKeyPrefix: input.agentApiKeyPrefix,
+    databaseUrl: input.databaseUrl,
+    model: input.model,
+    protocol: input.protocol,
+    requestId: input.requestId,
+    stream: true,
+    virtualModelId: input.virtualModelId,
+  });
+  const response = await input.execute();
+  if (!response.ok) {
+    await completeGatewayRequestActivity({
+      activityId: activity.id,
+      databaseUrl: input.databaseUrl,
+      responseBody: response.body,
+      route: response.activity,
+      startedAt: activity.startedAt,
+      statusCode: response.statusCode,
+    });
+    return response;
+  }
+
+  return {
+    ...response,
+    body: wrapProviderStreamWithActivityCompletion(response.body, {
+      completeActivity: ({ statusCode }) =>
+        completeGatewayRequestActivity({
+          activityId: activity.id,
+          databaseUrl: input.databaseUrl,
+          responseBody: {},
+          route: response.activity,
+          startedAt: activity.startedAt,
+          statusCode,
+        }),
+      statusCode: response.statusCode,
+    }),
+  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

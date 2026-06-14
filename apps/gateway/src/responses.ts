@@ -26,6 +26,7 @@ import {
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
+import { type GatewayUsageCostDetails, selectGatewayBaselineCandidate } from "./usage-recorder.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayResponsesErrorCode =
@@ -49,6 +50,7 @@ export type GatewayResponsesResponse = {
   headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
+  usageCost?: GatewayUsageCostDetails;
 };
 
 export type GatewayResponsesRequestSuccess = {
@@ -162,6 +164,7 @@ export async function executeGatewayOpenAIResponse(input: {
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
     activity = {
       fallbackAttempts: [],
@@ -234,6 +237,14 @@ export async function executeGatewayOpenAIResponse(input: {
       body: result.body,
       requestMetadata,
       statusCode: result.statusCode,
+      usageCost: {
+        actualPrice: selectedCandidate.price,
+        baselinePrice: baselineCandidate.price,
+        baselineProviderModelId: baselineCandidate.providerModelId,
+        estimatedInputTokens: requestMetadata.estimatedInputTokens,
+        estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
+        providerModelId: selectedCandidate.providerModelId,
+      },
     };
   } catch (error) {
     await releaseGatewayBudgetReservation({

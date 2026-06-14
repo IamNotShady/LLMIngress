@@ -544,8 +544,8 @@
         "feat-040",
         "feat-044"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-045 E2E because completed Gateway requests did not write request_usage/request_costs/request_savings rows, and unit red observed for preserving actual cost when only baseline price is unknown. Added Gateway usage/cost/savings recorder, successful non-streaming chat/responses/messages usageCost output, and activity-wrapper persistence after completed successful requests. Known-price requests record estimated input/output tokens, actual cost, baseline cost, and savings; unknown actual-price requests record token usage with unavailable costs. P2+ review found no blocking issues after checking success-only write boundaries, deterministic baseline selection, fallback actual model attribution, and unknown-price handling. Verification passed — feat-045 unit tests 3 passed, real Gateway/PostgreSQL E2E 1 passed, pnpm run verify passed, and verify:features passed all 44 prior passing features before marking feat-045 passing."
     },
     {
       "id": "feat-046",

@@ -33,6 +33,7 @@ import {
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
+import { type GatewayUsageCostDetails, selectGatewayBaselineCandidate } from "./usage-recorder.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayChatCompletionErrorCode =
@@ -55,6 +56,7 @@ export type GatewayChatCompletionResponse = {
   headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
+  usageCost?: GatewayUsageCostDetails;
 };
 
 export type GatewayChatCompletionRequestSuccess = {
@@ -168,6 +170,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const attemptCandidates = buildFallbackAttemptCandidates({
       routePolicy,
       selectedProviderModelId: routeDecision.providerModelId,
@@ -230,6 +233,14 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       body: result.result.body,
       requestMetadata,
       statusCode: result.result.statusCode,
+      usageCost: {
+        actualPrice: result.selectedCandidate.price,
+        baselinePrice: baselineCandidate.price,
+        baselineProviderModelId: baselineCandidate.providerModelId,
+        estimatedInputTokens: requestMetadata.estimatedInputTokens,
+        estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
+        providerModelId: result.selectedCandidate.providerModelId,
+      },
     };
   } catch (error) {
     await releaseGatewayBudgetReservation({

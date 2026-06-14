@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 18:17 AWST
-**Active Feature:** feat-045 next (feat-001 through feat-044 completed)
+**Last Updated:** 2026-06-14 19:09 AWST
+**Active Feature:** feat-046 next (feat-001 through feat-045 completed)
 
 ## Status
 
@@ -12,6 +12,11 @@
 - [x] Built the minimum monorepo scaffold for Gateway, Console, Worker, and shared packages (feat-001).
 - [x] Split the MVP scope from `docs/PLAN.md` into 54 independently developable and testable features.
 - [x] Standardized feature tracker schema on `description` / `status` with strict verification contracts.
+- [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
+  - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
+  - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.
+  - Known-price requests record estimated tokens, actual request cost, baseline cost, and savings; unknown actual-price requests preserve token usage and mark costs unavailable.
+  - Verification passed: feat-045 unit tests, real Gateway/PostgreSQL E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -102,9 +107,9 @@
 
 ### What's Next
 
-1. `feat-045` — Usage Cost Baseline and Savings Recorder.
-2. `feat-046` — Activity Console Page.
-3. `feat-047` — Usage and Cost Console Page.
+1. `feat-046` — Activity Console Page.
+2. `feat-047` — Usage and Cost Console Page.
+3. `feat-048` — Gateway Runtime Status Page.
 
 ## Blockers / Risks
 

@@ -24,6 +24,10 @@ import {
   readGatewayStreamingFlag,
 } from "./streaming.js";
 import {
+  type GatewayUsageCostDetails,
+  recordGatewayUsageCostAndSavings,
+} from "./usage-recorder.js";
+import {
   listAllowedGatewayVirtualModels,
   readRequestedModelName,
   resolveGatewayVirtualModelRequest,
@@ -379,6 +383,7 @@ async function executeRecordedGatewayJsonRequest(input: {
     headers?: Record<string, string>;
     requestMetadata?: GatewayRequestMetadata;
     statusCode: number;
+    usageCost?: GatewayUsageCostDetails;
   }>;
   model: string;
   protocol: GatewayRequestActivityProtocol;
@@ -404,6 +409,15 @@ async function executeRecordedGatewayJsonRequest(input: {
     startedAt: activity.startedAt,
     statusCode: response.statusCode,
   });
+  if (response.statusCode < 400 && response.usageCost) {
+    await recordGatewayUsageCostAndSavings({
+      activityId: activity.id,
+      agentApiKeyId: input.agentApiKeyId,
+      databaseUrl: input.databaseUrl,
+      usageCost: response.usageCost,
+      virtualModelId: input.virtualModelId,
+    });
+  }
   return response;
 }
 

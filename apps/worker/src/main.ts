@@ -3,6 +3,7 @@ import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createModelRefreshJobHandler } from "./model-refresh.js";
 import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
+import { createStaleReservationCleanupJobHandler } from "./stale-reservations.js";
 
 type StartWorkerOptions = {
   jobRunner?: JobRunner;
@@ -17,6 +18,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
       handlers: {
         model_refresh: createModelRefreshJobHandler({ databaseUrl: config.databaseUrl }),
         provider_connectivity_check: createProviderConnectivityCheckJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        stale_reservation_cleanup: createStaleReservationCleanupJobHandler({
           databaseUrl: config.databaseUrl,
         }),
       },

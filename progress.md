@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 22:59 AWST
-**Active Feature:** None (feat-003 through feat-016 completed)
+**Last Updated:** 2026-06-14 17:29 AWST
+**Active Feature:** feat-044 next (feat-001 through feat-043 completed)
 
 ## Status
 
@@ -102,9 +102,9 @@
 
 ### What's Next
 
-1. `feat-017` — Model Library Refresh Job.
-2. `feat-018` — OpenAI Provider Adapter.
-3. `feat-019` — Anthropic Provider Adapter.
+1. `feat-044` — Request Activity and Error Recorder.
+2. `feat-045` — Usage and Cost Recorder.
+3. `feat-046` — Savings Baseline and Reporting.
 
 ## Blockers / Risks
 
@@ -758,3 +758,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-042 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 41 prior passing features.
   - After marking feat-042 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 42 passing features.
+
+- [x] feat-043 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-043-stale-reservations.unit.test.ts` failed because `apps/worker/src/stale-reservations` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-043-stale-reservations.e2e.spec.ts --grep 'cleanup releases expired reservations keeps active reservations and reports count'` failed because the stale reservation cleanup handler module was missing.
+  - Added `stale_reservation_cleanup` Worker handler that selects expired pending `budget_reservations` with `FOR UPDATE SKIP LOCKED`, marks them `expired`, releases reserved token/cost counters from `budget_periods`, and returns `releasedReservationCount`, `releasedReservedTokens`, and `releasedReservedCostUsd` for the job result.
+  - Registered `stale_reservation_cleanup` in Worker startup so normal Postgres job claiming can execute it.
+  - E2E verifies expired pending reservations are released, active pending reservations stay pending, finalized/released reservations are unchanged, budget period reserved counters are decremented only for expired pending rows, and the job result records the release count.
+  - P2+ review found no blocking issues after checking duplicate-release avoidance, counter decrement semantics, active reservation preservation, and expired status semantics.
+  - `pnpm exec vitest run tests/features/feat-043-stale-reservations.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-043-stale-reservations.e2e.spec.ts --grep 'cleanup releases expired reservations keeps active reservations and reports count'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-043 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 42 prior passing features.
+  - After marking feat-043 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 43 passing features.

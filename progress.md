@@ -636,3 +636,19 @@
   - `pnpm run verify` passed.
   - Before marking feat-034 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 33 prior passing features.
   - After marking feat-034 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 34 passing features.
+
+- [x] feat-035 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-035-virtual-model-access.unit.test.ts` failed because `apps/gateway/src/virtual-model-access` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-035-virtual-model-access.e2e.spec.ts --grep 'models list allowed names disallowed post returns 403 missing model uses default or returns 400'` failed because `GET /v1/models` returned 404.
+  - Added Gateway Virtual Model access helpers, `/v1/models` allowed-list response, and `/v1/chat/completions` model contract after authentication.
+  - `GET /v1/models` returns only allowed Virtual Model names; explicit disallowed POST model returns 403 `virtual_model_not_allowed`; missing POST model uses the Agent API key default Virtual Model; missing POST model without default returns 400 `missing_model`.
+  - Adapted feat-034 valid-key fixture to include an allowed Virtual Model under the new contract.
+  - P2+ review found no blocking issues after checking allowed-list filtering, default resolution, request-id propagation, and auth-before-model validation ordering.
+  - `pnpm exec vitest run tests/features/feat-035-virtual-model-access.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-035-virtual-model-access.e2e.spec.ts --grep 'models list allowed names disallowed post returns 403 missing model uses default or returns 400'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-035 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 34 prior passing features.
+  - After marking feat-035 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 35 passing features.

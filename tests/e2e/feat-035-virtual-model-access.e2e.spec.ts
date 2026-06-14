@@ -5,16 +5,16 @@ import { expect, test } from "@playwright/test";
 import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-test("valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id", async () => {
+test("models list allowed names disallowed post returns 403 missing model uses default or returns 400", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_gateway_auth_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_vm_access_${randomUUID().replaceAll("-", "_")}`,
   });
-  const validKey = "llmi_valid_gateway_auth_key_034";
-  const disabledKey = "llmi_disabled_gateway_auth_key_034";
+  const allowedKey = "llmi_allowed_gateway_vm_key_035";
+  const noDefaultKey = "llmi_no_default_gateway_vm_key_035";
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedAgentApiKeys(fixture, { disabledKey, validKey });
+    await seedVirtualModelAccess(fixture, { allowedKey, noDefaultKey });
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
@@ -25,27 +25,25 @@ test("valid key returns 200 and missing invalid disabled keys return 401 with st
       const baseUrl = `http://127.0.0.1:${gateway.port}`;
       await waitForGateway(baseUrl, gateway);
 
-      await expectGatewayAuth(baseUrl, {
-        expectedCode: "missing_agent_api_key",
-        requestId: "req_missing_034",
-        status: 401,
+      await expectAllowedModels(baseUrl, allowedKey, ["coding-fast", "coding-strong"]);
+      await expectGatewayPost(baseUrl, {
+        apiKey: allowedKey,
+        expectedCode: "virtual_model_not_allowed",
+        model: "blocked-model",
+        requestId: "req_blocked_035",
+        status: 403,
       });
-      await expectGatewayAuth(baseUrl, {
-        apiKey: "llmi_invalid_gateway_auth_key_034",
-        expectedCode: "invalid_agent_api_key",
-        requestId: "req_invalid_034",
-        status: 401,
-      });
-      await expectGatewayAuth(baseUrl, {
-        apiKey: disabledKey,
-        expectedCode: "disabled_agent_api_key",
-        requestId: "req_disabled_034",
-        status: 401,
-      });
-      await expectGatewayAuth(baseUrl, {
-        apiKey: validKey,
-        requestId: "req_valid_034",
+      await expectGatewayPost(baseUrl, {
+        apiKey: allowedKey,
+        expectedModel: "coding-fast",
+        requestId: "req_default_035",
         status: 200,
+      });
+      await expectGatewayPost(baseUrl, {
+        apiKey: noDefaultKey,
+        expectedCode: "missing_model",
+        requestId: "req_missing_model_035",
+        status: 400,
       });
     } finally {
       await stopGatewayProcess(gateway);
@@ -64,29 +62,37 @@ type GatewayProcess = {
   stdout: string[];
 };
 
-type GatewayAuthExpectation = {
-  apiKey?: string;
+type GatewayPostExpectation = {
+  apiKey: string;
   expectedCode?: string;
+  expectedModel?: string;
+  model?: string;
   requestId: string;
-  status: 200 | 401;
+  status: 200 | 400 | 403;
 };
 
-async function seedAgentApiKeys(
+async function seedVirtualModelAccess(
   fixture: Fixture,
-  input: { disabledKey: string; validKey: string },
+  input: { allowedKey: string; noDefaultKey: string },
 ): Promise<void> {
   const agentId = randomUUID();
-  const validKeyId = randomUUID();
-  const codingVirtualModelId = randomUUID();
+  const allowedKeyId = randomUUID();
+  const noDefaultKeyId = randomUUID();
+  const fastVirtualModelId = randomUUID();
+  const strongVirtualModelId = randomUUID();
+  const blockedVirtualModelId = randomUUID();
+
   await fixture.query(
     `
       insert into virtual_models (id, name, display_name, enabled)
-      values ($1, 'coding', 'Coding', true)
+      values ($1, 'coding-fast', 'Coding Fast', true),
+             ($2, 'coding-strong', 'Coding Strong', true),
+             ($3, 'blocked-model', 'Blocked Model', true)
     `,
-    [codingVirtualModelId],
+    [fastVirtualModelId, strongVirtualModelId, blockedVirtualModelId],
   );
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'Gateway Auth Agent', 'coding', true)",
+    "insert into agents (id, name, agent_type, enabled) values ($1, 'VM Access Agent', 'coding', true)",
     [agentId],
   );
   await fixture.query(
@@ -100,56 +106,78 @@ async function seedAgentApiKeys(
         enabled
       )
       values ($1, $2, $3, $4, $5, true),
-             ($6, $2, $7, $8, null, false)
+             ($6, $2, $7, $8, null, true)
     `,
     [
-      validKeyId,
+      allowedKeyId,
       agentId,
-      input.validKey.slice(0, 12),
-      buildGatewayAgentApiKeyHash(input.validKey),
-      codingVirtualModelId,
-      randomUUID(),
-      input.disabledKey.slice(0, 12),
-      buildGatewayAgentApiKeyHash(input.disabledKey),
+      input.allowedKey.slice(0, 12),
+      buildGatewayAgentApiKeyHash(input.allowedKey),
+      fastVirtualModelId,
+      noDefaultKeyId,
+      input.noDefaultKey.slice(0, 12),
+      buildGatewayAgentApiKeyHash(input.noDefaultKey),
     ],
   );
   await fixture.query(
     `
       insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
-      values ($1, $2)
+      values ($1, $2),
+             ($1, $3),
+             ($4, $2)
     `,
-    [validKeyId, codingVirtualModelId],
+    [allowedKeyId, fastVirtualModelId, strongVirtualModelId, noDefaultKeyId],
   );
   await fixture.query(
-    "insert into config_versions (version, source, description) values (1, 'console', 'Gateway auth config')",
+    "insert into config_versions (version, source, description) values (1, 'console', 'Gateway VM access config')",
   );
 }
 
-async function expectGatewayAuth(
+async function expectAllowedModels(
   baseUrl: string,
-  expectation: GatewayAuthExpectation,
+  apiKey: string,
+  expectedModelNames: string[],
 ): Promise<void> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-request-id": expectation.requestId,
+  const response = await fetch(`${baseUrl}/v1/models`, {
+    headers: { authorization: `Bearer ${apiKey}`, "x-request-id": "req_models_035" },
+  });
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body).toEqual({
+    data: expectedModelNames.map((modelName) => ({
+      id: modelName,
+      object: "model",
+    })),
+    object: "list",
+    requestId: "req_models_035",
+  });
+}
+
+async function expectGatewayPost(
+  baseUrl: string,
+  expectation: GatewayPostExpectation,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    messages: [{ content: "hello", role: "user" }],
   };
-  if (expectation.apiKey) {
-    headers.authorization = `Bearer ${expectation.apiKey}`;
+  if (expectation.model) {
+    body.model = expectation.model;
   }
 
   const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-    body: JSON.stringify({
-      messages: [{ content: "hello", role: "user" }],
-      model: "coding",
-    }),
-    headers,
+    body: JSON.stringify(body),
+    headers: {
+      authorization: `Bearer ${expectation.apiKey}`,
+      "content-type": "application/json",
+      "x-request-id": expectation.requestId,
+    },
     method: "POST",
   });
   expect(response.status).toBe(expectation.status);
-  const body = await response.json();
+  const responseBody = await response.json();
 
-  if (expectation.status === 401) {
-    expect(body).toEqual({
+  if (expectation.status !== 200) {
+    expect(responseBody).toEqual({
       error: {
         code: expectation.expectedCode,
         message: expect.any(String),
@@ -159,7 +187,8 @@ async function expectGatewayAuth(
     return;
   }
 
-  expect(body).toMatchObject({
+  expect(responseBody).toMatchObject({
+    model: expectation.expectedModel,
     requestId: expectation.requestId,
     status: "authenticated",
   });

@@ -3,6 +3,11 @@ import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import Fastify from "fastify";
 import { authenticateGatewayRequest } from "./auth.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
+import {
+  listAllowedGatewayVirtualModels,
+  readRequestedModelName,
+  resolveGatewayVirtualModelRequest,
+} from "./virtual-model-access.js";
 
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
@@ -36,10 +41,51 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       return reply.code(auth.statusCode).send(auth.body);
     }
 
+    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
+      agentApiKeyId: auth.agentApiKey.id,
+      databaseUrl,
+    });
+    const virtualModelAccess = resolveGatewayVirtualModelRequest({
+      allowedVirtualModels,
+      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
+      requestedModelName: readRequestedModelName(request.body),
+      requestId: auth.requestId,
+    });
+    if (!virtualModelAccess.ok) {
+      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+    }
+
     return {
       agentApiKeyId: auth.agentApiKey.id,
+      model: virtualModelAccess.virtualModel.name,
       requestId: auth.requestId,
       status: "authenticated",
+    };
+  });
+
+  app.get("/v1/models", async (request, reply) => {
+    const databaseUrl = requireGatewayDatabaseUrl(options);
+    const auth = await authenticateGatewayRequest({
+      databaseUrl,
+      headers: request.headers,
+    });
+
+    if (!auth.ok) {
+      return reply.code(auth.statusCode).send(auth.body);
+    }
+
+    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
+      agentApiKeyId: auth.agentApiKey.id,
+      databaseUrl,
+    });
+
+    return {
+      data: allowedVirtualModels.map((virtualModel) => ({
+        id: virtualModel.name,
+        object: "model",
+      })),
+      object: "list",
+      requestId: auth.requestId,
     };
   });
 

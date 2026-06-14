@@ -542,3 +542,17 @@
   - `pnpm run verify` passed.
   - Before marking feat-028 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 26 prior passing features.
   - After marking feat-028 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 27 passing features.
+
+- [x] feat-029 verification and P2+ review passed:
+  - Added TDD tests first: `tests/features/feat-029-route-policy-crud.unit.test.ts` and `tests/e2e/feat-029-route-policy-crud.e2e.spec.ts`.
+  - Red phase: `pnpm exec vitest run tests/features/feat-029-route-policy-crud.unit.test.ts` failed because `apps/console/src/server/route-policies` was missing.
+  - Implemented Route Policy form normalization, route reason metadata, provider model option listing, create/update/list/delete helpers, authenticated `/api/route-policies`, and Dashboard Route Policies UI.
+  - The UI persists primary and fallback provider model candidates, route strategy/cost preference, and route reason metadata through real PostgreSQL.
+  - P2+ self-review found no blocking code issues in transaction boundaries, candidate duplicate handling, one-policy-per-Virtual-Model enforcement, or delete/update behavior.
+  - During regression, repaired a feat-028 locator conflict by keeping Route Policy card headings fixed as `Route policy` and rendering the referenced Virtual Model in separate body text.
+  - `pnpm exec vitest run tests/features/feat-029-route-policy-crud.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-029-route-policy-crud.e2e.spec.ts --grep 'route policy CRUD persists candidates cost preference and fallback chain'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` -> 28 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-029 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 27 prior passing features.
+  - After marking feat-029 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 28 passing features.

@@ -336,8 +336,8 @@
         "feat-016",
         "feat-028"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-029 unit tests because apps/console/src/server/route-policies was missing. Added Route Policy CRUD server/API/Dashboard UI with provider model candidates, strategy/cost preference, route reason metadata, fallback chain configuration, config publisher integration, one-policy-per-Virtual-Model enforcement, and duplicate candidate validation. P2+ review found no blocking issues after checking transaction boundaries, candidate duplicate handling, create/update/delete behavior, and delete cascade scope; repaired a regression where route policy headings conflicted with feat-028 Virtual Model locators. Verification passed — feat-029 unit tests 3 passed, real Chromium/PostgreSQL E2E 1 passed, full pnpm test:e2e passed 28/28, pnpm run verify passed, verify:features passed all 27 prior passing features before marking feat-029 passing, and final verify:features passed all 28 passing features after marking."
     },
     {
       "id": "feat-030",

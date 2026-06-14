@@ -13,6 +13,11 @@ import {
   listOpenAICompatibleProviderTemplates,
 } from "../server/provider-templates";
 import { listProviders } from "../server/providers";
+import {
+  listProviderModelOptions,
+  listRoutePolicies,
+  routePolicyStrategies,
+} from "../server/route-policies";
 import { listVirtualModels } from "../server/virtual-models";
 
 const previewProviderKey = "openai";
@@ -79,10 +84,18 @@ export default async function Home() {
   const providers = await listProviders(databaseUrl);
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
   const virtualModels = await listVirtualModels(databaseUrl);
+  const routePolicies = await listRoutePolicies(databaseUrl);
+  const providerModelOptions = await listProviderModelOptions(databaseUrl);
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
   const agentApiKeysByAgentId = groupByAgentId(agentApiKeys);
+  const routedVirtualModelIds = new Set(
+    routePolicies.map((routePolicy) => routePolicy.virtualModelId),
+  );
+  const virtualModelsWithoutRoutePolicy = virtualModels.filter(
+    (virtualModel) => !routedVirtualModelIds.has(virtualModel.id),
+  );
 
   return (
     <main className="console-page">
@@ -161,6 +174,156 @@ export default async function Home() {
                   <input type="hidden" name="id" value={virtualModel.id} />
                   <button className="secondary-button" type="submit">
                     Delete virtual model
+                  </button>
+                </form>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+      <section className="providers-panel" aria-labelledby="route-policies-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Routes</p>
+            <h2 id="route-policies-title">Route policies</h2>
+          </div>
+        </div>
+        {virtualModelsWithoutRoutePolicy.length === 0 ? (
+          <p>No Virtual Models without route policies.</p>
+        ) : providerModelOptions.length === 0 ? (
+          <p>No provider models available.</p>
+        ) : (
+          <form className="provider-create-form" action="/api/route-policies" method="post">
+            <input type="hidden" name="action" value="create" />
+            <label htmlFor="route-policy-virtual-model">Route policy virtual model</label>
+            <select id="route-policy-virtual-model" name="virtualModelId" required defaultValue="">
+              <option value="" disabled>
+                Select virtual model
+              </option>
+              {virtualModelsWithoutRoutePolicy.map((virtualModel) => (
+                <option key={virtualModel.id} value={virtualModel.id}>
+                  {virtualModel.displayName} ({virtualModel.name})
+                </option>
+              ))}
+            </select>
+            <label htmlFor="route-policy-strategy">Route policy strategy</label>
+            <select id="route-policy-strategy" name="strategy" required defaultValue="balanced">
+              {routePolicyStrategies.map((strategy) => (
+                <option key={strategy} value={strategy}>
+                  {strategy}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="route-policy-primary-models">Primary provider models</label>
+            <select
+              id="route-policy-primary-models"
+              name="primaryProviderModelIds"
+              multiple
+              required
+              size={providerModelSelectSize(providerModelOptions.length)}
+            >
+              {providerModelOptions.map((providerModel) => (
+                <option key={providerModel.id} value={providerModel.id}>
+                  {providerModel.optionLabel}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="route-policy-fallback-models">Fallback provider models</label>
+            <select
+              id="route-policy-fallback-models"
+              name="fallbackProviderModelIds"
+              multiple
+              size={providerModelSelectSize(providerModelOptions.length)}
+            >
+              {providerModelOptions.map((providerModel) => (
+                <option key={providerModel.id} value={providerModel.id}>
+                  {providerModel.optionLabel}
+                </option>
+              ))}
+            </select>
+            <button type="submit">Create route policy</button>
+          </form>
+        )}
+        <div className="provider-list">
+          {routePolicies.length === 0 ? (
+            <p>No route policies configured.</p>
+          ) : (
+            routePolicies.map((routePolicy) => (
+              <article className="provider-item" key={routePolicy.id}>
+                <header className="provider-header">
+                  <div>
+                    <p className="eyebrow">{routePolicy.virtualModelName}</p>
+                    <h2>Route policy</h2>
+                  </div>
+                  <p className="status-enabled">Enabled</p>
+                </header>
+                <p>
+                  Virtual Model: {routePolicy.virtualModelDisplayName} (
+                  {routePolicy.virtualModelName})
+                </p>
+                <p>Strategy: {routePolicy.strategy}</p>
+                <p>Route reason: {routePolicy.routeReason}</p>
+                <p>Primary: {formatRoutePolicyCandidateList(routePolicy.primaryCandidates)}</p>
+                <p>Fallback: {formatRoutePolicyCandidateList(routePolicy.fallbackCandidates)}</p>
+                <form className="provider-edit-form" action="/api/route-policies" method="post">
+                  <input type="hidden" name="action" value="update" />
+                  <input type="hidden" name="id" value={routePolicy.id} />
+                  <input type="hidden" name="virtualModelId" value={routePolicy.virtualModelId} />
+                  <label htmlFor={`route-policy-strategy-${routePolicy.id}`}>
+                    Edit route policy strategy
+                  </label>
+                  <select
+                    id={`route-policy-strategy-${routePolicy.id}`}
+                    name="strategy"
+                    defaultValue={routePolicy.strategy}
+                    required
+                  >
+                    {routePolicyStrategies.map((strategy) => (
+                      <option key={strategy} value={strategy}>
+                        {strategy}
+                      </option>
+                    ))}
+                  </select>
+                  <label htmlFor={`route-policy-primary-models-${routePolicy.id}`}>
+                    Edit primary provider models
+                  </label>
+                  <select
+                    id={`route-policy-primary-models-${routePolicy.id}`}
+                    name="primaryProviderModelIds"
+                    defaultValue={routePolicy.primaryCandidates.map((candidate) => candidate.id)}
+                    multiple
+                    required
+                    size={providerModelSelectSize(providerModelOptions.length)}
+                  >
+                    {providerModelOptions.map((providerModel) => (
+                      <option key={providerModel.id} value={providerModel.id}>
+                        {providerModel.optionLabel}
+                      </option>
+                    ))}
+                  </select>
+                  <label htmlFor={`route-policy-fallback-models-${routePolicy.id}`}>
+                    Edit fallback provider models
+                  </label>
+                  <select
+                    id={`route-policy-fallback-models-${routePolicy.id}`}
+                    name="fallbackProviderModelIds"
+                    defaultValue={routePolicy.fallbackCandidates.map((candidate) => candidate.id)}
+                    multiple
+                    size={providerModelSelectSize(providerModelOptions.length)}
+                  >
+                    {providerModelOptions.map((providerModel) => (
+                      <option key={providerModel.id} value={providerModel.id}>
+                        {providerModel.optionLabel}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="submit">Save route policy</button>
+                </form>
+                <form action="/api/route-policies" method="post">
+                  <input type="hidden" name="action" value="delete" />
+                  <input type="hidden" name="id" value={routePolicy.id} />
+                  <button className="secondary-button" type="submit">
+                    Delete route policy
                   </button>
                 </form>
               </article>
@@ -535,6 +698,16 @@ function formatUsd(value: number): string {
 
 function formatDateTime(value: Date): string {
   return value.toISOString();
+}
+
+function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string }>): string {
+  return candidates.length === 0
+    ? "None"
+    : candidates.map((candidate) => candidate.optionLabel).join(", ");
+}
+
+function providerModelSelectSize(optionCount: number): number {
+  return Math.min(6, Math.max(2, optionCount));
 }
 
 function groupByAgentId<T extends { agentId: string }>(values: T[]): Map<string, T[]> {

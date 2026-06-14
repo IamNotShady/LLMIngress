@@ -361,8 +361,8 @@
         "feat-015",
         "feat-027"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-031 unit tests because apps/console/src/server/agent-limits was missing, and E2E failed because the Dashboard did not expose Budget USD limit controls. Added Agent API key limit server helpers, authenticated /api/agent-limits saveLimitRules action, Dashboard Budget/RPM/TPM/Token limit controls, config publisher integration, fixed period/unit combinations for each limit type, and a cost-budget guard that rejects unknown-price models until a manual price override exists. P2+ review found no blocking issues after checking key-row locking, transaction rollback before deleting old rules, unknown-price validation, stale period cleanup, and config change publication. Verification passed — feat-031 unit tests 4 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 29 prior passing features before marking feat-031 passing, and final verify:features passed all 30 passing features after marking."
     },
     {
       "id": "feat-032",

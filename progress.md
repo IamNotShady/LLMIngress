@@ -568,3 +568,14 @@
   - `pnpm run verify` passed.
   - Before marking feat-030 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 28 prior passing features.
   - After marking feat-030 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 29 passing features.
+
+- [x] feat-031 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts` failed because `apps/console/src/server/agent-limits` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form saves budget rpm tpm token rules and blocks cost budget when selected model has unknown price'` failed because the Dashboard did not expose `Budget USD limit`.
+  - Implemented Agent API key limit normalization, listing, summaries, transaction-backed save, `agent_limits` config publisher integration, authenticated `/api/agent-limits`, Dashboard Budget/RPM/TPM/Token controls, fixed period/unit combinations, and an unknown-price cost-budget guard that allows saving after a manual price override exists.
+  - P2+ review found no blocking issues after checking Agent API key row locking, rollback before deleting old rules, stale period cleanup, unknown-price validation, config change publication, and fixed limit type period/unit combinations.
+  - `pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts` -> 4 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form saves budget rpm tpm token rules and blocks cost budget when selected model has unknown price'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-031 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 29 prior passing features.
+  - After marking feat-031 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 30 passing features.

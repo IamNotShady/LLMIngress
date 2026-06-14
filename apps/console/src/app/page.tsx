@@ -8,6 +8,11 @@ import {
   listAgentApiKeyMetadata,
   listAgentApiKeyVirtualModelAccess,
 } from "../server/agent-api-keys";
+import {
+  type ConsoleAgentLimit,
+  formatAgentLimitSummaries,
+  listAgentLimits,
+} from "../server/agent-limits";
 import { listAgents } from "../server/agents";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
@@ -86,6 +91,7 @@ export default async function Home() {
   const agents = await listAgents(databaseUrl);
   const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
   const agentApiKeyVirtualModelAccess = await listAgentApiKeyVirtualModelAccess(databaseUrl);
+  const agentLimits = await listAgentLimits(databaseUrl);
   const providers = await listProviders(databaseUrl);
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
   const virtualModels = await listVirtualModels(databaseUrl);
@@ -98,6 +104,7 @@ export default async function Home() {
   const agentApiKeyVirtualModelAccessById = new Map(
     agentApiKeyVirtualModelAccess.map((access) => [access.agentApiKeyId, access]),
   );
+  const agentLimitsByApiKeyId = groupByAgentApiKeyId(agentLimits);
   const routedVirtualModelIds = new Set(
     routePolicies.map((routePolicy) => routePolicy.virtualModelId),
   );
@@ -413,6 +420,12 @@ export default async function Home() {
                         defaultVirtualModel: null,
                       };
                       const accessLabels = formatAgentApiKeyVirtualModelAccess(access);
+                      const limits = agentLimitsByApiKeyId.get(agentApiKey.id) ?? [];
+                      const limitSummaries = formatAgentLimitSummaries(limits);
+                      const budgetLimit = findAgentLimit(limits, "budget");
+                      const rpmLimit = findAgentLimit(limits, "rpm");
+                      const tokenLimit = findAgentLimit(limits, "token");
+                      const tpmLimit = findAgentLimit(limits, "tpm");
 
                       return (
                         <div key={agentApiKey.id}>
@@ -465,6 +478,94 @@ export default async function Home() {
                               ))}
                             </select>
                             <button type="submit">Save Agent API key virtual models</button>
+                          </form>
+                          <p>Budget Limit: {limitSummaries.budget}</p>
+                          <p>RPM Limit: {limitSummaries.rpm}</p>
+                          <p>TPM Limit: {limitSummaries.tpm}</p>
+                          <p>Token Limit: {limitSummaries.token}</p>
+                          <form
+                            className="provider-edit-form"
+                            action="/api/agent-limits"
+                            method="post"
+                          >
+                            <input type="hidden" name="action" value="saveLimitRules" />
+                            <input type="hidden" name="agentApiKeyId" value={agentApiKey.id} />
+                            <label htmlFor={`agent-key-budget-usd-${agentApiKey.id}`}>
+                              Budget USD limit
+                            </label>
+                            <input
+                              id={`agent-key-budget-usd-${agentApiKey.id}`}
+                              name="budgetUsd"
+                              type="number"
+                              min="0.000001"
+                              step="0.000001"
+                              defaultValue={budgetLimit?.limitValue ?? 10}
+                              required
+                            />
+                            <label htmlFor={`agent-key-budget-period-${agentApiKey.id}`}>
+                              Budget period
+                            </label>
+                            <select
+                              id={`agent-key-budget-period-${agentApiKey.id}`}
+                              name="budgetPeriod"
+                              defaultValue={budgetLimit?.period ?? "month"}
+                              required
+                            >
+                              <option value="day">day</option>
+                              <option value="week">week</option>
+                              <option value="month">month</option>
+                            </select>
+                            <label htmlFor={`agent-key-budget-provider-${agentApiKey.id}`}>
+                              Budget price provider key
+                            </label>
+                            <input
+                              id={`agent-key-budget-provider-${agentApiKey.id}`}
+                              name="budgetPriceProviderKey"
+                              defaultValue="openai"
+                              required
+                            />
+                            <label htmlFor={`agent-key-budget-model-${agentApiKey.id}`}>
+                              Budget price model id
+                            </label>
+                            <input
+                              id={`agent-key-budget-model-${agentApiKey.id}`}
+                              name="budgetPriceModelId"
+                              defaultValue="gpt-4.1-mini"
+                              required
+                            />
+                            <label htmlFor={`agent-key-rpm-${agentApiKey.id}`}>RPM limit</label>
+                            <input
+                              id={`agent-key-rpm-${agentApiKey.id}`}
+                              name="rpm"
+                              type="number"
+                              min="1"
+                              step="1"
+                              defaultValue={rpmLimit?.limitValue ?? 60}
+                              required
+                            />
+                            <label htmlFor={`agent-key-tpm-${agentApiKey.id}`}>TPM limit</label>
+                            <input
+                              id={`agent-key-tpm-${agentApiKey.id}`}
+                              name="tpm"
+                              type="number"
+                              min="1"
+                              step="1"
+                              defaultValue={tpmLimit?.limitValue ?? 120000}
+                              required
+                            />
+                            <label htmlFor={`agent-key-token-limit-${agentApiKey.id}`}>
+                              Token limit
+                            </label>
+                            <input
+                              id={`agent-key-token-limit-${agentApiKey.id}`}
+                              name="tokenLimit"
+                              type="number"
+                              min="1"
+                              step="1"
+                              defaultValue={tokenLimit?.limitValue ?? 8000}
+                              required
+                            />
+                            <button type="submit">Save Agent API key limits</button>
                           </form>
                           <form action="/api/agent-api-keys" method="post">
                             <input type="hidden" name="action" value="rotate" />
@@ -782,6 +883,23 @@ function formatVirtualModelOptionLabel(virtualModel: {
   name: string;
 }): string {
   return `${virtualModel.displayName} (${virtualModel.name})`;
+}
+
+function findAgentLimit(
+  limits: readonly ConsoleAgentLimit[],
+  limitType: ConsoleAgentLimit["limitType"],
+): ConsoleAgentLimit | undefined {
+  return limits.find((limit) => limit.limitType === limitType);
+}
+
+function groupByAgentApiKeyId<T extends { agentApiKeyId: string }>(values: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const value of values) {
+    const group = grouped.get(value.agentApiKeyId) ?? [];
+    group.push(value);
+    grouped.set(value.agentApiKeyId, group);
+  }
+  return grouped;
 }
 
 function groupByAgentId<T extends { agentId: string }>(values: T[]): Map<string, T[]> {

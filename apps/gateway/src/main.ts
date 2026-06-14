@@ -73,6 +73,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       return sendGatewayStreamingResponse(
         reply,
         await executeGatewayStreamingRequest({
+          agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
           protocol: "chat_completions",
           requestBody: request.body,
@@ -84,6 +85,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
 
     const chatCompletion = await executeGatewayOpenAIChatCompletion({
+      agentApiKeyId: auth.agentApiKey.id,
       databaseUrl,
       requestBody: request.body,
       requestId: auth.requestId,
@@ -148,6 +150,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       return sendGatewayStreamingResponse(
         reply,
         await executeGatewayStreamingRequest({
+          agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
           protocol: "responses",
           requestBody: request.body,
@@ -159,6 +162,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
 
     const response = await executeGatewayOpenAIResponse({
+      agentApiKeyId: auth.agentApiKey.id,
       databaseUrl,
       requestBody: request.body,
       requestId: auth.requestId,
@@ -197,6 +201,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       return sendGatewayStreamingResponse(
         reply,
         await executeGatewayStreamingRequest({
+          agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
           protocol: "messages",
           requestBody: request.body,
@@ -208,6 +213,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
 
     const message = await executeGatewayAnthropicMessages({
+      agentApiKeyId: auth.agentApiKey.id,
       databaseUrl,
       requestBody: request.body,
       requestId: auth.requestId,
@@ -279,6 +285,7 @@ function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
 
 function sendGatewayStreamingResponse(reply: FastifyReply, stream: GatewayStreamingResult) {
   writeGatewayRequestMetadataDebugHeader(reply, stream.requestMetadata);
+  writeGatewayResponseHeaders(reply, stream.headers);
   if (!stream.ok) {
     return reply.code(stream.statusCode).send(stream.body);
   }
@@ -288,10 +295,29 @@ function sendGatewayStreamingResponse(reply: FastifyReply, stream: GatewayStream
 
 function sendGatewayJsonResponse(
   reply: FastifyReply,
-  response: { body: unknown; requestMetadata?: GatewayRequestMetadata; statusCode: number },
+  response: {
+    body: unknown;
+    headers?: Record<string, string>;
+    requestMetadata?: GatewayRequestMetadata;
+    statusCode: number;
+  },
 ) {
   writeGatewayRequestMetadataDebugHeader(reply, response.requestMetadata);
+  writeGatewayResponseHeaders(reply, response.headers);
   return reply.code(response.statusCode).send(response.body);
+}
+
+function writeGatewayResponseHeaders(
+  reply: FastifyReply,
+  headers: Record<string, string> | undefined,
+) {
+  if (!headers) {
+    return;
+  }
+
+  for (const [name, value] of Object.entries(headers)) {
+    reply.header(name, value);
+  }
 }
 
 function writeGatewayRequestMetadataDebugHeader(

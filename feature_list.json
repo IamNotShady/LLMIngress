@@ -490,8 +490,8 @@
         "feat-034",
         "feat-040"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-041 unit tests because apps/gateway/src/rate-limits was missing, and E2E failed because over-limit requests still returned 200. Added Gateway RPM/TPM enforcement backed by rate_limit_windows, using enabled minute agent_limits for the authenticated Agent API key, atomic transaction/row locking per current minute window, shared feat-040 estimated token totals for TPM, stable 429 rate_limit_exceeded responses, retry-after metadata in body and header, and rollback/no-provider-call behavior for blocked requests. Chat completions, responses, messages, and streaming requests now run rate checks before route/provider calls. P2+ review found no blocking issues after checking transaction rollback, no blocked-request counter increments, provider no-call behavior, retry-after semantics, and streaming error response handling. Verification passed — feat-041 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 40 prior passing features before marking feat-041 passing, and final verify:features passed all 41 passing features after marking."
     },
     {
       "id": "feat-042",

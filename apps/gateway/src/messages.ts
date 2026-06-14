@@ -13,6 +13,7 @@ import {
   type NormalizedAnthropicMessage,
   type NormalizedAnthropicMessagesRequest,
 } from "./provider-adapters/anthropic.js";
+import { enforceGatewayRateLimits } from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,
   type GatewayRequestMetadata,
@@ -36,6 +37,7 @@ export type GatewayAnthropicMessagesErrorBody = {
 
 export type GatewayAnthropicMessagesResponse = {
   body: unknown;
+  headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
 };
@@ -98,6 +100,7 @@ export function normalizeAnthropicMessagesRequest(
 }
 
 export async function executeGatewayAnthropicMessages(input: {
+  agentApiKeyId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl: string;
   requestBody: unknown;
@@ -118,6 +121,21 @@ export async function executeGatewayAnthropicMessages(input: {
     rawBody: input.requestBody,
     request: normalized.request,
   });
+
+  const rateLimit = await enforceGatewayRateLimits({
+    agentApiKeyId: input.agentApiKeyId,
+    databaseUrl: input.databaseUrl,
+    requestId: input.requestId,
+    requestMetadata,
+  });
+  if (!rateLimit.ok) {
+    return {
+      body: rateLimit.body,
+      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
+      requestMetadata,
+      statusCode: rateLimit.statusCode,
+    };
+  }
 
   try {
     const routeDecision = selectRouteCandidate({

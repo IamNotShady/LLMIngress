@@ -12,6 +12,7 @@ import type {
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
+import { enforceGatewayRateLimits } from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,
   buildOpenAIChatCompletionRequestMetadata,
@@ -28,12 +29,14 @@ export type GatewayStreamingResult =
   | {
       body: Readable;
       contentType: string;
+      headers?: Record<string, string>;
       ok: true;
       requestMetadata: GatewayRequestMetadata;
       statusCode: number;
     }
   | {
       body: unknown;
+      headers?: Record<string, string>;
       ok: false;
       requestMetadata?: GatewayRequestMetadata;
       statusCode: number;
@@ -58,6 +61,7 @@ export function readGatewayStreamingFlag(body: unknown): boolean {
 }
 
 export async function executeGatewayStreamingRequest(input: {
+  agentApiKeyId: string;
   databaseUrl: string;
   fetch?: typeof globalThis.fetch;
   protocol: GatewayStreamingProtocol;
@@ -74,6 +78,22 @@ export async function executeGatewayStreamingRequest(input: {
   });
   if (!normalized.ok) {
     return normalized;
+  }
+
+  const rateLimit = await enforceGatewayRateLimits({
+    agentApiKeyId: input.agentApiKeyId,
+    databaseUrl: input.databaseUrl,
+    requestId: input.requestId,
+    requestMetadata: normalized.requestMetadata,
+  });
+  if (!rateLimit.ok) {
+    return {
+      body: rateLimit.body,
+      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
+      ok: false,
+      requestMetadata: normalized.requestMetadata,
+      statusCode: rateLimit.statusCode,
+    };
   }
 
   try {

@@ -19,6 +19,7 @@ import type {
   NormalizedOpenAIChatRequest,
   OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
+import { enforceGatewayRateLimits } from "./rate-limits.js";
 import {
   buildOpenAIChatCompletionRequestMetadata,
   type GatewayRequestMetadata,
@@ -42,6 +43,7 @@ export type GatewayChatCompletionErrorBody = {
 
 export type GatewayChatCompletionResponse = {
   body: unknown;
+  headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
 };
@@ -106,6 +108,7 @@ export function normalizeOpenAIChatCompletionRequest(
 }
 
 export async function executeGatewayOpenAIChatCompletion(input: {
+  agentApiKeyId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl: string;
   masterKeySource?: MasterKeySource;
@@ -127,6 +130,21 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     rawBody: input.requestBody,
     request: normalized.request,
   });
+
+  const rateLimit = await enforceGatewayRateLimits({
+    agentApiKeyId: input.agentApiKeyId,
+    databaseUrl: input.databaseUrl,
+    requestId: input.requestId,
+    requestMetadata,
+  });
+  if (!rateLimit.ok) {
+    return {
+      body: rateLimit.body,
+      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
+      requestMetadata,
+      statusCode: rateLimit.statusCode,
+    };
+  }
 
   try {
     const routeDecision = selectRouteCandidate({

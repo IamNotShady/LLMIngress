@@ -728,3 +728,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-040 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 39 prior passing features.
   - After marking feat-040 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 40 passing features.
+
+- [x] feat-041 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-041-rate-limits.unit.test.ts` failed because `apps/gateway/src/rate-limits` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-041-rate-limits.e2e.spec.ts --grep 'rpm and tpm over limit return 429 with retry-after and reset window allows later request'` failed because over-limit requests still returned 200.
+  - Added Gateway RPM/TPM enforcement backed by `rate_limit_windows`, using enabled minute `agent_limits` for the authenticated Agent API key.
+  - Limit checks run in one transaction with row locking per current minute window; blocked requests roll back, return stable 429 `rate_limit_exceeded`, include `retry-after` metadata in both body and header, and do not call the provider.
+  - TPM uses the shared feat-040 estimated input + output token total; chat completions, responses, messages, and streaming requests all run rate checks before route/provider calls.
+  - P2+ review found no blocking issues after checking transaction rollback, no blocked-request counter increments, provider no-call behavior, retry-after semantics, and streaming error response handling.
+  - `pnpm exec vitest run tests/features/feat-041-rate-limits.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-041-rate-limits.e2e.spec.ts --grep 'rpm and tpm over limit return 429 with retry-after and reset window allows later request'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-041 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 40 prior passing features.
+  - After marking feat-041 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 41 passing features.

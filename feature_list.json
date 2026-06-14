@@ -348,8 +348,8 @@
         "feat-027",
         "feat-028"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-030 unit tests because Agent API key virtual model access helpers were missing, and E2E failed because the Dashboard did not expose Allowed virtual models controls. Added Agent API key allowed/default Virtual Model server helpers, authenticated updateVirtualModelAccess API action, Dashboard allowed/default controls, config publisher integration, and validation that a default Virtual Model must be included in the allowed list. P2+ review found no blocking issues after checking transaction rollback, duplicate allowed-id normalization, default-in-allowed enforcement at both API normalization and server write entry, and Agent API key delete cascade scope. Verification passed — feat-030 unit tests 3 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 28 prior passing features before marking feat-030 passing, and final verify:features passed all 29 passing features after marking."
     },
     {
       "id": "feat-031",

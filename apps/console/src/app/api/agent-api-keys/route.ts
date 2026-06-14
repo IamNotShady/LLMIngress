@@ -3,7 +3,9 @@ import {
   createAgentApiKey,
   deleteAgentApiKey,
   disableAgentApiKey,
+  normalizeAgentApiKeyVirtualModelAccessInput,
   rotateAgentApiKey,
+  updateAgentApiKeyVirtualModelAccess,
 } from "../../../server/agent-api-keys";
 import {
   getConsoleDatabaseUrl,
@@ -40,7 +42,16 @@ export async function POST(request: NextRequest) {
       return renderOneTimeAgentApiKeyResponse(result);
     }
 
-    if (action === "disable") {
+    if (action === "updateVirtualModelAccess") {
+      await updateAgentApiKeyVirtualModelAccess({
+        access: normalizeAgentApiKeyVirtualModelAccessInput({
+          allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
+          defaultVirtualModelId: readOptionalText(form, "defaultVirtualModelId"),
+          id: readRequiredText(form, "id"),
+        }),
+        databaseUrl,
+      });
+    } else if (action === "disable") {
       await disableAgentApiKey({
         databaseUrl,
         id: readRequiredText(form, "id"),
@@ -123,6 +134,17 @@ function readRequiredText(form: FormData, name: string): string {
     throw new Error(`${name} is required.`);
   }
   return value.trim();
+}
+
+function readOptionalText(form: FormData, name: string): string | null {
+  const value = form.get(name);
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readTextValues(form: FormData, name: string): string[] {
+  return form
+    .getAll(name)
+    .flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
 }
 
 function escapeHtml(value: string): string {

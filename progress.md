@@ -556,3 +556,15 @@
   - `pnpm run verify` passed.
   - Before marking feat-029 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 27 prior passing features.
   - After marking feat-029 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 28 passing features.
+
+- [x] feat-030 verification and P2+ review passed:
+  - feat-025 remains intentionally not started because it depends on unfinished feat-032.
+  - Red phase: `pnpm exec vitest run tests/features/feat-030-allowed-default-models.unit.test.ts` failed because Agent API key virtual model access helpers were missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-030-allowed-default-models.e2e.spec.ts --grep 'default virtual model must be in allowed list'` failed because the Dashboard did not expose `Allowed virtual models`.
+  - Implemented Agent API key allowed/default Virtual Model access helpers, `updateVirtualModelAccess` API handling, Dashboard allowed/default controls, config publisher integration, and default-in-allowed validation.
+  - P2+ review found no blocking issues after checking transaction rollback, duplicate allowed-id normalization, validation at both API normalization and server write entry, config change publication, and Agent API key delete cascade behavior.
+  - `pnpm exec vitest run tests/features/feat-030-allowed-default-models.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-030-allowed-default-models.e2e.spec.ts --grep 'default virtual model must be in allowed list'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-030 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 28 prior passing features.
+  - After marking feat-030 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 29 passing features.

@@ -3,7 +3,11 @@ import {
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
 import { cookies } from "next/headers";
-import { listAgentApiKeyMetadata } from "../server/agent-api-keys";
+import {
+  formatAgentApiKeyVirtualModelAccess,
+  listAgentApiKeyMetadata,
+  listAgentApiKeyVirtualModelAccess,
+} from "../server/agent-api-keys";
 import { listAgents } from "../server/agents";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
@@ -81,6 +85,7 @@ export default async function Home() {
   const pricePanel = await getPricePanel(databaseUrl);
   const agents = await listAgents(databaseUrl);
   const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
+  const agentApiKeyVirtualModelAccess = await listAgentApiKeyVirtualModelAccess(databaseUrl);
   const providers = await listProviders(databaseUrl);
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
   const virtualModels = await listVirtualModels(databaseUrl);
@@ -90,6 +95,9 @@ export default async function Home() {
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
   const agentApiKeysByAgentId = groupByAgentId(agentApiKeys);
+  const agentApiKeyVirtualModelAccessById = new Map(
+    agentApiKeyVirtualModelAccess.map((access) => [access.agentApiKeyId, access]),
+  );
   const routedVirtualModelIds = new Set(
     routePolicies.map((routePolicy) => routePolicy.virtualModelId),
   );
@@ -398,35 +406,90 @@ export default async function Home() {
                   {(agentApiKeysByAgentId.get(agent.id) ?? []).length === 0 ? (
                     <p>No Agent API keys saved.</p>
                   ) : (
-                    (agentApiKeysByAgentId.get(agent.id) ?? []).map((agentApiKey) => (
-                      <div key={agentApiKey.id}>
-                        <p>Agent API key prefix: {agentApiKey.keyPrefix}</p>
-                        <p>Agent API key status: {agentApiKey.enabled ? "Enabled" : "Disabled"}</p>
-                        <p>Agent API key created: {formatDateTime(agentApiKey.createdAt)}</p>
-                        <p>Agent API key updated: {formatDateTime(agentApiKey.updatedAt)}</p>
-                        <form action="/api/agent-api-keys" method="post">
-                          <input type="hidden" name="action" value="rotate" />
-                          <input type="hidden" name="id" value={agentApiKey.id} />
-                          <button type="submit">Rotate Agent API key</button>
-                        </form>
-                        {agentApiKey.enabled ? (
+                    (agentApiKeysByAgentId.get(agent.id) ?? []).map((agentApiKey) => {
+                      const access = agentApiKeyVirtualModelAccessById.get(agentApiKey.id) ?? {
+                        agentApiKeyId: agentApiKey.id,
+                        allowedVirtualModels: [],
+                        defaultVirtualModel: null,
+                      };
+                      const accessLabels = formatAgentApiKeyVirtualModelAccess(access);
+
+                      return (
+                        <div key={agentApiKey.id}>
+                          <p>Agent API key prefix: {agentApiKey.keyPrefix}</p>
+                          <p>
+                            Agent API key status: {agentApiKey.enabled ? "Enabled" : "Disabled"}
+                          </p>
+                          <p>Agent API key created: {formatDateTime(agentApiKey.createdAt)}</p>
+                          <p>Agent API key updated: {formatDateTime(agentApiKey.updatedAt)}</p>
+                          <p>Allowed Virtual Models: {accessLabels.allowedLabel}</p>
+                          <p>Default Virtual Model: {accessLabels.defaultLabel}</p>
+                          <form
+                            className="provider-edit-form"
+                            action="/api/agent-api-keys"
+                            method="post"
+                          >
+                            <input type="hidden" name="action" value="updateVirtualModelAccess" />
+                            <input type="hidden" name="id" value={agentApiKey.id} />
+                            <label htmlFor={`agent-key-allowed-virtual-models-${agentApiKey.id}`}>
+                              Allowed virtual models
+                            </label>
+                            <select
+                              id={`agent-key-allowed-virtual-models-${agentApiKey.id}`}
+                              name="allowedVirtualModelIds"
+                              defaultValue={access.allowedVirtualModels.map(
+                                (virtualModel) => virtualModel.id,
+                              )}
+                              multiple
+                              size={virtualModelSelectSize(virtualModels.length)}
+                            >
+                              {virtualModels.map((virtualModel) => (
+                                <option key={virtualModel.id} value={virtualModel.id}>
+                                  {formatVirtualModelOptionLabel(virtualModel)}
+                                </option>
+                              ))}
+                            </select>
+                            <label htmlFor={`agent-key-default-virtual-model-${agentApiKey.id}`}>
+                              Default virtual model
+                            </label>
+                            <select
+                              id={`agent-key-default-virtual-model-${agentApiKey.id}`}
+                              name="defaultVirtualModelId"
+                              defaultValue={access.defaultVirtualModel?.id ?? ""}
+                            >
+                              <option value="">No default virtual model</option>
+                              {virtualModels.map((virtualModel) => (
+                                <option key={virtualModel.id} value={virtualModel.id}>
+                                  {formatVirtualModelOptionLabel(virtualModel)}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit">Save Agent API key virtual models</button>
+                          </form>
                           <form action="/api/agent-api-keys" method="post">
-                            <input type="hidden" name="action" value="disable" />
+                            <input type="hidden" name="action" value="rotate" />
+                            <input type="hidden" name="id" value={agentApiKey.id} />
+                            <button type="submit">Rotate Agent API key</button>
+                          </form>
+                          {agentApiKey.enabled ? (
+                            <form action="/api/agent-api-keys" method="post">
+                              <input type="hidden" name="action" value="disable" />
+                              <input type="hidden" name="id" value={agentApiKey.id} />
+                              <button className="secondary-button" type="submit">
+                                Disable Agent API key
+                              </button>
+                            </form>
+                          ) : null}
+                          <form action="/api/agent-api-keys" method="post">
+                            <input type="hidden" name="action" value="delete" />
                             <input type="hidden" name="id" value={agentApiKey.id} />
                             <button className="secondary-button" type="submit">
-                              Disable Agent API key
+                              Delete Agent API key
                             </button>
                           </form>
-                        ) : null}
-                        <form action="/api/agent-api-keys" method="post">
-                          <input type="hidden" name="action" value="delete" />
-                          <input type="hidden" name="id" value={agentApiKey.id} />
-                          <button className="secondary-button" type="submit">
-                            Delete Agent API key
-                          </button>
-                        </form>
-                      </div>
-                    ))
+                        </div>
+                      );
+                    })
                   )}
                 </div>
                 <form className="provider-key-form" action="/api/agent-api-keys" method="post">
@@ -708,6 +771,17 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
 
 function providerModelSelectSize(optionCount: number): number {
   return Math.min(6, Math.max(2, optionCount));
+}
+
+function virtualModelSelectSize(optionCount: number): number {
+  return Math.min(6, Math.max(2, optionCount));
+}
+
+function formatVirtualModelOptionLabel(virtualModel: {
+  displayName: string;
+  name: string;
+}): string {
+  return `${virtualModel.displayName} (${virtualModel.name})`;
 }
 
 function groupByAgentId<T extends { agentId: string }>(values: T[]): Map<string, T[]> {

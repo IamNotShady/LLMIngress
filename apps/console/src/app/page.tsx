@@ -36,6 +36,12 @@ import {
   routePolicyStrategies,
 } from "../server/route-policies";
 import {
+  formatGatewayHeartbeatStatus,
+  formatRuntimeErrorEntry,
+  formatRuntimeReloadResult,
+  getConsoleRuntimeSnapshot,
+} from "../server/runtime";
+import {
   type ConsoleUsageBreakdown,
   formatConsoleUsageCost,
   formatConsoleUsageTokens,
@@ -111,6 +117,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const usageWindow = parseConsoleUsageWindow(
     readSingleSearchParam(resolvedSearchParams.usageWindow),
   );
+  const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
   const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: usageWindow });
   const activities = await listConsoleActivities(databaseUrl);
   const selectedActivity =
@@ -155,6 +162,52 @@ export default async function Home({ searchParams }: HomeProps = {}) {
       </header>
       <section className="status-band" aria-label="Console status">
         <p>Signed in as admin</p>
+      </section>
+      <section className="providers-panel" id="runtime" aria-labelledby="runtime-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Gateway</p>
+            <h2 id="runtime-title">Runtime</h2>
+          </div>
+        </div>
+        {runtimeSnapshot.gateways.length === 0 ? (
+          <p>No gateway runtime status recorded.</p>
+        ) : (
+          <div className="runtime-grid">
+            {runtimeSnapshot.gateways.map((gateway) => (
+              <article className="runtime-item" key={gateway.gatewayInstanceId}>
+                <h3>Gateway: {gateway.gatewayInstanceId}</h3>
+                <p>
+                  Heartbeat: {formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt })}
+                </p>
+                <p>Gateway status: {gateway.status}</p>
+                <p>Applied config version: {formatConfigVersion(gateway.appliedConfigVersion)}</p>
+                <p>Target config version: {formatConfigVersion(gateway.targetConfigVersion)}</p>
+                <p>{formatRuntimeReloadResult(gateway)}</p>
+                {gateway.lastReloadError && gateway.lastReloadStatus !== "failed" ? (
+                  <p>Reload error: {gateway.lastReloadError}</p>
+                ) : null}
+                <p>Last heartbeat: {formatNullableDateTime(gateway.heartbeatAt)}</p>
+              </article>
+            ))}
+          </div>
+        )}
+        <div className="runtime-errors">
+          <h3>Recent runtime errors</h3>
+          {runtimeSnapshot.errors.length === 0 ? (
+            <p>No runtime errors recorded.</p>
+          ) : (
+            <ul>
+              {runtimeSnapshot.errors.map((error) => (
+                <li
+                  key={`${error.processType}:${error.processId}:${error.errorCode}:${error.createdAt.toISOString()}`}
+                >
+                  {formatRuntimeErrorEntry(error)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
       <section className="providers-panel" id="usage" aria-labelledby="usage-title">
         <div className="section-heading">
@@ -997,6 +1050,14 @@ function formatUsd(value: number): string {
 
 function formatDateTime(value: Date): string {
   return value.toISOString();
+}
+
+function formatNullableDateTime(value: Date | null): string {
+  return value ? formatDateTime(value) : "Unknown";
+}
+
+function formatConfigVersion(value: number | null): string {
+  return value === null ? "None" : `v${value}`;
 }
 
 function readSingleSearchParam(value: string | string[] | undefined): string | undefined {

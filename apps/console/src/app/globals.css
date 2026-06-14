@@ -280,6 +280,37 @@ dd {
   line-height: 1.3;
 }
 
+.runtime-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.runtime-item {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.runtime-item h3,
+.runtime-errors h3 {
+  margin: 0 0 8px;
+  color: #101828;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.runtime-errors {
+  margin-top: 16px;
+}
+
+.runtime-errors ul {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
 .activity-layout {
   display: grid;
   grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.4fr);

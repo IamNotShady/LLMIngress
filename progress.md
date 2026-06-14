@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 19:59 AWST
-**Active Feature:** feat-048 next (feat-001 through feat-047 completed)
+**Last Updated:** 2026-06-14 20:18 AWST
+**Active Feature:** feat-049 next (feat-001 through feat-048 completed)
 
 ## Status
 
@@ -26,6 +26,10 @@
   - Summarizes request count, token totals, cost total, and provider/model breakdown from recorded request usage and cost rows.
   - Review follow-up fixed provider/model breakdown grouping to use stable provider/model IDs instead of display labels.
   - Verification passed: feat-047 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-048 — Gateway Runtime Status Page (passing)**:
+  - Added a protected Runtime section backed by `gateway_runtime_status` and `runtime_errors`.
+  - Shows Gateway heartbeat health, Gateway status, applied/target config versions, reload result, last heartbeat timestamp, and recent runtime errors.
+  - Verification passed: feat-048 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -116,9 +120,9 @@
 
 ### What's Next
 
-1. `feat-048` — Gateway Runtime Status Page.
-2. `feat-049` — Playground Live Public API Test.
-3. `feat-050` — MVP Happy Path E2E.
+1. `feat-049` — Playground Live Public API Test.
+2. `feat-050` — MVP Happy Path E2E.
+3. `feat-051` — MVP Streaming E2E.
 
 ## Blockers / Risks
 
@@ -802,3 +806,17 @@
   - `pnpm run verify` passed.
   - Before marking feat-044 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 43 prior passing features.
   - After marking feat-044 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 44 passing features.
+
+- [x] feat-048 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-048-runtime-page.unit.test.ts` failed because `apps/console/src/server/runtime` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-048-runtime-page.e2e.spec.ts --grep 'runtime page shows heartbeat config version reload result and recent errors'` failed because the authenticated Console had no Runtime section.
+  - Added `apps/console/src/server/runtime.ts` to read `gateway_runtime_status` and `runtime_errors` from PostgreSQL and format heartbeat, reload, and runtime error labels.
+  - Added a protected Runtime section to the Console dashboard showing Gateway heartbeat health, Gateway status, applied/target config versions, last reload result, last heartbeat timestamp, and recent runtime errors.
+  - P2+ review found no blocking issues after checking auth boundary, heartbeat freshness calculation, Postgres-backed E2E coverage, and runtime error rendering.
+  - `pnpm exec vitest run tests/features/feat-048-runtime-page.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-048-runtime-page.e2e.spec.ts --grep 'runtime page shows heartbeat config version reload result and recent errors'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-048 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 47 prior passing features.
+  - Next active feature: feat-049 Console Playground Dry Run Page.

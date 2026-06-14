@@ -581,8 +581,8 @@
         "feat-012",
         "feat-013"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-048 unit tests because Console runtime helpers were missing, and E2E because the authenticated Console had no Runtime section. Added protected Runtime section backed by PostgreSQL gateway_runtime_status and runtime_errors, showing Gateway heartbeat health, Gateway status, applied/target config versions, last reload result, last heartbeat timestamp, and recent runtime error entries. P2+ review found no blocking issues after checking auth boundary, heartbeat freshness calculation, Postgres-backed E2E coverage, and runtime error rendering. Verification passed — feat-048 unit tests 2 passed, real Chromium/PostgreSQL Console E2E 1 passed, pnpm run verify passed, and verify:features passed all 47 prior passing features before marking feat-048 passing."
     },
     {
       "id": "feat-049",

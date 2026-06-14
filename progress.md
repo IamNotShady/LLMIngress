@@ -579,3 +579,17 @@
   - `pnpm run verify` passed.
   - Before marking feat-031 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 29 prior passing features.
   - After marking feat-031 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 30 passing features.
+
+- [x] feat-032 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-032-route-engine.unit.test.ts` failed because `apps/gateway/src/route-engine` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-032-route-engine.e2e.spec.ts --grep 'fixed routing and cost first routing are deterministic with route reason'` failed because the route engine was not implemented.
+  - Extended the Gateway config snapshot with enabled route policies, available primary/fallback provider model candidates, and effective built-in/manual candidate prices.
+  - Implemented deterministic route selection: `fixed` selects the first configured primary candidate, `cost_first` selects the lowest estimated-cost priced primary candidate, unknown-price candidates do not participate in cost optimization, and every decision returns route reason metadata.
+  - P2+ review found no blocking issues after checking deterministic tie-breaking, fallback exclusion from primary selection, unknown-price behavior, and snapshot filtering to enabled Virtual Models, enabled Providers, and available Provider Models.
+  - `pnpm exec vitest run tests/features/feat-032-route-engine.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-032-route-engine.e2e.spec.ts --grep 'fixed routing and cost first routing are deterministic with route reason'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-032 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 30 prior passing features.
+  - After marking feat-032 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 31 passing features.

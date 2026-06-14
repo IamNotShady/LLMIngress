@@ -125,6 +125,7 @@ function snapshot(version: number, providerKeys: string[]) {
       id: providerKey,
       providerKey,
     })),
+    routePolicies: [],
     version,
   };
 }

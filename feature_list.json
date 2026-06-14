@@ -374,8 +374,8 @@
         "feat-014",
         "feat-029"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-032 unit and E2E tests because apps/gateway/src/route-engine was missing. Added Gateway route policy/candidate loading to the config snapshot, manual price override resolution for candidate prices, and a deterministic route engine that selects the first primary candidate for fixed routing, selects the lowest estimated-cost priced primary candidate for cost_first routing, skips unknown-price candidates during cost optimization, and returns route reason metadata for every decision. P2+ review found no blocking issues after checking deterministic tie-breaking, fallback exclusion from primary selection, unknown-price handling, and config snapshot filtering to enabled Virtual Models, enabled Providers, and available Provider Models. Verification passed — feat-032 unit tests 2 passed, real PostgreSQL E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 30 prior passing features before marking feat-032 passing, and final verify:features passed all 31 passing features after marking."
     },
     {
       "id": "feat-033",

@@ -278,6 +278,11 @@ export default async function Home() {
                 </p>
                 <p>Strategy: {routePolicy.strategy}</p>
                 <p>Route reason: {routePolicy.routeReason}</p>
+                {routePolicy.routeWarnings.map((warning) => (
+                  <p className="route-warning" key={warning}>
+                    {warning}
+                  </p>
+                ))}
                 <p>Primary: {formatRoutePolicyCandidateList(routePolicy.primaryCandidates)}</p>
                 <p>Fallback: {formatRoutePolicyCandidateList(routePolicy.fallbackCandidates)}</p>
                 <form className="provider-edit-form" action="/api/route-policies" method="post">

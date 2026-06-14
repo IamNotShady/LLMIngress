@@ -288,8 +288,8 @@
         "feat-023",
         "feat-032"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-025 unit tests because buildRoutePolicyWarnings was missing, and E2E failed because Console did not show an affected route warning. Existing Worker refresh planning already soft-deleted missing referenced models to unavailable and feat-032 Gateway snapshots already excluded unavailable candidates. Added Console route policy warnings for non-available candidates and Dashboard rendering for affected routes. E2E verifies the full chain with fake provider, real PostgreSQL, Worker model_refresh job, Gateway snapshot route exclusion, deterministic route selection of the remaining available candidate, and real Chromium Console warning visibility. P2+ review found no blocking issues after checking warning scope, DB row retention, routing exclusion, and E2E altitude. Verification passed — feat-025 unit tests 2 passed, real PostgreSQL/Chromium E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 31 prior passing features before marking feat-025 passing, and final verify:features passed all 32 passing features after marking."
     },
     {
       "id": "feat-026",

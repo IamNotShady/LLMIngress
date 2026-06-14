@@ -593,3 +593,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-032 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 30 prior passing features.
   - After marking feat-032 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 31 passing features.
+
+- [x] feat-025 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-025-model-soft-delete.unit.test.ts` failed because `buildRoutePolicyWarnings` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-025-model-soft-delete.e2e.spec.ts --grep 'missing referenced model marked unavailable excluded from routing and warning visible'` failed because Console did not show an affected route warning.
+  - Confirmed existing Worker refresh logic already keeps referenced missing models and marks them `unavailable`; confirmed Gateway snapshots from feat-032 exclude unavailable Provider Models from routing.
+  - Added Console Route Policy warnings for non-available candidates and rendered them on the Dashboard Route Policy card.
+  - E2E verifies the full chain with fake provider, real PostgreSQL, Worker `model_refresh`, Gateway snapshot exclusion, route selection of the remaining available candidate, and real Chromium Console warning visibility.
+  - P2+ review found no blocking issues after checking warning scope, DB row retention, routing exclusion, and E2E altitude.
+  - `pnpm exec vitest run tests/features/feat-025-model-soft-delete.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-025-model-soft-delete.e2e.spec.ts --grep 'missing referenced model marked unavailable excluded from routing and warning visible'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-025 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 31 prior passing features.
+  - After marking feat-025 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 32 passing features.

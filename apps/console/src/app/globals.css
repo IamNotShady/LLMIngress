@@ -264,6 +264,11 @@ dd {
   margin-bottom: 12px;
 }
 
+.route-warning {
+  color: #b42318;
+  font-weight: 700;
+}
+
 .status-enabled,
 .status-disabled {
   border-radius: 999px;

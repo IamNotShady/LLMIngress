@@ -43,10 +43,16 @@ export type ConsoleRoutePolicy = {
   id: string;
   primaryCandidates: ConsoleRoutePolicyCandidate[];
   routeReason: string;
+  routeWarnings: string[];
   strategy: RoutePolicyStrategy;
   virtualModelDisplayName: string;
   virtualModelId: string;
   virtualModelName: string;
+};
+
+export type RoutePolicyWarningCandidate = {
+  availability: string;
+  optionLabel: string;
 };
 
 export type RouteReasonMetadataInput = {
@@ -137,6 +143,17 @@ export function buildRouteReasonMetadata(input: RouteReasonMetadataInput): strin
       ? "no fallback"
       : `${input.fallbackCandidateCount} ${pluralize("fallback", input.fallbackCandidateCount)}`;
   return `${input.strategy} route for ${input.virtualModelName} uses ${primary} with ${fallback}.`;
+}
+
+export function buildRoutePolicyWarnings(
+  candidates: readonly RoutePolicyWarningCandidate[],
+): string[] {
+  return candidates
+    .filter((candidate) => candidate.availability !== "available")
+    .map(
+      (candidate) =>
+        `Route warning: ${candidate.optionLabel} is ${candidate.availability} and excluded from Gateway routing.`,
+    );
 }
 
 export async function listProviderModelOptions(
@@ -527,6 +544,7 @@ function rowToConsoleRoutePolicy(
       strategy: row.strategy,
       virtualModelName: row.virtual_model_name,
     }),
+    routeWarnings: buildRoutePolicyWarnings(candidates),
     strategy: row.strategy,
     virtualModelDisplayName: row.virtual_model_display_name,
     virtualModelId: row.virtual_model_id,

@@ -387,8 +387,8 @@
         "feat-018",
         "feat-032"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-033 unit and E2E tests because apps/gateway/src/fallback-chain was missing. Added Gateway fallback chain execution that builds an attempt sequence from the selected route candidate plus fallback candidates, calls the OpenAI provider adapter, falls back only when a provider attempt fails before the first byte (statusCode null), returns the successful fallback response, and records failed provider/model attempts in fallback_events. E2E uses a fake provider first-byte socket failure followed by a successful fake provider response with real PostgreSQL request_activity and fallback_events assertions. P2+ review found no blocking issues after checking pre-first-byte gating, non-first-byte failure behavior, attempt ordering, and failed-attempt persistence. Verification passed — feat-033 unit tests 2 passed, real PostgreSQL E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 32 prior passing features before marking feat-033 passing, and final verify:features passed all 33 passing features after marking."
     },
     {
       "id": "feat-034",

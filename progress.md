@@ -608,3 +608,17 @@
   - `pnpm run verify` passed.
   - Before marking feat-025 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 31 prior passing features.
   - After marking feat-025 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 32 passing features.
+
+- [x] feat-033 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-033-fallback-chain.unit.test.ts` failed because `apps/gateway/src/fallback-chain` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-033-fallback-chain.e2e.spec.ts --grep 'first-byte failure falls back and records failed attempt'` failed because fallback chain execution was not implemented.
+  - Added Gateway fallback chain execution that builds selected-candidate plus fallback attempt order, calls the OpenAI provider adapter, falls back only for pre-first-byte failures, returns the successful fallback response, and records failed attempts in `fallback_events`.
+  - E2E verifies fake-provider first-byte socket failure, successful fallback response, real PostgreSQL `request_activity`, and persisted `fallback_events`.
+  - P2+ review found no blocking issues after checking pre-first-byte gating, non-first-byte failure behavior, attempt ordering, and failed-attempt persistence.
+  - `pnpm exec vitest run tests/features/feat-033-fallback-chain.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-033-fallback-chain.e2e.spec.ts --grep 'first-byte failure falls back and records failed attempt'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-033 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 32 prior passing features.
+  - After marking feat-033 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 33 passing features.

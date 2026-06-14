@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 22:25 AWST
-**Active Feature:** feat-055 next (feat-001 through feat-053 completed; feat-054 waits for feat-055)
+**Last Updated:** 2026-06-14 22:35 AWST
+**Active Feature:** feat-054 next (feat-001 through feat-053 and feat-055 completed)
 
 ## Status
 
@@ -53,6 +53,10 @@
   - Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code.
   - The same E2E verifies first-byte provider failure falls back to the second candidate, returns HTTP 200, and records both the final Activity provider/model hit and failed fallback attempt.
   - Verification passed: feat-053 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-055 — CI Migration Validation (passing)**:
+  - Added `pnpm run db:migrate:check`, backed by an isolated PostgreSQL fixture database.
+  - The command applies all migrations, reruns them to verify idempotent skips, and is now executed by CI after dependency install.
+  - Verification passed: feat-055 unit tests, real PostgreSQL E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -143,8 +147,7 @@
 
 ### What's Next
 
-1. `feat-055` — CI Migration Validation.
-2. `feat-054` — MVP Local Deployment Smoke.
+1. `feat-054` — MVP Local Deployment Smoke.
 
 ## Blockers / Risks
 
@@ -907,3 +910,17 @@
   - `pnpm run verify` passed.
   - Before marking feat-053 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 52 prior passing features.
   - Next active feature: feat-055 CI Migration Validation; feat-054 waits for feat-055.
+
+- [x] feat-055 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-055-ci-migration-validation.unit.test.ts` failed because `db:migrate:check` was missing from `package.json` and CI.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-055-ci-migration-validation.e2e.spec.ts --grep 'migration validation command runs cleanly against test postgres'` failed because the command did not exist.
+  - Added `scripts/migrate-check.ts`, which creates an isolated test database from `TEST_DATABASE_URL`, applies all migrations, reruns them to verify idempotent skips, and disposes the database.
+  - Added `pnpm run db:migrate:check` and a CI `Migration validation` step after dependency install.
+  - Updated the obsolete feat-005 unit assertion that expected migration validation to be absent from base CI.
+  - P2+ review found no blocking issues after checking isolated database usage, CI placement, and feat-005 regression impact.
+  - `pnpm exec vitest run tests/features/feat-055-ci-migration-validation.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-055-ci-migration-validation.e2e.spec.ts --grep 'migration validation command runs cleanly against test postgres'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run db:migrate:check` -> applied 8; rerun skipped 8.
+  - `pnpm run verify` passed.
+  - Before marking feat-055 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 53 prior passing features.
+  - Next active feature: feat-054 MVP Local Deployment Smoke.

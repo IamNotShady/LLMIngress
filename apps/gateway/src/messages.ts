@@ -15,6 +15,8 @@ import type {
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
 import {
+  type AnthropicContentBlock,
+  type AnthropicMessageContent,
   type AnthropicProviderAdapter,
   createAnthropicProviderAdapter,
   type NormalizedAnthropicMessage,
@@ -96,6 +98,14 @@ export function normalizeAnthropicMessagesRequest(
   if (body.system !== undefined && typeof body.system !== "string") {
     return invalidMessagesRequest(requestId);
   }
+  const tools = readOptionalObjectArray(body.tools);
+  if (tools === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const toolChoice = readOptionalToolChoice(body.tool_choice);
+  if (toolChoice === null) {
+    return invalidMessagesRequest(requestId);
+  }
 
   return {
     ok: true,
@@ -105,6 +115,8 @@ export function normalizeAnthropicMessagesRequest(
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       system: typeof body.system === "string" && body.system.trim() ? body.system : undefined,
       temperature,
+      toolChoice,
+      tools,
     }),
   };
 }
@@ -264,17 +276,43 @@ export function createGatewayAnthropicMessagesErrorBody(
 }
 
 function readAnthropicMessage(value: unknown): NormalizedAnthropicMessage | null {
-  if (!isRecord(value) || typeof value.content !== "string" || !value.content.trim()) {
+  if (!isRecord(value)) {
     return null;
   }
   if (value.role !== "user" && value.role !== "assistant") {
     return null;
   }
+  const content = readAnthropicMessageContent(value.content);
+  if (!content) {
+    return null;
+  }
 
   return {
-    content: value.content,
+    content,
     role: value.role,
   };
+}
+
+function readAnthropicMessageContent(value: unknown): AnthropicMessageContent | null {
+  if (typeof value === "string") {
+    return value.trim() ? value : null;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+
+  const blocks = value.map(readAnthropicContentBlock);
+  if (blocks.some((block) => !block)) {
+    return null;
+  }
+  return blocks as AnthropicContentBlock[];
+}
+
+function readAnthropicContentBlock(value: unknown): AnthropicContentBlock | null {
+  if (!isRecord(value) || typeof value.type !== "string" || !value.type.trim()) {
+    return null;
+  }
+  return value as AnthropicContentBlock;
 }
 
 function readRequiredPositiveInteger(value: unknown): number | null {
@@ -289,6 +327,26 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return undefined;
   }
   if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  return value;
+}
+
+function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.some((entry) => !isRecord(entry))) {
+    return null;
+  }
+  return value as Record<string, unknown>[];
+}
+
+function readOptionalToolChoice(value: unknown): Record<string, unknown> | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value) || typeof value.type !== "string" || !value.type.trim()) {
     return null;
   }
   return value;

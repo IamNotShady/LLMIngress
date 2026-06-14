@@ -434,6 +434,8 @@ function buildStreamingPayload(input: {
       messages: normalized.request.messages,
       system: normalized.request.system,
       temperature: normalized.request.temperature,
+      tool_choice: normalized.request.toolChoice,
+      tools: normalized.request.tools,
     }),
     requestMetadata,
   };

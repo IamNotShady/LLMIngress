@@ -68,7 +68,9 @@ export function buildAnthropicMessagesRequestMetadata(input: {
 }): GatewayRequestMetadata {
   const messageTextParts = [
     input.request.system ?? "",
-    ...input.request.messages.map((message) => message.content),
+    ...input.request.messages.flatMap((message) =>
+      readAnthropicMessageContentTextParts(message.content),
+    ),
   ];
   const toolTextParts = readToolTextParts(input.rawBody);
 
@@ -96,6 +98,25 @@ export function serializeGatewayRequestMetadata(metadata: GatewayRequestMetadata
 function estimateTextTokens(parts: readonly string[]): number {
   const characterCount = parts.filter((part) => part.trim()).join("\n").length;
   return Math.max(1, Math.ceil(characterCount / 4));
+}
+
+function readAnthropicMessageContentTextParts(
+  content: NormalizedAnthropicMessagesRequest["messages"][number]["content"],
+): string[] {
+  if (typeof content === "string") {
+    return [content];
+  }
+
+  return content.flatMap((block) => {
+    const parts: string[] = [];
+    if (typeof block.text === "string") {
+      parts.push(block.text);
+    }
+    if (typeof block.content === "string") {
+      parts.push(block.content);
+    }
+    return parts;
+  });
 }
 
 function readToolTextParts(rawBody: unknown): string[] {

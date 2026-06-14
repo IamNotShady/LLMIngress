@@ -1,6 +1,12 @@
+export type AnthropicContentBlock = Record<string, unknown> & {
+  type: string;
+};
+
+export type AnthropicMessageContent = string | AnthropicContentBlock[];
+
 export type NormalizedAnthropicMessage = {
   role: "user" | "assistant";
-  content: string;
+  content: AnthropicMessageContent;
 };
 
 export type NormalizedAnthropicMessagesRequest = {
@@ -9,6 +15,8 @@ export type NormalizedAnthropicMessagesRequest = {
   stream?: boolean;
   system?: string;
   temperature?: number;
+  toolChoice?: unknown;
+  tools?: unknown[];
 };
 
 export type AnthropicProviderTarget = {
@@ -53,6 +61,8 @@ type AnthropicMessagesPayload = {
   stream?: boolean;
   system?: string;
   temperature?: number;
+  tool_choice?: unknown;
+  tools?: unknown[];
 };
 
 const anthropicVersion = "2023-06-01";
@@ -111,6 +121,8 @@ function buildMessagesPayload(
     stream: request.stream,
     system: request.system,
     temperature: request.temperature,
+    tool_choice: request.toolChoice,
+    tools: request.tools,
   });
 }
 

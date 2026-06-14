@@ -638,8 +638,8 @@
         "feat-038",
         "feat-050"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-052 unit test because Claude Code content-block messages normalized to ok:false, and the real Gateway/PostgreSQL/fake-provider E2E returned HTTP 400 for the same Claude Code style request. Added Anthropic Messages support for content block arrays, tool definitions, and tool_choice passthrough in both non-streaming and streaming provider payloads; metadata token estimation now extracts text from Anthropic content blocks. E2E verifies a valid Agent key sends a Claude Code style /v1/messages request through the Anthropic provider path, receives HTTP 200, forwards content blocks/tools/tool_choice to the provider, and records the Anthropic provider/model hit in request_activity. P2+ review found no blocking issues. Verification passed — feat-052 unit tests 1 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 51 prior passing features before marking feat-052 passing."
     },
     {
       "id": "feat-053",

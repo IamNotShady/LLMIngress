@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 21:48 AWST
-**Active Feature:** feat-052 next (feat-001 through feat-051 completed)
+**Last Updated:** 2026-06-14 22:07 AWST
+**Active Feature:** feat-053 next (feat-001 through feat-052 completed)
 
 ## Status
 
@@ -44,6 +44,11 @@
   - Successful streaming requests now create `request_activity` before provider execution and complete it when the provider stream ends, preserving selected provider/model route metadata.
   - Pre-stream streaming failures now complete the started Activity row immediately with the returned status.
   - Verification passed: feat-051 unit tests, real Gateway/PostgreSQL/fake-provider streaming E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-052 — Claude Code Messages E2E (passing)**:
+  - Added Anthropic Messages support for Claude Code style content block arrays, tool definitions, and `tool_choice` passthrough.
+  - Non-streaming and streaming Anthropic provider payloads now preserve those fields, and metadata token estimation extracts text from Anthropic content blocks.
+  - E2E verifies a valid Agent key gets HTTP 200 from the Anthropic provider path and `request_activity` records the Anthropic provider/model hit.
+  - Verification passed: feat-052 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -134,9 +139,9 @@
 
 ### What's Next
 
-1. `feat-052` — Claude Code Messages E2E.
-2. `feat-053` — Codex OpenAI-Compatible E2E.
-3. `feat-054` — MVP Local Deployment Smoke.
+1. `feat-053` — Limits and Fallback E2E.
+2. `feat-054` — MVP Local Deployment Smoke.
+3. `feat-055` — CI Migration Validation.
 
 ## Blockers / Risks
 
@@ -873,3 +878,16 @@
   - `pnpm run verify` passed.
   - Before marking feat-051 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 50 prior passing features.
   - Next active feature: feat-052 Claude Code Messages E2E.
+
+- [x] feat-052 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-052-claude-code-messages.unit.test.ts` failed because Claude Code content-block messages normalized to `ok: false`.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-052-claude-code-messages.e2e.spec.ts --grep 'claude code messages request returns 200 and records anthropic model hit'` returned HTTP 400 for the same Claude Code style request.
+  - Added Anthropic Messages support for content block arrays, tool definitions, and `tool_choice` passthrough.
+  - Non-streaming and streaming Anthropic provider payloads preserve those fields; metadata token estimation extracts text from Anthropic content blocks.
+  - E2E verifies a valid Agent key receives HTTP 200 from the Anthropic provider path, the fake provider sees content blocks/tools/tool_choice, and `request_activity` records the Anthropic provider/model hit.
+  - P2+ review found no blocking issues after checking payload scope, streaming parity, Activity coverage, and token metadata extraction.
+  - `pnpm exec vitest run tests/features/feat-052-claude-code-messages.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-052-claude-code-messages.e2e.spec.ts --grep 'claude code messages request returns 200 and records anthropic model hit'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-052 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 51 prior passing features.
+  - Next active feature: feat-053 Limits and Fallback E2E.

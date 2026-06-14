@@ -743,3 +743,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-041 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 40 prior passing features.
   - After marking feat-041 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 41 passing features.
+
+- [x] feat-042 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-042-budget-enforcement.unit.test.ts` failed because `apps/gateway/src/budgets` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'` failed because over-budget requests still returned 200.
+  - Added Gateway request token and cost budget enforcement backed by `agent_limits`, `budget_periods`, and `budget_reservations`.
+  - Gateway checks request token limits, refuses cost-budget enforcement for unknown-price selected models, accepts selected models with manual price overrides, reserves estimated input/output tokens and cost before provider calls, finalizes successful requests into `budget_periods`, and releases reservations on provider failure or stream failure/close.
+  - Chat completions, responses, messages, and streaming requests now run budget checks after route selection and before provider calls.
+  - P2+ review found and fixed streaming close handling so aborted streams release pending reservations; no remaining blocking issues after checking provider no-call behavior, reservation rollback/finalization, unknown-price rejection, manual-price acceptance, and route/provider payload compatibility.
+  - `pnpm exec vitest run tests/features/feat-042-budget-enforcement.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-042 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 41 prior passing features.
+  - After marking feat-042 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 42 passing features.

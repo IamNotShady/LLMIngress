@@ -504,8 +504,8 @@
         "feat-031",
         "feat-040"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-042 unit tests because apps/gateway/src/budgets was missing, and E2E failed because over-budget requests still returned 200. Added Gateway token/request and cost/month budget enforcement backed by agent_limits, budget_periods, and budget_reservations. Gateway now checks request token limits, refuses cost-budget enforcement when the selected model price is unknown, accepts models with manual price overrides, reserves estimated input/output tokens and cost before provider calls, finalizes successful requests into budget_periods, and releases reservations on provider failure or stream failure/close. Chat completions, responses, messages, and streaming requests now run budget checks after route selection and before provider calls. P2+ review found and fixed streaming close handling so aborted streams release pending reservations; no remaining blocking issues after checking provider no-call behavior, reservation rollback/finalization, unknown-price rejection, manual-price acceptance, and route/provider payload compatibility. Verification passed — feat-042 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 41 prior passing features before marking feat-042 passing, and final verify:features passed all 42 passing features after marking."
     },
     {
       "id": "feat-043",

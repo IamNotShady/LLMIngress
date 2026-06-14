@@ -4,6 +4,12 @@ import {
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
 import { Client, type QueryResultRow } from "pg";
+import {
+  finalizeGatewayBudgetReservation,
+  type GatewayBudgetReservation,
+  releaseGatewayBudgetReservation,
+  reserveGatewayBudget,
+} from "./budgets.js";
 import type {
   GatewayConfigSnapshot,
   GatewayRouteCandidateSnapshot,
@@ -146,6 +152,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     };
   }
 
+  let budgetReservation: GatewayBudgetReservation | undefined;
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -158,6 +165,27 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       routePolicy,
       selectedProviderModelId: routeDecision.providerModelId,
     });
+    const selectedCandidate = attemptCandidates[0];
+    if (!selectedCandidate) {
+      throw new Error("Selected route candidate was not found in route policy.");
+    }
+
+    const budget = await reserveGatewayBudget({
+      agentApiKeyId: input.agentApiKeyId,
+      databaseUrl: input.databaseUrl,
+      price: selectedCandidate.price,
+      requestId: input.requestId,
+      requestMetadata,
+    });
+    if (!budget.ok) {
+      return {
+        body: budget.body,
+        requestMetadata,
+        statusCode: budget.statusCode,
+      };
+    }
+    budgetReservation = budget.reservation;
+
     const candidates = await attachGatewayProviderCredentials({
       candidates: attemptCandidates,
       databaseUrl: input.databaseUrl,
@@ -168,6 +196,10 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       candidates,
       request: normalized.request,
     });
+    await finalizeGatewayBudgetReservation({
+      databaseUrl: input.databaseUrl,
+      reservation: budgetReservation,
+    });
 
     return {
       body: result.result.body,
@@ -175,6 +207,10 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       statusCode: result.result.statusCode,
     };
   } catch (error) {
+    await releaseGatewayBudgetReservation({
+      databaseUrl: input.databaseUrl,
+      reservation: budgetReservation,
+    });
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyChatCompletionError(message);
     return {

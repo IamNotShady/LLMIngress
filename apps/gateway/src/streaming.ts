@@ -2,6 +2,12 @@ import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
 import { Client } from "pg";
 import {
+  finalizeGatewayBudgetReservation,
+  type GatewayBudgetReservation,
+  releaseGatewayBudgetReservation,
+  reserveGatewayBudget,
+} from "./budgets.js";
+import {
   attachGatewayProviderCredentials,
   normalizeOpenAIChatCompletionRequest,
   readGatewayMasterKeySource,
@@ -96,6 +102,7 @@ export async function executeGatewayStreamingRequest(input: {
     };
   }
 
+  let budgetReservation: GatewayBudgetReservation | undefined;
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: normalized.estimatedInputTokens,
@@ -105,6 +112,23 @@ export async function executeGatewayStreamingRequest(input: {
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
+    const budget = await reserveGatewayBudget({
+      agentApiKeyId: input.agentApiKeyId,
+      databaseUrl: input.databaseUrl,
+      price: selectedCandidate.price,
+      requestId: input.requestId,
+      requestMetadata: normalized.requestMetadata,
+    });
+    if (!budget.ok) {
+      return {
+        body: budget.body,
+        ok: false,
+        requestMetadata: normalized.requestMetadata,
+        statusCode: budget.statusCode,
+      };
+    }
+    budgetReservation = budget.reservation;
+
     const candidates = await attachGatewayProviderCredentials({
       candidates: [selectedCandidate],
       databaseUrl: input.databaseUrl,
@@ -129,6 +153,11 @@ export async function executeGatewayStreamingRequest(input: {
     );
 
     if (!response.ok || !response.body) {
+      await releaseGatewayBudgetReservation({
+        databaseUrl: input.databaseUrl,
+        reservation: budgetReservation,
+      });
+      budgetReservation = undefined;
       return {
         body: createGatewayStreamingErrorBody("provider_request_failed", input.requestId),
         ok: false,
@@ -136,9 +165,8 @@ export async function executeGatewayStreamingRequest(input: {
         statusCode: 502,
       };
     }
-
-    return {
-      body: wrapProviderStreamWithErrorRecording(
+    const body = wrapProviderStreamWithBudgetFinalization(
+      wrapProviderStreamWithErrorRecording(
         Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
         {
           recordRuntimeError: (error) =>
@@ -154,12 +182,25 @@ export async function executeGatewayStreamingRequest(input: {
             }),
         },
       ),
+      {
+        databaseUrl: input.databaseUrl,
+        reservation: budgetReservation,
+      },
+    );
+    budgetReservation = undefined;
+
+    return {
+      body,
       contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
       ok: true,
       requestMetadata: normalized.requestMetadata,
       statusCode: response.status,
     };
   } catch (error) {
+    await releaseGatewayBudgetReservation({
+      databaseUrl: input.databaseUrl,
+      reservation: budgetReservation,
+    });
     return {
       body: createGatewayStreamingErrorBody(
         "provider_request_failed",
@@ -199,6 +240,38 @@ export function wrapProviderStreamWithErrorRecording(
   source.pipe(output);
 
   return output;
+}
+
+function wrapProviderStreamWithBudgetFinalization(
+  source: Readable,
+  input: {
+    databaseUrl: string;
+    reservation: GatewayBudgetReservation | undefined;
+  },
+): Readable {
+  let settled = false;
+  source.once("end", () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    void finalizeGatewayBudgetReservation(input);
+  });
+  source.once("error", () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    void releaseGatewayBudgetReservation(input);
+  });
+  source.once("close", () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    void releaseGatewayBudgetReservation(input);
+  });
+  return source;
 }
 
 function buildStreamingPayload(input: {

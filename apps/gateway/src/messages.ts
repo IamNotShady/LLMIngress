@@ -1,4 +1,10 @@
 import {
+  finalizeGatewayBudgetReservation,
+  type GatewayBudgetReservation,
+  releaseGatewayBudgetReservation,
+  reserveGatewayBudget,
+} from "./budgets.js";
+import {
   attachGatewayProviderCredentials,
   readGatewayMasterKeySource,
 } from "./chat-completions.js";
@@ -137,6 +143,7 @@ export async function executeGatewayAnthropicMessages(input: {
     };
   }
 
+  let budgetReservation: GatewayBudgetReservation | undefined;
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -146,6 +153,22 @@ export async function executeGatewayAnthropicMessages(input: {
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
+    const budget = await reserveGatewayBudget({
+      agentApiKeyId: input.agentApiKeyId,
+      databaseUrl: input.databaseUrl,
+      price: selectedCandidate.price,
+      requestId: input.requestId,
+      requestMetadata,
+    });
+    if (!budget.ok) {
+      return {
+        body: budget.body,
+        requestMetadata,
+        statusCode: budget.statusCode,
+      };
+    }
+    budgetReservation = budget.reservation;
+
     const candidates = await attachGatewayProviderCredentials({
       candidates: [selectedCandidate],
       databaseUrl: input.databaseUrl,
@@ -165,6 +188,11 @@ export async function executeGatewayAnthropicMessages(input: {
       },
     });
     if (!result.ok) {
+      await releaseGatewayBudgetReservation({
+        databaseUrl: input.databaseUrl,
+        reservation: budgetReservation,
+      });
+      budgetReservation = undefined;
       return {
         body: createGatewayAnthropicMessagesErrorBody("provider_request_failed", input.requestId),
         requestMetadata,
@@ -172,12 +200,21 @@ export async function executeGatewayAnthropicMessages(input: {
       };
     }
 
+    await finalizeGatewayBudgetReservation({
+      databaseUrl: input.databaseUrl,
+      reservation: budgetReservation,
+    });
+
     return {
       body: result.body,
       requestMetadata,
       statusCode: result.statusCode,
     };
   } catch (error) {
+    await releaseGatewayBudgetReservation({
+      databaseUrl: input.databaseUrl,
+      reservation: budgetReservation,
+    });
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyMessagesError(message);
     return {

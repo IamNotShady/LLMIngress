@@ -1,7 +1,13 @@
 import { createServer, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 
-export type FakeProviderMode = "json" | "stream" | "error" | "timeout" | "first-byte-failure";
+export type FakeProviderMode =
+  | "json"
+  | "stream"
+  | "error"
+  | "timeout"
+  | "first-byte-failure"
+  | "midstream-error";
 
 export type CapturedFakeProviderRequest = {
   method: string;
@@ -12,13 +18,20 @@ export type CapturedFakeProviderRequest = {
   bodyJson: unknown;
 };
 
+export type FakeProviderModel = {
+  id: string;
+  name?: string;
+};
+
 export type FakeProviderServer = {
   url: string;
   requests: CapturedFakeProviderRequest[];
+  setModels: (models: FakeProviderModel[]) => void;
   close: () => Promise<void>;
 };
 
 type FakeProviderServerOptions = {
+  models?: FakeProviderModel[];
   timeoutMs?: number;
 };
 
@@ -26,10 +39,11 @@ export async function createFakeProviderServer(
   options: FakeProviderServerOptions = {},
 ): Promise<FakeProviderServer> {
   const requests: CapturedFakeProviderRequest[] = [];
+  let models = options.models ?? [{ id: "fake-model" }];
   const timeoutMs = options.timeoutMs ?? 30_000;
 
   const server = createServer((request, response) => {
-    void handleRequest(request, response, requests, timeoutMs);
+    void handleRequest(request, response, requests, { getModels: () => models, timeoutMs });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -45,6 +59,9 @@ export async function createFakeProviderServer(
   return {
     url: `http://127.0.0.1:${address.port}`,
     requests,
+    setModels: (nextModels) => {
+      models = nextModels;
+    },
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
@@ -62,7 +79,7 @@ async function handleRequest(
   request: IncomingMessage,
   response: Parameters<Parameters<typeof createServer>[0]>[1],
   requests: CapturedFakeProviderRequest[],
-  timeoutMs: number,
+  options: { getModels: () => FakeProviderModel[]; timeoutMs: number },
 ): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://fake-provider.local");
@@ -79,6 +96,76 @@ async function handleRequest(
       bodyJson,
     });
 
+    if (hasBadCredentials(request.headers)) {
+      writeJson(response, 401, {
+        error: {
+          code: "invalid_api_key",
+          message: "Invalid API key",
+        },
+      });
+      return;
+    }
+
+    if (mode === "json" && url.pathname.endsWith("/models")) {
+      writeJson(response, 200, {
+        object: "list",
+        data: options.getModels().map((model) => ({
+          id: model.id,
+          name: model.name ?? model.id,
+          object: "model",
+        })),
+      });
+      return;
+    }
+
+    if (mode === "json" && url.pathname.endsWith("/api/tags")) {
+      writeJson(response, 200, {
+        models: [
+          {
+            digest: "fake-ollama-digest",
+            modified_at: "2026-01-01T00:00:00Z",
+            name: "llama3.2:latest",
+            size: 123,
+          },
+        ],
+      });
+      return;
+    }
+
+    if (mode === "json" && url.pathname.endsWith("/api/chat")) {
+      writeJson(response, 200, {
+        done: true,
+        message: { role: "assistant", content: "fake provider response" },
+        model: "llama3.2",
+      });
+      return;
+    }
+
+    if (mode === "json" && url.pathname.endsWith("/messages")) {
+      writeJson(response, 200, {
+        id: "fake-provider-message",
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: "fake provider response" }],
+      });
+      return;
+    }
+
+    if (mode === "json" && url.pathname.endsWith("/responses")) {
+      writeJson(response, 200, {
+        id: "fake-provider-response",
+        object: "response",
+        output: [
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "fake provider response" }],
+          },
+        ],
+      });
+      return;
+    }
+
     if (mode === "json") {
       writeJson(response, 200, {
         id: "fake-provider-response",
@@ -94,8 +181,29 @@ async function handleRequest(
         "cache-control": "no-cache",
       });
       response.write('data: {"delta":"fake"}\n\n');
-      response.write('data: {"delta":" stream"}\n\n');
-      response.end("data: [DONE]\n\n");
+      const secondChunkTimer = setTimeout(() => {
+        response.write('data: {"delta":" stream"}\n\n');
+      }, 300);
+      const endTimer = setTimeout(() => {
+        response.end("data: [DONE]\n\n");
+      }, 700);
+      response.once("close", () => {
+        clearTimeout(secondChunkTimer);
+        clearTimeout(endTimer);
+      });
+      return;
+    }
+
+    if (mode === "midstream-error") {
+      response.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+      });
+      response.write('data: {"delta":"fake"}\n\n');
+      const destroyTimer = setTimeout(() => {
+        response.destroy(new Error("Fake provider mid-stream error"));
+      }, 100);
+      response.once("close", () => clearTimeout(destroyTimer));
       return;
     }
 
@@ -119,7 +227,7 @@ async function handleRequest(
             },
           });
         }
-      }, timeoutMs);
+      }, options.timeoutMs);
       timer.unref();
       response.once("close", () => clearTimeout(timer));
       return;
@@ -138,7 +246,8 @@ function readMode(url: URL): FakeProviderMode {
     mode === "stream" ||
     mode === "error" ||
     mode === "timeout" ||
-    mode === "first-byte-failure"
+    mode === "first-byte-failure" ||
+    mode === "midstream-error"
   ) {
     return mode;
   }
@@ -171,4 +280,14 @@ function parseJsonBody(bodyRaw: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+function hasBadCredentials(headers: IncomingHttpHeaders): boolean {
+  const authorization = Array.isArray(headers.authorization)
+    ? headers.authorization.join(" ")
+    : headers.authorization;
+  const apiKey = Array.isArray(headers["x-api-key"])
+    ? headers["x-api-key"].join(" ")
+    : headers["x-api-key"];
+  return [authorization, apiKey].some((value) => value?.includes("bad-provider-key"));
 }

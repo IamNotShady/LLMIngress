@@ -18,12 +18,6 @@ describe("feat-005 CI verification pipeline", () => {
     expect(workflow).toContain("pnpm build");
   });
 
-  it("does not include migration validation in the base CI feature", () => {
-    const workflow = readFileSync(workflowPath, "utf8");
-
-    expect(workflow).not.toMatch(/db:migrate:check|migration validation/i);
-  });
-
   it("keeps PostgreSQL fixture E2E opt-in for the base e2e command", () => {
     const postgresE2e = readFileSync(
       resolve(root, "tests/e2e/feat-003-postgres-fixture.e2e.spec.ts"),

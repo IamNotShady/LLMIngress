@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-13 20:37 AWST
-**Active Feature:** None (feat-003 through feat-009 completed)
+**Last Updated:** 2026-06-14 22:35 AWST
+**Active Feature:** feat-054 next (feat-001 through feat-053 and feat-055 completed)
 
 ## Status
 
@@ -12,6 +12,51 @@
 - [x] Built the minimum monorepo scaffold for Gateway, Console, Worker, and shared packages (feat-001).
 - [x] Split the MVP scope from `docs/PLAN.md` into 54 independently developable and testable features.
 - [x] Standardized feature tracker schema on `description` / `status` with strict verification contracts.
+- [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
+  - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
+  - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.
+  - Known-price requests record estimated tokens, actual request cost, baseline cost, and savings; unknown actual-price requests preserve token usage and mark costs unavailable.
+  - Verification passed: feat-045 unit tests, real Gateway/PostgreSQL E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-046 — Activity Console Page (passing)**:
+  - Added a protected Console Activity section that lists recent requests and shows a selected request detail.
+  - Detail displays provider/model hit, token totals, request cost, route reason, fallback attempts, and error code with explicit unavailable labels for missing runtime records.
+  - Verification passed: feat-046 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-047 — Usage and Cost Console Page (passing)**:
+  - Added a protected Usage & Cost section with 24h / 7d / 30d selection.
+  - Summarizes request count, token totals, cost total, and provider/model breakdown from recorded request usage and cost rows.
+  - Review follow-up fixed provider/model breakdown grouping to use stable provider/model IDs instead of display labels.
+  - Verification passed: feat-047 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-048 — Gateway Runtime Status Page (passing)**:
+  - Added a protected Runtime section backed by `gateway_runtime_status` and `runtime_errors`.
+  - Shows Gateway heartbeat health, Gateway status, applied/target config versions, reload result, last heartbeat timestamp, and recent runtime errors.
+  - Verification passed: feat-048 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-049 — Playground Live Public API Test (passing)**:
+  - Added a protected browser-only Playground that accepts a user-pasted Agent API key, loads allowed Virtual Models from Gateway `GET /v1/models`, and sends a live `POST /v1/chat/completions` directly from the browser to Gateway.
+  - Added Gateway CORS support for default local Console origins and explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
+  - Review follow-up fixed blank/relative Gateway base URLs so the Playground cannot accidentally send the pasted key to Console same-origin paths.
+  - Verification passed: feat-049 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-050 — MVP Happy Path E2E (passing)**:
+  - Added a clean-run MVP happy path E2E covering Console setup, price configuration, Provider API key storage, Virtual Model, Route Policy, Agent, Agent API key access, limits, Gateway request, Activity/Usage visibility, and Route Policy hot reload without restarting Gateway.
+  - The E2E pre-seeds the fake-provider-backed provider/model catalog because `feat-020` intentionally blocks arbitrary OpenAI-compatible custom endpoints in Console UI; Provider API key and the rest of the user-facing config still go through authenticated Console/Gateway paths.
+  - Verification passed: feat-050 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-051 — MVP Streaming E2E (passing)**:
+  - Added streaming Activity recording for Gateway chat completions, Responses, and Messages.
+  - Successful streaming requests now create `request_activity` before provider execution and complete it when the provider stream ends, preserving selected provider/model route metadata.
+  - Pre-stream streaming failures now complete the started Activity row immediately with the returned status.
+  - Verification passed: feat-051 unit tests, real Gateway/PostgreSQL/fake-provider streaming E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-052 — Claude Code Messages E2E (passing)**:
+  - Added Anthropic Messages support for Claude Code style content block arrays, tool definitions, and `tool_choice` passthrough.
+  - Non-streaming and streaming Anthropic provider payloads now preserve those fields, and metadata token estimation extracts text from Anthropic content blocks.
+  - E2E verifies a valid Agent key gets HTTP 200 from the Anthropic provider path and `request_activity` records the Anthropic provider/model hit.
+  - Verification passed: feat-052 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-053 — Limits and Fallback E2E (passing)**:
+  - Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code.
+  - The same E2E verifies first-byte provider failure falls back to the second candidate, returns HTTP 200, and records both the final Activity provider/model hit and failed fallback attempt.
+  - Verification passed: feat-053 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-055 — CI Migration Validation (passing)**:
+  - Added `pnpm run db:migrate:check`, backed by an isolated PostgreSQL fixture database.
+  - The command applies all migrations, reruns them to verify idempotent skips, and is now executed by CI after dependency install.
+  - Verification passed: feat-055 unit tests, real PostgreSQL E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -66,6 +111,35 @@
   - Added indexes for Activity/Usage list queries, budget reservation cleanup, worker job claiming, provider health lookups, Gateway heartbeat lookup, and runtime error lookup.
   - Added feat-009 unit and real PostgreSQL E2E tests; both were observed failing before implementation and passing after implementation.
   - Review follow-up fixed P2+ schema issues only: nullable provider-level health summary uniqueness, large budget token counters, job lease pair integrity, and provider/model ownership mismatch checks.
+- [x] **feat-010 — Master Key and Secret Encryption (passing)**:
+  - Added `@llmingress/security` for inline/file master key loading and AES-256-GCM secret encryption envelopes.
+  - Covered same-key decrypt, wrong-key failure, non-plaintext ciphertext, file-backed master key source, and no plaintext console logging.
+  - Code review found no blocking issues after removing generated build artifacts from the diff.
+- [x] **feat-011 — Config Publisher and Postgres Notifications (passing)**:
+  - Added shared `@llmingress/config` config publisher for routing-visible writes, config versions, change events, and `config_changed` Postgres notifications.
+  - Publisher wraps the caller's config write, `config_versions`, `config_change_events`, and `pg_notify` in one transaction, with rollback and no notify on write failure.
+  - Code review fix narrowed NOTIFY payload to version metadata and hardened listener payload parsing.
+- [x] **feat-012 — Gateway Config Snapshot Reload (passing)**:
+  - Added Gateway config snapshot runtime that loads the latest PostgreSQL config on startup, applies newer `config_changed` notifications without restart, and reconciles missed versions.
+  - Gateway `/health` now reports the active config version and provider count.
+  - Code review P2+ fix covered concurrent notifications while a reload is in flight so a newer version is not dropped until the next reconcile.
+- [x] **feat-013 — Console First Run and Login (passing)**:
+  - Added Console auth schema for singleton admin credentials and hashed expiring sessions.
+  - Added scrypt admin password hashing, setup/login/logout route handlers, and session-cookie protected dashboard rendering.
+  - Real Chromium E2E covers first-run setup, post-setup login requirement, and valid login reaching the dashboard.
+- [x] **feat-014 — Static Price Registry (passing)**:
+  - Added `@llmingress/billing` with MVP static price snapshot `mvp-static-2026-06-13`.
+  - Built-in registry covers OpenAI GPT-4.1 / 4.1 mini / 4.1 nano and Anthropic Claude Fable 5, Opus 4.8, Sonnet 4.6, and Haiku 4.5 entries from official pricing docs.
+  - Unknown models return explicit `unknown_price`; cost estimation returns `unavailable` instead of zero when price is unknown.
+- [x] **feat-015 — Model Price Override Management (passing)**:
+  - Added `model_price_overrides` schema and effective price resolution that prefers matching manual overrides over built-in prices.
+  - Console dashboard now shows the built-in `gpt-4.1-mini` price, accepts a manual override, and updates subsequent sample cost estimates.
+  - Saving an override is authenticated and uses the shared config publisher so price changes emit routing-visible config change events.
+  - Review follow-up fixed full E2E concurrency by serializing Console Next dev-server specs with a process lock.
+- [x] **feat-016 — Provider CRUD and Enablement (passing)**:
+  - Added authenticated Console provider create, edit, enable, disable, and list flows.
+  - Provider writes use the shared config publisher and record routing-visible config change events.
+  - Real Chromium E2E verifies disabled providers are excluded from Gateway config snapshots and re-enabled providers return.
 
 ### What's In Progress
 
@@ -73,14 +147,11 @@
 
 ### What's Next
 
-1. `feat-010` — Master Key and Secret Encryption.
-2. `feat-011` — Config Publisher and Postgres Notifications.
-3. `feat-055` — CI Migration Validation after `feat-007` produces the migration command.
+1. `feat-054` — MVP Local Deployment Smoke.
 
 ## Blockers / Risks
 
-- [ ] Playwright browsers are NOT installed (`pnpm exec playwright install chromium` not yet run). feat-002's E2E spec needs no browser, but Console-page E2E features (feat-013+) will need it.
-- [ ] Console page E2E features (feat-013+) will need Playwright browser installation before browser-driven tests are added.
+- [x] Playwright Chromium is installed locally; Console page E2E can run in this workspace.
 - [ ] Review debt to resolve before related features: clarify or rename `PostgresFixture.migrate()` test-only fixture helper, make migration directory resolution independent of `process.cwd()` before app-start migration usage, revisit `config_change_events.changed_record_id` typing when non-UUID config tables are introduced, and add semantic validation for `agent_limits` combinations in feat-031.
 - [ ] Before the final real-provider MVP smoke, re-check that the active Codex shell can still see both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; both were visible on 2026-06-13 19:11 AWST.
 
@@ -186,6 +257,79 @@
 - `tests/e2e/feat-009-runtime-schema.e2e.spec.ts` - Added real Postgres coverage for review-fix invariants.
 - `feature_list.json` - feat-009 evidence updated with review-fix verification.
 - `progress.md` - Session state and review-fix evidence updated.
+- `packages/security/package.json` - New security workspace package for feat-010.
+- `packages/security/tsconfig.json` - TypeScript build configuration for the security package.
+- `packages/security/src/master-key.ts` - Master key source loading and stable key id derivation.
+- `packages/security/src/secret-encryption.ts` - AES-256-GCM secret envelope encryption and decryption.
+- `packages/security/src/index.ts` - Security package exports.
+- `tests/features/feat-010-secret-encryption.unit.test.ts` - New secret encryption unit tests.
+- `tests/e2e/feat-010-secret-encryption.e2e.spec.ts` - New bootstrap-to-encryption E2E test.
+- `pnpm-lock.yaml` - Workspace importer entry for `@llmingress/security`.
+- `feature_list.json` - feat-010 marked `passing` with verification and review evidence.
+- `progress.md` - feat-010 session evidence updated.
+- `packages/config/package.json` - Added direct `pg` dependency for the shared config publisher.
+- `packages/config/src/config-publisher.ts` - New transactional config publisher and `config_changed` listener helper.
+- `packages/config/src/index.ts` - Exported config publisher types and functions.
+- `tests/features/feat-011-config-publisher.unit.test.ts` - New publisher transaction and rollback unit tests.
+- `tests/e2e/feat-011-config-publisher.e2e.spec.ts` - New real Postgres config publisher notification E2E.
+- `pnpm-lock.yaml` - Added `pg` dependency under the config package importer.
+- `feature_list.json` - feat-011 marked `passing` with verification and review evidence.
+- `progress.md` - feat-011 session evidence updated.
+- `apps/gateway/package.json` - Added direct `pg` dependency for Gateway config snapshot reload.
+- `apps/gateway/src/config-reload.ts` - New Gateway config snapshot loader, notification listener wiring, reconcile loop, and in-flight reload handling.
+- `apps/gateway/src/main.ts` - Gateway health now exposes config version and provider count from the runtime snapshot.
+- `tests/features/feat-012-config-reload.unit.test.ts` - New config reload unit tests, including the P2 concurrent notification review case.
+- `tests/e2e/feat-012-config-reload.e2e.spec.ts` - New real Gateway process E2E for startup snapshot, notification reload, and reconcile catch-up.
+- `pnpm-lock.yaml` - Added `pg` dependency under the Gateway package importer.
+- `feature_list.json` - feat-012 marked `passing` with verification and review evidence.
+- `progress.md` - feat-012 session evidence updated.
+- `packages/db/migrations/0004_console_auth_schema.sql` - New Console auth schema for singleton admin and hashed sessions.
+- `apps/console/src/server/auth.ts` - New Console auth helper for admin password hashing, session creation, verification, and cookie options.
+- `apps/console/src/app/api/auth/setup/route.ts` - New first-run admin creation endpoint.
+- `apps/console/src/app/api/auth/login/route.ts` - New admin login endpoint that issues a session cookie.
+- `apps/console/src/app/api/auth/logout/route.ts` - New logout endpoint that deletes the active session.
+- `apps/console/src/app/page.tsx` - Console home now renders first-run setup, login, or dashboard based on auth state.
+- `apps/console/src/app/globals.css` - Updated Console auth and dashboard layout styles.
+- `apps/console/src/main.ts` - Console startup passes the resolved database URL to the Next child process.
+- `apps/console/package.json` - Added direct `pg` dependency for Console server-side auth queries.
+- `tests/features/feat-013-console-auth.unit.test.ts` - New auth hashing and migration contract tests.
+- `tests/e2e/feat-013-console-auth.e2e.spec.ts` - New Chromium E2E for first-run setup and login.
+- `pnpm-lock.yaml` - Added `pg` dependency under the Console package importer.
+- `feature_list.json` - feat-013 marked `passing` with verification and review evidence.
+- `progress.md` - feat-013 session evidence updated.
+- `packages/billing/package.json` - New billing workspace package.
+- `packages/billing/tsconfig.json` - TypeScript build configuration for the billing package.
+- `packages/billing/src/price-registry.ts` - New built-in static token price registry and cost estimator.
+- `packages/billing/src/index.ts` - Billing package exports.
+- `tests/features/feat-014-price-registry.unit.test.ts` - New unit tests for known prices, unknown prices, and cost estimation.
+- `tests/e2e/feat-014-price-registry.e2e.spec.ts` - New Playwright E2E smoke for known and unknown price resolution.
+- `pnpm-lock.yaml` - Added billing workspace importer.
+- `feature_list.json` - feat-014 marked `passing` with verification and review evidence.
+- `progress.md` - feat-014 session evidence updated.
+- `packages/db/migrations/0005_model_price_overrides.sql` - New manual model price override schema.
+- `packages/billing/src/price-registry.ts` - Added manual override-aware effective price resolution.
+- `packages/billing/src/index.ts` - Exported manual override price resolution types and helper.
+- `packages/billing/package.json` - Added direct price-registry subpath export for Next server usage.
+- `packages/config/package.json` - Added direct config-publisher subpath export for Next server usage.
+- `apps/console/package.json` - Added `@llmingress/billing` dependency.
+- `apps/console/src/server/price-overrides.ts` - New manual price override query/save helper using config publisher.
+- `apps/console/src/app/api/prices/override/route.ts` - New authenticated manual price override endpoint.
+- `apps/console/src/app/page.tsx` - Dashboard now shows built-in/manual price state and sample cost estimate.
+- `apps/console/src/app/globals.css` - Added price panel and override form styles.
+- `tests/features/feat-015-price-override.unit.test.ts` - New tests for override precedence and schema contract.
+- `tests/e2e/feat-015-price-override.e2e.spec.ts` - New Console E2E for built-in price display, manual override save, estimate update, and config event.
+- `tests/support/process-lock.ts` - New E2E helper to serialize Console Next dev-server specs.
+- `tests/e2e/feat-013-console-auth.e2e.spec.ts` - Uses the Console dev-server process lock to avoid full-suite Next dev workspace conflicts.
+- `feature_list.json` - feat-015 marked `passing`; feat-005 evidence updated with the Console E2E concurrency regression repair.
+- `progress.md` - feat-015 session evidence updated.
+- `apps/console/src/server/providers.ts` - New provider list/create/update/enablement helpers using config publisher.
+- `apps/console/src/app/api/providers/route.ts` - New authenticated provider CRUD endpoint.
+- `apps/console/src/app/page.tsx` - Dashboard now lists providers and exposes create/edit/enable/disable controls.
+- `apps/console/src/app/globals.css` - Added provider panel and provider form styles.
+- `tests/features/feat-016-provider-crud.unit.test.ts` - New provider form normalization and schema contract tests.
+- `tests/e2e/feat-016-provider-crud.e2e.spec.ts` - New Console E2E for provider CRUD, config events, and disabled-provider snapshot exclusion.
+- `feature_list.json` - feat-016 marked `passing` with verification and review evidence.
+- `progress.md` - feat-016 session evidence updated.
 
 ## Evidence of Completion
 
@@ -296,7 +440,487 @@
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-009-runtime-schema.e2e.spec.ts` → 1 passed.
   - `pnpm run verify` passed after the review fix.
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 passing features.
+- [x] feat-010 verification and review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-010-secret-encryption.unit.test.ts` failed because `packages/security` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-010-secret-encryption.e2e.spec.ts --grep 'provider secret encrypts decrypts rejects wrong key and hides plaintext'` failed because `packages/security` was missing.
+  - `pnpm exec vitest run tests/features/feat-010-secret-encryption.unit.test.ts` → 4 passed.
+  - `pnpm test:e2e tests/e2e/feat-010-secret-encryption.e2e.spec.ts --grep 'provider secret encrypts decrypts rejects wrong key and hides plaintext'` → 1 passed.
+  - `pnpm run verify` passed after feat-010 implementation.
+  - Before marking feat-010 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 9 prior passing features.
+  - Code review found generated build artifacts in the diff; removed them before proceeding. No remaining blocking review issues were found.
+  - After marking feat-010 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 10 passing features.
+- [x] feat-011 verification and review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-011-config-publisher.unit.test.ts` failed because `createConfigPublisher` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-011-config-publisher.e2e.spec.ts --grep 'config publisher commits data and version in one transaction and sends one notify'` failed because `createConfigChangedListener` was missing.
+  - `pnpm exec vitest run tests/features/feat-011-config-publisher.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-011-config-publisher.e2e.spec.ts --grep 'config publisher commits data and version in one transaction and sends one notify'` → 1 passed.
+  - `pnpm run verify` passed after feat-011 implementation.
+  - Before marking feat-011 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 10 prior passing features.
+  - Code review found and fixed oversized NOTIFY payload risk and listener payload parsing hardening.
+  - After marking feat-011 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 11 passing features.
 
 ## Notes for Next Session
 
-`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next likely feature is `feat-010` unless the user explicitly picks a different unblocked feature.
+`pnpm test:e2e` now exists, so later feature verification commands can run their E2E half. Next features should follow the established TDD order: write `feat-XXX-<slug>.unit.test.ts` and `feat-XXX-<slug>.e2e.spec.ts` first, watch them fail, then implement. Before starting Console-page E2E work, run `pnpm exec playwright install chromium`. Next feature is `feat-012` unless the user explicitly picks a different unblocked feature.
+
+- [x] feat-017 verification and P2+ review passed:
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts` failed because `apps/console/src/server/provider-keys` and migration `0006` were missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once on create and rotate ciphertext stored metadata only after reload'` failed because the Console dashboard had no Provider API key controls.
+  - Implemented `provider_api_keys` ciphertext storage, encrypted save/rotate helper, authenticated Console route, one-time plaintext response page, dashboard metadata-only reads, and Console master-key propagation.
+  - Review fix: rejected Provider API keys too short to expose as a safe prefix, preventing later metadata from becoming full plaintext.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once on create and rotate ciphertext stored metadata only after reload'` → 1 passed.
+  - `pnpm run verify` passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` passed with 17/17 E2E tests.
+  - Before marking feat-017 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 16 prior passing features.
+
+- [x] feat-018 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-018-openai-adapter.unit.test.ts` failed because `apps/gateway/src/provider-adapters/openai` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-018-openai-adapter.e2e.spec.ts --grep 'openai adapter sends compatible payload auth header and maps response error'` failed because the adapter module was missing.
+  - Implemented a Gateway OpenAI chat-completions adapter that sends normalized requests to an OpenAI-compatible fake provider with Bearer auth and maps success / provider error responses into Gateway result objects.
+  - `pnpm exec vitest run tests/features/feat-018-openai-adapter.unit.test.ts` → 2 passed.
+  - `pnpm test:e2e tests/e2e/feat-018-openai-adapter.e2e.spec.ts --grep 'openai adapter sends compatible payload auth header and maps response error'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-018 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 17 prior passing features.
+  - Local P2+ code review found no blocking issues.
+
+- [x] feat-019 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-019-anthropic-adapter.unit.test.ts` failed because `apps/gateway/src/provider-adapters/anthropic` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-019-anthropic-adapter.e2e.spec.ts --grep 'anthropic adapter sends messages payload auth headers and maps response error'` failed because the adapter module was missing.
+  - Implemented a Gateway Anthropic messages adapter with `x-api-key`, `anthropic-version`, normalized messages payload mapping, success mapping, and provider error mapping; extended the fake provider with Anthropic-shaped `/v1/messages` JSON success responses.
+  - `pnpm exec vitest run tests/features/feat-019-anthropic-adapter.unit.test.ts` → 2 passed.
+  - `pnpm test:e2e tests/e2e/feat-019-anthropic-adapter.e2e.spec.ts --grep 'anthropic adapter sends messages payload auth headers and maps response error'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-019 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 18 prior passing features.
+  - Local P2+ code review found no blocking issues.
+
+- [x] feat-020 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-020-openai-compatible-template.unit.test.ts` failed because `apps/console/src/server/provider-templates` and migration `0007` were missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-020-openai-compatible-template.e2e.spec.ts --grep 'whitelisted template accepted arbitrary custom endpoint rejected'` failed because Console had no Provider template control.
+  - Implemented 0007 `provider_template_id`, the whitelisted DeepSeek OpenAI-compatible template with fixed base URL/capabilities, Console template creation, and base URL locking for template providers.
+  - P2+ review found a legacy create/update bypass for arbitrary API-key base URLs; added tests and fixed `normalizeProviderFormInput` / `updateProvider` to reject custom OpenAI-compatible endpoints outside fixed native providers or whitelisted templates.
+  - `pnpm exec vitest run tests/features/feat-020-openai-compatible-template.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-020-openai-compatible-template.e2e.spec.ts --grep 'whitelisted template accepted arbitrary custom endpoint rejected'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-020 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 19 prior passing features.
+
+- [x] feat-021 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-021-ollama-adapter.unit.test.ts` failed because `apps/gateway/src/provider-adapters/ollama` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-021-ollama-adapter.e2e.spec.ts --grep 'ollama loopback private network url accepted template paths used public url requires confirmation'` failed because the Ollama adapter module was missing.
+  - Implemented a native Ollama Gateway adapter using fixed `/api/tags` and `/api/chat` template paths, extended the fake provider with Ollama-shaped model-list/chat responses, added the Ollama local provider template and Console form/API handling, and added migration `0008_ollama_provider_template.sql`.
+  - P2+ review found and fixed IPv6 loopback/private URL misclassification plus legacy local-provider create bypasses that skipped the Ollama template and public-network risk confirmation.
+  - `pnpm exec vitest run tests/features/feat-021-ollama-adapter.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-021-ollama-adapter.e2e.spec.ts --grep 'ollama loopback private network url accepted template paths used public url requires confirmation'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-021 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 20 prior passing features.
+
+- [x] feat-022 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-022-job-runner.unit.test.ts` failed because `apps/worker/src/job-runner` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-022-job-runner.e2e.spec.ts --grep 'worker leases job wakes on notify retries with backoff and records result once'` failed because the job runner module was missing.
+  - Implemented a Worker job runner with atomic Postgres pending-job claiming, lease ownership, `job_created` LISTEN/NOTIFY wakeups, retry backoff, guarded success/failure finalization, and Worker startup lifecycle wiring.
+  - P2+ review found and fixed unsupported-job claiming when no handler is registered, and retry backoff being calculated from claim time instead of handler failure time.
+  - `pnpm exec vitest run tests/features/feat-022-job-runner.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-022-job-runner.e2e.spec.ts --grep 'worker leases job wakes on notify retries with backoff and records result once'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-022 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 21 prior passing features.
+
+- [x] feat-023 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts` failed because the model refresh job planner/handler was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'model refresh writes derived rows marks missing referenced models unavailable and publishes config version only on routing-visible change'` failed because `model_refresh` was not implemented.
+  - Implemented provider model refresh planning, fake provider model-list support, worker `model_refresh` handler wiring, derived model row writes, missing referenced model `unavailable` handling, missing unreferenced model `not_listed` handling, and config publishing only when routing-visible availability changed.
+  - P2+ review found and fixed duplicate provider model ids causing refresh job unique-constraint failures; the fix deduplicates provider lists before planning and uses an insert upsert as the database write guard.
+  - P2+ review found and fixed display-name-only changes on referenced models incorrectly publishing routing-visible config versions.
+  - During feat-023 regression, repaired a feat-022 wakeup race where `job_created` notifications could be dropped while an empty claim was in flight; also switched Postgres claim timestamps to database time. `pnpm exec vitest run tests/features/feat-022-job-runner.unit.test.ts` → 4 passed, and the feat-022 real PostgreSQL E2E → 1 passed.
+  - `pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts` → 4 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'model refresh writes derived rows marks missing referenced models unavailable and publishes config version only on routing-visible change'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-023 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 22 prior passing features.
+  - After marking feat-023 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 23 passing features.
+
+- [x] feat-024 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-024-connectivity-check.unit.test.ts` failed because `apps/worker/src/provider-connectivity-check` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-024-connectivity-check.e2e.spec.ts --grep 'manual provider connectivity check records success and failure results'` failed because the handler module was missing.
+  - Implemented a `provider_connectivity_check` Worker handler that reads the Provider, decrypts the stored Provider API key with the Worker master key, performs a lightweight OpenAI-compatible probe, and stores structured success, bad-credential, or timeout results on the job record.
+  - P2+ review found and fixed plaintext API key persistence in `jobs.payload`; E2E now stores keys in encrypted `provider_api_keys`, sends only `providerId` in job payload, and asserts plaintext keys do not persist in `jobs.payload` or `provider_api_keys.encrypted_key`.
+  - Added `@llmingress/security` as a Worker dependency and aligned Worker tsconfig with security package TS extension handling so the dependency builds under NodeNext.
+  - `pnpm exec vitest run tests/features/feat-024-connectivity-check.unit.test.ts` → 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-024-connectivity-check.e2e.spec.ts --grep 'manual provider connectivity check records success and failure results'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-024 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 23 prior passing features.
+  - After marking feat-024 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 24 passing features.
+
+- [x] feat-026 verification and P2+ review passed:
+  - feat-025 was intentionally skipped because it depends on unfinished feat-032.
+  - Red phase: `pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts` failed because `apps/console/src/server/agents` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with active dependencies is blocked'` failed because Agent CRUD was not implemented.
+  - Implemented Agent create/edit/list/delete helpers, authenticated `/api/agents`, Dashboard Agent management UI, and config publisher integration for Agent changes.
+  - Delete is blocked with a dependency error when the Agent has enabled API keys or request attribution; disabled keys without request attribution are cleaned up before the Agent row is deleted.
+  - P2+ review found and fixed delete checks relying on `rowCount` from the ConfigPublisher client, then added `for update` row locking before dependency validation.
+  - `pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with active dependencies is blocked'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-026 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 24 prior passing features.
+  - After marking feat-026 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 25 passing features.
+
+- [x] feat-027 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-027-agent-key-lifecycle.unit.test.ts` failed because `apps/console/src/server/agent-api-keys` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-027-agent-key-lifecycle.e2e.spec.ts --grep 'agent key plaintext once hash prefix status metadata persisted after rotate disable delete'` failed because Agent API key lifecycle was not implemented.
+  - Implemented Agent API key generation, SHA-256 hash storage, prefix/status/metadata listing, one-time plaintext create/rotate pages, rotate, disable, delete, and Dashboard controls.
+  - Delete is blocked when an Agent API key has request attribution, preserving activity history.
+  - P2+ review found no additional blocking issues after verifying plaintext does not persist in Dashboard, `agent_api_keys.key_hash`, metadata, or DB assertions.
+  - `pnpm exec vitest run tests/features/feat-027-agent-key-lifecycle.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-027-agent-key-lifecycle.e2e.spec.ts --grep 'agent key plaintext once hash prefix status metadata persisted after rotate disable delete'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-027 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 25 prior passing features.
+  - After marking feat-027 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 26 passing features.
+
+- [x] feat-028 verification and P2+ review passed:
+  - feat-025 remains intentionally not started because it depends on unfinished feat-032.
+  - Implemented Virtual Model create/edit/list/delete helpers, authenticated `/api/virtual-models`, Dashboard Virtual Model management UI, name normalization, duplicate-name rejection, and config publisher integration for Virtual Model changes.
+  - Delete is blocked when a Virtual Model is referenced by a route policy, used as an Agent API key default, or allowed by an Agent API key.
+  - P2+ review found no additional blocking issues after checking duplicate handling and row locking before delete dependency validation.
+  - During feat-028 regression, repaired the full feat-005 E2E smoke after additional Console specs could queue behind the shared Next dev-server process lock long enough to hit the 30s Playwright test timeout. Raised Playwright and process-lock timeouts to 90s, then reran `pnpm test:e2e` and feat-005 verification successfully.
+  - `pnpm exec vitest run tests/features/feat-028-virtual-model-crud.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-028-virtual-model-crud.e2e.spec.ts --grep 'virtual model crud rejects duplicate name and blocks referenced delete'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-028 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 26 prior passing features.
+  - After marking feat-028 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 27 passing features.
+
+- [x] feat-029 verification and P2+ review passed:
+  - Added TDD tests first: `tests/features/feat-029-route-policy-crud.unit.test.ts` and `tests/e2e/feat-029-route-policy-crud.e2e.spec.ts`.
+  - Red phase: `pnpm exec vitest run tests/features/feat-029-route-policy-crud.unit.test.ts` failed because `apps/console/src/server/route-policies` was missing.
+  - Implemented Route Policy form normalization, route reason metadata, provider model option listing, create/update/list/delete helpers, authenticated `/api/route-policies`, and Dashboard Route Policies UI.
+  - The UI persists primary and fallback provider model candidates, route strategy/cost preference, and route reason metadata through real PostgreSQL.
+  - P2+ self-review found no blocking code issues in transaction boundaries, candidate duplicate handling, one-policy-per-Virtual-Model enforcement, or delete/update behavior.
+  - During regression, repaired a feat-028 locator conflict by keeping Route Policy card headings fixed as `Route policy` and rendering the referenced Virtual Model in separate body text.
+  - `pnpm exec vitest run tests/features/feat-029-route-policy-crud.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-029-route-policy-crud.e2e.spec.ts --grep 'route policy CRUD persists candidates cost preference and fallback chain'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e` -> 28 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-029 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 27 prior passing features.
+  - After marking feat-029 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 28 passing features.
+
+- [x] feat-030 verification and P2+ review passed:
+  - feat-025 remains intentionally not started because it depends on unfinished feat-032.
+  - Red phase: `pnpm exec vitest run tests/features/feat-030-allowed-default-models.unit.test.ts` failed because Agent API key virtual model access helpers were missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-030-allowed-default-models.e2e.spec.ts --grep 'default virtual model must be in allowed list'` failed because the Dashboard did not expose `Allowed virtual models`.
+  - Implemented Agent API key allowed/default Virtual Model access helpers, `updateVirtualModelAccess` API handling, Dashboard allowed/default controls, config publisher integration, and default-in-allowed validation.
+  - P2+ review found no blocking issues after checking transaction rollback, duplicate allowed-id normalization, validation at both API normalization and server write entry, config change publication, and Agent API key delete cascade behavior.
+  - `pnpm exec vitest run tests/features/feat-030-allowed-default-models.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-030-allowed-default-models.e2e.spec.ts --grep 'default virtual model must be in allowed list'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-030 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 28 prior passing features.
+  - After marking feat-030 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 29 passing features.
+
+- [x] feat-031 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts` failed because `apps/console/src/server/agent-limits` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form saves budget rpm tpm token rules and blocks cost budget when selected model has unknown price'` failed because the Dashboard did not expose `Budget USD limit`.
+  - Implemented Agent API key limit normalization, listing, summaries, transaction-backed save, `agent_limits` config publisher integration, authenticated `/api/agent-limits`, Dashboard Budget/RPM/TPM/Token controls, fixed period/unit combinations, and an unknown-price cost-budget guard that allows saving after a manual price override exists.
+  - P2+ review found no blocking issues after checking Agent API key row locking, rollback before deleting old rules, stale period cleanup, unknown-price validation, config change publication, and fixed limit type period/unit combinations.
+  - `pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts` -> 4 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form saves budget rpm tpm token rules and blocks cost budget when selected model has unknown price'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-031 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 29 prior passing features.
+  - After marking feat-031 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 30 passing features.
+
+- [x] feat-032 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-032-route-engine.unit.test.ts` failed because `apps/gateway/src/route-engine` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-032-route-engine.e2e.spec.ts --grep 'fixed routing and cost first routing are deterministic with route reason'` failed because the route engine was not implemented.
+  - Extended the Gateway config snapshot with enabled route policies, available primary/fallback provider model candidates, and effective built-in/manual candidate prices.
+  - Implemented deterministic route selection: `fixed` selects the first configured primary candidate, `cost_first` selects the lowest estimated-cost priced primary candidate, unknown-price candidates do not participate in cost optimization, and every decision returns route reason metadata.
+  - P2+ review found no blocking issues after checking deterministic tie-breaking, fallback exclusion from primary selection, unknown-price behavior, and snapshot filtering to enabled Virtual Models, enabled Providers, and available Provider Models.
+  - `pnpm exec vitest run tests/features/feat-032-route-engine.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-032-route-engine.e2e.spec.ts --grep 'fixed routing and cost first routing are deterministic with route reason'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-032 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 30 prior passing features.
+  - After marking feat-032 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 31 passing features.
+
+- [x] feat-025 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-025-model-soft-delete.unit.test.ts` failed because `buildRoutePolicyWarnings` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-025-model-soft-delete.e2e.spec.ts --grep 'missing referenced model marked unavailable excluded from routing and warning visible'` failed because Console did not show an affected route warning.
+  - Confirmed existing Worker refresh logic already keeps referenced missing models and marks them `unavailable`; confirmed Gateway snapshots from feat-032 exclude unavailable Provider Models from routing.
+  - Added Console Route Policy warnings for non-available candidates and rendered them on the Dashboard Route Policy card.
+  - E2E verifies the full chain with fake provider, real PostgreSQL, Worker `model_refresh`, Gateway snapshot exclusion, route selection of the remaining available candidate, and real Chromium Console warning visibility.
+  - P2+ review found no blocking issues after checking warning scope, DB row retention, routing exclusion, and E2E altitude.
+  - `pnpm exec vitest run tests/features/feat-025-model-soft-delete.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-025-model-soft-delete.e2e.spec.ts --grep 'missing referenced model marked unavailable excluded from routing and warning visible'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-025 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 31 prior passing features.
+  - After marking feat-025 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 32 passing features.
+
+- [x] feat-033 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-033-fallback-chain.unit.test.ts` failed because `apps/gateway/src/fallback-chain` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-033-fallback-chain.e2e.spec.ts --grep 'first-byte failure falls back and records failed attempt'` failed because fallback chain execution was not implemented.
+  - Added Gateway fallback chain execution that builds selected-candidate plus fallback attempt order, calls the OpenAI provider adapter, falls back only for pre-first-byte failures, returns the successful fallback response, and records failed attempts in `fallback_events`.
+  - E2E verifies fake-provider first-byte socket failure, successful fallback response, real PostgreSQL `request_activity`, and persisted `fallback_events`.
+  - P2+ review found no blocking issues after checking pre-first-byte gating, non-first-byte failure behavior, attempt ordering, and failed-attempt persistence.
+  - `pnpm exec vitest run tests/features/feat-033-fallback-chain.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-033-fallback-chain.e2e.spec.ts --grep 'first-byte failure falls back and records failed attempt'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-033 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 32 prior passing features.
+  - After marking feat-033 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 33 passing features.
+
+- [x] feat-034 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-034-auth.unit.test.ts` failed because `apps/gateway/src/auth` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` failed because Gateway API key authentication was not implemented.
+  - Added Gateway Agent API key auth helpers using the same `sha256:v1` hashing scheme as Console Agent API key storage.
+  - Added `/v1/chat/completions` authentication before routing response; missing, invalid, and disabled keys return 401 with stable error codes and request id, while valid enabled keys return 200.
+  - P2+ review found no blocking issues after checking hash compatibility, disabled-key handling, request-id propagation, and that `/health` remains unauthenticated.
+  - `pnpm exec vitest run tests/features/feat-034-auth.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-034 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 33 prior passing features.
+  - After marking feat-034 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 34 passing features.
+
+- [x] feat-035 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-035-virtual-model-access.unit.test.ts` failed because `apps/gateway/src/virtual-model-access` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-035-virtual-model-access.e2e.spec.ts --grep 'models list allowed names disallowed post returns 403 missing model uses default or returns 400'` failed because `GET /v1/models` returned 404.
+  - Added Gateway Virtual Model access helpers, `/v1/models` allowed-list response, and `/v1/chat/completions` model contract after authentication.
+  - `GET /v1/models` returns only allowed Virtual Model names; explicit disallowed POST model returns 403 `virtual_model_not_allowed`; missing POST model uses the Agent API key default Virtual Model; missing POST model without default returns 400 `missing_model`.
+  - Adapted feat-034 valid-key fixture to include an allowed Virtual Model under the new contract.
+  - P2+ review found no blocking issues after checking allowed-list filtering, default resolution, request-id propagation, and auth-before-model validation ordering.
+  - `pnpm exec vitest run tests/features/feat-035-virtual-model-access.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-035-virtual-model-access.e2e.spec.ts --grep 'models list allowed names disallowed post returns 403 missing model uses default or returns 400'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-035 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 34 prior passing features.
+  - After marking feat-035 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 35 passing features.
+
+- [x] feat-036 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts` failed because `apps/gateway/src/chat-completions` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-036-chat-completions.e2e.spec.ts --grep 'chat completions returns provider response and rejects disallowed virtual model without calling provider'` failed because `/v1/chat/completions` still returned the authenticated stub instead of the fake provider response.
+  - Added Gateway OpenAI chat completion normalization, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, fallback-chain execution, and real provider response forwarding for `/v1/chat/completions` after auth and Virtual Model access checks.
+  - Disallowed Virtual Models return 403 `virtual_model_not_allowed` before any provider call.
+  - Adapted feat-034/035 E2E fixtures to seed real provider routes under the new endpoint semantics.
+  - P2+ review found no blocking issues after checking auth-before-provider-call ordering, disallowed no-call behavior, provider key decryption, route snapshot usage, and fallback-chain integration.
+  - `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-036-chat-completions.e2e.spec.ts --grep 'chat completions returns provider response and rejects disallowed virtual model without calling provider'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-035-virtual-model-access.e2e.spec.ts --grep 'models list allowed names disallowed post returns 403 missing model uses default or returns 400'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-036 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 35 prior passing features.
+  - After marking feat-036 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 36 passing features.
+
+- [x] feat-037 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-037-responses-stateless.unit.test.ts` failed because `apps/gateway/src/responses` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-037-responses-stateless.e2e.spec.ts --grep 'responses stateless succeeds stateful fields return 400'` failed because `/v1/responses` returned 404.
+  - Added Gateway OpenAI Responses stateless normalization, explicit `unsupported_stateful_responses` errors for `previous_response_id` and `store=true`, `/v1/responses` auth plus Virtual Model access, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, and OpenAI provider adapter `/responses` forwarding.
+  - Provider requests are forced to `store=false` for the stateless subset.
+  - Fake provider now returns a deterministic Responses-shaped body.
+  - P2+ review found and fixed provider store default risk by asserting forwarded `store=false`; no remaining blocking issues after checking stateful-field rejection before provider calls, auth/access ordering, provider path `/v1/responses`, and chat adapter compatibility.
+  - `pnpm exec vitest run tests/features/feat-037-responses-stateless.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-037-responses-stateless.e2e.spec.ts --grep 'responses stateless succeeds stateful fields return 400'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-037 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 36 prior passing features.
+  - After marking feat-037 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 37 passing features.
+
+- [x] feat-038 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-038-anthropic-messages.unit.test.ts` failed because `apps/gateway/src/messages` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-038-anthropic-messages.e2e.spec.ts --grep 'messages returns provider response and rejects disallowed virtual model without calling provider'` failed because `/v1/messages` returned 404.
+  - Added Gateway Anthropic messages normalization, `/v1/messages` auth plus Virtual Model access, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, and Anthropic provider adapter forwarding through the selected provider model.
+  - Disallowed Virtual Models return 403 `virtual_model_not_allowed` before any provider call.
+  - P2+ review found no blocking issues after checking disallowed no-call behavior, auth/access ordering, Anthropic provider path `/v1/messages`, `x-api-key` and `anthropic-version` forwarding, and existing Anthropic adapter compatibility.
+  - `pnpm exec vitest run tests/features/feat-038-anthropic-messages.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-038-anthropic-messages.e2e.spec.ts --grep 'messages returns provider response and rejects disallowed virtual model without calling provider'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-038 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 37 prior passing features.
+  - After marking feat-038 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 38 passing features.
+
+- [x] feat-039 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-039-streaming.unit.test.ts` failed because `apps/gateway/src/streaming` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-039-streaming.e2e.spec.ts --grep 'streaming chat responses and messages forward first chunk before provider completes preserve chunk order and record midstream error without replay'` failed because streaming requests returned a buffered JSON response instead of `text/event-stream`.
+  - Added Gateway streaming passthrough for `/v1/chat/completions`, `/v1/responses`, and `/v1/messages`, using route selection from the Gateway config snapshot, encrypted provider API key loading/decryption, protocol-specific provider headers/payloads, and Node Readable passthrough from the provider response.
+  - Mid-stream provider stream errors are recorded in `runtime_errors` with `provider_stream_error`, and the stream failure is propagated without replaying the request.
+  - Fake provider now supports delayed SSE chunk delivery and a `midstream-error` mode for first-chunk-then-socket-failure coverage.
+  - P2+ review found and fixed a runtime-error recorder rejection handling issue; no remaining blocking issues after checking first-chunk timing, chunk order preservation, content-type passthrough, protocol-specific forwarding, and no replay after mid-stream failure.
+  - `pnpm exec vitest run tests/features/feat-039-streaming.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-039-streaming.e2e.spec.ts --grep 'streaming chat responses and messages forward first chunk before provider completes preserve chunk order and record midstream error without replay'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-039 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 38 prior passing features.
+  - After marking feat-039 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 39 passing features.
+
+- [x] feat-040 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-040-request-metadata.unit.test.ts` failed because `apps/gateway/src/request-metadata` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-040-request-metadata.e2e.spec.ts --grep 'chat responses and messages metadata includes model stream message count tools and token estimates'` failed because Gateway responses did not expose request metadata in the debug header.
+  - Added shared Gateway request metadata extraction for OpenAI chat completions, OpenAI responses, and Anthropic messages, covering resolved Virtual Model name, protocol, stream flag, message count, tool usage, estimated input tokens, and estimated output tokens.
+  - Chat, responses, messages, and streaming execution paths now use the shared estimates for route selection.
+  - Added a debug-only `x-llmingress-request-metadata` response header when `GATEWAY_DEBUG_REQUEST_METADATA=true`, allowing E2E verification through the real Gateway/PostgreSQL/fake-provider path without changing runtime schema before feat-044.
+  - P2+ review found no blocking issues after checking debug header default-off behavior, no prompt/tool body leakage in the header, default Virtual Model naming for streaming, provider payload compatibility, and route estimate changes.
+  - `pnpm exec vitest run tests/features/feat-040-request-metadata.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-040-request-metadata.e2e.spec.ts --grep 'chat responses and messages metadata includes model stream message count tools and token estimates'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-040 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 39 prior passing features.
+  - After marking feat-040 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 40 passing features.
+
+- [x] feat-041 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-041-rate-limits.unit.test.ts` failed because `apps/gateway/src/rate-limits` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-041-rate-limits.e2e.spec.ts --grep 'rpm and tpm over limit return 429 with retry-after and reset window allows later request'` failed because over-limit requests still returned 200.
+  - Added Gateway RPM/TPM enforcement backed by `rate_limit_windows`, using enabled minute `agent_limits` for the authenticated Agent API key.
+  - Limit checks run in one transaction with row locking per current minute window; blocked requests roll back, return stable 429 `rate_limit_exceeded`, include `retry-after` metadata in both body and header, and do not call the provider.
+  - TPM uses the shared feat-040 estimated input + output token total; chat completions, responses, messages, and streaming requests all run rate checks before route/provider calls.
+  - P2+ review found no blocking issues after checking transaction rollback, no blocked-request counter increments, provider no-call behavior, retry-after semantics, and streaming error response handling.
+  - `pnpm exec vitest run tests/features/feat-041-rate-limits.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-041-rate-limits.e2e.spec.ts --grep 'rpm and tpm over limit return 429 with retry-after and reset window allows later request'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-041 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 40 prior passing features.
+  - After marking feat-041 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 41 passing features.
+
+- [x] feat-042 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-042-budget-enforcement.unit.test.ts` failed because `apps/gateway/src/budgets` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'` failed because over-budget requests still returned 200.
+  - Added Gateway request token and cost budget enforcement backed by `agent_limits`, `budget_periods`, and `budget_reservations`.
+  - Gateway checks request token limits, refuses cost-budget enforcement for unknown-price selected models, accepts selected models with manual price overrides, reserves estimated input/output tokens and cost before provider calls, finalizes successful requests into `budget_periods`, and releases reservations on provider failure or stream failure/close.
+  - Chat completions, responses, messages, and streaming requests now run budget checks after route selection and before provider calls.
+  - P2+ review found and fixed streaming close handling so aborted streams release pending reservations; no remaining blocking issues after checking provider no-call behavior, reservation rollback/finalization, unknown-price rejection, manual-price acceptance, and route/provider payload compatibility.
+  - `pnpm exec vitest run tests/features/feat-042-budget-enforcement.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-042 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 41 prior passing features.
+  - After marking feat-042 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 42 passing features.
+
+- [x] feat-043 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-043-stale-reservations.unit.test.ts` failed because `apps/worker/src/stale-reservations` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-043-stale-reservations.e2e.spec.ts --grep 'cleanup releases expired reservations keeps active reservations and reports count'` failed because the stale reservation cleanup handler module was missing.
+  - Added `stale_reservation_cleanup` Worker handler that selects expired pending `budget_reservations` with `FOR UPDATE SKIP LOCKED`, marks them `expired`, releases reserved token/cost counters from `budget_periods`, and returns `releasedReservationCount`, `releasedReservedTokens`, and `releasedReservedCostUsd` for the job result.
+  - Registered `stale_reservation_cleanup` in Worker startup so normal Postgres job claiming can execute it.
+  - E2E verifies expired pending reservations are released, active pending reservations stay pending, finalized/released reservations are unchanged, budget period reserved counters are decremented only for expired pending rows, and the job result records the release count.
+  - P2+ review found no blocking issues after checking duplicate-release avoidance, counter decrement semantics, active reservation preservation, and expired status semantics.
+  - `pnpm exec vitest run tests/features/feat-043-stale-reservations.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-043-stale-reservations.e2e.spec.ts --grep 'cleanup releases expired reservations keeps active reservations and reports count'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-043 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 42 prior passing features.
+  - After marking feat-043 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 43 passing features.
+
+- [x] feat-044 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-044-activity-recorder.unit.test.ts` failed because `apps/gateway/src/activity-recorder` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-044-activity-recorder.e2e.spec.ts --grep 'success and failure requests create activity rows with route fallback latency and error code'` failed because successful/failed Gateway requests did not create `request_activity` rows.
+  - Added Gateway activity recorder helpers for creating started rows and completing rows with final status, HTTP status, latency, and stable error code/message.
+  - Non-streaming `/v1/chat/completions`, `/v1/responses`, and `/v1/messages` now create and complete request activity rows after Agent auth and Virtual Model resolution.
+  - Chat fallback execution now links `fallback_events` to the real request activity row and records failed attempts on `request_activity.fallback_attempts`; successful fallback activity records the actual fallback provider/model hit.
+  - P2+ review found no blocking issues after checking fallback actual-hit recording, provider-error versus Gateway-error codes, recorder DB write ordering, and non-stream scope for feat-044.
+  - `pnpm exec vitest run tests/features/feat-044-activity-recorder.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-044-activity-recorder.e2e.spec.ts --grep 'success and failure requests create activity rows with route fallback latency and error code'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-044 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 43 prior passing features.
+  - After marking feat-044 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 44 passing features.
+
+- [x] feat-048 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-048-runtime-page.unit.test.ts` failed because `apps/console/src/server/runtime` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-048-runtime-page.e2e.spec.ts --grep 'runtime page shows heartbeat config version reload result and recent errors'` failed because the authenticated Console had no Runtime section.
+  - Added `apps/console/src/server/runtime.ts` to read `gateway_runtime_status` and `runtime_errors` from PostgreSQL and format heartbeat, reload, and runtime error labels.
+  - Added a protected Runtime section to the Console dashboard showing Gateway heartbeat health, Gateway status, applied/target config versions, last reload result, last heartbeat timestamp, and recent runtime errors.
+  - P2+ review found no blocking issues after checking auth boundary, heartbeat freshness calculation, Postgres-backed E2E coverage, and runtime error rendering.
+  - `pnpm exec vitest run tests/features/feat-048-runtime-page.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-048-runtime-page.e2e.spec.ts --grep 'runtime page shows heartbeat config version reload result and recent errors'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-048 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 47 prior passing features.
+  - Next active feature: feat-049 Console Playground Dry Run Page.
+
+- [x] feat-049 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts` failed because `apps/console/src/app/playground-helpers` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-049-playground.e2e.spec.ts --grep 'playground uses pasted key in memory direct gateway call and usage increments'` failed because the authenticated Console had no Playground section.
+  - Added browser-only Console Playground with Gateway base URL, Agent API key React state, allowed-model loading from Gateway `GET /v1/models`, live Gateway `POST /v1/chat/completions`, result/request-id display, and no key persistence across reload.
+  - Added Gateway CORS headers for default local Console origins plus explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
+  - E2E verifies a real browser direct-to-Gateway request hits the fake provider, records usage in PostgreSQL, updates the Usage count after reload, and does not write the pasted key into cookies, localStorage, or sessionStorage.
+  - P2+ review found and fixed a key-leak risk from blank/relative Gateway base URLs by requiring an absolute `http(s)` URL before sending any Playground request.
+  - `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-049-playground.e2e.spec.ts --grep 'playground uses pasted key in memory direct gateway call and usage increments'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-049 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 48 prior passing features.
+  - Next active feature: feat-050 MVP Happy Path E2E.
+
+- [x] feat-050 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-050-mvp-happy-path.unit.test.ts` failed because `tests/support/mvp-happy-path` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-050-mvp-happy-path.e2e.spec.ts --grep 'clean setup request activity usage and hot reload after route change'` failed because the same helper was missing.
+  - Added a clean-run MVP happy path E2E that initializes Console, configures model prices through authenticated Console price API, stores the Provider API key through Console UI, creates Virtual Model, Route Policy, Agent, Agent API key access, and limits through Console UI, sends a real Gateway request, verifies Activity and Usage, edits Route Policy, waits for the already-running Gateway to hot-reload the new config version, and verifies the next request hits the reloaded provider model without restarting Gateway.
+  - The fake-provider-backed provider/model catalog is pre-seeded in the test because `feat-020` intentionally blocks arbitrary OpenAI-compatible custom endpoints in Console UI; this is recorded as a test boundary, not a product behavior change.
+  - P2+ review found no blocking issues after checking the hot-reload assertion, same-Gateway-process check, Activity/Usage coverage, and the fake-provider catalog boundary.
+  - `pnpm exec vitest run tests/features/feat-050-mvp-happy-path.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-050-mvp-happy-path.e2e.spec.ts --grep 'clean setup request activity usage and hot reload after route change'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-050 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 49 prior passing features.
+  - Next active feature: feat-051 MVP Streaming E2E.
+
+- [x] feat-051 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-051-mvp-streaming.unit.test.ts` failed because `wrapProviderStreamWithActivityCompletion` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-051-mvp-streaming.e2e.spec.ts --grep 'streaming request receives ordered chunks and activity records stream completion'` reached the fake-provider stream but found no completed `request_activity` row.
+  - Added Gateway streaming Activity recording for chat completions, Responses, and Messages.
+  - Streaming requests now create `request_activity` rows before provider execution, attach selected route metadata, complete pre-stream failures immediately, and complete successful rows when the provider stream ends.
+  - P2+ review fixed the Activity completion wrapper so failed completion writes cannot surface as unhandled rejections or break the client stream; no remaining blocking issues after checking stream completion timing, pre-stream failures, and route metadata.
+  - `pnpm exec vitest run tests/features/feat-051-mvp-streaming.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-051-mvp-streaming.e2e.spec.ts --grep 'streaming request receives ordered chunks and activity records stream completion'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-051 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 50 prior passing features.
+  - Next active feature: feat-052 Claude Code Messages E2E.
+
+- [x] feat-052 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-052-claude-code-messages.unit.test.ts` failed because Claude Code content-block messages normalized to `ok: false`.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-052-claude-code-messages.e2e.spec.ts --grep 'claude code messages request returns 200 and records anthropic model hit'` returned HTTP 400 for the same Claude Code style request.
+  - Added Anthropic Messages support for content block arrays, tool definitions, and `tool_choice` passthrough.
+  - Non-streaming and streaming Anthropic provider payloads preserve those fields; metadata token estimation extracts text from Anthropic content blocks.
+  - E2E verifies a valid Agent key receives HTTP 200 from the Anthropic provider path, the fake provider sees content blocks/tools/tool_choice, and `request_activity` records the Anthropic provider/model hit.
+  - P2+ review found no blocking issues after checking payload scope, streaming parity, Activity coverage, and token metadata extraction.
+  - `pnpm exec vitest run tests/features/feat-052-claude-code-messages.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-052-claude-code-messages.e2e.spec.ts --grep 'claude code messages request returns 200 and records anthropic model hit'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-052 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 51 prior passing features.
+  - Next active feature: feat-053 Limits and Fallback E2E.
+
+- [x] feat-053 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts` failed because `tests/support/limits-fallback` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-053-limits-fallback.e2e.spec.ts --grep 'limits return expected errors and first byte failure falls back successfully'` failed for the same missing helper.
+  - Added stable limits/fallback scenario names and request IDs plus an E2E that starts a real Gateway against isolated PostgreSQL and fake providers.
+  - E2E covers RPM, TPM, request token, and monthly cost budget failures with expected status/error code and no provider call for blocked requests.
+  - E2E also verifies a first-byte provider failure falls back successfully, records the final provider/model hit in `request_activity`, and records the failed first-byte attempt in `fallback_events`.
+  - P2+ review found no blocking issues after checking limit isolation, provider no-call assertions, fallback event scoping, and Activity coverage.
+  - `pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-053-limits-fallback.e2e.spec.ts --grep 'limits return expected errors and first byte failure falls back successfully'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-053 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 52 prior passing features.
+  - Next active feature: feat-055 CI Migration Validation; feat-054 waits for feat-055.
+
+- [x] feat-055 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-055-ci-migration-validation.unit.test.ts` failed because `db:migrate:check` was missing from `package.json` and CI.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-055-ci-migration-validation.e2e.spec.ts --grep 'migration validation command runs cleanly against test postgres'` failed because the command did not exist.
+  - Added `scripts/migrate-check.ts`, which creates an isolated test database from `TEST_DATABASE_URL`, applies all migrations, reruns them to verify idempotent skips, and disposes the database.
+  - Added `pnpm run db:migrate:check` and a CI `Migration validation` step after dependency install.
+  - Updated the obsolete feat-005 unit assertion that expected migration validation to be absent from base CI.
+  - P2+ review found no blocking issues after checking isolated database usage, CI placement, and feat-005 regression impact.
+  - `pnpm exec vitest run tests/features/feat-055-ci-migration-validation.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-055-ci-migration-validation.e2e.spec.ts --grep 'migration validation command runs cleanly against test postgres'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run db:migrate:check` -> applied 8; rerun skipped 8.
+  - `pnpm run verify` passed.
+  - Before marking feat-055 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 53 prior passing features.
+  - Next active feature: feat-054 MVP Local Deployment Smoke.

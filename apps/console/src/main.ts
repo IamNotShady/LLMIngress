@@ -7,20 +7,31 @@ type ConsoleMode = "dev" | "start";
 type ConsoleCommand = {
   command: string;
   args: string[];
+  env: NodeJS.ProcessEnv;
 };
 
 export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
+  const masterKeyEnv =
+    config.masterKeySource.kind === "inline"
+      ? { MASTER_KEY: config.masterKeySource.value }
+      : { MASTER_KEY_FILE: config.masterKeySource.path };
 
   return {
     command: "next",
     args: [mode, "--hostname", "0.0.0.0", "--port", String(config.consolePort)],
+    env: {
+      ...process.env,
+      DATABASE_URL: config.databaseUrl,
+      ...masterKeyEnv,
+    },
   };
 }
 
 export function startConsole(mode: ConsoleMode): void {
-  const { command, args } = buildConsoleCommand(mode);
+  const { command, args, env } = buildConsoleCommand(mode);
   const child = spawn(command, args, {
+    env,
     stdio: "inherit",
     shell: process.platform === "win32",
   });

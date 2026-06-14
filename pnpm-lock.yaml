@@ -35,12 +35,21 @@ importers:
 
   apps/console:
     dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -57,20 +66,41 @@ importers:
 
   apps/gateway:
     dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
 
   apps/worker:
     dependencies:
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../../packages/security
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
 
-  packages/config: {}
+  packages/billing: {}
+
+  packages/config:
+    dependencies:
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
 
   packages/db:
     dependencies:
@@ -79,6 +109,8 @@ importers:
         version: 8.21.0
 
   packages/domain: {}
+
+  packages/security: {}
 
 packages:
 

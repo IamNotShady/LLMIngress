@@ -1,0 +1,192 @@
+import { Client, type QueryResultRow } from "pg";
+
+export type ConsoleActivity = {
+  completedAt: Date | null;
+  errorCode: string | null;
+  fallbackAttempts: unknown;
+  httpStatus: number | null;
+  id: string;
+  inputTokens: number | null;
+  latencyMs: number | null;
+  model: string | null;
+  outputTokens: number | null;
+  protocol: string;
+  providerDisplayName: string | null;
+  providerKey: string | null;
+  providerModelDisplayName: string | null;
+  providerModelId: string | null;
+  providerModelName: string | null;
+  requestId: string;
+  routeReason: unknown;
+  startedAt: Date;
+  status: string;
+  totalCostUsd: string | null;
+  totalTokens: number | null;
+};
+
+type ActivityRow = QueryResultRow & {
+  completed_at: Date | null;
+  error_code: string | null;
+  fallback_attempts: unknown;
+  http_status: number | null;
+  id: string;
+  input_tokens: number | null;
+  latency_ms: number | null;
+  model: string | null;
+  output_tokens: number | null;
+  protocol: string;
+  provider_display_name: string | null;
+  provider_key: string | null;
+  provider_model_display_name: string | null;
+  provider_model_id: string | null;
+  provider_model_name: string | null;
+  request_id: string;
+  route_reason: unknown;
+  started_at: Date;
+  status: string;
+  total_cost_usd: string | null;
+  total_tokens: number | null;
+};
+
+export async function listConsoleActivities(
+  databaseUrl: string,
+  limit = 20,
+): Promise<ConsoleActivity[]> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+
+  try {
+    const result = await client.query<ActivityRow>(
+      `
+        select request_activity.id::text,
+               request_activity.request_id,
+               request_activity.protocol,
+               request_activity.model,
+               request_activity.status,
+               request_activity.error_code,
+               request_activity.http_status,
+               request_activity.latency_ms,
+               request_activity.started_at,
+               request_activity.completed_at,
+               request_activity.route_reason,
+               request_activity.fallback_attempts,
+               providers.display_name as provider_display_name,
+               providers.provider_key,
+               request_activity.provider_model_id::text as provider_model_id,
+               provider_models.display_name as provider_model_display_name,
+               provider_models.model_id as provider_model_name,
+               request_usage.input_tokens,
+               request_usage.output_tokens,
+               request_usage.total_tokens,
+               request_costs.total_cost_usd::text
+        from request_activity
+        left join providers on providers.id = request_activity.provider_id
+        left join provider_models on provider_models.id = request_activity.provider_model_id
+        left join request_usage on request_usage.request_activity_id = request_activity.id
+        left join request_costs on request_costs.request_activity_id = request_activity.id
+        order by request_activity.started_at desc,
+                 request_activity.created_at desc
+        limit $1
+      `,
+      [limit],
+    );
+
+    return result.rows.map(rowToConsoleActivity);
+  } finally {
+    await client.end();
+  }
+}
+
+export function formatConsoleActivityCost(totalCostUsd: string | null): string {
+  if (totalCostUsd === null) {
+    return "Unavailable";
+  }
+
+  const numericCost = Number(totalCostUsd);
+  if (!Number.isFinite(numericCost)) {
+    return "Unavailable";
+  }
+
+  return `$${numericCost.toFixed(8)}`;
+}
+
+export function formatConsoleActivityTokens(input: {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+}): string {
+  if (input.inputTokens === null || input.outputTokens === null || input.totalTokens === null) {
+    return "Token usage unavailable";
+  }
+
+  return `${input.totalTokens} total tokens (${input.inputTokens} input, ${input.outputTokens} output)`;
+}
+
+export function formatConsoleActivityRouteReason(routeReason: unknown): string {
+  if (isRecord(routeReason) && typeof routeReason.message === "string") {
+    const message = routeReason.message.trim();
+    if (message) {
+      return message;
+    }
+  }
+
+  return "No route reason recorded";
+}
+
+export function formatConsoleActivityFallbackAttempts(fallbackAttempts: unknown): string[] {
+  if (!Array.isArray(fallbackAttempts) || fallbackAttempts.length === 0) {
+    return ["No fallback attempts"];
+  }
+
+  return fallbackAttempts.map((attempt, index) => {
+    if (!isRecord(attempt)) {
+      return `Attempt ${index + 1}: unknown fallback result`;
+    }
+
+    const attemptOrder =
+      typeof attempt.attemptOrder === "number" && Number.isFinite(attempt.attemptOrder)
+        ? attempt.attemptOrder
+        : index + 1;
+    const errorCode =
+      typeof attempt.errorCode === "string" && attempt.errorCode.trim()
+        ? attempt.errorCode.trim()
+        : "unknown_error";
+    const providerModelId =
+      typeof attempt.providerModelId === "string" && attempt.providerModelId.trim()
+        ? attempt.providerModelId.trim()
+        : "unknown provider model";
+    const firstByte = attempt.failedBeforeFirstByte === true ? " before first byte" : "";
+
+    return `Attempt ${attemptOrder}: ${errorCode}${firstByte} on ${providerModelId}`;
+  });
+}
+
+function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
+  return {
+    completedAt: row.completed_at,
+    errorCode: row.error_code,
+    fallbackAttempts: row.fallback_attempts,
+    httpStatus: row.http_status,
+    id: row.id,
+    inputTokens: row.input_tokens,
+    latencyMs: row.latency_ms,
+    model: row.model,
+    outputTokens: row.output_tokens,
+    protocol: row.protocol,
+    providerDisplayName: row.provider_display_name,
+    providerKey: row.provider_key,
+    providerModelDisplayName: row.provider_model_display_name,
+    providerModelId: row.provider_model_id,
+    providerModelName: row.provider_model_name,
+    requestId: row.request_id,
+    routeReason: row.route_reason,
+    startedAt: row.started_at,
+    status: row.status,
+    totalCostUsd: row.total_cost_usd,
+    totalTokens: row.total_tokens,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 19:09 AWST
-**Active Feature:** feat-046 next (feat-001 through feat-045 completed)
+**Last Updated:** 2026-06-14 19:31 AWST
+**Active Feature:** feat-047 next (feat-001 through feat-046 completed)
 
 ## Status
 
@@ -17,6 +17,10 @@
   - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.
   - Known-price requests record estimated tokens, actual request cost, baseline cost, and savings; unknown actual-price requests preserve token usage and mark costs unavailable.
   - Verification passed: feat-045 unit tests, real Gateway/PostgreSQL E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-046 — Activity Console Page (passing)**:
+  - Added a protected Console Activity section that lists recent requests and shows a selected request detail.
+  - Detail displays provider/model hit, token totals, request cost, route reason, fallback attempts, and error code with explicit unavailable labels for missing runtime records.
+  - Verification passed: feat-046 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -107,9 +111,9 @@
 
 ### What's Next
 
-1. `feat-046` — Activity Console Page.
-2. `feat-047` — Usage and Cost Console Page.
-3. `feat-048` — Gateway Runtime Status Page.
+1. `feat-047` — Usage and Cost Console Page.
+2. `feat-048` — Gateway Runtime Status Page.
+3. `feat-049` — Playground Live Public API Test.
 
 ## Blockers / Risks
 

@@ -556,8 +556,8 @@
         "feat-013",
         "feat-044"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-046 unit tests because the Console activity server helper was missing, and E2E because the authenticated Console had no exact Activity section. Added authenticated Console Activity section, recent request list, selected detail view via activityId, server-side activity query, and formatting for provider/model hit, tokens, cost, route reason, fallback attempts, and error code. P2+ review found no blocking issues after checking auth boundary, missing usage/cost fallback display, selected-detail behavior, and request ordering. Verification passed — feat-046 unit tests 3 passed, real Chromium/PostgreSQL Console E2E 1 passed, pnpm run verify passed, and verify:features passed all 45 prior passing features before marking feat-046 passing."
     },
     {
       "id": "feat-047",

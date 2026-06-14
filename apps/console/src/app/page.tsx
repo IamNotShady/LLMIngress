@@ -4,6 +4,14 @@ import {
 } from "@llmingress/billing/price-registry";
 import { cookies } from "next/headers";
 import {
+  type ConsoleActivity,
+  formatConsoleActivityCost,
+  formatConsoleActivityFallbackAttempts,
+  formatConsoleActivityRouteReason,
+  formatConsoleActivityTokens,
+  listConsoleActivities,
+} from "../server/activity";
+import {
   formatAgentApiKeyVirtualModelAccess,
   listAgentApiKeyMetadata,
   listAgentApiKeyVirtualModelAccess,
@@ -34,7 +42,11 @@ const previewModelId = "gpt-4.1-mini";
 const providerTemplates = listOpenAICompatibleProviderTemplates();
 const localProviderTemplates = listOllamaProviderTemplates();
 
-export default async function Home() {
+type HomeProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function Home({ searchParams }: HomeProps = {}) {
   const cookieStore = await cookies();
   const databaseUrl = getConsoleDatabaseUrl();
   const authState = await readConsoleAuthState(
@@ -87,6 +99,11 @@ export default async function Home() {
     );
   }
 
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const selectedActivityId = readSingleSearchParam(resolvedSearchParams.activityId);
+  const activities = await listConsoleActivities(databaseUrl);
+  const selectedActivity =
+    activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
   const pricePanel = await getPricePanel(databaseUrl);
   const agents = await listAgents(databaseUrl);
   const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
@@ -127,6 +144,60 @@ export default async function Home() {
       </header>
       <section className="status-band" aria-label="Console status">
         <p>Signed in as admin</p>
+      </section>
+      <section className="providers-panel" id="activity" aria-labelledby="activity-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Requests</p>
+            <h2 id="activity-title">Activity</h2>
+          </div>
+        </div>
+        {activities.length === 0 ? (
+          <p>No activity recorded.</p>
+        ) : (
+          <div className="activity-layout">
+            <nav className="activity-list" aria-label="Recent requests">
+              {activities.map((activity) => (
+                <a
+                  className={
+                    selectedActivity?.id === activity.id
+                      ? "activity-list-item activity-list-item-selected"
+                      : "activity-list-item"
+                  }
+                  href={`/?activityId=${encodeURIComponent(activity.id)}#activity`}
+                  key={activity.id}
+                >
+                  <span className="activity-request-id">{activity.requestId}</span>
+                  <span>{formatActivityListStatus(activity)}</span>
+                  <span>{formatActivityModelSummary(activity)}</span>
+                </a>
+              ))}
+            </nav>
+            {selectedActivity ? (
+              <article className="activity-detail" aria-labelledby="activity-detail-title">
+                <h2 id="activity-detail-title">{selectedActivity.requestId}</h2>
+                <p>Provider: {formatActivityProviderLabel(selectedActivity)}</p>
+                <p>Model hit: {formatActivityModelHitLabel(selectedActivity)}</p>
+                <p>{formatConsoleActivityTokens(selectedActivity)}</p>
+                <p>Cost: {formatConsoleActivityCost(selectedActivity.totalCostUsd)}</p>
+                <p>
+                  Route reason: {formatConsoleActivityRouteReason(selectedActivity.routeReason)}
+                </p>
+                <p>Error code: {selectedActivity.errorCode ?? "None"}</p>
+                <div className="activity-fallbacks">
+                  <p>Fallback attempts</p>
+                  <ul>
+                    {formatConsoleActivityFallbackAttempts(selectedActivity.fallbackAttempts).map(
+                      (attempt) => (
+                        <li key={attempt}>{attempt}</li>
+                      ),
+                    )}
+                  </ul>
+                </div>
+              </article>
+            ) : null}
+          </div>
+        )}
       </section>
       <section className="providers-panel" aria-labelledby="virtual-models-title">
         <div className="section-heading">
@@ -867,6 +938,31 @@ function formatUsd(value: number): string {
 
 function formatDateTime(value: Date): string {
   return value.toISOString();
+}
+
+function readSingleSearchParam(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
+}
+
+function formatActivityListStatus(activity: ConsoleActivity): string {
+  return `${activity.protocol} - ${activity.status} - ${activity.httpStatus ?? "no status"}`;
+}
+
+function formatActivityProviderLabel(activity: ConsoleActivity): string {
+  return activity.providerDisplayName ?? activity.providerKey ?? "Unknown provider";
+}
+
+function formatActivityModelSummary(activity: ConsoleActivity): string {
+  return activity.providerModelName ?? activity.model ?? "Unknown model";
+}
+
+function formatActivityModelHitLabel(activity: ConsoleActivity): string {
+  const displayName = activity.providerModelDisplayName ?? "Unknown model";
+  const modelName = activity.providerModelName ?? activity.providerModelId ?? "unknown";
+  return `${displayName} (${modelName})`;
 }
 
 function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string }>): string {

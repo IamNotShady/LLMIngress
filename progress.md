@@ -669,3 +669,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-036 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 35 prior passing features.
   - After marking feat-036 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 36 passing features.
+
+- [x] feat-037 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-037-responses-stateless.unit.test.ts` failed because `apps/gateway/src/responses` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-037-responses-stateless.e2e.spec.ts --grep 'responses stateless succeeds stateful fields return 400'` failed because `/v1/responses` returned 404.
+  - Added Gateway OpenAI Responses stateless normalization, explicit `unsupported_stateful_responses` errors for `previous_response_id` and `store=true`, `/v1/responses` auth plus Virtual Model access, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, and OpenAI provider adapter `/responses` forwarding.
+  - Provider requests are forced to `store=false` for the stateless subset.
+  - Fake provider now returns a deterministic Responses-shaped body.
+  - P2+ review found and fixed provider store default risk by asserting forwarded `store=false`; no remaining blocking issues after checking stateful-field rejection before provider calls, auth/access ordering, provider path `/v1/responses`, and chat adapter compatibility.
+  - `pnpm exec vitest run tests/features/feat-037-responses-stateless.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-037-responses-stateless.e2e.spec.ts --grep 'responses stateless succeeds stateful fields return 400'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-037 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 36 prior passing features.
+  - After marking feat-037 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 37 passing features.

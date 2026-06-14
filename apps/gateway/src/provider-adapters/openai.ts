@@ -10,6 +10,18 @@ export type NormalizedOpenAIChatRequest = {
   temperature?: number;
 };
 
+export type NormalizedOpenAIResponsesInputMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export type NormalizedOpenAIResponsesRequest = {
+  input: string | NormalizedOpenAIResponsesInputMessage[];
+  maxOutputTokens?: number;
+  stream?: boolean;
+  temperature?: number;
+};
+
 export type OpenAIProviderTarget = {
   apiKey: string;
   baseUrl: string;
@@ -39,6 +51,10 @@ export type OpenAIProviderAdapter = {
     request: NormalizedOpenAIChatRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
+  response?: (input: {
+    request: NormalizedOpenAIResponsesRequest;
+    target: OpenAIProviderTarget;
+  }) => Promise<OpenAIAdapterResult>;
 };
 
 type CreateOpenAIProviderAdapterOptions = {
@@ -53,6 +69,15 @@ type OpenAIChatCompletionsPayload = {
   temperature?: number;
 };
 
+type OpenAIResponsesPayload = {
+  input: string | NormalizedOpenAIResponsesInputMessage[];
+  max_output_tokens?: number;
+  model: string;
+  store: false;
+  stream?: boolean;
+  temperature?: number;
+};
+
 export function createOpenAIProviderAdapter(
   options: CreateOpenAIProviderAdapterOptions = {},
 ): OpenAIProviderAdapter {
@@ -63,6 +88,39 @@ export function createOpenAIProviderAdapter(
       try {
         const response = await fetchImpl(buildChatCompletionsUrl(target.baseUrl), {
           body: JSON.stringify(buildChatCompletionsPayload(request, target)),
+          headers: {
+            authorization: `Bearer ${target.apiKey}`,
+            "content-type": "application/json",
+          },
+          method: "POST",
+        });
+        const body = await readResponseBody(response);
+
+        if (!response.ok) {
+          return mapProviderError(response.status, body);
+        }
+
+        return {
+          body,
+          ok: true,
+          providerRequestId: readProviderRequestId(body),
+          statusCode: response.status,
+        };
+      } catch (error) {
+        return {
+          body: null,
+          errorCode: "provider_request_failed",
+          errorMessage: error instanceof Error ? error.message : "Provider request failed.",
+          ok: false,
+          retryable: true,
+          statusCode: null,
+        };
+      }
+    },
+    response: async ({ request, target }) => {
+      try {
+        const response = await fetchImpl(buildResponsesUrl(target.baseUrl), {
+          body: JSON.stringify(buildResponsesPayload(request, target)),
           headers: {
             authorization: `Bearer ${target.apiKey}`,
             "content-type": "application/json",
@@ -109,9 +167,31 @@ function buildChatCompletionsPayload(
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
+  return buildProviderUrl(baseUrl, "chat/completions");
+}
+
+function buildResponsesPayload(
+  request: NormalizedOpenAIResponsesRequest,
+  target: OpenAIProviderTarget,
+): OpenAIResponsesPayload {
+  return omitUndefined({
+    input: request.input,
+    max_output_tokens: request.maxOutputTokens,
+    model: target.modelId,
+    store: false,
+    stream: request.stream,
+    temperature: request.temperature,
+  });
+}
+
+function buildResponsesUrl(baseUrl: string): string {
+  return buildProviderUrl(baseUrl, "responses");
+}
+
+function buildProviderUrl(baseUrl: string, suffix: string): string {
   const url = new URL(baseUrl);
   const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/chat/completions`.replaceAll(/\/{2,}/g, "/");
+  url.pathname = `${path}/${suffix}`.replaceAll(/\/{2,}/g, "/");
   return url.toString();
 }
 

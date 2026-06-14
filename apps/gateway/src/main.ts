@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
+import { executeGatewayOpenAIResponse } from "./responses.js";
 import {
   listAllowedGatewayVirtualModels,
   readRequestedModelName,
@@ -90,6 +91,41 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       object: "list",
       requestId: auth.requestId,
     };
+  });
+
+  app.post("/v1/responses", async (request, reply) => {
+    const databaseUrl = requireGatewayDatabaseUrl(options);
+    const auth = await authenticateGatewayRequest({
+      databaseUrl,
+      headers: request.headers,
+    });
+
+    if (!auth.ok) {
+      return reply.code(auth.statusCode).send(auth.body);
+    }
+
+    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
+      agentApiKeyId: auth.agentApiKey.id,
+      databaseUrl,
+    });
+    const virtualModelAccess = resolveGatewayVirtualModelRequest({
+      allowedVirtualModels,
+      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
+      requestedModelName: readRequestedModelName(request.body),
+      requestId: auth.requestId,
+    });
+    if (!virtualModelAccess.ok) {
+      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+    }
+
+    const response = await executeGatewayOpenAIResponse({
+      databaseUrl,
+      requestBody: request.body,
+      requestId: auth.requestId,
+      snapshot: requireGatewayConfigSnapshot(options),
+      virtualModel: virtualModelAccess.virtualModel,
+    });
+    return reply.code(response.statusCode).send(response.body);
   });
 
   app.addHook("onClose", async () => {

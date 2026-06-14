@@ -464,8 +464,8 @@
         "feat-037",
         "feat-038"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-039 unit tests because apps/gateway/src/streaming was missing, and E2E failed because streaming requests returned a buffered JSON response instead of text/event-stream. Added Gateway streaming request passthrough for OpenAI chat completions, OpenAI responses, and Anthropic messages, with route selection from the Gateway config snapshot, encrypted provider API key loading/decryption, provider SSE/body streaming via Node Readable passthrough, and runtime error persistence for mid-stream provider failures without retrying/replaying the request. Fake provider now supports delayed SSE chunks and a midstream-error mode. P2+ review found and fixed a runtime-error recorder rejection handling issue; no remaining blocking issues after checking first-chunk timing, chunk order preservation, protocol-specific provider headers/payloads, and no replay after mid-stream failure. Verification passed — feat-039 unit tests 2 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 38 prior passing features before marking feat-039 passing, and final verify:features passed all 39 passing features after marking."
     },
     {
       "id": "feat-040",

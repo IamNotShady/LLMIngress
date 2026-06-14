@@ -698,3 +698,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-038 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 37 prior passing features.
   - After marking feat-038 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 38 passing features.
+
+- [x] feat-039 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-039-streaming.unit.test.ts` failed because `apps/gateway/src/streaming` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-039-streaming.e2e.spec.ts --grep 'streaming chat responses and messages forward first chunk before provider completes preserve chunk order and record midstream error without replay'` failed because streaming requests returned a buffered JSON response instead of `text/event-stream`.
+  - Added Gateway streaming passthrough for `/v1/chat/completions`, `/v1/responses`, and `/v1/messages`, using route selection from the Gateway config snapshot, encrypted provider API key loading/decryption, protocol-specific provider headers/payloads, and Node Readable passthrough from the provider response.
+  - Mid-stream provider stream errors are recorded in `runtime_errors` with `provider_stream_error`, and the stream failure is propagated without replaying the request.
+  - Fake provider now supports delayed SSE chunk delivery and a `midstream-error` mode for first-chunk-then-socket-failure coverage.
+  - P2+ review found and fixed a runtime-error recorder rejection handling issue; no remaining blocking issues after checking first-chunk timing, chunk order preservation, content-type passthrough, protocol-specific forwarding, and no replay after mid-stream failure.
+  - `pnpm exec vitest run tests/features/feat-039-streaming.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-039-streaming.e2e.spec.ts --grep 'streaming chat responses and messages forward first chunk before provider completes preserve chunk order and record midstream error without replay'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-039 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 38 prior passing features.
+  - After marking feat-039 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 39 passing features.

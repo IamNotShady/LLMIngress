@@ -1,11 +1,16 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
 import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
 import { executeGatewayAnthropicMessages } from "./messages.js";
 import { executeGatewayOpenAIResponse } from "./responses.js";
+import {
+  executeGatewayStreamingRequest,
+  type GatewayStreamingResult,
+  readGatewayStreamingFlag,
+} from "./streaming.js";
 import {
   listAllowedGatewayVirtualModels,
   readRequestedModelName,
@@ -56,6 +61,20 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
     if (!virtualModelAccess.ok) {
       return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+    }
+
+    if (readGatewayStreamingFlag(request.body)) {
+      return sendGatewayStreamingResponse(
+        reply,
+        await executeGatewayStreamingRequest({
+          databaseUrl,
+          protocol: "chat_completions",
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      );
     }
 
     const chatCompletion = await executeGatewayOpenAIChatCompletion({
@@ -119,6 +138,20 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
     }
 
+    if (readGatewayStreamingFlag(request.body)) {
+      return sendGatewayStreamingResponse(
+        reply,
+        await executeGatewayStreamingRequest({
+          databaseUrl,
+          protocol: "responses",
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      );
+    }
+
     const response = await executeGatewayOpenAIResponse({
       databaseUrl,
       requestBody: request.body,
@@ -152,6 +185,20 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
     if (!virtualModelAccess.ok) {
       return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+    }
+
+    if (readGatewayStreamingFlag(request.body)) {
+      return sendGatewayStreamingResponse(
+        reply,
+        await executeGatewayStreamingRequest({
+          databaseUrl,
+          protocol: "messages",
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      );
     }
 
     const message = await executeGatewayAnthropicMessages({
@@ -222,6 +269,14 @@ function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
     throw new Error("Gateway API endpoints require configRuntime.");
   }
   return snapshot;
+}
+
+function sendGatewayStreamingResponse(reply: FastifyReply, stream: GatewayStreamingResult) {
+  if (!stream.ok) {
+    return reply.code(stream.statusCode).send(stream.body);
+  }
+
+  return reply.code(stream.statusCode).header("content-type", stream.contentType).send(stream.body);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

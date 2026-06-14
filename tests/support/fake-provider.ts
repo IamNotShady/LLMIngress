@@ -1,7 +1,13 @@
 import { createServer, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 
-export type FakeProviderMode = "json" | "stream" | "error" | "timeout" | "first-byte-failure";
+export type FakeProviderMode =
+  | "json"
+  | "stream"
+  | "error"
+  | "timeout"
+  | "first-byte-failure"
+  | "midstream-error";
 
 export type CapturedFakeProviderRequest = {
   method: string;
@@ -175,8 +181,29 @@ async function handleRequest(
         "cache-control": "no-cache",
       });
       response.write('data: {"delta":"fake"}\n\n');
-      response.write('data: {"delta":" stream"}\n\n');
-      response.end("data: [DONE]\n\n");
+      const secondChunkTimer = setTimeout(() => {
+        response.write('data: {"delta":" stream"}\n\n');
+      }, 300);
+      const endTimer = setTimeout(() => {
+        response.end("data: [DONE]\n\n");
+      }, 700);
+      response.once("close", () => {
+        clearTimeout(secondChunkTimer);
+        clearTimeout(endTimer);
+      });
+      return;
+    }
+
+    if (mode === "midstream-error") {
+      response.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+      });
+      response.write('data: {"delta":"fake"}\n\n');
+      const destroyTimer = setTimeout(() => {
+        response.destroy(new Error("Fake provider mid-stream error"));
+      }, 100);
+      response.once("close", () => clearTimeout(destroyTimer));
       return;
     }
 
@@ -219,7 +246,8 @@ function readMode(url: URL): FakeProviderMode {
     mode === "stream" ||
     mode === "error" ||
     mode === "timeout" ||
-    mode === "first-byte-failure"
+    mode === "first-byte-failure" ||
+    mode === "midstream-error"
   ) {
     return mode;
   }

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 22:07 AWST
-**Active Feature:** feat-053 next (feat-001 through feat-052 completed)
+**Last Updated:** 2026-06-14 22:25 AWST
+**Active Feature:** feat-055 next (feat-001 through feat-053 completed; feat-054 waits for feat-055)
 
 ## Status
 
@@ -49,6 +49,10 @@
   - Non-streaming and streaming Anthropic provider payloads now preserve those fields, and metadata token estimation extracts text from Anthropic content blocks.
   - E2E verifies a valid Agent key gets HTTP 200 from the Anthropic provider path and `request_activity` records the Anthropic provider/model hit.
   - Verification passed: feat-052 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-053 — Limits and Fallback E2E (passing)**:
+  - Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code.
+  - The same E2E verifies first-byte provider failure falls back to the second candidate, returns HTTP 200, and records both the final Activity provider/model hit and failed fallback attempt.
+  - Verification passed: feat-053 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -139,9 +143,8 @@
 
 ### What's Next
 
-1. `feat-053` — Limits and Fallback E2E.
+1. `feat-055` — CI Migration Validation.
 2. `feat-054` — MVP Local Deployment Smoke.
-3. `feat-055` — CI Migration Validation.
 
 ## Blockers / Risks
 
@@ -891,3 +894,16 @@
   - `pnpm run verify` passed.
   - Before marking feat-052 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 51 prior passing features.
   - Next active feature: feat-053 Limits and Fallback E2E.
+
+- [x] feat-053 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts` failed because `tests/support/limits-fallback` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-053-limits-fallback.e2e.spec.ts --grep 'limits return expected errors and first byte failure falls back successfully'` failed for the same missing helper.
+  - Added stable limits/fallback scenario names and request IDs plus an E2E that starts a real Gateway against isolated PostgreSQL and fake providers.
+  - E2E covers RPM, TPM, request token, and monthly cost budget failures with expected status/error code and no provider call for blocked requests.
+  - E2E also verifies a first-byte provider failure falls back successfully, records the final provider/model hit in `request_activity`, and records the failed first-byte attempt in `fallback_events`.
+  - P2+ review found no blocking issues after checking limit isolation, provider no-call assertions, fallback event scoping, and Activity coverage.
+  - `pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-053-limits-fallback.e2e.spec.ts --grep 'limits return expected errors and first byte failure falls back successfully'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-053 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 52 prior passing features.
+  - Next active feature: feat-055 CI Migration Validation; feat-054 waits for feat-055.

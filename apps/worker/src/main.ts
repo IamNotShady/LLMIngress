@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createModelRefreshJobHandler } from "./model-refresh.js";
+import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
 
 type StartWorkerOptions = {
   jobRunner?: JobRunner;
@@ -15,6 +16,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
       databaseUrl: config.databaseUrl,
       handlers: {
         model_refresh: createModelRefreshJobHandler({ databaseUrl: config.databaseUrl }),
+        provider_connectivity_check: createProviderConnectivityCheckJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
       },
       pollIntervalMs: config.workerHeartbeatMs,
       workerId: readWorkerId(),

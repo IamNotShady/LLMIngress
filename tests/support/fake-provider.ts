@@ -90,6 +90,16 @@ async function handleRequest(
       bodyJson,
     });
 
+    if (hasBadCredentials(request.headers)) {
+      writeJson(response, 401, {
+        error: {
+          code: "invalid_api_key",
+          message: "Invalid API key",
+        },
+      });
+      return;
+    }
+
     if (mode === "json" && url.pathname.endsWith("/models")) {
       writeJson(response, 200, {
         object: "list",
@@ -227,4 +237,14 @@ function parseJsonBody(bodyRaw: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+function hasBadCredentials(headers: IncomingHttpHeaders): boolean {
+  const authorization = Array.isArray(headers.authorization)
+    ? headers.authorization.join(" ")
+    : headers.authorization;
+  const apiKey = Array.isArray(headers["x-api-key"])
+    ? headers["x-api-key"].join(" ")
+    : headers["x-api-key"];
+  return [authorization, apiKey].some((value) => value?.includes("bad-provider-key"));
 }

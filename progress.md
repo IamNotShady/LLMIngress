@@ -493,3 +493,15 @@
   - `pnpm run verify` passed.
   - Before marking feat-023 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 22 prior passing features.
   - After marking feat-023 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 23 passing features.
+
+- [x] feat-024 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-024-connectivity-check.unit.test.ts` failed because `apps/worker/src/provider-connectivity-check` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-024-connectivity-check.e2e.spec.ts --grep 'manual provider connectivity check records success and failure results'` failed because the handler module was missing.
+  - Implemented a `provider_connectivity_check` Worker handler that reads the Provider, decrypts the stored Provider API key with the Worker master key, performs a lightweight OpenAI-compatible probe, and stores structured success, bad-credential, or timeout results on the job record.
+  - P2+ review found and fixed plaintext API key persistence in `jobs.payload`; E2E now stores keys in encrypted `provider_api_keys`, sends only `providerId` in job payload, and asserts plaintext keys do not persist in `jobs.payload` or `provider_api_keys.encrypted_key`.
+  - Added `@llmingress/security` as a Worker dependency and aligned Worker tsconfig with security package TS extension handling so the dependency builds under NodeNext.
+  - `pnpm exec vitest run tests/features/feat-024-connectivity-check.unit.test.ts` → 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-024-connectivity-check.e2e.spec.ts --grep 'manual provider connectivity check records success and failure results'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-024 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 23 prior passing features.
+  - After marking feat-024 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 24 passing features.

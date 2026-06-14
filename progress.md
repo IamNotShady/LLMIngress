@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 20:43 AWST
-**Active Feature:** feat-050 next (feat-001 through feat-049 completed)
+**Last Updated:** 2026-06-14 21:29 AWST
+**Active Feature:** feat-051 next (feat-001 through feat-050 completed)
 
 ## Status
 
@@ -35,6 +35,10 @@
   - Added Gateway CORS support for default local Console origins and explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
   - Review follow-up fixed blank/relative Gateway base URLs so the Playground cannot accidentally send the pasted key to Console same-origin paths.
   - Verification passed: feat-049 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-050 — MVP Happy Path E2E (passing)**:
+  - Added a clean-run MVP happy path E2E covering Console setup, price configuration, Provider API key storage, Virtual Model, Route Policy, Agent, Agent API key access, limits, Gateway request, Activity/Usage visibility, and Route Policy hot reload without restarting Gateway.
+  - The E2E pre-seeds the fake-provider-backed provider/model catalog because `feat-020` intentionally blocks arbitrary OpenAI-compatible custom endpoints in Console UI; Provider API key and the rest of the user-facing config still go through authenticated Console/Gateway paths.
+  - Verification passed: feat-050 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -125,9 +129,9 @@
 
 ### What's Next
 
-1. `feat-050` — MVP Happy Path E2E.
-2. `feat-051` — MVP Streaming E2E.
-3. `feat-052` — Claude Code Messages E2E.
+1. `feat-051` — MVP Streaming E2E.
+2. `feat-052` — Claude Code Messages E2E.
+3. `feat-053` — Codex OpenAI-Compatible E2E.
 
 ## Blockers / Risks
 
@@ -840,3 +844,15 @@
   - `pnpm run verify` passed.
   - Before marking feat-049 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 48 prior passing features.
   - Next active feature: feat-050 MVP Happy Path E2E.
+
+- [x] feat-050 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-050-mvp-happy-path.unit.test.ts` failed because `tests/support/mvp-happy-path` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-050-mvp-happy-path.e2e.spec.ts --grep 'clean setup request activity usage and hot reload after route change'` failed because the same helper was missing.
+  - Added a clean-run MVP happy path E2E that initializes Console, configures model prices through authenticated Console price API, stores the Provider API key through Console UI, creates Virtual Model, Route Policy, Agent, Agent API key access, and limits through Console UI, sends a real Gateway request, verifies Activity and Usage, edits Route Policy, waits for the already-running Gateway to hot-reload the new config version, and verifies the next request hits the reloaded provider model without restarting Gateway.
+  - The fake-provider-backed provider/model catalog is pre-seeded in the test because `feat-020` intentionally blocks arbitrary OpenAI-compatible custom endpoints in Console UI; this is recorded as a test boundary, not a product behavior change.
+  - P2+ review found no blocking issues after checking the hot-reload assertion, same-Gateway-process check, Activity/Usage coverage, and the fake-provider catalog boundary.
+  - `pnpm exec vitest run tests/features/feat-050-mvp-happy-path.unit.test.ts` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-050-mvp-happy-path.e2e.spec.ts --grep 'clean setup request activity usage and hot reload after route change'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-050 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 49 prior passing features.
+  - Next active feature: feat-051 MVP Streaming E2E.

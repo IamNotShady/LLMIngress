@@ -613,8 +613,8 @@
         "feat-046",
         "feat-047"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-050 unit/E2E because the MVP happy-path support helper was missing. Added a clean-run MVP happy path E2E that initializes Console, configures model prices through the authenticated Console price API, uses a fake-provider-backed preseeded provider/model catalog because feat-020 intentionally blocks arbitrary OpenAI-compatible custom endpoints in UI, stores the Provider API key through Console UI, creates Virtual Model, Route Policy, Agent, Agent API key access, and limits through Console UI, sends a real Gateway request, verifies Activity and Usage, edits the Route Policy in Console, waits for the already-running Gateway to hot-reload the new config version, and verifies the next request hits the reloaded provider model without restarting Gateway. P2+ review found no blocking issues; the fake-provider provider/model preseed is recorded as a deliberate test boundary rather than a product behavior change. Verification passed — feat-050 unit tests 1 passed, real Chromium/PostgreSQL/Gateway/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 49 prior passing features before marking feat-050 passing."
     },
     {
       "id": "feat-051",

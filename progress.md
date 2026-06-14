@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 17:29 AWST
-**Active Feature:** feat-044 next (feat-001 through feat-043 completed)
+**Last Updated:** 2026-06-14 18:17 AWST
+**Active Feature:** feat-045 next (feat-001 through feat-044 completed)
 
 ## Status
 
@@ -102,9 +102,9 @@
 
 ### What's Next
 
-1. `feat-044` — Request Activity and Error Recorder.
-2. `feat-045` — Usage and Cost Recorder.
-3. `feat-046` — Savings Baseline and Reporting.
+1. `feat-045` — Usage Cost Baseline and Savings Recorder.
+2. `feat-046` — Activity Console Page.
+3. `feat-047` — Usage and Cost Console Page.
 
 ## Blockers / Risks
 
@@ -773,3 +773,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-043 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 42 prior passing features.
   - After marking feat-043 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 43 passing features.
+
+- [x] feat-044 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-044-activity-recorder.unit.test.ts` failed because `apps/gateway/src/activity-recorder` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-044-activity-recorder.e2e.spec.ts --grep 'success and failure requests create activity rows with route fallback latency and error code'` failed because successful/failed Gateway requests did not create `request_activity` rows.
+  - Added Gateway activity recorder helpers for creating started rows and completing rows with final status, HTTP status, latency, and stable error code/message.
+  - Non-streaming `/v1/chat/completions`, `/v1/responses`, and `/v1/messages` now create and complete request activity rows after Agent auth and Virtual Model resolution.
+  - Chat fallback execution now links `fallback_events` to the real request activity row and records failed attempts on `request_activity.fallback_attempts`; successful fallback activity records the actual fallback provider/model hit.
+  - P2+ review found no blocking issues after checking fallback actual-hit recording, provider-error versus Gateway-error codes, recorder DB write ordering, and non-stream scope for feat-044.
+  - `pnpm exec vitest run tests/features/feat-044-activity-recorder.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-044-activity-recorder.e2e.spec.ts --grep 'success and failure requests create activity rows with route fallback latency and error code'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-044 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 43 prior passing features.
+  - After marking feat-044 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 44 passing features.

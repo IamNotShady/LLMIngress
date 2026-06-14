@@ -1,3 +1,4 @@
+import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
   type GatewayBudgetReservation,
@@ -43,6 +44,7 @@ export type GatewayResponsesErrorBody = {
 };
 
 export type GatewayResponsesResponse = {
+  activity?: GatewayRequestActivityRoute;
   body: unknown;
   headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
@@ -151,6 +153,7 @@ export async function executeGatewayOpenAIResponse(input: {
   }
 
   let budgetReservation: GatewayBudgetReservation | undefined;
+  let activity: GatewayRequestActivityRoute | undefined;
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -160,6 +163,13 @@ export async function executeGatewayOpenAIResponse(input: {
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
+    activity = {
+      fallbackAttempts: [],
+      providerId: selectedCandidate.providerId,
+      providerModelId: selectedCandidate.providerModelId,
+      routePolicyId: routeDecision.routePolicyId,
+      routeReason: routeDecision.routeReason,
+    };
     const budget = await reserveGatewayBudget({
       agentApiKeyId: input.agentApiKeyId,
       databaseUrl: input.databaseUrl,
@@ -169,6 +179,7 @@ export async function executeGatewayOpenAIResponse(input: {
     });
     if (!budget.ok) {
       return {
+        activity,
         body: budget.body,
         requestMetadata,
         statusCode: budget.statusCode,
@@ -206,6 +217,7 @@ export async function executeGatewayOpenAIResponse(input: {
       });
       budgetReservation = undefined;
       return {
+        activity,
         body: createGatewayResponsesErrorBody("provider_request_failed", input.requestId),
         requestMetadata,
         statusCode: 502,
@@ -218,6 +230,7 @@ export async function executeGatewayOpenAIResponse(input: {
     });
 
     return {
+      activity,
       body: result.body,
       requestMetadata,
       statusCode: result.statusCode,
@@ -230,6 +243,7 @@ export async function executeGatewayOpenAIResponse(input: {
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyResponsesError(message);
     return {
+      activity,
       body: createGatewayResponsesErrorBody(code, input.requestId),
       requestMetadata,
       statusCode: code === "provider_request_failed" ? 502 : 500,

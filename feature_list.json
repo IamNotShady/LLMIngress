@@ -531,8 +531,8 @@
         "feat-037",
         "feat-038"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-044 unit tests because apps/gateway/src/activity-recorder was missing, and E2E failed because successful/failed Gateway requests did not create request_activity rows. Added a Gateway activity recorder that creates a started request_activity row after Agent auth and Virtual Model resolution, completes non-streaming chat/responses/messages rows with status, http_status, latency, error code/message, route reason, selected provider/model, and fallback attempts, and links chat fallback_events to the activity row. P2+ review found no blocking issues after checking fallback actual-hit recording, provider-error versus Gateway-error codes, recorder DB write ordering, and non-stream scope for feat-044. Verification passed — feat-044 unit tests 2 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 43 prior passing features before marking feat-044 passing, and final verify:features passed all 44 passing features after marking."
     },
     {
       "id": "feat-045",

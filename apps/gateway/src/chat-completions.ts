@@ -4,6 +4,7 @@ import {
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
 import { Client, type QueryResultRow } from "pg";
+import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
   type GatewayBudgetReservation,
@@ -19,6 +20,7 @@ import {
   buildFallbackAttemptCandidates,
   executeFallbackChain,
   type FallbackChainCandidate,
+  type FallbackFailedAttempt,
 } from "./fallback-chain.js";
 import type {
   NormalizedOpenAIChatMessage,
@@ -48,6 +50,7 @@ export type GatewayChatCompletionErrorBody = {
 };
 
 export type GatewayChatCompletionResponse = {
+  activity?: GatewayRequestActivityRoute;
   body: unknown;
   headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
@@ -118,6 +121,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   adapter?: OpenAIProviderAdapter;
   databaseUrl: string;
   masterKeySource?: MasterKeySource;
+  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -153,6 +157,9 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   }
 
   let budgetReservation: GatewayBudgetReservation | undefined;
+  let activity: GatewayRequestActivityRoute | undefined;
+  let selectedActivityCandidate: GatewayRouteCandidateSnapshot | undefined;
+  const fallbackAttempts: FallbackFailedAttempt[] = [];
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -169,6 +176,12 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
     }
+    selectedActivityCandidate = selectedCandidate;
+    activity = buildRequestActivityRoute({
+      candidate: selectedActivityCandidate,
+      fallbackAttempts,
+      routeDecision,
+    });
 
     const budget = await reserveGatewayBudget({
       agentApiKeyId: input.agentApiKeyId,
@@ -179,6 +192,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     });
     if (!budget.ok) {
       return {
+        activity,
         body: budget.body,
         requestMetadata,
         statusCode: budget.statusCode,
@@ -194,7 +208,17 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     const result = await executeFallbackChain({
       adapter: input.adapter,
       candidates,
+      databaseUrl: input.databaseUrl,
+      recordFailedAttempt: async (attempt) => {
+        fallbackAttempts.push(attempt);
+      },
       request: normalized.request,
+      requestActivityId: input.requestActivityId,
+    });
+    activity = buildRequestActivityRoute({
+      candidate: result.selectedCandidate,
+      fallbackAttempts: result.failedAttempts,
+      routeDecision,
     });
     await finalizeGatewayBudgetReservation({
       databaseUrl: input.databaseUrl,
@@ -202,6 +226,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     });
 
     return {
+      activity,
       body: result.result.body,
       requestMetadata,
       statusCode: result.result.statusCode,
@@ -214,11 +239,26 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyChatCompletionError(message);
     return {
+      activity,
       body: createGatewayChatCompletionErrorBody(code, input.requestId),
       requestMetadata,
       statusCode: code === "provider_request_failed" ? 502 : 500,
     };
   }
+}
+
+function buildRequestActivityRoute(input: {
+  candidate: GatewayRouteCandidateSnapshot;
+  fallbackAttempts: FallbackFailedAttempt[];
+  routeDecision: ReturnType<typeof selectRouteCandidate>;
+}): GatewayRequestActivityRoute {
+  return {
+    fallbackAttempts: input.fallbackAttempts,
+    providerId: input.candidate.providerId,
+    providerModelId: input.candidate.providerModelId,
+    routePolicyId: input.routeDecision.routePolicyId,
+    routeReason: input.routeDecision.routeReason,
+  };
 }
 
 export async function attachGatewayProviderCredentials(input: {

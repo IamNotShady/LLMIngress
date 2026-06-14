@@ -1,6 +1,12 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import Fastify, { type FastifyReply } from "fastify";
+import {
+  completeGatewayRequestActivity,
+  createGatewayRequestActivity,
+  type GatewayRequestActivityProtocol,
+  type GatewayRequestActivityRoute,
+} from "./activity-recorder.js";
 import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
@@ -84,13 +90,24 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       );
     }
 
-    const chatCompletion = await executeGatewayOpenAIChatCompletion({
+    const chatCompletion = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
+      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      requestBody: request.body,
+      execute: (requestActivityId) =>
+        executeGatewayOpenAIChatCompletion({
+          agentApiKeyId: auth.agentApiKey.id,
+          databaseUrl,
+          requestActivityId,
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      model: virtualModelAccess.virtualModel.name,
+      protocol: "chat_completions",
       requestId: auth.requestId,
-      snapshot: requireGatewayConfigSnapshot(options),
-      virtualModel: virtualModelAccess.virtualModel,
+      virtualModelId: virtualModelAccess.virtualModel.id,
     });
     return sendGatewayJsonResponse(reply, chatCompletion);
   });
@@ -161,13 +178,23 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       );
     }
 
-    const response = await executeGatewayOpenAIResponse({
+    const response = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
+      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      requestBody: request.body,
+      execute: () =>
+        executeGatewayOpenAIResponse({
+          agentApiKeyId: auth.agentApiKey.id,
+          databaseUrl,
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      model: virtualModelAccess.virtualModel.name,
+      protocol: "responses",
       requestId: auth.requestId,
-      snapshot: requireGatewayConfigSnapshot(options),
-      virtualModel: virtualModelAccess.virtualModel,
+      virtualModelId: virtualModelAccess.virtualModel.id,
     });
     return sendGatewayJsonResponse(reply, response);
   });
@@ -212,13 +239,23 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       );
     }
 
-    const message = await executeGatewayAnthropicMessages({
+    const message = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
+      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      requestBody: request.body,
+      execute: () =>
+        executeGatewayAnthropicMessages({
+          agentApiKeyId: auth.agentApiKey.id,
+          databaseUrl,
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      model: virtualModelAccess.virtualModel.name,
+      protocol: "messages",
       requestId: auth.requestId,
-      snapshot: requireGatewayConfigSnapshot(options),
-      virtualModel: virtualModelAccess.virtualModel,
+      virtualModelId: virtualModelAccess.virtualModel.id,
     });
     return sendGatewayJsonResponse(reply, message);
   });
@@ -296,6 +333,7 @@ function sendGatewayStreamingResponse(reply: FastifyReply, stream: GatewayStream
 function sendGatewayJsonResponse(
   reply: FastifyReply,
   response: {
+    activity?: GatewayRequestActivityRoute;
     body: unknown;
     headers?: Record<string, string>;
     requestMetadata?: GatewayRequestMetadata;
@@ -329,6 +367,44 @@ function writeGatewayRequestMetadataDebugHeader(
   }
 
   reply.header(gatewayRequestMetadataHeader, serializeGatewayRequestMetadata(metadata));
+}
+
+async function executeRecordedGatewayJsonRequest(input: {
+  agentApiKeyId: string;
+  agentApiKeyPrefix: string;
+  databaseUrl: string;
+  execute: (requestActivityId: string) => Promise<{
+    activity?: GatewayRequestActivityRoute;
+    body: unknown;
+    headers?: Record<string, string>;
+    requestMetadata?: GatewayRequestMetadata;
+    statusCode: number;
+  }>;
+  model: string;
+  protocol: GatewayRequestActivityProtocol;
+  requestId: string;
+  virtualModelId: string;
+}) {
+  const activity = await createGatewayRequestActivity({
+    agentApiKeyId: input.agentApiKeyId,
+    agentApiKeyPrefix: input.agentApiKeyPrefix,
+    databaseUrl: input.databaseUrl,
+    model: input.model,
+    protocol: input.protocol,
+    requestId: input.requestId,
+    stream: false,
+    virtualModelId: input.virtualModelId,
+  });
+  const response = await input.execute(activity.id);
+  await completeGatewayRequestActivity({
+    activityId: activity.id,
+    databaseUrl: input.databaseUrl,
+    responseBody: response.body,
+    route: response.activity,
+    startedAt: activity.startedAt,
+    statusCode: response.statusCode,
+  });
+  return response;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

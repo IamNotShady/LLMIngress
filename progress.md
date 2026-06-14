@@ -530,3 +530,15 @@
   - `pnpm run verify` passed.
   - Before marking feat-027 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 25 prior passing features.
   - After marking feat-027 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 26 passing features.
+
+- [x] feat-028 verification and P2+ review passed:
+  - feat-025 remains intentionally not started because it depends on unfinished feat-032.
+  - Implemented Virtual Model create/edit/list/delete helpers, authenticated `/api/virtual-models`, Dashboard Virtual Model management UI, name normalization, duplicate-name rejection, and config publisher integration for Virtual Model changes.
+  - Delete is blocked when a Virtual Model is referenced by a route policy, used as an Agent API key default, or allowed by an Agent API key.
+  - P2+ review found no additional blocking issues after checking duplicate handling and row locking before delete dependency validation.
+  - During feat-028 regression, repaired the full feat-005 E2E smoke after additional Console specs could queue behind the shared Next dev-server process lock long enough to hit the 30s Playwright test timeout. Raised Playwright and process-lock timeouts to 90s, then reran `pnpm test:e2e` and feat-005 verification successfully.
+  - `pnpm exec vitest run tests/features/feat-028-virtual-model-crud.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-028-virtual-model-crud.e2e.spec.ts --grep 'virtual model crud rejects duplicate name and blocks referenced delete'` -> 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-028 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 26 prior passing features.
+  - After marking feat-028 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 27 passing features.

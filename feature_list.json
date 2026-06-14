@@ -52,7 +52,7 @@
         "feat-002"
       ],
       "status": "passing",
-      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82. 2026-06-12 regression during feat-008 verify:features: feat-005 verification failed while the full pnpm test:e2e smoke included a regressed feat-007 migration E2E assertion; repaired by making feat-007 migration E2E assert the current migration set, then rerunning feat-005 verification successfully with 8/8 E2E tests. 2026-06-13 regression during feat-015 verify:features: feat-005 full E2E smoke failed because two Console Playwright specs started Next dev concurrently against the same apps/console/.next workspace; repaired by adding a test process lock around Console dev-server E2E specs, then reran pnpm test:e2e and verify:features successfully."
+      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82. 2026-06-12 regression during feat-008 verify:features: feat-005 verification failed while the full pnpm test:e2e smoke included a regressed feat-007 migration E2E assertion; repaired by making feat-007 migration E2E assert the current migration set, then rerunning feat-005 verification successfully with 8/8 E2E tests. 2026-06-13 regression during feat-015 verify:features: feat-005 full E2E smoke failed because two Console Playwright specs started Next dev concurrently against the same apps/console/.next workspace; repaired by adding a test process lock around Console dev-server E2E specs, then reran pnpm test:e2e and verify:features successfully. 2026-06-14 regression during feat-028 verify:features: feat-005 full E2E smoke timed out after more Console specs queued behind the shared dev-server process lock; repaired by raising Playwright and process-lock timeouts to 90s, then reran pnpm test:e2e, feat-005 verification, pnpm run verify, and verify:features successfully."
     },
     {
       "id": "feat-006",
@@ -324,8 +324,8 @@
         "feat-008",
         "feat-013"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: Added Virtual Model CRUD server/API/Dashboard UI with normalized names, duplicate-name rejection, edit/list/delete support, config-version publishing, and delete blocking for route policies plus Agent API key default/allowed references. P2+ review found no additional blocking issues after checking duplicate handling and delete dependency locking. Verification passed — feat-028 unit tests 3 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, and verify:features passed all 26 prior passing features before marking feat-028 passing."
     },
     {
       "id": "feat-029",

@@ -5,7 +5,7 @@ import { join } from "node:path";
 export async function withProcessLock<T>(
   lockName: string,
   operation: () => Promise<T>,
-  timeoutMs = 30_000,
+  timeoutMs = 90_000,
 ): Promise<T> {
   const lockPath = join(tmpdir(), `${lockName}.lock`);
   const startedAt = Date.now();

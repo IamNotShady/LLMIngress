@@ -13,6 +13,7 @@ import {
   listOpenAICompatibleProviderTemplates,
 } from "../server/provider-templates";
 import { listProviders } from "../server/providers";
+import { listVirtualModels } from "../server/virtual-models";
 
 const previewProviderKey = "openai";
 const previewModelId = "gpt-4.1-mini";
@@ -77,6 +78,7 @@ export default async function Home() {
   const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
   const providers = await listProviders(databaseUrl);
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
+  const virtualModels = await listVirtualModels(databaseUrl);
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
@@ -97,6 +99,74 @@ export default async function Home() {
       </header>
       <section className="status-band" aria-label="Console status">
         <p>Signed in as admin</p>
+      </section>
+      <section className="providers-panel" aria-labelledby="virtual-models-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Virtual Models</p>
+            <h2 id="virtual-models-title">Virtual model names</h2>
+          </div>
+        </div>
+        <form className="provider-create-form" action="/api/virtual-models" method="post">
+          <input type="hidden" name="action" value="create" />
+          <label htmlFor="virtual-model-name">Virtual model name</label>
+          <input id="virtual-model-name" name="name" required />
+          <label htmlFor="virtual-model-display-name">Virtual model display name</label>
+          <input id="virtual-model-display-name" name="displayName" required />
+          <button type="submit">Create virtual model</button>
+        </form>
+        <div className="provider-list">
+          {virtualModels.length === 0 ? (
+            <p>No virtual models configured.</p>
+          ) : (
+            virtualModels.map((virtualModel) => (
+              <article className="provider-item" key={virtualModel.id}>
+                <header className="provider-header">
+                  <div>
+                    <p className="eyebrow">{virtualModel.name}</p>
+                    <h2>{virtualModel.displayName}</h2>
+                  </div>
+                  <p className={virtualModel.enabled ? "status-enabled" : "status-disabled"}>
+                    {virtualModel.enabled ? "Enabled" : "Disabled"}
+                  </p>
+                </header>
+                <form className="provider-edit-form" action="/api/virtual-models" method="post">
+                  <input type="hidden" name="action" value="update" />
+                  <input type="hidden" name="id" value={virtualModel.id} />
+                  <label htmlFor={`virtual-model-name-${virtualModel.id}`}>
+                    Edit virtual model name
+                  </label>
+                  <input
+                    id={`virtual-model-name-${virtualModel.id}`}
+                    name="name"
+                    defaultValue={virtualModel.name}
+                    required
+                  />
+                  <label htmlFor={`virtual-model-display-${virtualModel.id}`}>
+                    Edit virtual model display name
+                  </label>
+                  <input
+                    id={`virtual-model-display-${virtualModel.id}`}
+                    name="displayName"
+                    defaultValue={virtualModel.displayName}
+                    required
+                  />
+                  <button type="submit">Save virtual model</button>
+                </form>
+                <p>Route policies: {virtualModel.routePolicyCount}</p>
+                <p>Default Agent API keys: {virtualModel.defaultApiKeyCount}</p>
+                <p>Allowed Agent API keys: {virtualModel.allowedApiKeyCount}</p>
+                <form action="/api/virtual-models" method="post">
+                  <input type="hidden" name="action" value="delete" />
+                  <input type="hidden" name="id" value={virtualModel.id} />
+                  <button className="secondary-button" type="submit">
+                    Delete virtual model
+                  </button>
+                </form>
+              </article>
+            ))
+          )}
+        </div>
       </section>
       <section className="providers-panel" aria-labelledby="agents-title">
         <div className="section-heading">

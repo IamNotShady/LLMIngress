@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 19:31 AWST
-**Active Feature:** feat-047 next (feat-001 through feat-046 completed)
+**Last Updated:** 2026-06-14 19:59 AWST
+**Active Feature:** feat-048 next (feat-001 through feat-047 completed)
 
 ## Status
 
@@ -21,6 +21,11 @@
   - Added a protected Console Activity section that lists recent requests and shows a selected request detail.
   - Detail displays provider/model hit, token totals, request cost, route reason, fallback attempts, and error code with explicit unavailable labels for missing runtime records.
   - Verification passed: feat-046 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-047 — Usage and Cost Console Page (passing)**:
+  - Added a protected Usage & Cost section with 24h / 7d / 30d selection.
+  - Summarizes request count, token totals, cost total, and provider/model breakdown from recorded request usage and cost rows.
+  - Review follow-up fixed provider/model breakdown grouping to use stable provider/model IDs instead of display labels.
+  - Verification passed: feat-047 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -111,9 +116,9 @@
 
 ### What's Next
 
-1. `feat-047` — Usage and Cost Console Page.
-2. `feat-048` — Gateway Runtime Status Page.
-3. `feat-049` — Playground Live Public API Test.
+1. `feat-048` — Gateway Runtime Status Page.
+2. `feat-049` — Playground Live Public API Test.
+3. `feat-050` — MVP Happy Path E2E.
 
 ## Blockers / Risks
 

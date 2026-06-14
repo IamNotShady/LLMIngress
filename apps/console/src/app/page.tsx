@@ -35,6 +35,13 @@ import {
   listRoutePolicies,
   routePolicyStrategies,
 } from "../server/route-policies";
+import {
+  type ConsoleUsageBreakdown,
+  formatConsoleUsageCost,
+  formatConsoleUsageTokens,
+  getConsoleUsageSummary,
+  parseConsoleUsageWindow,
+} from "../server/usage";
 import { listVirtualModels } from "../server/virtual-models";
 
 const previewProviderKey = "openai";
@@ -101,6 +108,10 @@ export default async function Home({ searchParams }: HomeProps = {}) {
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const selectedActivityId = readSingleSearchParam(resolvedSearchParams.activityId);
+  const usageWindow = parseConsoleUsageWindow(
+    readSingleSearchParam(resolvedSearchParams.usageWindow),
+  );
+  const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: usageWindow });
   const activities = await listConsoleActivities(databaseUrl);
   const selectedActivity =
     activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
@@ -144,6 +155,54 @@ export default async function Home({ searchParams }: HomeProps = {}) {
       </header>
       <section className="status-band" aria-label="Console status">
         <p>Signed in as admin</p>
+      </section>
+      <section className="providers-panel" id="usage" aria-labelledby="usage-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Usage</p>
+            <h2 id="usage-title">Usage & Cost</h2>
+          </div>
+        </div>
+        <form className="usage-window-form" action="/" method="get">
+          <label htmlFor="usage-window">Usage window</label>
+          <select id="usage-window" name="usageWindow" defaultValue={usageSummary.window}>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+          <button type="submit">Apply usage window</button>
+        </form>
+        <dl className="usage-summary-grid">
+          <div>
+            <dt>Requests</dt>
+            <dd>Requests: {usageSummary.requestCount}</dd>
+          </div>
+          <div>
+            <dt>Tokens</dt>
+            <dd>{formatConsoleUsageTokens(usageSummary)}</dd>
+          </div>
+          <div>
+            <dt>Cost</dt>
+            <dd>Cost: {formatConsoleUsageCost(usageSummary.totalCostUsd)}</dd>
+          </div>
+        </dl>
+        <div className="usage-breakdown-list">
+          {usageSummary.breakdowns.length === 0 ? (
+            <p>No usage recorded for this window.</p>
+          ) : (
+            usageSummary.breakdowns.map((breakdown) => (
+              <article
+                className="usage-breakdown-item"
+                key={`${breakdown.providerId}:${breakdown.modelId}`}
+              >
+                <h3>
+                  {breakdown.providerLabel} / {breakdown.modelLabel}
+                </h3>
+                <p>{formatUsageBreakdownStats(breakdown)}</p>
+              </article>
+            ))
+          )}
+        </div>
       </section>
       <section className="providers-panel" id="activity" aria-labelledby="activity-title">
         <div className="section-heading">
@@ -963,6 +1022,11 @@ function formatActivityModelHitLabel(activity: ConsoleActivity): string {
   const displayName = activity.providerModelDisplayName ?? "Unknown model";
   const modelName = activity.providerModelName ?? activity.providerModelId ?? "unknown";
   return `${displayName} (${modelName})`;
+}
+
+function formatUsageBreakdownStats(breakdown: ConsoleUsageBreakdown): string {
+  const requestLabel = breakdown.requestCount === 1 ? "request" : "requests";
+  return `${breakdown.requestCount} ${requestLabel} - ${breakdown.totalTokens} tokens - ${formatConsoleUsageCost(breakdown.totalCostUsd)}`;
 }
 
 function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string }>): string {

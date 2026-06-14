@@ -568,8 +568,8 @@
         "feat-013",
         "feat-045"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-047 unit tests because Console usage helpers were missing, and E2E because the authenticated Console had no Usage & Cost section. Added protected Usage & Cost section with selectable 24h/7d/30d window, request count, token totals, cost total, and provider/model breakdown using recorded request_usage/request_costs data. P2+ review found and fixed provider/model breakdown grouping by display labels instead of stable provider/model ids. Verification passed — feat-047 unit tests 2 passed, real Chromium/PostgreSQL Console E2E 1 passed, pnpm run verify passed, and verify:features passed all 46 prior passing features before marking feat-047 passing."
     },
     {
       "id": "feat-048",

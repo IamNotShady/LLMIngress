@@ -246,6 +246,40 @@ dd {
   padding: 16px;
 }
 
+.usage-window-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(160px, 220px) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 20px;
+}
+
+.usage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.usage-summary-grid div,
+.usage-breakdown-item {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.usage-breakdown-list {
+  display: grid;
+  gap: 10px;
+}
+
+.usage-breakdown-item h3 {
+  margin: 0 0 6px;
+  color: #101828;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
 .activity-layout {
   display: grid;
   grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.4fr);
@@ -357,6 +391,8 @@ dd {
 
   .section-heading,
   .activity-layout,
+  .usage-summary-grid,
+  .usage-window-form,
   .price-form,
   .provider-create-form,
   .provider-edit-form,

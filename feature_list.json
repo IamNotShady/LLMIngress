@@ -596,8 +596,8 @@
         "feat-038",
         "feat-045"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-049 unit tests because Playground helpers and Gateway CORS helpers were missing, and E2E because the authenticated Console had no Playground section. Added protected browser-only Playground with Gateway base URL, user-pasted Agent API key kept in React state only, allowed-model loading from Gateway GET /v1/models, live POST /v1/chat/completions directly from the browser to Gateway, result/request-id display, and Usage refresh after the live request. Added Gateway CORS support for default local Console origins plus explicit GATEWAY_CORS_ALLOWED_ORIGINS. P2+ review found and fixed a key-leak risk from blank/relative Gateway base URLs by requiring an absolute http(s) URL before sending any request. Verification passed — feat-049 unit tests 2 passed, real Chromium/PostgreSQL/Gateway/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 48 prior passing features before marking feat-049 passing."
     },
     {
       "id": "feat-050",

@@ -49,6 +49,7 @@ import {
   parseConsoleUsageWindow,
 } from "../server/usage";
 import { listVirtualModels } from "../server/virtual-models";
+import { Playground } from "./playground";
 
 const previewProviderKey = "openai";
 const previewModelId = "gpt-4.1-mini";
@@ -123,6 +124,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const selectedActivity =
     activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
   const pricePanel = await getPricePanel(databaseUrl);
+  const playgroundGatewayBaseUrl = getPlaygroundGatewayBaseUrl();
   const agents = await listAgents(databaseUrl);
   const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
   const agentApiKeyVirtualModelAccess = await listAgentApiKeyVirtualModelAccess(databaseUrl);
@@ -163,6 +165,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
       <section className="status-band" aria-label="Console status">
         <p>Signed in as admin</p>
       </section>
+      <Playground defaultGatewayBaseUrl={playgroundGatewayBaseUrl} />
       <section className="providers-panel" id="runtime" aria-labelledby="runtime-title">
         <div className="section-heading">
           <div>
@@ -1046,6 +1049,10 @@ async function getPricePanel(databaseUrl: string) {
 
 function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`;
+}
+
+function getPlaygroundGatewayBaseUrl(): string {
+  return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
 }
 
 function formatDateTime(value: Date): string {

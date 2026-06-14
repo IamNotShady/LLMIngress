@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 20:18 AWST
-**Active Feature:** feat-049 next (feat-001 through feat-048 completed)
+**Last Updated:** 2026-06-14 20:43 AWST
+**Active Feature:** feat-050 next (feat-001 through feat-049 completed)
 
 ## Status
 
@@ -30,6 +30,11 @@
   - Added a protected Runtime section backed by `gateway_runtime_status` and `runtime_errors`.
   - Shows Gateway heartbeat health, Gateway status, applied/target config versions, reload result, last heartbeat timestamp, and recent runtime errors.
   - Verification passed: feat-048 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-049 — Playground Live Public API Test (passing)**:
+  - Added a protected browser-only Playground that accepts a user-pasted Agent API key, loads allowed Virtual Models from Gateway `GET /v1/models`, and sends a live `POST /v1/chat/completions` directly from the browser to Gateway.
+  - Added Gateway CORS support for default local Console origins and explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
+  - Review follow-up fixed blank/relative Gateway base URLs so the Playground cannot accidentally send the pasted key to Console same-origin paths.
+  - Verification passed: feat-049 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -120,9 +125,9 @@
 
 ### What's Next
 
-1. `feat-049` — Playground Live Public API Test.
-2. `feat-050` — MVP Happy Path E2E.
-3. `feat-051` — MVP Streaming E2E.
+1. `feat-050` — MVP Happy Path E2E.
+2. `feat-051` — MVP Streaming E2E.
+3. `feat-052` — Claude Code Messages E2E.
 
 ## Blockers / Risks
 
@@ -820,3 +825,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-048 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 47 prior passing features.
   - Next active feature: feat-049 Console Playground Dry Run Page.
+
+- [x] feat-049 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts` failed because `apps/console/src/app/playground-helpers` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-049-playground.e2e.spec.ts --grep 'playground uses pasted key in memory direct gateway call and usage increments'` failed because the authenticated Console had no Playground section.
+  - Added browser-only Console Playground with Gateway base URL, Agent API key React state, allowed-model loading from Gateway `GET /v1/models`, live Gateway `POST /v1/chat/completions`, result/request-id display, and no key persistence across reload.
+  - Added Gateway CORS headers for default local Console origins plus explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
+  - E2E verifies a real browser direct-to-Gateway request hits the fake provider, records usage in PostgreSQL, updates the Usage count after reload, and does not write the pasted key into cookies, localStorage, or sessionStorage.
+  - P2+ review found and fixed a key-leak risk from blank/relative Gateway base URLs by requiring an absolute `http(s)` URL before sending any Playground request.
+  - `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts` -> 2 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-049-playground.e2e.spec.ts --grep 'playground uses pasted key in memory direct gateway call and usage increments'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-049 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 48 prior passing features.
+  - Next active feature: feat-050 MVP Happy Path E2E.

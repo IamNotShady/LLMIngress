@@ -18,7 +18,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -70,7 +71,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 44px;
   border: 1px solid #98a2b3;
@@ -78,6 +80,10 @@ select {
   background: #ffffff;
   color: #101828;
   padding: 10px 12px;
+}
+
+textarea {
+  resize: vertical;
 }
 
 button {
@@ -311,6 +317,24 @@ dd {
   padding-left: 20px;
 }
 
+.playground-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 20px;
+}
+
+.playground-form textarea {
+  grid-column: 1 / 3;
+}
+
+.playground-result {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+}
+
 .activity-layout {
   display: grid;
   grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.4fr);
@@ -421,7 +445,8 @@ dd {
   }
 
   .section-heading,
-  .activity-layout,
+    .activity-layout,
+  .playground-form,
   .usage-summary-grid,
   .usage-window-form,
   .price-form,

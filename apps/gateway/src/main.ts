@@ -10,6 +10,7 @@ import {
 import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
+import { gatewayCorsHeaders } from "./cors.js";
 import { executeGatewayAnthropicMessages } from "./messages.js";
 import {
   type GatewayRequestMetadata,
@@ -41,6 +42,17 @@ type CreateGatewayAppOptions = {
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   const app = Fastify({
     logger: true,
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    const corsHeaders = gatewayCorsHeaders(firstRequestHeaderValue(request.headers.origin));
+    for (const [name, value] of Object.entries(corsHeaders)) {
+      reply.header(name, value);
+    }
+
+    if (request.method === "OPTIONS") {
+      return reply.code(204).send();
+    }
   });
 
   app.get("/health", async () => {
@@ -360,6 +372,10 @@ function writeGatewayResponseHeaders(
   for (const [name, value] of Object.entries(headers)) {
     reply.header(name, value);
   }
+}
+
+function firstRequestHeaderValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function writeGatewayRequestMetadataDebugHeader(

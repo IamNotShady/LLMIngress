@@ -480,3 +480,16 @@
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-022-job-runner.e2e.spec.ts --grep 'worker leases job wakes on notify retries with backoff and records result once'` → 1 passed.
   - `pnpm run verify` passed.
   - Before marking feat-022 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 21 prior passing features.
+
+- [x] feat-023 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts` failed because the model refresh job planner/handler was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'model refresh writes derived rows marks missing referenced models unavailable and publishes config version only on routing-visible change'` failed because `model_refresh` was not implemented.
+  - Implemented provider model refresh planning, fake provider model-list support, worker `model_refresh` handler wiring, derived model row writes, missing referenced model `unavailable` handling, missing unreferenced model `not_listed` handling, and config publishing only when routing-visible availability changed.
+  - P2+ review found and fixed duplicate provider model ids causing refresh job unique-constraint failures; the fix deduplicates provider lists before planning and uses an insert upsert as the database write guard.
+  - P2+ review found and fixed display-name-only changes on referenced models incorrectly publishing routing-visible config versions.
+  - During feat-023 regression, repaired a feat-022 wakeup race where `job_created` notifications could be dropped while an empty claim was in flight; also switched Postgres claim timestamps to database time. `pnpm exec vitest run tests/features/feat-022-job-runner.unit.test.ts` → 4 passed, and the feat-022 real PostgreSQL E2E → 1 passed.
+  - `pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts` → 4 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'model refresh writes derived rows marks missing referenced models unavailable and publishes config version only on routing-visible change'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-023 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 22 prior passing features.
+  - After marking feat-023 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 23 passing features.

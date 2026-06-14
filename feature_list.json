@@ -249,7 +249,7 @@
         "feat-009"
       ],
       "status": "passing",
-      "evidence": "2026-06-14: TDD red observed for feat-022 unit/E2E because apps/worker/src/job-runner was missing. Added a testable Worker job runner with atomic Postgres job claiming, lease ownership, job_created LISTEN/NOTIFY wakeups, retry backoff, guarded success/failure finalization, and worker startup wiring. P2+ review found and fixed unsupported-job claiming with empty handlers plus retry backoff being calculated from claim time instead of handler failure time. Verification passed — feat-022 unit tests 3 passed, real PostgreSQL E2E 1 passed, pnpm run verify passed, and verify:features passed all 21 prior passing features before marking feat-022 passing."
+      "evidence": "2026-06-14: TDD red observed for feat-022 unit/E2E because apps/worker/src/job-runner was missing. Added a testable Worker job runner with atomic Postgres job claiming, lease ownership, job_created LISTEN/NOTIFY wakeups, retry backoff, guarded success/failure finalization, and worker startup wiring. P2+ review found and fixed unsupported-job claiming with empty handlers plus retry backoff being calculated from claim time instead of handler failure time. Verification passed — feat-022 unit tests 3 passed, real PostgreSQL E2E 1 passed, pnpm run verify passed, and verify:features passed all 21 prior passing features before marking feat-022 passing. 2026-06-14 regression repair during feat-023 fixed dropped job_created wakeups while an empty claim was in flight, used database time for claim timestamps, and reran feat-022 unit tests 4 passed plus real PostgreSQL E2E 1 passed."
     },
     {
       "id": "feat-023",
@@ -262,8 +262,8 @@
         "feat-018",
         "feat-022"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-023 unit/E2E because the model refresh job handler was missing. Added provider model refresh planning and worker handler wiring that fetches fake provider model lists, writes derived provider_models rows, marks missing referenced models unavailable, marks missing unreferenced models not_listed, and publishes a config version only when routing-visible availability changed. P2+ review found and fixed duplicate provider model ids causing refresh job unique-constraint failures, plus display-name-only changes incorrectly publishing routing-visible config versions. Verification passed — feat-023 unit tests 4 passed, real PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 22 prior passing features before marking feat-023 passing, and final verify:features passed all 23 passing features after marking."
     },
     {
       "id": "feat-024",

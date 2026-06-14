@@ -73,6 +73,44 @@ describe("feat-022 worker job runner", () => {
     await expect(runner.runOnce()).resolves.toBe(false);
   });
 
+  it("does not drop a job_created wake while an empty claim is in flight", async () => {
+    let onJobCreated: (() => void) | undefined;
+    let releaseFirstClaim: (() => void) | undefined;
+    let claimCalls = 0;
+    const store: JobStore = {
+      claimNextJob: async () => {
+        claimCalls += 1;
+        if (claimCalls === 1) {
+          await new Promise<void>((resolve) => {
+            releaseFirstClaim = resolve;
+          });
+        }
+        return null;
+      },
+      completeJob: async () => false,
+      failJob: async () => false,
+      subscribeJobCreated: async (callback) => {
+        onJobCreated = callback;
+        return { stop: async () => undefined };
+      },
+    };
+    const runner = createJobRunner({
+      handlers: {
+        model_refresh: async () => ({ ok: true }),
+      },
+      pollIntervalMs: 60_000,
+      store,
+      workerId: "worker-unit",
+    });
+
+    await runner.start();
+    await waitFor(() => claimCalls === 1);
+    onJobCreated?.();
+    releaseFirstClaim?.();
+    await waitFor(() => claimCalls === 2);
+    await runner.stop();
+  });
+
   it("retries failed jobs with backoff and records only one terminal result", async () => {
     const firstClaimedAt = new Date("2026-01-01T00:00:00.000Z");
     const firstFailedAt = new Date("2026-01-01T00:00:05.000Z");
@@ -151,4 +189,14 @@ function createClaimedJob(
     priority: overrides.priority ?? 0,
     trigger: overrides.trigger ?? "manual",
   };
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt > 1_000) {
+      throw new Error("Timed out waiting for predicate.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
 }

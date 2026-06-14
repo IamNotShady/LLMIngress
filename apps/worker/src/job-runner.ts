@@ -136,7 +136,15 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
       },
       Math.max(0, delayMs),
     );
-    timer.unref?.();
+  };
+
+  const requestWake = () => {
+    if (processing) {
+      wakeRequested = true;
+      return;
+    }
+
+    schedule(0);
   };
 
   const runNextJob = async (): Promise<RunNextJobResult> => {
@@ -236,7 +244,7 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
       started = true;
       stopped = false;
       subscription = await options.store.subscribeJobCreated?.(() => {
-        schedule(0);
+        requestWake();
       });
       schedule(0);
     },
@@ -290,8 +298,8 @@ class PostgresJobStore implements JobStore {
               select id
               from jobs
               where status = 'pending'
-                and run_after <= $3::timestamptz
-                and job_type = any($4::text[])
+                and run_after <= now()
+                and job_type = any($3::text[])
               order by priority desc, run_after, created_at
               limit 1
               for update skip locked
@@ -299,9 +307,9 @@ class PostgresJobStore implements JobStore {
             update jobs
             set status = 'running',
                 lease_owner = $1,
-                lease_expires_at = $3::timestamptz + ($2::integer * interval '1 millisecond'),
+                lease_expires_at = now() + ($2::integer * interval '1 millisecond'),
                 attempt_count = attempt_count + 1,
-                updated_at = $3::timestamptz
+                updated_at = now()
             from candidate
             where jobs.id = candidate.id
             returning jobs.id::text,
@@ -312,7 +320,7 @@ class PostgresJobStore implements JobStore {
                       jobs.attempt_count as attempt_number,
                       jobs.max_attempts
           `,
-          [input.workerId, input.leaseMs, input.now.toISOString(), input.jobTypes],
+          [input.workerId, input.leaseMs, input.jobTypes],
         );
         const job = result.rows[0];
 
@@ -324,9 +332,9 @@ class PostgresJobStore implements JobStore {
         await client.query(
           `
             insert into job_attempts (id, job_id, attempt_number, worker_id, status, started_at)
-            values ($1, $2, $3, $4, 'running', $5::timestamptz)
+            values ($1, $2, $3, $4, 'running', now())
           `,
-          [randomUUID(), job.id, job.attempt_number, input.workerId, input.now.toISOString()],
+          [randomUUID(), job.id, job.attempt_number, input.workerId],
         );
         await client.query("commit");
         return rowToClaimedJob(job);

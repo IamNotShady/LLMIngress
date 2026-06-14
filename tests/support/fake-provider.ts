@@ -12,13 +12,20 @@ export type CapturedFakeProviderRequest = {
   bodyJson: unknown;
 };
 
+export type FakeProviderModel = {
+  id: string;
+  name?: string;
+};
+
 export type FakeProviderServer = {
   url: string;
   requests: CapturedFakeProviderRequest[];
+  setModels: (models: FakeProviderModel[]) => void;
   close: () => Promise<void>;
 };
 
 type FakeProviderServerOptions = {
+  models?: FakeProviderModel[];
   timeoutMs?: number;
 };
 
@@ -26,10 +33,11 @@ export async function createFakeProviderServer(
   options: FakeProviderServerOptions = {},
 ): Promise<FakeProviderServer> {
   const requests: CapturedFakeProviderRequest[] = [];
+  let models = options.models ?? [{ id: "fake-model" }];
   const timeoutMs = options.timeoutMs ?? 30_000;
 
   const server = createServer((request, response) => {
-    void handleRequest(request, response, requests, timeoutMs);
+    void handleRequest(request, response, requests, { getModels: () => models, timeoutMs });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -45,6 +53,9 @@ export async function createFakeProviderServer(
   return {
     url: `http://127.0.0.1:${address.port}`,
     requests,
+    setModels: (nextModels) => {
+      models = nextModels;
+    },
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
@@ -62,7 +73,7 @@ async function handleRequest(
   request: IncomingMessage,
   response: Parameters<Parameters<typeof createServer>[0]>[1],
   requests: CapturedFakeProviderRequest[],
-  timeoutMs: number,
+  options: { getModels: () => FakeProviderModel[]; timeoutMs: number },
 ): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://fake-provider.local");
@@ -78,6 +89,18 @@ async function handleRequest(
       bodyRaw,
       bodyJson,
     });
+
+    if (mode === "json" && url.pathname.endsWith("/models")) {
+      writeJson(response, 200, {
+        object: "list",
+        data: options.getModels().map((model) => ({
+          id: model.id,
+          name: model.name ?? model.id,
+          object: "model",
+        })),
+      });
+      return;
+    }
 
     if (mode === "json" && url.pathname.endsWith("/api/tags")) {
       writeJson(response, 200, {
@@ -152,7 +175,7 @@ async function handleRequest(
             },
           });
         }
-      }, timeoutMs);
+      }, options.timeoutMs);
       timer.unref();
       response.once("close", () => clearTimeout(timer));
       return;

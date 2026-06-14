@@ -38,6 +38,7 @@ test("worker leases job wakes on notify retries with backoff and records result 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await Promise.all([runnerA.start(), runnerB.start()]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     await insertPendingJobAndNotify(fixture, jobId);
 

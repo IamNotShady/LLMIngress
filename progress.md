@@ -505,3 +505,16 @@
   - `pnpm run verify` passed.
   - Before marking feat-024 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 23 prior passing features.
   - After marking feat-024 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 24 passing features.
+
+- [x] feat-026 verification and P2+ review passed:
+  - feat-025 was intentionally skipped because it depends on unfinished feat-032.
+  - Red phase: `pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts` failed because `apps/console/src/server/agents` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with active dependencies is blocked'` failed because Agent CRUD was not implemented.
+  - Implemented Agent create/edit/list/delete helpers, authenticated `/api/agents`, Dashboard Agent management UI, and config publisher integration for Agent changes.
+  - Delete is blocked with a dependency error when the Agent has enabled API keys or request attribution; disabled keys without request attribution are cleaned up before the Agent row is deleted.
+  - P2+ review found and fixed delete checks relying on `rowCount` from the ConfigPublisher client, then added `for update` row locking before dependency validation.
+  - `pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with active dependencies is blocked'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-026 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 24 prior passing features.
+  - After marking feat-026 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 25 passing features.

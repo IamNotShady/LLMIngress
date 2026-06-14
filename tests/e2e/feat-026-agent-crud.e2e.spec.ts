@@ -1,0 +1,249 @@
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { createServer } from "node:net";
+import { expect, type Page, test } from "@playwright/test";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { withProcessLock } from "../support/process-lock";
+
+test("agent crud works and delete with active dependencies is blocked", async ({ browser }) => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_agent_crud_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+
+    await withProcessLock("llmingress-console-next-dev", async () => {
+      const consoleApp = startConsoleProcess({
+        databaseUrl: fixture.databaseUrl,
+        port: await getFreePort(),
+      });
+
+      try {
+        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const context = await browser.newContext();
+        const page = await context.newPage();
+
+        try {
+          await waitForConsole(baseUrl, consoleApp);
+          await signInFromFirstRun(page, baseUrl);
+
+          await page.getByLabel("Agent name").fill("Codex");
+          await page.getByLabel("Agent type").selectOption("coding");
+          await page.getByRole("button", { name: "Create agent" }).click();
+
+          await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
+          await expect(page.getByText("Type: coding")).toBeVisible();
+
+          await page.getByLabel("Edit agent name").fill("Codex CLI");
+          await page.getByLabel("Edit agent type").selectOption("terminal");
+          await page.getByRole("button", { name: "Save agent" }).click();
+
+          await expect(page.getByRole("heading", { name: "Codex CLI" })).toBeVisible();
+          await expect(page.getByText("Type: terminal")).toBeVisible();
+
+          await page.getByRole("button", { name: "Delete agent" }).click();
+          await expect(page.getByText("No agents configured.")).toBeVisible();
+
+          const protectedAgents = await insertProtectedAgents(fixture);
+          await page.reload();
+          await expect(page.getByRole("heading", { name: "Active Key Agent" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Attributed Agent" })).toBeVisible();
+
+          await expectAgentActionError(page, protectedAgents.activeKeyAgentId, /active API keys/i);
+          await expectAgentActionError(
+            page,
+            protectedAgents.attributedAgentId,
+            /request attribution/i,
+          );
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await stopConsoleProcess(consoleApp);
+      }
+    });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+type ConsoleProcess = {
+  child: ChildProcessWithoutNullStreams;
+  port: number;
+  stderr: string[];
+  stdout: string[];
+};
+
+type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
+
+type ProtectedAgents = {
+  activeKeyAgentId: string;
+  attributedAgentId: string;
+};
+
+async function insertProtectedAgents(fixture: Fixture): Promise<ProtectedAgents> {
+  const activeKeyAgentId = randomUUID();
+  const attributedAgentId = randomUUID();
+  const attributedApiKeyId = randomUUID();
+
+  await fixture.query(
+    `
+      insert into agents (id, name, agent_type, enabled)
+      values ($1, 'Active Key Agent', 'coding', true),
+             ($2, 'Attributed Agent', 'desktop', true)
+    `,
+    [activeKeyAgentId, attributedAgentId],
+  );
+  await fixture.query(
+    `
+      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, enabled)
+      values ($1, $2, 'active26', 'hash-active-26', true),
+             ($3, $4, 'attr26', 'hash-attributed-26', false)
+    `,
+    [randomUUID(), activeKeyAgentId, attributedApiKeyId, attributedAgentId],
+  );
+  await fixture.query(
+    `
+      insert into request_activity (
+        id,
+        request_id,
+        agent_api_key_id,
+        agent_api_key_prefix,
+        protocol,
+        status
+      )
+      values ($1, $2, $3, 'attr26', 'chat_completions', 'succeeded')
+    `,
+    [randomUUID(), `request-${randomUUID()}`, attributedApiKeyId],
+  );
+
+  return { activeKeyAgentId, attributedAgentId };
+}
+
+async function expectAgentActionError(
+  page: Page,
+  agentId: string,
+  errorPattern: RegExp,
+): Promise<void> {
+  const result = await page.evaluate(
+    async ({ id }) => {
+      const body = new FormData();
+      body.set("action", "delete");
+      body.set("id", id);
+      const response = await fetch("/api/agents", { body, method: "POST" });
+      return {
+        body: await response.json(),
+        status: response.status,
+      };
+    },
+    { id: agentId },
+  );
+
+  expect(result.status).toBe(400);
+  expect(result.body).toEqual({ error: expect.stringMatching(errorPattern) });
+}
+
+async function signInFromFirstRun(page: Page, baseUrl: string) {
+  const password = "correct horse battery staple";
+
+  await page.goto(baseUrl);
+  await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible();
+  await page.getByLabel("Admin password").fill(password);
+  await page.getByRole("button", { name: "Create admin" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByLabel("Admin password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+async function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("Failed to allocate TCP port.")));
+        return;
+      }
+      const port = address.port;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        if (consoleApp.child.exitCode !== null) {
+          return `exited:${consoleApp.child.exitCode}`;
+        }
+
+        try {
+          const response = await fetch(baseUrl);
+          return response.status;
+        } catch {
+          return "not-ready";
+        }
+      },
+      {
+        message: "Console did not start.",
+        timeout: 15_000,
+      },
+    )
+    .toBe(200);
+}
+
+function startConsoleProcess(options: { databaseUrl: string; port: number }): ConsoleProcess {
+  const child = spawn(
+    "pnpm",
+    [
+      "--filter",
+      "@llmingress/console",
+      "exec",
+      "next",
+      "dev",
+      "--hostname",
+      "127.0.0.1",
+      "--port",
+      String(options.port),
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        CONSOLE_PORT: String(options.port),
+        DATABASE_URL: options.databaseUrl,
+        MASTER_KEY: "test-master-key",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const consoleApp: ConsoleProcess = {
+    child,
+    port: options.port,
+    stderr: [],
+    stdout: [],
+  };
+  child.stderr.on("data", (chunk) => consoleApp.stderr.push(String(chunk)));
+  child.stdout.on("data", (chunk) => consoleApp.stdout.push(String(chunk)));
+  return consoleApp;
+}
+
+async function stopConsoleProcess(consoleApp: ConsoleProcess): Promise<void> {
+  if (consoleApp.child.exitCode !== null) {
+    return;
+  }
+
+  consoleApp.child.kill("SIGTERM");
+  await new Promise<void>((resolve) => {
+    consoleApp.child.once("exit", () => resolve());
+    setTimeout(() => {
+      if (consoleApp.child.exitCode === null) {
+        consoleApp.child.kill("SIGKILL");
+      }
+      resolve();
+    }, 2_000);
+  });
+}

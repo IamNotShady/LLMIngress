@@ -3,6 +3,7 @@ import {
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
 import { cookies } from "next/headers";
+import { listAgents } from "../server/agents";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
 import { listProviderApiKeyMetadata } from "../server/provider-keys";
@@ -71,6 +72,7 @@ export default async function Home() {
   }
 
   const pricePanel = await getPricePanel(databaseUrl);
+  const agents = await listAgents(databaseUrl);
   const providers = await listProviders(databaseUrl);
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
   const providerKeyByProviderId = new Map(
@@ -92,6 +94,81 @@ export default async function Home() {
       </header>
       <section className="status-band" aria-label="Console status">
         <p>Signed in as admin</p>
+      </section>
+      <section className="providers-panel" aria-labelledby="agents-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Agents</p>
+            <h2 id="agents-title">Agent configurations</h2>
+          </div>
+        </div>
+        <form className="provider-create-form" action="/api/agents" method="post">
+          <input type="hidden" name="action" value="create" />
+          <label htmlFor="agent-name">Agent name</label>
+          <input id="agent-name" name="name" required />
+          <label htmlFor="agent-type">Agent type</label>
+          <select id="agent-type" name="agentType" required defaultValue="coding">
+            <option value="coding">coding</option>
+            <option value="desktop">desktop</option>
+            <option value="terminal">terminal</option>
+            <option value="ide">ide</option>
+            <option value="other">other</option>
+          </select>
+          <button type="submit">Create agent</button>
+        </form>
+        <div className="provider-list">
+          {agents.length === 0 ? (
+            <p>No agents configured.</p>
+          ) : (
+            agents.map((agent) => (
+              <article className="provider-item" key={agent.id}>
+                <header className="provider-header">
+                  <div>
+                    <p className="eyebrow">Type: {agent.agentType}</p>
+                    <h2>{agent.name}</h2>
+                  </div>
+                  <p className={agent.enabled ? "status-enabled" : "status-disabled"}>
+                    {agent.enabled ? "Enabled" : "Disabled"}
+                  </p>
+                </header>
+                <form className="provider-edit-form" action="/api/agents" method="post">
+                  <input type="hidden" name="action" value="update" />
+                  <input type="hidden" name="id" value={agent.id} />
+                  <label htmlFor={`agent-name-${agent.id}`}>Edit agent name</label>
+                  <input
+                    id={`agent-name-${agent.id}`}
+                    name="name"
+                    defaultValue={agent.name}
+                    required
+                  />
+                  <label htmlFor={`agent-type-${agent.id}`}>Edit agent type</label>
+                  <select
+                    id={`agent-type-${agent.id}`}
+                    name="agentType"
+                    defaultValue={agent.agentType}
+                    required
+                  >
+                    <option value="coding">coding</option>
+                    <option value="desktop">desktop</option>
+                    <option value="terminal">terminal</option>
+                    <option value="ide">ide</option>
+                    <option value="other">other</option>
+                  </select>
+                  <button type="submit">Save agent</button>
+                </form>
+                <p>Active API keys: {agent.activeApiKeyCount}</p>
+                <p>Request attribution records: {agent.requestAttributionCount}</p>
+                <form action="/api/agents" method="post">
+                  <input type="hidden" name="action" value="delete" />
+                  <input type="hidden" name="id" value={agent.id} />
+                  <button className="secondary-button" type="submit">
+                    Delete agent
+                  </button>
+                </form>
+              </article>
+            ))
+          )}
+        </div>
       </section>
       <section className="price-panel" aria-labelledby="price-title">
         <div className="section-heading">

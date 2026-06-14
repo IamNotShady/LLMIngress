@@ -72,6 +72,9 @@ importers:
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       fastify:
         specifier: ^5.8.5
         version: 5.8.5

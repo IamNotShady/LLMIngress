@@ -652,3 +652,20 @@
   - `pnpm run verify` passed.
   - Before marking feat-035 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 34 prior passing features.
   - After marking feat-035 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 35 passing features.
+
+- [x] feat-036 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts` failed because `apps/gateway/src/chat-completions` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-036-chat-completions.e2e.spec.ts --grep 'chat completions returns provider response and rejects disallowed virtual model without calling provider'` failed because `/v1/chat/completions` still returned the authenticated stub instead of the fake provider response.
+  - Added Gateway OpenAI chat completion normalization, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, fallback-chain execution, and real provider response forwarding for `/v1/chat/completions` after auth and Virtual Model access checks.
+  - Disallowed Virtual Models return 403 `virtual_model_not_allowed` before any provider call.
+  - Adapted feat-034/035 E2E fixtures to seed real provider routes under the new endpoint semantics.
+  - P2+ review found no blocking issues after checking auth-before-provider-call ordering, disallowed no-call behavior, provider key decryption, route snapshot usage, and fallback-chain integration.
+  - `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-036-chat-completions.e2e.spec.ts --grep 'chat completions returns provider response and rejects disallowed virtual model without calling provider'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-034-auth.e2e.spec.ts --grep 'valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id'` -> 1 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-035-virtual-model-access.e2e.spec.ts --grep 'models list allowed names disallowed post returns 403 missing model uses default or returns 400'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-036 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 35 prior passing features.
+  - After marking feat-036 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 36 passing features.

@@ -424,8 +424,8 @@
         "feat-032",
         "feat-035"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-036 unit tests because apps/gateway/src/chat-completions was missing, and E2E failed because /v1/chat/completions still returned the authenticated stub instead of a provider response. Added Gateway OpenAI chat completion normalization, route selection through the Gateway config snapshot, encrypted provider API key loading/decryption, fallback-chain execution, and real provider response forwarding for /v1/chat/completions after auth and Virtual Model access checks. Disallowed Virtual Models still return 403 virtual_model_not_allowed before any provider call. Adapted feat-034/035 E2E fixtures to seed real provider routes under the new endpoint semantics. P2+ review found no blocking issues after checking auth-before-provider-call ordering, disallowed no-call behavior, provider key decryption, route snapshot usage, and fallback-chain integration. Verification passed — feat-036 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, feat-034 auth E2E regression passed, feat-035 Virtual Model access E2E regression passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 35 prior passing features before marking feat-036 passing, and final verify:features passed all 36 passing features after marking."
     },
     {
       "id": "feat-037",

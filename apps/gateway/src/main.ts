@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import Fastify from "fastify";
 import { authenticateGatewayRequest } from "./auth.js";
+import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
 import {
   listAllowedGatewayVirtualModels,
@@ -55,12 +56,14 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
     }
 
-    return {
-      agentApiKeyId: auth.agentApiKey.id,
-      model: virtualModelAccess.virtualModel.name,
+    const chatCompletion = await executeGatewayOpenAIChatCompletion({
+      databaseUrl,
+      requestBody: request.body,
       requestId: auth.requestId,
-      status: "authenticated",
-    };
+      snapshot: requireGatewayConfigSnapshot(options),
+      virtualModel: virtualModelAccess.virtualModel,
+    });
+    return reply.code(chatCompletion.statusCode).send(chatCompletion.body);
   });
 
   app.get("/v1/models", async (request, reply) => {
@@ -139,6 +142,14 @@ function requireGatewayDatabaseUrl(options: CreateGatewayAppOptions): string {
     throw new Error("Gateway API endpoints require databaseUrl.");
   }
   return options.databaseUrl;
+}
+
+function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
+  const snapshot = options.configRuntime?.getSnapshot();
+  if (!snapshot) {
+    throw new Error("Gateway API endpoints require configRuntime.");
+  }
+  return snapshot;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -8,21 +8,19 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { createFakeProviderServer } from "../support/fake-provider";
 
 const masterKey = "test-master-key";
-const providerApiKey = "sk-fake-provider-vm-access-035";
+const providerApiKey = "sk-fake-provider-chat-036";
 
-test("models list allowed names disallowed post returns 403 missing model uses default or returns 400", async () => {
+test("chat completions returns provider response and rejects disallowed virtual model without calling provider", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_vm_access_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_chat_completions_${randomUUID().replaceAll("-", "_")}`,
   });
   const provider = await createFakeProviderServer();
-  const allowedKey = "llmi_allowed_gateway_vm_key_035";
-  const noDefaultKey = "llmi_no_default_gateway_vm_key_035";
+  const agentApiKey = "llmi_allowed_gateway_chat_key_036";
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedVirtualModelAccess(fixture, {
-      allowedKey,
-      noDefaultKey,
+    await seedChatCompletionRoute(fixture, {
+      agentApiKey,
       providerBaseUrl: `${provider.url}/v1`,
     });
 
@@ -35,30 +33,32 @@ test("models list allowed names disallowed post returns 403 missing model uses d
       const baseUrl = `http://127.0.0.1:${gateway.port}`;
       await waitForGateway(baseUrl, gateway);
 
-      await expectAllowedModels(baseUrl, allowedKey, ["coding-fast", "coding-strong"]);
-      await expectGatewayPost(baseUrl, {
-        apiKey: allowedKey,
+      await expectGatewayChatCompletion(baseUrl, {
+        apiKey: agentApiKey,
         expectedCode: "virtual_model_not_allowed",
-        model: "blocked-model",
-        requestId: "req_blocked_035",
+        model: "blocked-coding",
+        requestId: "req_blocked_036",
         status: 403,
       });
-      await expectGatewayPost(baseUrl, {
-        apiKey: allowedKey,
-        requestId: "req_default_035",
+      expect(provider.requests).toHaveLength(0);
+
+      await expectGatewayChatCompletion(baseUrl, {
+        apiKey: agentApiKey,
+        model: "chat-coding",
+        requestId: "req_allowed_036",
         status: 200,
       });
       expect(provider.requests).toHaveLength(1);
-      expect(provider.requests[0]?.bodyJson).toMatchObject({
-        messages: [{ content: "hello", role: "user" }],
-        model: "gpt-4.1-mini",
+      expect(provider.requests[0]).toMatchObject({
+        bodyJson: {
+          messages: [{ content: "hello from feat 036", role: "user" }],
+          model: "gpt-4.1-mini",
+          stream: false,
+        },
+        method: "POST",
+        path: "/v1/chat/completions",
       });
-      await expectGatewayPost(baseUrl, {
-        apiKey: noDefaultKey,
-        expectedCode: "missing_model",
-        requestId: "req_missing_model_035",
-        status: 400,
-      });
+      expect(provider.requests[0]?.headers.authorization).toBe(`Bearer ${providerApiKey}`);
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -77,27 +77,26 @@ type GatewayProcess = {
   stdout: string[];
 };
 
-type GatewayPostExpectation = {
+type GatewayChatCompletionExpectation = {
   apiKey: string;
   expectedCode?: string;
-  model?: string;
+  model: string;
   requestId: string;
-  status: 200 | 400 | 403;
+  status: 200 | 403;
 };
 
-async function seedVirtualModelAccess(
+async function seedChatCompletionRoute(
   fixture: Fixture,
-  input: { allowedKey: string; noDefaultKey: string; providerBaseUrl: string },
+  input: { agentApiKey: string; providerBaseUrl: string },
 ): Promise<void> {
-  const agentId = randomUUID();
-  const allowedKeyId = randomUUID();
-  const noDefaultKeyId = randomUUID();
-  const fastVirtualModelId = randomUUID();
-  const strongVirtualModelId = randomUUID();
-  const blockedVirtualModelId = randomUUID();
   const providerId = randomUUID();
   const providerModelId = randomUUID();
-  const routePolicyId = randomUUID();
+  const allowedVirtualModelId = randomUUID();
+  const blockedVirtualModelId = randomUUID();
+  const allowedRoutePolicyId = randomUUID();
+  const blockedRoutePolicyId = randomUUID();
+  const agentId = randomUUID();
+  const agentApiKeyId = randomUUID();
   const encrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
     providerApiKey,
   );
@@ -105,7 +104,7 @@ async function seedVirtualModelAccess(
   await fixture.query(
     `
       insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
-      values ($1, 'api_key', 'fake-openai-vm-access', 'Fake OpenAI VM Access', $2, true)
+      values ($1, 'api_key', 'fake-openai', 'Fake OpenAI', $2, true)
     `,
     [providerId, input.providerBaseUrl],
   );
@@ -141,14 +140,35 @@ async function seedVirtualModelAccess(
   await fixture.query(
     `
       insert into virtual_models (id, name, display_name, enabled)
-      values ($1, 'coding-fast', 'Coding Fast', true),
-             ($2, 'coding-strong', 'Coding Strong', true),
-             ($3, 'blocked-model', 'Blocked Model', true)
+      values ($1, 'chat-coding', 'Chat Coding', true),
+             ($2, 'blocked-coding', 'Blocked Coding', true)
     `,
-    [fastVirtualModelId, strongVirtualModelId, blockedVirtualModelId],
+    [allowedVirtualModelId, blockedVirtualModelId],
   );
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'VM Access Agent', 'coding', true)",
+    `
+      insert into route_policies (id, virtual_model_id, strategy)
+      values ($1, $2, 'fixed'),
+             ($3, $4, 'fixed')
+    `,
+    [allowedRoutePolicyId, allowedVirtualModelId, blockedRoutePolicyId, blockedVirtualModelId],
+  );
+  await fixture.query(
+    `
+      insert into route_policy_candidates (
+        id,
+        route_policy_id,
+        provider_model_id,
+        candidate_order,
+        is_fallback
+      )
+      values ($1, $2, $3, 1, false),
+             ($4, $5, $3, 1, false)
+    `,
+    [randomUUID(), allowedRoutePolicyId, providerModelId, randomUUID(), blockedRoutePolicyId],
+  );
+  await fixture.query(
+    "insert into agents (id, name, agent_type, enabled) values ($1, 'Chat Agent', 'coding', true)",
     [agentId],
   );
   await fixture.query(
@@ -161,84 +181,38 @@ async function seedVirtualModelAccess(
         default_virtual_model_id,
         enabled
       )
-      values ($1, $2, $3, $4, $5, true),
-             ($6, $2, $7, $8, null, true)
+      values ($1, $2, $3, $4, $5, true)
     `,
     [
-      allowedKeyId,
+      agentApiKeyId,
       agentId,
-      input.allowedKey.slice(0, 12),
-      buildGatewayAgentApiKeyHash(input.allowedKey),
-      fastVirtualModelId,
-      noDefaultKeyId,
-      input.noDefaultKey.slice(0, 12),
-      buildGatewayAgentApiKeyHash(input.noDefaultKey),
+      input.agentApiKey.slice(0, 12),
+      buildGatewayAgentApiKeyHash(input.agentApiKey),
+      allowedVirtualModelId,
     ],
   );
   await fixture.query(
     `
       insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
-      values ($1, $2),
-             ($1, $3),
-             ($4, $2)
+      values ($1, $2)
     `,
-    [allowedKeyId, fastVirtualModelId, strongVirtualModelId, noDefaultKeyId],
+    [agentApiKeyId, allowedVirtualModelId],
   );
   await fixture.query(
-    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
-    [routePolicyId, fastVirtualModelId],
-  );
-  await fixture.query(
-    `
-      insert into route_policy_candidates (
-        id,
-        route_policy_id,
-        provider_model_id,
-        candidate_order,
-        is_fallback
-      )
-      values ($1, $2, $3, 1, false)
-    `,
-    [randomUUID(), routePolicyId, providerModelId],
-  );
-  await fixture.query(
-    "insert into config_versions (version, source, description) values (1, 'console', 'Gateway VM access config')",
+    "insert into config_versions (version, source, description) values (1, 'console', 'Chat completions config')",
   );
 }
 
-async function expectAllowedModels(
+async function expectGatewayChatCompletion(
   baseUrl: string,
-  apiKey: string,
-  expectedModelNames: string[],
+  expectation: GatewayChatCompletionExpectation,
 ): Promise<void> {
-  const response = await fetch(`${baseUrl}/v1/models`, {
-    headers: { authorization: `Bearer ${apiKey}`, "x-request-id": "req_models_035" },
-  });
-  expect(response.status).toBe(200);
-  const body = await response.json();
-  expect(body).toEqual({
-    data: expectedModelNames.map((modelName) => ({
-      id: modelName,
-      object: "model",
-    })),
-    object: "list",
-    requestId: "req_models_035",
-  });
-}
-
-async function expectGatewayPost(
-  baseUrl: string,
-  expectation: GatewayPostExpectation,
-): Promise<void> {
-  const body: Record<string, unknown> = {
-    messages: [{ content: "hello", role: "user" }],
-  };
-  if (expectation.model) {
-    body.model = expectation.model;
-  }
-
   const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      messages: [{ content: "hello from feat 036", role: "user" }],
+      model: expectation.model,
+      stream: false,
+    }),
     headers: {
       authorization: `Bearer ${expectation.apiKey}`,
       "content-type": "application/json",
@@ -247,10 +221,10 @@ async function expectGatewayPost(
     method: "POST",
   });
   expect(response.status).toBe(expectation.status);
-  const responseBody = await response.json();
+  const body = await response.json();
 
   if (expectation.status !== 200) {
-    expect(responseBody).toEqual({
+    expect(body).toEqual({
       error: {
         code: expectation.expectedCode,
         message: expect.any(String),
@@ -260,7 +234,8 @@ async function expectGatewayPost(
     return;
   }
 
-  expect(responseBody).toMatchObject({
+  expect(body).toMatchObject({
+    choices: [{ message: { content: "fake provider response", role: "assistant" } }],
     id: "fake-provider-response",
     object: "chat.completion",
   });
@@ -298,7 +273,7 @@ async function waitForGateway(baseUrl: string, gateway: GatewayProcess): Promise
         }
       },
       {
-        message: "Gateway did not start.",
+        message: `Gateway did not start.\nstdout=${gateway.stdout.join("")}\nstderr=${gateway.stderr.join("")}`,
         timeout: 15_000,
       },
     )

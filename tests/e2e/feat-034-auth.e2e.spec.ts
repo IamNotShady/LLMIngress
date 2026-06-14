@@ -1,20 +1,30 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
+import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createFakeProviderServer } from "../support/fake-provider";
+
+const masterKey = "test-master-key";
+const providerApiKey = "sk-fake-provider-auth-034";
 
 test("valid key returns 200 and missing invalid disabled keys return 401 with stable error code and request id", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_gateway_auth_${randomUUID().replaceAll("-", "_")}`,
   });
+  const provider = await createFakeProviderServer();
   const validKey = "llmi_valid_gateway_auth_key_034";
   const disabledKey = "llmi_disabled_gateway_auth_key_034";
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedAgentApiKeys(fixture, { disabledKey, validKey });
+    await seedAgentApiKeys(fixture, {
+      disabledKey,
+      providerBaseUrl: `${provider.url}/v1`,
+      validKey,
+    });
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
@@ -51,6 +61,7 @@ test("valid key returns 200 and missing invalid disabled keys return 401 with st
       await stopGatewayProcess(gateway);
     }
   } finally {
+    await provider.close();
     await fixture.dispose();
   }
 });
@@ -73,11 +84,53 @@ type GatewayAuthExpectation = {
 
 async function seedAgentApiKeys(
   fixture: Fixture,
-  input: { disabledKey: string; validKey: string },
+  input: { disabledKey: string; providerBaseUrl: string; validKey: string },
 ): Promise<void> {
   const agentId = randomUUID();
   const validKeyId = randomUUID();
   const codingVirtualModelId = randomUUID();
+  const providerId = randomUUID();
+  const providerModelId = randomUUID();
+  const routePolicyId = randomUUID();
+  const encrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
+    providerApiKey,
+  );
+  await fixture.query(
+    `
+      insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+      values ($1, 'api_key', 'fake-openai-auth', 'Fake OpenAI Auth', $2, true)
+    `,
+    [providerId, input.providerBaseUrl],
+  );
+  await fixture.query(
+    `
+      insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id)
+      values ($1, $2, $3, $4, $5)
+    `,
+    [
+      randomUUID(),
+      providerId,
+      providerApiKey.slice(0, 8),
+      JSON.stringify(encrypted),
+      encrypted.keyId,
+    ],
+  );
+  await fixture.query(
+    `
+      insert into provider_models (
+        id,
+        provider_id,
+        model_id,
+        display_name,
+        context_window,
+        supports_streaming,
+        supports_tools,
+        availability
+      )
+      values ($1, $2, 'gpt-4.1-mini', 'GPT 4.1 Mini', 128000, true, true, 'available')
+    `,
+    [providerModelId, providerId],
+  );
   await fixture.query(
     `
       insert into virtual_models (id, name, display_name, enabled)
@@ -121,6 +174,23 @@ async function seedAgentApiKeys(
     [validKeyId, codingVirtualModelId],
   );
   await fixture.query(
+    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
+    [routePolicyId, codingVirtualModelId],
+  );
+  await fixture.query(
+    `
+      insert into route_policy_candidates (
+        id,
+        route_policy_id,
+        provider_model_id,
+        candidate_order,
+        is_fallback
+      )
+      values ($1, $2, $3, 1, false)
+    `,
+    [randomUUID(), routePolicyId, providerModelId],
+  );
+  await fixture.query(
     "insert into config_versions (version, source, description) values (1, 'console', 'Gateway auth config')",
   );
 }
@@ -160,8 +230,8 @@ async function expectGatewayAuth(
   }
 
   expect(body).toMatchObject({
-    requestId: expectation.requestId,
-    status: "authenticated",
+    id: "fake-provider-response",
+    object: "chat.completion",
   });
 }
 
@@ -213,7 +283,7 @@ function startGatewayProcess(options: { databaseUrl: string; port: number }): Ga
       GATEWAY_CONFIG_NOTIFICATIONS: "false",
       GATEWAY_CONFIG_RECONCILE_INTERVAL_MS: "0",
       GATEWAY_PORT: String(options.port),
-      MASTER_KEY: "test-master-key",
+      MASTER_KEY: masterKey,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

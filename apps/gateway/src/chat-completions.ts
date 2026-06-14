@@ -19,6 +19,10 @@ import type {
   NormalizedOpenAIChatRequest,
   OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
+import {
+  buildOpenAIChatCompletionRequestMetadata,
+  type GatewayRequestMetadata,
+} from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
@@ -38,6 +42,7 @@ export type GatewayChatCompletionErrorBody = {
 
 export type GatewayChatCompletionResponse = {
   body: unknown;
+  requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
 };
 
@@ -117,10 +122,16 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     };
   }
 
+  const requestMetadata = buildOpenAIChatCompletionRequestMetadata({
+    model: input.virtualModel.name,
+    rawBody: input.requestBody,
+    request: normalized.request,
+  });
+
   try {
     const routeDecision = selectRouteCandidate({
-      estimatedInputTokens: estimateInputTokens(normalized.request),
-      estimatedOutputTokens: normalized.request.maxOutputTokens ?? 1024,
+      estimatedInputTokens: requestMetadata.estimatedInputTokens,
+      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -142,6 +153,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
 
     return {
       body: result.result.body,
+      requestMetadata,
       statusCode: result.result.statusCode,
     };
   } catch (error) {
@@ -149,6 +161,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     const code = classifyChatCompletionError(message);
     return {
       body: createGatewayChatCompletionErrorBody(code, input.requestId),
+      requestMetadata,
       statusCode: code === "provider_request_failed" ? 502 : 500,
     };
   }
@@ -254,14 +267,6 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
-}
-
-function estimateInputTokens(request: NormalizedOpenAIChatRequest): number {
-  const characterCount = request.messages.reduce(
-    (total, message) => total + message.content.length,
-    0,
-  );
-  return Math.max(1, Math.ceil(characterCount / 4));
 }
 
 function requireRoutePolicy(

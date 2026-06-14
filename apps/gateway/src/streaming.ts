@@ -12,6 +12,12 @@ import type {
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
+import {
+  buildAnthropicMessagesRequestMetadata,
+  buildOpenAIChatCompletionRequestMetadata,
+  buildOpenAIResponsesRequestMetadata,
+  type GatewayRequestMetadata,
+} from "./request-metadata.js";
 import { normalizeOpenAIResponsesRequest } from "./responses.js";
 import { selectRouteCandidate } from "./route-engine.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
@@ -23,11 +29,13 @@ export type GatewayStreamingResult =
       body: Readable;
       contentType: string;
       ok: true;
+      requestMetadata: GatewayRequestMetadata;
       statusCode: number;
     }
   | {
       body: unknown;
       ok: false;
+      requestMetadata?: GatewayRequestMetadata;
       statusCode: number;
     };
 
@@ -42,6 +50,7 @@ type GatewayStreamingPayload = {
   headers: Record<string, string>;
   payload: Record<string, unknown>;
   pathSuffix: string;
+  requestMetadata: GatewayRequestMetadata;
 };
 
 export function readGatewayStreamingFlag(body: unknown): boolean {
@@ -61,6 +70,7 @@ export async function executeGatewayStreamingRequest(input: {
     protocol: input.protocol,
     requestBody: input.requestBody,
     requestId: input.requestId,
+    resolvedModelName: input.virtualModel.name,
   });
   if (!normalized.ok) {
     return normalized;
@@ -102,6 +112,7 @@ export async function executeGatewayStreamingRequest(input: {
       return {
         body: createGatewayStreamingErrorBody("provider_request_failed", input.requestId),
         ok: false,
+        requestMetadata: normalized.requestMetadata,
         statusCode: 502,
       };
     }
@@ -125,6 +136,7 @@ export async function executeGatewayStreamingRequest(input: {
       ),
       contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
       ok: true,
+      requestMetadata: normalized.requestMetadata,
       statusCode: response.status,
     };
   } catch (error) {
@@ -135,6 +147,7 @@ export async function executeGatewayStreamingRequest(input: {
         error instanceof Error ? error.message : undefined,
       ),
       ok: false,
+      requestMetadata: normalized.requestMetadata,
       statusCode: 502,
     };
   }
@@ -172,6 +185,7 @@ function buildStreamingPayload(input: {
   protocol: GatewayStreamingProtocol;
   requestBody: unknown;
   requestId: string;
+  resolvedModelName: string;
 }):
   | (GatewayStreamingPayload & {
       headersWithApiKey: (apiKey: string) => Record<string, string>;
@@ -187,12 +201,15 @@ function buildStreamingPayload(input: {
     if (!normalized.ok) {
       return normalized;
     }
+    const requestMetadata = buildOpenAIChatCompletionRequestMetadata({
+      model: input.resolvedModelName,
+      rawBody: input.requestBody,
+      request: normalized.request,
+    });
 
     return {
-      estimatedInputTokens: estimateTextTokens(
-        normalized.request.messages.map((message) => message.content).join("\n"),
-      ),
-      estimatedOutputTokens: normalized.request.maxOutputTokens ?? 1024,
+      estimatedInputTokens: requestMetadata.estimatedInputTokens,
+      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       headers: { "content-type": "application/json" },
       headersWithApiKey: (apiKey) => ({
         authorization: `Bearer ${apiKey}`,
@@ -205,6 +222,7 @@ function buildStreamingPayload(input: {
         messages: normalized.request.messages,
         temperature: normalized.request.temperature,
       }),
+      requestMetadata,
     };
   }
 
@@ -213,14 +231,15 @@ function buildStreamingPayload(input: {
     if (!normalized.ok) {
       return normalized;
     }
-    const inputText =
-      typeof normalized.request.input === "string"
-        ? normalized.request.input
-        : normalized.request.input.map((message) => message.content).join("\n");
+    const requestMetadata = buildOpenAIResponsesRequestMetadata({
+      model: input.resolvedModelName,
+      rawBody: input.requestBody,
+      request: normalized.request,
+    });
 
     return {
-      estimatedInputTokens: estimateTextTokens(inputText),
-      estimatedOutputTokens: normalized.request.maxOutputTokens ?? 1024,
+      estimatedInputTokens: requestMetadata.estimatedInputTokens,
+      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       headers: { "content-type": "application/json" },
       headersWithApiKey: (apiKey) => ({
         authorization: `Bearer ${apiKey}`,
@@ -234,6 +253,7 @@ function buildStreamingPayload(input: {
         store: false,
         temperature: normalized.request.temperature,
       }),
+      requestMetadata,
     };
   }
 
@@ -241,15 +261,15 @@ function buildStreamingPayload(input: {
   if (!normalized.ok) {
     return normalized;
   }
+  const requestMetadata = buildAnthropicMessagesRequestMetadata({
+    model: input.resolvedModelName,
+    rawBody: input.requestBody,
+    request: normalized.request,
+  });
 
   return {
-    estimatedInputTokens: estimateTextTokens(
-      [
-        normalized.request.system ?? "",
-        ...normalized.request.messages.map((message) => message.content),
-      ].join("\n"),
-    ),
-    estimatedOutputTokens: normalized.request.maxOutputTokens,
+    estimatedInputTokens: requestMetadata.estimatedInputTokens,
+    estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
     headers: { "content-type": "application/json" },
     headersWithApiKey: (apiKey) => ({
       "anthropic-version": "2023-06-01",
@@ -264,6 +284,7 @@ function buildStreamingPayload(input: {
       system: normalized.request.system,
       temperature: normalized.request.temperature,
     }),
+    requestMetadata,
   };
 }
 
@@ -344,10 +365,6 @@ function createGatewayStreamingErrorBody(
     },
     requestId,
   };
-}
-
-function estimateTextTokens(text: string): number {
-  return Math.max(1, Math.ceil(text.length / 4));
 }
 
 function omitUndefined<T extends Record<string, unknown>>(value: T): T {

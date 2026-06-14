@@ -5,6 +5,12 @@ import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
 import { executeGatewayAnthropicMessages } from "./messages.js";
+import {
+  type GatewayRequestMetadata,
+  gatewayRequestMetadataHeader,
+  serializeGatewayRequestMetadata,
+  shouldExposeGatewayRequestMetadata,
+} from "./request-metadata.js";
 import { executeGatewayOpenAIResponse } from "./responses.js";
 import {
   executeGatewayStreamingRequest,
@@ -84,7 +90,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       snapshot: requireGatewayConfigSnapshot(options),
       virtualModel: virtualModelAccess.virtualModel,
     });
-    return reply.code(chatCompletion.statusCode).send(chatCompletion.body);
+    return sendGatewayJsonResponse(reply, chatCompletion);
   });
 
   app.get("/v1/models", async (request, reply) => {
@@ -159,7 +165,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       snapshot: requireGatewayConfigSnapshot(options),
       virtualModel: virtualModelAccess.virtualModel,
     });
-    return reply.code(response.statusCode).send(response.body);
+    return sendGatewayJsonResponse(reply, response);
   });
 
   app.post("/v1/messages", async (request, reply) => {
@@ -208,7 +214,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       snapshot: requireGatewayConfigSnapshot(options),
       virtualModel: virtualModelAccess.virtualModel,
     });
-    return reply.code(message.statusCode).send(message.body);
+    return sendGatewayJsonResponse(reply, message);
   });
 
   app.addHook("onClose", async () => {
@@ -272,11 +278,31 @@ function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
 }
 
 function sendGatewayStreamingResponse(reply: FastifyReply, stream: GatewayStreamingResult) {
+  writeGatewayRequestMetadataDebugHeader(reply, stream.requestMetadata);
   if (!stream.ok) {
     return reply.code(stream.statusCode).send(stream.body);
   }
 
   return reply.code(stream.statusCode).header("content-type", stream.contentType).send(stream.body);
+}
+
+function sendGatewayJsonResponse(
+  reply: FastifyReply,
+  response: { body: unknown; requestMetadata?: GatewayRequestMetadata; statusCode: number },
+) {
+  writeGatewayRequestMetadataDebugHeader(reply, response.requestMetadata);
+  return reply.code(response.statusCode).send(response.body);
+}
+
+function writeGatewayRequestMetadataDebugHeader(
+  reply: FastifyReply,
+  metadata: GatewayRequestMetadata | undefined,
+) {
+  if (!metadata || !shouldExposeGatewayRequestMetadata()) {
+    return;
+  }
+
+  reply.header(gatewayRequestMetadataHeader, serializeGatewayRequestMetadata(metadata));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -13,6 +13,10 @@ import {
   type NormalizedOpenAIResponsesRequest,
   type OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
+import {
+  buildOpenAIResponsesRequestMetadata,
+  type GatewayRequestMetadata,
+} from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
@@ -33,6 +37,7 @@ export type GatewayResponsesErrorBody = {
 
 export type GatewayResponsesResponse = {
   body: unknown;
+  requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
 };
 
@@ -115,10 +120,16 @@ export async function executeGatewayOpenAIResponse(input: {
     };
   }
 
+  const requestMetadata = buildOpenAIResponsesRequestMetadata({
+    model: input.virtualModel.name,
+    rawBody: input.requestBody,
+    request: normalized.request,
+  });
+
   try {
     const routeDecision = selectRouteCandidate({
-      estimatedInputTokens: estimateResponsesInputTokens(normalized.request),
-      estimatedOutputTokens: normalized.request.maxOutputTokens ?? 1024,
+      estimatedInputTokens: requestMetadata.estimatedInputTokens,
+      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -150,12 +161,14 @@ export async function executeGatewayOpenAIResponse(input: {
     if (!result.ok) {
       return {
         body: createGatewayResponsesErrorBody("provider_request_failed", input.requestId),
+        requestMetadata,
         statusCode: 502,
       };
     }
 
     return {
       body: result.body,
+      requestMetadata,
       statusCode: result.statusCode,
     };
   } catch (error) {
@@ -163,6 +176,7 @@ export async function executeGatewayOpenAIResponse(input: {
     const code = classifyResponsesError(message);
     return {
       body: createGatewayResponsesErrorBody(code, input.requestId),
+      requestMetadata,
       statusCode: code === "provider_request_failed" ? 502 : 500,
     };
   }
@@ -230,14 +244,6 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
-}
-
-function estimateResponsesInputTokens(request: NormalizedOpenAIResponsesRequest): number {
-  const content =
-    typeof request.input === "string"
-      ? request.input
-      : request.input.map((message) => message.content).join("\n");
-  return Math.max(1, Math.ceil(content.length / 4));
 }
 
 function requireRoutePolicy(

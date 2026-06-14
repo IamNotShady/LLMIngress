@@ -713,3 +713,18 @@
   - `pnpm run verify` passed.
   - Before marking feat-039 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 38 prior passing features.
   - After marking feat-039 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 39 passing features.
+
+- [x] feat-040 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-040-request-metadata.unit.test.ts` failed because `apps/gateway/src/request-metadata` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-040-request-metadata.e2e.spec.ts --grep 'chat responses and messages metadata includes model stream message count tools and token estimates'` failed because Gateway responses did not expose request metadata in the debug header.
+  - Added shared Gateway request metadata extraction for OpenAI chat completions, OpenAI responses, and Anthropic messages, covering resolved Virtual Model name, protocol, stream flag, message count, tool usage, estimated input tokens, and estimated output tokens.
+  - Chat, responses, messages, and streaming execution paths now use the shared estimates for route selection.
+  - Added a debug-only `x-llmingress-request-metadata` response header when `GATEWAY_DEBUG_REQUEST_METADATA=true`, allowing E2E verification through the real Gateway/PostgreSQL/fake-provider path without changing runtime schema before feat-044.
+  - P2+ review found no blocking issues after checking debug header default-off behavior, no prompt/tool body leakage in the header, default Virtual Model naming for streaming, provider payload compatibility, and route estimate changes.
+  - `pnpm exec vitest run tests/features/feat-040-request-metadata.unit.test.ts` -> 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-040-request-metadata.e2e.spec.ts --grep 'chat responses and messages metadata includes model stream message count tools and token estimates'` -> 1 passed.
+  - `pnpm run lint` passed.
+  - `pnpm run typecheck` passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-040 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 39 prior passing features.
+  - After marking feat-040 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 40 passing features.

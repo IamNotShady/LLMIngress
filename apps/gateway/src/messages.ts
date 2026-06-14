@@ -13,6 +13,10 @@ import {
   type NormalizedAnthropicMessage,
   type NormalizedAnthropicMessagesRequest,
 } from "./provider-adapters/anthropic.js";
+import {
+  buildAnthropicMessagesRequestMetadata,
+  type GatewayRequestMetadata,
+} from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
@@ -32,6 +36,7 @@ export type GatewayAnthropicMessagesErrorBody = {
 
 export type GatewayAnthropicMessagesResponse = {
   body: unknown;
+  requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
 };
 
@@ -108,10 +113,16 @@ export async function executeGatewayAnthropicMessages(input: {
     };
   }
 
+  const requestMetadata = buildAnthropicMessagesRequestMetadata({
+    model: input.virtualModel.name,
+    rawBody: input.requestBody,
+    request: normalized.request,
+  });
+
   try {
     const routeDecision = selectRouteCandidate({
-      estimatedInputTokens: estimateAnthropicInputTokens(normalized.request),
-      estimatedOutputTokens: normalized.request.maxOutputTokens,
+      estimatedInputTokens: requestMetadata.estimatedInputTokens,
+      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
       virtualModelId: input.virtualModel.id,
     });
@@ -138,12 +149,14 @@ export async function executeGatewayAnthropicMessages(input: {
     if (!result.ok) {
       return {
         body: createGatewayAnthropicMessagesErrorBody("provider_request_failed", input.requestId),
+        requestMetadata,
         statusCode: 502,
       };
     }
 
     return {
       body: result.body,
+      requestMetadata,
       statusCode: result.statusCode,
     };
   } catch (error) {
@@ -151,6 +164,7 @@ export async function executeGatewayAnthropicMessages(input: {
     const code = classifyMessagesError(message);
     return {
       body: createGatewayAnthropicMessagesErrorBody(code, input.requestId),
+      requestMetadata,
       statusCode: code === "provider_request_failed" ? 502 : 500,
     };
   }
@@ -198,14 +212,6 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
-}
-
-function estimateAnthropicInputTokens(request: NormalizedAnthropicMessagesRequest): number {
-  const content = [
-    request.system ?? "",
-    ...request.messages.map((message) => message.content),
-  ].join("\n");
-  return Math.max(1, Math.ceil(content.length / 4));
 }
 
 function requireRoutePolicy(

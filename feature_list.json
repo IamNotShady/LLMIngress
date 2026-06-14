@@ -477,8 +477,8 @@
         "feat-037",
         "feat-038"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-040 unit tests because apps/gateway/src/request-metadata was missing, and E2E failed because Gateway responses did not expose request metadata in the debug header. Added shared Gateway request metadata extraction for OpenAI chat completions, OpenAI responses, and Anthropic messages, covering resolved Virtual Model name, protocol, stream flag, message count, tool usage, estimated input tokens, and estimated output tokens. Chat, responses, messages, and streaming execution paths now use the shared estimates for route selection. A debug-only x-llmingress-request-metadata response header is emitted when GATEWAY_DEBUG_REQUEST_METADATA=true so E2E can verify the real Gateway/PostgreSQL/fake-provider path without changing runtime schema before feat-044. P2+ review found no blocking issues after checking debug header default-off behavior, no prompt/tool body leakage in the header, default Virtual Model naming for streaming, provider payload compatibility, and route estimate changes. Verification passed — feat-040 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 39 prior passing features before marking feat-040 passing, and final verify:features passed all 40 passing features after marking."
     },
     {
       "id": "feat-041",

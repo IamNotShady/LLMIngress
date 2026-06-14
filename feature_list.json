@@ -248,8 +248,8 @@
       "dependencies": [
         "feat-009"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-022 unit/E2E because apps/worker/src/job-runner was missing. Added a testable Worker job runner with atomic Postgres job claiming, lease ownership, job_created LISTEN/NOTIFY wakeups, retry backoff, guarded success/failure finalization, and worker startup wiring. P2+ review found and fixed unsupported-job claiming with empty handlers plus retry backoff being calculated from claim time instead of handler failure time. Verification passed — feat-022 unit tests 3 passed, real PostgreSQL E2E 1 passed, pnpm run verify passed, and verify:features passed all 21 prior passing features before marking feat-022 passing."
     },
     {
       "id": "feat-023",

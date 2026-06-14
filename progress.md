@@ -470,3 +470,13 @@
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-021-ollama-adapter.e2e.spec.ts --grep 'ollama loopback private network url accepted template paths used public url requires confirmation'` → 1 passed.
   - `pnpm run verify` passed.
   - Before marking feat-021 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 20 prior passing features.
+
+- [x] feat-022 verification and P2+ review passed:
+  - Red phase: `pnpm exec vitest run tests/features/feat-022-job-runner.unit.test.ts` failed because `apps/worker/src/job-runner` was missing.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-022-job-runner.e2e.spec.ts --grep 'worker leases job wakes on notify retries with backoff and records result once'` failed because the job runner module was missing.
+  - Implemented a Worker job runner with atomic Postgres pending-job claiming, lease ownership, `job_created` LISTEN/NOTIFY wakeups, retry backoff, guarded success/failure finalization, and Worker startup lifecycle wiring.
+  - P2+ review found and fixed unsupported-job claiming when no handler is registered, and retry backoff being calculated from claim time instead of handler failure time.
+  - `pnpm exec vitest run tests/features/feat-022-job-runner.unit.test.ts` → 3 passed.
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-022-job-runner.e2e.spec.ts --grep 'worker leases job wakes on notify retries with backoff and records result once'` → 1 passed.
+  - `pnpm run verify` passed.
+  - Before marking feat-022 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 21 prior passing features.

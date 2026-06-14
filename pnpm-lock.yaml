@@ -81,6 +81,9 @@ importers:
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
 
   packages/billing: {}
 

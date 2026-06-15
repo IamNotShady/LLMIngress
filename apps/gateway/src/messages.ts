@@ -91,6 +91,30 @@ export function normalizeAnthropicMessagesRequest(
   if (temperature === null) {
     return invalidMessagesRequest(requestId);
   }
+  const topP = readOptionalFiniteNumber(body.top_p);
+  if (topP === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const topK = readOptionalPositiveInteger(body.top_k);
+  if (topK === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const stopSequences = readOptionalNonEmptyStringArray(body.stop_sequences);
+  if (stopSequences === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const metadata = readOptionalRecord(body.metadata);
+  if (metadata === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const thinking = readOptionalRecord(body.thinking);
+  if (thinking === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const serviceTier = readOptionalNonEmptyString(body.service_tier);
+  if (serviceTier === null) {
+    return invalidMessagesRequest(requestId);
+  }
 
   if (body.stream !== undefined && typeof body.stream !== "boolean") {
     return invalidMessagesRequest(requestId);
@@ -112,11 +136,17 @@ export function normalizeAnthropicMessagesRequest(
     request: omitUndefined({
       maxOutputTokens,
       messages: messages as NormalizedAnthropicMessage[],
+      metadata,
+      serviceTier,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
+      stopSequences,
       system: typeof body.system === "string" && body.system.trim() ? body.system : undefined,
       temperature,
+      thinking,
       toolChoice,
       tools,
+      topK,
+      topP,
     }),
   };
 }
@@ -322,6 +352,13 @@ function readRequiredPositiveInteger(value: unknown): number | null {
   return value;
 }
 
+function readOptionalPositiveInteger(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return readRequiredPositiveInteger(value);
+}
+
 function readOptionalFiniteNumber(value: unknown): number | null | undefined {
   if (value === undefined) {
     return undefined;
@@ -340,6 +377,40 @@ function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | nu
     return null;
   }
   return value as Record<string, unknown>[];
+}
+
+function readOptionalRecord(value: unknown): Record<string, unknown> | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  return value;
+}
+
+function readOptionalNonEmptyString(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  return value;
+}
+
+function readOptionalNonEmptyStringArray(value: unknown): string[] | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((entry) => typeof entry !== "string" || !entry.trim())
+  ) {
+    return null;
+  }
+  return value;
 }
 
 function readOptionalToolChoice(value: unknown): Record<string, unknown> | null | undefined {

@@ -11,12 +11,18 @@ export type NormalizedAnthropicMessage = {
 
 export type NormalizedAnthropicMessagesRequest = {
   maxOutputTokens: number;
+  metadata?: Record<string, unknown>;
   messages: NormalizedAnthropicMessage[];
+  serviceTier?: string;
   stream?: boolean;
+  stopSequences?: string[];
   system?: string;
   temperature?: number;
+  thinking?: Record<string, unknown>;
   toolChoice?: unknown;
   tools?: unknown[];
+  topK?: number;
+  topP?: number;
 };
 
 export type AnthropicProviderTarget = {
@@ -54,15 +60,21 @@ type CreateAnthropicProviderAdapterOptions = {
   fetch?: typeof globalThis.fetch;
 };
 
-type AnthropicMessagesPayload = {
+export type AnthropicMessagesPayload = {
   max_tokens: number;
+  metadata?: Record<string, unknown>;
   messages: NormalizedAnthropicMessage[];
   model: string;
+  service_tier?: string;
   stream?: boolean;
+  stop_sequences?: string[];
   system?: string;
   temperature?: number;
+  thinking?: Record<string, unknown>;
   tool_choice?: unknown;
   tools?: unknown[];
+  top_k?: number;
+  top_p?: number;
 };
 
 const anthropicVersion = "2023-06-01";
@@ -76,7 +88,7 @@ export function createAnthropicProviderAdapter(
     messages: async ({ request, target }) => {
       try {
         const response = await fetchImpl(buildMessagesUrl(target.baseUrl), {
-          body: JSON.stringify(buildMessagesPayload(request, target)),
+          body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
           headers: {
             "anthropic-version": anthropicVersion,
             "content-type": "application/json",
@@ -110,19 +122,25 @@ export function createAnthropicProviderAdapter(
   };
 }
 
-function buildMessagesPayload(
+export function buildAnthropicMessagesPayload(
   request: NormalizedAnthropicMessagesRequest,
   target: AnthropicProviderTarget,
 ): AnthropicMessagesPayload {
   return omitUndefined({
     max_tokens: request.maxOutputTokens,
+    metadata: request.metadata,
     messages: request.messages,
     model: target.modelId,
+    service_tier: request.serviceTier,
     stream: request.stream,
+    stop_sequences: request.stopSequences,
     system: request.system,
     temperature: request.temperature,
+    thinking: request.thinking,
     tool_choice: request.toolChoice,
     tools: request.tools,
+    top_k: request.topK,
+    top_p: request.topP,
   });
 }
 

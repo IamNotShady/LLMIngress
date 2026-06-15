@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 01:35 AWST
-**Active Feature:** none — 67 tracked features are `passing`; 28 V1 features are `pending`
+**Last Updated:** 2026-06-16 01:53 AWST
+**Active Feature:** none — 68 tracked features are `passing`; 27 V1 features are `pending`
 
 ## Status
 
@@ -57,6 +57,12 @@
   - Successful embeddings requests record `request_activity`, `request_usage`, and `request_costs`; disallowed Virtual Model requests return 403 before any provider call.
   - Code review found and fixed a P2 provider adapter selection gap for OpenRouter embeddings routes.
   - Verification passed: feat-067 unit tests (4), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-018/033/035/044/045/065/066 regressions, `pnpm run verify`, full regression of all 66 prior passing features before marking, and final `pnpm run verify:features` across all 67 passing features after marking.
+- [x] **feat-068 — Anthropic Messages Parameter Passthrough (passing)**:
+  - Anthropic Messages normalization now whitelists and preserves `top_p`, `top_k`, `stop_sequences`, `metadata`, `thinking`, and `service_tier` alongside existing Messages fields.
+  - The Anthropic adapter and streaming Gateway path forward the whitelisted fields using Anthropic payload names while ignoring unknown header-style fields such as `extra_headers` and `anthropic_beta`.
+  - E2E verifies a real Gateway/PostgreSQL/fake-provider request preserves the parameter payload and keeps provider auth/version headers controlled by stored Provider credentials.
+  - Code review found no P2+ issues after checking whitelist scope, unknown-field filtering, adapter payload shape, and streaming parity.
+  - Verification passed: feat-068 unit tests (3), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-019/038/039/040/052 regressions, `pnpm run verify`, full regression of all 67 prior passing features before marking, and final `pnpm run verify:features` across all 68 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

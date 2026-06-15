@@ -866,8 +866,8 @@
         "feat-038",
         "feat-052"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-068 unit tests because Anthropic Messages normalization and adapter payloads dropped top_p, top_k, stop_sequences, metadata, thinking, and service_tier, and E2E red because the real Gateway provider payload omitted the same fields. Added explicit whitelist passthrough for common sampling parameters, stop sequences, metadata, and safe Anthropic provider parameters across non-streaming and streaming Messages paths while continuing to ignore unknown header-style fields. E2E verifies a real Gateway/PostgreSQL/fake-provider /v1/messages request forwards the whitelisted payload fields, preserves stored x-api-key and anthropic-version headers, and does not forward extra_headers or anthropic_beta. Code review found no P2+ issues after checking whitelist scope, unknown-field filtering, adapter payload shape, and streaming parity. Verification passed — feat-068 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, related feat-019/038/039/040/052 unit regressions passed, related feat-038/039/052 E2E regressions passed, pnpm run verify passed, verify:features passed all 67 prior passing features before marking, and final verify:features passed all 68 passing features after marking."
     },
     {
       "id": "feat-069",

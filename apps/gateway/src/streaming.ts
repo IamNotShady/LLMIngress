@@ -438,11 +438,17 @@ function buildStreamingPayload(input: {
     pathSuffix: "messages",
     payload: omitUndefined({
       max_tokens: normalized.request.maxOutputTokens,
+      metadata: normalized.request.metadata,
       messages: normalized.request.messages,
+      service_tier: normalized.request.serviceTier,
+      stop_sequences: normalized.request.stopSequences,
       system: normalized.request.system,
       temperature: normalized.request.temperature,
+      thinking: normalized.request.thinking,
       tool_choice: normalized.request.toolChoice,
       tools: normalized.request.tools,
+      top_k: normalized.request.topK,
+      top_p: normalized.request.topP,
     }),
     requestMetadata,
   };

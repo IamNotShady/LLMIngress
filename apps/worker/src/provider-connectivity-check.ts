@@ -1,3 +1,4 @@
+import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
@@ -72,12 +73,30 @@ export function createProviderConnectivityCheckJobHandler(
       providerId: provider.id,
     });
 
-    return checkProviderConnectivity({
+    const result = await checkProviderConnectivity({
       apiKey,
       fetch: options.fetch,
       provider,
       timeoutMs: payload.timeoutMs ?? options.timeoutMs,
     });
+    await recordProviderHealthEvent({
+      databaseUrl: options.databaseUrl,
+      errorCode: result.errorCode,
+      errorMessage: result.errorMessage,
+      jobId: job.id,
+      latencyMs: result.latencyMs,
+      metadata: {
+        checkedAt: result.checkedAt,
+        providerKey: result.providerKey,
+        retryable: result.retryable,
+        statusCode: result.statusCode,
+      },
+      observedAt: new Date(result.checkedAt),
+      providerId: provider.id,
+      status: result.ok ? "healthy" : "failed",
+      trigger: job.trigger === "manual" ? "manual" : "worker_probe",
+    });
+    return result;
   };
 }
 

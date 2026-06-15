@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { Client } from "pg";
 import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
 import { createGeminiProviderAdapter } from "./provider-adapters/gemini.js";
@@ -134,6 +135,8 @@ export async function executeFallbackChain(
       await recordFailedAttemptInDatabase(input, failedAttempt);
     }
 
+    await recordCandidateHealthFailure(input, candidate, candidateFailedAttempts);
+
     if (candidateFailedAttempts.some((attempt) => !attempt.failedBeforeFirstByte)) {
       throw new Error(lastError?.errorMessage ?? "Provider request failed.");
     }
@@ -200,4 +203,42 @@ async function recordFailedAttemptInDatabase(
   } finally {
     await client.end();
   }
+}
+
+async function recordCandidateHealthFailure(
+  input: ExecuteFallbackChainInput,
+  candidate: FallbackChainCandidate,
+  failedAttempts: FallbackFailedAttempt[],
+): Promise<void> {
+  if (!input.databaseUrl || failedAttempts.length === 0) {
+    return;
+  }
+
+  const latestAttempt = failedAttempts[failedAttempts.length - 1];
+  if (!latestAttempt) {
+    return;
+  }
+
+  const shared = {
+    databaseUrl: input.databaseUrl,
+    errorCode: latestAttempt.errorCode,
+    errorMessage: latestAttempt.errorMessage,
+    metadata: {
+      attemptCount: failedAttempts.length,
+      failedBeforeFirstByte: latestAttempt.failedBeforeFirstByte,
+      providerApiKeyPrefix: latestAttempt.providerApiKeyPrefix ?? null,
+    },
+    status: "failed" as const,
+    trigger: "request_path" as const,
+  };
+
+  await recordProviderHealthEvent({
+    ...shared,
+    providerId: candidate.providerId,
+  });
+  await recordProviderHealthEvent({
+    ...shared,
+    providerId: candidate.providerId,
+    providerModelId: candidate.providerModelId,
+  });
 }

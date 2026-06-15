@@ -965,8 +965,8 @@
         "feat-069",
         "feat-072"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-075 unit/E2E because provider health runtime module was missing. Added @llmingress/db provider-health runtime for provider_health_events/summary updates and health_summary_changed notifications. Worker provider_connectivity_check now records manual and scheduled/worker_probe health events. Gateway request-path candidate failures now record provider-level and provider-model-level health events without changing V1 route selection. Code review found and fixed a P2 fallback_attempts shape regression by keeping providerId out of public fallback attempts. Verification passed: feat-075 unit tests (2), real PostgreSQL/Gateway/Worker E2E (1), db:migrate:check, related feat-024/033/070 unit and E2E regressions, pnpm run verify, full verify:features passed all 74 prior passing features before marking, and final verify:features passed all 75 passing features after marking."
     },
     {
       "id": "feat-076",

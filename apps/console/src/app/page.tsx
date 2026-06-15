@@ -45,8 +45,12 @@ import {
 } from "../server/provider-templates";
 import { listProviders } from "../server/providers";
 import {
+  buildRoutePolicyHealthWarnings,
+  filterRoutePolicyEditorProviderModelOptions,
   listProviderModelOptions,
   listRoutePolicies,
+  mergeRoutePolicyEditorProviderModelOptions,
+  normalizeRoutePolicyEditorFilters,
   routePolicyStrategies,
 } from "../server/route-policies";
 import {
@@ -134,6 +138,10 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const usageWindow = parseConsoleUsageWindow(
     readSingleSearchParam(resolvedSearchParams.usageWindow),
   );
+  const routePolicyEditorFilters = normalizeRoutePolicyEditorFilters({
+    modelQuery: readSingleSearchParam(resolvedSearchParams.routeModelFilter),
+    providerKey: readSingleSearchParam(resolvedSearchParams.routeProviderFilter),
+  });
   const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
   const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: usageWindow });
   const activities = await listConsoleActivities(databaseUrl);
@@ -151,6 +159,12 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const virtualModels = await listVirtualModels(databaseUrl);
   const routePolicies = await listRoutePolicies(databaseUrl);
   const providerModelOptions = await listProviderModelOptions(databaseUrl);
+  const routePolicyProviderFilterOptions =
+    listRoutePolicyProviderFilterOptions(providerModelOptions);
+  const routePolicyCreateProviderModelOptions = filterRoutePolicyEditorProviderModelOptions(
+    providerModelOptions,
+    routePolicyEditorFilters,
+  );
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
@@ -411,10 +425,37 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             <h2 id="route-policies-title">Route policies</h2>
           </div>
         </div>
+        {providerModelOptions.length === 0 ? null : (
+          <form className="provider-create-form" action="/#route-policies" method="get">
+            <label htmlFor="route-provider-filter">Route provider filter</label>
+            <select
+              id="route-provider-filter"
+              name="routeProviderFilter"
+              defaultValue={routePolicyEditorFilters.providerKey ?? ""}
+            >
+              <option value="">All providers</option>
+              {routePolicyProviderFilterOptions.map((provider) => (
+                <option key={provider.providerKey} value={provider.providerKey}>
+                  {provider.providerDisplayName} ({provider.providerKey})
+                </option>
+              ))}
+            </select>
+            <label htmlFor="route-model-filter">Route model filter</label>
+            <input
+              id="route-model-filter"
+              name="routeModelFilter"
+              defaultValue={routePolicyEditorFilters.modelQuery ?? ""}
+            />
+            <button type="submit">Apply route policy filters</button>
+            <a href="/#route-policies">Clear route policy filters</a>
+          </form>
+        )}
         {virtualModelsWithoutRoutePolicy.length === 0 ? (
           <p>No Virtual Models without route policies.</p>
         ) : providerModelOptions.length === 0 ? (
           <p>No provider models available.</p>
+        ) : routePolicyCreateProviderModelOptions.length === 0 ? (
+          <p>No provider models match route policy filters.</p>
         ) : (
           <form className="provider-create-form" action="/api/route-policies" method="post">
             <input type="hidden" name="action" value="create" />
@@ -443,9 +484,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
               name="primaryProviderModelIds"
               multiple
               required
-              size={providerModelSelectSize(providerModelOptions.length)}
+              size={providerModelSelectSize(routePolicyCreateProviderModelOptions.length)}
             >
-              {providerModelOptions.map((providerModel) => (
+              {routePolicyCreateProviderModelOptions.map((providerModel) => (
                 <option key={providerModel.id} value={providerModel.id}>
                   {providerModel.pricedOptionLabel}
                 </option>
@@ -456,9 +497,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
               id="route-policy-fallback-models"
               name="fallbackProviderModelIds"
               multiple
-              size={providerModelSelectSize(providerModelOptions.length)}
+              size={providerModelSelectSize(routePolicyCreateProviderModelOptions.length)}
             >
-              {providerModelOptions.map((providerModel) => (
+              {routePolicyCreateProviderModelOptions.map((providerModel) => (
                 <option key={providerModel.id} value={providerModel.id}>
                   {providerModel.pricedOptionLabel}
                 </option>
@@ -471,91 +512,107 @@ export default async function Home({ searchParams }: HomeProps = {}) {
           {routePolicies.length === 0 ? (
             <p>No route policies configured.</p>
           ) : (
-            routePolicies.map((routePolicy) => (
-              <article className="provider-item" key={routePolicy.id}>
-                <header className="provider-header">
-                  <div>
-                    <p className="eyebrow">{routePolicy.virtualModelName}</p>
-                    <h2>Route policy</h2>
-                  </div>
-                  <p className="status-enabled">Enabled</p>
-                </header>
-                <p>
-                  Virtual Model: {routePolicy.virtualModelDisplayName} (
-                  {routePolicy.virtualModelName})
-                </p>
-                <p>Strategy: {routePolicy.strategy}</p>
-                <p>Route reason: {routePolicy.routeReason}</p>
-                {routePolicy.routeWarnings.map((warning) => (
-                  <p className="route-warning" key={warning}>
-                    {warning}
+            routePolicies.map((routePolicy) => {
+              const routePolicyEditorOptions = mergeRoutePolicyEditorProviderModelOptions(
+                routePolicyCreateProviderModelOptions,
+                routePolicy.candidates,
+              );
+              const routePolicyWarnings = [
+                ...routePolicy.routeWarnings,
+                ...buildRoutePolicyHealthWarnings(
+                  buildRoutePolicyHealthWarningCandidates(routePolicy, providerHealthByProviderId),
+                ),
+              ];
+
+              return (
+                <article className="provider-item" key={routePolicy.id}>
+                  <header className="provider-header">
+                    <div>
+                      <p className="eyebrow">{routePolicy.virtualModelName}</p>
+                      <h2>Route policy</h2>
+                    </div>
+                    <p className="status-enabled">Enabled</p>
+                  </header>
+                  <p>
+                    Virtual Model: {routePolicy.virtualModelDisplayName} (
+                    {routePolicy.virtualModelName})
                   </p>
-                ))}
-                <p>Primary: {formatRoutePolicyCandidateList(routePolicy.primaryCandidates)}</p>
-                <p>Fallback: {formatRoutePolicyCandidateList(routePolicy.fallbackCandidates)}</p>
-                <form className="provider-edit-form" action="/api/route-policies" method="post">
-                  <input type="hidden" name="action" value="update" />
-                  <input type="hidden" name="id" value={routePolicy.id} />
-                  <input type="hidden" name="virtualModelId" value={routePolicy.virtualModelId} />
-                  <label htmlFor={`route-policy-strategy-${routePolicy.id}`}>
-                    Edit route policy strategy
-                  </label>
-                  <select
-                    id={`route-policy-strategy-${routePolicy.id}`}
-                    name="strategy"
-                    defaultValue={routePolicy.strategy}
-                    required
-                  >
-                    {routePolicyStrategies.map((strategy) => (
-                      <option key={strategy} value={strategy}>
-                        {strategy}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor={`route-policy-primary-models-${routePolicy.id}`}>
-                    Edit primary provider models
-                  </label>
-                  <select
-                    id={`route-policy-primary-models-${routePolicy.id}`}
-                    name="primaryProviderModelIds"
-                    defaultValue={routePolicy.primaryCandidates.map((candidate) => candidate.id)}
-                    multiple
-                    required
-                    size={providerModelSelectSize(providerModelOptions.length)}
-                  >
-                    {providerModelOptions.map((providerModel) => (
-                      <option key={providerModel.id} value={providerModel.id}>
-                        {providerModel.pricedOptionLabel}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor={`route-policy-fallback-models-${routePolicy.id}`}>
-                    Edit fallback provider models
-                  </label>
-                  <select
-                    id={`route-policy-fallback-models-${routePolicy.id}`}
-                    name="fallbackProviderModelIds"
-                    defaultValue={routePolicy.fallbackCandidates.map((candidate) => candidate.id)}
-                    multiple
-                    size={providerModelSelectSize(providerModelOptions.length)}
-                  >
-                    {providerModelOptions.map((providerModel) => (
-                      <option key={providerModel.id} value={providerModel.id}>
-                        {providerModel.pricedOptionLabel}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="submit">Save route policy</button>
-                </form>
-                <form action="/api/route-policies" method="post">
-                  <input type="hidden" name="action" value="delete" />
-                  <input type="hidden" name="id" value={routePolicy.id} />
-                  <button className="secondary-button" type="submit">
-                    Delete route policy
-                  </button>
-                </form>
-              </article>
-            ))
+                  <p>Strategy: {routePolicy.strategy}</p>
+                  <p>Route reason: {routePolicy.routeReason}</p>
+                  {routePolicyWarnings.map((warning) => (
+                    <p className="route-warning" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+                  <p>Primary: {formatRoutePolicyCandidateList(routePolicy.primaryCandidates)}</p>
+                  <p>Fallback: {formatRoutePolicyCandidateList(routePolicy.fallbackCandidates)}</p>
+                  <p>
+                    Fallback order: {formatRoutePolicyFallbackOrder(routePolicy.fallbackCandidates)}
+                  </p>
+                  <form className="provider-edit-form" action="/api/route-policies" method="post">
+                    <input type="hidden" name="action" value="update" />
+                    <input type="hidden" name="id" value={routePolicy.id} />
+                    <input type="hidden" name="virtualModelId" value={routePolicy.virtualModelId} />
+                    <label htmlFor={`route-policy-strategy-${routePolicy.id}`}>
+                      Edit route policy strategy
+                    </label>
+                    <select
+                      id={`route-policy-strategy-${routePolicy.id}`}
+                      name="strategy"
+                      defaultValue={routePolicy.strategy}
+                      required
+                    >
+                      {routePolicyStrategies.map((strategy) => (
+                        <option key={strategy} value={strategy}>
+                          {strategy}
+                        </option>
+                      ))}
+                    </select>
+                    <label htmlFor={`route-policy-primary-models-${routePolicy.id}`}>
+                      Edit primary provider models
+                    </label>
+                    <select
+                      id={`route-policy-primary-models-${routePolicy.id}`}
+                      name="primaryProviderModelIds"
+                      defaultValue={routePolicy.primaryCandidates.map((candidate) => candidate.id)}
+                      multiple
+                      required
+                      size={providerModelSelectSize(routePolicyEditorOptions.length)}
+                    >
+                      {routePolicyEditorOptions.map((providerModel) => (
+                        <option key={providerModel.id} value={providerModel.id}>
+                          {providerModel.pricedOptionLabel}
+                        </option>
+                      ))}
+                    </select>
+                    <label htmlFor={`route-policy-fallback-models-${routePolicy.id}`}>
+                      Edit fallback provider models
+                    </label>
+                    <select
+                      id={`route-policy-fallback-models-${routePolicy.id}`}
+                      name="fallbackProviderModelIds"
+                      defaultValue={routePolicy.fallbackCandidates.map((candidate) => candidate.id)}
+                      multiple
+                      size={providerModelSelectSize(routePolicyEditorOptions.length)}
+                    >
+                      {routePolicyEditorOptions.map((providerModel) => (
+                        <option key={providerModel.id} value={providerModel.id}>
+                          {providerModel.pricedOptionLabel}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit">Save route policy</button>
+                  </form>
+                  <form action="/api/route-policies" method="post">
+                    <input type="hidden" name="action" value="delete" />
+                    <input type="hidden" name="id" value={routePolicy.id} />
+                    <button className="secondary-button" type="submit">
+                      Delete route policy
+                    </button>
+                  </form>
+                </article>
+              );
+            })
           )}
         </div>
       </section>
@@ -1296,8 +1353,48 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
     : candidates.map((candidate) => candidate.optionLabel).join(", ");
 }
 
+function formatRoutePolicyFallbackOrder(candidates: Array<{ optionLabel: string }>): string {
+  return candidates.length === 0
+    ? "None"
+    : candidates.map((candidate, index) => `${index + 1}. ${candidate.optionLabel}`).join(" -> ");
+}
+
 function providerModelSelectSize(optionCount: number): number {
   return Math.min(6, Math.max(2, optionCount));
+}
+
+function listRoutePolicyProviderFilterOptions(
+  providerModels: Awaited<ReturnType<typeof listProviderModelOptions>>,
+) {
+  const providersByKey = new Map<string, { providerDisplayName: string; providerKey: string }>();
+  for (const providerModel of providerModels) {
+    if (!providersByKey.has(providerModel.providerKey)) {
+      providersByKey.set(providerModel.providerKey, {
+        providerDisplayName: providerModel.providerDisplayName,
+        providerKey: providerModel.providerKey,
+      });
+    }
+  }
+  return Array.from(providersByKey.values()).sort((left, right) =>
+    left.providerDisplayName.localeCompare(right.providerDisplayName),
+  );
+}
+
+function buildRoutePolicyHealthWarningCandidates(
+  routePolicy: Awaited<ReturnType<typeof listRoutePolicies>>[number],
+  providerHealthByProviderId: Map<string, ConsoleProviderHealthSummary>,
+) {
+  return routePolicy.candidates.map((candidate) => {
+    const providerHealth = providerHealthByProviderId.get(candidate.providerId);
+    const modelHealth = providerHealth?.models.find((model) => model.id === candidate.id);
+    return {
+      modelHealthIsStale: modelHealth?.isStale ?? false,
+      modelHealthStatus: modelHealth?.status ?? null,
+      optionLabel: candidate.optionLabel,
+      providerHealthIsStale: providerHealth?.isStale ?? false,
+      providerHealthStatus: providerHealth?.status ?? null,
+    };
+  });
 }
 
 function groupProviderModelsByProviderId(

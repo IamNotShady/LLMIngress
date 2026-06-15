@@ -62,6 +62,25 @@ export type ConsoleRoutePolicy = {
 export type RoutePolicyWarningCandidate = {
   availability: string;
   optionLabel: string;
+  priceStatus?: ModelTokenPrice["status"];
+};
+
+export type RoutePolicyEditorFilterInput = {
+  modelQuery?: string | null;
+  providerKey?: string | null;
+};
+
+export type RoutePolicyEditorFilters = {
+  modelQuery: string | null;
+  providerKey: string | null;
+};
+
+export type RoutePolicyHealthWarningCandidate = {
+  modelHealthIsStale?: boolean;
+  modelHealthStatus?: string | null;
+  optionLabel: string;
+  providerHealthIsStale?: boolean;
+  providerHealthStatus?: string | null;
 };
 
 export type RouteReasonMetadataInput = {
@@ -181,12 +200,105 @@ export function buildRouteReasonMetadata(input: RouteReasonMetadataInput): strin
 export function buildRoutePolicyWarnings(
   candidates: readonly RoutePolicyWarningCandidate[],
 ): string[] {
-  return candidates
-    .filter((candidate) => candidate.availability !== "available")
-    .map(
-      (candidate) =>
+  const warnings: string[] = [];
+
+  for (const candidate of candidates) {
+    if (candidate.priceStatus === "unknown_price") {
+      warnings.push(
+        `Price warning: ${candidate.optionLabel} has unknown price; save a manual price override before using budgeted routes.`,
+      );
+    }
+    if (candidate.availability !== "available") {
+      warnings.push(
         `Route warning: ${candidate.optionLabel} is ${candidate.availability} and excluded from Gateway routing.`,
-    );
+      );
+    }
+  }
+
+  return warnings;
+}
+
+export function buildRoutePolicyHealthWarnings(
+  candidates: readonly RoutePolicyHealthWarningCandidate[],
+): string[] {
+  const warnings: string[] = [];
+
+  for (const candidate of candidates) {
+    if (isWarningHealthStatus(candidate.providerHealthStatus)) {
+      warnings.push(
+        `Health warning: ${candidate.optionLabel} provider health is ${formatRoutePolicyHealthStatus(
+          candidate.providerHealthStatus,
+        )}.`,
+      );
+    }
+    if (isWarningHealthStatus(candidate.modelHealthStatus)) {
+      warnings.push(
+        `Health warning: ${candidate.optionLabel} model health is ${formatRoutePolicyHealthStatus(
+          candidate.modelHealthStatus,
+        )}.`,
+      );
+    }
+    if (candidate.providerHealthIsStale) {
+      warnings.push(`Health warning: ${candidate.optionLabel} provider health is stale.`);
+    }
+    if (candidate.modelHealthIsStale) {
+      warnings.push(`Health warning: ${candidate.optionLabel} model health is stale.`);
+    }
+  }
+
+  return warnings;
+}
+
+export function normalizeRoutePolicyEditorFilters(
+  input: RoutePolicyEditorFilterInput,
+): RoutePolicyEditorFilters {
+  return {
+    modelQuery: normalizeOptionalFilter(input.modelQuery),
+    providerKey: normalizeOptionalFilter(input.providerKey),
+  };
+}
+
+export function filterRoutePolicyEditorProviderModelOptions(
+  options: readonly ConsoleProviderModelOption[],
+  filters: RoutePolicyEditorFilters,
+): ConsoleProviderModelOption[] {
+  const providerKey = filters.providerKey?.toLowerCase() ?? null;
+  const modelQuery = filters.modelQuery?.toLowerCase() ?? null;
+
+  return options.filter((option) => {
+    if (providerKey && option.providerKey.toLowerCase() !== providerKey) {
+      return false;
+    }
+    if (
+      modelQuery &&
+      ![
+        option.modelDisplayName,
+        option.modelId,
+        option.providerDisplayName,
+        option.providerKey,
+      ].some((value) => value.toLowerCase().includes(modelQuery))
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function mergeRoutePolicyEditorProviderModelOptions(
+  filteredOptions: readonly ConsoleProviderModelOption[],
+  selectedCandidates: readonly ConsoleProviderModelOption[],
+): ConsoleProviderModelOption[] {
+  const merged = [...filteredOptions];
+  const existingIds = new Set(merged.map((option) => option.id));
+
+  for (const candidate of selectedCandidates) {
+    if (!existingIds.has(candidate.id)) {
+      merged.push(candidate);
+      existingIds.add(candidate.id);
+    }
+  }
+
+  return merged;
 }
 
 export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): string {
@@ -765,6 +877,19 @@ function normalizeUuidList(input?: readonly (string | null | undefined)[]): stri
 
 function isRoutePolicyStrategy(value: string | null | undefined): value is RoutePolicyStrategy {
   return routePolicyStrategies.includes(value as RoutePolicyStrategy);
+}
+
+function isWarningHealthStatus(value: string | null | undefined): value is string {
+  return value === "degraded" || value === "unhealthy";
+}
+
+function formatRoutePolicyHealthStatus(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function normalizeOptionalFilter(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
 
 function isUuid(value: string): boolean {

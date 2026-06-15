@@ -1010,8 +1010,8 @@
         "feat-058",
         "feat-076"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-078 unit tests because route policy editor filter/merge/health-warning helpers were missing and price warnings only covered availability, and E2E red because the Console Route Policy section had no provider/model filters. Added provider/model filter normalization, filtered create selectors, edit selector merging that preserves already-selected candidates, explicit fallback order display, unknown-price route warnings, provider/model health warnings from health summaries, and E2E coverage proving no V2 task/context/tool rule controls were added. Code review found no P2+ logic issues after checking filtered edit preservation, warning scope, and V1-only route-policy controls; Biome formatting/import drift was fixed. Verification passed: feat-078 unit tests (2), real Chromium/PostgreSQL Console E2E (1), pnpm run lint, pnpm run verify, full verify:features passed all 77 prior passing features before marking, and final verify:features passed all 78 passing features after marking."
     },
     {
       "id": "feat-079",

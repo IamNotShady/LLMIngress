@@ -14,7 +14,9 @@ type LoadEnvFilesOptions = {
   fileNames?: string[];
 };
 
-export function loadEnvFiles(options: LoadEnvFilesOptions = {}): { loadedFiles: LoadedEnvFile[] } {
+export function loadEnvFiles(
+  options: LoadEnvFilesOptions = {},
+): { loadedFiles: LoadedEnvFile[]; loadedValues: Record<string, string> } {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
   const fileNames = options.fileNames ?? [".env", ".env.local"];
@@ -24,6 +26,7 @@ export function loadEnvFiles(options: LoadEnvFilesOptions = {}): { loadedFiles: 
       .map(([key]) => key),
   );
   const loadedFiles: LoadedEnvFile[] = [];
+  const loadedValues: Record<string, string> = {};
 
   for (const name of fileNames) {
     const path = resolve(cwd, name);
@@ -35,12 +38,20 @@ export function loadEnvFiles(options: LoadEnvFilesOptions = {}): { loadedFiles: 
     for (const [key, value] of Object.entries(parsed)) {
       if (!shellDefinedKeys.has(key)) {
         env[key] = value;
+        loadedValues[key] = value;
       }
     }
     loadedFiles.push({ name, path });
   }
 
-  return { loadedFiles };
+  return { loadedFiles, loadedValues };
+}
+
+export function formatShellExports(values: Record<string, string>): string {
+  const lines = Object.entries(values).map(
+    ([key, value]) => `export ${key}=${shellQuote(value)}`,
+  );
+  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
 export function parseEnvFile(content: string): Record<string, string> {
@@ -88,4 +99,8 @@ function unescapeDoubleQuotedValue(value: string): string {
     .replaceAll("\\t", "\t")
     .replaceAll('\\"', '"')
     .replaceAll("\\\\", "\\");
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }

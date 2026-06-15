@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 19:26 AWST
+**Last Updated:** 2026-06-15 19:38 AWST
 **Active Feature:** none — all 60 tracked features are `passing`
 
 ## Status
@@ -92,8 +92,9 @@
 - [x] **Test env file loading**:
   - Added a dependency-free test env loader that reads `.env` first and then `.env.local` when present; `.env.local` overrides `.env`, while shell-provided variables keep highest precedence.
   - Wrapped `pnpm test`, `pnpm test:e2e`, `pnpm run verify:features`, and `pnpm run db:migrate:check` with `scripts/run-with-env.ts`.
+  - `init.sh` now evaluates the same env loader before the verification gate and before starting Gateway, Console, and Worker, so service startup uses `.env` / `.env.local` as well.
   - Added `.env.example` documenting current local/test/runtime environment variables, including the opt-in real provider smoke variables.
-  - Verification passed: env-loader unit tests, package-script Vitest path, opt-in real-provider Playwright skip path, `pnpm run verify`, and final `pnpm run verify:features` across all 60 passing features.
+  - Verification passed: env-loader unit tests, shell export smoke, package-script Vitest path, opt-in real-provider Playwright skip path, `pnpm run verify`, and final `pnpm run verify:features` across all 60 passing features.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).

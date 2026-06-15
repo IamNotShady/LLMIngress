@@ -13,6 +13,10 @@ if [ ! -d "node_modules" ]; then
   pnpm install
 fi
 
+if [ -f ".env" ] || [ -f ".env.local" ]; then
+  eval "$(pnpm exec tsx scripts/print-env-exports.ts)"
+fi
+
 # Verification gate: must pass before any dev server starts.
 # Set SKIP_VERIFY=1 for fast restarts during iteration.
 if [ "${SKIP_VERIFY:-0}" != "1" ]; then

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadEnvFiles, parseEnvFile } from "../../scripts/env-loader";
+import { formatShellExports, loadEnvFiles, parseEnvFile } from "../../scripts/env-loader";
 
 const createdDirectories: string[] = [];
 
@@ -76,6 +76,35 @@ describe("test environment file loader", () => {
     );
     expect(packageJson.scripts["db:migrate:check"]).toBe(
       "tsx scripts/run-with-env.ts tsx scripts/migrate-check.ts",
+    );
+  });
+
+  it("formats loaded values as shell-safe exports for init.sh", () => {
+    expect(
+      formatShellExports({
+        EMPTY_VALUE: "",
+        OPENAI_API_KEY: "sk-test'with-quote",
+        TEST_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/postgres",
+      }),
+    ).toBe(
+      [
+        "export EMPTY_VALUE=''",
+        "export OPENAI_API_KEY='sk-test'\\''with-quote'",
+        "export TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres'",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("loads env files before init.sh verification and service startup", async () => {
+    const initScript = await readFile("init.sh", "utf8");
+
+    expect(initScript).toContain("pnpm exec tsx scripts/print-env-exports.ts");
+    expect(initScript.indexOf("scripts/print-env-exports.ts")).toBeLessThan(
+      initScript.indexOf("pnpm run verify"),
+    );
+    expect(initScript.indexOf("scripts/print-env-exports.ts")).toBeLessThan(
+      initScript.indexOf("pnpm --filter @llmingress/gateway dev"),
     );
   });
 });

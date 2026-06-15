@@ -61,6 +61,8 @@ import {
 } from "../server/runtime";
 import {
   type ConsoleUsageBreakdown,
+  type ConsoleUsageDimensionBreakdown,
+  formatConsoleUsageBreakdownStats,
   formatConsoleUsageCost,
   formatConsoleUsageTokens,
   getConsoleUsageSummary,
@@ -277,22 +279,55 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             <dt>Cost</dt>
             <dd>Cost: {formatConsoleUsageCost(usageSummary.totalCostUsd)}</dd>
           </div>
+          <div>
+            <dt>Failures</dt>
+            <dd>Failures: {usageSummary.failureCount}</dd>
+          </div>
+          <div>
+            <dt>Savings</dt>
+            <dd>Savings: {formatConsoleUsageCost(usageSummary.totalSavingsUsd)}</dd>
+          </div>
         </dl>
         <div className="usage-breakdown-list">
-          {usageSummary.breakdowns.length === 0 ? (
+          {usageSummary.requestCount === 0 ? (
             <p>No usage recorded for this window.</p>
           ) : (
-            usageSummary.breakdowns.map((breakdown) => (
-              <article
-                className="usage-breakdown-item"
-                key={`${breakdown.providerId}:${breakdown.modelId}`}
-              >
-                <h3>
-                  {breakdown.providerLabel} / {breakdown.modelLabel}
-                </h3>
-                <p>{formatUsageBreakdownStats(breakdown)}</p>
-              </article>
-            ))
+            <>
+              <UsageBreakdownSection
+                breakdowns={usageSummary.agentBreakdowns}
+                title="Agent breakdown"
+              />
+              <UsageBreakdownSection
+                breakdowns={usageSummary.agentApiKeyBreakdowns}
+                title="Agent API Key breakdown"
+              />
+              <UsageBreakdownSection
+                breakdowns={usageSummary.virtualModelBreakdowns}
+                title="Virtual Model breakdown"
+              />
+              <UsageBreakdownSection
+                breakdowns={usageSummary.providerBreakdowns}
+                title="Provider breakdown"
+              />
+              <UsageBreakdownSection
+                breakdowns={usageSummary.modelBreakdowns}
+                title="Model breakdown"
+              />
+              <section className="usage-breakdown-group" aria-labelledby="provider-model-breakdown">
+                <h3 id="provider-model-breakdown">Provider / Model breakdown</h3>
+                {usageSummary.breakdowns.map((breakdown) => (
+                  <article
+                    className="usage-breakdown-item"
+                    key={`${breakdown.providerId}:${breakdown.modelId}`}
+                  >
+                    <h3>
+                      {breakdown.providerLabel} / {breakdown.modelLabel}
+                    </h3>
+                    <p>{formatUsageBreakdownStats(breakdown)}</p>
+                  </article>
+                ))}
+              </section>
+            </>
           )}
         </div>
       </section>
@@ -1340,6 +1375,28 @@ function formatActivityModelHitLabel(activity: ConsoleActivity): string {
   const displayName = activity.providerModelDisplayName ?? "Unknown model";
   const modelName = activity.providerModelName ?? activity.providerModelId ?? "unknown";
   return `${displayName} (${modelName})`;
+}
+
+function UsageBreakdownSection({
+  breakdowns,
+  title,
+}: {
+  breakdowns: ConsoleUsageDimensionBreakdown[];
+  title: string;
+}) {
+  const headingId = title.toLowerCase().replaceAll(" ", "-");
+
+  return (
+    <section className="usage-breakdown-group" aria-labelledby={headingId}>
+      <h3 id={headingId}>{title}</h3>
+      {breakdowns.map((breakdown) => (
+        <article className="usage-breakdown-item" key={breakdown.id}>
+          <p className="usage-breakdown-label">{breakdown.label}</p>
+          <p>{formatConsoleUsageBreakdownStats(breakdown)}</p>
+        </article>
+      ))}
+    </section>
+  );
 }
 
 function formatUsageBreakdownStats(breakdown: ConsoleUsageBreakdown): string {

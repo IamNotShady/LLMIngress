@@ -1023,8 +1023,8 @@
         "feat-071",
         "feat-074"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-079 unit tests because Console usage summary lacked failure count, total savings, and Agent / Agent API Key / Virtual Model / provider / model breakdown arrays, and E2E red because the authenticated Usage page did not show Failures, Savings, or the new breakdown groups. Added usage aggregation for failures and request_savings, dimension breakdowns for Agent, Agent API Key, Virtual Model, provider, and model, and Console rendering for the new summary/breakdown sections while preserving the existing provider/model combined breakdown for feat-047 compatibility. P2+ review found and fixed a heading namespace regression where Usage breakdown item headings collided with Agent configuration headings; new dimension item labels now render as plain text while section headings remain accessible. Verification passed: feat-079 unit test (1), real Chromium/PostgreSQL Console E2E (1), related feat-026 and feat-047 E2E regressions, pnpm run lint, pnpm run verify, full verify:features passed all 78 prior passing features before marking, and final verify:features passed all 79 passing features after marking."
     },
     {
       "id": "feat-080",

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 05:42 AWST
-**Active Feature:** none — 78 tracked features are `passing`; 17 V1 features are `pending`
+**Last Updated:** 2026-06-16 06:13 AWST
+**Active Feature:** none — 79 tracked features are `passing`; 16 V1 features are `pending`
 
 ## Status
 
@@ -124,6 +124,11 @@
   - Validation coverage proves duplicate candidate rejection in the same route editing flow, while the Console route policy section remains scoped to V1 controls and excludes task/context/tool routing rules.
   - Code review found no P2+ logic issues after checking filtered edit preservation, warning scope, and V1-only route-policy controls; Biome formatting/import drift was fixed.
   - Verification passed: feat-078 unit tests (2), real Chromium/PostgreSQL Console E2E (1), `pnpm run lint`, `pnpm run verify`, full `pnpm run verify:features` across all 77 prior passing features before marking, and final `pnpm run verify:features` across all 78 passing features after marking.
+- [x] **feat-079 — Usage / Cost Breakdowns and Savings Summary (passing)**:
+  - Console Usage aggregation now includes failure count, total savings, and separate Agent, Agent API Key, Virtual Model, provider, and model breakdowns.
+  - Usage page now shows Failures and Savings summary cards plus the five new breakdown groups while preserving the existing provider/model combined breakdown for `feat-047` compatibility.
+  - Code review found and fixed a heading namespace regression where Usage breakdown item headings collided with Agent configuration headings; new dimension item labels render as plain text while group headings remain accessible.
+  - Verification passed: feat-079 unit test (1), real Chromium/PostgreSQL Console E2E (1), related feat-026 and feat-047 E2E regressions, `pnpm run lint`, `pnpm run verify`, full `pnpm run verify:features` across all 78 prior passing features before marking, and final `pnpm run verify:features` across all 79 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

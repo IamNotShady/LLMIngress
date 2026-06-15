@@ -14,6 +14,7 @@ import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
+import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIResponsesInputMessage,
@@ -257,7 +258,7 @@ export async function executeGatewayOpenAIResponse(input: {
       activity,
       body: createGatewayResponsesErrorBody(code, input.requestId),
       requestMetadata,
-      statusCode: code === "provider_request_failed" ? 502 : 500,
+      statusCode: mapGatewayErrorStatus(code),
     };
   }
 }

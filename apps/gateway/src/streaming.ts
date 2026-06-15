@@ -18,6 +18,7 @@ import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
+import { mapGatewayErrorStatus } from "./error-mapping.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
 import { openRouterAttributionHeaders } from "./provider-adapters/openrouter.js";
 import { enforceGatewayRateLimits } from "./rate-limits.js";
@@ -56,6 +57,11 @@ export type GatewayRuntimeStreamError = {
   errorCode: "provider_stream_error";
   errorMessage: string;
 };
+
+type GatewayStreamingErrorCode =
+  | "provider_credentials_missing"
+  | "provider_request_failed"
+  | "route_not_found";
 
 type GatewayStreamingPayload = {
   estimatedInputTokens: number;
@@ -218,15 +224,17 @@ export async function executeGatewayStreamingRequest(input: {
       databaseUrl: input.databaseUrl,
       reservation: budgetReservation,
     });
+    const message = error instanceof Error ? error.message : "Provider request failed.";
+    const code = classifyStreamingError(message);
     return {
       body: createGatewayStreamingErrorBody(
-        "provider_request_failed",
+        code,
         input.requestId,
-        error instanceof Error ? error.message : undefined,
+        code === "provider_request_failed" ? message : undefined,
       ),
       ok: false,
       requestMetadata: normalized.requestMetadata,
-      statusCode: 502,
+      statusCode: mapGatewayErrorStatus(code),
     };
   }
 }
@@ -550,9 +558,9 @@ function buildStreamingActivityRoute(input: {
 }
 
 function createGatewayStreamingErrorBody(
-  code: "provider_request_failed",
+  code: GatewayStreamingErrorCode,
   requestId: string,
-  message = "Provider request failed.",
+  message = streamingErrorMessage(code),
 ) {
   return {
     error: {
@@ -561,6 +569,26 @@ function createGatewayStreamingErrorBody(
     },
     requestId,
   };
+}
+
+function classifyStreamingError(message: string): GatewayStreamingErrorCode {
+  if (message.includes("No route policy") || message.includes("Route policy")) {
+    return "route_not_found";
+  }
+  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
+    return "provider_credentials_missing";
+  }
+  return "provider_request_failed";
+}
+
+function streamingErrorMessage(code: GatewayStreamingErrorCode): string {
+  if (code === "route_not_found") {
+    return "No route policy is available for the selected Virtual Model.";
+  }
+  if (code === "provider_credentials_missing") {
+    return "Provider credentials are not configured for the selected route.";
+  }
+  return "Provider request failed.";
 }
 
 function omitUndefined<T extends Record<string, unknown>>(value: T): T {

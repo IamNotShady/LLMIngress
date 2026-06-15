@@ -14,6 +14,7 @@ import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
+import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
   type AnthropicContentBlock,
   type AnthropicMessageContent,
@@ -287,7 +288,7 @@ export async function executeGatewayAnthropicMessages(input: {
       activity,
       body: createGatewayAnthropicMessagesErrorBody(code, input.requestId),
       requestMetadata,
-      statusCode: code === "provider_request_failed" ? 502 : 500,
+      statusCode: mapGatewayErrorStatus(code),
     };
   }
 }

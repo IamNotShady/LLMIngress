@@ -12,6 +12,7 @@ import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
 import { gatewayCorsHeaders } from "./cors.js";
 import { executeGatewayOpenAIEmbeddings } from "./embeddings.js";
+import { gatewayRequestIdHeader } from "./error-mapping.js";
 import { executeGatewayAnthropicMessages } from "./messages.js";
 import {
   type GatewayRequestMetadata,
@@ -76,7 +77,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -90,7 +91,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
     });
     if (!virtualModelAccess.ok) {
-      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
     }
 
     if (readGatewayStreamingFlag(request.body)) {
@@ -115,6 +120,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
+        auth.requestId,
       );
     }
 
@@ -137,7 +143,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
-    return sendGatewayJsonResponse(reply, chatCompletion);
+    return sendGatewayJsonResponse(reply, chatCompletion, auth.requestId);
   });
 
   app.get("/v1/models", async (request, reply) => {
@@ -148,7 +154,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -156,14 +162,14 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       databaseUrl,
     });
 
-    return {
+    return reply.header(gatewayRequestIdHeader, auth.requestId).send({
       data: allowedVirtualModels.map((virtualModel) => ({
         id: virtualModel.name,
         object: "model",
       })),
       object: "list",
       requestId: auth.requestId,
-    };
+    });
   });
 
   app.post("/v1/embeddings", async (request, reply) => {
@@ -174,7 +180,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -188,7 +194,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
     });
     if (!virtualModelAccess.ok) {
-      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
     }
 
     const embeddings = await executeRecordedGatewayJsonRequest({
@@ -208,7 +218,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
-    return sendGatewayJsonResponse(reply, embeddings);
+    return sendGatewayJsonResponse(reply, embeddings, auth.requestId);
   });
 
   app.post("/v1/responses", async (request, reply) => {
@@ -219,7 +229,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -233,7 +243,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
     });
     if (!virtualModelAccess.ok) {
-      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
     }
 
     if (readGatewayStreamingFlag(request.body)) {
@@ -258,6 +272,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
+        auth.requestId,
       );
     }
 
@@ -279,7 +294,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
-    return sendGatewayJsonResponse(reply, response);
+    return sendGatewayJsonResponse(reply, response, auth.requestId);
   });
 
   app.post("/v1/messages", async (request, reply) => {
@@ -290,7 +305,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -304,7 +319,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
     });
     if (!virtualModelAccess.ok) {
-      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
     }
 
     if (readGatewayStreamingFlag(request.body)) {
@@ -329,6 +348,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
+        auth.requestId,
       );
     }
 
@@ -350,7 +370,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
-    return sendGatewayJsonResponse(reply, message);
+    return sendGatewayJsonResponse(reply, message, auth.requestId);
   });
 
   app.addHook("onClose", async () => {
@@ -413,7 +433,12 @@ function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
   return snapshot;
 }
 
-function sendGatewayStreamingResponse(reply: FastifyReply, stream: GatewayStreamingResult) {
+function sendGatewayStreamingResponse(
+  reply: FastifyReply,
+  stream: GatewayStreamingResult,
+  requestId: string,
+) {
+  writeGatewayRequestIdHeader(reply, requestId);
   writeGatewayRequestMetadataDebugHeader(reply, stream.requestMetadata);
   writeGatewayResponseHeaders(reply, stream.headers);
   if (!stream.ok) {
@@ -432,10 +457,25 @@ function sendGatewayJsonResponse(
     requestMetadata?: GatewayRequestMetadata;
     statusCode: number;
   },
+  requestId: string,
 ) {
+  writeGatewayRequestIdHeader(reply, requestId);
   writeGatewayRequestMetadataDebugHeader(reply, response.requestMetadata);
   writeGatewayResponseHeaders(reply, response.headers);
   return reply.code(response.statusCode).send(response.body);
+}
+
+function sendGatewayErrorResponse(
+  reply: FastifyReply,
+  statusCode: number,
+  body: { requestId: string },
+) {
+  writeGatewayRequestIdHeader(reply, body.requestId);
+  return reply.code(statusCode).send(body);
+}
+
+function writeGatewayRequestIdHeader(reply: FastifyReply, requestId: string) {
+  reply.header(gatewayRequestIdHeader, requestId);
 }
 
 function writeGatewayResponseHeaders(

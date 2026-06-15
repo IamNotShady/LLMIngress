@@ -885,8 +885,8 @@
         "feat-042",
         "feat-044"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-069 unit tests because the shared error-mapping module was missing, and E2E red because Gateway responses did not carry x-request-id headers. Added shared Gateway error status mapping, x-request-id response headers for authenticated success/failure, auth failures, Virtual Model access failures, models, non-streaming, and streaming Public API responses, exposed x-request-id through CORS, and mapped route_not_found to HTTP 404 across chat, responses, messages, embeddings, and streaming errors. E2E verifies auth, provider, routing, and limit errors plus success and streaming responses carry the request id, and matching request_activity rows carry the same request_id with expected status/error_code. Code review found and fixed a P2 spoofing risk so response headers always use the Gateway-authenticated request id rather than any provider body requestId. Verification passed — feat-069 unit tests 2 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, related feat-034/035/036/037/038/039/041/042/044 unit and E2E regressions passed, pnpm run verify passed, verify:features passed all 68 prior passing features before marking, and final verify:features passed all 69 passing features after marking."
     },
     {
       "id": "feat-070",

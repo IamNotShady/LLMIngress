@@ -16,6 +16,7 @@ import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
+import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
   buildFallbackAttemptCandidates,
   executeFallbackChain,
@@ -263,7 +264,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       activity,
       body: createGatewayChatCompletionErrorBody(code, input.requestId),
       requestMetadata,
-      statusCode: code === "provider_request_failed" ? 502 : 500,
+      statusCode: mapGatewayErrorStatus(code),
     };
   }
 }

@@ -986,7 +986,7 @@
       "id": "feat-077",
       "name": "Agent Integration Templates",
       "description": "Codex, Claude Code, Cursor, and OpenClaw show copyable Gateway URL, API key, and model setup snippets.",
-      "verification": "pnpm exec vitest run tests/features/feat-077-agent-integration-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts --grep 'agent integration templates show copyable setup snippets'",
+      "verification": "pnpm exec vitest run tests/features/feat-077-agent-integration-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts --grep 'agent integration templates show codex claude code cursor openclaw gateway url api key and model snippets'",
       "dependencies": [
         "feat-026",
         "feat-027",
@@ -1017,7 +1017,7 @@
       "id": "feat-079",
       "name": "Usage / Cost Breakdowns and Savings Summary",
       "description": "Usage page breaks down Agent, Agent API Key, Virtual Model, provider, model, cost, failures, and savings.",
-      "verification": "pnpm exec vitest run tests/features/feat-079-usage-breakdowns-savings.unit.test.ts && pnpm test:e2e tests/e2e/feat-079-usage-breakdowns-savings.e2e.spec.ts --grep 'usage page shows breakdowns failures and savings summary'",
+      "verification": "pnpm exec vitest run tests/features/feat-079-usage-breakdowns-savings.unit.test.ts && pnpm test:e2e tests/e2e/feat-079-usage-breakdowns-savings.e2e.spec.ts --grep 'usage page shows agent agent api key virtual model provider model cost failure and savings breakdowns'",
       "dependencies": [
         "feat-047",
         "feat-071",

@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 22:56 AWST
+**Last Updated:** 2026-06-15 23:04 AWST
 **Active Feature:** none — 61 tracked features are `passing`; 34 V1 features are `pending`
 
 ## Status
@@ -15,6 +15,7 @@
 - [x] Split the V1 scope from `docs/PLAN.md` into `feat-062` through `feat-095`, each independently developable and verifiable with unit and E2E test commands; all new V1 entries are `pending` with empty evidence.
 - [x] Applied V1 split review follow-up: added `feat-072` Worker Periodic Scheduler, renumbered later V1 pending features, tightened dependency edges, kept V1 route-policy scope out of V2 task/context/tool rules, and made verification text match feature descriptions more closely.
 - [x] Applied optional V1 tracker polish: final V1 smoke now depends on Agent Integration Templates, scheduler verification covers due and not-due timing, and retention / budget / rate-limit features explicitly own configurable windows and thresholds.
+- [x] Tightened optional V1 tracker verification text for Agent Integration Templates and Usage / Cost Breakdowns so the grep contracts pin the named tools, snippet fields, and new usage dimensions.
 - [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
   - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
   - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.

@@ -918,8 +918,8 @@
     {
       "id": "feat-072",
       "name": "Worker Periodic Scheduler",
-      "description": "Worker scheduler creates trigger=scheduled jobs when periodic tasks are due, deduplicates unfinished jobs for the same task, payload, and schedule window, pg_notify job_created, and includes recurring stale_reservation_cleanup enqueueing.",
-      "verification": "pnpm exec vitest run tests/features/feat-072-worker-periodic-scheduler.unit.test.ts && pnpm test:e2e tests/e2e/feat-072-worker-periodic-scheduler.e2e.spec.ts --grep 'worker scheduler creates deduplicated scheduled jobs notifies worker and enqueues stale reservation cleanup'",
+      "description": "Worker scheduler creates trigger=scheduled jobs only when periodic tasks are due, skips tasks before their next due time, deduplicates unfinished jobs for the same task, payload, and schedule window, pg_notify job_created, and includes recurring stale_reservation_cleanup enqueueing.",
+      "verification": "pnpm exec vitest run tests/features/feat-072-worker-periodic-scheduler.unit.test.ts && pnpm test:e2e tests/e2e/feat-072-worker-periodic-scheduler.e2e.spec.ts --grep 'worker scheduler enqueues due tasks skips not due tasks deduplicates notifies and schedules stale reservation cleanup'",
       "dependencies": [
         "feat-022",
         "feat-043"
@@ -1099,8 +1099,8 @@
     {
       "id": "feat-085",
       "name": "Retention Cleanup Policy",
-      "description": "Scheduler-created retention_cleanup jobs delete expired request and export data while preserving required aggregates.",
-      "verification": "pnpm exec vitest run tests/features/feat-085-retention-cleanup-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-085-retention-cleanup-policy.e2e.spec.ts --grep 'scheduled retention cleanup deletes expired request export data and preserves aggregates'",
+      "description": "Scheduler-created retention_cleanup jobs read a configurable retention window, delete expired request and export data, skip unexpired data, and preserve required aggregates.",
+      "verification": "pnpm exec vitest run tests/features/feat-085-retention-cleanup-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-085-retention-cleanup-policy.e2e.spec.ts --grep 'scheduled retention cleanup uses configurable window deletes expired data skips unexpired data and preserves aggregates'",
       "dependencies": [
         "feat-022",
         "feat-072",
@@ -1138,8 +1138,8 @@
     {
       "id": "feat-088",
       "name": "Budget Threshold Alerts",
-      "description": "Scheduler-triggered budget threshold evaluator emits Email and Webhook notifications when budget usage approaches configured thresholds.",
-      "verification": "pnpm exec vitest run tests/features/feat-088-budget-threshold-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-088-budget-threshold-alerts.e2e.spec.ts --grep 'scheduled budget threshold evaluator emits email webhook notifications near budget limit'",
+      "description": "Scheduler-triggered budget threshold evaluator reads configurable budget warning thresholds and emits Email and Webhook notifications when budget usage approaches configured thresholds.",
+      "verification": "pnpm exec vitest run tests/features/feat-088-budget-threshold-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-088-budget-threshold-alerts.e2e.spec.ts --grep 'scheduled budget threshold evaluator uses configurable threshold and emits email webhook notifications near budget limit'",
       "dependencies": [
         "feat-042",
         "feat-072",
@@ -1151,8 +1151,8 @@
     {
       "id": "feat-089",
       "name": "Rate Limit High-Frequency Alerts",
-      "description": "Scheduler-triggered rate limit evaluator detects repeated RPM or TPM blocks and sends notifications.",
-      "verification": "pnpm exec vitest run tests/features/feat-089-rate-limit-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-089-rate-limit-alerts.e2e.spec.ts --grep 'scheduled rate limit evaluator detects repeated rpm tpm blocks and notifies'",
+      "description": "Scheduler-triggered rate limit evaluator reads a configurable high-frequency window and threshold, detects repeated RPM or TPM blocks, and sends notifications.",
+      "verification": "pnpm exec vitest run tests/features/feat-089-rate-limit-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-089-rate-limit-alerts.e2e.spec.ts --grep 'scheduled rate limit evaluator uses configurable window threshold detects repeated rpm tpm blocks and notifies'",
       "dependencies": [
         "feat-041",
         "feat-072",
@@ -1239,6 +1239,7 @@
       "description": "Single-node smoke verifies usage breakdowns, exports, alerts, metrics, traces, backup, migration status, and retention cleanup.",
       "verification": "pnpm exec vitest run tests/features/feat-095-v1-daily-operations-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-095-v1-daily-operations-smoke.e2e.spec.ts --grep 'v1 daily operations smoke verifies breakdowns exports alerts metrics traces backup migration retention'",
       "dependencies": [
+        "feat-077",
         "feat-079",
         "feat-080",
         "feat-081",

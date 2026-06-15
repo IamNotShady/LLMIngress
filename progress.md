@@ -3,7 +3,7 @@
 ## Current State
 
 **Last Updated:** 2026-06-16 00:56 AWST
-**Active Feature:** none — 64 tracked features are `passing`; 31 V1 features are `pending`
+**Active Feature:** none — 65 tracked features are `passing`; 30 V1 features are `pending`
 
 ## Status
 
@@ -36,6 +36,13 @@
   - Added migration `0010_local_provider_templates` so the database whitelist accepts `lmstudio` and `llama_cpp`.
   - Code review found no P2+ issues after checking whitelist scope, public URL confirmation, template paths, and migration coverage.
   - Verification passed: feat-064 unit tests (4), real Chromium/fake-provider E2E (1), related feat-021/062/063 unit regressions, related feat-062 E2E, `pnpm run db:migrate:check`, `pnpm run verify`, full regression of all 63 prior passing features before marking, and final `pnpm run verify:features` across all 64 passing features after marking.
+- [x] **feat-065 — OpenRouter API Key Provider (passing)**:
+  - Added OpenRouter as a fixed remote API-key template and database-whitelisted `provider_template_id`, while legacy custom OpenRouter provider creation is rejected in favor of the template.
+  - Added an OpenRouter adapter over the generic OpenAI-compatible adapter with required attribution headers and numeric OpenRouter error mapping.
+  - Gateway non-streaming and streaming chat paths now send OpenRouter attribution headers; Worker model refresh sends Bearer plus attribution headers to `/models`.
+  - Fake-provider E2E covers model refresh, Gateway non-streaming chat, Gateway streaming chat, and OpenRouter numeric error mapping recorded in `fallback_events`.
+  - Code review found and fixed a P2 streaming-path header omission; no remaining P2+ issues after checking template scope, adapter selection, model refresh headers, migration coverage, and fake-provider error mapping.
+  - Verification passed: feat-065 unit tests (4), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-018/023/033/039/062/063 unit regressions, related feat-023/036/039 E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and full regression of all 64 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

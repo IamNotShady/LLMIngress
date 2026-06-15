@@ -315,6 +315,12 @@ export function buildProviderModelListRequest(input: {
           "anthropic-version": "2023-06-01",
           "content-type": "application/json",
         };
+  } else if (providerKey === "openrouter" && input.apiKey) {
+    init.headers = {
+      "HTTP-Referer": "https://llmingress.local",
+      "X-OpenRouter-Title": "LLMIngress",
+      authorization: `Bearer ${input.apiKey}`,
+    };
   } else if (input.apiKey) {
     init.headers = {
       authorization: `Bearer ${input.apiKey}`,

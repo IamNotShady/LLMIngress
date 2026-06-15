@@ -12,7 +12,8 @@ export type FakeProviderMode =
   | "error"
   | "timeout"
   | "first-byte-failure"
-  | "midstream-error";
+  | "midstream-error"
+  | "openrouter-error";
 
 export type CapturedFakeProviderRequest = {
   method: string;
@@ -245,6 +246,19 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "openrouter-error") {
+      writeJson(response, 402, {
+        error: {
+          code: 402,
+          message: "OpenRouter account has insufficient credits",
+          metadata: {
+            provider_name: "OpenRouter",
+          },
+        },
+      });
+      return;
+    }
+
     if (mode === "timeout") {
       const timer = setTimeout(() => {
         if (!response.destroyed) {
@@ -275,7 +289,8 @@ function readMode(url: URL): FakeProviderMode {
     mode === "error" ||
     mode === "timeout" ||
     mode === "first-byte-failure" ||
-    mode === "midstream-error"
+    mode === "midstream-error" ||
+    mode === "openrouter-error"
   ) {
     return mode;
   }

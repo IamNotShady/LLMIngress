@@ -8,6 +8,7 @@ import {
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
+import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
@@ -62,11 +63,13 @@ export async function executeFallbackChain(
     throw new Error("Fallback chain requires at least one candidate.");
   }
 
-  const adapter = input.adapter ?? createOpenAIProviderAdapter();
+  const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
+  const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
   const failedAttempts: FallbackFailedAttempt[] = [];
   let lastError: OpenAIAdapterError | undefined;
 
   for (const [index, candidate] of input.candidates.entries()) {
+    const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
     const result = await adapter.chatCompletion({
       request: input.request,
       target: {

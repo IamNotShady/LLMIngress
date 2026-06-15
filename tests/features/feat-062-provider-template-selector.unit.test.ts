@@ -15,7 +15,7 @@ describe("feat-062 provider template selector", () => {
       id: "remote_api_key",
       label: "Remote API-key templates",
     });
-    expect(remoteGroup?.templates).toHaveLength(9);
+    expect(remoteGroup?.templates).toHaveLength(10);
     expect(remoteGroup?.templates).toEqual(
       expect.arrayContaining([
         {

@@ -79,19 +79,21 @@ describe("feat-063 remote OpenAI-compatible templates", () => {
     );
 
     expect(remoteGroup?.templates).toEqual(
-      remoteTemplateExpectations.map(([id, displayName, baseUrl]) => ({
-        auth: {
-          header: "Authorization",
-          scheme: "Bearer",
-        },
-        baseUrlMode: "fixed_remote",
-        capabilities: ["chat_completions", "streaming", "tools"],
-        displayName,
-        fixedBaseUrl: baseUrl,
-        id,
-        providerKey: id,
-        providerType: "api_key",
-      })),
+      expect.arrayContaining(
+        remoteTemplateExpectations.map(([id, displayName, baseUrl]) => ({
+          auth: {
+            header: "Authorization",
+            scheme: "Bearer",
+          },
+          baseUrlMode: "fixed_remote",
+          capabilities: ["chat_completions", "streaming", "tools"],
+          displayName,
+          fixedBaseUrl: baseUrl,
+          id,
+          providerKey: id,
+          providerType: "api_key",
+        })),
+      ),
     );
   });
 

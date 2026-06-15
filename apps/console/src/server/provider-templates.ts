@@ -10,6 +10,7 @@ export type OpenAICompatibleProviderTemplateId =
   | "qwen"
   | "xai"
   | "zai";
+export type OpenRouterProviderTemplateId = "openrouter";
 export type OllamaProviderTemplateId = "ollama";
 export type LocalProviderTemplateId = OllamaProviderTemplateId | "lmstudio" | "llama_cpp";
 export type ProviderTemplateSelectorGroupId = "remote_api_key" | "local";
@@ -36,6 +37,9 @@ export type OpenAICompatibleProviderTemplate = ProviderTemplateCreateInput & {
     tools: boolean;
   };
   id: OpenAICompatibleProviderTemplateId;
+};
+export type OpenRouterProviderTemplate = Omit<OpenAICompatibleProviderTemplate, "id"> & {
+  id: OpenRouterProviderTemplateId;
 };
 
 export type LocalProviderTemplate = {
@@ -66,7 +70,7 @@ export type ProviderTemplateSelectorItem = {
   chatPath?: string;
   displayName: string;
   fixedBaseUrl?: string;
-  id: OpenAICompatibleProviderTemplateId | LocalProviderTemplateId;
+  id: OpenAICompatibleProviderTemplateId | OpenRouterProviderTemplateId | LocalProviderTemplateId;
   modelListPath?: string;
   providerKey: string;
   providerType: ProviderType;
@@ -137,6 +141,16 @@ const templates: Record<OpenAICompatibleProviderTemplateId, OpenAICompatibleProv
   }),
 };
 
+const openRouterTemplate: OpenRouterProviderTemplate = {
+  auth: { ...remoteTemplateAuth },
+  baseUrl: "https://openrouter.ai/api/v1",
+  capabilities: { ...defaultOpenAICompatibleCapabilities },
+  displayName: "OpenRouter",
+  id: "openrouter",
+  providerKey: "openrouter",
+  providerType: "api_key",
+};
+
 const localTemplates: Record<LocalProviderTemplateId, LocalProviderTemplate> = {
   ollama: {
     baseUrlPlaceholder: "http://127.0.0.1:11434",
@@ -187,7 +201,10 @@ export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGr
     {
       id: "remote_api_key",
       label: "Remote API-key templates",
-      templates: listOpenAICompatibleProviderTemplates().map((template) => ({
+      templates: [
+        copyOpenRouterTemplate(openRouterTemplate),
+        ...listOpenAICompatibleProviderTemplates(),
+      ].map((template) => ({
         auth: { ...template.auth },
         baseUrlMode: "fixed_remote",
         capabilities: readOpenAICompatibleCapabilities(template),
@@ -236,6 +253,16 @@ export function getOllamaProviderTemplate(
   return copyOllamaTemplate(localTemplates.ollama as OllamaProviderTemplate);
 }
 
+export function getOpenRouterProviderTemplate(
+  templateId: string | null | undefined,
+): OpenRouterProviderTemplate {
+  if (templateId !== "openrouter") {
+    throw new Error("Provider must use a whitelisted provider template.");
+  }
+
+  return copyOpenRouterTemplate(openRouterTemplate);
+}
+
 export function getLocalProviderTemplate(
   templateId: string | null | undefined,
 ): LocalProviderTemplate {
@@ -253,6 +280,13 @@ export function normalizeProviderTemplateFormInput(
     return normalizeLocalTemplateFormInput(input);
   }
 
+  if (input.templateId === "openrouter") {
+    if (input.baseUrl?.trim()) {
+      throw new Error("Custom OpenAI-compatible endpoints are not allowed.");
+    }
+    return getOpenRouterProviderTemplate(input.templateId);
+  }
+
   if (input.baseUrl?.trim()) {
     throw new Error("Custom OpenAI-compatible endpoints are not allowed.");
   }
@@ -262,7 +296,9 @@ export function normalizeProviderTemplateFormInput(
 
 export function isKnownProviderTemplateKey(providerKey: string): boolean {
   return (
-    isOpenAICompatibleProviderTemplateId(providerKey) || isLocalProviderTemplateId(providerKey)
+    isOpenAICompatibleProviderTemplateId(providerKey) ||
+    providerKey === "openrouter" ||
+    isLocalProviderTemplateId(providerKey)
   );
 }
 
@@ -315,6 +351,14 @@ function copyTemplate(
   };
 }
 
+function copyOpenRouterTemplate(template: OpenRouterProviderTemplate): OpenRouterProviderTemplate {
+  return {
+    ...template,
+    auth: { ...template.auth },
+    capabilities: { ...template.capabilities },
+  };
+}
+
 function copyOllamaTemplate(template: OllamaProviderTemplate): OllamaProviderTemplate {
   return {
     ...template,
@@ -330,7 +374,7 @@ function copyLocalTemplate(template: LocalProviderTemplate): LocalProviderTempla
 }
 
 function readOpenAICompatibleCapabilities(
-  template: OpenAICompatibleProviderTemplate,
+  template: OpenAICompatibleProviderTemplate | OpenRouterProviderTemplate,
 ): ProviderTemplateSelectorCapability[] {
   const capabilities: ProviderTemplateSelectorCapability[] = [];
 

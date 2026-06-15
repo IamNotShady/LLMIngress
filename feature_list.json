@@ -823,8 +823,8 @@
         "feat-036",
         "feat-062"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-065 unit tests because the OpenRouter provider adapter module was missing, and E2E red because provider_template_id='openrouter' was rejected by the database whitelist. Added the fixed OpenRouter API-key template, Console template normalization that rejects custom OpenRouter endpoints, 0011 provider_template_id whitelist migration, OpenRouter adapter attribution headers and numeric error mapping, Gateway fallback-chain selection of the OpenRouter adapter, streaming OpenRouter attribution headers, and Worker model refresh headers. E2E verifies fake OpenRouter model refresh, Gateway non-streaming and streaming chat requests, and fake OpenRouter error mapping into fallback_events. Code review found and fixed a P2 streaming-path header omission; no remaining P2+ issues after checking template scope, adapter selection, model refresh headers, migration coverage, and fake-provider error mapping. Verification passed — feat-065 unit tests 4 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, related feat-018/023/033/039/062/063 unit regressions passed, related feat-023/036/039 E2E regressions passed, db:migrate:check passed, pnpm run verify passed, and verify:features passed all 64 prior passing features before marking."
     },
     {
       "id": "feat-066",

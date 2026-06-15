@@ -19,6 +19,7 @@ import type {
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
+import { openRouterAttributionHeaders } from "./provider-adapters/openrouter.js";
 import { enforceGatewayRateLimits } from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,
@@ -157,7 +158,11 @@ export async function executeGatewayStreamingRequest(input: {
           model: selected.modelId,
           stream: true,
         }),
-        headers: normalized.headersWithApiKey(selected.apiKey),
+        headers: buildStreamingProviderHeaders({
+          apiKey: selected.apiKey,
+          headersWithApiKey: normalized.headersWithApiKey,
+          providerKey: selected.providerKey,
+        }),
         method: "POST",
       },
     );
@@ -482,6 +487,21 @@ function buildProviderUrl(baseUrl: string, suffix: string): string {
   const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
   url.pathname = `${path}/${suffix}`.replaceAll(/\/{2,}/g, "/");
   return url.toString();
+}
+
+function buildStreamingProviderHeaders(input: {
+  apiKey: string;
+  headersWithApiKey: (apiKey: string) => Record<string, string>;
+  providerKey: string;
+}): Record<string, string> {
+  const headers = input.headersWithApiKey(input.apiKey);
+  if (input.providerKey === "openrouter") {
+    return {
+      ...headers,
+      ...openRouterAttributionHeaders,
+    };
+  }
+  return headers;
 }
 
 function requireRoutePolicy(

@@ -61,6 +61,8 @@ export type OpenAIProviderAdapter = {
 
 type CreateOpenAIProviderAdapterOptions = {
   fetch?: typeof globalThis.fetch;
+  headers?: Record<string, string>;
+  mapProviderError?: (statusCode: number, body: unknown) => OpenAIAdapterError;
 };
 
 type OpenAIChatCompletionsPayload = {
@@ -86,22 +88,20 @@ export function createOpenAIProviderAdapter(
   options: CreateOpenAIProviderAdapterOptions = {},
 ): OpenAIProviderAdapter {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const mapError = options.mapProviderError ?? mapProviderError;
 
   return {
     chatCompletion: async ({ request, target }) => {
       try {
         const response = await fetchImpl(buildChatCompletionsUrl(target.baseUrl), {
           body: JSON.stringify(buildChatCompletionsPayload(request, target)),
-          headers: {
-            authorization: `Bearer ${target.apiKey}`,
-            "content-type": "application/json",
-          },
+          headers: buildProviderHeaders(target.apiKey, options.headers),
           method: "POST",
         });
         const body = await readResponseBody(response);
 
         if (!response.ok) {
-          return mapProviderError(response.status, body);
+          return mapError(response.status, body);
         }
 
         return {
@@ -125,16 +125,13 @@ export function createOpenAIProviderAdapter(
       try {
         const response = await fetchImpl(buildResponsesUrl(target.baseUrl), {
           body: JSON.stringify(buildResponsesPayload(request, target)),
-          headers: {
-            authorization: `Bearer ${target.apiKey}`,
-            "content-type": "application/json",
-          },
+          headers: buildProviderHeaders(target.apiKey, options.headers),
           method: "POST",
         });
         const body = await readResponseBody(response);
 
         if (!response.ok) {
-          return mapProviderError(response.status, body);
+          return mapError(response.status, body);
         }
 
         return {
@@ -154,6 +151,17 @@ export function createOpenAIProviderAdapter(
         };
       }
     },
+  };
+}
+
+function buildProviderHeaders(
+  apiKey: string,
+  extraHeaders: Record<string, string> | undefined,
+): Record<string, string> {
+  return {
+    ...extraHeaders,
+    authorization: `Bearer ${apiKey}`,
+    "content-type": "application/json",
   };
 }
 

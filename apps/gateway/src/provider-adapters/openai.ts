@@ -24,6 +24,12 @@ export type NormalizedOpenAIResponsesRequest = {
   temperature?: number;
 };
 
+export type NormalizedOpenAIEmbeddingsRequest = {
+  dimensions?: number;
+  encodingFormat?: "base64" | "float";
+  input: string | string[];
+};
+
 export type OpenAIProviderTarget = {
   apiKey: string;
   baseUrl: string;
@@ -51,6 +57,10 @@ export type OpenAIAdapterResult = OpenAIAdapterSuccess | OpenAIAdapterError;
 export type OpenAIProviderAdapter = {
   chatCompletion: (input: {
     request: NormalizedOpenAIChatRequest;
+    target: OpenAIProviderTarget;
+  }) => Promise<OpenAIAdapterResult>;
+  embeddings?: (input: {
+    request: NormalizedOpenAIEmbeddingsRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
   response?: (input: {
@@ -84,6 +94,13 @@ type OpenAIResponsesPayload = {
   temperature?: number;
 };
 
+type OpenAIEmbeddingsPayload = {
+  dimensions?: number;
+  encoding_format?: NormalizedOpenAIEmbeddingsRequest["encodingFormat"];
+  input: string | string[];
+  model: string;
+};
+
 export function createOpenAIProviderAdapter(
   options: CreateOpenAIProviderAdapterOptions = {},
 ): OpenAIProviderAdapter {
@@ -95,6 +112,36 @@ export function createOpenAIProviderAdapter(
       try {
         const response = await fetchImpl(buildChatCompletionsUrl(target.baseUrl), {
           body: JSON.stringify(buildChatCompletionsPayload(request, target)),
+          headers: buildProviderHeaders(target.apiKey, options.headers),
+          method: "POST",
+        });
+        const body = await readResponseBody(response);
+
+        if (!response.ok) {
+          return mapError(response.status, body);
+        }
+
+        return {
+          body,
+          ok: true,
+          providerRequestId: readProviderRequestId(body),
+          statusCode: response.status,
+        };
+      } catch (error) {
+        return {
+          body: null,
+          errorCode: "provider_request_failed",
+          errorMessage: error instanceof Error ? error.message : "Provider request failed.",
+          ok: false,
+          retryable: true,
+          statusCode: null,
+        };
+      }
+    },
+    embeddings: async ({ request, target }) => {
+      try {
+        const response = await fetchImpl(buildEmbeddingsUrl(target.baseUrl), {
+          body: JSON.stringify(buildEmbeddingsPayload(request, target)),
           headers: buildProviderHeaders(target.apiKey, options.headers),
           method: "POST",
         });
@@ -200,6 +247,22 @@ function buildResponsesPayload(
 
 function buildResponsesUrl(baseUrl: string): string {
   return buildProviderUrl(baseUrl, "responses");
+}
+
+function buildEmbeddingsPayload(
+  request: NormalizedOpenAIEmbeddingsRequest,
+  target: OpenAIProviderTarget,
+): OpenAIEmbeddingsPayload {
+  return omitUndefined({
+    dimensions: request.dimensions,
+    encoding_format: request.encodingFormat,
+    input: request.input,
+    model: target.modelId,
+  });
+}
+
+function buildEmbeddingsUrl(baseUrl: string): string {
+  return buildProviderUrl(baseUrl, "embeddings");
 }
 
 function buildProviderUrl(baseUrl: string, suffix: string): string {

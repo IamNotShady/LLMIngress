@@ -11,6 +11,7 @@ import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
 import { gatewayCorsHeaders } from "./cors.js";
+import { executeGatewayOpenAIEmbeddings } from "./embeddings.js";
 import { executeGatewayAnthropicMessages } from "./messages.js";
 import {
   type GatewayRequestMetadata,
@@ -163,6 +164,51 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       object: "list",
       requestId: auth.requestId,
     };
+  });
+
+  app.post("/v1/embeddings", async (request, reply) => {
+    const databaseUrl = requireGatewayDatabaseUrl(options);
+    const auth = await authenticateGatewayRequest({
+      databaseUrl,
+      headers: request.headers,
+    });
+
+    if (!auth.ok) {
+      return reply.code(auth.statusCode).send(auth.body);
+    }
+
+    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
+      agentApiKeyId: auth.agentApiKey.id,
+      databaseUrl,
+    });
+    const virtualModelAccess = resolveGatewayVirtualModelRequest({
+      allowedVirtualModels,
+      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
+      requestedModelName: readRequestedModelName(request.body),
+      requestId: auth.requestId,
+    });
+    if (!virtualModelAccess.ok) {
+      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+    }
+
+    const embeddings = await executeRecordedGatewayJsonRequest({
+      agentApiKeyId: auth.agentApiKey.id,
+      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
+      databaseUrl,
+      execute: () =>
+        executeGatewayOpenAIEmbeddings({
+          databaseUrl,
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      model: virtualModelAccess.virtualModel.name,
+      protocol: "embeddings",
+      requestId: auth.requestId,
+      virtualModelId: virtualModelAccess.virtualModel.id,
+    });
+    return sendGatewayJsonResponse(reply, embeddings);
   });
 
   app.post("/v1/responses", async (request, reply) => {

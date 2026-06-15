@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 01:14 AWST
-**Active Feature:** none — 66 tracked features are `passing`; 29 V1 features are `pending`
+**Last Updated:** 2026-06-16 01:35 AWST
+**Active Feature:** none — 67 tracked features are `passing`; 28 V1 features are `pending`
 
 ## Status
 
@@ -51,6 +51,12 @@
   - Fake-provider E2E covers real Gateway/PostgreSQL routing to `/models/{model}:generateContent`, `x-goog-api-key` forwarding, Gemini payload shape, and OpenAI-compatible response mapping.
   - Code review found no P2+ issues after checking template capability scope, API key header placement, adapter selection, migration coverage, and response/error mapping.
   - Verification passed: feat-066 unit tests (4), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-033/062/063/065/066 unit regressions, related feat-062 E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and full regression of all 65 prior passing features before marking.
+- [x] **feat-067 — Embeddings Endpoint (passing)**:
+  - Added Gateway `POST /v1/embeddings` with Agent API key authentication, allowed/disallowed Virtual Model access enforcement, OpenAI-compatible provider routing, and input-only request metadata.
+  - OpenAI-compatible adapters now support `/embeddings`; OpenRouter embeddings routes use the OpenRouter adapter so attribution headers are preserved.
+  - Successful embeddings requests record `request_activity`, `request_usage`, and `request_costs`; disallowed Virtual Model requests return 403 before any provider call.
+  - Code review found and fixed a P2 provider adapter selection gap for OpenRouter embeddings routes.
+  - Verification passed: feat-067 unit tests (4), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-018/033/035/044/045/065/066 regressions, `pnpm run verify`, full regression of all 66 prior passing features before marking, and final `pnpm run verify:features` across all 67 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

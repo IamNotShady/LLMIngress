@@ -853,8 +853,8 @@
         "feat-044",
         "feat-045"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-067 unit tests because the embeddings execution module was missing, and E2E red because POST /v1/embeddings returned 404. Added OpenAI-compatible embeddings request normalization, provider adapter support for /embeddings, Gateway /v1/embeddings authentication and Virtual Model access checks, provider routing, Activity protocol support, and usage/cost recording with input-only estimated tokens. E2E verifies disallowed Virtual Model requests return 403 without calling the provider, and allowed requests route to the fake provider and create request_activity, request_usage, and request_costs rows. Code review found and fixed a P2 provider adapter selection gap so OpenRouter embeddings routes use OpenRouter attribution headers instead of the generic adapter. Verification passed — feat-067 unit tests 4 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, related feat-018/033/035/044/045/065/066 unit and E2E regressions passed, pnpm run verify passed, verify:features passed all 66 prior passing features before marking, and final verify:features passed all 67 passing features after marking."
     },
     {
       "id": "feat-068",

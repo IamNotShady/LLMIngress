@@ -4,7 +4,7 @@ import type {
   NormalizedOpenAIResponsesRequest,
 } from "./provider-adapters/openai.js";
 
-export type GatewayRequestProtocol = "chat_completions" | "messages" | "responses";
+export type GatewayRequestProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 
 export type GatewayRequestMetadata = {
   estimatedInputTokens: number;

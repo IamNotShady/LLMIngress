@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 
-export type GatewayRequestActivityProtocol = "chat_completions" | "messages" | "responses";
+export type GatewayRequestActivityProtocol =
+  | "chat_completions"
+  | "embeddings"
+  | "messages"
+  | "responses";
 
 export type GatewayRequestActivityRoute = {
   fallbackAttempts?: unknown[];

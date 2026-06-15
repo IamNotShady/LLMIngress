@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 04:35 AWST
-**Active Feature:** none — 75 tracked features are `passing`; 20 V1 features are `pending`
+**Last Updated:** 2026-06-16 04:55 AWST
+**Active Feature:** none — 76 tracked features are `passing`; 19 V1 features are `pending`
 
 ## Status
 
@@ -106,6 +106,12 @@
   - V1 route selection remains unchanged: unhealthy summaries are recorded and notified but do not exclude alternatives from routing.
   - Code review found and fixed a P2 public fallback attempt shape regression by keeping `providerId` out of persisted `fallback_attempts`.
   - Verification passed: feat-075 unit tests (2), real PostgreSQL/Gateway/Worker E2E (1), `pnpm run db:migrate:check`, related feat-024/033/070 unit and E2E regressions, `pnpm run verify`, full `pnpm run verify:features` across all 74 prior passing features before marking, and final `pnpm run verify:features` across all 75 passing features after marking.
+- [x] **feat-076 — Provider / Model Health Console Summary (passing)**:
+  - Added Console provider health query and formatting helpers that read `provider_health_summary` and its last event for both provider-level and provider-model-level health.
+  - Dashboard Provider cards now show provider/model health, latest probe time and trigger, consecutive failures, and stale/no-probe status.
+  - Providers and models without health summaries render as `Unknown` / `No probe` rather than disappearing.
+  - Code review found no P2+ logic issues; formatting drift was fixed with `pnpm run lint:fix`.
+  - Verification passed: feat-076 unit tests (2), real Chromium/PostgreSQL Console E2E (1), related feat-016/048/057 E2E regressions, related feat-016/048/057/075 unit regressions, `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, full `pnpm run verify:features` across all 75 prior passing features before marking, and final `pnpm run verify:features` across all 76 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

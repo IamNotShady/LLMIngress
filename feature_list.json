@@ -979,8 +979,8 @@
         "feat-048",
         "feat-075"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-076 unit because Console provider health helper was missing and E2E because the Provider card did not show health text. Added Console provider-health query/format helpers that read provider_health_summary plus last events for provider and provider_model rows, including unknown/no-probe state and stale detection. Dashboard Provider cards now display provider and model health, latest probe trigger/time, consecutive failures, and stale status. Code review found no P2+ logic issues; formatting drift was fixed with pnpm run lint:fix. Verification passed: feat-076 unit tests (2), real Chromium/PostgreSQL Console E2E (1), related feat-016/048/057 E2E regressions, related feat-016/048/057/075 unit regressions, pnpm run lint, pnpm run typecheck, pnpm run verify, full verify:features passed all 75 prior passing features before marking, and final verify:features passed all 76 passing features after marking."
     },
     {
       "id": "feat-077",

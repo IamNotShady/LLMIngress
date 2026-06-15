@@ -25,6 +25,14 @@ import {
 import { listAgents } from "../server/agents";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
 import { getManualPriceOverride } from "../server/price-overrides";
+import {
+  type ConsoleProviderHealthSummary,
+  formatProviderHealthFailureCount,
+  formatProviderHealthLatestProbe,
+  formatProviderHealthStaleStatus,
+  formatProviderHealthStatus,
+  listConsoleProviderHealthSummaries,
+} from "../server/provider-health";
 import { listProviderApiKeyMetadata } from "../server/provider-keys";
 import {
   listProviderTemplateSelectorGroups,
@@ -133,12 +141,16 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const agentApiKeyVirtualModelAccess = await listAgentApiKeyVirtualModelAccess(databaseUrl);
   const agentLimits = await listAgentLimits(databaseUrl);
   const providers = await listProviders(databaseUrl);
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
   const virtualModels = await listVirtualModels(databaseUrl);
   const routePolicies = await listRoutePolicies(databaseUrl);
   const providerModelOptions = await listProviderModelOptions(databaseUrl);
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
+  );
+  const providerHealthByProviderId = new Map(
+    providerHealthSummaries.map((summary) => [summary.id, summary]),
   );
   const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
   const modelRefreshProvider = providers.find((provider) => provider.id === modelRefreshProviderId);
@@ -947,6 +959,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
           ) : (
             providers.map((provider) => {
               const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
+              const providerHealth = providerHealthByProviderId.get(provider.id);
               const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
 
               return (
@@ -1022,6 +1035,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                       </p>
                     )}
                   </div>
+                  <ProviderHealthSummaryPanel health={providerHealth} />
                   <form className="provider-key-form" action="/api/provider-keys" method="post">
                     <input type="hidden" name="providerId" value={provider.id} />
                     <label htmlFor={`provider-api-key-${provider.id}`}>Provider API key</label>
@@ -1152,6 +1166,60 @@ function requireProviderTemplateGroup(id: "remote_api_key" | "local") {
     throw new Error(`Provider template group ${id} is missing.`);
   }
   return group;
+}
+
+function ProviderHealthSummaryPanel({
+  health,
+}: {
+  health: ConsoleProviderHealthSummary | undefined;
+}) {
+  const providerHealth = health ?? {
+    consecutiveFailures: 0,
+    latestProbeAt: null,
+    models: [],
+    status: "unknown" as const,
+    trigger: null,
+  };
+
+  return (
+    <div className="provider-health-summary">
+      <p>Provider health: {formatProviderHealthStatus(providerHealth.status)}</p>
+      <p>
+        {formatProviderHealthLatestProbe({
+          latestProbeAt: providerHealth.latestProbeAt,
+          trigger: providerHealth.trigger,
+        })}
+      </p>
+      <p>{formatProviderHealthFailureCount(providerHealth.consecutiveFailures)}</p>
+      <p>
+        Provider health stale status:{" "}
+        {formatProviderHealthStaleStatus({ latestProbeAt: providerHealth.latestProbeAt })}
+      </p>
+      {providerHealth.models.length === 0 ? (
+        <p>No provider model health recorded.</p>
+      ) : (
+        <div className="provider-model-health-list">
+          {providerHealth.models.map((model) => (
+            <div className="provider-model-health-item" key={model.id}>
+              <p>Model: {model.displayName}</p>
+              <p>Model health: {formatProviderHealthStatus(model.status)}</p>
+              <p>
+                {formatProviderHealthLatestProbe({
+                  latestProbeAt: model.latestProbeAt,
+                  trigger: model.trigger,
+                })}
+              </p>
+              <p>{formatProviderHealthFailureCount(model.consecutiveFailures)}</p>
+              <p>
+                Model health stale status:{" "}
+                {formatProviderHealthStaleStatus({ latestProbeAt: model.latestProbeAt })}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function formatDateTime(value: Date): string {

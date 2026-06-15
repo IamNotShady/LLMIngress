@@ -955,3 +955,14 @@
   - Added pending features `feat-057`, `feat-058`, and `feat-059` for provider model price status, budget-safe route validation, and real OpenAI-compatible Agent smoke coverage.
   - Verification passed: `pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'`, and `pnpm run verify`.
   - Full `pnpm run verify:features` not run because the new features are pending and not being marked passing in this session.
+
+- [x] 2026-06-15 feat-060 optimized feature regression runner:
+  - Added `feat-060` for reducing `pnpm run verify:features` green-path runtime without reducing coverage.
+  - Red phase: `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts` failed because `scripts/verify-features.mjs` executed CLI side effects on import and exposed no optimized runner API.
+  - Added `scripts/verify-features.mjs --legacy`, default optimized mode, `--dry-run`, and `--compare`. The optimized mode batches standard `pnpm exec vitest run <unit-file> && pnpm test:e2e <e2e-file> [--grep ...]` entries, keeps non-standard commands in a legacy bucket, and falls back to original feature verifications when a batch fails.
+  - Added stale PID cleanup, malformed lock errors, shorter timeout diagnostics, and a post-operation settle window to `tests/support/process-lock.ts`.
+  - Full legacy regression initially reproduced a Console startup flake after `feat-049`; root cause was `apps/console/src/main.ts` not forwarding SIGTERM/SIGINT to the child Next process. Added lifecycle handling and unit coverage so the wrapper forwards parent shutdown signals and exits after the child exits.
+  - Improved Console E2E startup failure diagnostics in the affected specs so future failures include the last observed response status plus child stdout/stderr.
+  - Verification passed: `node scripts/verify-features.mjs --dry-run`, `node scripts/verify-features.mjs --compare`, `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'`, `pnpm run verify`, `node scripts/verify-features.mjs --legacy`, and `pnpm run verify:features`.
+  - Optimized `pnpm run verify:features` re-verified all 57 passing features; E2E batch took 159.3s and total repeated Playwright/Vitest process startup count was reduced by batching 50 standard features.
+  - Next active features remain `feat-057`, `feat-058`, and `feat-059`.

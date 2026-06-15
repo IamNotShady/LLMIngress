@@ -521,24 +521,47 @@ async function waitForGateway(baseUrl: string, gateway: PortAppProcess): Promise
 }
 
 async function waitForConsole(baseUrl: string, consoleApp: PortAppProcess): Promise<void> {
+  let lastObservedStatus = "not-started";
+
   await expect
     .poll(
       async () => {
         if (consoleApp.child.exitCode !== null) {
-          return `exited:${consoleApp.child.exitCode}`;
+          return formatConsoleStartupFailure(consoleApp, lastObservedStatus);
         }
         try {
-          return (await fetch(baseUrl)).status;
-        } catch {
+          const response = await fetch(baseUrl);
+          if (response.status !== 200) {
+            lastObservedStatus = `status:${response.status}:${(await response.text()).slice(0, 500)}`;
+            return lastObservedStatus;
+          }
+          lastObservedStatus = String(response.status);
+          return response.status;
+        } catch (error) {
+          lastObservedStatus = `fetch-error:${
+            error instanceof Error ? error.message : String(error)
+          }`;
           return "not-ready";
         }
       },
       {
-        message: `Console did not start.\nstdout=${consoleApp.stdout.join("")}\nstderr=${consoleApp.stderr.join("")}`,
+        message: "Console did not start.",
         timeout: 30_000,
       },
     )
     .toBe(200);
+}
+
+function formatConsoleStartupFailure(
+  consoleApp: PortAppProcess,
+  lastObservedStatus: string,
+): string {
+  return [
+    `exited:${consoleApp.child.exitCode}`,
+    `last:${lastObservedStatus}`,
+    `stdout:${consoleApp.stdout.join("")}`,
+    `stderr:${consoleApp.stderr.join("")}`,
+  ].join("\n");
 }
 
 async function waitForWorkerStarted(worker: AppProcess): Promise<void> {

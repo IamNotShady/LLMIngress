@@ -1,11 +1,12 @@
-import { open, unlink } from "node:fs/promises";
+import { open, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 export async function withProcessLock<T>(
   lockName: string,
   operation: () => Promise<T>,
-  timeoutMs = 90_000,
+  timeoutMs = 60_000,
+  settleMs = 250,
 ): Promise<T> {
   const lockPath = join(tmpdir(), `${lockName}.lock`);
   const startedAt = Date.now();
@@ -17,6 +18,9 @@ export async function withProcessLock<T>(
         await handle.writeFile(String(process.pid));
         return await operation();
       } finally {
+        if (settleMs > 0) {
+          await sleep(settleMs);
+        }
         await handle.close();
         await unlink(lockPath).catch(() => {});
       }
@@ -24,8 +28,18 @@ export async function withProcessLock<T>(
       if (!isFileExistsError(error)) {
         throw error;
       }
-      if (Date.now() - startedAt > timeoutMs) {
-        throw new Error(`Timed out waiting for process lock: ${lockName}`);
+
+      const ownerPid = await readLockOwnerPid(lockPath);
+      if (!isProcessRunning(ownerPid)) {
+        await unlink(lockPath).catch(() => {});
+        continue;
+      }
+
+      const waitedMs = Date.now() - startedAt;
+      if (waitedMs > timeoutMs) {
+        throw new Error(
+          `Timed out waiting for process lock: ${lockName} at ${lockPath}; owner pid ${ownerPid}; waited ${waitedMs}ms`,
+        );
       }
       await sleep(100);
     }
@@ -34,6 +48,38 @@ export async function withProcessLock<T>(
 
 function isFileExistsError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EEXIST";
+}
+
+async function readLockOwnerPid(lockPath: string): Promise<number> {
+  let raw: string;
+  try {
+    raw = await readFile(lockPath, "utf8");
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return -1;
+    }
+    throw error;
+  }
+
+  const value = raw.trim();
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`Malformed process lock: ${lockPath} contains ${JSON.stringify(value)}`);
+  }
+
+  return Number(value);
+}
+
+function isProcessRunning(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EPERM";
+  }
 }
 
 function sleep(ms: number): Promise<void> {

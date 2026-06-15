@@ -774,13 +774,12 @@
     {
       "id": "feat-062",
       "name": "Provider Template Selector",
-      "description": "Console lists categorized whitelisted Provider templates with fixed capabilities and rejects arbitrary endpoints.",
-      "verification": "pnpm exec vitest run tests/features/feat-062-provider-template-selector.unit.test.ts && pnpm test:e2e tests/e2e/feat-062-provider-template-selector.e2e.spec.ts --grep 'provider template selector lists whitelisted templates and rejects arbitrary endpoints'",
+      "description": "Console lists Provider templates grouped by remote API-key and local categories, displays each template's fixed capabilities, and rejects arbitrary endpoints.",
+      "verification": "pnpm exec vitest run tests/features/feat-062-provider-template-selector.unit.test.ts && pnpm test:e2e tests/e2e/feat-062-provider-template-selector.e2e.spec.ts --grep 'provider template selector lists categories fixed capabilities and rejects arbitrary endpoints'",
       "dependencies": [
         "feat-016",
         "feat-020",
-        "feat-021",
-        "feat-056"
+        "feat-021"
       ],
       "status": "pending",
       "evidence": ""
@@ -788,9 +787,11 @@
     {
       "id": "feat-063",
       "name": "V1 Remote OpenAI-Compatible Templates",
-      "description": "DeepSeek, xAI, Mistral, Qwen, Moonshot/Kimi, MiniMax, Groq, Fireworks AI, and Z.ai use fixed template URLs via the generic adapter.",
-      "verification": "pnpm exec vitest run tests/features/feat-063-remote-openai-compatible-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-063-remote-openai-compatible-templates.e2e.spec.ts --grep 'remote openai compatible templates use fixed URLs through generic adapter'",
+      "description": "DeepSeek, xAI, Mistral, Qwen, Moonshot/Kimi, MiniMax, Groq, Fireworks AI, and Z.ai each define a whitelisted remote OpenAI-compatible template with fixed base URL, capabilities, and auth behavior; one representative template completes a fake-provider chat request through the generic adapter.",
+      "verification": "pnpm exec vitest run tests/features/feat-063-remote-openai-compatible-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-063-remote-openai-compatible-templates.e2e.spec.ts --grep 'all nine remote templates expose fixed urls capabilities and representative generic adapter request works'",
       "dependencies": [
+        "feat-004",
+        "feat-018",
         "feat-020",
         "feat-062"
       ],
@@ -812,11 +813,14 @@
     {
       "id": "feat-065",
       "name": "OpenRouter API Key Provider",
-      "description": "OpenRouter template, adapter headers, chat request, model refresh, and error mapping work against fake OpenRouter.",
-      "verification": "pnpm exec vitest run tests/features/feat-065-openrouter-provider.unit.test.ts && pnpm test:e2e tests/e2e/feat-065-openrouter-provider.e2e.spec.ts --grep 'openrouter template adapter model refresh and error mapping work'",
+      "description": "OpenRouter template, adapter headers, Gateway-routed chat request, model refresh, and error mapping work against fake OpenRouter.",
+      "verification": "pnpm exec vitest run tests/features/feat-065-openrouter-provider.unit.test.ts && pnpm test:e2e tests/e2e/feat-065-openrouter-provider.e2e.spec.ts --grep 'openrouter template adapter gateway chat model refresh and error mapping work'",
       "dependencies": [
         "feat-017",
         "feat-018",
+        "feat-023",
+        "feat-032",
+        "feat-036",
         "feat-062"
       ],
       "status": "pending",
@@ -825,11 +829,13 @@
     {
       "id": "feat-066",
       "name": "Google Gemini API Key Provider",
-      "description": "Gemini adapter sends the expected payload, maps responses and errors, and supports routing through Gateway.",
-      "verification": "pnpm exec vitest run tests/features/feat-066-gemini-provider.unit.test.ts && pnpm test:e2e tests/e2e/feat-066-gemini-provider.e2e.spec.ts --grep 'gemini adapter maps payload responses errors and routes through gateway'",
+      "description": "Gemini adapter sends the expected payload, maps responses and errors, and supports a Gateway-routed chat request.",
+      "verification": "pnpm exec vitest run tests/features/feat-066-gemini-provider.unit.test.ts && pnpm test:e2e tests/e2e/feat-066-gemini-provider.e2e.spec.ts --grep 'gemini adapter maps payload responses errors and routes chat through gateway'",
       "dependencies": [
         "feat-004",
         "feat-017",
+        "feat-032",
+        "feat-036",
         "feat-062"
       ],
       "status": "pending",
@@ -838,14 +844,14 @@
     {
       "id": "feat-067",
       "name": "Embeddings Endpoint",
-      "description": "POST /v1/embeddings authenticates, checks Virtual Model access, routes to a provider, and records activity, usage, and cost.",
-      "verification": "pnpm exec vitest run tests/features/feat-067-embeddings-endpoint.unit.test.ts && pnpm test:e2e tests/e2e/feat-067-embeddings-endpoint.e2e.spec.ts --grep 'embeddings endpoint authenticates routes and records activity usage cost'",
+      "description": "POST /v1/embeddings authenticates, checks allowed and disallowed Virtual Model access, routes to a provider, and records activity, usage, and cost.",
+      "verification": "pnpm exec vitest run tests/features/feat-067-embeddings-endpoint.unit.test.ts && pnpm test:e2e tests/e2e/feat-067-embeddings-endpoint.e2e.spec.ts --grep 'embeddings endpoint authenticates routes records activity usage cost and rejects disallowed virtual model without provider call'",
       "dependencies": [
         "feat-018",
         "feat-032",
         "feat-035",
         "feat-044",
-        "feat-062"
+        "feat-045"
       ],
       "status": "pending",
       "evidence": ""
@@ -866,13 +872,17 @@
     {
       "id": "feat-069",
       "name": "Gateway Error Mapping and Request ID Trace",
-      "description": "Provider, auth, routing, and limit errors map consistently, and every response and Activity row carries the request id.",
-      "verification": "pnpm exec vitest run tests/features/feat-069-error-mapping-request-id.unit.test.ts && pnpm test:e2e tests/e2e/feat-069-error-mapping-request-id.e2e.spec.ts --grep 'gateway errors map consistently and request id traces to activity'",
+      "description": "Provider, auth, routing, and limit errors map consistently, and success, failure, and streaming responses plus Activity rows carry the request id.",
+      "verification": "pnpm exec vitest run tests/features/feat-069-error-mapping-request-id.unit.test.ts && pnpm test:e2e tests/e2e/feat-069-error-mapping-request-id.e2e.spec.ts --grep 'provider auth routing limit errors and success failure streaming responses carry request id'",
       "dependencies": [
+        "feat-034",
+        "feat-035",
         "feat-036",
         "feat-037",
         "feat-038",
         "feat-039",
+        "feat-041",
+        "feat-042",
         "feat-044"
       ],
       "status": "pending",
@@ -881,8 +891,8 @@
     {
       "id": "feat-070",
       "name": "Provider Multi-Key Failover",
-      "description": "Multiple keys per provider are tried before provider fallback, with failed key attempts recorded.",
-      "verification": "pnpm exec vitest run tests/features/feat-070-provider-multi-key-failover.unit.test.ts && pnpm test:e2e tests/e2e/feat-070-provider-multi-key-failover.e2e.spec.ts --grep 'provider multi key failover tries keys before provider fallback and records attempts'",
+      "description": "Provider API key storage supports multiple active keys per provider, and Gateway tries multiple keys before provider fallback while recording failed key attempts.",
+      "verification": "pnpm exec vitest run tests/features/feat-070-provider-multi-key-failover.unit.test.ts && pnpm test:e2e tests/e2e/feat-070-provider-multi-key-failover.e2e.spec.ts --grep 'provider multi key schema accepts multiple keys and failover records failed key attempts before fallback'",
       "dependencies": [
         "feat-017",
         "feat-033",
@@ -894,8 +904,8 @@
     {
       "id": "feat-071",
       "name": "Prompt Caching Cost Accounting",
-      "description": "Cached input tokens are detected from provider usage and affect stored usage, cost, and savings records.",
-      "verification": "pnpm exec vitest run tests/features/feat-071-prompt-caching-cost.unit.test.ts && pnpm test:e2e tests/e2e/feat-071-prompt-caching-cost.e2e.spec.ts --grep 'prompt caching tokens affect usage cost and savings records'",
+      "description": "Cached input tokens are detected from provider usage and cost uses cached-input pricing when available or normal input pricing when unavailable, then updates stored usage, cost, and savings records.",
+      "verification": "pnpm exec vitest run tests/features/feat-071-prompt-caching-cost.unit.test.ts && pnpm test:e2e tests/e2e/feat-071-prompt-caching-cost.e2e.spec.ts --grep 'prompt caching tokens use cached input pricing fallback and affect usage cost savings records'",
       "dependencies": [
         "feat-014",
         "feat-040",
@@ -907,29 +917,25 @@
     },
     {
       "id": "feat-072",
-      "name": "Price Sync Job",
-      "description": "Manual and scheduled price_sync jobs write price snapshots and update effective prices without rewriting historical costs.",
-      "verification": "pnpm exec vitest run tests/features/feat-072-price-sync-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-072-price-sync-job.e2e.spec.ts --grep 'price sync writes snapshots and updates effective prices without historical rewrite'",
+      "name": "Worker Periodic Scheduler",
+      "description": "Worker scheduler creates trigger=scheduled jobs when periodic tasks are due, deduplicates unfinished jobs for the same task, payload, and schedule window, pg_notify job_created, and includes recurring stale_reservation_cleanup enqueueing.",
+      "verification": "pnpm exec vitest run tests/features/feat-072-worker-periodic-scheduler.unit.test.ts && pnpm test:e2e tests/e2e/feat-072-worker-periodic-scheduler.e2e.spec.ts --grep 'worker scheduler creates deduplicated scheduled jobs notifies worker and enqueues stale reservation cleanup'",
       "dependencies": [
-        "feat-014",
-        "feat-015",
         "feat-022",
-        "feat-023",
-        "feat-063",
-        "feat-065",
-        "feat-066"
+        "feat-043"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-073",
-      "name": "Billing Reconciliation Job",
-      "description": "Billing reconciliation jobs reconcile stored request costs from provider or price data and record reconciliation runs and items.",
-      "verification": "pnpm exec vitest run tests/features/feat-073-billing-reconciliation-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-073-billing-reconciliation-job.e2e.spec.ts --grep 'billing reconciliation updates request costs and records runs and items'",
+      "name": "Price Sync Job",
+      "description": "Manual and scheduler-created price_sync jobs write price snapshots and update effective prices without rewriting historical costs.",
+      "verification": "pnpm exec vitest run tests/features/feat-073-price-sync-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-073-price-sync-job.e2e.spec.ts --grep 'manual and scheduled price sync writes snapshots and updates effective prices without historical rewrite'",
       "dependencies": [
-        "feat-045",
-        "feat-071",
+        "feat-014",
+        "feat-015",
+        "feat-022",
         "feat-072"
       ],
       "status": "pending",
@@ -937,36 +943,50 @@
     },
     {
       "id": "feat-074",
-      "name": "Provider Health Summary Runtime",
-      "description": "Checks and request failures update health events and summaries, notify Gateway, and influence routing when alternatives exist.",
-      "verification": "pnpm exec vitest run tests/features/feat-074-provider-health-runtime.unit.test.ts && pnpm test:e2e tests/e2e/feat-074-provider-health-runtime.e2e.spec.ts --grep 'provider health summary updates notifies gateway and influences routing'",
+      "name": "Billing Reconciliation Job",
+      "description": "Billing reconciliation jobs reconcile stored request costs from provider or price data and record reconciliation runs and items.",
+      "verification": "pnpm exec vitest run tests/features/feat-074-billing-reconciliation-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-074-billing-reconciliation-job.e2e.spec.ts --grep 'billing reconciliation updates request costs and records runs and items'",
       "dependencies": [
-        "feat-024",
-        "feat-044",
-        "feat-069"
+        "feat-045",
+        "feat-071",
+        "feat-073"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-075",
-      "name": "Provider / Model Health Console Summary",
-      "description": "Console displays provider and model health, latest probe, consecutive failures, and stale status.",
-      "verification": "pnpm exec vitest run tests/features/feat-075-provider-health-console.unit.test.ts && pnpm test:e2e tests/e2e/feat-075-provider-health-console.e2e.spec.ts --grep 'console shows provider model health latest probe failures and stale status'",
+      "name": "Provider Health Summary Runtime",
+      "description": "Manual and scheduled checks plus request failures update provider health events and summaries and emit health_summary_changed notifications without changing V1 route selection.",
+      "verification": "pnpm exec vitest run tests/features/feat-075-provider-health-runtime.unit.test.ts && pnpm test:e2e tests/e2e/feat-075-provider-health-runtime.e2e.spec.ts --grep 'provider health summary updates notifications and scheduled checks without changing route selection'",
       "dependencies": [
-        "feat-013",
-        "feat-016",
-        "feat-048",
-        "feat-074"
+        "feat-024",
+        "feat-044",
+        "feat-069",
+        "feat-072"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-076",
+      "name": "Provider / Model Health Console Summary",
+      "description": "Console displays provider and model health, latest probe, consecutive failures, and stale status.",
+      "verification": "pnpm exec vitest run tests/features/feat-076-provider-health-console.unit.test.ts && pnpm test:e2e tests/e2e/feat-076-provider-health-console.e2e.spec.ts --grep 'console shows provider model health latest probe failures and stale status'",
+      "dependencies": [
+        "feat-013",
+        "feat-016",
+        "feat-048",
+        "feat-075"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-077",
       "name": "Agent Integration Templates",
       "description": "Codex, Claude Code, Cursor, and OpenClaw show copyable Gateway URL, API key, and model setup snippets.",
-      "verification": "pnpm exec vitest run tests/features/feat-076-agent-integration-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-076-agent-integration-templates.e2e.spec.ts --grep 'agent integration templates show copyable setup snippets'",
+      "verification": "pnpm exec vitest run tests/features/feat-077-agent-integration-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts --grep 'agent integration templates show copyable setup snippets'",
       "dependencies": [
         "feat-026",
         "feat-027",
@@ -979,38 +999,38 @@
       "evidence": ""
     },
     {
-      "id": "feat-077",
+      "id": "feat-078",
       "name": "Route Policy Editor Enhancements",
-      "description": "Route Policy editing supports strategy, task, context, tool rules, provider and model filters, fallback order, and validation in one flow.",
-      "verification": "pnpm exec vitest run tests/features/feat-077-route-policy-editor-enhancements.unit.test.ts && pnpm test:e2e tests/e2e/feat-077-route-policy-editor-enhancements.e2e.spec.ts --grep 'route policy editor supports strategy rules filters fallback and validation'",
+      "description": "Route Policy editing supports strategy, provider and model filters, fallback order, price and health warnings, and validation in one flow without adding V2 task, context, or tool-routing rules.",
+      "verification": "pnpm exec vitest run tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts && pnpm test:e2e tests/e2e/feat-078-route-policy-editor-enhancements.e2e.spec.ts --grep 'route policy editor supports strategy filters fallback warnings validation and excludes v2 task context tool rules'",
       "dependencies": [
         "feat-029",
         "feat-032",
         "feat-057",
         "feat-058",
-        "feat-075"
-      ],
-      "status": "pending",
-      "evidence": ""
-    },
-    {
-      "id": "feat-078",
-      "name": "Usage / Cost Breakdowns and Savings Summary",
-      "description": "Usage page breaks down Agent, Agent API Key, Virtual Model, provider, model, cost, failures, and savings.",
-      "verification": "pnpm exec vitest run tests/features/feat-078-usage-breakdowns-savings.unit.test.ts && pnpm test:e2e tests/e2e/feat-078-usage-breakdowns-savings.e2e.spec.ts --grep 'usage page shows breakdowns failures and savings summary'",
-      "dependencies": [
-        "feat-047",
-        "feat-071",
-        "feat-073"
+        "feat-076"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-079",
+      "name": "Usage / Cost Breakdowns and Savings Summary",
+      "description": "Usage page breaks down Agent, Agent API Key, Virtual Model, provider, model, cost, failures, and savings.",
+      "verification": "pnpm exec vitest run tests/features/feat-079-usage-breakdowns-savings.unit.test.ts && pnpm test:e2e tests/e2e/feat-079-usage-breakdowns-savings.e2e.spec.ts --grep 'usage page shows breakdowns failures and savings summary'",
+      "dependencies": [
+        "feat-047",
+        "feat-071",
+        "feat-074"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-080",
       "name": "Config Import Export",
-      "description": "Config export emits redacted configuration, config import validates input, preserves secret safety, and publishes config versions.",
-      "verification": "pnpm exec vitest run tests/features/feat-079-config-import-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-079-config-import-export.e2e.spec.ts --grep 'config import export redacts secrets validates input and publishes config version'",
+      "description": "Config export emits redacted configuration, config import validates input, preserves secret safety, round-trips supported configuration faithfully, and publishes config versions.",
+      "verification": "pnpm exec vitest run tests/features/feat-080-config-import-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-080-config-import-export.e2e.spec.ts --grep 'config import export redacts secrets validates publishes config version and round trips supported configuration'",
       "dependencies": [
         "feat-011",
         "feat-013",
@@ -1021,16 +1041,16 @@
         "feat-029",
         "feat-031",
         "feat-062",
-        "feat-077"
+        "feat-078"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
-      "id": "feat-080",
+      "id": "feat-081",
       "name": "JSONL Request Logs Export",
       "description": "jsonl_export jobs export request metadata, fallback events, and errors as JSONL without secrets.",
-      "verification": "pnpm exec vitest run tests/features/feat-080-jsonl-request-log-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-080-jsonl-request-log-export.e2e.spec.ts --grep 'jsonl request log export writes metadata fallback errors without secrets'",
+      "verification": "pnpm exec vitest run tests/features/feat-081-jsonl-request-log-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-081-jsonl-request-log-export.e2e.spec.ts --grep 'jsonl request log export writes metadata fallback errors without secrets'",
       "dependencies": [
         "feat-022",
         "feat-044",
@@ -1040,22 +1060,22 @@
       "evidence": ""
     },
     {
-      "id": "feat-081",
+      "id": "feat-082",
       "name": "Cost Report Export",
       "description": "Cost report export jobs produce a report matching Usage breakdown totals.",
-      "verification": "pnpm exec vitest run tests/features/feat-081-cost-report-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-081-cost-report-export.e2e.spec.ts --grep 'cost report export matches usage breakdown totals'",
+      "verification": "pnpm exec vitest run tests/features/feat-082-cost-report-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-082-cost-report-export.e2e.spec.ts --grep 'cost report export matches usage breakdown totals'",
       "dependencies": [
         "feat-022",
-        "feat-078"
+        "feat-079"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
-      "id": "feat-082",
+      "id": "feat-083",
       "name": "Notification Channels and Dispatcher",
       "description": "Email and Webhook channels can be configured, queued, sent, retried, and audited.",
-      "verification": "pnpm exec vitest run tests/features/feat-082-notification-channels-dispatcher.unit.test.ts && pnpm test:e2e tests/e2e/feat-082-notification-channels-dispatcher.e2e.spec.ts --grep 'notification channels queue send retry and audit email webhook deliveries'",
+      "verification": "pnpm exec vitest run tests/features/feat-083-notification-channels-dispatcher.unit.test.ts && pnpm test:e2e tests/e2e/feat-083-notification-channels-dispatcher.e2e.spec.ts --grep 'notification channels queue send retry and audit email webhook deliveries'",
       "dependencies": [
         "feat-013",
         "feat-022"
@@ -1064,48 +1084,50 @@
       "evidence": ""
     },
     {
-      "id": "feat-083",
+      "id": "feat-084",
       "name": "Webhook Event Export",
       "description": "Request, fallback, and error events export to webhook independently of alert notifications.",
-      "verification": "pnpm exec vitest run tests/features/feat-083-webhook-event-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-083-webhook-event-export.e2e.spec.ts --grep 'webhook event export sends request fallback and error events separately from alerts'",
+      "verification": "pnpm exec vitest run tests/features/feat-084-webhook-event-export.unit.test.ts && pnpm test:e2e tests/e2e/feat-084-webhook-event-export.e2e.spec.ts --grep 'webhook event export sends request fallback and error events separately from alerts'",
       "dependencies": [
         "feat-044",
-        "feat-080",
-        "feat-082"
-      ],
-      "status": "pending",
-      "evidence": ""
-    },
-    {
-      "id": "feat-084",
-      "name": "Retention Cleanup Policy",
-      "description": "Scheduled retention cleanup deletes expired request and export data while preserving required aggregates.",
-      "verification": "pnpm exec vitest run tests/features/feat-084-retention-cleanup-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-084-retention-cleanup-policy.e2e.spec.ts --grep 'retention cleanup deletes expired request export data and preserves aggregates'",
-      "dependencies": [
-        "feat-022",
-        "feat-080"
+        "feat-081",
+        "feat-083"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-085",
-      "name": "Backup Job",
-      "description": "Manual and scheduled backup jobs create a local artifact covering config and operational tables, with pre-migration backup support.",
-      "verification": "pnpm exec vitest run tests/features/feat-085-backup-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-085-backup-job.e2e.spec.ts --grep 'backup job creates artifact for config operational tables and pre migration use'",
+      "name": "Retention Cleanup Policy",
+      "description": "Scheduler-created retention_cleanup jobs delete expired request and export data while preserving required aggregates.",
+      "verification": "pnpm exec vitest run tests/features/feat-085-retention-cleanup-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-085-retention-cleanup-policy.e2e.spec.ts --grep 'scheduled retention cleanup deletes expired request export data and preserves aggregates'",
       "dependencies": [
         "feat-022",
-        "feat-055",
-        "feat-079"
+        "feat-072",
+        "feat-081"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-086",
+      "name": "Backup Job",
+      "description": "Manual and scheduler-created backup jobs create a local artifact covering config and operational tables, with pre-migration backup support.",
+      "verification": "pnpm exec vitest run tests/features/feat-086-backup-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-086-backup-job.e2e.spec.ts --grep 'manual and scheduled backup jobs create artifact for config operational tables and pre migration use'",
+      "dependencies": [
+        "feat-022",
+        "feat-055",
+        "feat-072",
+        "feat-080"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-087",
       "name": "Migration Status Check",
       "description": "Console and CLI report current schema, pending migrations, and db:migrate:check health.",
-      "verification": "pnpm exec vitest run tests/features/feat-086-migration-status-check.unit.test.ts && pnpm test:e2e tests/e2e/feat-086-migration-status-check.e2e.spec.ts --grep 'migration status reports schema pending migrations and migrate check health'",
+      "verification": "pnpm exec vitest run tests/features/feat-087-migration-status-check.unit.test.ts && pnpm test:e2e tests/e2e/feat-087-migration-status-check.e2e.spec.ts --grep 'migration status reports schema pending migrations and migrate check health'",
       "dependencies": [
         "feat-048",
         "feat-055"
@@ -1114,86 +1136,90 @@
       "evidence": ""
     },
     {
-      "id": "feat-087",
+      "id": "feat-088",
       "name": "Budget Threshold Alerts",
-      "description": "Budget threshold evaluator emits Email and Webhook notifications when budget usage approaches configured thresholds.",
-      "verification": "pnpm exec vitest run tests/features/feat-087-budget-threshold-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-087-budget-threshold-alerts.e2e.spec.ts --grep 'budget threshold evaluator emits email webhook notifications near budget limit'",
+      "description": "Scheduler-triggered budget threshold evaluator emits Email and Webhook notifications when budget usage approaches configured thresholds.",
+      "verification": "pnpm exec vitest run tests/features/feat-088-budget-threshold-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-088-budget-threshold-alerts.e2e.spec.ts --grep 'scheduled budget threshold evaluator emits email webhook notifications near budget limit'",
       "dependencies": [
         "feat-042",
-        "feat-082"
-      ],
-      "status": "pending",
-      "evidence": ""
-    },
-    {
-      "id": "feat-088",
-      "name": "Rate Limit High-Frequency Alerts",
-      "description": "Rate limit evaluator detects repeated RPM or TPM blocks and sends notifications.",
-      "verification": "pnpm exec vitest run tests/features/feat-088-rate-limit-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-088-rate-limit-alerts.e2e.spec.ts --grep 'rate limit evaluator detects repeated rpm tpm blocks and notifies'",
-      "dependencies": [
-        "feat-041",
-        "feat-082"
+        "feat-072",
+        "feat-083"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-089",
-      "name": "Provider Failure Alerts",
-      "description": "Provider failure evaluator detects consecutive provider or model failures from health summary and sends notifications.",
-      "verification": "pnpm exec vitest run tests/features/feat-089-provider-failure-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-089-provider-failure-alerts.e2e.spec.ts --grep 'provider failure evaluator detects consecutive health failures and notifies'",
+      "name": "Rate Limit High-Frequency Alerts",
+      "description": "Scheduler-triggered rate limit evaluator detects repeated RPM or TPM blocks and sends notifications.",
+      "verification": "pnpm exec vitest run tests/features/feat-089-rate-limit-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-089-rate-limit-alerts.e2e.spec.ts --grep 'scheduled rate limit evaluator detects repeated rpm tpm blocks and notifies'",
       "dependencies": [
-        "feat-074",
-        "feat-082"
+        "feat-041",
+        "feat-072",
+        "feat-083"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-090",
-      "name": "Fallback Exhaustion Alerts",
-      "description": "Fallback exhaustion evaluator detects exhausted fallback chains and notifies with request and Activity context.",
-      "verification": "pnpm exec vitest run tests/features/feat-090-fallback-exhaustion-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-090-fallback-exhaustion-alerts.e2e.spec.ts --grep 'fallback exhaustion evaluator detects exhausted chains and notifies with activity context'",
+      "name": "Provider Failure Alerts",
+      "description": "Scheduler-triggered provider failure evaluator detects consecutive provider or model failures from health summary and sends notifications.",
+      "verification": "pnpm exec vitest run tests/features/feat-090-provider-failure-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-090-provider-failure-alerts.e2e.spec.ts --grep 'scheduled provider failure evaluator detects consecutive health failures and notifies'",
       "dependencies": [
-        "feat-033",
-        "feat-044",
-        "feat-082"
+        "feat-072",
+        "feat-075",
+        "feat-083"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-091",
-      "name": "Prometheus Metrics Exporter",
-      "description": "/metrics exposes Gateway and Worker request, latency, cost, fallback, health, and job metrics without secrets.",
-      "verification": "pnpm exec vitest run tests/features/feat-091-prometheus-metrics-exporter.unit.test.ts && pnpm test:e2e tests/e2e/feat-091-prometheus-metrics-exporter.e2e.spec.ts --grep 'prometheus metrics exposes gateway worker request latency cost fallback health job metrics'",
+      "name": "Fallback Exhaustion Alerts",
+      "description": "Scheduler-triggered fallback exhaustion evaluator detects exhausted fallback chains and notifies with request and Activity context.",
+      "verification": "pnpm exec vitest run tests/features/feat-091-fallback-exhaustion-alerts.unit.test.ts && pnpm test:e2e tests/e2e/feat-091-fallback-exhaustion-alerts.e2e.spec.ts --grep 'scheduled fallback exhaustion evaluator detects exhausted chains and notifies with activity context'",
       "dependencies": [
-        "feat-040",
+        "feat-033",
         "feat-044",
-        "feat-048",
-        "feat-074"
+        "feat-072",
+        "feat-083"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-092",
-      "name": "OpenTelemetry Tracing",
-      "description": "Gateway, provider, and job spans include request id, job id, provider, model, status, and error code without prompt or key content.",
-      "verification": "pnpm exec vitest run tests/features/feat-092-opentelemetry-tracing.unit.test.ts && pnpm test:e2e tests/e2e/feat-092-opentelemetry-tracing.e2e.spec.ts --grep 'opentelemetry traces include request job provider model status without prompt key content'",
+      "name": "Prometheus Metrics Exporter",
+      "description": "/metrics exposes Gateway and Worker request, latency, cost, fallback, health, and job metrics without secrets.",
+      "verification": "pnpm exec vitest run tests/features/feat-092-prometheus-metrics-exporter.unit.test.ts && pnpm test:e2e tests/e2e/feat-092-prometheus-metrics-exporter.e2e.spec.ts --grep 'prometheus metrics exposes gateway worker request latency cost fallback health job metrics'",
       "dependencies": [
-        "feat-022",
-        "feat-069",
-        "feat-091"
+        "feat-040",
+        "feat-044",
+        "feat-048",
+        "feat-075"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
       "id": "feat-093",
+      "name": "OpenTelemetry Tracing",
+      "description": "Gateway, provider, and job spans include request id, job id, provider, model, status, and error code without prompt or key content.",
+      "verification": "pnpm exec vitest run tests/features/feat-093-opentelemetry-tracing.unit.test.ts && pnpm test:e2e tests/e2e/feat-093-opentelemetry-tracing.e2e.spec.ts --grep 'opentelemetry traces include request job provider model status without prompt key content'",
+      "dependencies": [
+        "feat-022",
+        "feat-069",
+        "feat-092"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-094",
       "name": "V1 Provider Coverage Smoke",
-      "description": "Fake-backed smoke proves OpenAI, Anthropic, Gemini, OpenRouter, and two local providers route successfully.",
-      "verification": "pnpm exec vitest run tests/features/feat-093-v1-provider-coverage-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-093-v1-provider-coverage-smoke.e2e.spec.ts --grep 'v1 provider coverage smoke routes openai anthropic gemini openrouter and local providers'",
+      "description": "Fake-backed smoke proves OpenAI, Anthropic, Gemini, OpenRouter, and two local providers route successfully, and validates all nine long-tail OpenAI-compatible templates are available for configuration.",
+      "verification": "pnpm exec vitest run tests/features/feat-094-v1-provider-coverage-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-094-v1-provider-coverage-smoke.e2e.spec.ts --grep 'v1 provider coverage smoke routes core providers local providers and validates long tail templates available'",
       "dependencies": [
         "feat-063",
         "feat-064",
@@ -1202,22 +1228,21 @@
         "feat-067",
         "feat-068",
         "feat-070",
-        "feat-075"
+        "feat-076"
       ],
       "status": "pending",
       "evidence": ""
     },
     {
-      "id": "feat-094",
+      "id": "feat-095",
       "name": "V1 Daily Operations Smoke",
       "description": "Single-node smoke verifies usage breakdowns, exports, alerts, metrics, traces, backup, migration status, and retention cleanup.",
-      "verification": "pnpm exec vitest run tests/features/feat-094-v1-daily-operations-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-094-v1-daily-operations-smoke.e2e.spec.ts --grep 'v1 daily operations smoke verifies breakdowns exports alerts metrics traces backup migration retention'",
+      "verification": "pnpm exec vitest run tests/features/feat-095-v1-daily-operations-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-095-v1-daily-operations-smoke.e2e.spec.ts --grep 'v1 daily operations smoke verifies breakdowns exports alerts metrics traces backup migration retention'",
       "dependencies": [
-        "feat-078",
         "feat-079",
         "feat-080",
         "feat-081",
-        "feat-083",
+        "feat-082",
         "feat-084",
         "feat-085",
         "feat-086",
@@ -1227,7 +1252,8 @@
         "feat-090",
         "feat-091",
         "feat-092",
-        "feat-093"
+        "feat-093",
+        "feat-094"
       ],
       "status": "pending",
       "evidence": ""

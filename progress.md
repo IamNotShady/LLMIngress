@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 21:29 AWST
-**Active Feature:** none — 61 tracked features are `passing`; 33 V1 features are `pending`
+**Last Updated:** 2026-06-15 22:47 AWST
+**Active Feature:** none — 61 tracked features are `passing`; 34 V1 features are `pending`
 
 ## Status
 
@@ -12,7 +12,8 @@
 - [x] Built the minimum monorepo scaffold for Gateway, Console, Worker, and shared packages (feat-001).
 - [x] Split the MVP scope from `docs/PLAN.md` into 54 independently developable and testable features.
 - [x] Standardized feature tracker schema on `description` / `status` with strict verification contracts.
-- [x] Split the V1 scope from `docs/PLAN.md` into `feat-062` through `feat-094`, each independently developable and verifiable with unit and E2E test commands; all new V1 entries are `pending` with empty evidence.
+- [x] Split the V1 scope from `docs/PLAN.md` into `feat-062` through `feat-095`, each independently developable and verifiable with unit and E2E test commands; all new V1 entries are `pending` with empty evidence.
+- [x] Applied V1 split review follow-up: added `feat-072` Worker Periodic Scheduler, renumbered later V1 pending features, tightened dependency edges, kept V1 route-policy scope out of V2 task/context/tool rules, and made verification text match feature descriptions more closely.
 - [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
   - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
   - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.

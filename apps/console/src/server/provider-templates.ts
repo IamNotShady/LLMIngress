@@ -11,13 +11,14 @@ export type OpenAICompatibleProviderTemplateId =
   | "xai"
   | "zai";
 export type OpenRouterProviderTemplateId = "openrouter";
+export type GeminiProviderTemplateId = "gemini";
 export type OllamaProviderTemplateId = "ollama";
 export type LocalProviderTemplateId = OllamaProviderTemplateId | "lmstudio" | "llama_cpp";
 export type ProviderTemplateSelectorGroupId = "remote_api_key" | "local";
 export type ProviderTemplateSelectorCapability = "chat_completions" | "streaming" | "tools";
 export type ProviderTemplateAuthBehavior = {
-  header: "Authorization";
-  scheme: "Bearer";
+  header: string;
+  scheme: string;
 };
 
 export type ProviderTemplateCreateInput = {
@@ -40,6 +41,9 @@ export type OpenAICompatibleProviderTemplate = ProviderTemplateCreateInput & {
 };
 export type OpenRouterProviderTemplate = Omit<OpenAICompatibleProviderTemplate, "id"> & {
   id: OpenRouterProviderTemplateId;
+};
+export type GeminiProviderTemplate = Omit<OpenAICompatibleProviderTemplate, "id"> & {
+  id: GeminiProviderTemplateId;
 };
 
 export type LocalProviderTemplate = {
@@ -70,7 +74,11 @@ export type ProviderTemplateSelectorItem = {
   chatPath?: string;
   displayName: string;
   fixedBaseUrl?: string;
-  id: OpenAICompatibleProviderTemplateId | OpenRouterProviderTemplateId | LocalProviderTemplateId;
+  id:
+    | OpenAICompatibleProviderTemplateId
+    | OpenRouterProviderTemplateId
+    | GeminiProviderTemplateId
+    | LocalProviderTemplateId;
   modelListPath?: string;
   providerKey: string;
   providerType: ProviderType;
@@ -151,6 +159,20 @@ const openRouterTemplate: OpenRouterProviderTemplate = {
   providerType: "api_key",
 };
 
+const geminiTemplate: GeminiProviderTemplate = {
+  auth: { header: "x-goog-api-key", scheme: "API key" },
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  capabilities: {
+    chatCompletions: true,
+    streaming: false,
+    tools: false,
+  },
+  displayName: "Google Gemini",
+  id: "gemini",
+  providerKey: "gemini",
+  providerType: "api_key",
+};
+
 const localTemplates: Record<LocalProviderTemplateId, LocalProviderTemplate> = {
   ollama: {
     baseUrlPlaceholder: "http://127.0.0.1:11434",
@@ -202,6 +224,7 @@ export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGr
       id: "remote_api_key",
       label: "Remote API-key templates",
       templates: [
+        copyGeminiTemplate(geminiTemplate),
         copyOpenRouterTemplate(openRouterTemplate),
         ...listOpenAICompatibleProviderTemplates(),
       ].map((template) => ({
@@ -263,6 +286,16 @@ export function getOpenRouterProviderTemplate(
   return copyOpenRouterTemplate(openRouterTemplate);
 }
 
+export function getGeminiProviderTemplate(
+  templateId: string | null | undefined,
+): GeminiProviderTemplate {
+  if (templateId !== "gemini") {
+    throw new Error("Provider must use a whitelisted provider template.");
+  }
+
+  return copyGeminiTemplate(geminiTemplate);
+}
+
 export function getLocalProviderTemplate(
   templateId: string | null | undefined,
 ): LocalProviderTemplate {
@@ -287,6 +320,13 @@ export function normalizeProviderTemplateFormInput(
     return getOpenRouterProviderTemplate(input.templateId);
   }
 
+  if (input.templateId === "gemini") {
+    if (input.baseUrl?.trim()) {
+      throw new Error("Custom Gemini endpoints are not allowed.");
+    }
+    return getGeminiProviderTemplate(input.templateId);
+  }
+
   if (input.baseUrl?.trim()) {
     throw new Error("Custom OpenAI-compatible endpoints are not allowed.");
   }
@@ -298,6 +338,7 @@ export function isKnownProviderTemplateKey(providerKey: string): boolean {
   return (
     isOpenAICompatibleProviderTemplateId(providerKey) ||
     providerKey === "openrouter" ||
+    providerKey === "gemini" ||
     isLocalProviderTemplateId(providerKey)
   );
 }
@@ -359,6 +400,14 @@ function copyOpenRouterTemplate(template: OpenRouterProviderTemplate): OpenRoute
   };
 }
 
+function copyGeminiTemplate(template: GeminiProviderTemplate): GeminiProviderTemplate {
+  return {
+    ...template,
+    auth: { ...template.auth },
+    capabilities: { ...template.capabilities },
+  };
+}
+
 function copyOllamaTemplate(template: OllamaProviderTemplate): OllamaProviderTemplate {
   return {
     ...template,
@@ -374,7 +423,7 @@ function copyLocalTemplate(template: LocalProviderTemplate): LocalProviderTempla
 }
 
 function readOpenAICompatibleCapabilities(
-  template: OpenAICompatibleProviderTemplate | OpenRouterProviderTemplate,
+  template: OpenAICompatibleProviderTemplate | OpenRouterProviderTemplate | GeminiProviderTemplate,
 ): ProviderTemplateSelectorCapability[] {
   const capabilities: ProviderTemplateSelectorCapability[] = [];
 

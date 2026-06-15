@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
+import { createGeminiProviderAdapter } from "./provider-adapters/gemini.js";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIChatRequest,
@@ -64,12 +65,18 @@ export async function executeFallbackChain(
   }
 
   const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
+  const geminiAdapter = input.adapter ?? createGeminiProviderAdapter();
   const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
   const failedAttempts: FallbackFailedAttempt[] = [];
   let lastError: OpenAIAdapterError | undefined;
 
   for (const [index, candidate] of input.candidates.entries()) {
-    const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
+    const adapter =
+      candidate.providerKey === "gemini"
+        ? geminiAdapter
+        : candidate.providerKey === "openrouter"
+          ? openRouterAdapter
+          : genericAdapter;
     const result = await adapter.chatCompletion({
       request: input.request,
       target: {

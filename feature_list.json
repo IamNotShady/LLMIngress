@@ -838,8 +838,8 @@
         "feat-036",
         "feat-062"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-066 unit tests because the Gemini provider adapter module was missing, and E2E red because provider_template_id='gemini' was rejected by the database whitelist. Added the fixed Google Gemini API-key template with x-goog-api-key auth metadata, 0012 provider_template_id whitelist migration, a native Gemini adapter that maps OpenAI chat messages to generateContent contents/systemInstruction/generationConfig, maps Gemini responses back to OpenAI-compatible chat completions, maps Gemini error statuses, and Gateway fallback-chain selection of the Gemini adapter. Fake-provider E2E verifies a real Gateway/PostgreSQL chat request reaches /models/{model}:generateContent with x-goog-api-key and returns OpenAI-compatible chat output. Code review found no P2+ issues after checking template capability scope, API key header placement, adapter selection, migration coverage, and response/error mapping. Verification passed — feat-066 unit tests 4 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, related feat-033/062/063/065/066 unit regressions passed, related feat-062 E2E passed, db:migrate:check passed, pnpm run verify passed, and verify:features passed all 65 prior passing features before marking."
     },
     {
       "id": "feat-067",

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 00:56 AWST
-**Active Feature:** none — 65 tracked features are `passing`; 30 V1 features are `pending`
+**Last Updated:** 2026-06-16 01:14 AWST
+**Active Feature:** none — 66 tracked features are `passing`; 29 V1 features are `pending`
 
 ## Status
 
@@ -43,6 +43,14 @@
   - Fake-provider E2E covers model refresh, Gateway non-streaming chat, Gateway streaming chat, and OpenRouter numeric error mapping recorded in `fallback_events`.
   - Code review found and fixed a P2 streaming-path header omission; no remaining P2+ issues after checking template scope, adapter selection, model refresh headers, migration coverage, and fake-provider error mapping.
   - Verification passed: feat-065 unit tests (4), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-018/023/033/039/062/063 unit regressions, related feat-023/036/039 E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and full regression of all 64 prior passing features before marking.
+- [x] **feat-066 — Google Gemini API Key Provider (passing)**:
+  - Added Google Gemini as a fixed remote API-key template with `x-goog-api-key` auth metadata and no unimplemented streaming/tools capability claims.
+  - Added migration `0012_gemini_provider` so the database whitelist accepts `gemini`.
+  - Added a native Gemini Gateway adapter that maps OpenAI chat messages to Gemini `generateContent` `contents`, `systemInstruction`, and `generationConfig`, maps Gemini responses back to OpenAI-compatible chat completions, and maps Gemini error statuses.
+  - Gateway fallback-chain routing now selects the Gemini adapter for `provider_key='gemini'`.
+  - Fake-provider E2E covers real Gateway/PostgreSQL routing to `/models/{model}:generateContent`, `x-goog-api-key` forwarding, Gemini payload shape, and OpenAI-compatible response mapping.
+  - Code review found no P2+ issues after checking template capability scope, API key header placement, adapter selection, migration coverage, and response/error mapping.
+  - Verification passed: feat-066 unit tests (4), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-033/062/063/065/066 unit regressions, related feat-062 E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and full regression of all 65 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

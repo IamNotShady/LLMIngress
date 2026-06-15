@@ -13,7 +13,8 @@ export type FakeProviderMode =
   | "timeout"
   | "first-byte-failure"
   | "midstream-error"
-  | "openrouter-error";
+  | "openrouter-error"
+  | "gemini";
 
 export type CapturedFakeProviderRequest = {
   method: string;
@@ -195,6 +196,40 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "gemini" && url.pathname.includes(":generateContent")) {
+      writeJson(response, 200, {
+        candidates: [
+          {
+            content: {
+              role: "model",
+              parts: [{ text: "fake gemini response" }],
+            },
+            finishReason: "STOP",
+            index: 0,
+          },
+        ],
+        modelVersion: "gemini-3.5-flash",
+        responseId: "fake-gemini-response",
+        usageMetadata: {
+          candidatesTokenCount: 4,
+          promptTokenCount: 6,
+          totalTokenCount: 10,
+        },
+      });
+      return;
+    }
+
+    if (mode === "gemini") {
+      writeJson(response, 404, {
+        error: {
+          code: 404,
+          message: "Gemini fake provider expected generateContent path",
+          status: "NOT_FOUND",
+        },
+      });
+      return;
+    }
+
     if (mode === "json") {
       writeJson(response, 200, {
         id: "fake-provider-response",
@@ -290,7 +325,8 @@ function readMode(url: URL): FakeProviderMode {
     mode === "timeout" ||
     mode === "first-byte-failure" ||
     mode === "midstream-error" ||
-    mode === "openrouter-error"
+    mode === "openrouter-error" ||
+    mode === "gemini"
   ) {
     return mode;
   }

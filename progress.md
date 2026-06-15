@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 07:11 AWST
-**Active Feature:** none — 81 tracked features are `passing`; 14 V1 features are `pending`
+**Last Updated:** 2026-06-16 07:30 AWST
+**Active Feature:** none — 82 tracked features are `passing`; 13 V1 features are `pending`
 
 ## Status
 
@@ -141,6 +141,12 @@
   - Export avoids provider encrypted keys and Agent key hashes, redacts secret-like values in metadata and error fields, and preserves safe identifiers such as key prefixes and provider keys.
   - P2+ review found and fixed absent usage/cost rows being exported as fake zero/null objects instead of `null`.
   - Verification passed: feat-081 unit tests (3), real PostgreSQL Worker E2E (1), `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 80 prior passing features before marking, and final `pnpm run verify:features` across all 81 passing features after marking.
+- [x] **feat-082 — Cost Report Export (passing)**:
+  - Added migration `0017_cost_report_export` for `cost_report_export` jobs and `cost_report` export task records.
+  - Added a Worker cost report export handler that writes a JSON artifact with Usage summary totals plus Agent, Agent API Key, Virtual Model, provider, model, and provider/model breakdowns.
+  - E2E verifies the exported report matches `getConsoleUsageSummary` for the same 24h window and excludes Agent key hashes.
+  - P2+ review found no blocking logic issues after checking Usage aggregation parity, migration constraint compatibility, and secret exposure.
+  - Verification passed: feat-082 unit tests (3), real PostgreSQL Worker E2E (1), `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 81 prior passing features before marking, and final `pnpm run verify:features` across all 82 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

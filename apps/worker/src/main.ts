@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { createBillingReconciliationJobHandler } from "./billing-reconciliation.js";
+import { createCostReportExportJobHandler } from "./cost-report-export.js";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createJsonlRequestLogExportJobHandler } from "./jsonl-export.js";
 import { createModelRefreshJobHandler } from "./model-refresh.js";
@@ -33,6 +34,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
           databaseUrl: config.databaseUrl,
         }),
         price_sync: createPriceSyncJobHandler({ databaseUrl: config.databaseUrl }),
+        cost_report_export: createCostReportExportJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
         jsonl_export: createJsonlRequestLogExportJobHandler({
           databaseUrl: config.databaseUrl,
         }),

@@ -1043,8 +1043,8 @@
         "feat-062",
         "feat-078"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-080 unit tests because the config import/export server helper was missing, and E2E red because the authenticated Console Settings UI did not expose config import/export controls. Added redacted config export/import service, authenticated export/import API routes, and Console Settings controls. Export covers providers, provider models, redacted provider API key metadata, virtual models, route policies, agents, redacted Agent API key metadata, allowed/default Virtual Models, and limits without selecting provider secrets or Agent key hashes. Import validates shape, UUIDs, whitelisted provider templates, fixed template URLs, local provider URL safety, redacted secrets, and cross-object references; it preserves existing provider API secrets, gives newly imported redacted Agent API keys non-authenticating placeholder hashes, preserves existing Agent API key hashes on same-DB round trip, round-trips supported configuration faithfully, and publishes a config version. P2+ review found and fixed coverage for same-DB import preserving real Agent API key hashes. Verification passed: feat-080 unit tests (2), real Chromium/PostgreSQL Console E2E (1), pnpm run lint, pnpm run typecheck, pnpm run verify, full verify:features passed all 79 prior passing features before marking, and final verify:features passed all 80 passing features after marking."
     },
     {
       "id": "feat-081",

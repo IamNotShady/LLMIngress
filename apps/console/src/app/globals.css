@@ -121,6 +121,15 @@ button:hover {
   color: #344054;
 }
 
+a.secondary-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-self: start;
+  padding: 10px 14px;
+  text-decoration: none;
+}
+
 .secondary-button:hover {
   background: #f2f4f7;
 }
@@ -373,6 +382,27 @@ dd {
   gap: 8px;
   margin: 8px 0 0;
   padding-left: 20px;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.settings-panel h3 {
+  margin: 0;
+  color: #101828;
+  font-size: 16px;
+  line-height: 1.3;
 }
 
 .playground-form {

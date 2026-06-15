@@ -136,6 +136,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const selectedActivityId = readSingleSearchParam(resolvedSearchParams.activityId);
+  const configImportVersion = readSingleSearchParam(resolvedSearchParams.configImportVersion);
   const modelRefreshProviderId = readSingleSearchParam(resolvedSearchParams.modelRefreshProviderId);
   const usageWindow = parseConsoleUsageWindow(
     readSingleSearchParam(resolvedSearchParams.usageWindow),
@@ -1189,6 +1190,32 @@ export default async function Home({ searchParams }: HomeProps = {}) {
               );
             })
           )}
+        </div>
+      </section>
+      <section className="providers-panel" id="settings" aria-labelledby="settings-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Settings</p>
+            <h2 id="settings-title">Settings</h2>
+          </div>
+        </div>
+        <div className="settings-grid">
+          <section className="settings-panel" aria-labelledby="config-import-export-title">
+            <h3 id="config-import-export-title">Config import/export</h3>
+            {configImportVersion ? (
+              <p className="status-enabled">
+                Config import published version v{configImportVersion}
+              </p>
+            ) : null}
+            <a className="secondary-button" download href="/api/config-export">
+              Export redacted config
+            </a>
+            <form className="provider-create-form" action="/api/config-import" method="post">
+              <label htmlFor="config-import-json">Config import JSON</label>
+              <textarea id="config-import-json" name="configJson" required rows={8} />
+              <button type="submit">Import redacted config</button>
+            </form>
+          </section>
         </div>
       </section>
     </main>

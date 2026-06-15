@@ -466,6 +466,31 @@ dd {
   margin: 14px 0;
 }
 
+.agent-integration-snippets {
+  display: grid;
+  border: 0;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.agent-integration-snippets > legend {
+  margin-bottom: 2px;
+  color: #344054;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.agent-integration-snippet {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-integration-snippet textarea {
+  min-height: 116px;
+  background: #f9fafb;
+}
+
 .provider-key-form {
   margin-bottom: 12px;
 }

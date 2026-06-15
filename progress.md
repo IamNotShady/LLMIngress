@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 04:55 AWST
-**Active Feature:** none — 76 tracked features are `passing`; 19 V1 features are `pending`
+**Last Updated:** 2026-06-16 05:18 AWST
+**Active Feature:** none — 77 tracked features are `passing`; 18 V1 features are `pending`
 
 ## Status
 
@@ -112,6 +112,12 @@
   - Providers and models without health summaries render as `Unknown` / `No probe` rather than disappearing.
   - Code review found no P2+ logic issues; formatting drift was fixed with `pnpm run lint:fix`.
   - Verification passed: feat-076 unit tests (2), real Chromium/PostgreSQL Console E2E (1), related feat-016/048/057 E2E regressions, related feat-016/048/057/075 unit regressions, `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, full `pnpm run verify:features` across all 75 prior passing features before marking, and final `pnpm run verify:features` across all 76 passing features after marking.
+- [x] **feat-077 — Agent Integration Templates (passing)**:
+  - Added shared Agent integration template generation for Codex, Claude Code, Cursor, and OpenClaw.
+  - One-time Agent API key create/rotate pages now show copyable setup snippets with Gateway URL, plaintext API key, and model placeholder in the no-store response.
+  - Dashboard Agent API key cards show the same snippets with a prefix-based API key placeholder and the resolved default or first allowed Virtual Model name, without exposing stored plaintext.
+  - Code review found no P2+ logic issues; lint found and fixed the snippet group accessibility shape by using `fieldset` / `legend`.
+  - Verification passed: feat-077 unit tests (3), real Chromium/PostgreSQL Console E2E (1), `pnpm run lint`, `pnpm run verify`, full `pnpm run verify:features` across all 76 prior passing features before marking, and final `pnpm run verify:features` across all 77 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

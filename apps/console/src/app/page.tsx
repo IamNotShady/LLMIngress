@@ -17,6 +17,11 @@ import {
   listAgentApiKeyVirtualModelAccess,
 } from "../server/agent-api-keys";
 import {
+  buildAgentIntegrationTemplates,
+  formatDashboardAgentApiKeySnippetValue,
+  resolveAgentIntegrationModelName,
+} from "../server/agent-integrations";
+import {
   type ConsoleAgentLimit,
   defaultAgentLimitFormValues,
   formatAgentLimitSummaries,
@@ -634,6 +639,11 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                       const rpmLimit = findAgentLimit(limits, "rpm");
                       const tokenLimit = findAgentLimit(limits, "token");
                       const tpmLimit = findAgentLimit(limits, "tpm");
+                      const integrationTemplates = buildAgentIntegrationTemplates({
+                        apiKey: formatDashboardAgentApiKeySnippetValue(agentApiKey.keyPrefix),
+                        gatewayBaseUrl: playgroundGatewayBaseUrl,
+                        model: resolveAgentIntegrationModelName(access),
+                      });
 
                       return (
                         <div key={agentApiKey.id}>
@@ -645,6 +655,22 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                           <p>Agent API key updated: {formatDateTime(agentApiKey.updatedAt)}</p>
                           <p>Allowed Virtual Models: {accessLabels.allowedLabel}</p>
                           <p>Default Virtual Model: {accessLabels.defaultLabel}</p>
+                          <fieldset className="agent-integration-snippets">
+                            <legend>Agent integration snippets</legend>
+                            {integrationTemplates.map((template) => (
+                              <div className="agent-integration-snippet" key={template.id}>
+                                <label htmlFor={`${template.id}-setup-snippet-${agentApiKey.id}`}>
+                                  {template.displayName} setup snippet
+                                </label>
+                                <textarea
+                                  id={`${template.id}-setup-snippet-${agentApiKey.id}`}
+                                  readOnly
+                                  rows={4}
+                                  defaultValue={template.snippet}
+                                />
+                              </div>
+                            ))}
+                          </fieldset>
                           <form
                             className="provider-edit-form"
                             action="/api/agent-api-keys"

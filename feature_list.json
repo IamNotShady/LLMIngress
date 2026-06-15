@@ -995,8 +995,8 @@
         "feat-052",
         "feat-059"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-077 unit tests because apps/console/src/server/agent-integrations.ts did not exist, and E2E red because the one-time Agent API key page did not expose Codex setup snippets. Added shared Agent integration template generation for Codex, Claude Code, Cursor, and OpenClaw; one-time create/rotate pages now show copyable Gateway URL, API key, and model snippets with the plaintext key only in the no-store one-time response, while the Dashboard shows the same snippets using a prefix-based Agent API key placeholder plus resolved default/allowed Virtual Model name. Code review found no P2+ logic issues; lint found and fixed an accessibility issue by rendering the Dashboard snippet group as fieldset/legend. Verification passed: feat-077 unit tests (3), real Chromium/PostgreSQL Console E2E (1), pnpm run lint, pnpm run verify, full verify:features passed all 76 prior passing features before marking, and final verify:features passed all 77 passing features after marking."
     },
     {
       "id": "feat-078",

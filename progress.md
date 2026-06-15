@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 12:51 AWST
+**Last Updated:** 2026-06-15 13:48 AWST
 **Active Feature:** none — all 56 MVP features (feat-001 through feat-056) are `passing`
 
 ## Status
@@ -34,6 +34,7 @@
   - Added a protected browser-only Playground that accepts a user-pasted Agent API key, loads allowed Virtual Models from Gateway `GET /v1/models`, and sends a live `POST /v1/chat/completions` directly from the browser to Gateway.
   - Added Gateway CORS support for default local Console origins and explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
   - Review follow-up fixed blank/relative Gateway base URLs so the Playground cannot accidentally send the pasted key to Console same-origin paths.
+  - Bugfix: Gateway fetch failures now show a status message instead of unhandled browser rejections.
   - Verification passed: feat-049 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-050 — MVP Happy Path E2E (passing)**:
   - Added a clean-run MVP happy path E2E covering Console setup, price configuration, Provider API key storage, Virtual Model, Route Policy, Agent, Agent API key access, limits, Gateway request, Activity/Usage visibility, and Route Policy hot reload without restarting Gateway.
@@ -65,8 +66,9 @@
 - [x] **feat-056 — Console Provider Model Refresh Button (passing)**:
   - Added an authenticated Console Provider-card button that enqueues a `model_refresh` job and wakes the Worker via `job_created`.
   - Added a queued status message after refresh submission.
+  - Bugfix: `model_refresh` now decrypts and sends the saved Provider API key for API-key Providers, and Provider cards list discovered models after refresh.
   - E2E verifies a real Console click, Worker model refresh, and refreshed provider model availability in the Route Policy selector without manual SQL.
-  - Verification passed: feat-056 unit tests (3), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 55 prior passing features before marking, and final full regression of all 56 passing features after marking.
+  - Verification passed: feat-056 unit tests (3), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 55 prior passing features before marking, and final full regression of all 56 passing features after the API-key refresh bugfix.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -99,6 +101,7 @@
   - Added pnpm setup/cache in the workflow.
   - Added GitHub Actions Node 24 opt-in to avoid the upcoming Node 20 action runtime deprecation window.
   - Kept migration validation out of base CI; `feat-055` still owns that later.
+  - Regression-speed follow-up: `verify:features` now uses the dedicated feat-005 unit/E2E workflow contract tests instead of rerunning full install/lint/typecheck/unit/E2E/build and GitHub Actions status inside feat-005.
 - [x] **feat-006 — Bootstrap Runtime Configuration (passing)**:
   - Added `packages/config` bootstrap runtime loader for environment and JSON bootstrap config files.
   - Covers gateway/console ports, worker heartbeat, PostgreSQL `DATABASE_URL`, and inline/file master key sources.

@@ -7,8 +7,11 @@ import { selectRouteCandidate } from "../../apps/gateway/src/route-engine";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
+
+const masterKeySource = { kind: "inline" as const, value: "test-master-key" };
 
 test("missing referenced model marked unavailable excluded from routing and warning visible", async ({
   browser,
@@ -28,6 +31,7 @@ test("missing referenced model marked unavailable excluded from routing and warn
       id: providerId,
       providerKey: "openai",
     });
+    await insertProviderApiKey(fixture, providerId);
     await runModelRefreshJob(fixture, providerId);
 
     const oldReferencedModelId = await readProviderModelId(fixture, providerId, "old-referenced");
@@ -122,6 +126,17 @@ async function insertProvider(fixture: Fixture, input: ProviderInput): Promise<v
   );
 }
 
+async function insertProviderApiKey(fixture: Fixture, providerId: string): Promise<void> {
+  const encrypted = createSecretEncryption(masterKeySource).encrypt("sk-model-soft-delete-secret");
+  await fixture.query(
+    `
+      insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id)
+      values ($1, $2, 'sk-model', $3, $4)
+    `,
+    [randomUUID(), providerId, JSON.stringify(encrypted), encrypted.keyId],
+  );
+}
+
 async function insertRoutePolicy(
   fixture: Fixture,
   input: { oldReferencedModelId: string; stableModelId: string },
@@ -160,7 +175,10 @@ async function runModelRefreshJob(fixture: Fixture, providerId: string): Promise
   const runner = createPostgresJobRunner({
     databaseUrl: fixture.databaseUrl,
     handlers: {
-      model_refresh: createModelRefreshJobHandler({ databaseUrl: fixture.databaseUrl }),
+      model_refresh: createModelRefreshJobHandler({
+        databaseUrl: fixture.databaseUrl,
+        masterKeySource,
+      }),
     },
     workerId: `worker-model-soft-delete-${randomUUID()}`,
   });

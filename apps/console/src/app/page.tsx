@@ -138,6 +138,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
+  const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
   const modelRefreshProvider = providers.find((provider) => provider.id === modelRefreshProviderId);
   const agentApiKeysByAgentId = groupByAgentId(agentApiKeys);
   const agentApiKeyVirtualModelAccessById = new Map(
@@ -919,6 +920,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
           ) : (
             providers.map((provider) => {
               const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
+              const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
 
               return (
                 <article className="provider-item" key={provider.id}>
@@ -976,6 +978,18 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                       </>
                     ) : (
                       <p>No Provider API key saved.</p>
+                    )}
+                  </div>
+                  <div className="provider-model-metadata">
+                    {providerModels.length === 0 ? (
+                      <p>No provider models discovered yet.</p>
+                    ) : (
+                      <p>
+                        Provider models:{" "}
+                        {providerModels
+                          .map((model) => `${model.modelDisplayName} (${model.modelId})`)
+                          .join(", ")}
+                      </p>
                     )}
                   </div>
                   <form className="provider-key-form" action="/api/provider-keys" method="post">
@@ -1116,6 +1130,20 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
 
 function providerModelSelectSize(optionCount: number): number {
   return Math.min(6, Math.max(2, optionCount));
+}
+
+function groupProviderModelsByProviderId(
+  providerModels: Awaited<ReturnType<typeof listProviderModelOptions>>,
+) {
+  const grouped = new Map<string, typeof providerModels>();
+
+  for (const providerModel of providerModels) {
+    const models = grouped.get(providerModel.providerId) ?? [];
+    models.push(providerModel);
+    grouped.set(providerModel.providerId, models);
+  }
+
+  return grouped;
 }
 
 function virtualModelSelectSize(optionCount: number): number {

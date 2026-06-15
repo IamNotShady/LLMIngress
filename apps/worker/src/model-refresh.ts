@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { type ConfigChange, createConfigPublisher } from "@llmingress/config";
+import type { MasterKeySource } from "@llmingress/security/master-key";
+import {
+  createSecretEncryption,
+  type EncryptedSecret,
+} from "@llmingress/security/secret-encryption";
 import { Client, type QueryResultRow } from "pg";
 import type { JobHandler } from "./job-runner.js";
 
@@ -40,6 +45,7 @@ export type ProviderModelRefreshResult = {
 type CreateModelRefreshJobHandlerOptions = {
   databaseUrl: string;
   fetch?: typeof globalThis.fetch;
+  masterKeySource?: MasterKeySource;
 };
 
 type RefreshProviderModelsOptions = CreateModelRefreshJobHandlerOptions & {
@@ -56,6 +62,7 @@ type ProviderRow = QueryResultRow & {
   display_name: string;
   id: string;
   provider_key: string;
+  provider_type: "api_key" | "local";
 };
 
 type ProviderModelRow = QueryResultRow & {
@@ -155,7 +162,15 @@ export async function refreshProviderModels(
 ): Promise<ProviderModelRefreshResult> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const provider = await readProvider(options.databaseUrl, options.providerId);
-  const listedModels = await fetchListedProviderModels(fetchImpl, provider);
+  const apiKey =
+    provider.provider_type === "api_key"
+      ? await readProviderApiKey({
+          databaseUrl: options.databaseUrl,
+          masterKeySource: options.masterKeySource ?? readWorkerMasterKeySource(),
+          providerId: provider.id,
+        })
+      : null;
+  const listedModels = await fetchListedProviderModels(fetchImpl, provider, apiKey);
   const existingModels = await readExistingProviderModels(options.databaseUrl, provider.id);
   const plan = planProviderModelRefresh({ existingModels, listedModels });
   const writePlan = (client: QueryClient) =>
@@ -207,7 +222,7 @@ async function readProvider(databaseUrl: string, providerId: string): Promise<Pr
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
-        select id::text, provider_key, display_name, base_url
+        select id::text, provider_type, provider_key, display_name, base_url
         from providers
         where id = $1
           and enabled = true
@@ -261,10 +276,13 @@ async function readExistingProviderModels(
 async function fetchListedProviderModels(
   fetchImpl: typeof globalThis.fetch,
   provider: ProviderRow,
+  apiKey: string | null,
 ): Promise<ListedProviderModel[]> {
-  const response = await fetchImpl(buildModelsUrl(provider.base_url as string), {
-    method: "GET",
+  const request = buildProviderModelListRequest({
+    apiKey,
+    baseUrl: provider.base_url as string,
   });
+  const response = await fetchImpl(request.url, request.init);
   const body = await readResponseBody(response);
 
   if (!response.ok) {
@@ -272,6 +290,24 @@ async function fetchListedProviderModels(
   }
 
   return parseProviderModelList(body);
+}
+
+export function buildProviderModelListRequest(input: { apiKey?: string | null; baseUrl: string }): {
+  init: RequestInit;
+  url: string;
+} {
+  const init: RequestInit = { method: "GET" };
+
+  if (input.apiKey) {
+    init.headers = {
+      authorization: `Bearer ${input.apiKey}`,
+    };
+  }
+
+  return {
+    init,
+    url: buildModelsUrl(input.baseUrl),
+  };
 }
 
 function parseProviderModelList(body: unknown): ListedProviderModel[] {
@@ -375,6 +411,62 @@ function readProviderId(payload: unknown): string {
     return payload.providerId;
   }
   throw new Error("model_refresh job payload requires providerId.");
+}
+
+async function readProviderApiKey(input: {
+  databaseUrl: string;
+  masterKeySource: MasterKeySource;
+  providerId: string;
+}): Promise<string> {
+  const encrypted = await withClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{ encrypted_key: unknown }>(
+      `
+        select encrypted_key
+        from provider_api_keys
+        where provider_id = $1
+      `,
+      [input.providerId],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error("Provider API key was not found.");
+    }
+    return readEncryptedSecret(row.encrypted_key);
+  });
+
+  return createSecretEncryption(input.masterKeySource).decrypt(encrypted);
+}
+
+function readWorkerMasterKeySource(
+  env: Record<string, string | undefined> = process.env,
+): MasterKeySource {
+  const inlineKey = env.MASTER_KEY;
+  if (inlineKey?.trim()) {
+    return { kind: "inline", value: inlineKey };
+  }
+
+  const keyFile = env.MASTER_KEY_FILE;
+  if (keyFile?.trim()) {
+    return { kind: "file", path: keyFile };
+  }
+
+  throw new Error("MASTER_KEY or MASTER_KEY_FILE is required for provider model refresh.");
+}
+
+function readEncryptedSecret(value: unknown): EncryptedSecret {
+  if (
+    isRecord(value) &&
+    value.version === 1 &&
+    value.algorithm === "aes-256-gcm" &&
+    typeof value.keyId === "string" &&
+    typeof value.iv === "string" &&
+    typeof value.ciphertext === "string" &&
+    typeof value.authTag === "string"
+  ) {
+    return value as EncryptedSecret;
+  }
+
+  throw new Error("Stored provider API key is not a valid encrypted secret.");
 }
 
 function buildModelsUrl(baseUrl: string): string {

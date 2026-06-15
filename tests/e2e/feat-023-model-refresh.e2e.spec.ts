@@ -3,7 +3,10 @@ import { expect, test } from "@playwright/test";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 import { createFakeProviderServer } from "../support/fake-provider";
+
+const masterKeySource = { kind: "inline" as const, value: "test-master-key" };
 
 test("model refresh writes derived rows marks missing referenced models unavailable and publishes config version only on routing-visible change", async () => {
   const fixture = await createTestPostgresFixture({
@@ -21,6 +24,7 @@ test("model refresh writes derived rows marks missing referenced models unavaila
       id: providerId,
       providerKey: "openai",
     });
+    await insertProviderApiKey(fixture, providerId);
 
     await runModelRefreshJob(fixture, providerId);
 
@@ -70,7 +74,10 @@ async function runModelRefreshJob(fixture: Fixture, providerId: string): Promise
   const runner = createPostgresJobRunner({
     databaseUrl: fixture.databaseUrl,
     handlers: {
-      model_refresh: createModelRefreshJobHandler({ databaseUrl: fixture.databaseUrl }),
+      model_refresh: createModelRefreshJobHandler({
+        databaseUrl: fixture.databaseUrl,
+        masterKeySource,
+      }),
     },
     workerId: `worker-model-refresh-${randomUUID()}`,
   });
@@ -103,6 +110,17 @@ async function insertProvider(fixture: Fixture, input: ProviderInput): Promise<v
       values ($1, 'api_key', $2, $3, $4, true)
     `,
     [input.id, input.providerKey, input.providerKey, input.baseUrl],
+  );
+}
+
+async function insertProviderApiKey(fixture: Fixture, providerId: string): Promise<void> {
+  const encrypted = createSecretEncryption(masterKeySource).encrypt("sk-model-refresh-secret");
+  await fixture.query(
+    `
+      insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id)
+      values ($1, $2, 'sk-model', $3, $4)
+    `,
+    [randomUUID(), providerId, JSON.stringify(encrypted), encrypted.keyId],
   );
 }
 

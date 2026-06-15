@@ -14,8 +14,10 @@ test("console refresh models button enqueues job worker refreshes models and rou
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_model_refresh_button_${randomUUID().replaceAll("-", "_")}`,
   });
+  const providerApiKey = "sk-refresh-button-secret";
   const provider = await createFakeProviderServer({
     models: [{ id: "refresh-button-model", name: "Refresh Button Model" }],
+    requiredModelListAuthorization: `Bearer ${providerApiKey}`,
   });
   const providerId = randomUUID();
 
@@ -43,6 +45,7 @@ test("console refresh models button enqueues job worker refreshes models and rou
           await waitForConsole(consoleBaseUrl, consoleApp);
           await signInFromFirstRun(page, consoleBaseUrl);
 
+          await storeProviderApiKey(page, providerApiKey);
           await createVirtualModel(page);
           await expect(page.getByText("No provider models available.")).toBeVisible();
 
@@ -54,8 +57,18 @@ test("console refresh models button enqueues job worker refreshes models and rou
           await expect
             .poll(() => readLatestModelRefreshJob(fixture, providerId))
             .toMatchObject({ status: "succeeded" });
+          expect(
+            provider.requests.find((request) => request.path.endsWith("/models")),
+          ).toMatchObject({
+            headers: {
+              authorization: `Bearer ${providerApiKey}`,
+            },
+          });
 
           await page.reload();
+          await expect(
+            page.getByText("Provider models: Refresh Button Model (refresh-button-model)"),
+          ).toBeVisible();
           await page.getByLabel("Route policy virtual model").selectOption({
             label: "Refresh Button VM (refresh-button-vm)",
           });
@@ -99,6 +112,14 @@ async function insertProvider(
     `,
     [input.id, input.baseUrl],
   );
+}
+
+async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<void> {
+  await page.getByLabel("Provider API key").fill(providerApiKey);
+  await page.getByRole("button", { name: "Store provider API key" }).click();
+  await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
+  await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await expect(page.getByText("Provider API key prefix: sk-refre")).toBeVisible();
 }
 
 async function createVirtualModel(page: Page): Promise<void> {

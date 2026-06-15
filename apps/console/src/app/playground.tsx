@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   buildPlaygroundChatRequest,
+  formatPlaygroundFetchError,
   isValidPlaygroundGatewayBaseUrl,
   normalizePlaygroundGatewayBaseUrl,
   readPlaygroundResponseText,
@@ -38,11 +39,17 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
       return;
     }
 
-    const response = await fetch(`${normalizedGatewayBaseUrl}/v1/models`, {
-      headers: {
-        authorization: `Bearer ${agentApiKey}`,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${normalizedGatewayBaseUrl}/v1/models`, {
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+        },
+      });
+    } catch (error) {
+      setStatus(formatPlaygroundFetchError("loading allowed models", error));
+      return;
+    }
     const body = await response.json().catch(() => null);
 
     if (!response.ok) {
@@ -66,20 +73,27 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
     }
 
     const requestId = createPlaygroundRequestId();
-    const response = await fetch(`${normalizedGatewayBaseUrl}/v1/chat/completions`, {
-      body: JSON.stringify(
-        buildPlaygroundChatRequest({
-          model: selectedModel,
-          prompt,
-        }),
-      ),
-      headers: {
-        authorization: `Bearer ${agentApiKey}`,
-        "content-type": "application/json",
-        "x-request-id": requestId,
-      },
-      method: "POST",
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${normalizedGatewayBaseUrl}/v1/chat/completions`, {
+        body: JSON.stringify(
+          buildPlaygroundChatRequest({
+            model: selectedModel,
+            prompt,
+          }),
+        ),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+          "x-request-id": requestId,
+        },
+        method: "POST",
+      });
+    } catch (error) {
+      setResult(null);
+      setStatus(formatPlaygroundFetchError("sending a live request", error));
+      return;
+    }
     const body = await response.json().catch(() => null);
 
     if (!response.ok) {

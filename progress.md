@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 00:01 AWST
-**Active Feature:** none — 63 tracked features are `passing`; 32 V1 features are `pending`
+**Last Updated:** 2026-06-16 00:18 AWST
+**Active Feature:** none — 64 tracked features are `passing`; 31 V1 features are `pending`
 
 ## Status
 
@@ -29,6 +29,13 @@
   - Representative fake-provider E2E proves the generic OpenAI-compatible adapter sends the expected chat payload and Authorization Bearer header.
   - Code review found and fixed a P2 regional endpoint issue by using the international Moonshot/Kimi and Z.ai base URLs.
   - Verification passed: feat-063 unit tests (4), real Chromium/fake-provider E2E (1), related feat-020/021/062 unit and E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, full regression of all 62 prior passing features before marking, and final `pnpm run verify:features` across all 63 passing features after marking and P2 endpoint correction.
+- [x] **feat-064 — V1 Local Provider Templates (passing)**:
+  - Added LM Studio and llama.cpp local OpenAI-compatible templates with user-provided local/private base URLs.
+  - Templates expose fixed `/models` and `/chat/completions` paths, fixed capability metadata, and per-template base URL placeholders in the Console selector.
+  - Public network URLs require explicit risk confirmation; legacy local Provider creation still requires whitelisted templates.
+  - Added migration `0010_local_provider_templates` so the database whitelist accepts `lmstudio` and `llama_cpp`.
+  - Code review found no P2+ issues after checking whitelist scope, public URL confirmation, template paths, and migration coverage.
+  - Verification passed: feat-064 unit tests (4), real Chromium/fake-provider E2E (1), related feat-021/062/063 unit regressions, related feat-062 E2E, `pnpm run db:migrate:check`, `pnpm run verify`, full regression of all 63 prior passing features before marking, and final `pnpm run verify:features` across all 64 passing features after marking.
 - [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
   - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
   - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.

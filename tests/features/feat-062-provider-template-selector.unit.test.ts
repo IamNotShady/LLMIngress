@@ -36,8 +36,8 @@ describe("feat-062 provider template selector", () => {
     expect(localGroup).toEqual({
       id: "local",
       label: "Local templates",
-      templates: [
-        {
+      templates: expect.arrayContaining([
+        expect.objectContaining({
           baseUrlMode: "user_local_private",
           capabilities: ["chat_completions"],
           chatPath: "/api/chat",
@@ -46,8 +46,8 @@ describe("feat-062 provider template selector", () => {
           modelListPath: "/api/tags",
           providerKey: "ollama",
           providerType: "local",
-        },
-      ],
+        }),
+      ]),
     });
   });
 

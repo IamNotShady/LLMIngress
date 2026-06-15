@@ -11,6 +11,7 @@ export type OpenAICompatibleProviderTemplateId =
   | "xai"
   | "zai";
 export type OllamaProviderTemplateId = "ollama";
+export type LocalProviderTemplateId = OllamaProviderTemplateId | "lmstudio" | "llama_cpp";
 export type ProviderTemplateSelectorGroupId = "remote_api_key" | "local";
 export type ProviderTemplateSelectorCapability = "chat_completions" | "streaming" | "tools";
 export type ProviderTemplateAuthBehavior = {
@@ -37,13 +38,18 @@ export type OpenAICompatibleProviderTemplate = ProviderTemplateCreateInput & {
   id: OpenAICompatibleProviderTemplateId;
 };
 
-export type OllamaProviderTemplate = {
+export type LocalProviderTemplate = {
+  baseUrlPlaceholder: string;
+  capabilities: ProviderTemplateSelectorCapability[];
   chatPath: string;
   displayName: string;
-  id: OllamaProviderTemplateId;
+  id: LocalProviderTemplateId;
   modelListPath: string;
   providerKey: string;
   providerType: ProviderType;
+};
+export type OllamaProviderTemplate = LocalProviderTemplate & {
+  id: OllamaProviderTemplateId;
 };
 
 export type ProviderTemplateFormInput = {
@@ -55,11 +61,12 @@ export type ProviderTemplateFormInput = {
 export type ProviderTemplateSelectorItem = {
   auth?: ProviderTemplateAuthBehavior;
   baseUrlMode: "fixed_remote" | "user_local_private";
+  baseUrlPlaceholder?: string;
   capabilities: ProviderTemplateSelectorCapability[];
   chatPath?: string;
   displayName: string;
   fixedBaseUrl?: string;
-  id: OpenAICompatibleProviderTemplateId | OllamaProviderTemplateId;
+  id: OpenAICompatibleProviderTemplateId | LocalProviderTemplateId;
   modelListPath?: string;
   providerKey: string;
   providerType: ProviderType;
@@ -130,13 +137,37 @@ const templates: Record<OpenAICompatibleProviderTemplateId, OpenAICompatibleProv
   }),
 };
 
-const ollamaTemplate: OllamaProviderTemplate = {
-  chatPath: "/api/chat",
-  displayName: "Ollama",
-  id: "ollama",
-  modelListPath: "/api/tags",
-  providerKey: "ollama",
-  providerType: "local",
+const localTemplates: Record<LocalProviderTemplateId, LocalProviderTemplate> = {
+  ollama: {
+    baseUrlPlaceholder: "http://127.0.0.1:11434",
+    capabilities: ["chat_completions"],
+    chatPath: "/api/chat",
+    displayName: "Ollama",
+    id: "ollama",
+    modelListPath: "/api/tags",
+    providerKey: "ollama",
+    providerType: "local",
+  },
+  lmstudio: {
+    baseUrlPlaceholder: "http://127.0.0.1:1234/v1",
+    capabilities: ["chat_completions", "streaming", "tools"],
+    chatPath: "/chat/completions",
+    displayName: "LM Studio",
+    id: "lmstudio",
+    modelListPath: "/models",
+    providerKey: "lmstudio",
+    providerType: "local",
+  },
+  llama_cpp: {
+    baseUrlPlaceholder: "http://127.0.0.1:8080/v1",
+    capabilities: ["chat_completions", "streaming", "tools"],
+    chatPath: "/chat/completions",
+    displayName: "llama.cpp",
+    id: "llama_cpp",
+    modelListPath: "/models",
+    providerKey: "llama_cpp",
+    providerType: "local",
+  },
 };
 
 export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProviderTemplate[] {
@@ -144,7 +175,11 @@ export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProvide
 }
 
 export function listOllamaProviderTemplates(): OllamaProviderTemplate[] {
-  return [copyOllamaTemplate(ollamaTemplate)];
+  return [copyOllamaTemplate(localTemplates.ollama as OllamaProviderTemplate)];
+}
+
+export function listLocalProviderTemplates(): LocalProviderTemplate[] {
+  return Object.values(localTemplates).map(copyLocalTemplate);
 }
 
 export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGroup[] {
@@ -166,9 +201,10 @@ export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGr
     {
       id: "local",
       label: "Local templates",
-      templates: listOllamaProviderTemplates().map((template) => ({
+      templates: listLocalProviderTemplates().map((template) => ({
         baseUrlMode: "user_local_private",
-        capabilities: ["chat_completions"],
+        baseUrlPlaceholder: template.baseUrlPlaceholder,
+        capabilities: [...template.capabilities],
         chatPath: template.chatPath,
         displayName: template.displayName,
         id: template.id,
@@ -197,14 +233,24 @@ export function getOllamaProviderTemplate(
     throw new Error("Provider must use a whitelisted provider template.");
   }
 
-  return copyOllamaTemplate(ollamaTemplate);
+  return copyOllamaTemplate(localTemplates.ollama as OllamaProviderTemplate);
+}
+
+export function getLocalProviderTemplate(
+  templateId: string | null | undefined,
+): LocalProviderTemplate {
+  if (!isLocalProviderTemplateId(templateId)) {
+    throw new Error("Provider must use a whitelisted provider template.");
+  }
+
+  return copyLocalTemplate(localTemplates[templateId]);
 }
 
 export function normalizeProviderTemplateFormInput(
   input: ProviderTemplateFormInput,
 ): ProviderTemplateCreateInput {
-  if (input.templateId === "ollama") {
-    return normalizeOllamaTemplateFormInput(input);
+  if (isLocalProviderTemplateId(input.templateId)) {
+    return normalizeLocalTemplateFormInput(input);
   }
 
   if (input.baseUrl?.trim()) {
@@ -215,22 +261,26 @@ export function normalizeProviderTemplateFormInput(
 }
 
 export function isKnownProviderTemplateKey(providerKey: string): boolean {
-  return isOpenAICompatibleProviderTemplateId(providerKey) || providerKey === "ollama";
+  return (
+    isOpenAICompatibleProviderTemplateId(providerKey) || isLocalProviderTemplateId(providerKey)
+  );
 }
 
-function normalizeOllamaTemplateFormInput(
+function normalizeLocalTemplateFormInput(
   input: ProviderTemplateFormInput,
 ): ProviderTemplateCreateInput {
-  const template = getOllamaProviderTemplate(input.templateId);
+  const template = getLocalProviderTemplate(input.templateId);
   const baseUrl = input.baseUrl?.trim();
 
   if (!baseUrl) {
-    throw new Error("Ollama base URL is required.");
+    throw new Error(`${template.displayName} base URL is required.`);
   }
 
   const url = readHttpUrl(baseUrl);
   if (requiresPublicNetworkRiskConfirmation(url) && !readRiskAccepted(input)) {
-    throw new Error("Ollama public network URL requires explicit risk confirmation.");
+    throw new Error(
+      `${template.displayName} public network URL requires explicit risk confirmation.`,
+    );
   }
 
   return {
@@ -249,6 +299,12 @@ function isOpenAICompatibleProviderTemplateId(
   return typeof value === "string" && Object.hasOwn(templates, value);
 }
 
+function isLocalProviderTemplateId(
+  value: string | null | undefined,
+): value is LocalProviderTemplateId {
+  return typeof value === "string" && Object.hasOwn(localTemplates, value);
+}
+
 function copyTemplate(
   template: OpenAICompatibleProviderTemplate,
 ): OpenAICompatibleProviderTemplate {
@@ -260,7 +316,17 @@ function copyTemplate(
 }
 
 function copyOllamaTemplate(template: OllamaProviderTemplate): OllamaProviderTemplate {
-  return { ...template };
+  return {
+    ...template,
+    capabilities: [...template.capabilities],
+  };
+}
+
+function copyLocalTemplate(template: LocalProviderTemplate): LocalProviderTemplate {
+  return {
+    ...template,
+    capabilities: [...template.capabilities],
+  };
 }
 
 function readOpenAICompatibleCapabilities(

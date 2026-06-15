@@ -807,8 +807,8 @@
         "feat-021",
         "feat-062"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-064 unit tests because LM Studio and llama.cpp were missing from the local template selector/normalizer and no 0010 migration allowed their template ids; E2E red because the real Console did not show the LM Studio local template. Added LM Studio and llama.cpp local OpenAI-compatible templates with local/private user-provided base URLs, template-defined /models and /chat/completions paths, fixed capability metadata, per-template placeholders, public network risk confirmation, and 0010 provider_template_id whitelist migration. Code review found no P2+ issues after checking whitelist scope, public URL confirmation, template paths, and migration coverage. Verification passed — feat-064 unit tests 4 passed, real Chromium/fake-provider E2E 1 passed, related feat-021/062/063 unit regressions passed, related feat-062 E2E passed, db:migrate:check passed, pnpm run verify passed, verify:features passed all 63 prior passing features before marking, and final verify:features passed all 64 passing features after marking."
     },
     {
       "id": "feat-065",

@@ -2,17 +2,48 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
+import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
-test("provider template selector lists categories fixed capabilities and rejects arbitrary endpoints", async ({
+test("local provider templates enforce local private urls template paths and public risk confirmation", async ({
   browser,
 }) => {
+  const server = await createFakeProviderServer();
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_provider_selector_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_local_templates_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
+    const adapter = createOpenAIProviderAdapter();
+    const adapterResult = await adapter.chatCompletion({
+      request: {
+        messages: [{ role: "user", content: "Say hi from local template" }],
+        stream: false,
+      },
+      target: {
+        apiKey: "sk-local-template",
+        baseUrl: `${server.url}/v1`,
+        modelId: "local-template-model",
+      },
+    });
+
+    expect(adapterResult).toMatchObject({
+      ok: true,
+      providerRequestId: "fake-provider-response",
+      statusCode: 200,
+    });
+    expect(server.requests[0]).toMatchObject({
+      bodyJson: {
+        messages: [{ role: "user", content: "Say hi from local template" }],
+        model: "local-template-model",
+        stream: false,
+      },
+      method: "POST",
+      path: "/v1/chat/completions",
+    });
+
     await runMigrations({ databaseUrl: fixture.databaseUrl });
 
     await withProcessLock("llmingress-console-next-dev", async () => {
@@ -30,65 +61,70 @@ test("provider template selector lists categories fixed capabilities and rejects
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
-          const remoteTemplates = page.getByRole("group", {
-            name: "Remote API-key templates",
-          });
-          const deepSeekTemplate = remoteTemplates.locator(".provider-template-card").filter({
-            has: page.getByRole("heading", { name: "DeepSeek" }),
-          });
-          await expect(deepSeekTemplate.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
-          await expect(
-            deepSeekTemplate.getByText("Fixed base URL: https://api.deepseek.com"),
-          ).toBeVisible();
-          await expect(
-            deepSeekTemplate.getByText("Auth: Authorization Bearer API key"),
-          ).toBeVisible();
-          await expect(
-            deepSeekTemplate.getByText("Capabilities: Chat completions, Streaming, Tools"),
-          ).toBeVisible();
-
           const localTemplates = page.getByRole("group", { name: "Local templates" });
-          const ollamaTemplate = localTemplates.locator(".provider-template-card").filter({
-            has: page.getByRole("heading", { name: "Ollama" }),
-          });
-          await expect(ollamaTemplate.getByRole("heading", { name: "Ollama" })).toBeVisible();
-          await expect(
-            ollamaTemplate.getByText("Base URL: user-provided local/private URL"),
-          ).toBeVisible();
-          await expect(ollamaTemplate.getByText("Model list path: /api/tags")).toBeVisible();
-          await expect(ollamaTemplate.getByText("Chat path: /api/chat")).toBeVisible();
-          await expect(ollamaTemplate.getByText("Capabilities: Chat completions")).toBeVisible();
+          for (const [displayName, placeholder] of [
+            ["LM Studio", "http://127.0.0.1:1234/v1"],
+            ["llama.cpp", "http://127.0.0.1:8080/v1"],
+          ] as const) {
+            const templateCard = localTemplates.locator(".provider-template-card").filter({
+              has: page.getByRole("heading", { name: displayName }),
+            });
+            await expect(templateCard.getByRole("heading", { name: displayName })).toBeVisible();
+            await expect(
+              templateCard.getByText("Base URL: user-provided local/private URL"),
+            ).toBeVisible();
+            await expect(templateCard.getByText("Model list path: /models")).toBeVisible();
+            await expect(templateCard.getByText("Chat path: /chat/completions")).toBeVisible();
+            await expect(
+              templateCard.getByText("Capabilities: Chat completions, Streaming, Tools"),
+            ).toBeVisible();
+            await expect(page.getByLabel(`${displayName} base URL`)).toHaveAttribute(
+              "placeholder",
+              placeholder,
+            );
+          }
 
-          await page.getByLabel("Provider template").selectOption("deepseek");
-          await page.getByRole("button", { name: "Add template provider" }).click();
-
-          const providerList = page.locator(".provider-list");
-          await expect(providerList.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
-          await expect(
-            providerList.getByText("Template provider base URL: https://api.deepseek.com"),
-          ).toBeVisible();
-
-          const customCreate = await postProviderForm(page, {
+          const publicCreate = await postProviderForm(page, {
             action: "createFromTemplate",
-            baseUrl: "https://arbitrary.example/v1",
-            templateId: "deepseek",
+            baseUrl: "https://lmstudio.example.com/v1",
+            templateId: "lmstudio",
           });
-          expect(customCreate.status).toBe(400);
-          expect(customCreate.body).toMatchObject({
-            error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
+          expect(publicCreate.status).toBe(400);
+          expect(publicCreate.body).toMatchObject({
+            error: expect.stringMatching(/public network.*risk confirmation/i),
           });
 
-          const legacyCustomCreate = await postProviderForm(page, {
-            action: "create",
-            baseUrl: "https://arbitrary.example/v1",
-            displayName: "Custom",
-            providerKey: "custom",
-            providerType: "api_key",
+          const loopbackCreate = await postProviderForm(page, {
+            action: "createFromTemplate",
+            baseUrl: `${server.url}/v1`,
+            templateId: "lmstudio",
           });
-          expect(legacyCustomCreate.status).toBe(400);
-          expect(legacyCustomCreate.body).toMatchObject({
-            error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
+          expect(loopbackCreate.status).toBe(200);
+
+          const privateCreate = await postProviderForm(page, {
+            action: "createFromTemplate",
+            baseUrl: "http://192.168.1.25:8080/v1",
+            templateId: "llama_cpp",
           });
+          expect(privateCreate.status).toBe(200);
+
+          const providers = await readLocalOpenAICompatibleProviders(fixture);
+          expect(providers).toEqual([
+            {
+              base_url: "http://192.168.1.25:8080/v1",
+              display_name: "llama.cpp",
+              provider_key: "llama_cpp",
+              provider_template_id: "llama_cpp",
+              provider_type: "local",
+            },
+            {
+              base_url: `${server.url}/v1`,
+              display_name: "LM Studio",
+              provider_key: "lmstudio",
+              provider_template_id: "lmstudio",
+              provider_type: "local",
+            },
+          ]);
         } finally {
           await context.close();
         }
@@ -98,6 +134,7 @@ test("provider template selector lists categories fixed capabilities and rejects
     });
   } finally {
     await fixture.dispose();
+    await server.close();
   }
 });
 
@@ -107,6 +144,28 @@ type ConsoleProcess = {
   stderr: string[];
   stdout: string[];
 };
+
+type LocalOpenAICompatibleProviderRow = {
+  base_url: string;
+  display_name: string;
+  provider_key: string;
+  provider_template_id: string;
+  provider_type: string;
+};
+
+async function readLocalOpenAICompatibleProviders(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+): Promise<LocalOpenAICompatibleProviderRow[]> {
+  const result = await fixture.query<LocalOpenAICompatibleProviderRow>(
+    `
+      select provider_type, provider_key, display_name, base_url, provider_template_id
+      from providers
+      where provider_template_id in ('lmstudio', 'llama_cpp')
+      order by provider_key
+    `,
+  );
+  return result.rows;
+}
 
 async function postProviderForm(
   page: Page,

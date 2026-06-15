@@ -12,6 +12,8 @@ describe("feat-021 Ollama local provider adapter", () => {
     const template = getOllamaProviderTemplate("ollama");
 
     expect(template).toEqual({
+      baseUrlPlaceholder: "http://127.0.0.1:11434",
+      capabilities: ["chat_completions"],
       chatPath: "/api/chat",
       displayName: "Ollama",
       id: "ollama",

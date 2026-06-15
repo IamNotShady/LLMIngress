@@ -919,7 +919,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                       id={`${template.id}-base-url`}
                       name="baseUrl"
                       type="url"
-                      placeholder="http://127.0.0.1:11434"
+                      placeholder={template.baseUrlPlaceholder ?? "http://127.0.0.1:11434"}
                       required
                     />
                     <label className="checkbox-label" htmlFor={`${template.id}-public-risk`}>

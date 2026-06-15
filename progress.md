@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 18:41 AWST
+**Last Updated:** 2026-06-15 19:26 AWST
 **Active Feature:** none — all 60 tracked features are `passing`
 
 ## Status
@@ -89,6 +89,11 @@
   - E2E starts a real Gateway against isolated PostgreSQL and fake provider, then verifies HTTP 200 under Agent-ready default limits, provider hit with forwarded tools, succeeded `request_activity`, `request_usage`, and estimated `request_costs`.
   - Code review found no P2+ issues; a minor review hardening restricted OpenAI `tool_choice` string modes.
   - Verification passed: feat-059 unit tests (2), real Gateway/PostgreSQL/fake-provider E2E (1), `pnpm run verify`, full regression of all 59 prior passing features before marking, and final `pnpm run verify:features` across all 60 passing features after marking.
+- [x] **Test env file loading**:
+  - Added a dependency-free test env loader that reads `.env` first and then `.env.local` when present; `.env.local` overrides `.env`, while shell-provided variables keep highest precedence.
+  - Wrapped `pnpm test`, `pnpm test:e2e`, `pnpm run verify:features`, and `pnpm run db:migrate:check` with `scripts/run-with-env.ts`.
+  - Added `.env.example` documenting current local/test/runtime environment variables, including the opt-in real provider smoke variables.
+  - Verification passed: env-loader unit tests, package-script Vitest path, opt-in real-provider Playwright skip path, `pnpm run verify`, and final `pnpm run verify:features` across all 60 passing features.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).

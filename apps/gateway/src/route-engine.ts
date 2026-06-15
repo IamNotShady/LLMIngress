@@ -1,4 +1,7 @@
-import { calculateTokenCostUsd } from "@llmingress/billing/price-registry";
+import {
+  calculateTokenCostUsd,
+  type PricedModelTokenPrice,
+} from "@llmingress/billing/price-registry";
 import type {
   GatewayConfigSnapshot,
   GatewayRouteCandidateSnapshot,
@@ -29,7 +32,7 @@ export type RouteDecision = {
 export type RouteReason = {
   estimatedCostUsd?: number;
   message: string;
-  priceSource?: "built_in_static_snapshot" | "manual_override";
+  priceSource?: PricedModelTokenPrice["source"];
   selectedCandidateOrder: number;
   strategy: GatewayRoutePolicyStrategy;
 };
@@ -37,7 +40,7 @@ export type RouteReason = {
 type CostCandidate = {
   candidate: GatewayRouteCandidateSnapshot;
   estimatedCostUsd: number;
-  priceSource: "built_in_static_snapshot" | "manual_override";
+  priceSource: PricedModelTokenPrice["source"];
 };
 
 export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecision {
@@ -159,7 +162,7 @@ function createDecision(input: {
   candidate: GatewayRouteCandidateSnapshot;
   estimatedCostUsd?: number;
   message: string;
-  priceSource?: "built_in_static_snapshot" | "manual_override";
+  priceSource?: PricedModelTokenPrice["source"];
   routePolicy: GatewayRoutePolicySnapshot;
 }): RouteDecision {
   return {

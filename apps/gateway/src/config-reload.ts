@@ -2,6 +2,7 @@ import {
   type ManualPriceOverride,
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
+  type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
 import {
   type ConfigChangedNotification,
@@ -84,6 +85,12 @@ type RoutePolicyCandidateRow = {
   providerKey: string;
   providerModelId: string;
   strategy: GatewayRoutePolicyStrategy;
+  syncedAt: Date | null;
+  syncedCachedInputUsdPerMillionTokens: string | null;
+  syncedInputUsdPerMillionTokens: string | null;
+  syncedOutputUsdPerMillionTokens: string | null;
+  syncedPriceVersion: string | null;
+  syncedSourceUrl: string | null;
   updatedAt: Date | null;
   virtualModelId: string;
   virtualModelName: string;
@@ -208,7 +215,19 @@ export async function loadGatewayConfigSnapshot(
                  as "inputUsdPerMillionTokens",
                model_price_overrides.output_usd_per_million_tokens::text
                  as "outputUsdPerMillionTokens",
-               model_price_overrides.updated_at as "updatedAt"
+               model_price_overrides.updated_at as "updatedAt",
+               latest_price_registry_snapshot.input_usd_per_million_tokens::text
+                 as "syncedInputUsdPerMillionTokens",
+               latest_price_registry_snapshot.cached_input_usd_per_million_tokens::text
+                 as "syncedCachedInputUsdPerMillionTokens",
+               latest_price_registry_snapshot.output_usd_per_million_tokens::text
+                 as "syncedOutputUsdPerMillionTokens",
+               latest_price_registry_snapshot.price_version
+                 as "syncedPriceVersion",
+               latest_price_registry_snapshot.source_url
+                 as "syncedSourceUrl",
+               latest_price_registry_snapshot.snapshot_at
+                 as "syncedAt"
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
         join route_policy_candidates
@@ -218,6 +237,19 @@ export async function loadGatewayConfigSnapshot(
         left join model_price_overrides
           on lower(model_price_overrides.provider_key) = lower(providers.provider_key)
          and model_price_overrides.model_id = provider_models.model_id
+        left join lateral (
+          select input_usd_per_million_tokens,
+                 cached_input_usd_per_million_tokens,
+                 output_usd_per_million_tokens,
+                 price_version,
+                 source_url,
+                 snapshot_at
+          from price_registry_snapshots
+          where lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+            and price_registry_snapshots.model_id = provider_models.model_id
+          order by snapshot_at desc, created_at desc
+          limit 1
+        ) latest_price_registry_snapshot on true
         where virtual_models.enabled = true
           and providers.enabled = true
           and provider_models.availability = 'available'
@@ -264,6 +296,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
         manualOverride: rowToManualPriceOverride(row),
         modelId: row.modelId,
         providerKey: row.providerKey,
+        syncedPrice: rowToSyncedPriceSnapshot(row),
       }),
       providerId: row.providerId,
       providerKey: row.providerKey,
@@ -289,6 +322,31 @@ function rowToManualPriceOverride(row: RoutePolicyCandidateRow): ManualPriceOver
     outputUsdPerMillionTokens: Number(row.outputUsdPerMillionTokens),
     providerKey: row.providerKey,
     updatedAt: row.updatedAt,
+  };
+}
+
+function rowToSyncedPriceSnapshot(row: RoutePolicyCandidateRow): SyncedPriceSnapshot | null {
+  if (
+    row.syncedInputUsdPerMillionTokens === null ||
+    row.syncedOutputUsdPerMillionTokens === null ||
+    row.syncedPriceVersion === null ||
+    row.syncedAt === null
+  ) {
+    return null;
+  }
+
+  return {
+    cachedInputUsdPerMillionTokens:
+      row.syncedCachedInputUsdPerMillionTokens === null
+        ? null
+        : Number(row.syncedCachedInputUsdPerMillionTokens),
+    inputUsdPerMillionTokens: Number(row.syncedInputUsdPerMillionTokens),
+    modelId: row.modelId,
+    outputUsdPerMillionTokens: Number(row.syncedOutputUsdPerMillionTokens),
+    priceVersion: row.syncedPriceVersion,
+    providerKey: row.providerKey,
+    sourceUrl: row.syncedSourceUrl,
+    syncedAt: row.syncedAt,
   };
 }
 

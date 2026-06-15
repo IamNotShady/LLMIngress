@@ -10,8 +10,8 @@ export type PricedModelTokenPrice = {
   outputUsdPerMillionTokens: number;
   priceVersion: string;
   providerKey: string;
-  snapshotDate: "2026-06-13";
-  source: "built_in_static_snapshot" | "manual_override";
+  snapshotDate: string;
+  source: "built_in_static_snapshot" | "manual_override" | "price_sync";
   sourceUrl: string;
   status: "priced";
   unit: "per_1m_tokens";
@@ -39,6 +39,17 @@ export type ManualPriceOverride = {
   outputUsdPerMillionTokens: number;
   providerKey: string;
   updatedAt: Date;
+};
+
+export type SyncedPriceSnapshot = {
+  cachedInputUsdPerMillionTokens?: number | null;
+  inputUsdPerMillionTokens: number;
+  modelId: string;
+  outputUsdPerMillionTokens: number;
+  priceVersion: string;
+  providerKey: string;
+  sourceUrl?: string | null;
+  syncedAt: Date;
 };
 
 export type EstimatedTokenCost = {
@@ -138,10 +149,31 @@ export function resolveModelTokenPrice(input: {
   };
 }
 
+export function listBuiltInModelTokenPrices(): PricedModelTokenPrice[] {
+  return [...priceRegistry.entries()]
+    .map(([key, entry]) => {
+      const separatorIndex = key.indexOf(":");
+      const modelId = separatorIndex === -1 ? key : key.slice(separatorIndex + 1);
+      return {
+        ...entry,
+        modelId,
+        priceVersion: BUILT_IN_PRICE_REGISTRY_VERSION,
+        snapshotDate: "2026-06-13",
+        source: "built_in_static_snapshot" as const,
+        status: "priced" as const,
+        unit: "per_1m_tokens" as const,
+      };
+    })
+    .sort((left, right) =>
+      `${left.providerKey}:${left.modelId}`.localeCompare(`${right.providerKey}:${right.modelId}`),
+    );
+}
+
 export function resolveEffectiveModelTokenPrice(input: {
   manualOverride?: ManualPriceOverride | null;
   modelId: string;
   providerKey: string;
+  syncedPrice?: SyncedPriceSnapshot | null;
 }): ModelTokenPrice {
   const providerKey = input.providerKey.trim().toLowerCase();
   const modelId = input.modelId.trim();
@@ -157,6 +189,26 @@ export function resolveEffectiveModelTokenPrice(input: {
       snapshotDate: "2026-06-13",
       source: "manual_override",
       sourceUrl: "manual://console/model-price-overrides",
+      status: "priced",
+      unit: "per_1m_tokens",
+    };
+  }
+
+  if (matchesSyncedPrice(input.syncedPrice, providerKey, modelId)) {
+    return {
+      ...(input.syncedPrice.cachedInputUsdPerMillionTokens !== null &&
+      input.syncedPrice.cachedInputUsdPerMillionTokens !== undefined
+        ? { cachedInputUsdPerMillionTokens: input.syncedPrice.cachedInputUsdPerMillionTokens }
+        : {}),
+      currency: "USD",
+      inputUsdPerMillionTokens: input.syncedPrice.inputUsdPerMillionTokens,
+      modelId,
+      outputUsdPerMillionTokens: input.syncedPrice.outputUsdPerMillionTokens,
+      priceVersion: input.syncedPrice.priceVersion,
+      providerKey,
+      snapshotDate: input.syncedPrice.syncedAt.toISOString().slice(0, 10),
+      source: "price_sync",
+      sourceUrl: input.syncedPrice.sourceUrl ?? "price-sync://snapshot",
       status: "priced",
       unit: "per_1m_tokens",
     };
@@ -238,6 +290,17 @@ function matchesManualOverride(
   return (
     manualOverride?.providerKey.trim().toLowerCase() === providerKey &&
     manualOverride.modelId.trim() === modelId
+  );
+}
+
+function matchesSyncedPrice(
+  syncedPrice: SyncedPriceSnapshot | null | undefined,
+  providerKey: string,
+  modelId: string,
+): syncedPrice is SyncedPriceSnapshot {
+  return (
+    syncedPrice?.providerKey.trim().toLowerCase() === providerKey &&
+    syncedPrice.modelId.trim() === modelId
   );
 }
 

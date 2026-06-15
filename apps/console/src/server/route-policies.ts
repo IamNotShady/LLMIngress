@@ -3,6 +3,7 @@ import {
   type ManualPriceOverride,
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
+  type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
@@ -88,6 +89,12 @@ type CandidateRow = QueryResultRow & {
   price_override_input_usd_per_million_tokens: string | null;
   price_override_output_usd_per_million_tokens: string | null;
   price_override_updated_at: Date | null;
+  price_sync_cached_input_usd_per_million_tokens: string | null;
+  price_sync_input_usd_per_million_tokens: string | null;
+  price_sync_output_usd_per_million_tokens: string | null;
+  price_sync_price_version: string | null;
+  price_sync_source_url: string | null;
+  price_sync_synced_at: Date | null;
   provider_display_name: string;
   provider_enabled: boolean;
   provider_id: string;
@@ -103,6 +110,12 @@ type ProviderModelOptionRow = QueryResultRow & {
   price_override_input_usd_per_million_tokens: string | null;
   price_override_output_usd_per_million_tokens: string | null;
   price_override_updated_at: Date | null;
+  price_sync_cached_input_usd_per_million_tokens: string | null;
+  price_sync_input_usd_per_million_tokens: string | null;
+  price_sync_output_usd_per_million_tokens: string | null;
+  price_sync_price_version: string | null;
+  price_sync_source_url: string | null;
+  price_sync_synced_at: Date | null;
   provider_display_name: string;
   provider_enabled: boolean;
   provider_id: string;
@@ -181,7 +194,13 @@ export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): str
     return "Unknown price";
   }
 
-  return price.source === "manual_override" ? "Priced (manual override)" : "Priced (built-in)";
+  if (price.source === "manual_override") {
+    return "Priced (manual override)";
+  }
+  if (price.source === "price_sync") {
+    return "Priced (price sync)";
+  }
+  return "Priced (built-in)";
 }
 
 export function formatProviderModelOptionLabel(input: {
@@ -243,6 +262,12 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                        model_price_overrides.input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
                        model_price_overrides.output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
                        model_price_overrides.updated_at as price_override_updated_at,
+                       latest_price_registry_snapshot.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+                       latest_price_registry_snapshot.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+                       latest_price_registry_snapshot.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+                       latest_price_registry_snapshot.price_version as price_sync_price_version,
+                       latest_price_registry_snapshot.source_url as price_sync_source_url,
+                       latest_price_registry_snapshot.snapshot_at as price_sync_synced_at,
                        route_policy_candidates.candidate_order,
                        route_policy_candidates.is_fallback
                 from route_policy_candidates
@@ -251,6 +276,19 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                 left join model_price_overrides
                   on model_price_overrides.provider_key = providers.provider_key
                  and model_price_overrides.model_id = provider_models.model_id
+                left join lateral (
+                  select input_usd_per_million_tokens,
+                         cached_input_usd_per_million_tokens,
+                         output_usd_per_million_tokens,
+                         price_version,
+                         source_url,
+                         snapshot_at
+                  from price_registry_snapshots
+                  where lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+                    and price_registry_snapshots.model_id = provider_models.model_id
+                  order by snapshot_at desc, created_at desc
+                  limit 1
+                ) latest_price_registry_snapshot on true
                 where route_policy_candidates.route_policy_id = any($1::uuid[])
                 order by route_policy_candidates.candidate_order
               `,
@@ -630,6 +668,78 @@ async function writeRoutePolicyCandidates(
                      and model_price_overrides.model_id = provider_models.model_id
                     where provider_models.id = route_policy_candidates.provider_model_id
                   ) as price_override_updated_at,
+                  (
+                    select price_registry_snapshots.input_usd_per_million_tokens::text
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join price_registry_snapshots
+                      on lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+                     and price_registry_snapshots.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                    order by price_registry_snapshots.snapshot_at desc,
+                             price_registry_snapshots.created_at desc
+                    limit 1
+                  ) as price_sync_input_usd_per_million_tokens,
+                  (
+                    select price_registry_snapshots.cached_input_usd_per_million_tokens::text
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join price_registry_snapshots
+                      on lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+                     and price_registry_snapshots.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                    order by price_registry_snapshots.snapshot_at desc,
+                             price_registry_snapshots.created_at desc
+                    limit 1
+                  ) as price_sync_cached_input_usd_per_million_tokens,
+                  (
+                    select price_registry_snapshots.output_usd_per_million_tokens::text
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join price_registry_snapshots
+                      on lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+                     and price_registry_snapshots.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                    order by price_registry_snapshots.snapshot_at desc,
+                             price_registry_snapshots.created_at desc
+                    limit 1
+                  ) as price_sync_output_usd_per_million_tokens,
+                  (
+                    select price_registry_snapshots.price_version
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join price_registry_snapshots
+                      on lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+                     and price_registry_snapshots.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                    order by price_registry_snapshots.snapshot_at desc,
+                             price_registry_snapshots.created_at desc
+                    limit 1
+                  ) as price_sync_price_version,
+                  (
+                    select price_registry_snapshots.source_url
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join price_registry_snapshots
+                      on lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+                     and price_registry_snapshots.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                    order by price_registry_snapshots.snapshot_at desc,
+                             price_registry_snapshots.created_at desc
+                    limit 1
+                  ) as price_sync_source_url,
+                  (
+                    select price_registry_snapshots.snapshot_at
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join price_registry_snapshots
+                      on lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+                     and price_registry_snapshots.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                    order by price_registry_snapshots.snapshot_at desc,
+                             price_registry_snapshots.created_at desc
+                    limit 1
+                  ) as price_sync_synced_at,
                   candidate_order,
                   is_fallback
       `,
@@ -680,12 +790,31 @@ function providerModelOptionsSelectSql(): string {
            provider_models.availability,
            model_price_overrides.input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
            model_price_overrides.output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
-           model_price_overrides.updated_at as price_override_updated_at
+           model_price_overrides.updated_at as price_override_updated_at,
+           latest_price_registry_snapshot.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+           latest_price_registry_snapshot.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+           latest_price_registry_snapshot.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+           latest_price_registry_snapshot.price_version as price_sync_price_version,
+           latest_price_registry_snapshot.source_url as price_sync_source_url,
+           latest_price_registry_snapshot.snapshot_at as price_sync_synced_at
     from provider_models
     join providers on providers.id = provider_models.provider_id
     left join model_price_overrides
       on model_price_overrides.provider_key = providers.provider_key
      and model_price_overrides.model_id = provider_models.model_id
+    left join lateral (
+      select input_usd_per_million_tokens,
+             cached_input_usd_per_million_tokens,
+             output_usd_per_million_tokens,
+             price_version,
+             source_url,
+             snapshot_at
+      from price_registry_snapshots
+      where lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
+        and price_registry_snapshots.model_id = provider_models.model_id
+      order by snapshot_at desc, created_at desc
+      limit 1
+    ) latest_price_registry_snapshot on true
   `;
 }
 
@@ -739,6 +868,7 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     manualOverride: rowToManualPriceOverride(row),
     modelId: row.model_id,
     providerKey: row.provider_key,
+    syncedPrice: rowToSyncedPriceSnapshot(row),
   });
   const priceStatusLabel = formatProviderModelPriceStatusLabel(price);
 
@@ -782,6 +912,31 @@ function rowToManualPriceOverride(row: ProviderModelOptionRow): ManualPriceOverr
     outputUsdPerMillionTokens: Number(row.price_override_output_usd_per_million_tokens),
     providerKey: row.provider_key,
     updatedAt: row.price_override_updated_at,
+  };
+}
+
+function rowToSyncedPriceSnapshot(row: ProviderModelOptionRow): SyncedPriceSnapshot | null {
+  if (
+    !row.price_sync_input_usd_per_million_tokens ||
+    !row.price_sync_output_usd_per_million_tokens ||
+    !row.price_sync_price_version ||
+    !row.price_sync_synced_at
+  ) {
+    return null;
+  }
+
+  return {
+    cachedInputUsdPerMillionTokens:
+      row.price_sync_cached_input_usd_per_million_tokens === null
+        ? null
+        : Number(row.price_sync_cached_input_usd_per_million_tokens),
+    inputUsdPerMillionTokens: Number(row.price_sync_input_usd_per_million_tokens),
+    modelId: row.model_id,
+    outputUsdPerMillionTokens: Number(row.price_sync_output_usd_per_million_tokens),
+    priceVersion: row.price_sync_price_version,
+    providerKey: row.provider_key,
+    sourceUrl: row.price_sync_source_url,
+    syncedAt: row.price_sync_synced_at,
   };
 }
 

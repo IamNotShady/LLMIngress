@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@llmingress/billing": "workspace:*",
     "@llmingress/config": "workspace:*",
     "@llmingress/security": "workspace:*",
     "pg": "^8.21.0"

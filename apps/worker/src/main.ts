@@ -7,6 +7,7 @@ import {
   createPostgresPeriodicScheduler,
   type PeriodicScheduler,
 } from "./periodic-scheduler.js";
+import { createPriceSyncJobHandler } from "./price-sync.js";
 import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
 import { createStaleReservationCleanupJobHandler } from "./stale-reservations.js";
 
@@ -26,6 +27,7 @@ export async function startWorker(options: StartWorkerOptions = {}) {
         provider_connectivity_check: createProviderConnectivityCheckJobHandler({
           databaseUrl: config.databaseUrl,
         }),
+        price_sync: createPriceSyncJobHandler({ databaseUrl: config.databaseUrl }),
         stale_reservation_cleanup: createStaleReservationCleanupJobHandler({
           databaseUrl: config.databaseUrl,
         }),

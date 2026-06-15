@@ -84,6 +84,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config

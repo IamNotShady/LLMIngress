@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
+import type { ManualPriceOverride, SyncedPriceSnapshot } from "@llmingress/billing/price-registry";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
@@ -57,6 +57,17 @@ type PriceOverrideRow = QueryResultRow & {
   output_usd_per_million_tokens: string;
   provider_key: string;
   updated_at: Date;
+};
+
+type SyncedPriceSnapshotRow = QueryResultRow & {
+  cached_input_usd_per_million_tokens: string | null;
+  input_usd_per_million_tokens: string;
+  model_id: string;
+  output_usd_per_million_tokens: string;
+  price_version: string;
+  provider_key: string;
+  source_url: string | null;
+  snapshot_at: Date;
 };
 
 type QueryClient = {
@@ -128,6 +139,7 @@ export function getCostBudgetPriceValidationError(input: {
   manualOverride: ManualPriceOverride | null;
   modelId: string;
   providerKey: string;
+  syncedPrice?: SyncedPriceSnapshot | null;
 }): string | null {
   const price = resolveEffectiveModelTokenPrice(input);
   if (price.status === "unknown_price") {
@@ -225,6 +237,7 @@ async function assertCostBudgetPriceKnown(
     manualOverride: await readManualPriceOverride(client, input),
     modelId: input.modelId,
     providerKey: input.providerKey,
+    syncedPrice: await readSyncedPriceSnapshot(client, input),
   });
   if (validationError) {
     throw new Error(validationError);
@@ -256,6 +269,46 @@ async function readManualPriceOverride(
         outputUsdPerMillionTokens: Number(row.output_usd_per_million_tokens),
         providerKey: row.provider_key,
         updatedAt: row.updated_at,
+      }
+    : null;
+}
+
+async function readSyncedPriceSnapshot(
+  client: QueryClient,
+  input: { modelId: string; providerKey: string },
+): Promise<SyncedPriceSnapshot | null> {
+  const result = await client.query<SyncedPriceSnapshotRow>(
+    `
+      select provider_key,
+             model_id,
+             input_usd_per_million_tokens::text,
+             cached_input_usd_per_million_tokens::text,
+             output_usd_per_million_tokens::text,
+             price_version,
+             source_url,
+             snapshot_at
+      from price_registry_snapshots
+      where lower(provider_key) = lower($1)
+        and model_id = $2
+      order by snapshot_at desc, created_at desc
+      limit 1
+    `,
+    [input.providerKey, input.modelId],
+  );
+  const row = result.rows[0];
+  return row
+    ? {
+        cachedInputUsdPerMillionTokens:
+          row.cached_input_usd_per_million_tokens === null
+            ? null
+            : Number(row.cached_input_usd_per_million_tokens),
+        inputUsdPerMillionTokens: Number(row.input_usd_per_million_tokens),
+        modelId: row.model_id,
+        outputUsdPerMillionTokens: Number(row.output_usd_per_million_tokens),
+        priceVersion: row.price_version,
+        providerKey: row.provider_key,
+        sourceUrl: row.source_url,
+        syncedAt: row.snapshot_at,
       }
     : null;
 }

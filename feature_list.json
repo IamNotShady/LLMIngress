@@ -710,8 +710,8 @@
         "feat-023",
         "feat-056"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-057 unit test because provider model options lacked price status fields and priced selector labels, and E2E because the refreshed Provider model list and Route Policy selector did not show price status. Added Console provider model option price resolution using the existing built-in price registry plus manual price overrides, Provider model list price-status display, and dedicated priced selector labels while preserving stable base labels for Route Policy summaries/warnings. P2+ code review found that changing the shared optionLabel globally regressed existing Route Policy selector tests; fixed by splitting base optionLabel from pricedOptionLabel and reran feat-029/050 affected E2Es. Verification passed — feat-057 unit test 1 passed, real Chromium/PostgreSQL/Worker/fake-provider E2E 1 passed, pnpm run verify passed, verify:features passed all 57 prior passing features before marking feat-057 passing, and final verify:features passed all 58 passing features after marking."
     },
     {
       "id": "feat-058",

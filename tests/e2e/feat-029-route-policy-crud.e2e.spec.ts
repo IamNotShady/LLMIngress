@@ -44,10 +44,10 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
           await page.getByLabel("Route policy strategy").selectOption("balanced");
           await page
             .getByLabel("Primary provider models")
-            .selectOption({ label: seededModels.openai.optionLabel });
+            .selectOption({ label: seededModels.openai.selectorLabel });
           await page
             .getByLabel("Fallback provider models")
-            .selectOption({ label: seededModels.anthropic.optionLabel });
+            .selectOption({ label: seededModels.anthropic.selectorLabel });
           await page.getByRole("button", { name: "Create route policy" }).click();
 
           await expect(
@@ -87,10 +87,10 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
           await page.getByLabel("Edit route policy strategy").selectOption("quality_first");
           await page
             .getByLabel("Edit primary provider models")
-            .selectOption({ label: seededModels.anthropic.optionLabel });
+            .selectOption({ label: seededModels.anthropic.selectorLabel });
           await page
             .getByLabel("Edit fallback provider models")
-            .selectOption({ label: seededModels.openai.optionLabel });
+            .selectOption({ label: seededModels.openai.selectorLabel });
           await page.getByRole("button", { name: "Save route policy" }).click();
 
           await expect(page.getByText("Strategy: quality_first")).toBeVisible();
@@ -145,6 +145,7 @@ type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 type SeededModel = {
   id: string;
   optionLabel: string;
+  selectorLabel: string;
 };
 
 type RoutePolicyState = {
@@ -196,10 +197,12 @@ async function seedProviderModels(fixture: Fixture): Promise<{
     anthropic: {
       id: anthropicModelId,
       optionLabel: "Anthropic - Claude Sonnet 4 (claude-sonnet-4)",
+      selectorLabel: "Anthropic - Claude Sonnet 4 (claude-sonnet-4) - Unknown price",
     },
     openai: {
       id: openaiModelId,
       optionLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini)",
+      selectorLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini) - Priced (built-in)",
     },
   };
 }

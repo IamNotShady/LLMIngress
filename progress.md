@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 13:48 AWST
-**Active Feature:** none — all 56 MVP features (feat-001 through feat-056) are `passing`
+**Last Updated:** 2026-06-15 18:05 AWST
+**Active Feature:** none — 58 features are `passing`; `feat-058` and `feat-059` remain pending
 
 ## Status
 
@@ -69,6 +69,12 @@
   - Bugfix: `model_refresh` now decrypts and sends the saved Provider API key for API-key Providers, and Provider cards list discovered models after refresh.
   - E2E verifies a real Console click, Worker model refresh, and refreshed provider model availability in the Route Policy selector without manual SQL.
   - Verification passed: feat-056 unit tests (3), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 55 prior passing features before marking, and final full regression of all 56 passing features after the API-key refresh bugfix.
+- [x] **feat-057 — Provider Model Price Status on Refresh (passing)**:
+  - Added Console provider model price-status resolution from the built-in price registry plus manual overrides.
+  - Provider cards now show refreshed models as built-in priced, manual-override priced, or unknown price.
+  - Route Policy selectors use dedicated priced option labels, while Route Policy summaries and warnings keep their stable base labels.
+  - Code review found a P2 regression risk from globally changing `optionLabel`; fixed by splitting `optionLabel` and `pricedOptionLabel`, then reran the affected `feat-029` and `feat-050` E2Es.
+  - Verification passed: feat-057 unit test (1), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 57 prior passing features before marking, and final `pnpm run verify:features` across all 58 passing features after marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -160,7 +166,8 @@
 
 ### What's Next
 
-1. All 56 MVP features are `passing`. Optional next step: run the opt-in real-provider smoke (`LLMINGRESS_REAL_SMOKE=1` with `OPENAI_API_KEY`+`ANTHROPIC_API_KEY`) against the real OpenAI/Anthropic providers under the USD 10 cap.
+1. Next active feature: `feat-058` Budget-Safe Route Policy Validation.
+2. `feat-059` Real Agent OpenAI-Compatible Smoke remains pending after the route-budget safety work.
 
 ## Blockers / Risks
 
@@ -965,4 +972,4 @@
   - Improved Console E2E startup failure diagnostics in the affected specs so future failures include the last observed response status plus child stdout/stderr.
   - Verification passed: `node scripts/verify-features.mjs --dry-run`, `node scripts/verify-features.mjs --compare`, `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'`, `pnpm run verify`, `node scripts/verify-features.mjs --legacy`, and `pnpm run verify:features`.
   - Optimized `pnpm run verify:features` re-verified all 57 passing features; E2E batch took 159.3s and total repeated Playwright/Vitest process startup count was reduced by batching 50 standard features.
-  - Next active features remain `feat-057`, `feat-058`, and `feat-059`.
+  - `feat-057` is now passing after the provider-model price status work; next active features remain `feat-058` and `feat-059`.

@@ -429,7 +429,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             >
               {providerModelOptions.map((providerModel) => (
                 <option key={providerModel.id} value={providerModel.id}>
-                  {providerModel.optionLabel}
+                  {providerModel.pricedOptionLabel}
                 </option>
               ))}
             </select>
@@ -442,7 +442,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             >
               {providerModelOptions.map((providerModel) => (
                 <option key={providerModel.id} value={providerModel.id}>
-                  {providerModel.optionLabel}
+                  {providerModel.pricedOptionLabel}
                 </option>
               ))}
             </select>
@@ -507,7 +507,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                   >
                     {providerModelOptions.map((providerModel) => (
                       <option key={providerModel.id} value={providerModel.id}>
-                        {providerModel.optionLabel}
+                        {providerModel.pricedOptionLabel}
                       </option>
                     ))}
                   </select>
@@ -523,7 +523,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                   >
                     {providerModelOptions.map((providerModel) => (
                       <option key={providerModel.id} value={providerModel.id}>
-                        {providerModel.optionLabel}
+                        {providerModel.pricedOptionLabel}
                       </option>
                     ))}
                   </select>
@@ -994,7 +994,10 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                       <p>
                         Provider models:{" "}
                         {providerModels
-                          .map((model) => `${model.modelDisplayName} (${model.modelId})`)
+                          .map(
+                            (model) =>
+                              `${model.modelDisplayName} (${model.modelId}) - ${model.priceStatusLabel}`,
+                          )
                           .join(", ")}
                       </p>
                     )}

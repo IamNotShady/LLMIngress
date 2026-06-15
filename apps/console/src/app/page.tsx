@@ -115,6 +115,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const selectedActivityId = readSingleSearchParam(resolvedSearchParams.activityId);
+  const modelRefreshProviderId = readSingleSearchParam(resolvedSearchParams.modelRefreshProviderId);
   const usageWindow = parseConsoleUsageWindow(
     readSingleSearchParam(resolvedSearchParams.usageWindow),
   );
@@ -137,6 +138,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
+  const modelRefreshProvider = providers.find((provider) => provider.id === modelRefreshProviderId);
   const agentApiKeysByAgentId = groupByAgentId(agentApiKeys);
   const agentApiKeyVirtualModelAccessById = new Map(
     agentApiKeyVirtualModelAccess.map((access) => [access.agentApiKeyId, access]),
@@ -908,6 +910,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             <button type="submit">Add local provider</button>
           </form>
         ))}
+        {modelRefreshProvider ? (
+          <p role="status">Model refresh queued for {modelRefreshProvider.displayName}.</p>
+        ) : null}
         <div className="provider-list">
           {providers.length === 0 ? (
             <p>No providers configured.</p>
@@ -996,6 +1001,12 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                     />
                     <button className="secondary-button" type="submit">
                       {provider.enabled ? "Disable provider" : "Enable provider"}
+                    </button>
+                  </form>
+                  <form action="/api/provider-model-refresh" method="post">
+                    <input type="hidden" name="providerId" value={provider.id} />
+                    <button className="secondary-button" disabled={!provider.enabled} type="submit">
+                      Refresh provider models
                     </button>
                   </form>
                 </article>

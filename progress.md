@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 23:55 AWST
-**Active Feature:** none — all 55 MVP features (feat-001 through feat-055) are `passing`
+**Last Updated:** 2026-06-15 12:51 AWST
+**Active Feature:** none — all 56 MVP features (feat-001 through feat-056) are `passing`
 
 ## Status
 
@@ -62,6 +62,11 @@
   - Added `pnpm run db:migrate:check`, backed by an isolated PostgreSQL fixture database.
   - The command applies all migrations, reruns them to verify idempotent skips, and is now executed by CI after dependency install.
   - Verification passed: feat-055 unit tests, real PostgreSQL E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-056 — Console Provider Model Refresh Button (passing)**:
+  - Added an authenticated Console Provider-card button that enqueues a `model_refresh` job and wakes the Worker via `job_created`.
+  - Added a queued status message after refresh submission.
+  - E2E verifies a real Console click, Worker model refresh, and refreshed provider model availability in the Route Policy selector without manual SQL.
+  - Verification passed: feat-056 unit tests (3), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 55 prior passing features before marking, and final full regression of all 56 passing features after marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -152,7 +157,7 @@
 
 ### What's Next
 
-1. All 55 MVP features are `passing`. Optional next step: run the opt-in real-provider smoke (`LLMINGRESS_REAL_SMOKE=1` with `OPENAI_API_KEY`+`ANTHROPIC_API_KEY`) against the real OpenAI/Anthropic providers under the USD 10 cap.
+1. All 56 MVP features are `passing`. Optional next step: run the opt-in real-provider smoke (`LLMINGRESS_REAL_SMOKE=1` with `OPENAI_API_KEY`+`ANTHROPIC_API_KEY`) against the real OpenAI/Anthropic providers under the USD 10 cap.
 
 ## Blockers / Risks
 

@@ -696,8 +696,8 @@
         "feat-023",
         "feat-050"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-056 unit test because apps/console/src/server/model-refresh-jobs was missing, and E2E because the Console Provider card had no Refresh provider models button. Added an authenticated Console provider model refresh route, provider refresh job enqueue helper, Provider-card refresh button, and queued status message. The E2E proves a real Console click enqueues model_refresh, pg_notify wakes the real Worker, the Worker refreshes provider models from the fake provider, and the Route Policy model selector can select the refreshed provider model without manual SQL. Verification passed — feat-056 unit tests 3 passed, real Chromium/PostgreSQL/Worker/fake-provider E2E 1 passed, pnpm run verify passed, verify:features passed all 55 prior passing features before marking feat-056 passing, and final verify:features passed all 56 passing features after marking."
     }
   ]
 }

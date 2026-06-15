@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 19:38 AWST
-**Active Feature:** none — all 60 tracked features are `passing`
+**Last Updated:** 2026-06-15 21:29 AWST
+**Active Feature:** none — 61 tracked features are `passing`; 33 V1 features are `pending`
 
 ## Status
 
@@ -12,6 +12,7 @@
 - [x] Built the minimum monorepo scaffold for Gateway, Console, Worker, and shared packages (feat-001).
 - [x] Split the MVP scope from `docs/PLAN.md` into 54 independently developable and testable features.
 - [x] Standardized feature tracker schema on `description` / `status` with strict verification contracts.
+- [x] Split the V1 scope from `docs/PLAN.md` into `feat-062` through `feat-094`, each independently developable and verifiable with unit and E2E test commands; all new V1 entries are `pending` with empty evidence.
 - [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
   - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
   - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.
@@ -186,7 +187,7 @@
 
 ### What's Next
 
-1. Next active feature: `feat-059` Real Agent OpenAI-Compatible Smoke.
+1. Next active feature: `feat-062` Provider Template Selector.
 
 ## Blockers / Risks
 

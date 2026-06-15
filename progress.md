@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 02:13 AWST
-**Active Feature:** none — 69 tracked features are `passing`; 26 V1 features are `pending`
+**Last Updated:** 2026-06-16 02:32 AWST
+**Active Feature:** none — 70 tracked features are `passing`; 25 V1 features are `pending`
 
 ## Status
 
@@ -69,6 +69,12 @@
   - E2E verifies auth, provider, routing, and limit errors plus success and streaming responses carry request id, and recorded `request_activity` rows carry matching `request_id`, status, HTTP status, and error code.
   - Code review found and fixed a P2 spoofing risk so response headers always use the Gateway-authenticated request id rather than any provider body request id.
   - Verification passed: feat-069 unit tests (2), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-034/035/036/037/038/039/041/042/044 regressions, `pnpm run verify`, full regression of all 68 prior passing features before marking, and final `pnpm run verify:features` across all 69 passing features after marking.
+- [x] **feat-070 — Provider Multi-Key Failover (passing)**:
+  - Added migration `0013_provider_multi_key_failover` to allow multiple Provider API keys per provider and record failed key attribution in `fallback_events`.
+  - Gateway credential loading now decrypts all active keys for a provider in deterministic creation order.
+  - Fallback execution tries every key for the selected provider before considering provider fallback, records failed key id/prefix without plaintext, and preserves the existing cross-provider fallback rule from feat-033.
+  - Code review found and fixed a P2 regression in older fallback/activity E2E assertions after key attribution fields were added to `request_activity.fallback_attempts`.
+  - Verification passed: feat-070 unit tests (2), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-017/033/044/053 unit and E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 69 prior passing features before marking, and final `pnpm run verify:features` across all 70 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

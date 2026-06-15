@@ -898,8 +898,8 @@
         "feat-033",
         "feat-069"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-070 unit tests because migration 0013 was missing and fallback-chain stopped after the first failed provider key, and E2E red because provider_api_keys.provider_id was still unique. Added migration 0013 to allow multiple provider_api_keys per provider and add provider_api_key_id/provider_api_key_prefix attribution to fallback_events. Gateway now loads all active provider keys in deterministic order, tries every key for a provider before moving to provider fallback, records failed key attempts with key id/prefix but never plaintext, and returns the selected successful key in memory only. Code review found and fixed a P2 regression where older activity/fallback E2E assertions were too strict after key attribution fields were added. Verification passed: feat-070 unit tests (2), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-017/033/044/053 unit and E2E regressions, pnpm run db:migrate:check, pnpm run verify, full verify:features passed all 69 prior passing features before marking, and final verify:features passed all 70 passing features after marking."
     },
     {
       "id": "feat-071",

@@ -14,6 +14,15 @@ import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
   baseUrl: string;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
+  providerApiKeys?: readonly FallbackProviderApiKey[];
+};
+
+export type FallbackProviderApiKey = {
+  apiKey: string;
+  keyPrefix?: string;
+  providerApiKeyId?: string;
 };
 
 export type FallbackFailedAttempt = {
@@ -21,6 +30,8 @@ export type FallbackFailedAttempt = {
   errorCode: string;
   errorMessage: string;
   failedBeforeFirstByte: boolean;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
   providerModelId: string;
 };
 
@@ -70,48 +81,81 @@ export async function executeFallbackChain(
   const failedAttempts: FallbackFailedAttempt[] = [];
   let lastError: OpenAIAdapterError | undefined;
 
-  for (const [index, candidate] of input.candidates.entries()) {
+  let attemptOrder = 0;
+  for (const candidate of input.candidates) {
     const adapter =
       candidate.providerKey === "gemini"
         ? geminiAdapter
         : candidate.providerKey === "openrouter"
           ? openRouterAdapter
           : genericAdapter;
-    const result = await adapter.chatCompletion({
-      request: input.request,
-      target: {
-        apiKey: candidate.apiKey,
-        baseUrl: candidate.baseUrl,
-        modelId: candidate.modelId,
-      },
-    });
+    const providerApiKeys = readFallbackProviderApiKeys(candidate);
+    const candidateFailedAttempts: FallbackFailedAttempt[] = [];
 
-    if (result.ok) {
-      return {
-        failedAttempts,
-        result,
-        selectedCandidate: candidate,
+    for (const providerApiKey of providerApiKeys) {
+      attemptOrder += 1;
+      const result = await adapter.chatCompletion({
+        request: input.request,
+        target: {
+          apiKey: providerApiKey.apiKey,
+          baseUrl: candidate.baseUrl,
+          modelId: candidate.modelId,
+        },
+      });
+
+      if (result.ok) {
+        return {
+          failedAttempts,
+          result,
+          selectedCandidate: {
+            ...candidate,
+            apiKey: providerApiKey.apiKey,
+            providerApiKeyId: providerApiKey.providerApiKeyId,
+            providerApiKeyPrefix: providerApiKey.keyPrefix,
+          },
+        };
+      }
+
+      lastError = result;
+      const failedAttempt: FallbackFailedAttempt = {
+        attemptOrder,
+        errorCode: result.errorCode,
+        errorMessage: result.errorMessage,
+        failedBeforeFirstByte: result.statusCode === null,
+        ...(providerApiKey.providerApiKeyId
+          ? { providerApiKeyId: providerApiKey.providerApiKeyId }
+          : {}),
+        ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
+        providerModelId: candidate.providerModelId,
       };
+      failedAttempts.push(failedAttempt);
+      candidateFailedAttempts.push(failedAttempt);
+      await input.recordFailedAttempt?.(failedAttempt);
+      await recordFailedAttemptInDatabase(input, failedAttempt);
     }
 
-    lastError = result;
-    const failedAttempt = {
-      attemptOrder: index + 1,
-      errorCode: result.errorCode,
-      errorMessage: result.errorMessage,
-      failedBeforeFirstByte: result.statusCode === null,
-      providerModelId: candidate.providerModelId,
-    };
-    failedAttempts.push(failedAttempt);
-    await input.recordFailedAttempt?.(failedAttempt);
-    await recordFailedAttemptInDatabase(input, failedAttempt);
-
-    if (!failedAttempt.failedBeforeFirstByte) {
-      throw new Error(result.errorMessage);
+    if (candidateFailedAttempts.some((attempt) => !attempt.failedBeforeFirstByte)) {
+      throw new Error(lastError?.errorMessage ?? "Provider request failed.");
     }
   }
 
   throw new Error(lastError?.errorMessage ?? "All fallback candidates failed.");
+}
+
+function readFallbackProviderApiKeys(
+  candidate: FallbackChainCandidate,
+): readonly FallbackProviderApiKey[] {
+  if (candidate.providerApiKeys && candidate.providerApiKeys.length > 0) {
+    return candidate.providerApiKeys;
+  }
+
+  return [
+    {
+      apiKey: candidate.apiKey,
+      ...(candidate.providerApiKeyPrefix ? { keyPrefix: candidate.providerApiKeyPrefix } : {}),
+      ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
+    },
+  ];
 }
 
 async function recordFailedAttemptInDatabase(
@@ -131,18 +175,22 @@ async function recordFailedAttemptInDatabase(
           id,
           request_activity_id,
           provider_model_id,
+          provider_api_key_id,
+          provider_api_key_prefix,
           attempt_order,
           status,
           error_code,
           error_message,
           failed_before_first_byte
         )
-        values ($1, $2, $3, $4, 'failed', $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
       `,
       [
         randomUUID(),
         input.requestActivityId,
         attempt.providerModelId,
+        attempt.providerApiKeyId || null,
+        attempt.providerApiKeyPrefix || null,
         attempt.attemptOrder,
         attempt.errorCode,
         attempt.errorMessage,

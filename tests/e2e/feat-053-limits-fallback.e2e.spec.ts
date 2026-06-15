@@ -66,13 +66,13 @@ test("limits return expected errors and first byte failure falls back successful
         .poll(() => readFallbackActivity(fixture, buildLimitsFallbackRequestId("fallback")))
         .toEqual({
           fallback_attempts: [
-            {
+            expect.objectContaining({
               attemptOrder: 1,
               errorCode: "provider_request_failed",
               errorMessage: expect.any(String),
               failedBeforeFirstByte: true,
               providerModelId: seeded.failedProviderModelId,
-            },
+            }),
           ],
           http_status: 200,
           provider_model_id: seeded.successProviderModelId,

@@ -22,6 +22,7 @@ import {
   executeFallbackChain,
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
+  type FallbackProviderApiKey,
 } from "./fallback-chain.js";
 import type {
   NormalizedOpenAIChatMessage,
@@ -78,7 +79,14 @@ export type GatewayChatCompletionRequestResult =
 type ProviderCredentialRow = QueryResultRow & {
   base_url: string | null;
   encrypted_key: unknown;
+  key_prefix: string;
+  provider_api_key_id: string;
   provider_id: string;
+};
+
+type ProviderCredentials = {
+  baseUrl: string;
+  keys: FallbackProviderApiKey[];
 };
 
 export function normalizeOpenAIChatCompletionRequest(
@@ -300,11 +308,18 @@ export async function attachGatewayProviderCredentials(input: {
     if (!credential) {
       throw new Error(`Provider credentials are missing for provider ${candidate.providerId}.`);
     }
+    const primaryKey = credential.keys[0];
+    if (!primaryKey) {
+      throw new Error(`Provider credentials are missing for provider ${candidate.providerId}.`);
+    }
 
     return {
       ...candidate,
-      apiKey: credential.apiKey,
+      apiKey: primaryKey.apiKey,
       baseUrl: credential.baseUrl,
+      providerApiKeyId: primaryKey.providerApiKeyId,
+      providerApiKeyPrefix: primaryKey.keyPrefix,
+      providerApiKeys: credential.keys,
     };
   });
 }
@@ -426,7 +441,7 @@ async function readProviderCredentials(input: {
   databaseUrl: string;
   masterKeySource: MasterKeySource;
   providerIds: string[];
-}): Promise<Map<string, { apiKey: string; baseUrl: string }>> {
+}): Promise<Map<string, ProviderCredentials>> {
   if (input.providerIds.length === 0) {
     return new Map();
   }
@@ -440,29 +455,38 @@ async function readProviderCredentials(input: {
       `
         select providers.id::text as provider_id,
                providers.base_url,
+               provider_api_keys.id::text as provider_api_key_id,
+               provider_api_keys.key_prefix,
                provider_api_keys.encrypted_key
         from providers
         join provider_api_keys on provider_api_keys.provider_id = providers.id
         where providers.id = any($1::uuid[])
           and providers.enabled = true
+        order by providers.id, provider_api_keys.created_at asc, provider_api_keys.id asc
       `,
       [input.providerIds],
     );
-    return new Map(
-      result.rows.map((row) => {
-        if (!row.base_url?.trim()) {
-          throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
-        }
+    const credentials = new Map<string, ProviderCredentials>();
+    for (const row of result.rows) {
+      if (!row.base_url?.trim()) {
+        throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
+      }
 
-        return [
-          row.provider_id,
-          {
-            apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
-            baseUrl: row.base_url,
-          },
-        ];
-      }),
-    );
+      const existing = credentials.get(row.provider_id);
+      const providerCredentials =
+        existing ??
+        ({
+          baseUrl: row.base_url,
+          keys: [],
+        } satisfies ProviderCredentials);
+      providerCredentials.keys.push({
+        apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
+        keyPrefix: row.key_prefix,
+        providerApiKeyId: row.provider_api_key_id,
+      });
+      credentials.set(row.provider_id, providerCredentials);
+    }
+    return credentials;
   } finally {
     await client.end();
   }

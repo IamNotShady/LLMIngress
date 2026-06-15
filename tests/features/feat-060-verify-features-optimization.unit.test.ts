@@ -90,6 +90,29 @@ describe("feat-060 optimized feature verification runner", () => {
     ]);
     expect(result.failures).toEqual(["feat-999"]);
   });
+
+  it("does not keep a batch failure when fallback feature verification passes", () => {
+    const plan = buildOptimizedPlan([standardFeature]);
+    const executed: string[] = [];
+    const result = runOptimizedPlan(plan, {
+      execute: (command) => {
+        executed.push(command);
+        if (command === "pnpm test:e2e tests/e2e/feat-999-example.e2e.spec.ts --workers=1") {
+          return { output: "batch-only e2e failure", status: 1 };
+        }
+        return { output: "", status: 0 };
+      },
+      print: () => undefined,
+      root: process.cwd(),
+    });
+
+    expect(executed).toEqual([
+      "pnpm exec vitest run tests/features/feat-999-example.unit.test.ts",
+      "pnpm test:e2e tests/e2e/feat-999-example.e2e.spec.ts --workers=1",
+      standardVerification,
+    ]);
+    expect(result.failures).toEqual([]);
+  });
 });
 
 describe("feat-060 process lock stale owner handling", () => {

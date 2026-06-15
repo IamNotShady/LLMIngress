@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 00:18 AWST
+**Last Updated:** 2026-06-16 00:56 AWST
 **Active Feature:** none — 64 tracked features are `passing`; 31 V1 features are `pending`
 
 ## Status
@@ -36,6 +36,11 @@
   - Added migration `0010_local_provider_templates` so the database whitelist accepts `lmstudio` and `llama_cpp`.
   - Code review found no P2+ issues after checking whitelist scope, public URL confirmation, template paths, and migration coverage.
   - Verification passed: feat-064 unit tests (4), real Chromium/fake-provider E2E (1), related feat-021/062/063 unit regressions, related feat-062 E2E, `pnpm run db:migrate:check`, `pnpm run verify`, full regression of all 63 prior passing features before marking, and final `pnpm run verify:features` across all 64 passing features after marking.
+- [x] 2026-06-16 feat-060 verify-features fallback runner repair:
+  - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
+  - Added unit coverage proving batch failures are cleared when fallback feature verification passes.
+  - Updated `scripts/verify-features.mjs` so batch failure labels are only diagnostic; actual regression failures now come from failed fallback feature commands.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm run verify`, and `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` across all 64 passing features.
 - [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
   - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
   - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.

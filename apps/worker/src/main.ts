@@ -5,6 +5,7 @@ import { createCostReportExportJobHandler } from "./cost-report-export.js";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createJsonlRequestLogExportJobHandler } from "./jsonl-export.js";
 import { createModelRefreshJobHandler } from "./model-refresh.js";
+import { createNotificationDispatchJobHandler } from "./notification-dispatcher.js";
 import {
   createDefaultPeriodicTasks,
   createPostgresPeriodicScheduler,
@@ -38,6 +39,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
           databaseUrl: config.databaseUrl,
         }),
         jsonl_export: createJsonlRequestLogExportJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        notification_dispatch: createNotificationDispatchJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         stale_reservation_cleanup: createStaleReservationCleanupJobHandler({

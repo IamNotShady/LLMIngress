@@ -29,6 +29,10 @@ import {
 } from "../server/agent-limits";
 import { listAgents } from "../server/agents";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../server/auth";
+import {
+  type ConsoleNotificationChannel,
+  listNotificationChannels,
+} from "../server/notification-channels";
 import { getManualPriceOverride } from "../server/price-overrides";
 import {
   type ConsoleProviderHealthSummary,
@@ -156,6 +160,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
   const agentApiKeyVirtualModelAccess = await listAgentApiKeyVirtualModelAccess(databaseUrl);
   const agentLimits = await listAgentLimits(databaseUrl);
+  const notificationChannels = await listNotificationChannels(databaseUrl);
   const providers = await listProviders(databaseUrl);
   const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
@@ -1199,6 +1204,63 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             <h2 id="settings-title">Settings</h2>
           </div>
         </div>
+        <section
+          className="settings-panel"
+          id="notification-channels"
+          aria-labelledby="notification-channels-title"
+        >
+          <h3 id="notification-channels-title">Notification channels</h3>
+          <div className="provider-list">
+            {notificationChannels.length === 0 ? (
+              <p>No notification channels configured.</p>
+            ) : (
+              notificationChannels.map((channel) => (
+                <article className="provider-item" key={channel.id}>
+                  <header className="provider-header">
+                    <div>
+                      <p className="eyebrow">{channel.channelType}</p>
+                      <h3>{channel.displayName}</h3>
+                    </div>
+                    <p className={channel.enabled ? "status-enabled" : "status-disabled"}>
+                      {channel.enabled ? "Enabled" : "Disabled"}
+                    </p>
+                  </header>
+                  <p>{formatNotificationChannelConfig(channel)}</p>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="settings-grid">
+            <form
+              className="provider-create-form"
+              action="/api/notification-channels"
+              method="post"
+            >
+              <input type="hidden" name="action" value="create" />
+              <input type="hidden" name="channelType" value="email" />
+              <label htmlFor="notification-email-name">Email channel name</label>
+              <input id="notification-email-name" name="displayName" required />
+              <label htmlFor="notification-email-to">Email to</label>
+              <input id="notification-email-to" name="emailTo" type="email" required />
+              <label htmlFor="notification-email-from">Email from</label>
+              <input id="notification-email-from" name="emailFrom" type="email" required />
+              <button type="submit">Create email notification channel</button>
+            </form>
+            <form
+              className="provider-create-form"
+              action="/api/notification-channels"
+              method="post"
+            >
+              <input type="hidden" name="action" value="create" />
+              <input type="hidden" name="channelType" value="webhook" />
+              <label htmlFor="notification-webhook-name">Webhook channel name</label>
+              <input id="notification-webhook-name" name="displayName" required />
+              <label htmlFor="notification-webhook-url">Webhook URL</label>
+              <input id="notification-webhook-url" name="webhookUrl" type="url" required />
+              <button type="submit">Create webhook notification channel</button>
+            </form>
+          </div>
+        </section>
         <div className="settings-grid">
           <section className="settings-panel" aria-labelledby="config-import-export-title">
             <h3 id="config-import-export-title">Config import/export</h3>
@@ -1259,6 +1321,34 @@ async function getPricePanel(databaseUrl: string) {
     outputPriceValue: String(price.outputUsdPerMillionTokens),
     sourceLabel: price.source === "manual_override" ? "Manual override" : "Built-in price",
   };
+}
+
+function formatNotificationChannelConfig(channel: ConsoleNotificationChannel): string {
+  if (channel.channelType === "email") {
+    const config = channel.config as { from?: string; to?: string };
+    return `Email: ${config.from ?? "unknown sender"} to ${config.to ?? "unknown recipient"}`;
+  }
+
+  const config = channel.config as { url?: string };
+  return `Webhook: ${formatWebhookUrlForDisplay(config.url)}`;
+}
+
+function formatWebhookUrlForDisplay(rawUrl: string | undefined): string {
+  if (!rawUrl) {
+    return "Unknown webhook URL";
+  }
+
+  try {
+    const url = new URL(rawUrl);
+    if (url.search) {
+      url.search = "?redacted";
+    }
+    url.password = "";
+    url.username = "";
+    return url.toString();
+  } catch {
+    return "Invalid webhook URL";
+  }
 }
 
 function formatUsd(value: number): string {

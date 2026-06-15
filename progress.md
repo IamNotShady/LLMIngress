@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 03:47 AWST
-**Active Feature:** none — 73 tracked features are `passing`; 22 V1 features are `pending`
+**Last Updated:** 2026-06-16 04:13 AWST
+**Active Feature:** none — 74 tracked features are `passing`; 21 V1 features are `pending`
 
 ## Status
 
@@ -94,6 +94,12 @@
   - E2E covers a manual job and a real scheduler-created `price_sync` job updating Gateway effective price while preserving a historical cost row.
   - Code review found and fixed P2+ issues in `price_sync` route-engine typing, scheduled-test altitude, and an over-eager default periodic `price_sync` task that changed existing smoke-test config versions and built-in price labels.
   - Verification passed: feat-073 unit tests (2), real PostgreSQL E2E (1), `pnpm run db:migrate:check`, related feat-014/015/022/054/057/072 regressions, `pnpm run verify`, full `pnpm run verify:features` across all 72 prior passing features before marking, and final `pnpm run verify:features` across all 73 passing features after marking.
+- [x] **feat-074 — Billing Reconciliation Job (passing)**:
+  - Added migration `0015_billing_reconciliation` with `billing_reconciliation_runs` and `billing_reconciliation_items`.
+  - Added a Worker `billing_reconciliation` handler that updates stored `request_costs` from provider actual cost payloads or effective price data, recomputes `request_savings` against the original baseline, and records reconciliation runs/items without changing original request activity/model attribution.
+  - Worker startup now registers `billing_reconciliation` with the default job runner.
+  - Code review found and fixed the P2 Worker registration gap after the feature handler initially only ran in direct test runners.
+  - Verification passed: feat-074 unit tests (3), real PostgreSQL E2E (1), `pnpm run db:migrate:check`, related feat-045/071/073 unit and E2E regressions, `pnpm run verify`, full `pnpm run verify:features` across all 73 prior passing features before marking, and final `pnpm run verify:features` across all 74 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

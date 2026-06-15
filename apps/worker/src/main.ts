@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
+import { createBillingReconciliationJobHandler } from "./billing-reconciliation.js";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createModelRefreshJobHandler } from "./model-refresh.js";
 import {
@@ -25,6 +26,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
       handlers: {
         model_refresh: createModelRefreshJobHandler({ databaseUrl: config.databaseUrl }),
         provider_connectivity_check: createProviderConnectivityCheckJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        billing_reconciliation: createBillingReconciliationJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         price_sync: createPriceSyncJobHandler({ databaseUrl: config.databaseUrl }),

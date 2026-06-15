@@ -951,8 +951,8 @@
         "feat-071",
         "feat-073"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-074 unit/E2E because billing reconciliation migration/handler support was missing, and follow-up unit red observed because the default Worker main did not register billing_reconciliation. Added migration 0015_billing_reconciliation for billing_reconciliation_runs and billing_reconciliation_items. Added a Worker billing_reconciliation handler that reconciles stored request_costs from provider actual cost payloads or effective price data, recomputes request_savings against the original baseline without changing the original request activity/model attribution, and records reconciliation runs/items. Worker startup now registers billing_reconciliation with the default job runner. Code review found and fixed the P2 Worker registration gap. Verification passed: feat-074 unit tests (3), real PostgreSQL E2E (1), db:migrate:check, related feat-045/071/073 unit and E2E regressions, pnpm run verify, full verify:features passed all 73 prior passing features before marking, and final verify:features passed all 74 passing features after marking."
     },
     {
       "id": "feat-075",

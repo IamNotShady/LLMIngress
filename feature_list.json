@@ -668,8 +668,8 @@
         "feat-052",
         "feat-053"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-054 unit/E2E because tests/support/local-deployment-smoke was missing. Added a hybrid deployment smoke: the default E2E brings up a real isolated PostgreSQL (migrated), the real Worker, Gateway, and Console processes against it, runs health checks (Gateway /health 200 reporting configVersion+providerCount, Console GET / 200, Worker '[worker] started'), measures and records startup-to-first-request duration (startup_to_first_request_ms), and completes one fake-provider-backed routed request asserting a recorded succeeded request_activity row. A second opt-in test (skipped unless LLMINGRESS_REAL_SMOKE=1 with OPENAI_API_KEY+ANTHROPIC_API_KEY) routes one real OpenAI and one real Anthropic request under a hard USD 10 budget cap; it never runs in automated CI/regression. The init.sh portion of the verification is the same lightweight entrypoint/duration smoke feat-001 uses (servers require DATABASE_URL+MASTER_KEY which the smoke does not supply, so it is lenient by design); the genuine altitude proof is the E2E. Verification passed — feat-054 unit tests 3 passed, default real-deployment E2E 1 passed (real opt-in test skipped), pnpm run verify passed, and verify:features passed all 55 passing features after marking feat-054 passing."
     },
     {
       "id": "feat-055",
@@ -683,6 +683,21 @@
       ],
       "status": "passing",
       "evidence": "2026-06-14: TDD red observed for feat-055 unit test because package.json had no db:migrate:check script and for E2E because the command failed. Added scripts/migrate-check.ts, which creates an isolated PostgreSQL test database from TEST_DATABASE_URL, applies all SQL migrations, reruns migrations to verify idempotent skips, and disposes the database. Added package script db:migrate:check and CI Migration validation step after dependency install. Updated the obsolete feat-005 unit assertion that expected migration validation to be absent from base CI. P2+ review found no blocking issues; the check uses an isolated fixture database and leaves PR CI as the external pushed-branch validation. Verification passed — feat-055 unit tests 1 passed, real PostgreSQL E2E 1 passed, pnpm run db:migrate:check passed, pnpm run verify passed, and verify:features passed all 53 prior passing features before marking feat-055 passing."
+    },
+    {
+      "id": "feat-056",
+      "name": "Console Provider Model Refresh Button",
+      "description": "An authenticated Console user can click a Provider-level refresh models button that enqueues a model_refresh job, wakes the Worker, and shows refreshed provider models in the Route Policy model selector without manual SQL.",
+      "verification": "pnpm exec vitest run tests/features/feat-056-console-model-refresh-button.unit.test.ts && pnpm test:e2e tests/e2e/feat-056-console-model-refresh-button.e2e.spec.ts --grep 'console refresh models button enqueues job worker refreshes models and route policy can select them'",
+      "dependencies": [
+        "feat-013",
+        "feat-016",
+        "feat-022",
+        "feat-023",
+        "feat-050"
+      ],
+      "status": "not_started",
+      "evidence": "No verification evidence yet; feature is not_started."
     }
   ]
 }

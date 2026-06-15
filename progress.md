@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 22:35 AWST
-**Active Feature:** feat-054 next (feat-001 through feat-053 and feat-055 completed)
+**Last Updated:** 2026-06-14 23:55 AWST
+**Active Feature:** none — all 55 MVP features (feat-001 through feat-055) are `passing`
 
 ## Status
 
@@ -53,6 +53,11 @@
   - Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code.
   - The same E2E verifies first-byte provider failure falls back to the second candidate, returns HTTP 200, and records both the final Activity provider/model hit and failed fallback attempt.
   - Verification passed: feat-053 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-054 — MVP Local Deployment Smoke (passing)**:
+  - Added a hybrid deployment smoke. The default E2E brings up a real migrated PostgreSQL plus the real Worker, Gateway, and Console processes, runs health checks (Gateway `/health` 200 with configVersion+providerCount, Console `GET /` 200, Worker `[worker] started`), measures/records startup-to-first-request duration, and completes one fake-provider routed request asserting a recorded `succeeded` `request_activity` row.
+  - Added a second opt-in test (skipped unless `LLMINGRESS_REAL_SMOKE=1` with `OPENAI_API_KEY`+`ANTHROPIC_API_KEY`) that routes one real OpenAI and one real Anthropic request under a hard USD 10 budget cap; it never runs in automated CI/regression.
+  - The `init.sh` portion of the verification is the same lightweight entrypoint/duration smoke feat-001 uses (lenient by design: servers need DATABASE_URL+MASTER_KEY which the smoke does not supply); the genuine altitude proof is the E2E.
+  - Verification passed: feat-054 unit tests (3), default real-deployment E2E (1; opt-in real test skipped), `pnpm run verify`, and full regression of all 55 passing features before marking.
 - [x] **feat-055 — CI Migration Validation (passing)**:
   - Added `pnpm run db:migrate:check`, backed by an isolated PostgreSQL fixture database.
   - The command applies all migrations, reruns them to verify idempotent skips, and is now executed by CI after dependency install.
@@ -147,13 +152,13 @@
 
 ### What's Next
 
-1. `feat-054` — MVP Local Deployment Smoke.
+1. All 55 MVP features are `passing`. Optional next step: run the opt-in real-provider smoke (`LLMINGRESS_REAL_SMOKE=1` with `OPENAI_API_KEY`+`ANTHROPIC_API_KEY`) against the real OpenAI/Anthropic providers under the USD 10 cap.
 
 ## Blockers / Risks
 
 - [x] Playwright Chromium is installed locally; Console page E2E can run in this workspace.
 - [ ] Review debt to resolve before related features: clarify or rename `PostgresFixture.migrate()` test-only fixture helper, make migration directory resolution independent of `process.cwd()` before app-start migration usage, revisit `config_change_events.changed_record_id` typing when non-UUID config tables are introduced, and add semantic validation for `agent_limits` combinations in feat-031.
-- [ ] Before the final real-provider MVP smoke, re-check that the active Codex shell can still see both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; both were visible on 2026-06-13 19:11 AWST.
+- [ ] The final real-provider MVP smoke is now the opt-in test in `tests/e2e/feat-054-local-deployment-smoke.e2e.spec.ts` (run with `LLMINGRESS_REAL_SMOKE=1`). Before running it, re-check that the active shell can still see both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` (both visible 2026-06-13 19:11 AWST); the opt-in test is structurally complete but has never executed against the real providers, so its first real run is unverified.
 
 ## Decisions Made
 

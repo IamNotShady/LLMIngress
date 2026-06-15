@@ -992,3 +992,13 @@
   - Verification passed: `node scripts/verify-features.mjs --dry-run`, `node scripts/verify-features.mjs --compare`, `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'`, `pnpm run verify`, `node scripts/verify-features.mjs --legacy`, and `pnpm run verify:features`.
   - Optimized `pnpm run verify:features` re-verified all 57 passing features; E2E batch took 159.3s and total repeated Playwright/Vitest process startup count was reduced by batching 50 standard features.
   - `feat-057`, `feat-058`, and `feat-059` are now passing after provider-model price status, budget-safe route validation, and the real Agent OpenAI-compatible smoke.
+
+- [x] 2026-06-15 feat-061 Console interaction layout repair:
+  - Added `feat-061` for repairing Dashboard form interaction layout, especially mispaired labels/controls in Playground and Provider configuration forms.
+  - Red phase: `pnpm exec vitest run tests/features/feat-061-console-interaction-layout.unit.test.ts` failed because Playground fields were not grouped as stable Console fields.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --grep 'dashboard form labels stay paired with their controls on desktop'` failed because the rendered Gateway base URL label and input were 509px apart in Chromium.
+  - Fixed Playground markup by wrapping label/control pairs and action buttons in explicit field/action groups.
+  - Fixed shared Console form CSS so ungrouped Provider, price, usage-window, and key forms use stable single-column field flows, while Playground uses responsive grouped columns and no horizontal overflow.
+  - Browser and Chrome DevTools verification on an isolated PostgreSQL Console run showed no Console errors, paired Dashboard form fields, and no desktop overflow; Playwright screenshots verified desktop 1280px and mobile 390px layouts.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-061-console-interaction-layout.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --grep 'dashboard form labels stay paired with their controls on desktop'`, `pnpm run verify`, and `pnpm run verify:features`.
+  - `pnpm run verify:features` re-verified all 61 passing features; E2E batch took 211.9s.

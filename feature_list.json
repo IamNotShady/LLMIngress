@@ -757,6 +757,19 @@
       ],
       "status": "passing",
       "evidence": "2026-06-15: TDD red observed for feat-060 because scripts/verify-features.mjs executed CLI side effects on import and exported no optimized runner API; process-lock had no stale PID handling; and Console wrapper shutdown did not forward SIGTERM to the child Next process. Added an importable optimized feature regression runner with --legacy, --dry-run, and --compare modes; standard unit/E2E verifications are batched, non-standard commands remain legacy, and batch failures fall back to original feature verification. Added stale PID cleanup, malformed-lock errors, lock wait diagnostics, and Console child lifecycle shutdown coverage. Required verification passed: node scripts/verify-features.mjs --dry-run, node scripts/verify-features.mjs --compare, pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts, pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard', pnpm run verify, node scripts/verify-features.mjs --legacy, and pnpm run verify:features."
+    },
+    {
+      "id": "feat-061",
+      "name": "Console Interaction Layout Repair",
+      "description": "Console form labels remain visually paired with their controls on the Dashboard, especially Playground and Provider configuration forms, with no horizontal overflow on desktop or mobile viewports.",
+      "verification": "pnpm exec vitest run tests/features/feat-061-console-interaction-layout.unit.test.ts && pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --grep 'dashboard form labels stay paired with their controls on desktop'",
+      "dependencies": [
+        "feat-013",
+        "feat-049",
+        "feat-056"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-061 unit test because Playground labels and controls were not grouped, and E2E because the Gateway base URL label and control were 509px apart in the rendered Dashboard grid. Added explicit Playground field/action groups and changed the existing Console form grids to stable stacked field flows for ungrouped configuration forms. Targeted verification passed: feat-061 unit test 1 passed and real Chromium/PostgreSQL Console E2E 1 passed. Browser/Chrome DevTools inspection showed no Console errors, paired Playground fields, and no horizontal overflow; Playwright screenshots verified desktop 1280px and mobile 390px layouts. Full verification passed: pnpm run verify passed, and pnpm run verify:features re-verified all 61 passing features with e2e batch PASS."
     }
   ]
 }

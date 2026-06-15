@@ -201,9 +201,9 @@ dd {
 
 .price-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
 }
 
 .provider-create-form,
@@ -211,9 +211,9 @@ dd {
 .provider-template-form,
 .provider-key-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
 }
 
 .provider-create-form {
@@ -225,7 +225,7 @@ dd {
 }
 
 .local-provider-template-form {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .checkbox-label {
@@ -254,9 +254,9 @@ dd {
 
 .usage-window-form {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(160px, 220px) auto;
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
   margin-top: 20px;
 }
 
@@ -319,14 +319,34 @@ dd {
 
 .playground-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(180px, auto);
+  gap: 16px;
   align-items: end;
   margin-top: 20px;
 }
 
-.playground-form textarea {
+.console-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.console-actions {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.console-actions button {
+  width: 100%;
+}
+
+.playground-prompt-field {
   grid-column: 1 / 3;
+}
+
+.playground-send-action {
+  grid-column: 3;
 }
 
 .playground-result {
@@ -405,6 +425,21 @@ dd {
   margin-bottom: 12px;
 }
 
+.price-form > button,
+.provider-create-form > button,
+.provider-edit-form > button,
+.provider-template-form > button,
+.provider-key-form > button,
+.usage-window-form > button {
+  justify-self: start;
+  min-width: 180px;
+  margin-top: 4px;
+}
+
+.provider-edit-form > p {
+  margin: 4px 0;
+}
+
 .route-warning {
   color: #b42318;
   font-weight: 700;
@@ -456,6 +491,11 @@ dd {
   .provider-key-form {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .playground-prompt-field,
+  .playground-send-action {
+    grid-column: auto;
   }
 
   .price-grid {

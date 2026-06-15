@@ -281,6 +281,7 @@ async function fetchListedProviderModels(
   const request = buildProviderModelListRequest({
     apiKey,
     baseUrl: provider.base_url as string,
+    providerKey: provider.provider_key,
   });
   const response = await fetchImpl(request.url, request.init);
   const body = await readResponseBody(response);
@@ -292,13 +293,29 @@ async function fetchListedProviderModels(
   return parseProviderModelList(body);
 }
 
-export function buildProviderModelListRequest(input: { apiKey?: string | null; baseUrl: string }): {
+export function buildProviderModelListRequest(input: {
+  apiKey?: string | null;
+  baseUrl: string;
+  providerKey?: string | null;
+}): {
   init: RequestInit;
   url: string;
 } {
   const init: RequestInit = { method: "GET" };
+  const providerKey = input.providerKey?.toLowerCase();
 
-  if (input.apiKey) {
+  if (providerKey === "anthropic") {
+    init.headers = input.apiKey
+      ? {
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "x-api-key": input.apiKey,
+        }
+      : {
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        };
+  } else if (input.apiKey) {
     init.headers = {
       authorization: `Bearer ${input.apiKey}`,
     };

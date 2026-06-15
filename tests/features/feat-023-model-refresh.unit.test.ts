@@ -113,6 +113,7 @@ describe("feat-023 provider model refresh job", () => {
       buildProviderModelListRequest({
         apiKey: "sk-refresh-secret",
         baseUrl: "https://api.openai.com/v1",
+        providerKey: "openai",
       }),
     ).toEqual({
       init: {
@@ -122,6 +123,26 @@ describe("feat-023 provider model refresh job", () => {
         method: "GET",
       },
       url: "https://api.openai.com/v1/models",
+    });
+  });
+
+  it("builds an Anthropic provider model list request with Anthropic API key headers", () => {
+    expect(
+      buildProviderModelListRequest({
+        apiKey: "sk-ant-refresh-secret",
+        baseUrl: "https://api.anthropic.com/v1",
+        providerKey: "anthropic",
+      }),
+    ).toEqual({
+      init: {
+        headers: {
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "x-api-key": "sk-ant-refresh-secret",
+        },
+        method: "GET",
+      },
+      url: "https://api.anthropic.com/v1/models",
     });
   });
 

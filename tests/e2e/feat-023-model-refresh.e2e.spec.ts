@@ -57,6 +57,37 @@ test("model refresh writes derived rows marks missing referenced models unavaila
   }
 });
 
+test("anthropic model refresh authenticates model list with Anthropic API key headers", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_anthropic_model_refresh_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const server = await createFakeProviderServer({
+    models: [{ id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }],
+  });
+  const providerId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await insertProvider(fixture, {
+      baseUrl: `${server.url}/v1`,
+      id: providerId,
+      providerKey: "anthropic",
+    });
+    await insertProviderApiKey(fixture, providerId);
+
+    await runModelRefreshJob(fixture, providerId);
+
+    expect(server.requests[0]?.path).toBe("/v1/models");
+    expect(server.requests[0]?.headers["x-api-key"]).toBe("sk-model-refresh-secret");
+    expect(server.requests[0]?.headers["anthropic-version"]).toBe("2023-06-01");
+    expect(server.requests[0]?.headers.authorization).toBeUndefined();
+    await expectModelRows(fixture, [{ availability: "available", model_id: "claude-sonnet-4-5" }]);
+  } finally {
+    await server.close();
+    await fixture.dispose();
+  }
+});
+
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 type ProviderInput = {

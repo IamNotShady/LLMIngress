@@ -12,6 +12,7 @@ type ConsoleCommand = {
 
 export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
+  const consoleHost = process.env.CONSOLE_HOST?.trim() || "127.0.0.1";
   const masterKeyEnv =
     config.masterKeySource.kind === "inline"
       ? { MASTER_KEY: config.masterKeySource.value }
@@ -19,7 +20,7 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
 
   return {
     command: "next",
-    args: [mode, "--hostname", "0.0.0.0", "--port", String(config.consolePort)],
+    args: [mode, "--hostname", consoleHost, "--port", String(config.consolePort)],
     env: {
       ...process.env,
       DATABASE_URL: config.databaseUrl,

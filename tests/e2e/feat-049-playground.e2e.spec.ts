@@ -338,17 +338,7 @@ function startConsoleProcess(options: {
 }): ConsoleProcess {
   const child = spawn(
     "pnpm",
-    [
-      "--filter",
-      "@llmingress/console",
-      "exec",
-      "next",
-      "dev",
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      String(options.port),
-    ],
+    ["--filter", "@llmingress/console", "exec", "tsx", "src/main.ts", "dev"],
     {
       cwd: process.cwd(),
       env: {

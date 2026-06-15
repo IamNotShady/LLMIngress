@@ -937,3 +937,14 @@
   - `pnpm run verify` passed.
   - Before marking feat-055 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 53 prior passing features.
   - Next active feature: feat-054 MVP Local Deployment Smoke.
+
+- [x] 2026-06-15 MVP validation bugfixes:
+  - Console local validation fix: Console dev startup now binds to `127.0.0.1` by default so browser-origin Gateway CORS matches the default local origin during Playground validation.
+  - Verified the Console hostname fix with a red/green feat-054 unit assertion, the feat-049 Playground E2E happy path, and `pnpm run verify`.
+  - Anthropic Provider model refresh root cause: the saved Anthropic Provider key was present, but three manual `model_refresh` jobs failed with HTTP 401 because the Worker reused OpenAI-style `Authorization: Bearer <api-key>` headers for `provider_key = 'anthropic'`.
+  - Fixed Worker model refresh request construction so Anthropic uses `x-api-key`, `anthropic-version: 2023-06-01`, and `content-type: application/json`, while OpenAI-compatible providers keep Bearer auth.
+  - Red phase: `pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts` failed because Anthropic still built Bearer auth.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'anthropic model refresh authenticates model list with Anthropic API key headers'` failed because the fake provider did not receive `x-api-key`.
+  - Green verification: feat-023 unit tests 6 passed, feat-023 PostgreSQL E2E tests 2 passed, and `pnpm run verify` passed.
+  - Live local DB verification: queued Anthropic refresh job `e847799f-b3a7-40a8-9414-0af7c9f354f7` succeeded on attempt 1 and wrote 8 available Anthropic provider models including `claude-sonnet-4-5-20250929`, `claude-sonnet-4-6`, and `claude-opus-4-8`.
+  - Full `pnpm run verify:features` intentionally not rerun during this validation step per user request to avoid the slow full regression until MVP is fully walked through.

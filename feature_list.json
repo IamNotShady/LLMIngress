@@ -912,8 +912,8 @@
         "feat-045",
         "feat-069"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-071 unit tests because usage/cost records ignored provider usage and cached input tokens, E2E red because fake provider/Gateway did not return or persist cached usage details, and an added parser red caught Anthropic cache_read_input_tokens being clamped incorrectly. Added optional cached-input pricing to the price registry, provider usage parsing for OpenAI chat/responses/embeddings and Anthropic Messages usage shapes, cached input token cost calculation with normal input price fallback when cached pricing is unavailable, request_usage.cached_input_tokens/reasoning_tokens writes, and fake cached-usage provider support. Code review found and fixed the embeddings token_source regression by updating feat-067 expectations to provider usage. Verification passed: feat-071 unit tests (3), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-045/067 unit and E2E regressions, pnpm run verify, full verify:features passed all 70 prior passing features before marking, and final verify:features passed all 71 passing features after marking."
     },
     {
       "id": "feat-072",

@@ -3,6 +3,7 @@ export const BUILT_IN_PRICE_REGISTRY_VERSION = "mvp-static-2026-06-13";
 export type PriceProviderKey = "anthropic" | "openai";
 
 export type PricedModelTokenPrice = {
+  cachedInputUsdPerMillionTokens?: number;
   currency: "USD";
   inputUsdPerMillionTokens: number;
   modelId: string;
@@ -27,6 +28,7 @@ export type UnknownModelTokenPrice = {
 export type ModelTokenPrice = PricedModelTokenPrice | UnknownModelTokenPrice;
 
 export type TokenUsage = {
+  cachedInputTokens?: number;
   inputTokens: number;
   outputTokens: number;
 };
@@ -174,7 +176,13 @@ export function calculateTokenCostUsd(
     };
   }
 
-  const inputCostUsd = costFromTokens(usage.inputTokens, price.inputUsdPerMillionTokens);
+  const cachedInputTokens = clampCachedInputTokens(usage.cachedInputTokens ?? 0, usage.inputTokens);
+  const uncachedInputTokens = usage.inputTokens - cachedInputTokens;
+  const cachedInputPrice = price.cachedInputUsdPerMillionTokens ?? price.inputUsdPerMillionTokens;
+  const inputCostUsd = roundUsd(
+    costFromTokens(uncachedInputTokens, price.inputUsdPerMillionTokens) +
+      costFromTokens(cachedInputTokens, cachedInputPrice),
+  );
   const outputCostUsd = costFromTokens(usage.outputTokens, price.outputUsdPerMillionTokens);
 
   return {
@@ -192,6 +200,7 @@ function openai(
   sourceUrl: string,
 ): PriceRegistryEntry & { modelId: string } {
   return {
+    cachedInputUsdPerMillionTokens: inputUsdPerMillionTokens / 4,
     currency: "USD",
     inputUsdPerMillionTokens,
     modelId,
@@ -234,6 +243,13 @@ function matchesManualOverride(
 
 function costFromTokens(tokens: number, usdPerMillionTokens: number): number {
   return roundUsd((tokens * usdPerMillionTokens) / 1_000_000);
+}
+
+function clampCachedInputTokens(cachedInputTokens: number, inputTokens: number): number {
+  if (!Number.isFinite(cachedInputTokens) || cachedInputTokens <= 0) {
+    return 0;
+  }
+  return Math.min(Math.floor(cachedInputTokens), inputTokens);
 }
 
 function roundUsd(value: number): number {

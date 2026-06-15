@@ -18,7 +18,11 @@ import {
 import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
-import { type GatewayUsageCostDetails, selectGatewayBaselineCandidate } from "./usage-recorder.js";
+import {
+  type GatewayUsageCostDetails,
+  readGatewayProviderTokenUsage,
+  selectGatewayBaselineCandidate,
+} from "./usage-recorder.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayEmbeddingsErrorCode =
@@ -201,6 +205,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
         baselineProviderModelId: baselineCandidate.providerModelId,
         estimatedInputTokens: requestMetadata.estimatedInputTokens,
         estimatedOutputTokens: 0,
+        providerUsage: readGatewayProviderTokenUsage(result.body),
         providerModelId: selected.providerModelId,
       },
     };

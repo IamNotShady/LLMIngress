@@ -8,22 +8,20 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { createFakeProviderServer } from "../support/fake-provider";
 
 const masterKey = "test-master-key";
-const providerApiKey = "sk-fake-provider-embeddings-067";
-const agentApiKey = "llmi_embeddings_gateway_key_067";
-const providerModelIdText = "text-embedding-3-small";
+const providerApiKey = "sk-fake-provider-cache-071";
+const agentApiKey = "llmi_prompt_cache_gateway_key_071";
 
-test("embeddings endpoint authenticates routes records activity usage cost and rejects disallowed virtual model without provider call", async () => {
+test("prompt caching tokens use cached input pricing fallback and affect usage cost savings records", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_embeddings_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_prompt_cache_${randomUUID().replaceAll("-", "_")}`,
   });
   const provider = await createFakeProviderServer();
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedEmbeddingsRoute(fixture, {
-      providerBaseUrl: `${provider.url}/v1?mode=embeddings`,
+    const seeded = await seedPromptCachingRoute(fixture, {
+      providerBaseUrl: `${provider.url}/v1?mode=cached-usage`,
     });
-
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
       port: await getFreePort(),
@@ -33,61 +31,48 @@ test("embeddings endpoint authenticates routes records activity usage cost and r
       const baseUrl = `http://127.0.0.1:${gateway.port}`;
       await waitForGateway(baseUrl, gateway);
 
-      const blockedResponse = await fetch(`${baseUrl}/v1/embeddings`, {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
-          input: "blocked embeddings text",
-          model: "blocked-embeddings",
+          max_tokens: 200,
+          messages: [{ content: "use provider cached token accounting", role: "user" }],
+          model: "prompt-cache-coding",
+          stream: false,
         }),
         headers: {
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
-          "x-request-id": "req_embeddings_blocked_067",
-        },
-        method: "POST",
-      });
-
-      expect(blockedResponse.status).toBe(403);
-      await expect(blockedResponse.json()).resolves.toMatchObject({
-        error: { code: "virtual_model_not_allowed" },
-        requestId: "req_embeddings_blocked_067",
-      });
-      expect(provider.requests).toHaveLength(0);
-
-      const response = await fetch(`${baseUrl}/v1/embeddings`, {
-        body: JSON.stringify({
-          dimensions: 256,
-          encoding_format: "float",
-          input: ["hello embeddings"],
-          model: "embedding-coding",
-        }),
-        headers: {
-          authorization: `Bearer ${agentApiKey}`,
-          "content-type": "application/json",
-          "x-request-id": "req_embeddings_allowed_067",
+          "x-request-id": "req_prompt_cache_071",
         },
         method: "POST",
       });
 
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toMatchObject({
-        data: [{ embedding: [0.1, 0.2, 0.3], index: 0, object: "embedding" }],
-        model: providerModelIdText,
-        object: "list",
+        id: "fake-provider-cached-usage",
+        object: "chat.completion",
       });
-      expect(provider.requests).toHaveLength(1);
-      expect(provider.requests[0]).toMatchObject({
-        bodyJson: {
-          dimensions: 256,
-          encoding_format: "float",
-          input: ["hello embeddings"],
-          model: providerModelIdText,
-        },
-        method: "POST",
-        path: "/v1/embeddings",
-      });
-      expect(provider.requests[0]?.headers.authorization).toBe(`Bearer ${providerApiKey}`);
 
-      await expectEmbeddingsRuntimeRows(fixture);
+      await expect
+        .poll(() => readPromptCachingCostRow(fixture))
+        .toEqual({
+          actual_cost_usd: "0.00015000",
+          baseline_cost_usd: "0.00300000",
+          baseline_provider_model_id: seeded.baselineProviderModelId,
+          cached_input_tokens: 400,
+          cost_source: "estimated",
+          input_cost_usd: "0.00007000",
+          input_tokens: 1000,
+          output_cost_usd: "0.00008000",
+          output_tokens: 200,
+          price_source: "built_in_static_snapshot",
+          provider_model_id: seeded.actualProviderModelId,
+          reasoning_tokens: 25,
+          request_id: "req_prompt_cache_071",
+          savings_usd: "0.00285000",
+          token_source: "provider",
+          total_cost_usd: "0.00015000",
+          total_tokens: 1200,
+        });
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -106,16 +91,40 @@ type GatewayProcess = {
   stdout: string[];
 };
 
-async function seedEmbeddingsRoute(
+type SeededPromptCachingRoute = {
+  actualProviderModelId: string;
+  baselineProviderModelId: string;
+};
+
+type PromptCachingCostRow = {
+  actual_cost_usd: string;
+  baseline_cost_usd: string;
+  baseline_provider_model_id: string;
+  cached_input_tokens: number;
+  cost_source: string;
+  input_cost_usd: string;
+  input_tokens: number;
+  output_cost_usd: string;
+  output_tokens: number;
+  price_source: string | null;
+  provider_model_id: string;
+  reasoning_tokens: number;
+  request_id: string;
+  savings_usd: string;
+  token_source: string;
+  total_cost_usd: string;
+  total_tokens: number;
+};
+
+async function seedPromptCachingRoute(
   fixture: Fixture,
   input: { providerBaseUrl: string },
-): Promise<void> {
+): Promise<SeededPromptCachingRoute> {
   const providerId = randomUUID();
-  const providerModelId = randomUUID();
-  const allowedVirtualModelId = randomUUID();
-  const blockedVirtualModelId = randomUUID();
+  const baselineProviderModelId = randomUUID();
+  const actualProviderModelId = randomUUID();
+  const virtualModelId = randomUUID();
   const routePolicyId = randomUUID();
-  const blockedRoutePolicyId = randomUUID();
   const agentId = randomUUID();
   const agentApiKeyId = randomUUID();
   const encrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
@@ -125,7 +134,7 @@ async function seedEmbeddingsRoute(
   await fixture.query(
     `
       insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
-      values ($1, 'api_key', 'fake-openai-embeddings', 'Fake OpenAI Embeddings', $2, true)
+      values ($1, 'api_key', 'openai', 'OpenAI', $2, true)
     `,
     [providerId, input.providerBaseUrl],
   );
@@ -154,25 +163,18 @@ async function seedEmbeddingsRoute(
         supports_tools,
         availability
       )
-      values ($1, $2, $3, 'Text Embedding 3 Small', 8191, false, false, 'available')
+      values ($1, $2, 'gpt-4.1', 'GPT 4.1', 128000, true, true, 'available'),
+             ($3, $2, 'gpt-4.1-nano', 'GPT 4.1 Nano', 128000, true, true, 'available')
     `,
-    [providerModelId, providerId, providerModelIdText],
+    [baselineProviderModelId, providerId, actualProviderModelId],
   );
   await fixture.query(
-    `
-      insert into virtual_models (id, name, display_name, enabled)
-      values ($1, 'embedding-coding', 'Embedding Coding', true),
-             ($2, 'blocked-embeddings', 'Blocked Embeddings', true)
-    `,
-    [allowedVirtualModelId, blockedVirtualModelId],
+    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'prompt-cache-coding', 'Prompt Cache Coding', true)",
+    [virtualModelId],
   );
   await fixture.query(
-    `
-      insert into route_policies (id, virtual_model_id, strategy)
-      values ($1, $2, 'fixed'),
-             ($3, $4, 'fixed')
-    `,
-    [routePolicyId, allowedVirtualModelId, blockedRoutePolicyId, blockedVirtualModelId],
+    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'cost_first')",
+    [routePolicyId, virtualModelId],
   );
   await fixture.query(
     `
@@ -184,12 +186,12 @@ async function seedEmbeddingsRoute(
         is_fallback
       )
       values ($1, $2, $3, 1, false),
-             ($4, $5, $3, 1, false)
+             ($4, $2, $5, 2, false)
     `,
-    [randomUUID(), routePolicyId, providerModelId, randomUUID(), blockedRoutePolicyId],
+    [randomUUID(), routePolicyId, baselineProviderModelId, randomUUID(), actualProviderModelId],
   );
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'Embeddings Agent', 'coding', true)",
+    "insert into agents (id, name, agent_type, enabled) values ($1, 'Prompt Cache Agent', 'coding', true)",
     [agentId],
   );
   await fixture.query(
@@ -209,7 +211,7 @@ async function seedEmbeddingsRoute(
       agentId,
       agentApiKey.slice(0, 12),
       buildGatewayAgentApiKeyHash(agentApiKey),
-      allowedVirtualModelId,
+      virtualModelId,
     ],
   );
   await fixture.query(
@@ -217,70 +219,43 @@ async function seedEmbeddingsRoute(
       insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
       values ($1, $2)
     `,
-    [agentApiKeyId, allowedVirtualModelId],
+    [agentApiKeyId, virtualModelId],
   );
   await fixture.query(
-    `
-      insert into model_price_overrides (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens
-      )
-      values ($1, 'fake-openai-embeddings', $2, 0.02, 0)
-    `,
-    [randomUUID(), providerModelIdText],
+    "insert into config_versions (version, source, description) values (1, 'console', 'Prompt caching config')",
   );
-  await fixture.query(
-    "insert into config_versions (version, source, description) values (1, 'console', 'Embeddings route config')",
-  );
+
+  return { actualProviderModelId, baselineProviderModelId };
 }
 
-async function expectEmbeddingsRuntimeRows(fixture: Fixture): Promise<void> {
-  const result = await fixture.query<{
-    cost_source: string;
-    http_status: number;
-    input_tokens: number;
-    output_tokens: number;
-    protocol: string;
-    request_id: string;
-    status: string;
-    token_source: string;
-    total_cost_usd: string;
-    total_tokens: number;
-  }>(
+async function readPromptCachingCostRow(fixture: Fixture): Promise<PromptCachingCostRow | null> {
+  const result = await fixture.query<PromptCachingCostRow>(
     `
       select request_activity.request_id,
-             request_activity.protocol,
-             request_activity.status,
-             request_activity.http_status,
+             request_usage.provider_model_id::text,
              request_usage.input_tokens,
              request_usage.output_tokens,
              request_usage.total_tokens,
+             request_usage.cached_input_tokens,
+             request_usage.reasoning_tokens,
              request_usage.token_source,
+             request_costs.input_cost_usd::text,
+             request_costs.output_cost_usd::text,
              request_costs.total_cost_usd::text,
-             request_costs.cost_source
+             request_costs.cost_source,
+             request_costs.price_source,
+             request_savings.baseline_provider_model_id::text,
+             request_savings.actual_cost_usd::text,
+             request_savings.baseline_cost_usd::text,
+             request_savings.savings_usd::text
       from request_activity
       join request_usage on request_usage.request_activity_id = request_activity.id
       join request_costs on request_costs.request_activity_id = request_activity.id
-      where request_activity.request_id = 'req_embeddings_allowed_067'
+      join request_savings on request_savings.request_activity_id = request_activity.id
+      where request_activity.request_id = 'req_prompt_cache_071'
     `,
   );
-
-  expect(result.rows).toHaveLength(1);
-  expect(result.rows[0]).toMatchObject({
-    cost_source: "estimated",
-    http_status: 200,
-    output_tokens: 0,
-    protocol: "embeddings",
-    request_id: "req_embeddings_allowed_067",
-    status: "succeeded",
-    token_source: "provider",
-  });
-  expect(result.rows[0]?.input_tokens).toBeGreaterThan(0);
-  expect(result.rows[0]?.total_tokens).toBe(result.rows[0]?.input_tokens);
-  expect(Number(result.rows[0]?.total_cost_usd)).toBeGreaterThan(0);
+  return result.rows[0] ?? null;
 }
 
 async function getFreePort(): Promise<number> {

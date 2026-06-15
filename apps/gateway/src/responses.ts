@@ -27,7 +27,11 @@ import {
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
-import { type GatewayUsageCostDetails, selectGatewayBaselineCandidate } from "./usage-recorder.js";
+import {
+  type GatewayUsageCostDetails,
+  readGatewayProviderTokenUsage,
+  selectGatewayBaselineCandidate,
+} from "./usage-recorder.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayResponsesErrorCode =
@@ -244,6 +248,7 @@ export async function executeGatewayOpenAIResponse(input: {
         baselineProviderModelId: baselineCandidate.providerModelId,
         estimatedInputTokens: requestMetadata.estimatedInputTokens,
         estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
+        providerUsage: readGatewayProviderTokenUsage(result.body),
         providerModelId: selectedCandidate.providerModelId,
       },
     };

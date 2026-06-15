@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 02:32 AWST
-**Active Feature:** none — 70 tracked features are `passing`; 25 V1 features are `pending`
+**Last Updated:** 2026-06-16 02:52 AWST
+**Active Feature:** none — 71 tracked features are `passing`; 24 V1 features are `pending`
 
 ## Status
 
@@ -75,6 +75,12 @@
   - Fallback execution tries every key for the selected provider before considering provider fallback, records failed key id/prefix without plaintext, and preserves the existing cross-provider fallback rule from feat-033.
   - Code review found and fixed a P2 regression in older fallback/activity E2E assertions after key attribution fields were added to `request_activity.fallback_attempts`.
   - Verification passed: feat-070 unit tests (2), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-017/033/044/053 unit and E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 69 prior passing features before marking, and final `pnpm run verify:features` across all 70 passing features after marking.
+- [x] **feat-071 — Prompt Caching Cost Accounting (passing)**:
+  - Provider usage parsing now detects cached input tokens from OpenAI-compatible and Anthropic usage shapes, including Anthropic `cache_read_input_tokens`.
+  - Usage/cost recording writes provider token counts, `cached_input_tokens`, and `reasoning_tokens` when providers return usage, while preserving estimated usage fallback.
+  - Price calculation uses cached-input pricing when present and normal input pricing when cached pricing is unavailable.
+  - Code review found and fixed the expected feat-067 embeddings token-source change from estimated to provider.
+  - Verification passed: feat-071 unit tests (3), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-045/067 unit and E2E regressions, `pnpm run verify`, full `pnpm run verify:features` across all 70 prior passing features before marking, and final `pnpm run verify:features` across all 71 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

@@ -9,7 +9,15 @@ export type GatewayUsageCostDetails = {
   baselineProviderModelId: string;
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
+  providerUsage?: GatewayProviderTokenUsage;
   providerModelId: string;
+};
+
+export type GatewayProviderTokenUsage = {
+  cachedInputTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
 };
 
 export type GatewayUsageCostRecords = {
@@ -31,9 +39,11 @@ export type GatewayUsageCostRecords = {
     savingsUsd: number | null;
   };
   requestUsage: {
+    cachedInputTokens: number;
     inputTokens: number;
     outputTokens: number;
-    tokenSource: "estimated";
+    reasoningTokens: number;
+    tokenSource: "estimated" | "provider";
     totalTokens: number;
   };
 };
@@ -66,9 +76,11 @@ export async function recordGatewayUsageCostAndSavings(
           input_tokens,
           output_tokens,
           total_tokens,
+          cached_input_tokens,
+          reasoning_tokens,
           token_source
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `,
       [
         randomUUID(),
@@ -79,6 +91,8 @@ export async function recordGatewayUsageCostAndSavings(
         records.requestUsage.inputTokens,
         records.requestUsage.outputTokens,
         records.requestUsage.totalTokens,
+        records.requestUsage.cachedInputTokens,
+        records.requestUsage.reasoningTokens,
         records.requestUsage.tokenSource,
       ],
     );
@@ -150,19 +164,16 @@ export async function recordGatewayUsageCostAndSavings(
 export function buildGatewayUsageCostRecords(
   input: GatewayUsageCostDetails,
 ): GatewayUsageCostRecords {
-  const usage = {
-    inputTokens: input.estimatedInputTokens,
-    outputTokens: input.estimatedOutputTokens,
-    tokenSource: "estimated" as const,
-    totalTokens: input.estimatedInputTokens + input.estimatedOutputTokens,
-  };
+  const usage = buildGatewayRequestUsage(input);
   const actualCost = calculateTokenCostUsd(input.actualPrice, {
-    inputTokens: input.estimatedInputTokens,
-    outputTokens: input.estimatedOutputTokens,
+    cachedInputTokens: usage.cachedInputTokens,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
   });
   const baselineCost = calculateTokenCostUsd(input.baselinePrice, {
-    inputTokens: input.estimatedInputTokens,
-    outputTokens: input.estimatedOutputTokens,
+    cachedInputTokens: usage.cachedInputTokens,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
   });
 
   if (actualCost.status !== "estimated") {
@@ -235,6 +246,55 @@ export function buildGatewayUsageCostRecords(
   };
 }
 
+export function readGatewayProviderTokenUsage(
+  body: unknown,
+): GatewayProviderTokenUsage | undefined {
+  if (!isRecord(body) || !isRecord(body.usage)) {
+    return undefined;
+  }
+
+  const providerInputTokens =
+    readNonNegativeInteger(body.usage.prompt_tokens) ??
+    readNonNegativeInteger(body.usage.input_tokens);
+  if (providerInputTokens === undefined) {
+    return undefined;
+  }
+
+  const anthropicCacheCreationInputTokens =
+    readNonNegativeInteger(body.usage.cache_creation_input_tokens) ?? 0;
+  const anthropicCacheReadInputTokens =
+    readNonNegativeInteger(body.usage.cache_read_input_tokens) ?? 0;
+  const hasAnthropicCacheUsage =
+    anthropicCacheCreationInputTokens > 0 || anthropicCacheReadInputTokens > 0;
+  const inputTokens = hasAnthropicCacheUsage
+    ? providerInputTokens + anthropicCacheCreationInputTokens + anthropicCacheReadInputTokens
+    : providerInputTokens;
+  const outputTokens =
+    readNonNegativeInteger(body.usage.completion_tokens) ??
+    readNonNegativeInteger(body.usage.output_tokens) ??
+    0;
+  const cachedInputTokens = Math.min(
+    readNestedNonNegativeInteger(body.usage.prompt_tokens_details, "cached_tokens") ??
+      readNestedNonNegativeInteger(body.usage.input_tokens_details, "cached_tokens") ??
+      (hasAnthropicCacheUsage ? anthropicCacheReadInputTokens : undefined) ??
+      readNonNegativeInteger(body.usage.cached_input_tokens) ??
+      0,
+    inputTokens,
+  );
+  const reasoningTokens =
+    readNestedNonNegativeInteger(body.usage.completion_tokens_details, "reasoning_tokens") ??
+    readNestedNonNegativeInteger(body.usage.output_tokens_details, "reasoning_tokens") ??
+    readNonNegativeInteger(body.usage.reasoning_tokens) ??
+    0;
+
+  return {
+    cachedInputTokens,
+    inputTokens,
+    outputTokens,
+    reasoningTokens,
+  };
+}
+
 export function selectGatewayBaselineCandidate(
   routePolicy: GatewayRoutePolicySnapshot,
 ): GatewayRouteCandidateSnapshot {
@@ -245,6 +305,45 @@ export function selectGatewayBaselineCandidate(
     throw new Error(`Route policy ${routePolicy.id} has no baseline candidate.`);
   }
   return candidate;
+}
+
+function buildGatewayRequestUsage(
+  input: GatewayUsageCostDetails,
+): GatewayUsageCostRecords["requestUsage"] {
+  if (input.providerUsage) {
+    return {
+      cachedInputTokens: input.providerUsage.cachedInputTokens,
+      inputTokens: input.providerUsage.inputTokens,
+      outputTokens: input.providerUsage.outputTokens,
+      reasoningTokens: input.providerUsage.reasoningTokens,
+      tokenSource: "provider",
+      totalTokens: input.providerUsage.inputTokens + input.providerUsage.outputTokens,
+    };
+  }
+
+  return {
+    cachedInputTokens: 0,
+    inputTokens: input.estimatedInputTokens,
+    outputTokens: input.estimatedOutputTokens,
+    reasoningTokens: 0,
+    tokenSource: "estimated",
+    totalTokens: input.estimatedInputTokens + input.estimatedOutputTokens,
+  };
+}
+
+function readNestedNonNegativeInteger(value: unknown, key: string): number | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  return readNonNegativeInteger(value[key]);
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function roundUsd(value: number): number {

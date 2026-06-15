@@ -15,7 +15,8 @@ export type FakeProviderMode =
   | "midstream-error"
   | "openrouter-error"
   | "gemini"
-  | "embeddings";
+  | "embeddings"
+  | "cached-usage";
 
 export type CapturedFakeProviderRequest = {
   method: string;
@@ -197,6 +198,26 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "cached-usage") {
+      writeJson(response, 200, {
+        id: "fake-provider-cached-usage",
+        object: "chat.completion",
+        choices: [{ index: 0, message: { role: "assistant", content: "fake cached response" } }],
+        usage: {
+          completion_tokens: 200,
+          completion_tokens_details: {
+            reasoning_tokens: 25,
+          },
+          prompt_tokens: 1000,
+          prompt_tokens_details: {
+            cached_tokens: 400,
+          },
+          total_tokens: 1200,
+        },
+      });
+      return;
+    }
+
     if (mode === "embeddings" && url.pathname.endsWith("/embeddings")) {
       writeJson(response, 200, {
         data: [
@@ -357,7 +378,8 @@ function readMode(url: URL): FakeProviderMode {
     mode === "midstream-error" ||
     mode === "openrouter-error" ||
     mode === "gemini" ||
-    mode === "embeddings"
+    mode === "embeddings" ||
+    mode === "cached-usage"
   ) {
     return mode;
   }

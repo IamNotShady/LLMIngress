@@ -781,8 +781,8 @@
         "feat-020",
         "feat-021"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-062 unit test because the Provider template selector group metadata API was missing, and E2E because the Console Provider area did not expose remote API-key/local template groups or fixed capability text. Added selector group metadata for remote API-key and local templates, rendered grouped Console template selector fieldsets with fixed base URL/path/capability summaries, and kept arbitrary endpoint rejection covered through template and legacy create paths. Code review found and fixed a P2 capability overstatement by removing unimplemented Ollama streaming from displayed local template capabilities. Verification passed — feat-062 unit tests 2 passed, real Chromium Console E2E 1 passed, related feat-020/021 unit and E2E regressions passed, pnpm run verify passed, verify:features passed all 61 prior passing features before marking, and final verify:features passed all 62 passing features after marking."
     },
     {
       "id": "feat-063",

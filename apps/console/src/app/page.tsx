@@ -27,8 +27,8 @@ import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "
 import { getManualPriceOverride } from "../server/price-overrides";
 import { listProviderApiKeyMetadata } from "../server/provider-keys";
 import {
-  listOllamaProviderTemplates,
-  listOpenAICompatibleProviderTemplates,
+  listProviderTemplateSelectorGroups,
+  type ProviderTemplateSelectorItem,
 } from "../server/provider-templates";
 import { listProviders } from "../server/providers";
 import {
@@ -54,8 +54,9 @@ import { Playground } from "./playground";
 
 const previewProviderKey = "openai";
 const previewModelId = "gpt-4.1-mini";
-const providerTemplates = listOpenAICompatibleProviderTemplates();
-const localProviderTemplates = listOllamaProviderTemplates();
+const providerTemplateGroups = listProviderTemplateSelectorGroups();
+const remoteProviderTemplateGroup = requireProviderTemplateGroup("remote_api_key");
+const localProviderTemplateGroup = requireProviderTemplateGroup("local");
 
 type HomeProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -877,47 +878,66 @@ export default async function Home({ searchParams }: HomeProps = {}) {
           <input id="provider-base-url" name="baseUrl" type="url" />
           <button type="submit">Create provider</button>
         </form>
-        <form className="provider-template-form" action="/api/providers" method="post">
-          <input type="hidden" name="action" value="createFromTemplate" />
-          <label htmlFor="provider-template">Provider template</label>
-          <select id="provider-template" name="templateId" required>
-            {providerTemplates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.displayName}
-              </option>
-            ))}
-          </select>
-          <button type="submit">Add template provider</button>
-        </form>
-        {localProviderTemplates.map((template) => (
-          <form
-            className="provider-template-form local-provider-template-form"
-            action="/api/providers"
-            method="post"
-            key={template.id}
-          >
-            <input type="hidden" name="action" value="createFromTemplate" />
-            <input type="hidden" name="templateId" value={template.id} />
-            <label htmlFor={`${template.id}-base-url`}>{template.displayName} base URL</label>
-            <input
-              id={`${template.id}-base-url`}
-              name="baseUrl"
-              type="url"
-              placeholder="http://127.0.0.1:11434"
-              required
-            />
-            <label className="checkbox-label" htmlFor={`${template.id}-public-risk`}>
-              <input
-                id={`${template.id}-public-risk`}
-                name="publicNetworkRiskAccepted"
-                type="checkbox"
-                value="true"
-              />
-              Accept public network risk
-            </label>
-            <button type="submit">Add local provider</button>
-          </form>
-        ))}
+        <div className="provider-template-selector">
+          <fieldset className="provider-template-group">
+            <legend>{remoteProviderTemplateGroup.label}</legend>
+            <form className="provider-template-form" action="/api/providers" method="post">
+              <input type="hidden" name="action" value="createFromTemplate" />
+              <label htmlFor="provider-template">Provider template</label>
+              <select id="provider-template" name="templateId" required>
+                {remoteProviderTemplateGroup.templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.displayName}
+                  </option>
+                ))}
+              </select>
+              <button type="submit">Add template provider</button>
+            </form>
+            <div className="provider-template-list">
+              {remoteProviderTemplateGroup.templates.map((template) => (
+                <ProviderTemplateSummary key={template.id} template={template} />
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="provider-template-group">
+            <legend>{localProviderTemplateGroup.label}</legend>
+            <div className="provider-template-list">
+              {localProviderTemplateGroup.templates.map((template) => (
+                <div className="provider-template-local-item" key={template.id}>
+                  <ProviderTemplateSummary template={template} />
+                  <form
+                    className="provider-template-form local-provider-template-form"
+                    action="/api/providers"
+                    method="post"
+                  >
+                    <input type="hidden" name="action" value="createFromTemplate" />
+                    <input type="hidden" name="templateId" value={template.id} />
+                    <label htmlFor={`${template.id}-base-url`}>
+                      {template.displayName} base URL
+                    </label>
+                    <input
+                      id={`${template.id}-base-url`}
+                      name="baseUrl"
+                      type="url"
+                      placeholder="http://127.0.0.1:11434"
+                      required
+                    />
+                    <label className="checkbox-label" htmlFor={`${template.id}-public-risk`}>
+                      <input
+                        id={`${template.id}-public-risk`}
+                        name="publicNetworkRiskAccepted"
+                        type="checkbox"
+                        value="true"
+                      />
+                      Accept public network risk
+                    </label>
+                    <button type="submit">Add local provider</button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          </fieldset>
+        </div>
         {modelRefreshProvider ? (
           <p role="status">Model refresh queued for {modelRefreshProvider.displayName}.</p>
         ) : null}
@@ -1088,6 +1108,41 @@ function formatUsd(value: number): string {
 
 function getPlaygroundGatewayBaseUrl(): string {
   return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
+}
+
+function ProviderTemplateSummary({ template }: { template: ProviderTemplateSelectorItem }) {
+  return (
+    <article className="provider-template-card">
+      <h3>{template.displayName}</h3>
+      {template.fixedBaseUrl ? <p>Fixed base URL: {template.fixedBaseUrl}</p> : null}
+      {template.baseUrlMode === "user_local_private" ? (
+        <p>Base URL: user-provided local/private URL</p>
+      ) : null}
+      {template.modelListPath ? <p>Model list path: {template.modelListPath}</p> : null}
+      {template.chatPath ? <p>Chat path: {template.chatPath}</p> : null}
+      <p>Capabilities: {formatProviderTemplateCapabilities(template)}</p>
+    </article>
+  );
+}
+
+function formatProviderTemplateCapabilities(template: ProviderTemplateSelectorItem): string {
+  return template.capabilities.map(formatProviderTemplateCapability).join(", ");
+}
+
+function formatProviderTemplateCapability(capability: string): string {
+  if (capability === "chat_completions") {
+    return "Chat completions";
+  }
+
+  return capability.charAt(0).toUpperCase() + capability.slice(1);
+}
+
+function requireProviderTemplateGroup(id: "remote_api_key" | "local") {
+  const group = providerTemplateGroups.find((candidate) => candidate.id === id);
+  if (!group) {
+    throw new Error(`Provider template group ${id} is missing.`);
+  }
+  return group;
 }
 
 function formatDateTime(value: Date): string {

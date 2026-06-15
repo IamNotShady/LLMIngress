@@ -224,6 +224,51 @@ dd {
   margin-top: 12px;
 }
 
+.provider-template-selector {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.provider-template-group {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  margin: 0;
+  padding: 14px;
+}
+
+.provider-template-group > legend {
+  color: #101828;
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.provider-template-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.provider-template-card {
+  background: #f9fafb;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.provider-template-card > h3 {
+  margin: 0 0 8px;
+}
+
+.provider-template-card > p {
+  margin: 4px 0;
+}
+
+.provider-template-local-item {
+  display: grid;
+  gap: 10px;
+}
+
 .local-provider-template-form {
   grid-template-columns: minmax(0, 1fr);
 }

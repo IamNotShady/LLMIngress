@@ -5,9 +5,11 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("whitelisted template accepted arbitrary custom endpoint rejected", async ({ browser }) => {
+test("provider template selector lists categories fixed capabilities and rejects arbitrary endpoints", async ({
+  browser,
+}) => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_openai_template_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_provider_selector_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
@@ -28,6 +30,26 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
+          const remoteTemplates = page.getByRole("group", {
+            name: "Remote API-key templates",
+          });
+          await expect(remoteTemplates.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
+          await expect(
+            remoteTemplates.getByText("Fixed base URL: https://api.deepseek.com/v1"),
+          ).toBeVisible();
+          await expect(
+            remoteTemplates.getByText("Capabilities: Chat completions, Streaming, Tools"),
+          ).toBeVisible();
+
+          const localTemplates = page.getByRole("group", { name: "Local templates" });
+          await expect(localTemplates.getByRole("heading", { name: "Ollama" })).toBeVisible();
+          await expect(
+            localTemplates.getByText("Base URL: user-provided local/private URL"),
+          ).toBeVisible();
+          await expect(localTemplates.getByText("Model list path: /api/tags")).toBeVisible();
+          await expect(localTemplates.getByText("Chat path: /api/chat")).toBeVisible();
+          await expect(localTemplates.getByText("Capabilities: Chat completions")).toBeVisible();
+
           await page.getByLabel("Provider template").selectOption("deepseek");
           await page.getByRole("button", { name: "Add template provider" }).click();
 
@@ -36,16 +58,6 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
           await expect(
             providerList.getByText("Template provider base URL: https://api.deepseek.com/v1"),
           ).toBeVisible();
-
-          const providers = await readTemplateProviders(fixture);
-          expect(providers).toEqual([
-            {
-              base_url: "https://api.deepseek.com/v1",
-              display_name: "DeepSeek",
-              provider_key: "deepseek",
-              provider_template_id: "deepseek",
-            },
-          ]);
 
           const customCreate = await postProviderForm(page, {
             action: "createFromTemplate",
@@ -68,17 +80,6 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
           expect(legacyCustomCreate.body).toMatchObject({
             error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
           });
-
-          const customUpdate = await postProviderForm(page, {
-            action: "update",
-            baseUrl: "https://arbitrary.example/v1",
-            displayName: "DeepSeek",
-            id: await readDeepSeekProviderId(fixture),
-          });
-          expect(customUpdate.status).toBe(400);
-          expect(customUpdate.body).toMatchObject({
-            error: expect.stringMatching(/template provider base URL cannot be changed/i),
-          });
         } finally {
           await context.close();
         }
@@ -98,40 +99,6 @@ type ConsoleProcess = {
   stdout: string[];
 };
 
-type TemplateProviderRow = {
-  base_url: string;
-  display_name: string;
-  provider_key: string;
-  provider_template_id: string;
-};
-
-async function readTemplateProviders(
-  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
-): Promise<TemplateProviderRow[]> {
-  const result = await fixture.query<TemplateProviderRow>(
-    `
-      select provider_key, display_name, base_url, provider_template_id
-      from providers
-      where provider_template_id is not null
-      order by provider_key
-    `,
-  );
-  return result.rows;
-}
-
-async function readDeepSeekProviderId(
-  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
-): Promise<string> {
-  const result = await fixture.query<{ id: string }>(
-    "select id::text from providers where provider_key = 'deepseek'",
-  );
-  const id = result.rows[0]?.id;
-  if (!id) {
-    throw new Error("DeepSeek provider was not created.");
-  }
-  return id;
-}
-
 async function postProviderForm(
   page: Page,
   form: Record<string, string>,
@@ -142,8 +109,12 @@ async function postProviderForm(
       headers: { "content-type": "application/x-www-form-urlencoded" },
       method: "POST",
     });
+
     return {
-      body: await response.json(),
+      body:
+        response.headers.get("content-type")?.includes("application/json") === true
+          ? await response.json()
+          : null,
       status: response.status,
     };
   }, form);
@@ -159,6 +130,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string) {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

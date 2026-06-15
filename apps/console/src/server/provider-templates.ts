@@ -2,6 +2,8 @@ import type { ProviderType } from "./providers";
 
 export type OpenAICompatibleProviderTemplateId = "deepseek";
 export type OllamaProviderTemplateId = "ollama";
+export type ProviderTemplateSelectorGroupId = "remote_api_key" | "local";
+export type ProviderTemplateSelectorCapability = "chat_completions" | "streaming" | "tools";
 
 export type ProviderTemplateCreateInput = {
   baseUrl: string;
@@ -36,6 +38,24 @@ export type ProviderTemplateFormInput = {
   templateId?: string | null;
 };
 
+export type ProviderTemplateSelectorItem = {
+  baseUrlMode: "fixed_remote" | "user_local_private";
+  capabilities: ProviderTemplateSelectorCapability[];
+  chatPath?: string;
+  displayName: string;
+  fixedBaseUrl?: string;
+  id: OpenAICompatibleProviderTemplateId | OllamaProviderTemplateId;
+  modelListPath?: string;
+  providerKey: string;
+  providerType: ProviderType;
+};
+
+export type ProviderTemplateSelectorGroup = {
+  id: ProviderTemplateSelectorGroupId;
+  label: string;
+  templates: ProviderTemplateSelectorItem[];
+};
+
 const templates: Record<OpenAICompatibleProviderTemplateId, OpenAICompatibleProviderTemplate> = {
   deepseek: {
     baseUrl: "https://api.deepseek.com/v1",
@@ -66,6 +86,38 @@ export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProvide
 
 export function listOllamaProviderTemplates(): OllamaProviderTemplate[] {
   return [copyOllamaTemplate(ollamaTemplate)];
+}
+
+export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGroup[] {
+  return [
+    {
+      id: "remote_api_key",
+      label: "Remote API-key templates",
+      templates: listOpenAICompatibleProviderTemplates().map((template) => ({
+        baseUrlMode: "fixed_remote",
+        capabilities: readOpenAICompatibleCapabilities(template),
+        displayName: template.displayName,
+        fixedBaseUrl: template.baseUrl,
+        id: template.id,
+        providerKey: template.providerKey,
+        providerType: template.providerType,
+      })),
+    },
+    {
+      id: "local",
+      label: "Local templates",
+      templates: listOllamaProviderTemplates().map((template) => ({
+        baseUrlMode: "user_local_private",
+        capabilities: ["chat_completions"],
+        chatPath: template.chatPath,
+        displayName: template.displayName,
+        id: template.id,
+        modelListPath: template.modelListPath,
+        providerKey: template.providerKey,
+        providerType: template.providerType,
+      })),
+    },
+  ];
 }
 
 export function getOpenAICompatibleProviderTemplate(
@@ -148,6 +200,26 @@ function copyTemplate(
 
 function copyOllamaTemplate(template: OllamaProviderTemplate): OllamaProviderTemplate {
   return { ...template };
+}
+
+function readOpenAICompatibleCapabilities(
+  template: OpenAICompatibleProviderTemplate,
+): ProviderTemplateSelectorCapability[] {
+  const capabilities: ProviderTemplateSelectorCapability[] = [];
+
+  if (template.capabilities.chatCompletions) {
+    capabilities.push("chat_completions");
+  }
+
+  if (template.capabilities.streaming) {
+    capabilities.push("streaming");
+  }
+
+  if (template.capabilities.tools) {
+    capabilities.push("tools");
+  }
+
+  return capabilities;
 }
 
 function readHttpUrl(value: string): URL {

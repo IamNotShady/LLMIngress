@@ -1120,6 +1120,7 @@ function ProviderTemplateSummary({ template }: { template: ProviderTemplateSelec
       ) : null}
       {template.modelListPath ? <p>Model list path: {template.modelListPath}</p> : null}
       {template.chatPath ? <p>Chat path: {template.chatPath}</p> : null}
+      {template.auth ? <p>Auth: {formatProviderTemplateAuth(template)}</p> : null}
       <p>Capabilities: {formatProviderTemplateCapabilities(template)}</p>
     </article>
   );
@@ -1135,6 +1136,14 @@ function formatProviderTemplateCapability(capability: string): string {
   }
 
   return capability.charAt(0).toUpperCase() + capability.slice(1);
+}
+
+function formatProviderTemplateAuth(template: ProviderTemplateSelectorItem): string {
+  if (!template.auth) {
+    return "None";
+  }
+
+  return `${template.auth.header} ${template.auth.scheme} API key`;
 }
 
 function requireProviderTemplateGroup(id: "remote_api_key" | "local") {

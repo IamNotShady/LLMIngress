@@ -1,16 +1,66 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
-test("whitelisted template accepted arbitrary custom endpoint rejected", async ({ browser }) => {
+const remoteTemplateExpectations = [
+  ["deepseek", "DeepSeek", "https://api.deepseek.com"],
+  ["xai", "xAI", "https://api.x.ai/v1"],
+  ["mistral", "Mistral", "https://api.mistral.ai/v1"],
+  ["qwen", "Qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"],
+  ["moonshot", "Moonshot/Kimi", "https://api.moonshot.ai/v1"],
+  ["minimax", "MiniMax", "https://api.minimax.io/v1"],
+  ["groq", "Groq", "https://api.groq.com/openai/v1"],
+  ["fireworks", "Fireworks AI", "https://api.fireworks.ai/inference/v1"],
+  ["zai", "Z.ai", "https://api.z.ai/api/paas/v4"],
+] as const;
+
+test("all nine remote templates expose fixed urls capabilities auth behavior and representative generic adapter request works", async ({
+  browser,
+}) => {
+  const provider = await createFakeProviderServer();
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_openai_template_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_remote_templates_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
+    const adapter = createOpenAIProviderAdapter();
+    const representative = await adapter.chatCompletion({
+      request: {
+        messages: [{ role: "user", content: "Say hi through a long-tail template" }],
+        stream: false,
+      },
+      target: {
+        apiKey: "sk-remote-template-e2e",
+        baseUrl: `${provider.url}/openai/v1`,
+        modelId: "llmingress-template-smoke",
+      },
+    });
+
+    expect(representative).toMatchObject({
+      body: {
+        choices: [{ message: { content: "fake provider response" } }],
+        id: "fake-provider-response",
+      },
+      ok: true,
+      providerRequestId: "fake-provider-response",
+      statusCode: 200,
+    });
+    expect(provider.requests[0]).toMatchObject({
+      bodyJson: {
+        messages: [{ role: "user", content: "Say hi through a long-tail template" }],
+        model: "llmingress-template-smoke",
+        stream: false,
+      },
+      method: "POST",
+      path: "/openai/v1/chat/completions",
+    });
+    expect(provider.requests[0]?.headers.authorization).toBe("Bearer sk-remote-template-e2e");
+
     await runMigrations({ databaseUrl: fixture.databaseUrl });
 
     await withProcessLock("llmingress-console-next-dev", async () => {
@@ -28,57 +78,43 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
-          await page.getByLabel("Provider template").selectOption("deepseek");
+          const remoteTemplates = page.getByRole("group", {
+            name: "Remote API-key templates",
+          });
+          for (const [id, displayName, fixedBaseUrl] of remoteTemplateExpectations) {
+            const templateCard = remoteTemplates.locator(".provider-template-card").filter({
+              has: page.getByRole("heading", { name: displayName }),
+            });
+            await expect(templateCard.getByRole("heading", { name: displayName })).toBeVisible();
+            await expect(templateCard.getByText(`Fixed base URL: ${fixedBaseUrl}`)).toBeVisible();
+            await expect(
+              templateCard.getByText("Capabilities: Chat completions, Streaming, Tools"),
+            ).toBeVisible();
+            await expect(
+              templateCard.getByText("Auth: Authorization Bearer API key"),
+            ).toBeVisible();
+            await expect(page.getByLabel("Provider template")).toContainText(displayName);
+            await page.getByLabel("Provider template").selectOption(id);
+          }
+
+          await page.getByLabel("Provider template").selectOption("groq");
           await page.getByRole("button", { name: "Add template provider" }).click();
 
           const providerList = page.locator(".provider-list");
-          await expect(providerList.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
+          await expect(providerList.getByRole("heading", { name: "Groq" })).toBeVisible();
           await expect(
-            providerList.getByText("Template provider base URL: https://api.deepseek.com"),
+            providerList.getByText("Template provider base URL: https://api.groq.com/openai/v1"),
           ).toBeVisible();
 
           const providers = await readTemplateProviders(fixture);
           expect(providers).toEqual([
             {
-              base_url: "https://api.deepseek.com",
-              display_name: "DeepSeek",
-              provider_key: "deepseek",
-              provider_template_id: "deepseek",
+              base_url: "https://api.groq.com/openai/v1",
+              display_name: "Groq",
+              provider_key: "groq",
+              provider_template_id: "groq",
             },
           ]);
-
-          const customCreate = await postProviderForm(page, {
-            action: "createFromTemplate",
-            baseUrl: "https://arbitrary.example/v1",
-            templateId: "deepseek",
-          });
-          expect(customCreate.status).toBe(400);
-          expect(customCreate.body).toMatchObject({
-            error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
-          });
-
-          const legacyCustomCreate = await postProviderForm(page, {
-            action: "create",
-            baseUrl: "https://arbitrary.example/v1",
-            displayName: "Custom",
-            providerKey: "custom",
-            providerType: "api_key",
-          });
-          expect(legacyCustomCreate.status).toBe(400);
-          expect(legacyCustomCreate.body).toMatchObject({
-            error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
-          });
-
-          const customUpdate = await postProviderForm(page, {
-            action: "update",
-            baseUrl: "https://arbitrary.example/v1",
-            displayName: "DeepSeek",
-            id: await readDeepSeekProviderId(fixture),
-          });
-          expect(customUpdate.status).toBe(400);
-          expect(customUpdate.body).toMatchObject({
-            error: expect.stringMatching(/template provider base URL cannot be changed/i),
-          });
         } finally {
           await context.close();
         }
@@ -88,6 +124,7 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
     });
   } finally {
     await fixture.dispose();
+    await provider.close();
   }
 });
 
@@ -119,37 +156,7 @@ async function readTemplateProviders(
   return result.rows;
 }
 
-async function readDeepSeekProviderId(
-  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
-): Promise<string> {
-  const result = await fixture.query<{ id: string }>(
-    "select id::text from providers where provider_key = 'deepseek'",
-  );
-  const id = result.rows[0]?.id;
-  if (!id) {
-    throw new Error("DeepSeek provider was not created.");
-  }
-  return id;
-}
-
-async function postProviderForm(
-  page: Page,
-  form: Record<string, string>,
-): Promise<{ body: unknown; status: number }> {
-  return page.evaluate(async (formInput) => {
-    const response = await fetch("/api/providers", {
-      body: new URLSearchParams(formInput),
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      method: "POST",
-    });
-    return {
-      body: await response.json(),
-      status: response.status,
-    };
-  }, form);
-}
-
-async function signInFromFirstRun(page: Page, baseUrl: string) {
+async function signInFromFirstRun(page: import("@playwright/test").Page, baseUrl: string) {
   const password = "correct horse battery staple";
 
   await page.goto(baseUrl);
@@ -159,6 +166,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string) {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

@@ -788,15 +788,15 @@
       "id": "feat-063",
       "name": "V1 Remote OpenAI-Compatible Templates",
       "description": "DeepSeek, xAI, Mistral, Qwen, Moonshot/Kimi, MiniMax, Groq, Fireworks AI, and Z.ai each define a whitelisted remote OpenAI-compatible template with fixed base URL, capabilities, and auth behavior; one representative template completes a fake-provider chat request through the generic adapter.",
-      "verification": "pnpm exec vitest run tests/features/feat-063-remote-openai-compatible-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-063-remote-openai-compatible-templates.e2e.spec.ts --grep 'all nine remote templates expose fixed urls capabilities and representative generic adapter request works'",
+      "verification": "pnpm exec vitest run tests/features/feat-063-remote-openai-compatible-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-063-remote-openai-compatible-templates.e2e.spec.ts --grep 'all nine remote templates expose fixed urls capabilities auth behavior and representative generic adapter request works'",
       "dependencies": [
         "feat-004",
         "feat-018",
         "feat-020",
         "feat-062"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-063 unit tests because only DeepSeek was defined, remote template auth metadata was missing, and no 0009 migration allowed the new template ids; E2E red because Console did not expose auth behavior/all nine remote templates. Added all nine V1 remote OpenAI-compatible templates (DeepSeek, xAI, Mistral, Qwen, Moonshot/Kimi, MiniMax, Groq, Fireworks AI, Z.ai) with fixed base URLs, Bearer auth metadata, shared chat/stream/tools capabilities, selector auth display, and 0009 provider_template_id whitelist migration. Representative fake-provider request verifies the generic OpenAI-compatible adapter sends the expected chat payload and Authorization Bearer header. Code review found and fixed a P2 regional endpoint issue by using the international Moonshot/Kimi and Z.ai base URLs. Verification passed — feat-063 unit tests 4 passed, real Chromium/fake-provider E2E 1 passed, related feat-020/021/062 unit and E2E regressions passed, db:migrate:check passed, pnpm run verify passed, verify:features passed all 62 prior passing features before marking, and final verify:features passed all 63 passing features after marking and P2 endpoint correction."
     },
     {
       "id": "feat-064",

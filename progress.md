@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 23:32 AWST
-**Active Feature:** none — 62 tracked features are `passing`; 33 V1 features are `pending`
+**Last Updated:** 2026-06-16 00:01 AWST
+**Active Feature:** none — 63 tracked features are `passing`; 32 V1 features are `pending`
 
 ## Status
 
@@ -22,6 +22,13 @@
   - Template and legacy provider create paths continue to reject arbitrary OpenAI-compatible endpoints.
   - Code review found and fixed a P2 capability overstatement by removing unimplemented Ollama streaming from local template capabilities.
   - Verification passed: feat-062 unit tests (2), real Chromium Console E2E (1), related feat-020/021 unit and E2E regressions, `pnpm run verify`, full regression of all 61 prior passing features before marking, and final `pnpm run verify:features` across all 62 passing features after marking.
+- [x] **feat-063 — V1 Remote OpenAI-Compatible Templates (passing)**:
+  - Added all nine V1 remote OpenAI-compatible templates: DeepSeek, xAI, Mistral, Qwen, Moonshot/Kimi, MiniMax, Groq, Fireworks AI, and Z.ai.
+  - Templates now carry fixed base URLs, Bearer auth metadata, and shared chat/stream/tools capability metadata surfaced in the Console selector.
+  - Added migration `0009_remote_openai_compatible_templates` so the database whitelist accepts the new remote template ids.
+  - Representative fake-provider E2E proves the generic OpenAI-compatible adapter sends the expected chat payload and Authorization Bearer header.
+  - Code review found and fixed a P2 regional endpoint issue by using the international Moonshot/Kimi and Z.ai base URLs.
+  - Verification passed: feat-063 unit tests (4), real Chromium/fake-provider E2E (1), related feat-020/021/062 unit and E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, full regression of all 62 prior passing features before marking, and final `pnpm run verify:features` across all 63 passing features after marking and P2 endpoint correction.
 - [x] **feat-045 — Usage Cost Baseline and Savings Recorder (passing)**:
   - Added Gateway usage/cost/savings recorder for completed successful non-streaming requests.
   - Chat completions, Responses, and Anthropic Messages now return usage-cost details after successful provider execution; the activity wrapper persists `request_usage`, `request_costs`, and `request_savings`.

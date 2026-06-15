@@ -7,44 +7,53 @@ import { normalizeProviderFormInput } from "../../apps/console/src/server/provid
 
 describe("feat-062 provider template selector", () => {
   it("lists remote API-key and local template groups with fixed capabilities", () => {
-    expect(listProviderTemplateSelectorGroups()).toEqual([
-      {
-        id: "remote_api_key",
-        label: "Remote API-key templates",
-        templates: [
-          {
-            baseUrlMode: "fixed_remote",
-            capabilities: ["chat_completions", "streaming", "tools"],
-            displayName: "DeepSeek",
-            fixedBaseUrl: "https://api.deepseek.com/v1",
-            id: "deepseek",
-            providerKey: "deepseek",
-            providerType: "api_key",
+    const groups = listProviderTemplateSelectorGroups();
+    const remoteGroup = groups.find((group) => group.id === "remote_api_key");
+    const localGroup = groups.find((group) => group.id === "local");
+
+    expect(remoteGroup).toMatchObject({
+      id: "remote_api_key",
+      label: "Remote API-key templates",
+    });
+    expect(remoteGroup?.templates).toHaveLength(9);
+    expect(remoteGroup?.templates).toEqual(
+      expect.arrayContaining([
+        {
+          auth: {
+            header: "Authorization",
+            scheme: "Bearer",
           },
-        ],
-      },
-      {
-        id: "local",
-        label: "Local templates",
-        templates: [
-          {
-            baseUrlMode: "user_local_private",
-            capabilities: ["chat_completions"],
-            chatPath: "/api/chat",
-            displayName: "Ollama",
-            id: "ollama",
-            modelListPath: "/api/tags",
-            providerKey: "ollama",
-            providerType: "local",
-          },
-        ],
-      },
-    ]);
+          baseUrlMode: "fixed_remote",
+          capabilities: ["chat_completions", "streaming", "tools"],
+          displayName: "DeepSeek",
+          fixedBaseUrl: "https://api.deepseek.com",
+          id: "deepseek",
+          providerKey: "deepseek",
+          providerType: "api_key",
+        },
+      ]),
+    );
+    expect(localGroup).toEqual({
+      id: "local",
+      label: "Local templates",
+      templates: [
+        {
+          baseUrlMode: "user_local_private",
+          capabilities: ["chat_completions"],
+          chatPath: "/api/chat",
+          displayName: "Ollama",
+          id: "ollama",
+          modelListPath: "/api/tags",
+          providerKey: "ollama",
+          providerType: "local",
+        },
+      ],
+    });
   });
 
   it("accepts only whitelisted selector templates and rejects arbitrary endpoints", () => {
     expect(normalizeProviderTemplateFormInput({ templateId: "deepseek" })).toMatchObject({
-      baseUrl: "https://api.deepseek.com/v1",
+      baseUrl: "https://api.deepseek.com",
       providerKey: "deepseek",
       providerType: "api_key",
     });

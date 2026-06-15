@@ -1,9 +1,22 @@
 import type { ProviderType } from "./providers";
 
-export type OpenAICompatibleProviderTemplateId = "deepseek";
+export type OpenAICompatibleProviderTemplateId =
+  | "deepseek"
+  | "fireworks"
+  | "groq"
+  | "minimax"
+  | "mistral"
+  | "moonshot"
+  | "qwen"
+  | "xai"
+  | "zai";
 export type OllamaProviderTemplateId = "ollama";
 export type ProviderTemplateSelectorGroupId = "remote_api_key" | "local";
 export type ProviderTemplateSelectorCapability = "chat_completions" | "streaming" | "tools";
+export type ProviderTemplateAuthBehavior = {
+  header: "Authorization";
+  scheme: "Bearer";
+};
 
 export type ProviderTemplateCreateInput = {
   baseUrl: string;
@@ -15,6 +28,7 @@ export type ProviderTemplateCreateInput = {
 };
 
 export type OpenAICompatibleProviderTemplate = ProviderTemplateCreateInput & {
+  auth: ProviderTemplateAuthBehavior;
   capabilities: {
     chatCompletions: boolean;
     streaming: boolean;
@@ -39,6 +53,7 @@ export type ProviderTemplateFormInput = {
 };
 
 export type ProviderTemplateSelectorItem = {
+  auth?: ProviderTemplateAuthBehavior;
   baseUrlMode: "fixed_remote" | "user_local_private";
   capabilities: ProviderTemplateSelectorCapability[];
   chatPath?: string;
@@ -56,19 +71,63 @@ export type ProviderTemplateSelectorGroup = {
   templates: ProviderTemplateSelectorItem[];
 };
 
+const remoteTemplateAuth: ProviderTemplateAuthBehavior = {
+  header: "Authorization",
+  scheme: "Bearer",
+};
+
+const defaultOpenAICompatibleCapabilities = {
+  chatCompletions: true,
+  streaming: true,
+  tools: true,
+};
+
 const templates: Record<OpenAICompatibleProviderTemplateId, OpenAICompatibleProviderTemplate> = {
-  deepseek: {
-    baseUrl: "https://api.deepseek.com/v1",
-    capabilities: {
-      chatCompletions: true,
-      streaming: true,
-      tools: true,
-    },
+  deepseek: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.deepseek.com",
     displayName: "DeepSeek",
     id: "deepseek",
-    providerKey: "deepseek",
-    providerType: "api_key",
-  },
+  }),
+  xai: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.x.ai/v1",
+    displayName: "xAI",
+    id: "xai",
+  }),
+  mistral: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.mistral.ai/v1",
+    displayName: "Mistral",
+    id: "mistral",
+  }),
+  qwen: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    displayName: "Qwen",
+    id: "qwen",
+  }),
+  moonshot: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.moonshot.ai/v1",
+    displayName: "Moonshot/Kimi",
+    id: "moonshot",
+  }),
+  minimax: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.minimax.io/v1",
+    displayName: "MiniMax",
+    id: "minimax",
+  }),
+  groq: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.groq.com/openai/v1",
+    displayName: "Groq",
+    id: "groq",
+  }),
+  fireworks: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+    displayName: "Fireworks AI",
+    id: "fireworks",
+  }),
+  zai: createOpenAICompatibleProviderTemplate({
+    baseUrl: "https://api.z.ai/api/paas/v4",
+    displayName: "Z.ai",
+    id: "zai",
+  }),
 };
 
 const ollamaTemplate: OllamaProviderTemplate = {
@@ -94,6 +153,7 @@ export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGr
       id: "remote_api_key",
       label: "Remote API-key templates",
       templates: listOpenAICompatibleProviderTemplates().map((template) => ({
+        auth: { ...template.auth },
         baseUrlMode: "fixed_remote",
         capabilities: readOpenAICompatibleCapabilities(template),
         displayName: template.displayName,
@@ -155,7 +215,7 @@ export function normalizeProviderTemplateFormInput(
 }
 
 export function isKnownProviderTemplateKey(providerKey: string): boolean {
-  return providerKey === "deepseek" || providerKey === "ollama";
+  return isOpenAICompatibleProviderTemplateId(providerKey) || providerKey === "ollama";
 }
 
 function normalizeOllamaTemplateFormInput(
@@ -186,7 +246,7 @@ function normalizeOllamaTemplateFormInput(
 function isOpenAICompatibleProviderTemplateId(
   value: string | null | undefined,
 ): value is OpenAICompatibleProviderTemplateId {
-  return value === "deepseek";
+  return typeof value === "string" && Object.hasOwn(templates, value);
 }
 
 function copyTemplate(
@@ -194,6 +254,7 @@ function copyTemplate(
 ): OpenAICompatibleProviderTemplate {
   return {
     ...template,
+    auth: { ...template.auth },
     capabilities: { ...template.capabilities },
   };
 }
@@ -220,6 +281,22 @@ function readOpenAICompatibleCapabilities(
   }
 
   return capabilities;
+}
+
+function createOpenAICompatibleProviderTemplate(input: {
+  baseUrl: string;
+  displayName: string;
+  id: OpenAICompatibleProviderTemplateId;
+}): OpenAICompatibleProviderTemplate {
+  return {
+    auth: { ...remoteTemplateAuth },
+    baseUrl: input.baseUrl,
+    capabilities: { ...defaultOpenAICompatibleCapabilities },
+    displayName: input.displayName,
+    id: input.id,
+    providerKey: input.id,
+    providerType: "api_key",
+  };
 }
 
 function readHttpUrl(value: string): URL {

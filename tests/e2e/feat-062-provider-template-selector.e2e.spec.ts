@@ -33,12 +33,18 @@ test("provider template selector lists categories fixed capabilities and rejects
           const remoteTemplates = page.getByRole("group", {
             name: "Remote API-key templates",
           });
-          await expect(remoteTemplates.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
+          const deepSeekTemplate = remoteTemplates.locator(".provider-template-card").filter({
+            has: page.getByRole("heading", { name: "DeepSeek" }),
+          });
+          await expect(deepSeekTemplate.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
           await expect(
-            remoteTemplates.getByText("Fixed base URL: https://api.deepseek.com/v1"),
+            deepSeekTemplate.getByText("Fixed base URL: https://api.deepseek.com"),
           ).toBeVisible();
           await expect(
-            remoteTemplates.getByText("Capabilities: Chat completions, Streaming, Tools"),
+            deepSeekTemplate.getByText("Auth: Authorization Bearer API key"),
+          ).toBeVisible();
+          await expect(
+            deepSeekTemplate.getByText("Capabilities: Chat completions, Streaming, Tools"),
           ).toBeVisible();
 
           const localTemplates = page.getByRole("group", { name: "Local templates" });
@@ -56,7 +62,7 @@ test("provider template selector lists categories fixed capabilities and rejects
           const providerList = page.locator(".provider-list");
           await expect(providerList.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
           await expect(
-            providerList.getByText("Template provider base URL: https://api.deepseek.com/v1"),
+            providerList.getByText("Template provider base URL: https://api.deepseek.com"),
           ).toBeVisible();
 
           const customCreate = await postProviderForm(page, {

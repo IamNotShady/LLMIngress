@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 06:49 AWST
-**Active Feature:** none — 80 tracked features are `passing`; 15 V1 features are `pending`
+**Last Updated:** 2026-06-16 07:11 AWST
+**Active Feature:** none — 81 tracked features are `passing`; 14 V1 features are `pending`
 
 ## Status
 
@@ -135,6 +135,12 @@
   - Import validates template whitelist and references, rejects non-redacted secrets, preserves provider/Agent secret safety, round-trips supported configuration, and publishes a config version.
   - P2+ review found and fixed coverage for same-DB import preserving existing real Agent API key hashes instead of replacing them with redacted placeholders.
   - Verification passed: feat-080 unit tests (2), real Chromium/PostgreSQL Console E2E (1), `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, full `pnpm run verify:features` across all 79 prior passing features before marking, and final `pnpm run verify:features` across all 80 passing features after marking.
+- [x] **feat-081 — JSONL Request Logs Export (passing)**:
+  - Added migration `0016_jsonl_request_log_export` for `jsonl_export` jobs and `export_tasks` tracking.
+  - Added a Worker `jsonl_export` handler that exports request metadata, Agent/API key prefix, Virtual Model, provider/model, usage, cost, fallback events, and errors as one JSON object per request in a JSONL artifact.
+  - Export avoids provider encrypted keys and Agent key hashes, redacts secret-like values in metadata and error fields, and preserves safe identifiers such as key prefixes and provider keys.
+  - P2+ review found and fixed absent usage/cost rows being exported as fake zero/null objects instead of `null`.
+  - Verification passed: feat-081 unit tests (3), real PostgreSQL Worker E2E (1), `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 80 prior passing features before marking, and final `pnpm run verify:features` across all 81 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

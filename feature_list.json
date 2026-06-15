@@ -1056,8 +1056,8 @@
         "feat-044",
         "feat-046"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-081 unit and E2E tests because apps/worker/src/jsonl-export was missing. Added migration 0016 to allow jsonl_export jobs and track export_tasks, plus a Worker jsonl_export handler registered in the default Worker. The handler reads request_activity metadata with Agent, Agent API Key prefix, Virtual Model, route policy, provider/model, usage, cost, fallback_events, and errors; writes one JSON object per request to an outputPath JSONL artifact; records the export task and job result; and avoids selecting provider encrypted keys or Agent key hashes. Secret-like values in route metadata, fallback attempts, fallback error messages, and activity error messages are redacted while key prefixes and provider keys remain usable identifiers. P2+ review found and fixed absent usage/cost rows being exported as fake zero/null objects instead of null. Verification passed: feat-081 unit tests (3), real PostgreSQL Worker E2E (1), pnpm run db:migrate:check, pnpm run verify, full verify:features passed all 80 prior passing features before marking, and final verify:features passed all 81 passing features after marking."
     },
     {
       "id": "feat-082",

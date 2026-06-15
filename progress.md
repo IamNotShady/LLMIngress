@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 18:24 AWST
-**Active Feature:** none — 59 features are `passing`; `feat-059` remains pending
+**Last Updated:** 2026-06-15 18:41 AWST
+**Active Feature:** none — all 60 tracked features are `passing`
 
 ## Status
 
@@ -82,6 +82,13 @@
   - Manual price overrides allow the same Route Policy to save successfully.
   - Code review found no P2+ issues.
   - Verification passed: feat-058 unit test (1), real Chromium/PostgreSQL Console E2E (1), `pnpm run verify`, full regression of all 58 prior passing features before marking, and final `pnpm run verify:features` across all 59 passing features after marking.
+- [x] **feat-059 — Real Agent OpenAI-Compatible Smoke (passing)**:
+  - Added a Hermes-like OpenAI-compatible chat/completions smoke request with system prompt, large tool-heavy user prompt, OpenAI function tools, and default-limit assertions.
+  - Gateway OpenAI chat normalization, non-streaming provider adapter payloads, and streaming chat payloads now preserve `tool_choice` and `tools`.
+  - Invalid OpenAI `tool_choice` strings are rejected before provider execution; valid string modes are `auto`, `none`, and `required`.
+  - E2E starts a real Gateway against isolated PostgreSQL and fake provider, then verifies HTTP 200 under Agent-ready default limits, provider hit with forwarded tools, succeeded `request_activity`, `request_usage`, and estimated `request_costs`.
+  - Code review found no P2+ issues; a minor review hardening restricted OpenAI `tool_choice` string modes.
+  - Verification passed: feat-059 unit tests (2), real Gateway/PostgreSQL/fake-provider E2E (1), `pnpm run verify`, full regression of all 59 prior passing features before marking, and final `pnpm run verify:features` across all 60 passing features after marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -978,4 +985,4 @@
   - Improved Console E2E startup failure diagnostics in the affected specs so future failures include the last observed response status plus child stdout/stderr.
   - Verification passed: `node scripts/verify-features.mjs --dry-run`, `node scripts/verify-features.mjs --compare`, `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'`, `pnpm run verify`, `node scripts/verify-features.mjs --legacy`, and `pnpm run verify:features`.
   - Optimized `pnpm run verify:features` re-verified all 57 passing features; E2E batch took 159.3s and total repeated Playwright/Vitest process startup count was reduced by batching 50 standard features.
-  - `feat-057` and `feat-058` are now passing after provider-model price status and budget-safe route validation; next active feature is `feat-059`.
+  - `feat-057`, `feat-058`, and `feat-059` are now passing after provider-model price status, budget-safe route validation, and the real Agent OpenAI-compatible smoke.

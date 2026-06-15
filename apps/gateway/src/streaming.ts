@@ -372,6 +372,8 @@ function buildStreamingPayload(input: {
         max_tokens: normalized.request.maxOutputTokens,
         messages: normalized.request.messages,
         temperature: normalized.request.temperature,
+        tool_choice: normalized.request.toolChoice,
+        tools: normalized.request.tools,
       }),
       requestMetadata,
     };

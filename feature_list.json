@@ -742,8 +742,8 @@
         "feat-050",
         "feat-053"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-059 unit tests because OpenAI chat completion normalization and provider adapter payloads dropped tool_choice/tools, and E2E because the real Gateway fake-provider hit omitted the Hermes-like OpenAI-compatible tool schema fields. Added a Hermes-like local Agent chat/completions smoke request with system prompt, large tool-heavy user prompt, OpenAI function tools, and default-limit assertions. Gateway OpenAI chat normalization, non-streaming provider adapter payloads, and streaming chat payloads now preserve tool_choice/tools while rejecting unsupported tool_choice strings. The E2E starts a real Gateway against isolated PostgreSQL and fake provider, verifies HTTP 200 with default Agent-ready limits, provider hit with forwarded tools, succeeded request_activity, request_usage, and estimated request_costs. Code review found no P2+ issues; a minor review hardening restricted OpenAI tool_choice strings to auto/none/required. Verification passed — feat-059 unit tests 2 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run verify passed, verify:features passed all 59 prior passing features before marking feat-059 passing, and final verify:features passed all 60 passing features after marking."
     },
     {
       "id": "feat-060",

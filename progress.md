@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-15 18:05 AWST
-**Active Feature:** none — 58 features are `passing`; `feat-058` and `feat-059` remain pending
+**Last Updated:** 2026-06-15 18:24 AWST
+**Active Feature:** none — 59 features are `passing`; `feat-059` remains pending
 
 ## Status
 
@@ -75,6 +75,13 @@
   - Route Policy selectors use dedicated priced option labels, while Route Policy summaries and warnings keep their stable base labels.
   - Code review found a P2 regression risk from globally changing `optionLabel`; fixed by splitting `optionLabel` and `pricedOptionLabel`, then reran the affected `feat-029` and `feat-050` E2Es.
   - Verification passed: feat-057 unit test (1), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 57 prior passing features before marking, and final `pnpm run verify:features` across all 58 passing features after marking.
+- [x] **feat-058 — Budget-Safe Route Policy Validation (passing)**:
+  - Added Console Route Policy create/update validation for Virtual Models usable by enabled Agent API keys with enabled USD cost budgets.
+  - The validator rejects unknown-price primary or fallback candidates before mutating route policy rows or writing config-change events.
+  - Error messages identify the unknown-price Provider model and tell the user to add a manual price override or choose a priced replacement.
+  - Manual price overrides allow the same Route Policy to save successfully.
+  - Code review found no P2+ issues.
+  - Verification passed: feat-058 unit test (1), real Chromium/PostgreSQL Console E2E (1), `pnpm run verify`, full regression of all 58 prior passing features before marking, and final `pnpm run verify:features` across all 59 passing features after marking.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -166,8 +173,7 @@
 
 ### What's Next
 
-1. Next active feature: `feat-058` Budget-Safe Route Policy Validation.
-2. `feat-059` Real Agent OpenAI-Compatible Smoke remains pending after the route-budget safety work.
+1. Next active feature: `feat-059` Real Agent OpenAI-Compatible Smoke.
 
 ## Blockers / Risks
 
@@ -972,4 +978,4 @@
   - Improved Console E2E startup failure diagnostics in the affected specs so future failures include the last observed response status plus child stdout/stderr.
   - Verification passed: `node scripts/verify-features.mjs --dry-run`, `node scripts/verify-features.mjs --compare`, `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'`, `pnpm run verify`, `node scripts/verify-features.mjs --legacy`, and `pnpm run verify:features`.
   - Optimized `pnpm run verify:features` re-verified all 57 passing features; E2E batch took 159.3s and total repeated Playwright/Vitest process startup count was reduced by batching 50 standard features.
-  - `feat-057` is now passing after the provider-model price status work; next active features remain `feat-058` and `feat-059`.
+  - `feat-057` and `feat-058` are now passing after provider-model price status and budget-safe route validation; next active feature is `feat-059`.

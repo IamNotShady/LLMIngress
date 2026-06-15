@@ -725,8 +725,8 @@
         "feat-042",
         "feat-057"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-058 unit test because createRoutePolicy saved an unknown-price candidate for a Virtual Model usable by a cost-budgeted Agent API key, and E2E because POST /api/route-policies redirected successfully instead of returning a budget-safety error. Added Route Policy create/update validation that checks enabled USD budget limits for Agent API keys that can use the Virtual Model through allowed or default access, validates both primary and fallback candidates with the existing price resolver, and explains which candidate needs a manual price override or priced replacement. Manual price override then allows the same Route Policy to save. Code review found no P2+ issues. Verification passed — feat-058 unit test 1 passed, real Chromium/PostgreSQL Console E2E 1 passed, pnpm run verify passed, verify:features passed all 58 prior passing features before marking feat-058 passing, and final verify:features passed all 59 passing features after marking."
     },
     {
       "id": "feat-059",

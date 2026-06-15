@@ -109,6 +109,12 @@ type ProviderModelOptionRow = QueryResultRow & {
   provider_key: string;
 };
 
+type BudgetedVirtualModelUsageRow = QueryResultRow & {
+  budgeted_agent_api_key_count: number;
+  display_name: string;
+  name: string;
+};
+
 type QueryClient = {
   query: <T = Record<string, unknown>>(
     text: string,
@@ -277,6 +283,7 @@ export async function createRoutePolicy(input: {
         ...input.routePolicy.primaryProviderModelIds,
         ...input.routePolicy.fallbackProviderModelIds,
       ]);
+      await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
         `
@@ -331,6 +338,7 @@ export async function updateRoutePolicy(input: {
         ...input.routePolicy.primaryProviderModelIds,
         ...input.routePolicy.fallbackProviderModelIds,
       ]);
+      await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
         `
@@ -422,6 +430,88 @@ async function assertProviderModelsExist(
   if (missingIds.length > 0) {
     throw new Error("Route policy candidate provider model was not found.");
   }
+}
+
+async function assertBudgetSafeRoutePolicyCandidates(
+  client: QueryClient,
+  routePolicy: NormalizedRoutePolicyFormInput,
+): Promise<void> {
+  const budgetedUsage = await readBudgetedVirtualModelUsage(client, routePolicy.virtualModelId);
+  if (budgetedUsage.budgeted_agent_api_key_count === 0) {
+    return;
+  }
+
+  const candidates = await readProviderModelOptionsById(client, [
+    ...routePolicy.primaryProviderModelIds,
+    ...routePolicy.fallbackProviderModelIds,
+  ]);
+  const unknownPriceCandidates = candidates.filter(
+    (candidate) => candidate.priceStatus === "unknown_price",
+  );
+  if (unknownPriceCandidates.length === 0) {
+    return;
+  }
+
+  const candidateLabels = unknownPriceCandidates
+    .map((candidate) => `${candidate.modelDisplayName} (${candidate.modelId})`)
+    .join(", ");
+  const modelLabel = `${budgetedUsage.display_name} (${budgetedUsage.name})`;
+  throw new Error(
+    `Cannot save Route Policy for ${modelLabel} because ${candidateLabels} has unknown price. Save a manual price override or choose a priced replacement.`,
+  );
+}
+
+async function readBudgetedVirtualModelUsage(
+  client: QueryClient,
+  virtualModelId: string,
+): Promise<BudgetedVirtualModelUsageRow> {
+  const result = await client.query<BudgetedVirtualModelUsageRow>(
+    `
+      select virtual_models.name,
+             virtual_models.display_name,
+             count(distinct agent_api_keys.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_api_key_count
+      from virtual_models
+      left join agent_api_keys
+        on agent_api_keys.enabled = true
+       and (
+            agent_api_keys.default_virtual_model_id = virtual_models.id
+            or exists (
+              select 1
+              from agent_api_key_virtual_models
+              where agent_api_key_virtual_models.agent_api_key_id = agent_api_keys.id
+                and agent_api_key_virtual_models.virtual_model_id = virtual_models.id
+            )
+       )
+      left join agent_limits
+        on agent_limits.agent_api_key_id = agent_api_keys.id
+       and agent_limits.enabled = true
+       and agent_limits.limit_type = 'budget'
+       and agent_limits.unit = 'usd'
+      where virtual_models.id = $1
+      group by virtual_models.id, virtual_models.name, virtual_models.display_name
+    `,
+    [virtualModelId],
+  );
+  return requireRow(result.rows[0]);
+}
+
+async function readProviderModelOptionsById(
+  client: QueryClient,
+  providerModelIds: readonly string[],
+): Promise<ConsoleProviderModelOption[]> {
+  if (providerModelIds.length === 0) {
+    return [];
+  }
+
+  const result = await client.query<ProviderModelOptionRow>(
+    `
+      ${providerModelOptionsSelectSql()}
+      where provider_models.id = any($1::uuid[])
+      order by providers.display_name, provider_models.display_name
+    `,
+    [providerModelIds],
+  );
+  return result.rows.map(rowToProviderModelOption);
 }
 
 async function readRoutePolicyForUpdate(
@@ -573,6 +663,13 @@ function isUuid(value: string): boolean {
 
 function providerModelOptionsSql(): string {
   return `
+    ${providerModelOptionsSelectSql()}
+    order by providers.display_name, provider_models.display_name
+  `;
+}
+
+function providerModelOptionsSelectSql(): string {
+  return `
     select provider_models.id::text,
            providers.id::text as provider_id,
            providers.provider_key,
@@ -589,7 +686,6 @@ function providerModelOptionsSql(): string {
     left join model_price_overrides
       on model_price_overrides.provider_key = providers.provider_key
      and model_price_overrides.model_id = provider_models.model_id
-    order by providers.display_name, provider_models.display_name
   `;
 }
 

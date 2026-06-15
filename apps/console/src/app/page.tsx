@@ -18,6 +18,7 @@ import {
 } from "../server/agent-api-keys";
 import {
   type ConsoleAgentLimit,
+  defaultAgentLimitFormValues,
   formatAgentLimitSummaries,
   listAgentLimits,
 } from "../server/agent-limits";
@@ -693,7 +694,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="0.000001"
                               step="0.000001"
-                              defaultValue={budgetLimit?.limitValue ?? 10}
+                              defaultValue={
+                                budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd
+                              }
                               required
                             />
                             <label htmlFor={`agent-key-budget-period-${agentApiKey.id}`}>
@@ -702,7 +705,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                             <select
                               id={`agent-key-budget-period-${agentApiKey.id}`}
                               name="budgetPeriod"
-                              defaultValue={budgetLimit?.period ?? "month"}
+                              defaultValue={
+                                budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod
+                              }
                               required
                             >
                               <option value="day">day</option>
@@ -715,7 +720,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                             <input
                               id={`agent-key-budget-provider-${agentApiKey.id}`}
                               name="budgetPriceProviderKey"
-                              defaultValue="openai"
+                              defaultValue={defaultAgentLimitFormValues.budgetPriceProviderKey}
                               required
                             />
                             <label htmlFor={`agent-key-budget-model-${agentApiKey.id}`}>
@@ -724,7 +729,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                             <input
                               id={`agent-key-budget-model-${agentApiKey.id}`}
                               name="budgetPriceModelId"
-                              defaultValue="gpt-4.1-mini"
+                              defaultValue={defaultAgentLimitFormValues.budgetPriceModelId}
                               required
                             />
                             <label htmlFor={`agent-key-rpm-${agentApiKey.id}`}>RPM limit</label>
@@ -734,7 +739,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="1"
                               step="1"
-                              defaultValue={rpmLimit?.limitValue ?? 60}
+                              defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
                               required
                             />
                             <label htmlFor={`agent-key-tpm-${agentApiKey.id}`}>TPM limit</label>
@@ -744,7 +749,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="1"
                               step="1"
-                              defaultValue={tpmLimit?.limitValue ?? 120000}
+                              defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
                               required
                             />
                             <label htmlFor={`agent-key-token-limit-${agentApiKey.id}`}>
@@ -756,7 +761,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="1"
                               step="1"
-                              defaultValue={tokenLimit?.limitValue ?? 8000}
+                              defaultValue={
+                                tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit
+                              }
                               required
                             />
                             <button type="submit">Save Agent API key limits</button>

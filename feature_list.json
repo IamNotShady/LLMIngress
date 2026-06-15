@@ -505,7 +505,7 @@
         "feat-040"
       ],
       "status": "passing",
-      "evidence": "2026-06-14: TDD red observed for feat-042 unit tests because apps/gateway/src/budgets was missing, and E2E failed because over-budget requests still returned 200. Added Gateway token/request and cost/month budget enforcement backed by agent_limits, budget_periods, and budget_reservations. Gateway now checks request token limits, refuses cost-budget enforcement when the selected model price is unknown, accepts models with manual price overrides, reserves estimated input/output tokens and cost before provider calls, finalizes successful requests into budget_periods, and releases reservations on provider failure or stream failure/close. Chat completions, responses, messages, and streaming requests now run budget checks after route selection and before provider calls. P2+ review found and fixed streaming close handling so aborted streams release pending reservations; no remaining blocking issues after checking provider no-call behavior, reservation rollback/finalization, unknown-price rejection, manual-price acceptance, and route/provider payload compatibility. Verification passed — feat-042 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 41 prior passing features before marking feat-042 passing, and final verify:features passed all 42 passing features after marking."
+      "evidence": "2026-06-14: TDD red observed for feat-042 unit tests because apps/gateway/src/budgets was missing, and E2E failed because over-budget requests still returned 200. Added Gateway token/request and cost/month budget enforcement backed by agent_limits, budget_periods, and budget_reservations. Gateway now checks request token limits, refuses cost-budget enforcement when the selected model price is unknown, accepts models with manual price overrides, reserves estimated input/output tokens and cost before provider calls, finalizes successful requests into budget_periods, and releases reservations on provider failure or stream failure/close. Chat completions, responses, messages, and streaming requests now run budget checks after route selection and before provider calls. P2+ review found and fixed streaming close handling so aborted streams release pending reservations; no remaining blocking issues after checking provider no-call behavior, reservation rollback/finalization, unknown-price rejection, manual-price acceptance, and route/provider payload compatibility. Verification passed — feat-042 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 41 prior passing features before marking feat-042 passing, and final verify:features passed all 42 passing features after marking. 2026-06-15 coverage follow-up: budget E2E now includes an Anthropic built-in priced route for anthropic/claude-sonnet-4-6 and proves enabled cost budget allows the request instead of failing with unknown price. Verification passed — real PostgreSQL feat-042 E2E passed and pnpm run verify passed."
     },
     {
       "id": "feat-043",
@@ -653,7 +653,7 @@
         "feat-050"
       ],
       "status": "passing",
-      "evidence": "2026-06-14: TDD red observed for feat-053 unit/E2E because the limits/fallback scenario support helper was missing; after adding it, E2E exposed and fixed duplicate test key prefixes before exercising the runtime behavior. Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code and no provider call for blocked requests. The same E2E verifies a first-byte provider failure falls back to the second candidate, returns HTTP 200, records the successful provider/model hit in request_activity, and records the failed first-byte attempt in fallback_events. P2+ review found no blocking issues; fallback_events lookup was narrowed to the request under test. Verification passed — feat-053 unit tests 1 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 52 prior passing features before marking feat-053 passing."
+      "evidence": "2026-06-14: TDD red observed for feat-053 unit/E2E because the limits/fallback scenario support helper was missing; after adding it, E2E exposed and fixed duplicate test key prefixes before exercising the runtime behavior. Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code and no provider call for blocked requests. The same E2E verifies a first-byte provider failure falls back to the second candidate, returns HTTP 200, records the successful provider/model hit in request_activity, and records the failed first-byte attempt in fallback_events. P2+ review found no blocking issues; fallback_events lookup was narrowed to the request under test. Verification passed — feat-053 unit tests 1 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 52 prior passing features before marking feat-053 passing. 2026-06-15 coverage follow-up: Console Agent API key limit defaults are centralized and raised to Agent-ready values (TPM 1000000, token limit 200000) after Hermes-style validation exposed the old defaults as too small for tool-heavy clients. Red/green covered by feat-053 unit test; pnpm run verify passed."
     },
     {
       "id": "feat-054",
@@ -698,6 +698,52 @@
       ],
       "status": "passing",
       "evidence": "2026-06-15: TDD red observed for feat-056 unit test because apps/console/src/server/model-refresh-jobs was missing, and E2E because the Console Provider card had no Refresh provider models button. Added an authenticated Console provider model refresh route, provider refresh job enqueue helper, Provider-card refresh button, and queued status message. The E2E proves a real Console click enqueues model_refresh, pg_notify wakes the real Worker, the Worker refreshes provider models from the fake provider, and the Route Policy model selector can select the refreshed provider model without manual SQL. Verification passed — feat-056 unit tests 3 passed, real Chromium/PostgreSQL/Worker/fake-provider E2E 1 passed, pnpm run verify passed, verify:features passed all 55 prior passing features before marking feat-056 passing, and final verify:features passed all 56 passing features after marking. 2026-06-15 bugfix: model_refresh now decrypts the saved Provider API key for api_key providers and sends Authorization on the model-list request; the Provider card also lists discovered provider models after refresh. Regression passed — feat-023 model refresh unit test, feat-023/025/056 real E2Es, pnpm run verify, and final verify:features passed all 56 passing features. 2026-06-15 Anthropic bugfix: model_refresh now sends x-api-key, anthropic-version, and content-type for provider_key anthropic while preserving Bearer auth for OpenAI-compatible providers. Red/green covered by feat-023 unit and PostgreSQL E2E; live Anthropic refresh job e847799f-b3a7-40a8-9414-0af7c9f354f7 succeeded and wrote 8 available provider models. Verification passed — feat-023 unit tests 6 passed, feat-023 E2E 2 passed, pnpm run verify passed. Full verify:features was not rerun per user request while validating MVP."
+    },
+    {
+      "id": "feat-057",
+      "name": "Provider Model Price Status on Refresh",
+      "description": "After a Console user refreshes Provider models, LLMIngress resolves each discovered provider model against the built-in price registry and manual overrides, then shows priced versus unknown-price status in the Provider model list and Route Policy model selector.",
+      "verification": "pnpm exec vitest run tests/features/feat-057-provider-model-price-status.unit.test.ts && pnpm test:e2e tests/e2e/feat-057-provider-model-price-status.e2e.spec.ts --grep 'refresh provider models shows priced and unknown price status in provider and route selectors'",
+      "dependencies": [
+        "feat-014",
+        "feat-015",
+        "feat-023",
+        "feat-056"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-058",
+      "name": "Budget-Safe Route Policy Validation",
+      "description": "When a Virtual Model is usable by any Agent API key with an enabled cost budget, Console prevents saving Route Policy candidates whose selected Provider model has unknown price, and explains which model needs a manual price override or a priced replacement.",
+      "verification": "pnpm exec vitest run tests/features/feat-058-budget-safe-route-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-058-budget-safe-route-policy.e2e.spec.ts --grep 'budget enabled agent cannot save route policy with unknown price provider model'",
+      "dependencies": [
+        "feat-015",
+        "feat-029",
+        "feat-031",
+        "feat-042",
+        "feat-057"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-059",
+      "name": "Real Agent OpenAI-Compatible Smoke",
+      "description": "A local OpenAI-compatible Agent smoke test sends a Hermes-like large chat/completions request with system prompt, tool schemas, and Agent-ready default limits through Gateway, then verifies Provider hit, Activity, Usage, and no default limit rejection.",
+      "verification": "pnpm exec vitest run tests/features/feat-059-real-agent-openai-compatible-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-059-real-agent-openai-compatible-smoke.e2e.spec.ts --grep 'Hermes-like OpenAI-compatible agent request succeeds with default limits and records usage'",
+      "dependencies": [
+        "feat-030",
+        "feat-036",
+        "feat-042",
+        "feat-044",
+        "feat-045",
+        "feat-050",
+        "feat-053"
+      ],
+      "status": "pending",
+      "evidence": ""
     }
   ]
 }

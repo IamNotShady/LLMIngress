@@ -948,3 +948,10 @@
   - Green verification: feat-023 unit tests 6 passed, feat-023 PostgreSQL E2E tests 2 passed, and `pnpm run verify` passed.
   - Live local DB verification: queued Anthropic refresh job `e847799f-b3a7-40a8-9414-0af7c9f354f7` succeeded on attempt 1 and wrote 8 available Anthropic provider models including `claude-sonnet-4-5-20250929`, `claude-sonnet-4-6`, and `claude-opus-4-8`.
   - Full `pnpm run verify:features` intentionally not rerun during this validation step per user request to avoid the slow full regression until MVP is fully walked through.
+
+- [x] 2026-06-15 MVP coverage follow-up:
+  - Added regression coverage for Anthropic budget-priced routing: `feat-042` E2E now proves `anthropic/claude-sonnet-4-6` can pass an enabled cost budget using the built-in static price registry.
+  - Added red/green coverage for Agent-ready default limits: `feat-053` unit test first failed because Console limit defaults were not exported and existing UI defaults were too small for tool-heavy clients; Console now centralizes defaults at `budget=$10/month`, `rpm=60`, `tpm=1000000`, and `tokenLimit=200000`.
+  - Added pending features `feat-057`, `feat-058`, and `feat-059` for provider model price status, budget-safe route validation, and real OpenAI-compatible Agent smoke coverage.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'`, and `pnpm run verify`.
+  - Full `pnpm run verify:features` not run because the new features are pending and not being marked passing in this session.

@@ -924,8 +924,8 @@
         "feat-022",
         "feat-043"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-072 unit/E2E tests because apps/worker/src/periodic-scheduler.ts did not exist. Added a Worker periodic scheduler with due-window calculation, not-due skipping, schedule-window payload metadata, Postgres scheduled job enqueueing, advisory-lock deduplication, and pg_notify('job_created') wakeups. Worker startup now starts the job runner before the periodic scheduler so scheduled jobs can wake the runner, and the default periodic task enqueues stale_reservation_cleanup. Code review found no P2+ issues after checking duplicate prevention, job_created notification timing, stale cleanup payload compatibility, and Worker stop ordering. Verification passed: feat-072 unit tests (2), real PostgreSQL E2E (1), related feat-022/043 unit and E2E regressions, pnpm run verify, full verify:features passed all 71 prior passing features before marking, and final verify:features passed all 72 passing features after marking."
     },
     {
       "id": "feat-073",

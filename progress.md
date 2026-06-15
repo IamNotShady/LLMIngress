@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 02:52 AWST
-**Active Feature:** none — 71 tracked features are `passing`; 24 V1 features are `pending`
+**Last Updated:** 2026-06-16 03:07 AWST
+**Active Feature:** none — 72 tracked features are `passing`; 23 V1 features are `pending`
 
 ## Status
 
@@ -81,6 +81,12 @@
   - Price calculation uses cached-input pricing when present and normal input pricing when cached pricing is unavailable.
   - Code review found and fixed the expected feat-067 embeddings token-source change from estimated to provider.
   - Verification passed: feat-071 unit tests (3), real Gateway/PostgreSQL/fake-provider E2E (1), related feat-045/067 unit and E2E regressions, `pnpm run verify`, full `pnpm run verify:features` across all 70 prior passing features before marking, and final `pnpm run verify:features` across all 71 passing features after marking.
+- [x] **feat-072 — Worker Periodic Scheduler (passing)**:
+  - Added `apps/worker/src/periodic-scheduler.ts` with due-window calculation, not-due skipping, schedule-window payload metadata, Postgres enqueueing, advisory-lock deduplication, and `pg_notify('job_created')`.
+  - Worker startup now starts the job runner before the periodic scheduler so newly created scheduled jobs can wake the runner.
+  - Default periodic tasks now include recurring `stale_reservation_cleanup`.
+  - Code review found no P2+ issues after checking duplicate prevention, notification timing, stale cleanup payload compatibility, and Worker stop ordering.
+  - Verification passed: feat-072 unit tests (2), real PostgreSQL E2E (1), related feat-022/043 unit and E2E regressions, `pnpm run verify`, full `pnpm run verify:features` across all 71 prior passing features before marking, and final `pnpm run verify:features` across all 72 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

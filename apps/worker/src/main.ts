@@ -2,11 +2,17 @@ import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createModelRefreshJobHandler } from "./model-refresh.js";
+import {
+  createDefaultPeriodicTasks,
+  createPostgresPeriodicScheduler,
+  type PeriodicScheduler,
+} from "./periodic-scheduler.js";
 import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
 import { createStaleReservationCleanupJobHandler } from "./stale-reservations.js";
 
 type StartWorkerOptions = {
   jobRunner?: JobRunner;
+  periodicScheduler?: PeriodicScheduler;
 };
 
 export async function startWorker(options: StartWorkerOptions = {}) {
@@ -27,7 +33,15 @@ export async function startWorker(options: StartWorkerOptions = {}) {
       pollIntervalMs: config.workerHeartbeatMs,
       workerId: readWorkerId(),
     });
+  const periodicScheduler =
+    options.periodicScheduler ??
+    createPostgresPeriodicScheduler({
+      databaseUrl: config.databaseUrl,
+      tasks: createDefaultPeriodicTasks(),
+      tickIntervalMs: config.workerHeartbeatMs,
+    });
   await jobRunner.start();
+  await periodicScheduler.start();
 
   const timer = setInterval(() => {
     console.log("[worker] heartbeat");
@@ -38,6 +52,7 @@ export async function startWorker(options: StartWorkerOptions = {}) {
   return {
     async stop() {
       clearInterval(timer);
+      await periodicScheduler.stop();
       await jobRunner.stop();
       console.log("[worker] stopped");
     },

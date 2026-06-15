@@ -8,6 +8,8 @@ export type NormalizedOpenAIChatRequest = {
   messages: NormalizedOpenAIChatMessage[];
   stream?: boolean;
   temperature?: number;
+  toolChoice?: string | Record<string, unknown>;
+  tools?: Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIResponsesInputMessage = {
@@ -67,6 +69,8 @@ type OpenAIChatCompletionsPayload = {
   model: string;
   stream?: boolean;
   temperature?: number;
+  tool_choice?: NormalizedOpenAIChatRequest["toolChoice"];
+  tools?: Record<string, unknown>[];
 };
 
 type OpenAIResponsesPayload = {
@@ -163,6 +167,8 @@ function buildChatCompletionsPayload(
     model: target.modelId,
     stream: request.stream,
     temperature: request.temperature,
+    tool_choice: request.toolChoice,
+    tools: request.tools,
   });
 }
 

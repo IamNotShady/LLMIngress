@@ -19,11 +19,13 @@ test("budget reservation finalization over budget 402 and unknown price model re
   const costKey = "llmi_cost_budget_key_042";
   const unknownPriceKey = "llmi_unknown_price_budget_key_042";
   const manualPriceKey = "llmi_manual_price_budget_key_042";
+  const anthropicBuiltInPriceKey = "llmi_anthropic_budget_key_042";
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedBudgetRoutes(fixture, {
       costKey,
+      anthropicBuiltInPriceKey,
       manualPriceKey,
       providerBaseUrl: `${provider.url}/v1`,
       tokenKey,
@@ -87,6 +89,15 @@ test("budget reservation finalization over budget 402 and unknown price model re
         status: 200,
       });
       expect(provider.requests).toHaveLength(2);
+
+      await expectGatewayChat(baseUrl, {
+        apiKey: anthropicBuiltInPriceKey,
+        maxTokens: 16,
+        model: "anthropic-built-in-price-budget-coding",
+        requestId: "req_anthropic_builtin_price_042",
+        status: 200,
+      });
+      expect(provider.requests).toHaveLength(3);
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -122,6 +133,7 @@ async function seedBudgetRoutes(
   fixture: Fixture,
   input: {
     costKey: string;
+    anthropicBuiltInPriceKey: string;
     manualPriceKey: string;
     providerBaseUrl: string;
     tokenKey: string;
@@ -133,6 +145,7 @@ async function seedBudgetRoutes(
   const costAgentApiKeyId = randomUUID();
   const unknownPriceAgentApiKeyId = randomUUID();
   const manualPriceAgentApiKeyId = randomUUID();
+  const anthropicBuiltInPriceAgentApiKeyId = randomUUID();
   const encrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
     providerApiKey,
   );
@@ -164,6 +177,13 @@ async function seedBudgetRoutes(
       providerModel: "manual-budget-model",
       virtualModel: "manual-price-budget-coding",
       agentApiKeyId: manualPriceAgentApiKeyId,
+    },
+    {
+      key: input.anthropicBuiltInPriceKey,
+      providerKey: "anthropic",
+      providerModel: "claude-sonnet-4-6",
+      virtualModel: "anthropic-built-in-price-budget-coding",
+      agentApiKeyId: anthropicBuiltInPriceAgentApiKeyId,
     },
   ];
 
@@ -270,7 +290,8 @@ async function seedBudgetRoutes(
       values ($1, $2, 'token', 'request', 80, 'tokens', true),
              ($3, $4, 'budget', 'month', 0.00015, 'usd', true),
              ($5, $6, 'budget', 'month', 1, 'usd', true),
-             ($7, $8, 'budget', 'month', 1, 'usd', true)
+             ($7, $8, 'budget', 'month', 1, 'usd', true),
+             ($9, $10, 'budget', 'month', 1, 'usd', true)
     `,
     [
       randomUUID(),
@@ -281,6 +302,8 @@ async function seedBudgetRoutes(
       unknownPriceAgentApiKeyId,
       randomUUID(),
       manualPriceAgentApiKeyId,
+      randomUUID(),
+      anthropicBuiltInPriceAgentApiKeyId,
     ],
   );
   await fixture.query(

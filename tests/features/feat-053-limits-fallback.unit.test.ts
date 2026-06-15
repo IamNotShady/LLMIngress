@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultAgentLimitFormValues } from "../../apps/console/src/server/agent-limits";
 import {
   buildLimitsFallbackRequestId,
   limitsFallbackNames,
@@ -39,5 +40,13 @@ describe("feat-053 limits and fallback scenario support", () => {
       "req_limits_fallback_053",
     ]);
     expect(new Set(requestIds).size).toBe(requestIds.length);
+  });
+
+  it("uses Agent-ready default limit values for tool-heavy clients", () => {
+    expect(defaultAgentLimitFormValues.tokenLimit).toBeGreaterThanOrEqual(200_000);
+    expect(defaultAgentLimitFormValues.tpm).toBeGreaterThanOrEqual(
+      defaultAgentLimitFormValues.tokenLimit,
+    );
+    expect(defaultAgentLimitFormValues.rpm).toBeGreaterThanOrEqual(60);
   });
 });

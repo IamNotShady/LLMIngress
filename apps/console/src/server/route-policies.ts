@@ -1,4 +1,9 @@
 import { randomUUID } from "node:crypto";
+import {
+  type ManualPriceOverride,
+  type ModelTokenPrice,
+  resolveEffectiveModelTokenPrice,
+} from "@llmingress/billing/price-registry";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
 
@@ -26,6 +31,9 @@ export type ConsoleProviderModelOption = {
   modelDisplayName: string;
   modelId: string;
   optionLabel: string;
+  pricedOptionLabel: string;
+  priceStatus: ModelTokenPrice["status"];
+  priceStatusLabel: string;
   providerDisplayName: string;
   providerId: string;
   providerKey: string;
@@ -77,6 +85,9 @@ type CandidateRow = QueryResultRow & {
   is_fallback: boolean;
   model_display_name: string;
   model_id: string;
+  price_override_input_usd_per_million_tokens: string | null;
+  price_override_output_usd_per_million_tokens: string | null;
+  price_override_updated_at: Date | null;
   provider_display_name: string;
   provider_enabled: boolean;
   provider_id: string;
@@ -89,10 +100,19 @@ type ProviderModelOptionRow = QueryResultRow & {
   id: string;
   model_display_name: string;
   model_id: string;
+  price_override_input_usd_per_million_tokens: string | null;
+  price_override_output_usd_per_million_tokens: string | null;
+  price_override_updated_at: Date | null;
   provider_display_name: string;
   provider_enabled: boolean;
   provider_id: string;
   provider_key: string;
+};
+
+type BudgetedVirtualModelUsageRow = QueryResultRow & {
+  budgeted_agent_api_key_count: number;
+  display_name: string;
+  name: string;
 };
 
 type QueryClient = {
@@ -156,6 +176,31 @@ export function buildRoutePolicyWarnings(
     );
 }
 
+export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): string {
+  if (price.status === "unknown_price") {
+    return "Unknown price";
+  }
+
+  return price.source === "manual_override" ? "Priced (manual override)" : "Priced (built-in)";
+}
+
+export function formatProviderModelOptionLabel(input: {
+  modelDisplayName: string;
+  modelId: string;
+  providerDisplayName: string;
+}): string {
+  return `${input.providerDisplayName} - ${input.modelDisplayName} (${input.modelId})`;
+}
+
+export function formatPricedProviderModelOptionLabel(input: {
+  modelDisplayName: string;
+  modelId: string;
+  priceStatusLabel: string;
+  providerDisplayName: string;
+}): string {
+  return `${formatProviderModelOptionLabel(input)} - ${input.priceStatusLabel}`;
+}
+
 export async function listProviderModelOptions(
   databaseUrl: string,
 ): Promise<ConsoleProviderModelOption[]> {
@@ -195,11 +240,17 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                        provider_models.model_id,
                        provider_models.display_name as model_display_name,
                        provider_models.availability,
+                       model_price_overrides.input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
+                       model_price_overrides.output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
+                       model_price_overrides.updated_at as price_override_updated_at,
                        route_policy_candidates.candidate_order,
                        route_policy_candidates.is_fallback
                 from route_policy_candidates
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
+                left join model_price_overrides
+                  on model_price_overrides.provider_key = providers.provider_key
+                 and model_price_overrides.model_id = provider_models.model_id
                 where route_policy_candidates.route_policy_id = any($1::uuid[])
                 order by route_policy_candidates.candidate_order
               `,
@@ -232,6 +283,7 @@ export async function createRoutePolicy(input: {
         ...input.routePolicy.primaryProviderModelIds,
         ...input.routePolicy.fallbackProviderModelIds,
       ]);
+      await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
         `
@@ -286,6 +338,7 @@ export async function updateRoutePolicy(input: {
         ...input.routePolicy.primaryProviderModelIds,
         ...input.routePolicy.fallbackProviderModelIds,
       ]);
+      await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
         `
@@ -379,6 +432,88 @@ async function assertProviderModelsExist(
   }
 }
 
+async function assertBudgetSafeRoutePolicyCandidates(
+  client: QueryClient,
+  routePolicy: NormalizedRoutePolicyFormInput,
+): Promise<void> {
+  const budgetedUsage = await readBudgetedVirtualModelUsage(client, routePolicy.virtualModelId);
+  if (budgetedUsage.budgeted_agent_api_key_count === 0) {
+    return;
+  }
+
+  const candidates = await readProviderModelOptionsById(client, [
+    ...routePolicy.primaryProviderModelIds,
+    ...routePolicy.fallbackProviderModelIds,
+  ]);
+  const unknownPriceCandidates = candidates.filter(
+    (candidate) => candidate.priceStatus === "unknown_price",
+  );
+  if (unknownPriceCandidates.length === 0) {
+    return;
+  }
+
+  const candidateLabels = unknownPriceCandidates
+    .map((candidate) => `${candidate.modelDisplayName} (${candidate.modelId})`)
+    .join(", ");
+  const modelLabel = `${budgetedUsage.display_name} (${budgetedUsage.name})`;
+  throw new Error(
+    `Cannot save Route Policy for ${modelLabel} because ${candidateLabels} has unknown price. Save a manual price override or choose a priced replacement.`,
+  );
+}
+
+async function readBudgetedVirtualModelUsage(
+  client: QueryClient,
+  virtualModelId: string,
+): Promise<BudgetedVirtualModelUsageRow> {
+  const result = await client.query<BudgetedVirtualModelUsageRow>(
+    `
+      select virtual_models.name,
+             virtual_models.display_name,
+             count(distinct agent_api_keys.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_api_key_count
+      from virtual_models
+      left join agent_api_keys
+        on agent_api_keys.enabled = true
+       and (
+            agent_api_keys.default_virtual_model_id = virtual_models.id
+            or exists (
+              select 1
+              from agent_api_key_virtual_models
+              where agent_api_key_virtual_models.agent_api_key_id = agent_api_keys.id
+                and agent_api_key_virtual_models.virtual_model_id = virtual_models.id
+            )
+       )
+      left join agent_limits
+        on agent_limits.agent_api_key_id = agent_api_keys.id
+       and agent_limits.enabled = true
+       and agent_limits.limit_type = 'budget'
+       and agent_limits.unit = 'usd'
+      where virtual_models.id = $1
+      group by virtual_models.id, virtual_models.name, virtual_models.display_name
+    `,
+    [virtualModelId],
+  );
+  return requireRow(result.rows[0]);
+}
+
+async function readProviderModelOptionsById(
+  client: QueryClient,
+  providerModelIds: readonly string[],
+): Promise<ConsoleProviderModelOption[]> {
+  if (providerModelIds.length === 0) {
+    return [];
+  }
+
+  const result = await client.query<ProviderModelOptionRow>(
+    `
+      ${providerModelOptionsSelectSql()}
+      where provider_models.id = any($1::uuid[])
+      order by providers.display_name, provider_models.display_name
+    `,
+    [providerModelIds],
+  );
+  return result.rows.map(rowToProviderModelOption);
+}
+
 async function readRoutePolicyForUpdate(
   client: QueryClient,
   routePolicyId: string,
@@ -468,6 +603,33 @@ async function writeRoutePolicyCandidates(
                     from provider_models
                     where provider_models.id = route_policy_candidates.provider_model_id
                   ) as availability,
+                  (
+                    select model_price_overrides.input_usd_per_million_tokens::text
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join model_price_overrides
+                      on model_price_overrides.provider_key = providers.provider_key
+                     and model_price_overrides.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                  ) as price_override_input_usd_per_million_tokens,
+                  (
+                    select model_price_overrides.output_usd_per_million_tokens::text
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join model_price_overrides
+                      on model_price_overrides.provider_key = providers.provider_key
+                     and model_price_overrides.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                  ) as price_override_output_usd_per_million_tokens,
+                  (
+                    select model_price_overrides.updated_at
+                    from provider_models
+                    join providers on providers.id = provider_models.provider_id
+                    join model_price_overrides
+                      on model_price_overrides.provider_key = providers.provider_key
+                     and model_price_overrides.model_id = provider_models.model_id
+                    where provider_models.id = route_policy_candidates.provider_model_id
+                  ) as price_override_updated_at,
                   candidate_order,
                   is_fallback
       `,
@@ -501,6 +663,13 @@ function isUuid(value: string): boolean {
 
 function providerModelOptionsSql(): string {
   return `
+    ${providerModelOptionsSelectSql()}
+    order by providers.display_name, provider_models.display_name
+  `;
+}
+
+function providerModelOptionsSelectSql(): string {
+  return `
     select provider_models.id::text,
            providers.id::text as provider_id,
            providers.provider_key,
@@ -508,10 +677,15 @@ function providerModelOptionsSql(): string {
            providers.enabled as provider_enabled,
            provider_models.model_id,
            provider_models.display_name as model_display_name,
-           provider_models.availability
+           provider_models.availability,
+           model_price_overrides.input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
+           model_price_overrides.output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
+           model_price_overrides.updated_at as price_override_updated_at
     from provider_models
     join providers on providers.id = provider_models.provider_id
-    order by providers.display_name, provider_models.display_name
+    left join model_price_overrides
+      on model_price_overrides.provider_key = providers.provider_key
+     and model_price_overrides.model_id = provider_models.model_id
   `;
 }
 
@@ -561,16 +735,53 @@ function rowToConsoleRoutePolicyCandidate(row: CandidateRow): ConsoleRoutePolicy
 }
 
 function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderModelOption {
+  const price = resolveEffectiveModelTokenPrice({
+    manualOverride: rowToManualPriceOverride(row),
+    modelId: row.model_id,
+    providerKey: row.provider_key,
+  });
+  const priceStatusLabel = formatProviderModelPriceStatusLabel(price);
+
   return {
     availability: row.availability,
     id: row.id,
     modelDisplayName: row.model_display_name,
     modelId: row.model_id,
-    optionLabel: `${row.provider_display_name} - ${row.model_display_name} (${row.model_id})`,
+    optionLabel: formatProviderModelOptionLabel({
+      modelDisplayName: row.model_display_name,
+      modelId: row.model_id,
+      providerDisplayName: row.provider_display_name,
+    }),
+    pricedOptionLabel: formatPricedProviderModelOptionLabel({
+      modelDisplayName: row.model_display_name,
+      modelId: row.model_id,
+      priceStatusLabel,
+      providerDisplayName: row.provider_display_name,
+    }),
+    priceStatus: price.status,
+    priceStatusLabel,
     providerDisplayName: row.provider_display_name,
     providerEnabled: row.provider_enabled,
     providerId: row.provider_id,
     providerKey: row.provider_key,
+  };
+}
+
+function rowToManualPriceOverride(row: ProviderModelOptionRow): ManualPriceOverride | null {
+  if (
+    !row.price_override_input_usd_per_million_tokens ||
+    !row.price_override_output_usd_per_million_tokens ||
+    !row.price_override_updated_at
+  ) {
+    return null;
+  }
+
+  return {
+    inputUsdPerMillionTokens: Number(row.price_override_input_usd_per_million_tokens),
+    modelId: row.model_id,
+    outputUsdPerMillionTokens: Number(row.price_override_output_usd_per_million_tokens),
+    providerKey: row.provider_key,
+    updatedAt: row.price_override_updated_at,
   };
 }
 

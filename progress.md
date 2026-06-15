@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-14 22:35 AWST
-**Active Feature:** feat-054 next (feat-001 through feat-053 and feat-055 completed)
+**Last Updated:** 2026-06-15 19:38 AWST
+**Active Feature:** none — all 60 tracked features are `passing`
 
 ## Status
 
@@ -34,6 +34,7 @@
   - Added a protected browser-only Playground that accepts a user-pasted Agent API key, loads allowed Virtual Models from Gateway `GET /v1/models`, and sends a live `POST /v1/chat/completions` directly from the browser to Gateway.
   - Added Gateway CORS support for default local Console origins and explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
   - Review follow-up fixed blank/relative Gateway base URLs so the Playground cannot accidentally send the pasted key to Console same-origin paths.
+  - Bugfix: Gateway fetch failures now show a status message instead of unhandled browser rejections.
   - Verification passed: feat-049 unit tests, real Chromium/PostgreSQL/Gateway/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
 - [x] **feat-050 — MVP Happy Path E2E (passing)**:
   - Added a clean-run MVP happy path E2E covering Console setup, price configuration, Provider API key storage, Virtual Model, Route Policy, Agent, Agent API key access, limits, Gateway request, Activity/Usage visibility, and Route Policy hot reload without restarting Gateway.
@@ -53,10 +54,47 @@
   - Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code.
   - The same E2E verifies first-byte provider failure falls back to the second candidate, returns HTTP 200, and records both the final Activity provider/model hit and failed fallback attempt.
   - Verification passed: feat-053 unit tests, real Gateway/PostgreSQL/fake-provider E2E, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-054 — MVP Local Deployment Smoke (passing)**:
+  - Added a hybrid deployment smoke. The default E2E brings up a real migrated PostgreSQL plus the real Worker, Gateway, and Console processes, runs health checks (Gateway `/health` 200 with configVersion+providerCount, Console `GET /` 200, Worker `[worker] started`), measures/records startup-to-first-request duration, and completes one fake-provider routed request asserting a recorded `succeeded` `request_activity` row.
+  - Added a second opt-in test (skipped unless `LLMINGRESS_REAL_SMOKE=1` with `OPENAI_API_KEY`+`ANTHROPIC_API_KEY`) that routes one real OpenAI and one real Anthropic request under a hard USD 10 budget cap; it never runs in automated CI/regression.
+  - The `init.sh` portion of the verification is the same lightweight entrypoint/duration smoke feat-001 uses (lenient by design: servers need DATABASE_URL+MASTER_KEY which the smoke does not supply); the genuine altitude proof is the E2E.
+  - Verification passed: feat-054 unit tests (3), default real-deployment E2E (1; opt-in real test skipped), `pnpm run verify`, and full regression of all 55 passing features before marking.
 - [x] **feat-055 — CI Migration Validation (passing)**:
   - Added `pnpm run db:migrate:check`, backed by an isolated PostgreSQL fixture database.
   - The command applies all migrations, reruns them to verify idempotent skips, and is now executed by CI after dependency install.
   - Verification passed: feat-055 unit tests, real PostgreSQL E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and full prior-feature regression before marking.
+- [x] **feat-056 — Console Provider Model Refresh Button (passing)**:
+  - Added an authenticated Console Provider-card button that enqueues a `model_refresh` job and wakes the Worker via `job_created`.
+  - Added a queued status message after refresh submission.
+  - Bugfix: `model_refresh` now decrypts and sends the saved Provider API key for API-key Providers, and Provider cards list discovered models after refresh.
+  - E2E verifies a real Console click, Worker model refresh, and refreshed provider model availability in the Route Policy selector without manual SQL.
+  - Verification passed: feat-056 unit tests (3), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 55 prior passing features before marking, and final full regression of all 56 passing features after the API-key refresh bugfix.
+- [x] **feat-057 — Provider Model Price Status on Refresh (passing)**:
+  - Added Console provider model price-status resolution from the built-in price registry plus manual overrides.
+  - Provider cards now show refreshed models as built-in priced, manual-override priced, or unknown price.
+  - Route Policy selectors use dedicated priced option labels, while Route Policy summaries and warnings keep their stable base labels.
+  - Code review found a P2 regression risk from globally changing `optionLabel`; fixed by splitting `optionLabel` and `pricedOptionLabel`, then reran the affected `feat-029` and `feat-050` E2Es.
+  - Verification passed: feat-057 unit test (1), real Chromium/PostgreSQL/Worker/fake-provider E2E (1), `pnpm run verify`, full regression of all 57 prior passing features before marking, and final `pnpm run verify:features` across all 58 passing features after marking.
+- [x] **feat-058 — Budget-Safe Route Policy Validation (passing)**:
+  - Added Console Route Policy create/update validation for Virtual Models usable by enabled Agent API keys with enabled USD cost budgets.
+  - The validator rejects unknown-price primary or fallback candidates before mutating route policy rows or writing config-change events.
+  - Error messages identify the unknown-price Provider model and tell the user to add a manual price override or choose a priced replacement.
+  - Manual price overrides allow the same Route Policy to save successfully.
+  - Code review found no P2+ issues.
+  - Verification passed: feat-058 unit test (1), real Chromium/PostgreSQL Console E2E (1), `pnpm run verify`, full regression of all 58 prior passing features before marking, and final `pnpm run verify:features` across all 59 passing features after marking.
+- [x] **feat-059 — Real Agent OpenAI-Compatible Smoke (passing)**:
+  - Added a Hermes-like OpenAI-compatible chat/completions smoke request with system prompt, large tool-heavy user prompt, OpenAI function tools, and default-limit assertions.
+  - Gateway OpenAI chat normalization, non-streaming provider adapter payloads, and streaming chat payloads now preserve `tool_choice` and `tools`.
+  - Invalid OpenAI `tool_choice` strings are rejected before provider execution; valid string modes are `auto`, `none`, and `required`.
+  - E2E starts a real Gateway against isolated PostgreSQL and fake provider, then verifies HTTP 200 under Agent-ready default limits, provider hit with forwarded tools, succeeded `request_activity`, `request_usage`, and estimated `request_costs`.
+  - Code review found no P2+ issues; a minor review hardening restricted OpenAI `tool_choice` string modes.
+  - Verification passed: feat-059 unit tests (2), real Gateway/PostgreSQL/fake-provider E2E (1), `pnpm run verify`, full regression of all 59 prior passing features before marking, and final `pnpm run verify:features` across all 60 passing features after marking.
+- [x] **Test env file loading**:
+  - Added a dependency-free test env loader that reads `.env` first and then `.env.local` when present; `.env.local` overrides `.env`, while shell-provided variables keep highest precedence.
+  - Wrapped `pnpm test`, `pnpm test:e2e`, `pnpm run verify:features`, and `pnpm run db:migrate:check` with `scripts/run-with-env.ts`.
+  - `init.sh` now evaluates the same env loader before the verification gate and before starting Gateway, Console, and Worker, so service startup uses `.env` / `.env.local` as well.
+  - Added `.env.example` documenting current local/test/runtime environment variables, including the opt-in real provider smoke variables.
+  - Verification passed: env-loader unit tests, shell export smoke, package-script Vitest path, opt-in real-provider Playwright skip path, `pnpm run verify`, and final `pnpm run verify:features` across all 60 passing features.
 - [x] **feat-002 — Unit and E2E Test Harness (passing)**:
   - Added `tests/features/` (unit) and `tests/e2e/` (E2E) directories.
   - Added `test:e2e` script backed by Playwright (`playwright.config.ts`, testDir `tests/e2e`, testMatch `**/*.e2e.spec.ts`).
@@ -89,6 +127,7 @@
   - Added pnpm setup/cache in the workflow.
   - Added GitHub Actions Node 24 opt-in to avoid the upcoming Node 20 action runtime deprecation window.
   - Kept migration validation out of base CI; `feat-055` still owns that later.
+  - Regression-speed follow-up: `verify:features` now uses the dedicated feat-005 unit/E2E workflow contract tests instead of rerunning full install/lint/typecheck/unit/E2E/build and GitHub Actions status inside feat-005.
 - [x] **feat-006 — Bootstrap Runtime Configuration (passing)**:
   - Added `packages/config` bootstrap runtime loader for environment and JSON bootstrap config files.
   - Covers gateway/console ports, worker heartbeat, PostgreSQL `DATABASE_URL`, and inline/file master key sources.
@@ -147,13 +186,13 @@
 
 ### What's Next
 
-1. `feat-054` — MVP Local Deployment Smoke.
+1. Next active feature: `feat-059` Real Agent OpenAI-Compatible Smoke.
 
 ## Blockers / Risks
 
 - [x] Playwright Chromium is installed locally; Console page E2E can run in this workspace.
 - [ ] Review debt to resolve before related features: clarify or rename `PostgresFixture.migrate()` test-only fixture helper, make migration directory resolution independent of `process.cwd()` before app-start migration usage, revisit `config_change_events.changed_record_id` typing when non-UUID config tables are introduced, and add semantic validation for `agent_limits` combinations in feat-031.
-- [ ] Before the final real-provider MVP smoke, re-check that the active Codex shell can still see both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; both were visible on 2026-06-13 19:11 AWST.
+- [ ] The final real-provider MVP smoke is now the opt-in test in `tests/e2e/feat-054-local-deployment-smoke.e2e.spec.ts` (run with `LLMINGRESS_REAL_SMOKE=1`). Before running it, re-check that the active shell can still see both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` (both visible 2026-06-13 19:11 AWST); the opt-in test is structurally complete but has never executed against the real providers, so its first real run is unverified.
 
 ## Decisions Made
 
@@ -924,3 +963,42 @@
   - `pnpm run verify` passed.
   - Before marking feat-055 passing, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed all 53 prior passing features.
   - Next active feature: feat-054 MVP Local Deployment Smoke.
+
+- [x] 2026-06-15 MVP validation bugfixes:
+  - Console local validation fix: Console dev startup now binds to `127.0.0.1` by default so browser-origin Gateway CORS matches the default local origin during Playground validation.
+  - Verified the Console hostname fix with a red/green feat-054 unit assertion, the feat-049 Playground E2E happy path, and `pnpm run verify`.
+  - Anthropic Provider model refresh root cause: the saved Anthropic Provider key was present, but three manual `model_refresh` jobs failed with HTTP 401 because the Worker reused OpenAI-style `Authorization: Bearer <api-key>` headers for `provider_key = 'anthropic'`.
+  - Fixed Worker model refresh request construction so Anthropic uses `x-api-key`, `anthropic-version: 2023-06-01`, and `content-type: application/json`, while OpenAI-compatible providers keep Bearer auth.
+  - Red phase: `pnpm exec vitest run tests/features/feat-023-model-refresh.unit.test.ts` failed because Anthropic still built Bearer auth.
+  - Red phase: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-023-model-refresh.e2e.spec.ts --grep 'anthropic model refresh authenticates model list with Anthropic API key headers'` failed because the fake provider did not receive `x-api-key`.
+  - Green verification: feat-023 unit tests 6 passed, feat-023 PostgreSQL E2E tests 2 passed, and `pnpm run verify` passed.
+  - Live local DB verification: queued Anthropic refresh job `e847799f-b3a7-40a8-9414-0af7c9f354f7` succeeded on attempt 1 and wrote 8 available Anthropic provider models including `claude-sonnet-4-5-20250929`, `claude-sonnet-4-6`, and `claude-opus-4-8`.
+  - Full `pnpm run verify:features` intentionally not rerun during this validation step per user request to avoid the slow full regression until MVP is fully walked through.
+
+- [x] 2026-06-15 MVP coverage follow-up:
+  - Added regression coverage for Anthropic budget-priced routing: `feat-042` E2E now proves `anthropic/claude-sonnet-4-6` can pass an enabled cost budget using the built-in static price registry.
+  - Added red/green coverage for Agent-ready default limits: `feat-053` unit test first failed because Console limit defaults were not exported and existing UI defaults were too small for tool-heavy clients; Console now centralizes defaults at `budget=$10/month`, `rpm=60`, `tpm=1000000`, and `tokenLimit=200000`.
+  - Added pending features `feat-057`, `feat-058`, and `feat-059` for provider model price status, budget-safe route validation, and real OpenAI-compatible Agent smoke coverage.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-053-limits-fallback.unit.test.ts`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/feat-042-budget-enforcement.e2e.spec.ts --grep 'budget reservation finalization over budget 402 and unknown price model requires manual price'`, and `pnpm run verify`.
+  - Full `pnpm run verify:features` not run because the new features are pending and not being marked passing in this session.
+
+- [x] 2026-06-15 feat-060 optimized feature regression runner:
+  - Added `feat-060` for reducing `pnpm run verify:features` green-path runtime without reducing coverage.
+  - Red phase: `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts` failed because `scripts/verify-features.mjs` executed CLI side effects on import and exposed no optimized runner API.
+  - Added `scripts/verify-features.mjs --legacy`, default optimized mode, `--dry-run`, and `--compare`. The optimized mode batches standard `pnpm exec vitest run <unit-file> && pnpm test:e2e <e2e-file> [--grep ...]` entries, keeps non-standard commands in a legacy bucket, and falls back to original feature verifications when a batch fails.
+  - Added stale PID cleanup, malformed lock errors, shorter timeout diagnostics, and a post-operation settle window to `tests/support/process-lock.ts`.
+  - Full legacy regression initially reproduced a Console startup flake after `feat-049`; root cause was `apps/console/src/main.ts` not forwarding SIGTERM/SIGINT to the child Next process. Added lifecycle handling and unit coverage so the wrapper forwards parent shutdown signals and exits after the child exits.
+  - Improved Console E2E startup failure diagnostics in the affected specs so future failures include the last observed response status plus child stdout/stderr.
+  - Verification passed: `node scripts/verify-features.mjs --dry-run`, `node scripts/verify-features.mjs --compare`, `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'`, `pnpm run verify`, `node scripts/verify-features.mjs --legacy`, and `pnpm run verify:features`.
+  - Optimized `pnpm run verify:features` re-verified all 57 passing features; E2E batch took 159.3s and total repeated Playwright/Vitest process startup count was reduced by batching 50 standard features.
+  - `feat-057`, `feat-058`, and `feat-059` are now passing after provider-model price status, budget-safe route validation, and the real Agent OpenAI-compatible smoke.
+
+- [x] 2026-06-15 feat-061 Console interaction layout repair:
+  - Added `feat-061` for repairing Dashboard form interaction layout, especially mispaired labels/controls in Playground and Provider configuration forms.
+  - Red phase: `pnpm exec vitest run tests/features/feat-061-console-interaction-layout.unit.test.ts` failed because Playground fields were not grouped as stable Console fields.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --grep 'dashboard form labels stay paired with their controls on desktop'` failed because the rendered Gateway base URL label and input were 509px apart in Chromium.
+  - Fixed Playground markup by wrapping label/control pairs and action buttons in explicit field/action groups.
+  - Fixed shared Console form CSS so ungrouped Provider, price, usage-window, and key forms use stable single-column field flows, while Playground uses responsive grouped columns and no horizontal overflow.
+  - Browser and Chrome DevTools verification on an isolated PostgreSQL Console run showed no Console errors, paired Dashboard form fields, and no desktop overflow; Playwright screenshots verified desktop 1280px and mobile 390px layouts.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-061-console-interaction-layout.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --grep 'dashboard form labels stay paired with their controls on desktop'`, `pnpm run verify`, and `pnpm run verify:features`.
+  - `pnpm run verify:features` re-verified all 61 passing features; E2E batch took 211.9s.

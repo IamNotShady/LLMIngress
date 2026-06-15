@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPlaygroundChatRequest,
+  formatPlaygroundFetchError,
   isValidPlaygroundGatewayBaseUrl,
   normalizePlaygroundGatewayBaseUrl,
 } from "../../apps/console/src/app/playground-helpers";
@@ -34,6 +35,14 @@ describe("feat-049 Playground live public API test", () => {
     expect(isAllowedGatewayCorsOrigin("https://console.example")).toBe(false);
     expect(isAllowedGatewayCorsOrigin("https://console.example", "https://console.example")).toBe(
       true,
+    );
+  });
+
+  it("formats Gateway network failures without leaking unhandled fetch errors", () => {
+    expect(
+      formatPlaygroundFetchError("loading allowed models", new TypeError("Failed to fetch")),
+    ).toBe(
+      "Could not reach Gateway while loading allowed models. Check the Gateway base URL and that Gateway is running.",
     );
   });
 });

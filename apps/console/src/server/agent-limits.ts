@@ -68,6 +68,16 @@ type QueryClient = {
 
 const budgetPeriods = ["day", "week", "month"] as const;
 
+export const defaultAgentLimitFormValues = {
+  budgetPeriod: "month",
+  budgetPriceModelId: "gpt-4.1-mini",
+  budgetPriceProviderKey: "openai",
+  budgetUsd: 10,
+  rpm: 60,
+  tokenLimit: 200_000,
+  tpm: 1_000_000,
+} as const;
+
 export function normalizeAgentLimitFormInput(
   input: AgentLimitFormInput,
 ): NormalizedAgentLimitFormInput {

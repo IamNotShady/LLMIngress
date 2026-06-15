@@ -47,7 +47,10 @@ test("clean setup request activity usage and hot reload after route change", asy
             page.getByRole("heading", { exact: true, name: mvpHappyPathNames.providerDisplayName }),
           ).toBeVisible();
           await storeProviderApiKey(page);
-          await createVirtualModelAndRoutePolicy(page, modelOptions.initial.optionLabel);
+          await createVirtualModelAndRoutePolicy(page, {
+            optionLabel: modelOptions.initial.optionLabel,
+            selectorLabel: modelOptions.initial.selectorLabel,
+          });
           const agentApiKey = await createAgentApiKeyWithAccessAndLimits(page);
 
           const gateway = startGatewayProcess({
@@ -86,7 +89,7 @@ test("clean setup request activity usage and hot reload after route change", asy
 
             await page
               .getByLabel("Edit primary provider models")
-              .selectOption({ label: modelOptions.reloaded.optionLabel });
+              .selectOption({ label: modelOptions.reloaded.selectorLabel });
             await page.getByRole("button", { name: "Save route policy" }).click();
             await expect(
               page.getByText(`Primary: ${modelOptions.reloaded.optionLabel}`),
@@ -153,6 +156,7 @@ type GatewayProcess = {
 type ProviderModelOption = {
   id: string;
   optionLabel: string;
+  selectorLabel: string;
 };
 
 async function configurePriceOverride(page: Page): Promise<void> {
@@ -206,7 +210,7 @@ async function storeProviderApiKey(page: Page): Promise<void> {
 
 async function createVirtualModelAndRoutePolicy(
   page: Page,
-  initialModelOptionLabel: string,
+  initialModelOption: { optionLabel: string; selectorLabel: string },
 ): Promise<void> {
   await page
     .getByRole("textbox", { name: "Virtual model name" })
@@ -223,9 +227,11 @@ async function createVirtualModelAndRoutePolicy(
     label: `${mvpHappyPathNames.virtualModelDisplayName} (${mvpHappyPathNames.virtualModelName})`,
   });
   await page.getByLabel("Route policy strategy").selectOption("fixed");
-  await page.getByLabel("Primary provider models").selectOption({ label: initialModelOptionLabel });
+  await page
+    .getByLabel("Primary provider models")
+    .selectOption({ label: initialModelOption.selectorLabel });
   await page.getByRole("button", { name: "Create route policy" }).click();
-  await expect(page.getByText(`Primary: ${initialModelOptionLabel}`)).toBeVisible();
+  await expect(page.getByText(`Primary: ${initialModelOption.optionLabel}`)).toBeVisible();
 }
 
 async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string> {
@@ -310,6 +316,11 @@ async function seedProviderAndModels(
         modelId: mvpHappyPathNames.initialProviderModelId,
         providerDisplayName: mvpHappyPathNames.providerDisplayName,
       }),
+      selectorLabel: `${buildMvpHappyPathModelOptionLabel({
+        modelDisplayName: mvpHappyPathNames.initialProviderModelDisplayName,
+        modelId: mvpHappyPathNames.initialProviderModelId,
+        providerDisplayName: mvpHappyPathNames.providerDisplayName,
+      })} - Priced (manual override)`,
     },
     reloaded: {
       id: reloadedModelId,
@@ -318,6 +329,11 @@ async function seedProviderAndModels(
         modelId: mvpHappyPathNames.reloadedProviderModelId,
         providerDisplayName: mvpHappyPathNames.providerDisplayName,
       }),
+      selectorLabel: `${buildMvpHappyPathModelOptionLabel({
+        modelDisplayName: mvpHappyPathNames.reloadedProviderModelDisplayName,
+        modelId: mvpHappyPathNames.reloadedProviderModelId,
+        providerDisplayName: mvpHappyPathNames.providerDisplayName,
+      })} - Priced (manual override)`,
     },
   };
 }
@@ -403,26 +419,48 @@ async function getFreePort(): Promise<number> {
 }
 
 async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Promise<void> {
+  let lastObservedStatus = "not-started";
+
   await expect
     .poll(
       async () => {
         if (consoleApp.child.exitCode !== null) {
-          return `exited:${consoleApp.child.exitCode}`;
+          return formatConsoleStartupFailure(consoleApp, lastObservedStatus);
         }
 
         try {
           const response = await fetch(baseUrl);
+          if (response.status !== 200) {
+            lastObservedStatus = `status:${response.status}:${(await response.text()).slice(0, 500)}`;
+            return lastObservedStatus;
+          }
+          lastObservedStatus = String(response.status);
           return response.status;
-        } catch {
+        } catch (error) {
+          lastObservedStatus = `fetch-error:${
+            error instanceof Error ? error.message : String(error)
+          }`;
           return "not-ready";
         }
       },
       {
-        message: `Console did not start.\nstdout=${consoleApp.stdout.join("")}\nstderr=${consoleApp.stderr.join("")}`,
+        message: "Console did not start.",
         timeout: 15_000,
       },
     )
     .toBe(200);
+}
+
+function formatConsoleStartupFailure(
+  consoleApp: ConsoleProcess,
+  lastObservedStatus: string,
+): string {
+  return [
+    `exited:${consoleApp.child.exitCode}`,
+    `last:${lastObservedStatus}`,
+    `stdout:${consoleApp.stdout.join("")}`,
+    `stderr:${consoleApp.stderr.join("")}`,
+  ].join("\n");
 }
 
 async function waitForGateway(baseUrl: string, gateway: GatewayProcess): Promise<void> {

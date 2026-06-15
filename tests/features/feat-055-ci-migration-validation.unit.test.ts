@@ -9,7 +9,9 @@ describe("feat-055 CI migration validation", () => {
     const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
     const workflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
 
-    expect(packageJson.scripts["db:migrate:check"]).toBe("tsx scripts/migrate-check.ts");
+    expect(packageJson.scripts["db:migrate:check"]).toBe(
+      "tsx scripts/run-with-env.ts tsx scripts/migrate-check.ts",
+    );
     expect(existsSync(resolve(root, "scripts/migrate-check.ts"))).toBe(true);
     expect(workflow).toContain("name: Migration validation");
     expect(workflow).toContain("pnpm run db:migrate:check");

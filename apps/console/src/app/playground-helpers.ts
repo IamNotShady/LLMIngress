@@ -30,6 +30,10 @@ export function buildPlaygroundChatRequest(input: {
   };
 }
 
+export function formatPlaygroundFetchError(action: string, _error: unknown): string {
+  return `Could not reach Gateway while ${action}. Check the Gateway base URL and that Gateway is running.`;
+}
+
 export function readPlaygroundResponseText(body: unknown): string {
   if (!isRecord(body)) {
     return "No response text";

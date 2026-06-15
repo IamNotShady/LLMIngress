@@ -1,8 +1,15 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 
 type ConsoleMode = "dev" | "start";
+type ConsoleChildProcess = Pick<ChildProcess, "kill" | "on">;
+type ConsoleRuntime = {
+  exit: (code: number) => void;
+  killSelf: (signal: NodeJS.Signals) => void;
+  off: (signal: NodeJS.Signals, listener: () => void) => void;
+  once: (signal: NodeJS.Signals, listener: () => void) => void;
+};
 
 type ConsoleCommand = {
   command: string;
@@ -10,8 +17,17 @@ type ConsoleCommand = {
   env: NodeJS.ProcessEnv;
 };
 
+const shutdownSignals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+const defaultConsoleRuntime: ConsoleRuntime = {
+  exit: (code) => process.exit(code),
+  killSelf: (signal) => process.kill(process.pid, signal),
+  off: (signal, listener) => process.off(signal, listener),
+  once: (signal, listener) => process.once(signal, listener),
+};
+
 export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
+  const consoleHost = process.env.CONSOLE_HOST?.trim() || "127.0.0.1";
   const masterKeyEnv =
     config.masterKeySource.kind === "inline"
       ? { MASTER_KEY: config.masterKeySource.value }
@@ -19,7 +35,7 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
 
   return {
     command: "next",
-    args: [mode, "--hostname", "0.0.0.0", "--port", String(config.consolePort)],
+    args: [mode, "--hostname", consoleHost, "--port", String(config.consolePort)],
     env: {
       ...process.env,
       DATABASE_URL: config.databaseUrl,
@@ -36,14 +52,67 @@ export function startConsole(mode: ConsoleMode): void {
     shell: process.platform === "win32",
   });
 
+  attachConsoleChildLifecycle(child);
+}
+
+export function attachConsoleChildLifecycle(
+  child: ConsoleChildProcess,
+  runtime: ConsoleRuntime = defaultConsoleRuntime,
+): void {
+  let forwardedSignal: NodeJS.Signals | null = null;
+  let forceKillTimer: NodeJS.Timeout | null = null;
+  const parentSignalHandlers = new Map<NodeJS.Signals, () => void>();
+
+  for (const shutdownSignal of shutdownSignals) {
+    const listener = () => {
+      forwardedSignal ??= shutdownSignal;
+      killChild(child, shutdownSignal);
+      forceKillTimer ??= setChildForceKillTimer(child);
+    };
+    parentSignalHandlers.set(shutdownSignal, listener);
+    runtime.once(shutdownSignal, listener);
+  }
+
   child.on("exit", (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
+    if (forceKillTimer) {
+      clearTimeout(forceKillTimer);
+    }
+    for (const [parentSignal, listener] of parentSignalHandlers) {
+      runtime.off(parentSignal, listener);
+    }
+
+    if (forwardedSignal) {
+      runtime.exit(signalExitCode(forwardedSignal));
       return;
     }
 
-    process.exit(code ?? 0);
+    if (signal) {
+      runtime.killSelf(signal);
+      return;
+    }
+
+    runtime.exit(code ?? 0);
   });
+}
+
+function setChildForceKillTimer(child: ConsoleChildProcess): NodeJS.Timeout {
+  const timer = setTimeout(() => killChild(child, "SIGKILL"), 2_000);
+  timer.unref();
+  return timer;
+}
+
+function killChild(child: ConsoleChildProcess, signal: NodeJS.Signals): void {
+  try {
+    child.kill(signal);
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) {
+      throw error;
+    }
+  }
+}
+
+function signalExitCode(signal: NodeJS.Signals): number {
+  return signal === "SIGINT" ? 130 : 143;
 }
 
 function readMode(value: string | undefined): ConsoleMode {

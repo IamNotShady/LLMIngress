@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { planProviderModelRefresh } from "../../apps/worker/src/model-refresh";
+import {
+  buildProviderModelListRequest,
+  planProviderModelRefresh,
+} from "../../apps/worker/src/model-refresh";
 
 describe("feat-023 provider model refresh job", () => {
   it("plans derived model inserts and only treats referenced availability changes as routing-visible", () => {
@@ -103,6 +106,44 @@ describe("feat-023 provider model refresh job", () => {
     });
 
     expect(plan.insertModels).toEqual([{ displayName: "New Model", modelId: "new-model" }]);
+  });
+
+  it("builds an authenticated provider model list request", () => {
+    expect(
+      buildProviderModelListRequest({
+        apiKey: "sk-refresh-secret",
+        baseUrl: "https://api.openai.com/v1",
+        providerKey: "openai",
+      }),
+    ).toEqual({
+      init: {
+        headers: {
+          authorization: "Bearer sk-refresh-secret",
+        },
+        method: "GET",
+      },
+      url: "https://api.openai.com/v1/models",
+    });
+  });
+
+  it("builds an Anthropic provider model list request with Anthropic API key headers", () => {
+    expect(
+      buildProviderModelListRequest({
+        apiKey: "sk-ant-refresh-secret",
+        baseUrl: "https://api.anthropic.com/v1",
+        providerKey: "anthropic",
+      }),
+    ).toEqual({
+      init: {
+        headers: {
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "x-api-key": "sk-ant-refresh-secret",
+        },
+        method: "GET",
+      },
+      url: "https://api.anthropic.com/v1/models",
+    });
   });
 
   it("does not publish a routing-visible change for a referenced model display name-only change", () => {

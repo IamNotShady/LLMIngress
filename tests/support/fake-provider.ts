@@ -1,4 +1,9 @@
-import { createServer, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
+import {
+  createServer,
+  type IncomingHttpHeaders,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import type { AddressInfo } from "node:net";
 
 export type FakeProviderMode =
@@ -32,6 +37,7 @@ export type FakeProviderServer = {
 
 type FakeProviderServerOptions = {
   models?: FakeProviderModel[];
+  requiredModelListAuthorization?: string;
   timeoutMs?: number;
 };
 
@@ -43,7 +49,11 @@ export async function createFakeProviderServer(
   const timeoutMs = options.timeoutMs ?? 30_000;
 
   const server = createServer((request, response) => {
-    void handleRequest(request, response, requests, { getModels: () => models, timeoutMs });
+    void handleRequest(request, response, requests, {
+      getModels: () => models,
+      requiredModelListAuthorization: options.requiredModelListAuthorization,
+      timeoutMs,
+    });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -77,9 +87,13 @@ export async function createFakeProviderServer(
 
 async function handleRequest(
   request: IncomingMessage,
-  response: Parameters<Parameters<typeof createServer>[0]>[1],
+  response: ServerResponse<IncomingMessage>,
   requests: CapturedFakeProviderRequest[],
-  options: { getModels: () => FakeProviderModel[]; timeoutMs: number },
+  options: {
+    getModels: () => FakeProviderModel[];
+    requiredModelListAuthorization?: string;
+    timeoutMs: number;
+  },
 ): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://fake-provider.local");
@@ -95,6 +109,20 @@ async function handleRequest(
       bodyRaw,
       bodyJson,
     });
+
+    if (
+      url.pathname.endsWith("/models") &&
+      options.requiredModelListAuthorization &&
+      readAuthorization(request.headers) !== options.requiredModelListAuthorization
+    ) {
+      writeJson(response, 401, {
+        error: {
+          code: "invalid_api_key",
+          message: "Missing or invalid model list API key",
+        },
+      });
+      return;
+    }
 
     if (hasBadCredentials(request.headers)) {
       writeJson(response, 401, {
@@ -254,11 +282,7 @@ function readMode(url: URL): FakeProviderMode {
   return "json";
 }
 
-function writeJson(
-  response: Parameters<Parameters<typeof createServer>[0]>[1],
-  status: number,
-  body: unknown,
-): void {
+function writeJson(response: ServerResponse<IncomingMessage>, status: number, body: unknown): void {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(body));
 }
@@ -283,11 +307,14 @@ function parseJsonBody(bodyRaw: string): unknown {
 }
 
 function hasBadCredentials(headers: IncomingHttpHeaders): boolean {
-  const authorization = Array.isArray(headers.authorization)
-    ? headers.authorization.join(" ")
-    : headers.authorization;
   const apiKey = Array.isArray(headers["x-api-key"])
     ? headers["x-api-key"].join(" ")
     : headers["x-api-key"];
-  return [authorization, apiKey].some((value) => value?.includes("bad-provider-key"));
+  return [readAuthorization(headers), apiKey].some((value) => value?.includes("bad-provider-key"));
+}
+
+function readAuthorization(headers: IncomingHttpHeaders): string | undefined {
+  return Array.isArray(headers.authorization)
+    ? headers.authorization.join(" ")
+    : headers.authorization;
 }

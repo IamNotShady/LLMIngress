@@ -1,15 +1,15 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("first run creates admin protected pages require login valid login reaches dashboard", async ({
-  browser,
-}) => {
+const masterKey = "test-master-key";
+
+test("dashboard form labels stay paired with their controls on desktop", async ({ browser }) => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_console_auth_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_console_layout_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
@@ -23,26 +23,30 @@ test("first run creates admin protected pages require login valid login reaches 
 
       try {
         const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
-        const context = await browser.newContext();
+        const context = await browser.newContext({ viewport: { height: 720, width: 1280 } });
         const page = await context.newPage();
-        const password = "correct horse battery staple";
 
         try {
           await waitForConsole(baseUrl, consoleApp);
-          await page.goto(baseUrl);
-          await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible();
+          await signInFromFirstRun(page, baseUrl);
 
-          await page.getByLabel("Admin password").fill(password);
-          await page.getByRole("button", { name: "Create admin" }).click();
+          const desktopFields = await readFieldLayout(page, [
+            "playground-gateway-base-url",
+            "playground-agent-api-key",
+            "playground-model",
+            "playground-prompt",
+            "provider-key",
+            "provider-display-name",
+            "provider-base-url",
+          ]);
 
-          await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-          await expect(page.getByRole("heading", { name: "Dashboard" })).not.toBeVisible();
+          for (const field of desktopFields) {
+            expectFieldToBePaired(field);
+          }
 
-          await page.getByLabel("Admin password").fill(password);
-          await page.getByRole("button", { name: "Sign in" }).click();
-
-          await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-          await expect(page.getByText("Signed in as admin")).toBeVisible();
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth),
+          ).toBeLessThanOrEqual(1280);
         } finally {
           await context.close();
         }
@@ -62,20 +66,67 @@ type ConsoleProcess = {
   stdout: string[];
 };
 
-async function getFreePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => reject(new Error("Failed to allocate TCP port.")));
-        return;
+type FieldLayout = {
+  control: Rect | null;
+  id: string;
+  label: Rect | null;
+};
+
+type Rect = {
+  bottom: number;
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+function expectFieldToBePaired(field: FieldLayout): void {
+  expect(field.label, `${field.id} label`).not.toBeNull();
+  expect(field.control, `${field.id} control`).not.toBeNull();
+  const label = field.label as Rect;
+  const control = field.control as Rect;
+
+  expect(Math.abs(label.x - control.x), `${field.id} horizontal alignment`).toBeLessThanOrEqual(2);
+  expect(label.y, `${field.id} label vertical position`).toBeLessThan(control.y);
+  expect(control.y - label.bottom, `${field.id} label/control gap`).toBeLessThanOrEqual(12);
+  expect(control.width, `${field.id} control width`).toBeGreaterThan(240);
+}
+
+async function readFieldLayout(page: Page, ids: string[]): Promise<FieldLayout[]> {
+  return page.evaluate((fieldIds) => {
+    function rect(element: Element | null): Rect | null {
+      if (!element) {
+        return null;
       }
-      const port = address.port;
-      server.close(() => resolve(port));
-    });
-  });
+      const box = element.getBoundingClientRect();
+      return {
+        bottom: Math.round(box.bottom),
+        height: Math.round(box.height),
+        width: Math.round(box.width),
+        x: Math.round(box.x),
+        y: Math.round(box.y),
+      };
+    }
+
+    return fieldIds.map((id) => ({
+      control: rect(document.getElementById(id)),
+      id,
+      label: rect(document.querySelector(`label[for="${id}"]`)),
+    }));
+  }, ids);
+}
+
+async function signInFromFirstRun(page: Page, baseUrl: string): Promise<void> {
+  const password = "correct horse battery staple";
+
+  await page.goto(baseUrl);
+  await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible();
+  await page.getByLabel("Admin password").fill(password);
+  await page.getByRole("button", { name: "Create admin" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByLabel("Admin password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 }
 
 async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Promise<void> {
@@ -143,9 +194,8 @@ function startConsoleProcess(options: { databaseUrl: string; port: number }): Co
         ...process.env,
         CONSOLE_PORT: String(options.port),
         DATABASE_URL: options.databaseUrl,
-        MASTER_KEY: "test-master-key",
+        MASTER_KEY: masterKey,
       },
-      stdio: ["ignore", "pipe", "pipe"],
     },
   );
   const consoleApp: ConsoleProcess = {
@@ -163,7 +213,6 @@ async function stopConsoleProcess(consoleApp: ConsoleProcess): Promise<void> {
   if (consoleApp.child.exitCode !== null) {
     return;
   }
-
   consoleApp.child.kill("SIGTERM");
   await new Promise<void>((resolve) => {
     consoleApp.child.once("exit", () => resolve());
@@ -172,6 +221,22 @@ async function stopConsoleProcess(consoleApp: ConsoleProcess): Promise<void> {
         consoleApp.child.kill("SIGKILL");
       }
       resolve();
-    }, 2_000);
+    }, 2_000).unref();
+  });
+}
+
+async function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("Failed to allocate TCP port.")));
+        return;
+      }
+      const port = address.port;
+      server.close(() => resolve(port));
+    });
   });
 }

@@ -18,6 +18,7 @@ import {
 } from "../server/agent-api-keys";
 import {
   type ConsoleAgentLimit,
+  defaultAgentLimitFormValues,
   formatAgentLimitSummaries,
   listAgentLimits,
 } from "../server/agent-limits";
@@ -115,6 +116,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const selectedActivityId = readSingleSearchParam(resolvedSearchParams.activityId);
+  const modelRefreshProviderId = readSingleSearchParam(resolvedSearchParams.modelRefreshProviderId);
   const usageWindow = parseConsoleUsageWindow(
     readSingleSearchParam(resolvedSearchParams.usageWindow),
   );
@@ -137,6 +139,8 @@ export default async function Home({ searchParams }: HomeProps = {}) {
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
+  const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
+  const modelRefreshProvider = providers.find((provider) => provider.id === modelRefreshProviderId);
   const agentApiKeysByAgentId = groupByAgentId(agentApiKeys);
   const agentApiKeyVirtualModelAccessById = new Map(
     agentApiKeyVirtualModelAccess.map((access) => [access.agentApiKeyId, access]),
@@ -425,7 +429,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             >
               {providerModelOptions.map((providerModel) => (
                 <option key={providerModel.id} value={providerModel.id}>
-                  {providerModel.optionLabel}
+                  {providerModel.pricedOptionLabel}
                 </option>
               ))}
             </select>
@@ -438,7 +442,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             >
               {providerModelOptions.map((providerModel) => (
                 <option key={providerModel.id} value={providerModel.id}>
-                  {providerModel.optionLabel}
+                  {providerModel.pricedOptionLabel}
                 </option>
               ))}
             </select>
@@ -503,7 +507,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                   >
                     {providerModelOptions.map((providerModel) => (
                       <option key={providerModel.id} value={providerModel.id}>
-                        {providerModel.optionLabel}
+                        {providerModel.pricedOptionLabel}
                       </option>
                     ))}
                   </select>
@@ -519,7 +523,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                   >
                     {providerModelOptions.map((providerModel) => (
                       <option key={providerModel.id} value={providerModel.id}>
-                        {providerModel.optionLabel}
+                        {providerModel.pricedOptionLabel}
                       </option>
                     ))}
                   </select>
@@ -690,7 +694,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="0.000001"
                               step="0.000001"
-                              defaultValue={budgetLimit?.limitValue ?? 10}
+                              defaultValue={
+                                budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd
+                              }
                               required
                             />
                             <label htmlFor={`agent-key-budget-period-${agentApiKey.id}`}>
@@ -699,7 +705,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                             <select
                               id={`agent-key-budget-period-${agentApiKey.id}`}
                               name="budgetPeriod"
-                              defaultValue={budgetLimit?.period ?? "month"}
+                              defaultValue={
+                                budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod
+                              }
                               required
                             >
                               <option value="day">day</option>
@@ -712,7 +720,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                             <input
                               id={`agent-key-budget-provider-${agentApiKey.id}`}
                               name="budgetPriceProviderKey"
-                              defaultValue="openai"
+                              defaultValue={defaultAgentLimitFormValues.budgetPriceProviderKey}
                               required
                             />
                             <label htmlFor={`agent-key-budget-model-${agentApiKey.id}`}>
@@ -721,7 +729,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                             <input
                               id={`agent-key-budget-model-${agentApiKey.id}`}
                               name="budgetPriceModelId"
-                              defaultValue="gpt-4.1-mini"
+                              defaultValue={defaultAgentLimitFormValues.budgetPriceModelId}
                               required
                             />
                             <label htmlFor={`agent-key-rpm-${agentApiKey.id}`}>RPM limit</label>
@@ -731,7 +739,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="1"
                               step="1"
-                              defaultValue={rpmLimit?.limitValue ?? 60}
+                              defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
                               required
                             />
                             <label htmlFor={`agent-key-tpm-${agentApiKey.id}`}>TPM limit</label>
@@ -741,7 +749,7 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="1"
                               step="1"
-                              defaultValue={tpmLimit?.limitValue ?? 120000}
+                              defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
                               required
                             />
                             <label htmlFor={`agent-key-token-limit-${agentApiKey.id}`}>
@@ -753,7 +761,9 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               type="number"
                               min="1"
                               step="1"
-                              defaultValue={tokenLimit?.limitValue ?? 8000}
+                              defaultValue={
+                                tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit
+                              }
                               required
                             />
                             <button type="submit">Save Agent API key limits</button>
@@ -908,12 +918,16 @@ export default async function Home({ searchParams }: HomeProps = {}) {
             <button type="submit">Add local provider</button>
           </form>
         ))}
+        {modelRefreshProvider ? (
+          <p role="status">Model refresh queued for {modelRefreshProvider.displayName}.</p>
+        ) : null}
         <div className="provider-list">
           {providers.length === 0 ? (
             <p>No providers configured.</p>
           ) : (
             providers.map((provider) => {
               const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
+              const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
 
               return (
                 <article className="provider-item" key={provider.id}>
@@ -973,6 +987,21 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                       <p>No Provider API key saved.</p>
                     )}
                   </div>
+                  <div className="provider-model-metadata">
+                    {providerModels.length === 0 ? (
+                      <p>No provider models discovered yet.</p>
+                    ) : (
+                      <p>
+                        Provider models:{" "}
+                        {providerModels
+                          .map(
+                            (model) =>
+                              `${model.modelDisplayName} (${model.modelId}) - ${model.priceStatusLabel}`,
+                          )
+                          .join(", ")}
+                      </p>
+                    )}
+                  </div>
                   <form className="provider-key-form" action="/api/provider-keys" method="post">
                     <input type="hidden" name="providerId" value={provider.id} />
                     <label htmlFor={`provider-api-key-${provider.id}`}>Provider API key</label>
@@ -996,6 +1025,12 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                     />
                     <button className="secondary-button" type="submit">
                       {provider.enabled ? "Disable provider" : "Enable provider"}
+                    </button>
+                  </form>
+                  <form action="/api/provider-model-refresh" method="post">
+                    <input type="hidden" name="providerId" value={provider.id} />
+                    <button className="secondary-button" disabled={!provider.enabled} type="submit">
+                      Refresh provider models
                     </button>
                   </form>
                 </article>
@@ -1105,6 +1140,20 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
 
 function providerModelSelectSize(optionCount: number): number {
   return Math.min(6, Math.max(2, optionCount));
+}
+
+function groupProviderModelsByProviderId(
+  providerModels: Awaited<ReturnType<typeof listProviderModelOptions>>,
+) {
+  const grouped = new Map<string, typeof providerModels>();
+
+  for (const providerModel of providerModels) {
+    const models = grouped.get(providerModel.providerId) ?? [];
+    models.push(providerModel);
+    grouped.set(providerModel.providerId, models);
+  }
+
+  return grouped;
 }
 
 function virtualModelSelectSize(optionCount: number): number {

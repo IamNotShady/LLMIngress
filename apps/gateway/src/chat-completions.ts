@@ -106,6 +106,14 @@ export function normalizeOpenAIChatCompletionRequest(
   if (body.stream !== undefined && typeof body.stream !== "boolean") {
     return invalidChatRequest(requestId);
   }
+  const tools = readOptionalObjectArray(body.tools);
+  if (tools === null) {
+    return invalidChatRequest(requestId);
+  }
+  const toolChoice = readOptionalOpenAIToolChoice(body.tool_choice);
+  if (toolChoice === null) {
+    return invalidChatRequest(requestId);
+  }
 
   return {
     ok: true,
@@ -114,6 +122,8 @@ export function normalizeOpenAIChatCompletionRequest(
       messages: messages as NormalizedOpenAIChatMessage[],
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       temperature,
+      toolChoice,
+      tools,
     }),
   };
 }
@@ -372,6 +382,32 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
+}
+
+function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.some((entry) => !isRecord(entry))) {
+    return null;
+  }
+  return value as Record<string, unknown>[];
+}
+
+function readOptionalOpenAIToolChoice(
+  value: unknown,
+): string | Record<string, unknown> | null | undefined {
+  if (value === undefined || value === false) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    const mode = value.trim();
+    return mode === "auto" || mode === "none" || mode === "required" ? mode : null;
+  }
+  if (isRecord(value)) {
+    return value;
+  }
+  return null;
 }
 
 function requireRoutePolicy(

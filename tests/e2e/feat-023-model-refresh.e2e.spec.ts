@@ -3,7 +3,10 @@ import { expect, test } from "@playwright/test";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 import { createFakeProviderServer } from "../support/fake-provider";
+
+const masterKeySource = { kind: "inline" as const, value: "test-master-key" };
 
 test("model refresh writes derived rows marks missing referenced models unavailable and publishes config version only on routing-visible change", async () => {
   const fixture = await createTestPostgresFixture({
@@ -21,6 +24,7 @@ test("model refresh writes derived rows marks missing referenced models unavaila
       id: providerId,
       providerKey: "openai",
     });
+    await insertProviderApiKey(fixture, providerId);
 
     await runModelRefreshJob(fixture, providerId);
 
@@ -53,6 +57,37 @@ test("model refresh writes derived rows marks missing referenced models unavaila
   }
 });
 
+test("anthropic model refresh authenticates model list with Anthropic API key headers", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_anthropic_model_refresh_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const server = await createFakeProviderServer({
+    models: [{ id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }],
+  });
+  const providerId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await insertProvider(fixture, {
+      baseUrl: `${server.url}/v1`,
+      id: providerId,
+      providerKey: "anthropic",
+    });
+    await insertProviderApiKey(fixture, providerId);
+
+    await runModelRefreshJob(fixture, providerId);
+
+    expect(server.requests[0]?.path).toBe("/v1/models");
+    expect(server.requests[0]?.headers["x-api-key"]).toBe("sk-model-refresh-secret");
+    expect(server.requests[0]?.headers["anthropic-version"]).toBe("2023-06-01");
+    expect(server.requests[0]?.headers.authorization).toBeUndefined();
+    await expectModelRows(fixture, [{ availability: "available", model_id: "claude-sonnet-4-5" }]);
+  } finally {
+    await server.close();
+    await fixture.dispose();
+  }
+});
+
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 type ProviderInput = {
@@ -70,7 +105,10 @@ async function runModelRefreshJob(fixture: Fixture, providerId: string): Promise
   const runner = createPostgresJobRunner({
     databaseUrl: fixture.databaseUrl,
     handlers: {
-      model_refresh: createModelRefreshJobHandler({ databaseUrl: fixture.databaseUrl }),
+      model_refresh: createModelRefreshJobHandler({
+        databaseUrl: fixture.databaseUrl,
+        masterKeySource,
+      }),
     },
     workerId: `worker-model-refresh-${randomUUID()}`,
   });
@@ -103,6 +141,17 @@ async function insertProvider(fixture: Fixture, input: ProviderInput): Promise<v
       values ($1, 'api_key', $2, $3, $4, true)
     `,
     [input.id, input.providerKey, input.providerKey, input.baseUrl],
+  );
+}
+
+async function insertProviderApiKey(fixture: Fixture, providerId: string): Promise<void> {
+  const encrypted = createSecretEncryption(masterKeySource).encrypt("sk-model-refresh-secret");
+  await fixture.query(
+    `
+      insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id)
+      values ($1, $2, 'sk-model', $3, $4)
+    `,
+    [randomUUID(), providerId, JSON.stringify(encrypted), encrypted.keyId],
   );
 }
 

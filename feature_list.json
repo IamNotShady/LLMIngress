@@ -47,12 +47,12 @@
       "id": "feat-005",
       "name": "CI Verification Pipeline",
       "description": "A pushed commit runs the same install, lint, typecheck, unit test, E2E smoke, and build commands that developers run locally.",
-      "verification": "test -f .github/workflows/ci.yml && grep -q 'pnpm install' .github/workflows/ci.yml && grep -q 'pnpm run lint' .github/workflows/ci.yml && grep -q 'pnpm typecheck' .github/workflows/ci.yml && grep -q 'pnpm test' .github/workflows/ci.yml && grep -q 'pnpm test:e2e' .github/workflows/ci.yml && grep -q 'pnpm build' .github/workflows/ci.yml && grep -q 'postgres:' .github/workflows/ci.yml && grep -q 'TEST_DATABASE_URL' .github/workflows/ci.yml && pnpm install --frozen-lockfile && pnpm run lint && pnpm typecheck && pnpm test && bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm test:e2e && pnpm build && bash -lc \"gh run list --workflow ci.yml --branch main --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success\"",
+      "verification": "pnpm exec vitest run tests/features/feat-005-ci-pipeline.unit.test.ts && pnpm test:e2e tests/e2e/feat-005-ci-pipeline.e2e.spec.ts --grep 'ci workflow contains install lint typecheck unit e2e and build gates'",
       "dependencies": [
         "feat-002"
       ],
       "status": "passing",
-      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82. 2026-06-12 regression during feat-008 verify:features: feat-005 verification failed while the full pnpm test:e2e smoke included a regressed feat-007 migration E2E assertion; repaired by making feat-007 migration E2E assert the current migration set, then rerunning feat-005 verification successfully with 8/8 E2E tests. 2026-06-13 regression during feat-015 verify:features: feat-005 full E2E smoke failed because two Console Playwright specs started Next dev concurrently against the same apps/console/.next workspace; repaired by adding a test process lock around Console dev-server E2E specs, then reran pnpm test:e2e and verify:features successfully. 2026-06-14 regression during feat-028 verify:features: feat-005 full E2E smoke timed out after more Console specs queued behind the shared dev-server process lock; repaired by raising Playwright and process-lock timeouts to 90s, then reran pnpm test:e2e, feat-005 verification, pnpm run verify, and verify:features successfully."
+      "evidence": "2026-06-12: TDD red observed for feat-005 unit and E2E tests before implementation. 2026-06-12 review fix: CI workflow now includes PostgreSQL service, TEST_DATABASE_URL, pnpm cache, and Node 24 action opt-in; updated unit and E2E workflow checks passed; pnpm install --frozen-lockfile passed; pnpm run verify passed; TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e passed with 6/6 E2E tests executed; GitHub Actions CI run 27420889988 passed on pushed commit bc9fe82. 2026-06-12 regression during feat-008 verify:features: feat-005 verification failed while the full pnpm test:e2e smoke included a regressed feat-007 migration E2E assertion; repaired by making feat-007 migration E2E assert the current migration set, then rerunning feat-005 verification successfully with 8/8 E2E tests. 2026-06-13 regression during feat-015 verify:features: feat-005 full E2E smoke failed because two Console Playwright specs started Next dev concurrently against the same apps/console/.next workspace; repaired by adding a test process lock around Console dev-server E2E specs, then reran pnpm test:e2e and verify:features successfully. 2026-06-14 regression during feat-028 verify:features: feat-005 full E2E smoke timed out after more Console specs queued behind the shared dev-server process lock; repaired by raising Playwright and process-lock timeouts to 90s, then reran pnpm test:e2e, feat-005 verification, pnpm run verify, and verify:features successfully. 2026-06-15 regression-speed follow-up: feat-005 verification now uses its dedicated unit and E2E workflow contract tests instead of duplicating full install/lint/typecheck/unit/E2E/build plus GitHub Actions status inside every verify:features run; feat-005 verification now completes in about 2.3s locally, repo-wide health remains covered by pnpm run verify, and final verify:features passed all 56 passing features."
     },
     {
       "id": "feat-006",
@@ -505,7 +505,7 @@
         "feat-040"
       ],
       "status": "passing",
-      "evidence": "2026-06-14: TDD red observed for feat-042 unit tests because apps/gateway/src/budgets was missing, and E2E failed because over-budget requests still returned 200. Added Gateway token/request and cost/month budget enforcement backed by agent_limits, budget_periods, and budget_reservations. Gateway now checks request token limits, refuses cost-budget enforcement when the selected model price is unknown, accepts models with manual price overrides, reserves estimated input/output tokens and cost before provider calls, finalizes successful requests into budget_periods, and releases reservations on provider failure or stream failure/close. Chat completions, responses, messages, and streaming requests now run budget checks after route selection and before provider calls. P2+ review found and fixed streaming close handling so aborted streams release pending reservations; no remaining blocking issues after checking provider no-call behavior, reservation rollback/finalization, unknown-price rejection, manual-price acceptance, and route/provider payload compatibility. Verification passed — feat-042 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 41 prior passing features before marking feat-042 passing, and final verify:features passed all 42 passing features after marking."
+      "evidence": "2026-06-14: TDD red observed for feat-042 unit tests because apps/gateway/src/budgets was missing, and E2E failed because over-budget requests still returned 200. Added Gateway token/request and cost/month budget enforcement backed by agent_limits, budget_periods, and budget_reservations. Gateway now checks request token limits, refuses cost-budget enforcement when the selected model price is unknown, accepts models with manual price overrides, reserves estimated input/output tokens and cost before provider calls, finalizes successful requests into budget_periods, and releases reservations on provider failure or stream failure/close. Chat completions, responses, messages, and streaming requests now run budget checks after route selection and before provider calls. P2+ review found and fixed streaming close handling so aborted streams release pending reservations; no remaining blocking issues after checking provider no-call behavior, reservation rollback/finalization, unknown-price rejection, manual-price acceptance, and route/provider payload compatibility. Verification passed — feat-042 unit tests 3 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run lint passed, pnpm run typecheck passed, pnpm run verify passed, verify:features passed all 41 prior passing features before marking feat-042 passing, and final verify:features passed all 42 passing features after marking. 2026-06-15 coverage follow-up: budget E2E now includes an Anthropic built-in priced route for anthropic/claude-sonnet-4-6 and proves enabled cost budget allows the request instead of failing with unknown price. Verification passed — real PostgreSQL feat-042 E2E passed and pnpm run verify passed."
     },
     {
       "id": "feat-043",
@@ -597,7 +597,7 @@
         "feat-045"
       ],
       "status": "passing",
-      "evidence": "2026-06-14: TDD red observed for feat-049 unit tests because Playground helpers and Gateway CORS helpers were missing, and E2E because the authenticated Console had no Playground section. Added protected browser-only Playground with Gateway base URL, user-pasted Agent API key kept in React state only, allowed-model loading from Gateway GET /v1/models, live POST /v1/chat/completions directly from the browser to Gateway, result/request-id display, and Usage refresh after the live request. Added Gateway CORS support for default local Console origins plus explicit GATEWAY_CORS_ALLOWED_ORIGINS. P2+ review found and fixed a key-leak risk from blank/relative Gateway base URLs by requiring an absolute http(s) URL before sending any request. Verification passed — feat-049 unit tests 2 passed, real Chromium/PostgreSQL/Gateway/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 48 prior passing features before marking feat-049 passing."
+      "evidence": "2026-06-14: TDD red observed for feat-049 unit tests because Playground helpers and Gateway CORS helpers were missing, and E2E because the authenticated Console had no Playground section. Added protected browser-only Playground with Gateway base URL, user-pasted Agent API key kept in React state only, allowed-model loading from Gateway GET /v1/models, live POST /v1/chat/completions directly from the browser to Gateway, result/request-id display, and Usage refresh after the live request. Added Gateway CORS support for default local Console origins plus explicit GATEWAY_CORS_ALLOWED_ORIGINS. P2+ review found and fixed a key-leak risk from blank/relative Gateway base URLs by requiring an absolute http(s) URL before sending any request. Verification passed — feat-049 unit tests 2 passed, real Chromium/PostgreSQL/Gateway/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 48 prior passing features before marking feat-049 passing. 2026-06-15 bugfix: Playground Gateway fetch failures are now caught and shown as a user-facing status instead of surfacing as unhandled browser rejections; feat-049 unit tests passed."
     },
     {
       "id": "feat-050",
@@ -653,7 +653,7 @@
         "feat-050"
       ],
       "status": "passing",
-      "evidence": "2026-06-14: TDD red observed for feat-053 unit/E2E because the limits/fallback scenario support helper was missing; after adding it, E2E exposed and fixed duplicate test key prefixes before exercising the runtime behavior. Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code and no provider call for blocked requests. The same E2E verifies a first-byte provider failure falls back to the second candidate, returns HTTP 200, records the successful provider/model hit in request_activity, and records the failed first-byte attempt in fallback_events. P2+ review found no blocking issues; fallback_events lookup was narrowed to the request under test. Verification passed — feat-053 unit tests 1 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 52 prior passing features before marking feat-053 passing."
+      "evidence": "2026-06-14: TDD red observed for feat-053 unit/E2E because the limits/fallback scenario support helper was missing; after adding it, E2E exposed and fixed duplicate test key prefixes before exercising the runtime behavior. Added a real Gateway/PostgreSQL/fake-provider E2E covering RPM, TPM, per-request token, and monthly cost-budget failures with expected HTTP status/error code and no provider call for blocked requests. The same E2E verifies a first-byte provider failure falls back to the second candidate, returns HTTP 200, records the successful provider/model hit in request_activity, and records the failed first-byte attempt in fallback_events. P2+ review found no blocking issues; fallback_events lookup was narrowed to the request under test. Verification passed — feat-053 unit tests 1 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run verify passed, and verify:features passed all 52 prior passing features before marking feat-053 passing. 2026-06-15 coverage follow-up: Console Agent API key limit defaults are centralized and raised to Agent-ready values (TPM 1000000, token limit 200000) after Hermes-style validation exposed the old defaults as too small for tool-heavy clients. Red/green covered by feat-053 unit test; pnpm run verify passed."
     },
     {
       "id": "feat-054",
@@ -668,8 +668,8 @@
         "feat-052",
         "feat-053"
       ],
-      "status": "not_started",
-      "evidence": "No verification evidence yet; feature is not_started."
+      "status": "passing",
+      "evidence": "2026-06-14: TDD red observed for feat-054 unit/E2E because tests/support/local-deployment-smoke was missing. Added a hybrid deployment smoke: the default E2E brings up a real isolated PostgreSQL (migrated), the real Worker, Gateway, and Console processes against it, runs health checks (Gateway /health 200 reporting configVersion+providerCount, Console GET / 200, Worker '[worker] started'), measures and records startup-to-first-request duration (startup_to_first_request_ms), and completes one fake-provider-backed routed request asserting a recorded succeeded request_activity row. A second opt-in test (skipped unless LLMINGRESS_REAL_SMOKE=1 with OPENAI_API_KEY+ANTHROPIC_API_KEY) routes one real OpenAI and one real Anthropic request under a hard USD 10 budget cap; it never runs in automated CI/regression. The init.sh portion of the verification is the same lightweight entrypoint/duration smoke feat-001 uses (servers require DATABASE_URL+MASTER_KEY which the smoke does not supply, so it is lenient by design); the genuine altitude proof is the E2E. Verification passed — feat-054 unit tests 3 passed, default real-deployment E2E 1 passed (real opt-in test skipped), pnpm run verify passed, and verify:features passed all 55 passing features after marking feat-054 passing."
     },
     {
       "id": "feat-055",
@@ -683,6 +683,93 @@
       ],
       "status": "passing",
       "evidence": "2026-06-14: TDD red observed for feat-055 unit test because package.json had no db:migrate:check script and for E2E because the command failed. Added scripts/migrate-check.ts, which creates an isolated PostgreSQL test database from TEST_DATABASE_URL, applies all SQL migrations, reruns migrations to verify idempotent skips, and disposes the database. Added package script db:migrate:check and CI Migration validation step after dependency install. Updated the obsolete feat-005 unit assertion that expected migration validation to be absent from base CI. P2+ review found no blocking issues; the check uses an isolated fixture database and leaves PR CI as the external pushed-branch validation. Verification passed — feat-055 unit tests 1 passed, real PostgreSQL E2E 1 passed, pnpm run db:migrate:check passed, pnpm run verify passed, and verify:features passed all 53 prior passing features before marking feat-055 passing."
+    },
+    {
+      "id": "feat-056",
+      "name": "Console Provider Model Refresh Button",
+      "description": "An authenticated Console user can click a Provider-level refresh models button that enqueues a model_refresh job, wakes the Worker, and shows refreshed provider models in the Route Policy model selector without manual SQL.",
+      "verification": "pnpm exec vitest run tests/features/feat-056-console-model-refresh-button.unit.test.ts && pnpm test:e2e tests/e2e/feat-056-console-model-refresh-button.e2e.spec.ts --grep 'console refresh models button enqueues job worker refreshes models and route policy can select them'",
+      "dependencies": [
+        "feat-013",
+        "feat-016",
+        "feat-022",
+        "feat-023",
+        "feat-050"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-056 unit test because apps/console/src/server/model-refresh-jobs was missing, and E2E because the Console Provider card had no Refresh provider models button. Added an authenticated Console provider model refresh route, provider refresh job enqueue helper, Provider-card refresh button, and queued status message. The E2E proves a real Console click enqueues model_refresh, pg_notify wakes the real Worker, the Worker refreshes provider models from the fake provider, and the Route Policy model selector can select the refreshed provider model without manual SQL. Verification passed — feat-056 unit tests 3 passed, real Chromium/PostgreSQL/Worker/fake-provider E2E 1 passed, pnpm run verify passed, verify:features passed all 55 prior passing features before marking feat-056 passing, and final verify:features passed all 56 passing features after marking. 2026-06-15 bugfix: model_refresh now decrypts the saved Provider API key for api_key providers and sends Authorization on the model-list request; the Provider card also lists discovered provider models after refresh. Regression passed — feat-023 model refresh unit test, feat-023/025/056 real E2Es, pnpm run verify, and final verify:features passed all 56 passing features. 2026-06-15 Anthropic bugfix: model_refresh now sends x-api-key, anthropic-version, and content-type for provider_key anthropic while preserving Bearer auth for OpenAI-compatible providers. Red/green covered by feat-023 unit and PostgreSQL E2E; live Anthropic refresh job e847799f-b3a7-40a8-9414-0af7c9f354f7 succeeded and wrote 8 available provider models. Verification passed — feat-023 unit tests 6 passed, feat-023 E2E 2 passed, pnpm run verify passed. Full verify:features was not rerun per user request while validating MVP."
+    },
+    {
+      "id": "feat-057",
+      "name": "Provider Model Price Status on Refresh",
+      "description": "After a Console user refreshes Provider models, LLMIngress resolves each discovered provider model against the built-in price registry and manual overrides, then shows priced versus unknown-price status in the Provider model list and Route Policy model selector.",
+      "verification": "pnpm exec vitest run tests/features/feat-057-provider-model-price-status.unit.test.ts && pnpm test:e2e tests/e2e/feat-057-provider-model-price-status.e2e.spec.ts --grep 'refresh provider models shows priced and unknown price status in provider and route selectors'",
+      "dependencies": [
+        "feat-014",
+        "feat-015",
+        "feat-023",
+        "feat-056"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-057 unit test because provider model options lacked price status fields and priced selector labels, and E2E because the refreshed Provider model list and Route Policy selector did not show price status. Added Console provider model option price resolution using the existing built-in price registry plus manual price overrides, Provider model list price-status display, and dedicated priced selector labels while preserving stable base labels for Route Policy summaries/warnings. P2+ code review found that changing the shared optionLabel globally regressed existing Route Policy selector tests; fixed by splitting base optionLabel from pricedOptionLabel and reran feat-029/050 affected E2Es. Verification passed — feat-057 unit test 1 passed, real Chromium/PostgreSQL/Worker/fake-provider E2E 1 passed, pnpm run verify passed, verify:features passed all 57 prior passing features before marking feat-057 passing, and final verify:features passed all 58 passing features after marking."
+    },
+    {
+      "id": "feat-058",
+      "name": "Budget-Safe Route Policy Validation",
+      "description": "When a Virtual Model is usable by any Agent API key with an enabled cost budget, Console prevents saving Route Policy candidates whose selected Provider model has unknown price, and explains which model needs a manual price override or a priced replacement.",
+      "verification": "pnpm exec vitest run tests/features/feat-058-budget-safe-route-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-058-budget-safe-route-policy.e2e.spec.ts --grep 'budget enabled agent cannot save route policy with unknown price provider model'",
+      "dependencies": [
+        "feat-015",
+        "feat-029",
+        "feat-031",
+        "feat-042",
+        "feat-057"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-058 unit test because createRoutePolicy saved an unknown-price candidate for a Virtual Model usable by a cost-budgeted Agent API key, and E2E because POST /api/route-policies redirected successfully instead of returning a budget-safety error. Added Route Policy create/update validation that checks enabled USD budget limits for Agent API keys that can use the Virtual Model through allowed or default access, validates both primary and fallback candidates with the existing price resolver, and explains which candidate needs a manual price override or priced replacement. Manual price override then allows the same Route Policy to save. Code review found no P2+ issues. Verification passed — feat-058 unit test 1 passed, real Chromium/PostgreSQL Console E2E 1 passed, pnpm run verify passed, verify:features passed all 58 prior passing features before marking feat-058 passing, and final verify:features passed all 59 passing features after marking."
+    },
+    {
+      "id": "feat-059",
+      "name": "Real Agent OpenAI-Compatible Smoke",
+      "description": "A local OpenAI-compatible Agent smoke test sends a Hermes-like large chat/completions request with system prompt, tool schemas, and Agent-ready default limits through Gateway, then verifies Provider hit, Activity, Usage, and no default limit rejection.",
+      "verification": "pnpm exec vitest run tests/features/feat-059-real-agent-openai-compatible-smoke.unit.test.ts && pnpm test:e2e tests/e2e/feat-059-real-agent-openai-compatible-smoke.e2e.spec.ts --grep 'Hermes-like OpenAI-compatible agent request succeeds with default limits and records usage'",
+      "dependencies": [
+        "feat-030",
+        "feat-036",
+        "feat-042",
+        "feat-044",
+        "feat-045",
+        "feat-050",
+        "feat-053"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-059 unit tests because OpenAI chat completion normalization and provider adapter payloads dropped tool_choice/tools, and E2E because the real Gateway fake-provider hit omitted the Hermes-like OpenAI-compatible tool schema fields. Added a Hermes-like local Agent chat/completions smoke request with system prompt, large tool-heavy user prompt, OpenAI function tools, and default-limit assertions. Gateway OpenAI chat normalization, non-streaming provider adapter payloads, and streaming chat payloads now preserve tool_choice/tools while rejecting unsupported tool_choice strings. The E2E starts a real Gateway against isolated PostgreSQL and fake provider, verifies HTTP 200 with default Agent-ready limits, provider hit with forwarded tools, succeeded request_activity, request_usage, and estimated request_costs. Code review found no P2+ issues; a minor review hardening restricted OpenAI tool_choice strings to auto/none/required. Verification passed — feat-059 unit tests 2 passed, real Gateway/PostgreSQL/fake-provider E2E 1 passed, pnpm run verify passed, verify:features passed all 59 prior passing features before marking feat-059 passing, and final verify:features passed all 60 passing features after marking."
+    },
+    {
+      "id": "feat-060",
+      "name": "Optimized Feature Regression Runner",
+      "description": "pnpm run verify:features preserves full passing-feature coverage while reducing green-path runtime by batching standard unit and E2E verifications, keeping non-standard verifications in legacy mode, exposing dry-run/compare coverage checks, and avoiding stale Console E2E process locks.",
+      "verification": "node scripts/verify-features.mjs --dry-run && node scripts/verify-features.mjs --compare && pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts && pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard'",
+      "dependencies": [
+        "feat-002",
+        "feat-005",
+        "feat-013"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-060 because scripts/verify-features.mjs executed CLI side effects on import and exported no optimized runner API; process-lock had no stale PID handling; and Console wrapper shutdown did not forward SIGTERM to the child Next process. Added an importable optimized feature regression runner with --legacy, --dry-run, and --compare modes; standard unit/E2E verifications are batched, non-standard commands remain legacy, and batch failures fall back to original feature verification. Added stale PID cleanup, malformed-lock errors, lock wait diagnostics, and Console child lifecycle shutdown coverage. Required verification passed: node scripts/verify-features.mjs --dry-run, node scripts/verify-features.mjs --compare, pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts, pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard', pnpm run verify, node scripts/verify-features.mjs --legacy, and pnpm run verify:features."
+    },
+    {
+      "id": "feat-061",
+      "name": "Console Interaction Layout Repair",
+      "description": "Console form labels remain visually paired with their controls on the Dashboard, especially Playground and Provider configuration forms, with no horizontal overflow on desktop or mobile viewports.",
+      "verification": "pnpm exec vitest run tests/features/feat-061-console-interaction-layout.unit.test.ts && pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --grep 'dashboard form labels stay paired with their controls on desktop'",
+      "dependencies": [
+        "feat-013",
+        "feat-049",
+        "feat-056"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-15: TDD red observed for feat-061 unit test because Playground labels and controls were not grouped, and E2E because the Gateway base URL label and control were 509px apart in the rendered Dashboard grid. Added explicit Playground field/action groups and changed the existing Console form grids to stable stacked field flows for ungrouped configuration forms. Targeted verification passed: feat-061 unit test 1 passed and real Chromium/PostgreSQL Console E2E 1 passed. Browser/Chrome DevTools inspection showed no Console errors, paired Playground fields, and no horizontal overflow; Playwright screenshots verified desktop 1280px and mobile 390px layouts. Full verification passed: pnpm run verify passed, and pnpm run verify:features re-verified all 61 passing features with e2e batch PASS."
     }
   ]
 }

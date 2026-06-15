@@ -9,12 +9,12 @@
     "typecheck": "turbo run typecheck",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test": "tsx scripts/run-with-env.ts vitest run",
+    "test:e2e": "tsx scripts/run-with-env.ts playwright test",
     "verify": "pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
-    "verify:features": "node scripts/verify-features.mjs",
+    "verify:features": "tsx scripts/run-with-env.ts node scripts/verify-features.mjs",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:migrate:check": "tsx scripts/migrate-check.ts",
+    "db:migrate:check": "tsx scripts/run-with-env.ts tsx scripts/migrate-check.ts",
     "init": "bash init.sh"
   },
   "devDependencies": {

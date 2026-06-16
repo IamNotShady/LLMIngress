@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 09:35 AWST
-**Active Feature:** none - 87 tracked features are `passing`; 8 V1 features are `pending`
+**Last Updated:** 2026-06-16 09:59 AWST
+**Active Feature:** none - 88 tracked features are `passing`; 7 V1 features are `pending`
 
 ## Status
 
@@ -177,6 +177,12 @@
   - Manifest drift is covered by unit tests comparing the Console manifest against SQL migration files.
   - P2+ review found and fixed a Console build tracing risk by keeping filesystem migration loading out of the Next server component import path.
   - Verification passed: feat-087 unit tests (4), real PostgreSQL/Console E2E (1), `pnpm run verify`, and full `pnpm run verify:features` across all 86 prior passing features before marking.
+- [x] **feat-088 — Budget Threshold Alerts (passing)**:
+  - Added migration `0020_budget_threshold_alerts` and Worker `budget_threshold_alerts` job handling.
+  - Default periodic scheduler now creates budget threshold evaluator jobs using configurable `BUDGET_THRESHOLD_ALERT_INTERVAL_MS` and `BUDGET_WARNING_THRESHOLDS`.
+  - Evaluator reads current budget periods, compares usage against payload/env thresholds, queues `budget_threshold` notification events, and uses the existing Email/Webhook dispatcher for delivery.
+  - P2+ review added duplicate alert coverage so repeated evaluator jobs skip an existing `alertKey`; no-channel deployments complete with skipped counts instead of failing the scheduled job.
+  - Verification passed: feat-088 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), `pnpm run db:migrate:check`, feat-087 migration manifest regression, `pnpm run verify`, and full `pnpm run verify:features` across all 87 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

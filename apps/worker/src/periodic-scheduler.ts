@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { readBackupSettings } from "./backup.js";
+import { readBudgetThresholdAlertSettings } from "./budget-threshold-alerts.js";
 import { JOB_CREATED_CHANNEL } from "./job-runner.js";
 import { readRetentionCleanupSettings } from "./retention-cleanup.js";
 
@@ -12,7 +13,8 @@ export type PeriodicTaskJobType =
   | "retention_cleanup"
   | "stale_reservation_cleanup"
   | "webhook_export"
-  | "backup";
+  | "backup"
+  | "budget_threshold_alerts";
 
 export type PeriodicTaskDefinition = {
   id: string;
@@ -71,6 +73,7 @@ const defaultTickIntervalMs = 30_000;
 
 export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
   const backupSettings = readBackupSettings();
+  const budgetThresholdAlertSettings = readBudgetThresholdAlertSettings();
   const retentionCleanupSettings = readRetentionCleanupSettings();
 
   return [
@@ -99,6 +102,15 @@ export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
       maxAttempts: 1,
       payload: { outputDir: backupSettings.outputDir },
       priority: -10,
+      startAt: new Date(0),
+    },
+    {
+      id: "budget-threshold-alerts",
+      intervalMs: budgetThresholdAlertSettings.intervalMs,
+      jobType: "budget_threshold_alerts",
+      maxAttempts: 1,
+      payload: { thresholdRatios: budgetThresholdAlertSettings.thresholdRatios },
+      priority: -5,
       startAt: new Date(0),
     },
   ];

@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { createBackupJobHandler } from "./backup.js";
 import { createBillingReconciliationJobHandler } from "./billing-reconciliation.js";
+import { createBudgetThresholdAlertsJobHandler } from "./budget-threshold-alerts.js";
 import { createCostReportExportJobHandler } from "./cost-report-export.js";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createJsonlRequestLogExportJobHandler } from "./jsonl-export.js";
@@ -38,6 +39,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
           databaseUrl: config.databaseUrl,
         }),
         backup: createBackupJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        budget_threshold_alerts: createBudgetThresholdAlertsJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         price_sync: createPriceSyncJobHandler({ databaseUrl: config.databaseUrl }),

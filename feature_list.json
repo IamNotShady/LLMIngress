@@ -1145,8 +1145,8 @@
         "feat-072",
         "feat-083"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-088 unit/E2E tests because the budget threshold alert evaluator module and job type were missing. Added migration 0020 for budget_threshold_alerts jobs, a default scheduler-created budget-threshold-alerts task with BUDGET_THRESHOLD_ALERT_INTERVAL_MS / BUDGET_WARNING_THRESHOLDS configuration, and a Worker evaluator that reads current budget periods, applies payload/env threshold ratios, queues budget_threshold notification events, and lets the existing Email/Webhook notification_dispatch handler deliver them. P2+ review added duplicate alert coverage so repeated evaluator jobs for the same budget period and threshold skip the existing alertKey instead of resending notifications; no-channel deployments succeed with skippedNoChannelCount. Verification passed: feat-088 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), pnpm run db:migrate:check, feat-087 migration manifest regression, pnpm run verify, and full pnpm run verify:features across all 87 prior passing features before marking."
     },
     {
       "id": "feat-089",

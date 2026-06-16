@@ -145,6 +145,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0019",
     name: "webhook_event_export",
   },
+  {
+    checksum: "2fbeb0f5655ca8e0f68288bb5986fc116d14aa2d0544d8738d94c8ec79c40aac",
+    id: "0020",
+    name: "budget_threshold_alerts",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

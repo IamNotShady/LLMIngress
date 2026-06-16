@@ -14,6 +14,7 @@ import {
 import { createPriceSyncJobHandler } from "./price-sync.js";
 import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
 import { createStaleReservationCleanupJobHandler } from "./stale-reservations.js";
+import { createWebhookEventExportJobHandler } from "./webhook-export.js";
 
 type StartWorkerOptions = {
   jobRunner?: JobRunner;
@@ -42,6 +43,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
           databaseUrl: config.databaseUrl,
         }),
         notification_dispatch: createNotificationDispatchJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        webhook_export: createWebhookEventExportJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         stale_reservation_cleanup: createStaleReservationCleanupJobHandler({

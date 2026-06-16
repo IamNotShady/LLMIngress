@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 07:50 AWST
-**Active Feature:** none — 83 tracked features are `passing`; 12 V1 features are `pending`
+**Last Updated:** 2026-06-16 08:11 AWST
+**Active Feature:** none — 84 tracked features are `passing`; 11 V1 features are `pending`
 
 ## Status
 
@@ -153,6 +153,12 @@
   - Added Worker notification queueing and dispatch: events are queued per enabled channel, email deliveries use a local outbox audit path, webhook deliveries POST JSON payloads, failures are audited, and retry dispatch jobs are scheduled for retryable failures.
   - P2+ review found and fixed a transport exception path so thrown delivery errors are recorded as failed/retrying notification events instead of leaving events stuck in `sending`.
   - Verification passed: feat-083 unit tests (5), real PostgreSQL Worker/fake-webhook E2E (1), `pnpm run lint`, `pnpm run typecheck`, `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 82 prior passing features before marking, and final `pnpm run verify:features` across all 83 passing features after marking.
+- [x] **feat-084 — Webhook Event Export (passing)**:
+  - Added migration `0019_webhook_event_export` for `webhook_deliveries` audit records.
+  - Added Worker `webhook_export` handling for request, fallback, and error events from `request_activity` and `fallback_events`.
+  - Webhook payloads reuse JSONL redaction rules, stored webhook URLs are redacted, and E2E verifies no alert notification rows are created.
+  - P2+ review found and fixed retry duplicate risk by skipping already-sent delivery records for the same job/event on retry; partial failures only resend failed or missing events.
+  - Verification passed: feat-084 unit tests (5), real PostgreSQL Worker/fake-webhook E2E tests (2), `pnpm run lint`, `pnpm run typecheck`, `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 83 prior passing features before marking, and final `pnpm run verify:features` across all 84 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

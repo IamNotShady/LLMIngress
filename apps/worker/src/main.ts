@@ -15,6 +15,7 @@ import {
 } from "./periodic-scheduler.js";
 import { createPriceSyncJobHandler } from "./price-sync.js";
 import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
+import { createRateLimitAlertsJobHandler } from "./rate-limit-alerts.js";
 import { createRetentionCleanupJobHandler } from "./retention-cleanup.js";
 import { createStaleReservationCleanupJobHandler } from "./stale-reservations.js";
 import { createWebhookEventExportJobHandler } from "./webhook-export.js";
@@ -52,6 +53,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
           databaseUrl: config.databaseUrl,
         }),
         notification_dispatch: createNotificationDispatchJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        rate_limit_alerts: createRateLimitAlertsJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         webhook_export: createWebhookEventExportJobHandler({

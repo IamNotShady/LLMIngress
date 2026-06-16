@@ -1158,8 +1158,8 @@
         "feat-072",
         "feat-083"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-089 unit/E2E tests because the rate limit alert evaluator module and job type were missing. Added migration 0021 for rate_limit_alerts jobs, a default scheduler-created rate-limit-alerts task with RATE_LIMIT_ALERT_INTERVAL_MS / RATE_LIMIT_ALERT_WINDOW_MS / RATE_LIMIT_ALERT_THRESHOLD configuration, and a Worker evaluator that reads recent request_activity 429 rate_limit_exceeded rows, detects repeated RPM and TPM blocks per Agent API key, queues rate_limit_high_frequency notification events, and lets the existing Email/Webhook notification_dispatch handler deliver them. P2+ review found and fixed overlapping-window duplicate alert risk by keying alerts on the latest block timestamp, so repeated scheduled evaluator runs do not resend unless new block activity appears. Verification passed: feat-089 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), pnpm run db:migrate:check, feat-087 migration manifest regression, pnpm run verify, and full pnpm run verify:features across all 88 prior passing features before marking."
     },
     {
       "id": "feat-090",

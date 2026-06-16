@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 09:59 AWST
-**Active Feature:** none - 88 tracked features are `passing`; 7 V1 features are `pending`
+**Last Updated:** 2026-06-16 10:19 AWST
+**Active Feature:** none - 89 tracked features are `passing`; 6 V1 features are `pending`
 
 ## Status
 
@@ -183,6 +183,12 @@
   - Evaluator reads current budget periods, compares usage against payload/env thresholds, queues `budget_threshold` notification events, and uses the existing Email/Webhook dispatcher for delivery.
   - P2+ review added duplicate alert coverage so repeated evaluator jobs skip an existing `alertKey`; no-channel deployments complete with skipped counts instead of failing the scheduled job.
   - Verification passed: feat-088 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), `pnpm run db:migrate:check`, feat-087 migration manifest regression, `pnpm run verify`, and full `pnpm run verify:features` across all 87 prior passing features before marking.
+- [x] **feat-089 — Rate Limit High-Frequency Alerts (passing)**:
+  - Added migration `0021_rate_limit_alerts` and Worker `rate_limit_alerts` job handling.
+  - Default periodic scheduler now creates rate-limit evaluator jobs using configurable `RATE_LIMIT_ALERT_INTERVAL_MS`, `RATE_LIMIT_ALERT_WINDOW_MS`, and `RATE_LIMIT_ALERT_THRESHOLD`.
+  - Evaluator reads recent `request_activity` 429 `rate_limit_exceeded` rows, detects repeated RPM and TPM blocks per Agent API key, queues `rate_limit_high_frequency` notification events, and uses the existing Email/Webhook dispatcher for delivery.
+  - P2+ review found and fixed overlapping-window duplicate alert risk by keying alerts on the latest block timestamp, so repeated scheduled evaluator runs do not resend unless new block activity appears.
+  - Verification passed: feat-089 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), `pnpm run db:migrate:check`, feat-087 migration manifest regression, `pnpm run verify`, and full `pnpm run verify:features` across all 88 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

@@ -3,6 +3,7 @@ import { Client } from "pg";
 import { readBackupSettings } from "./backup.js";
 import { readBudgetThresholdAlertSettings } from "./budget-threshold-alerts.js";
 import { JOB_CREATED_CHANNEL } from "./job-runner.js";
+import { readRateLimitAlertSettings } from "./rate-limit-alerts.js";
 import { readRetentionCleanupSettings } from "./retention-cleanup.js";
 
 export type PeriodicTaskJobType =
@@ -14,7 +15,8 @@ export type PeriodicTaskJobType =
   | "stale_reservation_cleanup"
   | "webhook_export"
   | "backup"
-  | "budget_threshold_alerts";
+  | "budget_threshold_alerts"
+  | "rate_limit_alerts";
 
 export type PeriodicTaskDefinition = {
   id: string;
@@ -74,6 +76,7 @@ const defaultTickIntervalMs = 30_000;
 export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
   const backupSettings = readBackupSettings();
   const budgetThresholdAlertSettings = readBudgetThresholdAlertSettings();
+  const rateLimitAlertSettings = readRateLimitAlertSettings();
   const retentionCleanupSettings = readRetentionCleanupSettings();
 
   return [
@@ -110,6 +113,18 @@ export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
       jobType: "budget_threshold_alerts",
       maxAttempts: 1,
       payload: { thresholdRatios: budgetThresholdAlertSettings.thresholdRatios },
+      priority: -5,
+      startAt: new Date(0),
+    },
+    {
+      id: "rate-limit-alerts",
+      intervalMs: rateLimitAlertSettings.intervalMs,
+      jobType: "rate_limit_alerts",
+      maxAttempts: 1,
+      payload: {
+        thresholdCount: rateLimitAlertSettings.thresholdCount,
+        windowMs: rateLimitAlertSettings.windowMs,
+      },
       priority: -5,
       startAt: new Date(0),
     },

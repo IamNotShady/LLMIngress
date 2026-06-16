@@ -60,11 +60,14 @@ test("refresh provider models shows priced and unknown price status in provider 
           await expect
             .poll(() => readLatestModelRefreshJob(fixture, providerId))
             .toMatchObject({ status: "succeeded" });
+          await expect
+            .poll(() => readLatestChainedPriceSyncJob(fixture, providerId))
+            .toMatchObject({ status: "succeeded" });
 
           await page.reload();
           const providerModelMetadata = page.locator(".provider-model-metadata");
           await expect(
-            providerModelMetadata.getByText("GPT-4.1 Mini (gpt-4.1-mini) - Priced (built-in)"),
+            providerModelMetadata.getByText("GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)"),
           ).toBeVisible();
           await expect(
             providerModelMetadata.getByText(
@@ -81,7 +84,7 @@ test("refresh provider models shows priced and unknown price status in provider 
             label: "Price Status VM (price-status-vm)",
           });
           await expect(page.getByLabel("Primary provider models")).toContainText(
-            "OpenAI Price Status Provider - GPT-4.1 Mini (gpt-4.1-mini) - Priced (built-in)",
+            "OpenAI Price Status Provider - GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)",
           );
           await expect(page.getByLabel("Primary provider models")).toContainText(
             "OpenAI Price Status Provider - Manual Priced Model (manual-priced-model) - Priced (manual override)",
@@ -168,6 +171,26 @@ async function readLatestModelRefreshJob(
       select status
       from jobs
       where job_type = 'model_refresh'
+        and payload->>'providerId' = $1
+      order by created_at desc
+      limit 1
+    `,
+    [providerId],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function readLatestChainedPriceSyncJob(
+  fixture: Fixture,
+  providerId: string,
+): Promise<{ status: string } | null> {
+  const result = await fixture.query<{ status: string }>(
+    `
+      select status
+      from jobs
+      where job_type = 'price_sync'
+        and trigger = 'system'
+        and payload->>'source' = 'model_refresh'
         and payload->>'providerId' = $1
       order by created_at desc
       limit 1

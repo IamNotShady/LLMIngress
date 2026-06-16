@@ -1285,8 +1285,8 @@
         "feat-056",
         "feat-073"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-097 unit tests because model_refresh did not expose chained price_sync payload/status helpers, and E2E red because model_refresh job results had no chainedPriceSyncJobId and no system price_sync job. Added Worker-side chaining inside the successful model_refresh write transaction: it creates a trigger=system price_sync job with provider/model-set payload, deduplicates unfinished chained jobs per provider with an advisory transaction lock, emits job_created wake notifications, and records the chained price_sync job id in the model_refresh result while price sync runs asynchronously. Updated feat-057 E2E to account for automatic chained price_sync completing and surfacing price sync as the effective price source. Verification passed: feat-097 unit tests (2), real PostgreSQL Worker/fake-provider E2E (1), related feat-023/feat-056/feat-057/feat-073 regressions, pnpm run verify, pnpm run verify:features across all 96 prior passing features before marking, and final pnpm run verify:features across all 97 passing features after marking."
     }
   ]
 }

@@ -881,24 +881,6 @@ export default async function Home({ searchParams }: HomeProps = {}) {
                               <option value="week">week</option>
                               <option value="month">month</option>
                             </select>
-                            <label htmlFor={`agent-key-budget-provider-${agentApiKey.id}`}>
-                              Budget price provider key
-                            </label>
-                            <input
-                              id={`agent-key-budget-provider-${agentApiKey.id}`}
-                              name="budgetPriceProviderKey"
-                              defaultValue={defaultAgentLimitFormValues.budgetPriceProviderKey}
-                              required
-                            />
-                            <label htmlFor={`agent-key-budget-model-${agentApiKey.id}`}>
-                              Budget price model id
-                            </label>
-                            <input
-                              id={`agent-key-budget-model-${agentApiKey.id}`}
-                              name="budgetPriceModelId"
-                              defaultValue={defaultAgentLimitFormValues.budgetPriceModelId}
-                              required
-                            />
                             <label htmlFor={`agent-key-rpm-${agentApiKey.id}`}>RPM limit</label>
                             <input
                               id={`agent-key-rpm-${agentApiKey.id}`}

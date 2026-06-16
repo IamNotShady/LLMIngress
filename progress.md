@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 12:00 AWST
-**Active Feature:** none - 95 tracked features are `passing`; feat-096 and feat-097 are `pending`
+**Last Updated:** 2026-06-16 15:18 AWST
+**Active Feature:** none - 96 tracked features are `passing`; feat-097 is `pending`
 
 ## Status
 
@@ -18,6 +18,13 @@
 - [x] Tightened optional V1 tracker verification text for Agent Integration Templates and Usage / Cost Breakdowns so the grep contracts pin the named tools, snippet fields, and new usage dimensions.
 - [x] Added `feat-096` as a pending Agent budget cleanup feature and clarified `feat-031` as the legacy Agent API key limit configuration behavior that `feat-096` will replace for budget price validation.
 - [x] Added `feat-097` as a pending model refresh / price sync integration feature so successful Provider model refreshes can asynchronously enqueue a chained `price_sync` job.
+- [x] **feat-096 — Agent Budget Automatic Price Validation (passing)**:
+  - Removed manual budget price provider/model fields from Console Agent limit forms, API parsing, and limit normalization.
+  - Agent budget saves now write only Agent API key-scoped Budget/RPM/TPM/Token rules.
+  - Budget save validation now walks enabled/available Route Policy primary and fallback candidates reachable through the Agent API key's enabled allowed/default Virtual Models.
+  - Missing effective prices are reported before enabling the budget; built-in static prices, manual overrides, and latest price_sync snapshots are accepted.
+  - Legacy feat-031 tests and verification no longer require removed manual price fields; feat-050 and feat-058 E2Es were updated for the same UI contract.
+  - Verification passed: feat-096 unit and real Chromium/PostgreSQL E2E, updated feat-031 unit and real Chromium/PostgreSQL E2E, related feat-050 and feat-058 E2Es, `pnpm run lint`, `pnpm run verify`, and final `pnpm run verify:features` across all 96 passing features.
 - [x] **feat-062 — Provider Template Selector (passing)**:
   - Added grouped Provider template selector metadata for remote API-key and local templates.
   - Console now displays Remote API-key templates and Local templates as separate groups with fixed base URL/path and capability summaries.
@@ -393,7 +400,7 @@
 
 ### What's Next
 
-1. Next active feature: `feat-062` Provider Template Selector.
+1. Next active feature: `feat-097` Model Refresh Price Sync Chain.
 
 ## Blockers / Risks
 

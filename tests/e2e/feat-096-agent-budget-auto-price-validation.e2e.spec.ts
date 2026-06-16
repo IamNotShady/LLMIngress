@@ -5,23 +5,24 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("budget enabled agent cannot save route policy with unknown price provider model", async ({
+test("agent budget saves without manual price fields and blocks accessible unknown-price route candidates", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_budget_safe_route_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_agent_budget_auto_price_${randomUUID().replaceAll("-", "_")}`,
   });
-  const seededProviderModel = {
-    id: randomUUID(),
-    modelId: "unknown-budget-model",
-    optionLabel: "OpenAI Budget Safe Provider - Unknown Budget Model (unknown-budget-model)",
-    pricedOptionLabel:
-      "OpenAI Budget Safe Provider - Unknown Budget Model (unknown-budget-model) - Priced (manual override)",
+  const seededIds = {
+    agentApiKeyId: randomUUID(),
+    providerId: randomUUID(),
+    routePolicyId: randomUUID(),
+    unknownFallbackModelId: randomUUID(),
+    unknownPrimaryModelId: randomUUID(),
+    virtualModelId: randomUUID(),
   };
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedUnknownProviderModel(fixture, seededProviderModel.id);
+    await seedAgentBudgetRouteGraph(fixture, seededIds);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const consoleApp = startConsoleProcess({
@@ -38,51 +39,70 @@ test("budget enabled agent cannot save route policy with unknown price provider 
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
-          await createVirtualModel(page);
-          await createAgentApiKey(page);
-          const virtualModelId = await readVirtualModelId(fixture);
-          const apiKeyId = await readOnlyAgentApiKeyId(fixture);
+          await expect(page.getByRole("heading", { name: "Auto Budget Agent" })).toBeVisible();
+          await expect(page.getByText("Default Virtual Model: Auto Budget VM")).toBeVisible();
+          await expect(
+            page.getByText("Allowed Virtual Models: Auto Budget VM (auto-budget-vm)"),
+          ).toBeVisible();
+          await expect(
+            page.getByText(
+              "Primary: OpenAI Auto Budget Provider - Unknown Primary Model (unknown-primary-model)",
+            ),
+          ).toBeVisible();
+          await expect(
+            page.getByText(
+              "Fallback: OpenAI Auto Budget Provider - Unknown Fallback Model (unknown-fallback-model)",
+            ),
+          ).toBeVisible();
 
-          await assignVirtualModelAccess(page);
-          await saveKnownPriceCostBudget(page);
+          await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
+          await expect(page.getByLabel("Budget price model id")).toHaveCount(0);
 
           await expect(
-            postRoutePolicy(page, {
-              primaryProviderModelId: seededProviderModel.id,
-              virtualModelId,
+            postLimitRules(page, {
+              agentApiKeyId: seededIds.agentApiKeyId,
+              budgetUsd: "25",
+              rpm: "120",
+              tokenLimit: "32000",
+              tpm: "640000",
             }),
           ).resolves.toEqual({
             body: {
               error: expect.stringMatching(
-                /Unknown Budget Model.*unknown price.*manual price override.*priced replacement/i,
+                /(?=.*Unknown Primary Model)(?=.*Unknown Fallback Model)(?=.*unknown price)(?=.*manual price override)(?=.*sync prices)/i,
               ),
             },
             status: 400,
           });
-          await expect.poll(() => countRoutePolicies(fixture)).toBe(0);
-          await expect.poll(() => countRoutePolicyConfigChanges(fixture)).toBe(0);
+          await expect.poll(() => countAgentLimits(fixture, seededIds.agentApiKeyId)).toBe(0);
+          await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(0);
 
           await saveManualPriceOverride(page, {
             inputUsdPerMillionTokens: "1.25",
-            modelId: seededProviderModel.modelId,
+            modelId: "unknown-primary-model",
             outputUsdPerMillionTokens: "5.50",
             providerKey: "openai",
           });
+          await saveManualPriceOverride(page, {
+            inputUsdPerMillionTokens: "0.75",
+            modelId: "unknown-fallback-model",
+            outputUsdPerMillionTokens: "2.25",
+            providerKey: "openai",
+          });
 
-          await page.reload();
-          await expect(page.getByText(`Default Virtual Model: Budget Safe VM`)).toBeVisible();
-          await page
-            .getByLabel("Route policy virtual model")
-            .selectOption({ label: "Budget Safe VM (budget-safe-vm)" });
-          await page.getByLabel("Route policy strategy").selectOption("fixed");
-          await page
-            .getByLabel("Primary provider models")
-            .selectOption({ label: seededProviderModel.pricedOptionLabel });
-          await page.getByRole("button", { name: "Create route policy" }).click();
+          await page.getByLabel("Budget USD limit").fill("25");
+          await page.getByLabel("Budget period").selectOption("month");
+          await page.getByLabel("RPM limit").fill("120");
+          await page.getByLabel("TPM limit").fill("640000");
+          await page.getByLabel("Token limit").fill("32000");
+          await page.getByRole("button", { name: "Save Agent API key limits" }).click();
 
-          await expect(page.getByText(`Primary: ${seededProviderModel.optionLabel}`)).toBeVisible();
-          await expect.poll(() => countRoutePolicies(fixture)).toBe(1);
-          await expect.poll(() => countBudgetLimitRows(fixture, apiKeyId)).toBe(1);
+          await expect(page.getByText("Budget Limit: $25.00 / month")).toBeVisible();
+          await expect(page.getByText("RPM Limit: 120 requests / minute")).toBeVisible();
+          await expect(page.getByText("TPM Limit: 640000 tokens / minute")).toBeVisible();
+          await expect(page.getByText("Token Limit: 32000 tokens / request")).toBeVisible();
+          await expect.poll(() => countAgentLimits(fixture, seededIds.agentApiKeyId)).toBe(4);
+          await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(1);
         } finally {
           await context.close();
         }
@@ -104,81 +124,115 @@ type ConsoleProcess = {
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
-async function seedUnknownProviderModel(fixture: Fixture, providerModelId: string): Promise<void> {
-  const providerId = randomUUID();
+type SeededIds = {
+  agentApiKeyId: string;
+  providerId: string;
+  routePolicyId: string;
+  unknownFallbackModelId: string;
+  unknownPrimaryModelId: string;
+  virtualModelId: string;
+};
+
+async function seedAgentBudgetRouteGraph(fixture: Fixture, ids: SeededIds): Promise<void> {
+  const agentId = randomUUID();
+
   await fixture.query(
     `
       insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
-      values ($1, 'api_key', 'openai', 'OpenAI Budget Safe Provider', 'https://api.openai.com/v1', true)
+      values ($1, 'api_key', 'openai', 'OpenAI Auto Budget Provider', 'https://api.openai.com/v1', true)
     `,
-    [providerId],
+    [ids.providerId],
   );
   await fixture.query(
     `
       insert into provider_models (id, provider_id, model_id, display_name, availability)
-      values ($1, $2, 'unknown-budget-model', 'Unknown Budget Model', 'available')
+      values ($1, $3, 'unknown-primary-model', 'Unknown Primary Model', 'available'),
+             ($2, $3, 'unknown-fallback-model', 'Unknown Fallback Model', 'available')
     `,
-    [providerModelId, providerId],
+    [ids.unknownPrimaryModelId, ids.unknownFallbackModelId, ids.providerId],
+  );
+  await fixture.query(
+    `
+      insert into virtual_models (id, name, display_name, enabled)
+      values ($1, 'auto-budget-vm', 'Auto Budget VM', true)
+    `,
+    [ids.virtualModelId],
+  );
+  await fixture.query(
+    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
+    [ids.routePolicyId, ids.virtualModelId],
+  );
+  await fixture.query(
+    `
+      insert into route_policy_candidates (
+        id,
+        route_policy_id,
+        provider_model_id,
+        candidate_order,
+        is_fallback
+      )
+      values ($1, $3, $5, 1, false),
+             ($2, $3, $4, 2, true)
+    `,
+    [
+      randomUUID(),
+      randomUUID(),
+      ids.routePolicyId,
+      ids.unknownFallbackModelId,
+      ids.unknownPrimaryModelId,
+    ],
+  );
+  await fixture.query(
+    "insert into agents (id, name, agent_type, enabled) values ($1, 'Auto Budget Agent', 'coding', true)",
+    [agentId],
+  );
+  await fixture.query(
+    `
+      insert into agent_api_keys (
+        id,
+        agent_id,
+        key_prefix,
+        key_hash,
+        default_virtual_model_id,
+        enabled
+      )
+      values ($1, $2, 'llmi_auto96', 'sha256:v1:auto-budget-e2e-096', $3, true)
+    `,
+    [ids.agentApiKeyId, agentId, ids.virtualModelId],
+  );
+  await fixture.query(
+    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+    [ids.agentApiKeyId, ids.virtualModelId],
   );
 }
 
-async function createVirtualModel(page: Page): Promise<void> {
-  await page.getByRole("textbox", { name: "Virtual model name" }).fill("budget-safe-vm");
-  await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Budget Safe VM");
-  await page.getByRole("button", { name: "Create virtual model" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "Budget Safe VM" })).toBeVisible();
-}
-
-async function createAgentApiKey(page: Page): Promise<void> {
-  await page.getByLabel("Agent name").fill("Budget Agent");
-  await page.getByLabel("Agent type").selectOption("coding");
-  await page.getByRole("button", { name: "Create agent" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "Budget Agent" })).toBeVisible();
-  await page.getByRole("button", { name: "Create Agent API key" }).click();
-  await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
-  await page.getByRole("link", { name: "Back to dashboard" }).click();
-}
-
-async function assignVirtualModelAccess(page: Page): Promise<void> {
-  const label = "Budget Safe VM (budget-safe-vm)";
-  await page.getByLabel("Allowed virtual models").selectOption({ label });
-  await page.getByLabel("Default virtual model").selectOption({ label });
-  await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
-  await expect(page.getByText(`Default Virtual Model: ${label}`)).toBeVisible();
-}
-
-async function saveKnownPriceCostBudget(page: Page): Promise<void> {
-  await page.getByLabel("Budget USD limit").fill("10");
-  await page.getByLabel("Budget period").selectOption("month");
-  await page.getByLabel("RPM limit").fill("60");
-  await page.getByLabel("TPM limit").fill("120000");
-  await page.getByLabel("Token limit").fill("8000");
-  await page.getByRole("button", { name: "Save Agent API key limits" }).click();
-  await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
-}
-
-async function postRoutePolicy(
+async function postLimitRules(
   page: Page,
   input: {
-    primaryProviderModelId: string;
-    virtualModelId: string;
+    agentApiKeyId: string;
+    budgetUsd: string;
+    rpm: string;
+    tokenLimit: string;
+    tpm: string;
   },
 ) {
   return page.evaluate(async (payload) => {
     const body = new FormData();
-    body.set("action", "create");
-    body.set("virtualModelId", payload.virtualModelId);
-    body.set("strategy", "fixed");
-    body.append("primaryProviderModelIds", payload.primaryProviderModelId);
+    body.set("action", "saveLimitRules");
+    body.set("agentApiKeyId", payload.agentApiKeyId);
+    body.set("budgetPeriod", "month");
+    body.set("budgetUsd", payload.budgetUsd);
+    body.set("rpm", payload.rpm);
+    body.set("tpm", payload.tpm);
+    body.set("tokenLimit", payload.tokenLimit);
 
-    const response = await fetch("/api/route-policies", {
+    const response = await fetch("/api/agent-limits", {
       body,
       method: "POST",
       redirect: "manual",
     });
-    const text = await response.text();
     return {
-      body: text ? JSON.parse(text) : null,
+      body: await response.json(),
       status: response.status,
     };
   }, input);
@@ -207,54 +261,26 @@ async function saveManualPriceOverride(
   }, input);
 }
 
-async function readVirtualModelId(fixture: Fixture): Promise<string> {
-  const result = await fixture.query<{ id: string }>(
-    "select id::text from virtual_models where name = 'budget-safe-vm'",
-  );
-  const row = result.rows[0];
-  if (!row) {
-    throw new Error("Expected Budget Safe VM to exist.");
-  }
-  return row.id;
-}
-
-async function readOnlyAgentApiKeyId(fixture: Fixture): Promise<string> {
-  const result = await fixture.query<{ id: string }>("select id::text from agent_api_keys");
-  const row = result.rows[0];
-  if (!row || result.rows.length !== 1) {
-    throw new Error("Expected exactly one Agent API key.");
-  }
-  return row.id;
-}
-
-async function countRoutePolicies(fixture: Fixture): Promise<number> {
-  const result = await fixture.query<{ count: number }>(
-    "select count(*)::integer as count from route_policies",
-  );
-  return result.rows[0]?.count ?? 0;
-}
-
-async function countRoutePolicyConfigChanges(fixture: Fixture): Promise<number> {
-  const result = await fixture.query<{ count: number }>(
-    `
-      select count(*)::integer as count
-      from config_change_events
-      where changed_table = 'route_policies'
-    `,
-  );
-  return result.rows[0]?.count ?? 0;
-}
-
-async function countBudgetLimitRows(fixture: Fixture, agentApiKeyId: string): Promise<number> {
+async function countAgentLimits(fixture: Fixture, agentApiKeyId: string): Promise<number> {
   const result = await fixture.query<{ count: number }>(
     `
       select count(*)::integer as count
       from agent_limits
       where agent_api_key_id = $1
-        and limit_type = 'budget'
-        and enabled = true
     `,
     [agentApiKeyId],
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+async function countAgentLimitConfigChanges(fixture: Fixture): Promise<number> {
+  const result = await fixture.query<{ count: number }>(
+    `
+      select count(*)::integer as count
+      from config_change_events
+      where source = 'console'
+        and changed_table = 'agent_limits'
+    `,
   );
   return result.rows[0]?.count ?? 0;
 }
@@ -350,22 +376,15 @@ function startConsoleProcess(options: { databaseUrl: string; port: number }): Co
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
-  return captureProcess(child, { port: options.port });
-}
-
-function captureProcess<T extends object>(
-  child: ChildProcessWithoutNullStreams,
-  extra: T,
-): ConsoleProcess & T {
-  const app = {
-    ...extra,
+  const consoleApp: ConsoleProcess = {
     child,
+    port: options.port,
     stderr: [],
     stdout: [],
-  } as ConsoleProcess & T;
-  child.stderr.on("data", (chunk) => app.stderr.push(String(chunk)));
-  child.stdout.on("data", (chunk) => app.stdout.push(String(chunk)));
-  return app;
+  };
+  child.stderr.on("data", (chunk) => consoleApp.stderr.push(String(chunk)));
+  child.stdout.on("data", (chunk) => consoleApp.stdout.push(String(chunk)));
+  return consoleApp;
 }
 
 async function stopConsoleProcess(consoleApp: ConsoleProcess): Promise<void> {

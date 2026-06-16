@@ -253,8 +253,6 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
 
   await page.getByLabel("Budget USD limit").fill("100");
   await page.getByLabel("Budget period").selectOption("month");
-  await page.getByLabel("Budget price provider key").fill(mvpHappyPathNames.providerKey);
-  await page.getByLabel("Budget price model id").fill(mvpHappyPathNames.initialProviderModelId);
   await page.getByLabel("RPM limit").fill("120");
   await page.getByLabel("TPM limit").fill("120000");
   await page.getByLabel("Token limit").fill("12000");

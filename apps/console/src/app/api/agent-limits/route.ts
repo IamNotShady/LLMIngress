@@ -27,8 +27,6 @@ export async function POST(request: NextRequest) {
       limits: normalizeAgentLimitFormInput({
         agentApiKeyId: readRequiredText(form, "agentApiKeyId"),
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
-        budgetPriceModelId: readRequiredText(form, "budgetPriceModelId"),
-        budgetPriceProviderKey: readRequiredText(form, "budgetPriceProviderKey"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
         rpm: readRequiredText(form, "rpm"),
         tokenLimit: readRequiredText(form, "tokenLimit"),

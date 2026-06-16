@@ -5,7 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("agent key limit form saves budget rpm tpm token rules and blocks cost budget when selected model has unknown price", async ({
+test("agent key limit form saves budget rpm tpm token rules without manual price fields", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -39,37 +39,14 @@ test("agent key limit form saves budget rpm tpm token rules and blocks cost budg
           await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
-          const apiKeyId = await readOnlyAgentApiKeyId(fixture);
+          await readOnlyAgentApiKeyId(fixture);
 
           await expect(page.getByLabel("Budget USD limit")).toBeVisible({ timeout: 3_000 });
-          const unknownModelId = "unknown-budget-model";
-          await expect(
-            postLimitRules(page, {
-              apiKeyId,
-              budgetPriceModelId: unknownModelId,
-              budgetPriceProviderKey: "openai",
-              budgetUsd: "10",
-              rpm: "60",
-              tokenLimit: "8000",
-              tpm: "120000",
-            }),
-          ).resolves.toEqual({
-            body: { error: expect.stringMatching(/unknown price/i) },
-            status: 400,
-          });
-          await expect.poll(() => countAgentLimits(fixture)).toBe(0);
-
-          await saveManualPriceOverride(page, {
-            inputUsdPerMillionTokens: "1",
-            modelId: unknownModelId,
-            outputUsdPerMillionTokens: "2",
-            providerKey: "openai",
-          });
+          await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
+          await expect(page.getByLabel("Budget price model id")).toHaveCount(0);
 
           await page.getByLabel("Budget USD limit").fill("10");
           await page.getByLabel("Budget period").selectOption("month");
-          await page.getByLabel("Budget price provider key").fill("openai");
-          await page.getByLabel("Budget price model id").fill(unknownModelId);
           await page.getByLabel("RPM limit").fill("60");
           await page.getByLabel("TPM limit").fill("120000");
           await page.getByLabel("Token limit").fill("8000");
@@ -123,68 +100,6 @@ async function readOnlyAgentApiKeyId(fixture: Fixture): Promise<string> {
     throw new Error("Expected exactly one Agent API key.");
   }
   return row.id;
-}
-
-async function postLimitRules(
-  page: Page,
-  input: {
-    apiKeyId: string;
-    budgetPriceModelId: string;
-    budgetPriceProviderKey: string;
-    budgetUsd: string;
-    rpm: string;
-    tokenLimit: string;
-    tpm: string;
-  },
-) {
-  return page.evaluate(async (payload) => {
-    const body = new FormData();
-    body.set("action", "saveLimitRules");
-    body.set("agentApiKeyId", payload.apiKeyId);
-    body.set("budgetPeriod", "month");
-    body.set("budgetPriceProviderKey", payload.budgetPriceProviderKey);
-    body.set("budgetPriceModelId", payload.budgetPriceModelId);
-    body.set("budgetUsd", payload.budgetUsd);
-    body.set("rpm", payload.rpm);
-    body.set("tpm", payload.tpm);
-    body.set("tokenLimit", payload.tokenLimit);
-
-    const response = await fetch("/api/agent-limits", { body, method: "POST" });
-    return {
-      body: await response.json(),
-      status: response.status,
-    };
-  }, input);
-}
-
-async function saveManualPriceOverride(
-  page: Page,
-  input: {
-    inputUsdPerMillionTokens: string;
-    modelId: string;
-    outputUsdPerMillionTokens: string;
-    providerKey: string;
-  },
-): Promise<void> {
-  await page.evaluate(async (payload) => {
-    const body = new FormData();
-    body.set("providerKey", payload.providerKey);
-    body.set("modelId", payload.modelId);
-    body.set("inputUsdPerMillionTokens", payload.inputUsdPerMillionTokens);
-    body.set("outputUsdPerMillionTokens", payload.outputUsdPerMillionTokens);
-
-    const response = await fetch("/api/prices/override", { body, method: "POST" });
-    if (!response.ok) {
-      throw new Error(`Manual price override failed with HTTP ${response.status}.`);
-    }
-  }, input);
-}
-
-async function countAgentLimits(fixture: Fixture): Promise<number> {
-  const result = await fixture.query<{ count: number }>(
-    "select count(*)::integer as count from agent_limits",
-  );
-  return result.rows[0]?.count ?? 0;
 }
 
 async function readAgentLimits(fixture: Fixture) {

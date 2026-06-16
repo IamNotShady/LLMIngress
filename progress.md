@@ -1216,3 +1216,13 @@
   - P2+ review found no blocking issues after checking smoke altitude, template drift risk, local provider credentials, provider path assertions, and Activity coverage.
   - Verification passed: feat-094 unit test (1), real Gateway/PostgreSQL/fake-provider E2E (1), `pnpm run verify`, `pnpm run verify:features` across all 93 prior passing features before marking, and final `pnpm run verify:features` across all 94 passing features after marking.
   - Next active feature: feat-095 V1 Daily Operations Smoke.
+
+- [x] 2026-06-16 feat-095 V1 Daily Operations Smoke:
+  - Red phase: `pnpm exec vitest run tests/features/feat-095-v1-daily-operations-smoke.unit.test.ts` failed because `tests/support/v1-daily-operations-smoke` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-095-v1-daily-operations-smoke.e2e.spec.ts --grep 'v1 daily operations smoke verifies breakdowns exports alerts metrics traces backup migration retention'` failed for the same missing helper.
+  - Added a shared V1 daily operations smoke plan plus a PostgreSQL E2E that seeds usage, cost, savings, fallback, health, notification, export, backup, migration, and retention data.
+  - E2E verifies Usage / Cost Agent, Agent API Key, and Virtual Model breakdowns, runs JSONL, cost report, webhook export, backup, notification dispatch, and retention cleanup through Worker handlers, evaluates all V1 alert families, checks metrics/traces omit secrets, and verifies migration status.
+  - P2+ review fixed test time stability by making smoke timestamps relative to runtime and confirmed no remaining blocking issues after format/type/secret-leak checks.
+  - Verification passed: feat-095 unit test (1), PostgreSQL Worker/operations E2E (1), `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, `pnpm run verify:features` across all 94 prior passing features before marking, and final `pnpm run verify:features` across all 95 passing features after marking.
+  - All tracked V1 features are now passing.
+  - Final user-operation smoke passed on an isolated PostgreSQL database and isolated Console/Gateway ports using Playwright plus Chrome DevTools Protocol: first-run admin setup, sign-in, Agent creation, Agent API key creation, allowed/default Virtual Model binding, Playground model loading, and a real OpenAI `gpt-4.1-mini` request through Gateway all succeeded. Persisted Activity recorded the request as `status=succeeded`, `provider_key=openai`, `model_id=gpt-4.1-mini`; DevTools console/page/network checks reported 0 business errors after ignoring expected favicon noise.

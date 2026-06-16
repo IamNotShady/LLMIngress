@@ -1256,8 +1256,8 @@
         "feat-093",
         "feat-094"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-095 unit and E2E tests because tests/support/v1-daily-operations-smoke.ts did not exist. Added a shared V1 daily operations smoke plan and a PostgreSQL E2E that seeds operational data, verifies Usage / Cost Agent, Agent API Key, and Virtual Model breakdowns, runs JSONL, cost report, webhook export, backup, notification dispatch, and retention cleanup handlers through the Worker job runner, evaluates budget, rate-limit, provider-failure, and fallback-exhaustion alerts, checks Prometheus metrics and OpenTelemetry trace secret filtering, and verifies migration status. P2+ review fixed time stability and formatting issues. Verification passed: feat-095 unit test (1), PostgreSQL Worker/operations E2E (1), pnpm run lint, pnpm run typecheck, pnpm run verify, full pnpm run verify:features across all 94 prior passing features before marking, and final pnpm run verify:features across all 95 passing features after marking."
     }
   ]
 }

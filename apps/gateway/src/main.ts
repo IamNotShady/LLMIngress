@@ -14,6 +14,7 @@ import { gatewayCorsHeaders } from "./cors.js";
 import { executeGatewayOpenAIEmbeddings } from "./embeddings.js";
 import { gatewayRequestIdHeader } from "./error-mapping.js";
 import { executeGatewayAnthropicMessages } from "./messages.js";
+import { getPrometheusMetricsDocument } from "./metrics.js";
 import {
   type GatewayRequestMetadata,
   gatewayRequestMetadataHeader,
@@ -67,6 +68,13 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       service: "gateway",
       status: "ok",
     };
+  });
+
+  app.get("/metrics", async (_request, reply) => {
+    const document = await getPrometheusMetricsDocument({
+      databaseUrl: requireGatewayDatabaseUrl(options),
+    });
+    return reply.header("content-type", document.contentType).send(document.body);
   });
 
   app.post("/v1/chat/completions", async (request, reply) => {

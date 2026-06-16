@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 10:55 AWST
-**Active Feature:** none - 91 tracked features are `passing`; 4 V1 features are `pending`
+**Last Updated:** 2026-06-16 11:19 AWST
+**Active Feature:** none - 92 tracked features are `passing`; 3 V1 features are `pending`
 
 ## Status
 
@@ -201,6 +201,11 @@
   - Evaluator reads recent failed `provider_request_failed` Activity rows with failed `fallback_events`, queues `fallback_exhaustion` notification events containing request/activity/fallback context, and uses the existing Email/Webhook dispatcher for delivery.
   - P2+ review found no blocking issues after checking failed-request filtering, Activity context payload, alertKey duplicate protection, no-channel skip behavior, secret-free notification payload, job registration, and migration manifest drift.
   - Verification passed: feat-091 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), `pnpm run db:migrate:check`, feat-087 migration manifest regression, `pnpm run verify`, and full `pnpm run verify:features` across all 90 prior passing features before marking.
+- [x] **feat-092 — Prometheus Metrics Exporter (passing)**:
+  - Added Gateway `GET /metrics` with Prometheus text output for Gateway request counts, latency, cost, fallback events, provider health, Worker jobs, and Worker job attempts.
+  - Metrics aggregate from PostgreSQL and intentionally omit request ids, Agent API key prefixes, Provider base URLs/display names, job payloads, worker ids, and error messages.
+  - P2+ review found and fixed counter semantics so `_total` request/job/attempt metrics only include terminal statuses.
+  - Verification passed: feat-092 unit test (1), real Gateway/PostgreSQL `/metrics` E2E (1), `pnpm run lint`, `pnpm run verify`, full `pnpm run verify:features` across all 91 prior passing features before marking, and final `pnpm run verify:features` across all 92 passing features after marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

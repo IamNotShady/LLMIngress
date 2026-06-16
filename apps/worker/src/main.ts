@@ -15,6 +15,7 @@ import {
 } from "./periodic-scheduler.js";
 import { createPriceSyncJobHandler } from "./price-sync.js";
 import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
+import { createProviderFailureAlertsJobHandler } from "./provider-failure-alerts.js";
 import { createRateLimitAlertsJobHandler } from "./rate-limit-alerts.js";
 import { createRetentionCleanupJobHandler } from "./retention-cleanup.js";
 import { createStaleReservationCleanupJobHandler } from "./stale-reservations.js";
@@ -34,6 +35,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
       handlers: {
         model_refresh: createModelRefreshJobHandler({ databaseUrl: config.databaseUrl }),
         provider_connectivity_check: createProviderConnectivityCheckJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        provider_failure_alerts: createProviderFailureAlertsJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         billing_reconciliation: createBillingReconciliationJobHandler({

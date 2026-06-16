@@ -1171,8 +1171,8 @@
         "feat-075",
         "feat-083"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-090 unit/E2E tests because the provider failure alert evaluator module and job type were missing. Added migration 0022 for provider_failure_alerts jobs, a default scheduler-created provider-failure-alerts task with PROVIDER_FAILURE_ALERT_INTERVAL_MS / PROVIDER_FAILURE_ALERT_THRESHOLD configuration, and a Worker evaluator that reads provider_health_summary, detects provider-level and provider-model-level consecutive failures, queues provider_failure notification events, and lets the existing Email/Webhook notification_dispatch handler deliver them. P2+ review found no blocking issues after checking provider/model scope coverage, alertKey duplicate protection, disabled provider filtering, no-channel skip behavior, job registration, and migration manifest drift. Verification passed: feat-090 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), pnpm run db:migrate:check, feat-087 migration manifest regression, pnpm run verify, and full pnpm run verify:features across all 89 prior passing features before marking."
     },
     {
       "id": "feat-091",

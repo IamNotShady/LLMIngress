@@ -1132,8 +1132,8 @@
         "feat-048",
         "feat-055"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-087 unit/E2E tests because the migration status CLI and status helpers were missing. Added pnpm run db:migrate:status, filesystem-backed DB migration status reporting, and a Console Runtime migration status panel for current schema, pending migrations, and db:migrate:check health. Console uses a DB-only @llmingress/db/migration-status module with a shipped migration manifest to keep filesystem migration loading out of the Next server import path; unit tests compare the manifest with SQL migration files to catch drift. P2+ review found and fixed a Console build tracing risk from importing filesystem migration loading into the server component path. Verification passed: feat-087 unit tests (4), real PostgreSQL/Console E2E (1), pnpm run verify, and full pnpm run verify:features across all 86 prior passing features before marking."
     },
     {
       "id": "feat-088",

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 09:05 AWST
-**Active Feature:** none — 86 tracked features are `passing`; 9 V1 features are `pending`
+**Last Updated:** 2026-06-16 09:35 AWST
+**Active Feature:** none - 87 tracked features are `passing`; 8 V1 features are `pending`
 
 ## Status
 
@@ -171,6 +171,12 @@
   - Backup artifacts cover all 40 current migration tables across config, operational, and system groups; pre-migration backups skip tables not yet present.
   - P2+ review found and fixed deterministic scheduled backup output paths by deriving default scheduled paths from `schedule.windowStart`; backup reads now run in a repeatable-read read-only transaction.
   - Verification passed: feat-086 unit tests (4), real PostgreSQL Worker/scheduler/pre-migration CLI E2E (1), `pnpm run verify`, and full `pnpm run verify:features` across all 85 prior passing features before marking.
+- [x] **feat-087 — Migration Status Check (passing)**:
+  - Added `pnpm run db:migrate:status` for current schema, latest migration, applied/pending counts, pending migration list, and `db:migrate:check` health.
+  - Console Runtime now shows migration status using a DB-only migration-status module and shipped migration manifest.
+  - Manifest drift is covered by unit tests comparing the Console manifest against SQL migration files.
+  - P2+ review found and fixed a Console build tracing risk by keeping filesystem migration loading out of the Next server component import path.
+  - Verification passed: feat-087 unit tests (4), real PostgreSQL/Console E2E (1), `pnpm run verify`, and full `pnpm run verify:features` across all 86 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

@@ -1,3 +1,8 @@
+import {
+  getMigrationStatusFromDatabase,
+  type MigrationStatusSummary,
+  shippedSqlMigrations,
+} from "@llmingress/db/migration-status";
 import { Client, type QueryResultRow } from "pg";
 
 export type ConsoleGatewayRuntimeStatus = {
@@ -25,6 +30,7 @@ export type ConsoleRuntimeError = {
 export type ConsoleRuntimeSnapshot = {
   errors: ConsoleRuntimeError[];
   gateways: ConsoleGatewayRuntimeStatus[];
+  migrations: MigrationStatusSummary;
 };
 
 type GatewayRuntimeRow = QueryResultRow & {
@@ -90,9 +96,15 @@ export async function getConsoleRuntimeSnapshot(
       ),
     ]);
 
+    const migrations = await getMigrationStatusFromDatabase({
+      databaseUrl,
+      migrations: shippedSqlMigrations,
+    });
+
     return {
       errors: errorResult.rows.map(rowToRuntimeError),
       gateways: gatewayResult.rows.map(rowToGatewayRuntimeStatus),
+      migrations,
     };
   } finally {
     await client.end();

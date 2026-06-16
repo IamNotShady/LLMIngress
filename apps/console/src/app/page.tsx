@@ -240,6 +240,36 @@ export default async function Home({ searchParams }: HomeProps = {}) {
           </div>
         )}
         <div className="runtime-errors">
+          <h3>Migration status</h3>
+          <p>
+            Current schema: {runtimeSnapshot.migrations.currentSchemaVersion ?? "not initialized"}
+          </p>
+          <p>
+            Latest migration:{" "}
+            {runtimeSnapshot.migrations.latestMigrationId &&
+            runtimeSnapshot.migrations.latestMigrationName
+              ? `${runtimeSnapshot.migrations.latestMigrationId}_${runtimeSnapshot.migrations.latestMigrationName}`
+              : "none"}
+          </p>
+          <p>
+            Applied migrations: {runtimeSnapshot.migrations.appliedCount}/
+            {runtimeSnapshot.migrations.totalCount}
+          </p>
+          <p>
+            Pending migrations:{" "}
+            {runtimeSnapshot.migrations.pendingMigrations.length === 0
+              ? "none"
+              : runtimeSnapshot.migrations.pendingMigrations
+                  .map((migration) => `${migration.id}_${migration.name}`)
+                  .join(", ")}
+          </p>
+          <p>
+            db:migrate:check health:{" "}
+            {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready" ? "Ready" : "Blocked"}{" "}
+            - {runtimeSnapshot.migrations.migrateCheckHealth.message}
+          </p>
+        </div>
+        <div className="runtime-errors">
           <h3>Recent runtime errors</h3>
           {runtimeSnapshot.errors.length === 0 ? (
             <p>No runtime errors recorded.</p>

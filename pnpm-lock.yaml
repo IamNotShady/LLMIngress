@@ -41,6 +41,9 @@ importers:
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@llmingress/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@llmingress/security':
         specifier: workspace:*
         version: link:../../packages/security

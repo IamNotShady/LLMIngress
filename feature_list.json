@@ -1230,8 +1230,8 @@
         "feat-070",
         "feat-076"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-094 unit and E2E tests because tests/support/v1-provider-coverage-smoke.ts did not exist. Added a shared V1 provider coverage smoke plan that reuses the Console OpenAI-compatible template whitelist for all nine long-tail templates and defines six fake-backed Gateway routing scenarios for OpenAI, Anthropic, Gemini, OpenRouter, LM Studio, and llama.cpp. E2E starts a real Gateway against isolated PostgreSQL, seeds the six providers/models/Virtual Models/route policies/Agent key, verifies each provider routes successfully through the correct protocol/path/auth headers, checks OpenRouter attribution headers, and confirms request_activity persisted the provider/model hit for every request. P2+ review found no blocking issues after checking smoke altitude, template drift risk, local provider credential handling, fake provider path assertions, and persisted Activity coverage. Verification passed: feat-094 unit test (1), real Gateway/PostgreSQL/fake-provider E2E (1), pnpm run verify, full pnpm run verify:features across all 93 prior passing features before marking, and final pnpm run verify:features across all 94 passing features after marking."
     },
     {
       "id": "feat-095",

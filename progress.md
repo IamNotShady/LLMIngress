@@ -1207,3 +1207,12 @@
   - Browser and Chrome DevTools verification on an isolated PostgreSQL Console run showed no Console errors, paired Dashboard form fields, and no desktop overflow; Playwright screenshots verified desktop 1280px and mobile 390px layouts.
   - Verification passed: `pnpm exec vitest run tests/features/feat-061-console-interaction-layout.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --grep 'dashboard form labels stay paired with their controls on desktop'`, `pnpm run verify`, and `pnpm run verify:features`.
   - `pnpm run verify:features` re-verified all 61 passing features; E2E batch took 211.9s.
+
+- [x] 2026-06-16 feat-094 V1 Provider Coverage Smoke:
+  - Red phase: `pnpm exec vitest run tests/features/feat-094-v1-provider-coverage-smoke.unit.test.ts` failed because `tests/support/v1-provider-coverage-smoke` was missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-094-v1-provider-coverage-smoke.e2e.spec.ts --grep 'v1 provider coverage smoke routes core providers local providers and validates long tail templates available'` failed for the same missing helper.
+  - Added a shared smoke plan for OpenAI, Anthropic, Gemini, OpenRouter, LM Studio, and llama.cpp, plus long-tail template validation sourced from the existing Console provider template whitelist.
+  - E2E starts a real Gateway with isolated PostgreSQL and a fake provider, seeds six provider routes, verifies each request reaches the expected provider path/auth header, checks OpenRouter attribution headers, and confirms `request_activity` persisted each provider/model hit.
+  - P2+ review found no blocking issues after checking smoke altitude, template drift risk, local provider credentials, provider path assertions, and Activity coverage.
+  - Verification passed: feat-094 unit test (1), real Gateway/PostgreSQL/fake-provider E2E (1), `pnpm run verify`, `pnpm run verify:features` across all 93 prior passing features before marking, and final `pnpm run verify:features` across all 94 passing features after marking.
+  - Next active feature: feat-095 V1 Daily Operations Smoke.

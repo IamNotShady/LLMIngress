@@ -1185,8 +1185,8 @@
         "feat-072",
         "feat-083"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-091 unit/E2E tests because the fallback exhaustion alert evaluator module and job type were missing. Added migration 0023 for fallback_exhaustion_alerts jobs, a default scheduler-created fallback-exhaustion-alerts task with FALLBACK_EXHAUSTION_ALERT_INTERVAL_MS / FALLBACK_EXHAUSTION_ALERT_WINDOW_MS configuration, and a Worker evaluator that reads recent failed provider_request_failed request_activity rows with failed fallback_events, queues fallback_exhaustion notification events containing request/activity/fallback context, and lets the existing Email/Webhook notification_dispatch handler deliver them. P2+ review found no blocking issues after checking failed-request filtering, Activity context payload, alertKey duplicate protection, no-channel skip behavior, secret-free notification payload, job registration, and migration manifest drift. Verification passed: feat-091 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), pnpm run db:migrate:check, feat-087 migration manifest regression, pnpm run verify, and full pnpm run verify:features across all 90 prior passing features before marking."
     },
     {
       "id": "feat-092",

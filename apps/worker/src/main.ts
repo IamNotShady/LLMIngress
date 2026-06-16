@@ -4,6 +4,7 @@ import { createBackupJobHandler } from "./backup.js";
 import { createBillingReconciliationJobHandler } from "./billing-reconciliation.js";
 import { createBudgetThresholdAlertsJobHandler } from "./budget-threshold-alerts.js";
 import { createCostReportExportJobHandler } from "./cost-report-export.js";
+import { createFallbackExhaustionAlertsJobHandler } from "./fallback-exhaustion-alerts.js";
 import { createPostgresJobRunner, type JobRunner } from "./job-runner.js";
 import { createJsonlRequestLogExportJobHandler } from "./jsonl-export.js";
 import { createModelRefreshJobHandler } from "./model-refresh.js";
@@ -51,6 +52,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
         }),
         price_sync: createPriceSyncJobHandler({ databaseUrl: config.databaseUrl }),
         cost_report_export: createCostReportExportJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        fallback_exhaustion_alerts: createFallbackExhaustionAlertsJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         jsonl_export: createJsonlRequestLogExportJobHandler({

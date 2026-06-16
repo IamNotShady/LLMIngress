@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 10:37 AWST
-**Active Feature:** none - 90 tracked features are `passing`; 5 V1 features are `pending`
+**Last Updated:** 2026-06-16 10:55 AWST
+**Active Feature:** none - 91 tracked features are `passing`; 4 V1 features are `pending`
 
 ## Status
 
@@ -195,6 +195,12 @@
   - Evaluator reads `provider_health_summary`, detects provider-level and provider-model-level consecutive failures, queues `provider_failure` notification events, and uses the existing Email/Webhook dispatcher for delivery.
   - P2+ review found no blocking issues after checking provider/model scope coverage, alertKey duplicate protection, disabled provider filtering, no-channel skip behavior, job registration, and migration manifest drift.
   - Verification passed: feat-090 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), `pnpm run db:migrate:check`, feat-087 migration manifest regression, `pnpm run verify`, and full `pnpm run verify:features` across all 89 prior passing features before marking.
+- [x] **feat-091 — Fallback Exhaustion Alerts (passing)**:
+  - Added migration `0023_fallback_exhaustion_alerts` and Worker `fallback_exhaustion_alerts` job handling.
+  - Default periodic scheduler now creates fallback-exhaustion evaluator jobs using configurable `FALLBACK_EXHAUSTION_ALERT_INTERVAL_MS` and `FALLBACK_EXHAUSTION_ALERT_WINDOW_MS`.
+  - Evaluator reads recent failed `provider_request_failed` Activity rows with failed `fallback_events`, queues `fallback_exhaustion` notification events containing request/activity/fallback context, and uses the existing Email/Webhook dispatcher for delivery.
+  - P2+ review found no blocking issues after checking failed-request filtering, Activity context payload, alertKey duplicate protection, no-channel skip behavior, secret-free notification payload, job registration, and migration manifest drift.
+  - Verification passed: feat-091 unit tests (5), real PostgreSQL scheduler/Worker/fake-webhook E2E (1), `pnpm run db:migrate:check`, feat-087 migration manifest regression, `pnpm run verify`, and full `pnpm run verify:features` across all 90 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

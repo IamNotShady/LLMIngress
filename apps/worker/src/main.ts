@@ -13,6 +13,7 @@ import {
 } from "./periodic-scheduler.js";
 import { createPriceSyncJobHandler } from "./price-sync.js";
 import { createProviderConnectivityCheckJobHandler } from "./provider-connectivity-check.js";
+import { createRetentionCleanupJobHandler } from "./retention-cleanup.js";
 import { createStaleReservationCleanupJobHandler } from "./stale-reservations.js";
 import { createWebhookEventExportJobHandler } from "./webhook-export.js";
 
@@ -46,6 +47,9 @@ export async function startWorker(options: StartWorkerOptions = {}) {
           databaseUrl: config.databaseUrl,
         }),
         webhook_export: createWebhookEventExportJobHandler({
+          databaseUrl: config.databaseUrl,
+        }),
+        retention_cleanup: createRetentionCleanupJobHandler({
           databaseUrl: config.databaseUrl,
         }),
         stale_reservation_cleanup: createStaleReservationCleanupJobHandler({

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 08:11 AWST
-**Active Feature:** none — 84 tracked features are `passing`; 11 V1 features are `pending`
+**Last Updated:** 2026-06-16 08:37 AWST
+**Active Feature:** none — 85 tracked features are `passing`; 10 V1 features are `pending`
 
 ## Status
 
@@ -159,6 +159,12 @@
   - Webhook payloads reuse JSONL redaction rules, stored webhook URLs are redacted, and E2E verifies no alert notification rows are created.
   - P2+ review found and fixed retry duplicate risk by skipping already-sent delivery records for the same job/event on retry; partial failures only resend failed or missing events.
   - Verification passed: feat-084 unit tests (5), real PostgreSQL Worker/fake-webhook E2E tests (2), `pnpm run lint`, `pnpm run typecheck`, `pnpm run db:migrate:check`, `pnpm run verify`, full `pnpm run verify:features` across all 83 prior passing features before marking, and final `pnpm run verify:features` across all 84 passing features after marking.
+- [x] **feat-085 — Retention Cleanup Policy (passing)**:
+  - Added Worker `retention_cleanup` handling and default scheduler-created retention cleanup jobs.
+  - The scheduled job reads `RETENTION_CLEANUP_DAYS` / `RETENTION_CLEANUP_INTERVAL_MS`, validates the `retentionDays` payload, deletes expired request activity with cascading usage/cost/savings/fallback rows, and skips unexpired request data.
+  - Expired export task rows and local export artifact files are deleted; budget and rate-limit aggregate tables are preserved.
+  - P2+ review found and fixed expired export artifact retention and hard-coded retention window issues.
+  - Verification passed: feat-085 unit tests (5), real PostgreSQL Worker/scheduler E2E (1), `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, and full `pnpm run verify:features` across all 84 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

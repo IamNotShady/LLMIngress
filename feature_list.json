@@ -1106,8 +1106,8 @@
         "feat-072",
         "feat-081"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-085 unit tests because apps/worker/src/retention-cleanup was missing, and E2E red after review because expired export artifact files were not deleted. Added a Worker retention_cleanup handler registered in the default Worker, default scheduler-created retention_cleanup jobs, RETENTION_CLEANUP_DAYS / RETENTION_CLEANUP_INTERVAL_MS configuration, retentionDays payload validation, expired request_activity deletion with cascading usage/cost/savings/fallback cleanup, expired export_tasks and local artifact deletion, and preservation of budget_periods and rate_limit_windows aggregates. P2+ review found and fixed the export artifact retention gap and the hard-coded retention window by adding file deletion and env-backed settings. Verification passed: feat-085 unit tests (5), real PostgreSQL Worker/scheduler E2E (1), pnpm run lint, pnpm run typecheck, pnpm run verify, and full verify:features passed all 84 prior passing features before marking."
     },
     {
       "id": "feat-086",

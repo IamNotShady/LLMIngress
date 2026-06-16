@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { JOB_CREATED_CHANNEL } from "./job-runner.js";
+import { readRetentionCleanupSettings } from "./retention-cleanup.js";
 
 export type PeriodicTaskJobType =
   | "model_refresh"
@@ -68,6 +69,8 @@ type CreatePostgresPeriodicSchedulerOptions = Omit<CreatePeriodicSchedulerOption
 const defaultTickIntervalMs = 30_000;
 
 export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
+  const retentionCleanupSettings = readRetentionCleanupSettings();
+
   return [
     {
       id: "stale-reservation-cleanup",
@@ -75,6 +78,15 @@ export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
       jobType: "stale_reservation_cleanup",
       maxAttempts: 1,
       payload: {},
+      priority: 0,
+      startAt: new Date(0),
+    },
+    {
+      id: "retention-cleanup",
+      intervalMs: retentionCleanupSettings.intervalMs,
+      jobType: "retention_cleanup",
+      maxAttempts: 1,
+      payload: { retentionDays: retentionCleanupSettings.retentionDays },
       priority: 0,
       startAt: new Date(0),
     },

@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 08:37 AWST
-**Active Feature:** none — 85 tracked features are `passing`; 10 V1 features are `pending`
+**Last Updated:** 2026-06-16 09:05 AWST
+**Active Feature:** none — 86 tracked features are `passing`; 9 V1 features are `pending`
 
 ## Status
 
@@ -165,6 +165,12 @@
   - Expired export task rows and local export artifact files are deleted; budget and rate-limit aggregate tables are preserved.
   - P2+ review found and fixed expired export artifact retention and hard-coded retention window issues.
   - Verification passed: feat-085 unit tests (5), real PostgreSQL Worker/scheduler E2E (1), `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, and full `pnpm run verify:features` across all 84 prior passing features before marking.
+- [x] **feat-086 — Backup Job (passing)**:
+  - Added Worker `backup` job handling and default scheduler-created backup jobs.
+  - Added `pnpm run db:backup` for pre-migration backups before schema upgrades.
+  - Backup artifacts cover all 40 current migration tables across config, operational, and system groups; pre-migration backups skip tables not yet present.
+  - P2+ review found and fixed deterministic scheduled backup output paths by deriving default scheduled paths from `schedule.windowStart`; backup reads now run in a repeatable-read read-only transaction.
+  - Verification passed: feat-086 unit tests (4), real PostgreSQL Worker/scheduler/pre-migration CLI E2E (1), `pnpm run verify`, and full `pnpm run verify:features` across all 85 prior passing features before marking.
 - [x] 2026-06-16 feat-060 verify-features fallback runner repair:
   - Full regression initially found an optimized E2E batch-only failure in `feat-041`; the automatic per-feature fallback re-ran every standard feature and all individual feature verifications passed, but the runner still preserved `batch:e2e` as a failure.
   - Added unit coverage proving batch failures are cleared when fallback feature verification passes.

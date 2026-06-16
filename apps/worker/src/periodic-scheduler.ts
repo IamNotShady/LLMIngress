@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
+import { readBackupSettings } from "./backup.js";
 import { JOB_CREATED_CHANNEL } from "./job-runner.js";
 import { readRetentionCleanupSettings } from "./retention-cleanup.js";
 
@@ -69,6 +70,7 @@ type CreatePostgresPeriodicSchedulerOptions = Omit<CreatePeriodicSchedulerOption
 const defaultTickIntervalMs = 30_000;
 
 export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
+  const backupSettings = readBackupSettings();
   const retentionCleanupSettings = readRetentionCleanupSettings();
 
   return [
@@ -88,6 +90,15 @@ export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
       maxAttempts: 1,
       payload: { retentionDays: retentionCleanupSettings.retentionDays },
       priority: 0,
+      startAt: new Date(0),
+    },
+    {
+      id: "backup",
+      intervalMs: backupSettings.intervalMs,
+      jobType: "backup",
+      maxAttempts: 1,
+      payload: { outputDir: backupSettings.outputDir },
+      priority: -10,
       startAt: new Date(0),
     },
   ];

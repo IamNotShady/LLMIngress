@@ -354,7 +354,7 @@
     {
       "id": "feat-031",
       "name": "Agent API Key Limit Configuration",
-      "description": "A user can configure Budget, RPM, TPM, and Token Limit rules for an Agent API key; Console blocks enabling a cost budget for a model with unknown price until a manual price is provided.",
+      "description": "A user can configure Budget, RPM, TPM, and Token Limit rules for an Agent API key; the current legacy Console cost-budget guard verifies a selected provider/model has known pricing before saving, until feat-096 replaces it with automatic accessible-route price validation.",
       "verification": "pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form saves budget rpm tpm token rules and blocks cost budget when selected model has unknown price'",
       "dependencies": [
         "feat-014",
@@ -1258,6 +1258,35 @@
       ],
       "status": "passing",
       "evidence": "2026-06-16: TDD red observed for feat-095 unit and E2E tests because tests/support/v1-daily-operations-smoke.ts did not exist. Added a shared V1 daily operations smoke plan and a PostgreSQL E2E that seeds operational data, verifies Usage / Cost Agent, Agent API Key, and Virtual Model breakdowns, runs JSONL, cost report, webhook export, backup, notification dispatch, and retention cleanup handlers through the Worker job runner, evaluates budget, rate-limit, provider-failure, and fallback-exhaustion alerts, checks Prometheus metrics and OpenTelemetry trace secret filtering, and verifies migration status. P2+ review fixed time stability and formatting issues. Verification passed: feat-095 unit test (1), PostgreSQL Worker/operations E2E (1), pnpm run lint, pnpm run typecheck, pnpm run verify, full pnpm run verify:features across all 94 prior passing features before marking, and final pnpm run verify:features across all 95 passing features after marking."
+    },
+    {
+      "id": "feat-096",
+      "name": "Agent Budget Automatic Price Validation",
+      "description": "Agent budget configuration removes manual budget price provider/model fields, saves only Agent API key-scoped limit rules, updates the legacy feat-031 Agent limits tests/verification so verify:features no longer requires the removed fields, automatically validates every Route Policy primary/fallback candidate reachable through the Agent API key's allowed/default Virtual Models has an effective built-in, manual override, or price sync price, and reports each missing-price candidate before enabling the budget.",
+      "verification": "pnpm exec vitest run tests/features/feat-096-agent-budget-auto-price-validation.unit.test.ts && pnpm test:e2e tests/e2e/feat-096-agent-budget-auto-price-validation.e2e.spec.ts --grep 'agent budget saves without manual price fields and blocks accessible unknown-price route candidates'",
+      "dependencies": [
+        "feat-030",
+        "feat-031",
+        "feat-042",
+        "feat-058",
+        "feat-073"
+      ],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-097",
+      "name": "Model Refresh Price Sync Chain",
+      "description": "After a successful Provider model_refresh, the Worker enqueues a separate trigger=system price_sync job for the refreshed provider/model set, deduplicates unfinished chained price_sync jobs, sends job_created to wake workers, records the chained price_sync job id in the model_refresh result, and keeps the model refresh UI unblocked while price synchronization runs asynchronously.",
+      "verification": "pnpm exec vitest run tests/features/feat-097-model-refresh-price-sync-chain.unit.test.ts && pnpm test:e2e tests/e2e/feat-097-model-refresh-price-sync-chain.e2e.spec.ts --grep 'model refresh enqueues asynchronous price sync job for refreshed provider models'",
+      "dependencies": [
+        "feat-022",
+        "feat-023",
+        "feat-056",
+        "feat-073"
+      ],
+      "status": "pending",
+      "evidence": ""
     }
   ]
 }

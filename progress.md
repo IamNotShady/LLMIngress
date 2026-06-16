@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 11:43 AWST
-**Active Feature:** none - 93 tracked features are `passing`; 2 V1 features are `pending`
+**Last Updated:** 2026-06-16 12:00 AWST
+**Active Feature:** none - 95 tracked features are `passing`; feat-096 and feat-097 are `pending`
 
 ## Status
 
@@ -16,6 +16,8 @@
 - [x] Applied V1 split review follow-up: added `feat-072` Worker Periodic Scheduler, renumbered later V1 pending features, tightened dependency edges, kept V1 route-policy scope out of V2 task/context/tool rules, and made verification text match feature descriptions more closely.
 - [x] Applied optional V1 tracker polish: final V1 smoke now depends on Agent Integration Templates, scheduler verification covers due and not-due timing, and retention / budget / rate-limit features explicitly own configurable windows and thresholds.
 - [x] Tightened optional V1 tracker verification text for Agent Integration Templates and Usage / Cost Breakdowns so the grep contracts pin the named tools, snippet fields, and new usage dimensions.
+- [x] Added `feat-096` as a pending Agent budget cleanup feature and clarified `feat-031` as the legacy Agent API key limit configuration behavior that `feat-096` will replace for budget price validation.
+- [x] Added `feat-097` as a pending model refresh / price sync integration feature so successful Provider model refreshes can asynchronously enqueue a chained `price_sync` job.
 - [x] **feat-062 — Provider Template Selector (passing)**:
   - Added grouped Provider template selector metadata for remote API-key and local templates.
   - Console now displays Remote API-key templates and Local templates as separate groups with fixed base URL/path and capability summaries.

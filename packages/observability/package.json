@@ -1,0 +1,16 @@
+{
+  "name": "@llmingress/observability",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./traces": {
+      "types": "./src/traces.ts",
+      "default": "./src/traces.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

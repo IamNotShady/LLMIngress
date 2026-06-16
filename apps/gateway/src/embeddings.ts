@@ -18,6 +18,7 @@ import {
 import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
+import { recordGatewayProviderTrace } from "./tracing.js";
 import {
   type GatewayUsageCostDetails,
   readGatewayProviderTokenUsage,
@@ -182,6 +183,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
     if (!adapter.embeddings) {
       throw new Error("OpenAI embeddings provider adapter is not configured.");
     }
+    const providerStartedAt = new Date();
     const result = await adapter.embeddings({
       request: normalized.request,
       target: {
@@ -189,6 +191,14 @@ export async function executeGatewayOpenAIEmbeddings(input: {
         baseUrl: selected.baseUrl,
         modelId: selected.modelId,
       },
+    });
+    await recordGatewayProviderTrace({
+      errorCode: result.ok ? null : result.errorCode,
+      modelId: selected.modelId,
+      providerKey: selected.providerKey,
+      requestId: input.requestId,
+      startedAt: providerStartedAt,
+      status: result.ok ? "succeeded" : "failed",
     });
     if (!result.ok) {
       throw new Error(result.errorMessage);
@@ -227,7 +237,9 @@ function buildRequestActivityRoute(input: {
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: [],
+    modelId: input.candidate.modelId,
     providerId: input.candidate.providerId,
+    providerKey: input.candidate.providerKey,
     providerModelId: input.candidate.providerModelId,
     routePolicyId: input.routeDecision.routePolicyId,
     routeReason: input.routeDecision.routeReason,

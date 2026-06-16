@@ -240,6 +240,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       },
       request: normalized.request,
       requestActivityId: input.requestActivityId,
+      requestId: input.requestId,
     });
     activity = buildRequestActivityRoute({
       candidate: result.selectedCandidate,
@@ -289,7 +290,9 @@ function buildRequestActivityRoute(input: {
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: input.fallbackAttempts,
+    modelId: input.candidate.modelId,
     providerId: input.candidate.providerId,
+    providerKey: input.candidate.providerKey,
     providerModelId: input.candidate.providerModelId,
     routePolicyId: input.routeDecision.routePolicyId,
     routeReason: input.routeDecision.routeReason,

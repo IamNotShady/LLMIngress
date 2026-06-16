@@ -30,6 +30,7 @@ import {
 } from "./request-metadata.js";
 import { normalizeOpenAIResponsesRequest } from "./responses.js";
 import { selectRouteCandidate } from "./route-engine.js";
+import { recordGatewayProviderTrace } from "./tracing.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";
@@ -123,7 +124,9 @@ export async function executeGatewayStreamingRequest(input: {
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
     const activity = buildStreamingActivityRoute({
+      modelId: selectedCandidate.modelId,
       providerId: selectedCandidate.providerId,
+      providerKey: selectedCandidate.providerKey,
       providerModelId: selectedCandidate.providerModelId,
       routePolicyId: routeDecision.routePolicyId,
       routeReason: routeDecision.routeReason,
@@ -156,6 +159,7 @@ export async function executeGatewayStreamingRequest(input: {
       throw new Error("Provider credentials are missing for the selected route.");
     }
 
+    const providerStartedAt = new Date();
     const response = await (input.fetch ?? globalThis.fetch)(
       buildProviderUrl(selected.baseUrl, normalized.pathSuffix),
       {
@@ -172,6 +176,14 @@ export async function executeGatewayStreamingRequest(input: {
         method: "POST",
       },
     );
+    await recordGatewayProviderTrace({
+      errorCode: response.ok && response.body ? null : "provider_request_failed",
+      modelId: selected.modelId,
+      providerKey: selected.providerKey,
+      requestId: input.requestId,
+      startedAt: providerStartedAt,
+      status: response.ok && response.body ? "succeeded" : "failed",
+    });
 
     if (!response.ok || !response.body) {
       await releaseGatewayBudgetReservation({
@@ -543,14 +555,18 @@ function requireSelectedCandidate(
 }
 
 function buildStreamingActivityRoute(input: {
+  modelId: string;
   providerId: string;
+  providerKey: string;
   providerModelId: string;
   routePolicyId: string;
   routeReason: unknown;
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: [],
+    modelId: input.modelId,
     providerId: input.providerId,
+    providerKey: input.providerKey,
     providerModelId: input.providerModelId,
     routePolicyId: input.routePolicyId,
     routeReason: input.routeReason,

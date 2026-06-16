@@ -29,6 +29,7 @@ import {
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
+import { recordGatewayProviderTrace } from "./tracing.js";
 import {
   type GatewayUsageCostDetails,
   readGatewayProviderTokenUsage,
@@ -208,7 +209,9 @@ export async function executeGatewayAnthropicMessages(input: {
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
     activity = {
       fallbackAttempts: [],
+      modelId: selectedCandidate.modelId,
       providerId: selectedCandidate.providerId,
+      providerKey: selectedCandidate.providerKey,
       providerModelId: selectedCandidate.providerModelId,
       routePolicyId: routeDecision.routePolicyId,
       routeReason: routeDecision.routeReason,
@@ -240,6 +243,7 @@ export async function executeGatewayAnthropicMessages(input: {
       throw new Error("Provider credentials are missing for the selected route.");
     }
 
+    const providerStartedAt = new Date();
     const result = await (input.adapter ?? createAnthropicProviderAdapter()).messages({
       request: normalized.request,
       target: {
@@ -247,6 +251,14 @@ export async function executeGatewayAnthropicMessages(input: {
         baseUrl: selected.baseUrl,
         modelId: selected.modelId,
       },
+    });
+    await recordGatewayProviderTrace({
+      errorCode: result.ok ? null : result.errorCode,
+      modelId: selected.modelId,
+      providerKey: selected.providerKey,
+      requestId: input.requestId,
+      startedAt: providerStartedAt,
+      status: result.ok ? "succeeded" : "failed",
     });
     if (!result.ok) {
       await releaseGatewayBudgetReservation({

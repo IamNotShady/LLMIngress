@@ -11,6 +11,7 @@ import {
   type OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
 import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
+import { recordGatewayProviderTrace } from "./tracing.js";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
@@ -49,6 +50,7 @@ export type ExecuteFallbackChainInput = {
   recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void>;
   request: NormalizedOpenAIChatRequest;
   requestActivityId?: string;
+  requestId?: string;
 };
 
 export function buildFallbackAttemptCandidates(input: {
@@ -95,6 +97,7 @@ export async function executeFallbackChain(
 
     for (const providerApiKey of providerApiKeys) {
       attemptOrder += 1;
+      const providerStartedAt = new Date();
       const result = await adapter.chatCompletion({
         request: input.request,
         target: {
@@ -102,6 +105,14 @@ export async function executeFallbackChain(
           baseUrl: candidate.baseUrl,
           modelId: candidate.modelId,
         },
+      });
+      await recordGatewayProviderTrace({
+        errorCode: result.ok ? null : result.errorCode,
+        modelId: candidate.modelId,
+        providerKey: candidate.providerKey,
+        requestId: input.requestId,
+        startedAt: providerStartedAt,
+        status: result.ok ? "succeeded" : "failed",
       });
 
       if (result.ok) {

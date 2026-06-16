@@ -1212,8 +1212,8 @@
         "feat-069",
         "feat-092"
       ],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red observed for feat-093 unit tests because packages/observability/src/traces.ts did not exist, and E2E red because the fake OTLP collector received no Gateway/provider/job spans. Added @llmingress/observability tracing helpers that build OTLP resourceSpans JSON, filter attributes to a safe allowlist, and export to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT with a bounded timeout. Gateway now records request spans and provider spans across fallback-chain, Responses, Messages, Embeddings, and streaming provider paths; Worker job-runner records job spans for succeeded and failed jobs. P2+ review found and fixed provider-path coverage gaps beyond chat fallback-chain and added OTLP export timeout protection so tracing cannot indefinitely block Gateway/Worker paths. Verification passed: feat-093 unit test (1), real Gateway/PostgreSQL/fake-OTLP/fake-provider/Worker E2E (1), pnpm run lint, pnpm run typecheck, pnpm run verify, full pnpm run verify:features across all 92 prior passing features before marking, and final pnpm run verify:features across all 93 passing features after marking."
     },
     {
       "id": "feat-094",

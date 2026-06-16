@@ -9,7 +9,9 @@ export type GatewayRequestActivityProtocol =
 
 export type GatewayRequestActivityRoute = {
   fallbackAttempts?: unknown[];
+  modelId?: string;
   providerId?: string;
+  providerKey?: string;
   providerModelId?: string;
   routePolicyId?: string;
   routeReason?: unknown;

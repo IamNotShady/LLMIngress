@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { recordOpenTelemetrySpan } from "@llmingress/observability/traces";
 import { Client, type QueryResultRow } from "pg";
 
 export const JOB_CREATED_CHANNEL = "job_created";
@@ -183,6 +184,11 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
         result,
         workerId: options.workerId,
       });
+      await recordWorkerJobTrace({
+        job,
+        startedAt: claimedAt,
+        status: "succeeded",
+      });
       return { nextDelayMs: 0, processed: true };
     } catch (error) {
       const failedAt = now();
@@ -197,6 +203,12 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
         now: failedAt,
         retryAt: nextDelayMs === null ? null : new Date(failedAt.getTime() + nextDelayMs),
         workerId: options.workerId,
+      });
+      await recordWorkerJobTrace({
+        errorCode: failure.code,
+        job,
+        startedAt: claimedAt,
+        status: "failed",
       });
       return { nextDelayMs, processed: true };
     }
@@ -280,6 +292,31 @@ function readJobFailure(error: unknown): JobFailure {
     code: "job_handler_failed",
     message: error instanceof Error ? error.message : "Job handler failed.",
   };
+}
+
+async function recordWorkerJobTrace(input: {
+  errorCode?: string;
+  job: ClaimedJob;
+  startedAt: Date;
+  status: "failed" | "succeeded";
+}): Promise<void> {
+  await recordOpenTelemetrySpan({
+    attributes: {
+      "error.code": input.errorCode,
+      "job.id": input.job.id,
+      "job.type": input.job.jobType,
+      "llmingress.status": input.status,
+    },
+    endTimeUnixNano: dateToUnixNano(new Date()),
+    kind: "internal",
+    name: "llmingress.worker.job",
+    serviceName: "llmingress-worker",
+    startTimeUnixNano: dateToUnixNano(input.startedAt),
+  });
+}
+
+function dateToUnixNano(value: Date): string {
+  return String(BigInt(value.getTime()) * 1_000_000n);
 }
 
 class PostgresJobStore implements JobStore {

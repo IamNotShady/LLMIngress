@@ -6,6 +6,7 @@ import {
   createGatewayRequestActivity,
   type GatewayRequestActivityProtocol,
   type GatewayRequestActivityRoute,
+  readGatewayActivityError,
 } from "./activity-recorder.js";
 import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
@@ -28,6 +29,7 @@ import {
   readGatewayStreamingFlag,
   wrapProviderStreamWithActivityCompletion,
 } from "./streaming.js";
+import { recordGatewayRequestTrace } from "./tracing.js";
 import {
   type GatewayUsageCostDetails,
   recordGatewayUsageCostAndSavings,
@@ -559,6 +561,16 @@ async function executeRecordedGatewayJsonRequest(input: {
       virtualModelId: input.virtualModelId,
     });
   }
+  await recordGatewayRequestTrace({
+    errorCode: readGatewayActivityError(response.body)?.errorCode ?? null,
+    httpStatus: response.statusCode,
+    modelId: response.activity?.modelId ?? null,
+    protocol: input.protocol,
+    providerKey: response.activity?.providerKey ?? null,
+    requestId: input.requestId,
+    startedAt: activity.startedAt,
+    status: response.statusCode < 400 ? "succeeded" : "failed",
+  });
   return response;
 }
 

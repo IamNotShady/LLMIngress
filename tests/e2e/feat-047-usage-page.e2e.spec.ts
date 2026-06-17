@@ -21,13 +21,14 @@ test("usage page shows counts tokens cost and provider model breakdown", async (
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/usage`);
 
           await expect(page.getByRole("heading", { name: "Usage & Cost" })).toBeVisible();
           await expect(page.getByText("Requests: 2")).toBeVisible();

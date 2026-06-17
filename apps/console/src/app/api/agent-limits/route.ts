@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
 }
 
 function readRequiredText(form: FormData, name: string): string {

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("virtual model crud rejects duplicate name and blocks referenced delete", async ({
@@ -22,14 +23,16 @@ test("virtual model crud rejects duplicate name and blocks referenced delete", a
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/models`);
 
+          await openDisclosure(page, "New virtual model");
           await page.getByRole("textbox", { name: "Virtual model name" }).fill("Coding Fast");
           await page
             .getByRole("textbox", { name: "Virtual model display name" })
@@ -46,6 +49,7 @@ test("virtual model crud rejects duplicate name and blocks referenced delete", a
             name: "coding-fast",
           });
 
+          await openRow(page, "Coding Fast");
           await page
             .getByRole("textbox", { name: "Edit virtual model name" })
             .fill("coding-balanced");
@@ -57,6 +61,7 @@ test("virtual model crud rejects duplicate name and blocks referenced delete", a
           await expect(page.getByRole("heading", { name: "Coding Balanced" })).toBeVisible();
           await expect(page.getByText("coding-balanced")).toBeVisible();
 
+          await openRow(page, "Coding Balanced");
           await page.getByRole("button", { name: "Delete virtual model" }).click();
           await expect(page.getByText("No virtual models configured.")).toBeVisible();
 

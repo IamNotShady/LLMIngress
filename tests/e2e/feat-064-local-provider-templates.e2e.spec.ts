@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -53,14 +54,16 @@ test("local provider templates enforce local private urls template paths and pub
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/providers`);
 
+          await openDisclosure(page, "Add from template");
           const localTemplates = page.getByRole("group", { name: "Local templates" });
           for (const [displayName, placeholder] of [
             ["LM Studio", "http://127.0.0.1:1234/v1"],
@@ -198,7 +201,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string) {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

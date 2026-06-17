@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("config import export redacts secrets validates publishes config version and round trips supported configuration", async ({
@@ -24,17 +25,16 @@ test("config import export redacts secrets validates publishes config version an
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext({ acceptDownloads: true });
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/settings`);
 
-          const settingsSection = page
-            .getByRole("heading", { name: "Settings" })
-            .locator("xpath=ancestor::section[1]");
+          const settingsSection = page.getByRole("region", { name: "Settings" });
           await expect(
             settingsSection.getByRole("heading", { name: "Config import/export" }),
           ).toBeVisible();
@@ -67,9 +67,12 @@ test("config import export redacts secrets validates publishes config version an
           await settingsSection.getByRole("button", { name: "Import redacted config" }).click();
 
           await expect(page.getByText(/Config import published version v\d+/)).toBeVisible();
+          await page.goto(`${baseUrl}/agents`);
           await expect(
             page.getByRole("heading", { exact: true, name: "Imported Config Agent" }),
           ).toBeVisible();
+          await page.goto(`${baseUrl}/providers`);
+          await openRow(page, "Config Export DeepSeek");
           await expect(page.getByText("Provider API key prefix: sk-cfg80")).toBeVisible();
         } finally {
           await context.close();

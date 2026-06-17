@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
 }
 
 function renderOneTimeAgentApiKeyResponse(input: {
@@ -140,7 +140,7 @@ function renderOneTimeAgentApiKeyResponse(input: {
       <section class="snippets" aria-label="Agent integration templates">
         ${integrationTemplateHtml}
       </section>
-      <a href="/">Back to dashboard</a>
+      <a href="/agents">Back to dashboard</a>
     </main>
   </body>
 </html>`,

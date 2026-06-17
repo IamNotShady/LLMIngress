@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 const masterKey = "test-master-key";
@@ -22,7 +23,7 @@ test("dashboard form labels stay paired with their controls on desktop", async (
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext({ viewport: { height: 720, width: 1280 } });
         const page = await context.newPage();
 
@@ -30,17 +31,25 @@ test("dashboard form labels stay paired with their controls on desktop", async (
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
-          const desktopFields = await readFieldLayout(page, [
+          await page.goto(`${baseUrl}/playground`);
+          const playgroundFields = await readFieldLayout(page, [
             "playground-gateway-base-url",
             "playground-agent-api-key",
             "playground-model",
             "playground-prompt",
+          ]);
+          for (const field of playgroundFields) {
+            expectFieldToBePaired(field);
+          }
+
+          await page.goto(`${baseUrl}/providers`);
+          await openDisclosure(page, "New provider");
+          const providerFields = await readFieldLayout(page, [
             "provider-key",
             "provider-display-name",
             "provider-base-url",
           ]);
-
-          for (const field of desktopFields) {
+          for (const field of providerFields) {
             expectFieldToBePaired(field);
           }
 
@@ -126,7 +135,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string): Promise<void> {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Promise<void> {

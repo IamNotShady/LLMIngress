@@ -22,15 +22,16 @@ test("console shows built-in prices and manual price override changes subsequent
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/pricing`);
 
-          await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Pricing" })).toBeVisible();
           await expect(page.getByText("Built-in price")).toBeVisible();
           await expect(page.getByText("$0.40 / 1M input")).toBeVisible();
           await expect(page.getByText("$1.60 / 1M output")).toBeVisible();

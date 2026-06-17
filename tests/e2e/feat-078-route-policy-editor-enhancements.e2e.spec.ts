@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { type BrowserContext, expect, type Locator, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("route policy editor supports strategy filters fallback warnings validation and excludes v2 task context tool rules", async ({
@@ -23,7 +24,7 @@ test("route policy editor supports strategy filters fallback warnings validation
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
 
         try {
@@ -31,10 +32,9 @@ test("route policy editor supports strategy filters fallback warnings validation
           await seedAuthenticatedConsoleSession(fixture, context, baseUrl);
           const page = await context.newPage();
 
-          await page.goto(
-            `${baseUrl}/?routeProviderFilter=openai&routeModelFilter=gpt#route-policies`,
-          );
+          await page.goto(`${baseUrl}/routing?routeProviderFilter=openai&routeModelFilter=gpt`);
           const routePolicySection = routePoliciesSection(page);
+          await openDisclosure(page, "New route policy");
 
           await expect(routePolicySection.getByLabel("Route provider filter")).toHaveValue(
             "openai",
@@ -66,7 +66,8 @@ test("route policy editor supports strategy filters fallback warnings validation
           });
           await expect.poll(() => countRoutePolicies(fixture)).toBe(0);
 
-          await page.goto(`${baseUrl}/#route-policies`);
+          await page.goto(`${baseUrl}/routing`);
+          await openDisclosure(page, "New route policy");
           await routePolicySection
             .getByLabel("Route policy virtual model")
             .selectOption({ label: "Route Editor VM (route-editor-vm)" });
@@ -89,7 +90,8 @@ test("route policy editor supports strategy filters fallback warnings validation
           expect(createResult.body).toBeNull();
           expect([0, 303]).toContain(createResult.status);
           await expect.poll(() => countRoutePolicies(fixture)).toBe(1);
-          await page.goto(`${baseUrl}/?routeEditorReload=created#route-policies`);
+          await page.goto(`${baseUrl}/routing?routeEditorReload=created`);
+          await openRow(page, "Route Editor VM");
 
           await expect(routePolicySection.getByText("Strategy: cost_first")).toBeVisible();
           await expect(
@@ -137,7 +139,8 @@ test("route policy editor supports strategy filters fallback warnings validation
             strategy: "quality_first",
             virtualModelId: seeded.virtualModelId,
           });
-          await page.goto(`${baseUrl}/?routeEditorReload=updated#route-policies`);
+          await page.goto(`${baseUrl}/routing?routeEditorReload=updated`);
+          await openRow(page, "Route Editor VM");
 
           await expect(routePolicySection.getByText("Strategy: quality_first")).toBeVisible();
           await expect
@@ -317,9 +320,7 @@ async function seedProviderHealth(
 }
 
 function routePoliciesSection(page: Page): Locator {
-  return page
-    .getByRole("heading", { name: "Route policies" })
-    .locator("xpath=ancestor::section[1]");
+  return page.getByRole("region", { name: "Route policies" });
 }
 
 async function postRoutePolicy(

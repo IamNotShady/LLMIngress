@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("agent budget saves without manual price fields and blocks accessible unknown-price route candidates", async ({
@@ -31,7 +32,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
@@ -39,11 +40,15 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
+          await page.goto(`${baseUrl}/agents`);
           await expect(page.getByRole("heading", { name: "Auto Budget Agent" })).toBeVisible();
+          await openRow(page, "Auto Budget Agent");
           await expect(page.getByText("Default Virtual Model: Auto Budget VM")).toBeVisible();
           await expect(
             page.getByText("Allowed Virtual Models: Auto Budget VM (auto-budget-vm)"),
           ).toBeVisible();
+          await page.goto(`${baseUrl}/routing`);
+          await openRow(page, "Auto Budget VM");
           await expect(
             page.getByText(
               "Primary: OpenAI Auto Budget Provider - Unknown Primary Model (unknown-primary-model)",
@@ -55,6 +60,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
             ),
           ).toBeVisible();
 
+          await page.goto(`${baseUrl}/agents`);
           await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
           await expect(page.getByLabel("Budget price model id")).toHaveCount(0);
 
@@ -90,6 +96,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
             providerKey: "openai",
           });
 
+          await openRow(page, "Auto Budget Agent");
           await page.getByLabel("Budget USD limit").fill("25");
           await page.getByLabel("Budget period").selectOption("month");
           await page.getByLabel("RPM limit").fill("120");
@@ -97,6 +104,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await page.getByLabel("Token limit").fill("32000");
           await page.getByRole("button", { name: "Save Agent API key limits" }).click();
 
+          await openRow(page, "Auto Budget Agent");
           await expect(page.getByText("Budget Limit: $25.00 / month")).toBeVisible();
           await expect(page.getByText("RPM Limit: 120 requests / minute")).toBeVisible();
           await expect(page.getByText("TPM Limit: 640000 tokens / minute")).toBeVisible();

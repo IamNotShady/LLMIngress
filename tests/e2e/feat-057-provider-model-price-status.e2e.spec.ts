@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -41,7 +42,7 @@ test("refresh provider models shows priced and unknown price status in provider 
       });
 
       try {
-        const consoleBaseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const consoleBaseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
@@ -49,9 +50,13 @@ test("refresh provider models shows priced and unknown price status in provider 
           await waitForWorkerStarted(worker);
           await waitForConsole(consoleBaseUrl, consoleApp);
           await signInFromFirstRun(page, consoleBaseUrl);
+          await page.goto(`${consoleBaseUrl}/providers`);
 
           await storeProviderApiKey(page, providerApiKey);
+          await page.goto(`${consoleBaseUrl}/models`);
           await createVirtualModel(page);
+          await page.goto(`${consoleBaseUrl}/providers`);
+          await openRow(page, "OpenAI Price Status Provider");
           await page.getByRole("button", { name: "Refresh provider models" }).click();
           await expect(
             page.getByText("Model refresh queued for OpenAI Price Status Provider."),
@@ -64,7 +69,8 @@ test("refresh provider models shows priced and unknown price status in provider 
             .poll(() => readLatestChainedPriceSyncJob(fixture, providerId))
             .toMatchObject({ status: "succeeded" });
 
-          await page.reload();
+          await page.goto(`${consoleBaseUrl}/providers`);
+          await openRow(page, "OpenAI Price Status Provider");
           const providerModelMetadata = page.locator(".provider-model-metadata");
           await expect(
             providerModelMetadata.getByText("GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)"),
@@ -80,6 +86,8 @@ test("refresh provider models shows priced and unknown price status in provider 
             ),
           ).toBeVisible();
 
+          await page.goto(`${consoleBaseUrl}/routing`);
+          await openDisclosure(page, "New route policy");
           await page.getByLabel("Route policy virtual model").selectOption({
             label: "Price Status VM (price-status-vm)",
           });
@@ -148,14 +156,17 @@ async function insertManualPriceOverride(fixture: Fixture): Promise<void> {
 }
 
 async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<void> {
+  await openRow(page, "OpenAI Price Status Provider");
   await page.getByLabel("Provider API key").fill(providerApiKey);
   await page.getByRole("button", { name: "Store provider API key" }).click();
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openRow(page, "OpenAI Price Status Provider");
   await expect(page.getByText("Provider API key prefix: sk-price")).toBeVisible();
 }
 
 async function createVirtualModel(page: Page): Promise<void> {
+  await openDisclosure(page, "New virtual model");
   await page.getByRole("textbox", { name: "Virtual model name" }).fill("price-status-vm");
   await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Price Status VM");
   await page.getByRole("button", { name: "Create virtual model" }).click();
@@ -210,7 +221,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string): Promise<void> {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

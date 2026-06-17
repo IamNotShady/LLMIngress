@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("budget enabled agent cannot save route policy with unknown price provider model", async ({
@@ -30,7 +31,7 @@ test("budget enabled agent cannot save route policy with unknown price provider 
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
@@ -38,7 +39,9 @@ test("budget enabled agent cannot save route policy with unknown price provider 
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
+          await page.goto(`${baseUrl}/models`);
           await createVirtualModel(page);
+          await page.goto(`${baseUrl}/agents`);
           await createAgentApiKey(page);
           const virtualModelId = await readVirtualModelId(fixture);
           const apiKeyId = await readOnlyAgentApiKeyId(fixture);
@@ -69,8 +72,11 @@ test("budget enabled agent cannot save route policy with unknown price provider 
             providerKey: "openai",
           });
 
-          await page.reload();
+          await page.goto(`${baseUrl}/agents`);
+          await openRow(page, "Budget Agent");
           await expect(page.getByText(`Default Virtual Model: Budget Safe VM`)).toBeVisible();
+          await page.goto(`${baseUrl}/routing`);
+          await openDisclosure(page, "New route policy");
           await page
             .getByLabel("Route policy virtual model")
             .selectOption({ label: "Budget Safe VM (budget-safe-vm)" });
@@ -80,6 +86,7 @@ test("budget enabled agent cannot save route policy with unknown price provider 
             .selectOption({ label: seededProviderModel.pricedOptionLabel });
           await page.getByRole("button", { name: "Create route policy" }).click();
 
+          await openRow(page, "Budget Safe VM");
           await expect(page.getByText(`Primary: ${seededProviderModel.optionLabel}`)).toBeVisible();
           await expect.poll(() => countRoutePolicies(fixture)).toBe(1);
           await expect.poll(() => countBudgetLimitRows(fixture, apiKeyId)).toBe(1);
@@ -123,6 +130,7 @@ async function seedUnknownProviderModel(fixture: Fixture, providerModelId: strin
 }
 
 async function createVirtualModel(page: Page): Promise<void> {
+  await openDisclosure(page, "New virtual model");
   await page.getByRole("textbox", { name: "Virtual model name" }).fill("budget-safe-vm");
   await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Budget Safe VM");
   await page.getByRole("button", { name: "Create virtual model" }).click();
@@ -130,10 +138,12 @@ async function createVirtualModel(page: Page): Promise<void> {
 }
 
 async function createAgentApiKey(page: Page): Promise<void> {
+  await openDisclosure(page, "New agent");
   await page.getByLabel("Agent name").fill("Budget Agent");
   await page.getByLabel("Agent type").selectOption("coding");
   await page.getByRole("button", { name: "Create agent" }).click();
   await expect(page.getByRole("heading", { exact: true, name: "Budget Agent" })).toBeVisible();
+  await openRow(page, "Budget Agent");
   await page.getByRole("button", { name: "Create Agent API key" }).click();
   await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
@@ -141,19 +151,23 @@ async function createAgentApiKey(page: Page): Promise<void> {
 
 async function assignVirtualModelAccess(page: Page): Promise<void> {
   const label = "Budget Safe VM (budget-safe-vm)";
+  await openRow(page, "Budget Agent");
   await page.getByLabel("Allowed virtual models").selectOption({ label });
   await page.getByLabel("Default virtual model").selectOption({ label });
   await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
+  await openRow(page, "Budget Agent");
   await expect(page.getByText(`Default Virtual Model: ${label}`)).toBeVisible();
 }
 
 async function saveKnownPriceCostBudget(page: Page): Promise<void> {
+  await openRow(page, "Budget Agent");
   await page.getByLabel("Budget USD limit").fill("10");
   await page.getByLabel("Budget period").selectOption("month");
   await page.getByLabel("RPM limit").fill("60");
   await page.getByLabel("TPM limit").fill("120000");
   await page.getByLabel("Token limit").fill("8000");
   await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+  await openRow(page, "Budget Agent");
   await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
 }
 

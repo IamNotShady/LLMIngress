@@ -23,17 +23,16 @@ test("usage page shows agent agent api key virtual model provider model cost fai
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/usage`);
 
-          const usageSection = page
-            .getByRole("heading", { name: "Usage & Cost" })
-            .locator("xpath=ancestor::section[1]");
+          const usageSection = page.getByRole("region", { name: "Usage & Cost" });
           await expect(usageSection.getByText("Requests: 3")).toBeVisible();
           await expect(usageSection.getByText("Failures: 1")).toBeVisible();
           await expect(usageSection.getByText("Savings: $0.00400000")).toBeVisible();

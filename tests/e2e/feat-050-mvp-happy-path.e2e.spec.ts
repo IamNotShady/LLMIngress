@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import {
   buildMvpHappyPathModelOptionLabel,
@@ -32,7 +33,7 @@ test("clean setup request activity usage and hot reload after route change", asy
       });
 
       try {
-        const consoleBaseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const consoleBaseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
@@ -42,15 +43,17 @@ test("clean setup request activity usage and hot reload after route change", asy
 
           await configurePriceOverride(page);
           const modelOptions = await seedProviderAndModels(fixture, `${provider.url}/v1`);
-          await page.reload();
+          await page.goto(`${consoleBaseUrl}/providers`);
           await expect(
             page.getByRole("heading", { exact: true, name: mvpHappyPathNames.providerDisplayName }),
           ).toBeVisible();
           await storeProviderApiKey(page);
+          await page.goto(`${consoleBaseUrl}/models`);
           await createVirtualModelAndRoutePolicy(page, {
             optionLabel: modelOptions.initial.optionLabel,
             selectorLabel: modelOptions.initial.selectorLabel,
           });
+          await page.goto(`${consoleBaseUrl}/agents`);
           const agentApiKey = await createAgentApiKeyWithAccessAndLimits(page);
 
           const gateway = startGatewayProcess({
@@ -72,13 +75,14 @@ test("clean setup request activity usage and hot reload after route change", asy
               mvpHappyPathNames.initialProviderModelId,
             ]);
 
-            await page.reload();
+            await page.goto(`${consoleBaseUrl}/activity`);
             const activitySection = page.getByLabel("Activity");
             await expect(
               activitySection.getByRole("link", {
                 name: buildMvpHappyPathRequestId("initial"),
               }),
             ).toBeVisible();
+            await page.goto(`${consoleBaseUrl}/usage`);
             await expect(page.getByLabel("Usage").getByText("Requests: 1")).toBeVisible();
             await expect(
               page.getByRole("heading", {
@@ -87,10 +91,13 @@ test("clean setup request activity usage and hot reload after route change", asy
               }),
             ).toBeVisible();
 
+            await page.goto(`${consoleBaseUrl}/routing`);
+            await openRow(page, mvpHappyPathNames.virtualModelDisplayName);
             await page
               .getByLabel("Edit primary provider models")
               .selectOption({ label: modelOptions.reloaded.selectorLabel });
             await page.getByRole("button", { name: "Save route policy" }).click();
+            await openRow(page, mvpHappyPathNames.virtualModelDisplayName);
             await expect(
               page.getByText(`Primary: ${modelOptions.reloaded.optionLabel}`),
             ).toBeVisible();
@@ -108,12 +115,13 @@ test("clean setup request activity usage and hot reload after route change", asy
               mvpHappyPathNames.reloadedProviderModelId,
             ]);
 
-            await page.reload();
+            await page.goto(`${consoleBaseUrl}/activity`);
             await expect(
               page
                 .getByLabel("Activity")
                 .getByRole("link", { name: buildMvpHappyPathRequestId("reloaded") }),
             ).toBeVisible();
+            await page.goto(`${consoleBaseUrl}/usage`);
             await expect(page.getByLabel("Usage").getByText("Requests: 2")).toBeVisible();
             await expect(
               page.getByRole("heading", {
@@ -198,11 +206,13 @@ async function saveManualPriceOverride(
 }
 
 async function storeProviderApiKey(page: Page): Promise<void> {
+  await openRow(page, mvpHappyPathNames.providerDisplayName);
   await page.getByLabel("Provider API key").fill(providerApiKey);
   await page.getByRole("button", { name: "Store provider API key" }).click();
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await expect(page.locator("code")).toHaveText(providerApiKey);
   await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openRow(page, mvpHappyPathNames.providerDisplayName);
   await expect(
     page.getByText(`Provider API key prefix: ${providerApiKey.slice(0, 8)}`),
   ).toBeVisible();
@@ -212,6 +222,7 @@ async function createVirtualModelAndRoutePolicy(
   page: Page,
   initialModelOption: { optionLabel: string; selectorLabel: string },
 ): Promise<void> {
+  await openDisclosure(page, "New virtual model");
   await page
     .getByRole("textbox", { name: "Virtual model name" })
     .fill(mvpHappyPathNames.virtualModelDisplayName);
@@ -223,6 +234,8 @@ async function createVirtualModelAndRoutePolicy(
     page.getByRole("heading", { exact: true, name: mvpHappyPathNames.virtualModelDisplayName }),
   ).toBeVisible();
 
+  await page.goto(new URL("/routing", page.url()).href);
+  await openDisclosure(page, "New route policy");
   await page.getByLabel("Route policy virtual model").selectOption({
     label: `${mvpHappyPathNames.virtualModelDisplayName} (${mvpHappyPathNames.virtualModelName})`,
   });
@@ -231,24 +244,29 @@ async function createVirtualModelAndRoutePolicy(
     .getByLabel("Primary provider models")
     .selectOption({ label: initialModelOption.selectorLabel });
   await page.getByRole("button", { name: "Create route policy" }).click();
+  await openRow(page, mvpHappyPathNames.virtualModelDisplayName);
   await expect(page.getByText(`Primary: ${initialModelOption.optionLabel}`)).toBeVisible();
 }
 
 async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string> {
+  await openDisclosure(page, "New agent");
   await page.getByLabel("Agent name").fill("MVP Codex");
   await page.getByLabel("Agent type").selectOption("coding");
   await page.getByRole("button", { name: "Create agent" }).click();
   await expect(page.getByRole("heading", { exact: true, name: "MVP Codex" })).toBeVisible();
 
+  await openRow(page, "MVP Codex");
   await page.getByRole("button", { name: "Create Agent API key" }).click();
   await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
   const agentApiKey = await page.locator("code").innerText();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
 
   const virtualModelLabel = `${mvpHappyPathNames.virtualModelDisplayName} (${mvpHappyPathNames.virtualModelName})`;
+  await openRow(page, "MVP Codex");
   await page.getByLabel("Allowed virtual models").selectOption({ label: virtualModelLabel });
   await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
   await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
+  await openRow(page, "MVP Codex");
   await expect(page.getByText(`Default Virtual Model: ${virtualModelLabel}`)).toBeVisible();
 
   await page.getByLabel("Budget USD limit").fill("100");
@@ -257,6 +275,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await page.getByLabel("TPM limit").fill("120000");
   await page.getByLabel("Token limit").fill("12000");
   await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+  await openRow(page, "MVP Codex");
   await expect(page.getByText("Budget Limit: $100.00 / month")).toBeVisible();
 
   return agentApiKey;
@@ -397,7 +416,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string) {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

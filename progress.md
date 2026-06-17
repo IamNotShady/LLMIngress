@@ -2,14 +2,26 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 (console sidebar redesign)
-**Active Feature:** none — feat-098 (Console Module Navigation Sidebar) is `passing`; 97 features passing, feat-097 `pending`
-**Worktree:** `redesign/console-sidebar` (isolated; branched from dev HEAD)
+**Last Updated:** 2026-06-17 (feat-100 rollback)
+**Active Feature:** none — feat-100 implementation rolled back at user request; feat-099 is `passing`, feat-100 is `pending`
+**Branch:** `dev`
 
 ## Status
 
 ### What's Done
 
+- [x] **feat-100 rollback**:
+  - Rolled back the provider-model price source-of-truth implementation at the user's request. Removed the `0024_provider_model_prices` migration, `apps/worker/src/price-source.ts`, feat-100 unit/E2E tests, and the production/test rewrites that moved current pricing from `model_price_overrides` / `price_registry_snapshots` into `provider_models`.
+  - Restored completed feature descriptions and verification contracts that `feat-100` had rewritten (`feat-015`, `feat-057`, `feat-073`, `feat-096`, `feat-097`) back to the built-in/manual-override/snapshot price contract.
+  - Left `feat-100` in `feature_list.json` as `pending` with empty evidence so it can be redesigned later. Preserved `feat-099` runtime heartbeat work.
+
+- [x] **feat-099 — Gateway Runtime Status Heartbeat (passing)**:
+  - Added `apps/gateway/src/gateway-runtime-status.ts`: a single-function recorder that upserts `gateway_runtime_status` keyed by `GATEWAY_INSTANCE_ID` for startup / heartbeat / reload-succeeded / reload-failed events. `started_at` is written only on boot (conflict path preserves it for heartbeat/reload), config version `0` (empty snapshot) maps to `null` to respect the `config_versions` FK, and reload-failed never writes a possibly-nonexistent `target_config_version`. The live row uses `status='ready'` (schema CHECK has no `'healthy'`), so the Console heartbeat-freshness label renders `Healthy`.
+  - `createGatewayConfigRuntime` now takes `recordRuntimeStatus` / `gatewayInstanceId` / `heartbeatIntervalMs` (defaults: DB-backed recorder when `databaseUrl` is present else no-op; heartbeat disabled at `0`): records a `startup` event after the initial snapshot load, runs a dedicated unref'd heartbeat `setInterval`, and records `reload-succeeded` / `reload-failed` inside `reloadIfNewer`. All recorder calls are best-effort (caught + logged), so a status-write failure never crashes gateway boot or aborts a reload — protecting feat-012/050/053/054/059.
+  - `main.ts` wires `GATEWAY_INSTANCE_ID` (default `gateway`) and `GATEWAY_HEARTBEAT_INTERVAL_MS` (default 15_000). No Console changes — `server/runtime.ts` + `_modules/sections.tsx` already read & render the row.
+  - TDD: unit test (3 cases) and the real Gateway+Console Chromium E2E were written first and observed failing, then made to pass.
+  - Verification passed: feat-099 unit tests (3), real Gateway/PostgreSQL/Console Chromium E2E (1; boot → Healthy heartbeat + status `ready` + applied config v1 + reload succeeded, then publish v2 → applied/target v2), `pnpm run verify` (lint/typecheck/test/build) exit 0, and `pnpm run verify:features` across all 98 prior passing features — bulk e2e batch passed (407.7s); the only non-zero exit was a feat-054 `Console did not start` flake from Next 16's per-project dev-lock contention, confirmed passing on individual re-run (unit 4/4, e2e 3.7s), matching the documented feat-065/feat-098 batch-flake precedent.
+  - Env note: a pre-existing user `next dev` server on port 3000 (PID 43044, ~2h21m old) was stopped with the user's approval so console E2Es could run; restart via `./init.sh` when resuming. Aborted/back-to-back console E2E runs can orphan a `next-server` that keeps Next's project dev-lock and causes spurious `Console did not start` — clear strays before re-running.
 - [x] **Console list-page density redesign (extends feat-098)**:
   - Tamed the dense Providers / Agents / Route Policies / Virtual Models / Activity pages: each list item is now a compact summary row (title + key facts + status) that expands on demand via native `<details>`; create forms, the provider template selector, and agent integration snippets moved behind collapsible disclosures.
   - Added page-based pagination (8/page, `?page=N`) driven entirely by the URL — `_lib/pagination.ts` (`paginate`, `buildQueryHref`) + `_components/list-ui.tsx` (`Pager`, `Row`, `Disclosure`). New CSS: collapsed rows with chevron, disclosures, pager.
@@ -1260,3 +1272,8 @@
   - Updated feat-057 E2E because automatic chained price_sync can now complete before the provider model price-status page reloads, making the effective source `Priced (price sync)` instead of `Priced (built-in)`.
   - Verification passed: feat-097 unit test (2), real PostgreSQL Worker/fake-provider E2E (1), related feat-023/feat-056/feat-057/feat-073 regressions, `pnpm run verify`, `pnpm run verify:features` across all 96 prior passing features before marking, and final `pnpm run verify:features` across all 97 passing features after marking.
   - Note: optimized batch mode hit existing long-batch timing/lock fallbacks during full regression; the runner fell back to per-feature verification and all affected features passed individually, including feat-048, feat-057, feat-071, feat-096, and feat-097.
+
+- [ ] 2026-06-17 feat-100 Provider Model Price Source of Truth:
+  - Previous provider_models-only implementation was rolled back at the user's request.
+  - Current code remains on the pre-feat-100 pricing contract: built-in static registry, manual overrides in `model_price_overrides`, and price sync snapshots in `price_registry_snapshots`.
+  - Do not resume the old `0024_provider_model_prices` / provider_models-only approach without a fresh design pass.

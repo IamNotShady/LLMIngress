@@ -9,6 +9,12 @@ import {
   createConfigChangedListener as createPostgresConfigChangedListener,
 } from "@llmingress/config";
 import { Client } from "pg";
+import {
+  createGatewayRuntimeStatusRecorder,
+  type GatewayRuntimeStatusEvent,
+  noopRuntimeStatusRecorder,
+  type RecordGatewayRuntimeStatus,
+} from "./gateway-runtime-status.js";
 
 export type GatewayProviderSnapshot = {
   id: string;
@@ -63,7 +69,10 @@ type GatewayConfigRuntimeOptions = {
   createConfigChangedListener?: CreateConfigChangedListener;
   databaseUrl?: string;
   enableNotifications?: boolean;
+  gatewayInstanceId?: string;
+  heartbeatIntervalMs?: number;
   loadLatestSnapshot?: () => Promise<GatewayConfigSnapshot>;
+  recordRuntimeStatus?: RecordGatewayRuntimeStatus;
   reconcileIntervalMs?: number;
 };
 
@@ -113,11 +122,28 @@ export function createGatewayConfigRuntime(
   const loadLatestSnapshot = options.loadLatestSnapshot ?? createPostgresSnapshotLoader(options);
   const enableNotifications = options.enableNotifications !== false;
   const reconcileIntervalMs = options.reconcileIntervalMs ?? 30_000;
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 0;
+  const gatewayInstanceId = options.gatewayInstanceId ?? "gateway";
+  const recordRuntimeStatus =
+    options.recordRuntimeStatus ??
+    (options.databaseUrl
+      ? createGatewayRuntimeStatusRecorder({ databaseUrl: options.databaseUrl, gatewayInstanceId })
+      : noopRuntimeStatusRecorder);
 
   let currentSnapshot = emptySnapshot;
   let listener: ConfigChangedListener | undefined;
   let reconcileTimer: NodeJS.Timeout | undefined;
+  let heartbeatTimer: NodeJS.Timeout | undefined;
   let reloadInFlight: Promise<void> | undefined;
+
+  // Recording runtime status must never crash gateway boot or abort a config reload.
+  async function recordRuntimeStatusSafe(event: GatewayRuntimeStatusEvent): Promise<void> {
+    try {
+      await recordRuntimeStatus(event);
+    } catch (error) {
+      console.error("[gateway] failed to record runtime status", error);
+    }
+  }
 
   async function reloadIfNewer(targetVersion?: number): Promise<void> {
     if (targetVersion !== undefined && targetVersion <= currentSnapshot.version) {
@@ -133,9 +159,25 @@ export function createGatewayConfigRuntime(
     }
 
     reloadInFlight = (async () => {
-      const nextSnapshot = await loadLatestSnapshot();
+      let nextSnapshot: GatewayConfigSnapshot;
+      try {
+        nextSnapshot = await loadLatestSnapshot();
+      } catch (error) {
+        await recordRuntimeStatusSafe({
+          type: "reload-failed",
+          targetConfigVersion: targetVersion ?? null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+
       if (nextSnapshot.version > currentSnapshot.version) {
         currentSnapshot = nextSnapshot;
+        await recordRuntimeStatusSafe({
+          type: "reload-succeeded",
+          appliedConfigVersion: nextSnapshot.version,
+          targetConfigVersion: targetVersion ?? nextSnapshot.version,
+        });
       }
     })();
 
@@ -151,6 +193,11 @@ export function createGatewayConfigRuntime(
     reconcile: () => reloadIfNewer(),
     start: async () => {
       currentSnapshot = await loadLatestSnapshot();
+      await recordRuntimeStatusSafe({
+        type: "startup",
+        appliedConfigVersion: currentSnapshot.version,
+        startedAt: new Date(),
+      });
 
       if (enableNotifications) {
         const createConfigChangedListener =
@@ -166,11 +213,25 @@ export function createGatewayConfigRuntime(
         }, reconcileIntervalMs);
         reconcileTimer.unref?.();
       }
+
+      if (heartbeatIntervalMs > 0) {
+        heartbeatTimer = setInterval(() => {
+          void recordRuntimeStatusSafe({
+            type: "heartbeat",
+            appliedConfigVersion: currentSnapshot.version,
+          });
+        }, heartbeatIntervalMs);
+        heartbeatTimer.unref?.();
+      }
     },
     stop: async () => {
       if (reconcileTimer) {
         clearInterval(reconcileTimer);
         reconcileTimer = undefined;
+      }
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = undefined;
       }
       await listener?.close();
       listener = undefined;

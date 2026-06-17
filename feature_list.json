@@ -1020,6 +1020,24 @@
       "description": "A running Gateway records its own liveness into the gateway_runtime_status table by upserting a single row keyed by GATEWAY_INSTANCE_ID (default 'gateway'): on boot it writes started_at and an initial heartbeat with status 'healthy'; it refreshes heartbeat_at on a periodic heartbeat interval; and on each config snapshot reload it records the applied and target config versions plus the last reload status, error, and time. The authenticated Console Overview (Runtime) then shows the live gateway instance with a Healthy heartbeat, current applied/target config version, and reload result instead of 'No gateway runtime status recorded.'",
       "verification": "pnpm exec vitest run tests/features/feat-099-gateway-runtime-status-heartbeat.unit.test.ts && pnpm test:e2e tests/e2e/feat-099-gateway-runtime-status-heartbeat.e2e.spec.ts --grep 'running gateway records heartbeat and config version visible on console overview'",
       "dependencies": ["feat-009", "feat-012", "feat-048"],
+      "status": "passing",
+      "evidence": "New apps/gateway/src/gateway-runtime-status.ts upserts gateway_runtime_status keyed by GATEWAY_INSTANCE_ID (startup/heartbeat/reload events; config version 0 mapped to null to respect the config_versions FK; started_at written only on boot). createGatewayConfigRuntime now records a startup event after the initial snapshot load, refreshes heartbeat_at on a dedicated GATEWAY_HEARTBEAT_INTERVAL_MS timer (default 15s), and records reload-succeeded/failed on each reload; all recorder calls are best-effort so a status-write failure never crashes boot or aborts reload. main.ts wires GATEWAY_INSTANCE_ID + GATEWAY_HEARTBEAT_INTERVAL_MS. Console runtime.ts/sections.tsx unchanged (already read/render the row); the live row is written with status='ready' (schema has no 'healthy'), so the Console heartbeat-freshness label reads 'Healthy'. Verification passed: feat-099 unit tests (3: startup event, reload-succeeded per applied version, periodic heartbeat that stops after stop(), reload-failed preserving the previous snapshot), real Gateway+Console Chromium E2E (1: boot shows Healthy heartbeat + Gateway status ready + applied config v1 + reload succeeded, then publishing v2 updates applied/target to v2), pnpm run verify (lint/typecheck/test/build) green, and pnpm run verify:features across all 98 prior passing features — the bulk e2e batch passed (407.7s) and the sole non-zero exit was a feat-054 'Console did not start' Next 16 per-project dev-lock batch flake that passed on individual re-run (unit 4/4, e2e 3.7s), consistent with the documented feat-065/feat-098 batch-flake precedent."
+    },
+    {
+      "id": "feat-100",
+      "name": "Provider Model Price Source of Truth",
+      "description": "Redesign the current-pricing source-of-truth contract for provider model pricing before implementation. The previous provider_models-only implementation was rolled back at the user's request; current code must remain on the built-in static registry, model_price_overrides, and price_registry_snapshots contract until a replacement contract is explicitly defined. Historical request costs must not be rewritten, and completed feature descriptions/verifications should only change after the new contract is finalized.",
+      "verification": "TBD after redesign; previous feat-100 unit and E2E tests were removed during rollback",
+      "dependencies": ["feat-014", "feat-015", "feat-057", "feat-073", "feat-096", "feat-097"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-101",
+      "name": "Remove Unused Process Heartbeats Table",
+      "description": "Remove the unused process_heartbeats table from the database schema: new installations no longer create it, upgraded installations drop it, backup and migration-status manifests no longer reference it, and completed schema feature descriptions/verifications that encoded process_heartbeats are updated to the new lean runtime contract.",
+      "verification": "pnpm exec vitest run tests/features/feat-101-remove-process-heartbeats.unit.test.ts && pnpm test:e2e tests/e2e/feat-101-remove-process-heartbeats.e2e.spec.ts --grep 'runtime schema no longer creates or keeps process_heartbeats'",
+      "dependencies": ["feat-009", "feat-048", "feat-099"],
       "status": "pending",
       "evidence": ""
     }

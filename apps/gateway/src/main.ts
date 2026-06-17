@@ -395,6 +395,8 @@ export async function startGateway() {
   const configRuntime = createGatewayConfigRuntime({
     databaseUrl: config.databaseUrl,
     enableNotifications: readBooleanEnv("GATEWAY_CONFIG_NOTIFICATIONS", true),
+    gatewayInstanceId: process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
+    heartbeatIntervalMs: readNonNegativeIntegerEnv("GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000),
     reconcileIntervalMs: readNonNegativeIntegerEnv("GATEWAY_CONFIG_RECONCILE_INTERVAL_MS", 30_000),
   });
   await configRuntime.start();

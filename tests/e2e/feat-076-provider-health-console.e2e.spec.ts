@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("console shows provider model health latest probe failures and stale status", async ({
@@ -23,20 +24,22 @@ test("console shows provider model health latest probe failures and stale status
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/providers`);
 
           const providerCard = page
-            .locator("article.provider-item")
+            .locator("details.row")
             .filter({ hasText: "Health Console Provider" });
           await expect(
             providerCard.getByRole("heading", { name: "Health Console Provider" }),
           ).toBeVisible();
+          await openRow(page, "Health Console Provider");
           await expect(providerCard.getByText("Provider health: Healthy")).toBeVisible();
           await expect(providerCard.getByText(/Latest probe: .* via manual/)).toBeVisible();
           await expect(providerCard.getByText("Consecutive failures: 0")).toBeVisible();
@@ -48,9 +51,8 @@ test("console shows provider model health latest probe failures and stale status
           await expect(providerCard.getByText("Consecutive failures: 3")).toBeVisible();
           await expect(providerCard.getByText("Model health stale status: Stale")).toBeVisible();
 
-          const noProbeCard = page
-            .locator("article.provider-item")
-            .filter({ hasText: "No Probe Provider" });
+          const noProbeCard = page.locator("details.row").filter({ hasText: "No Probe Provider" });
+          await openRow(page, "No Probe Provider");
           await expect(noProbeCard.getByText("Provider health: Unknown")).toBeVisible();
           await expect(noProbeCard.getByText("Latest probe: Never")).toBeVisible();
           await expect(
@@ -150,7 +152,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string): Promise<void> {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

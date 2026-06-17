@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("default virtual model must be in allowed list", async ({ browser }) => {
@@ -20,13 +21,14 @@ test("default virtual model must be in allowed list", async ({ browser }) => {
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/models`);
 
           await createVirtualModel(page, {
             displayName: "Coding Fast",
@@ -38,17 +40,21 @@ test("default virtual model must be in allowed list", async ({ browser }) => {
           });
           const virtualModels = await readVirtualModels(fixture);
 
+          await page.goto(`${baseUrl}/agents`);
+          await openDisclosure(page, "New agent");
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
 
+          await openRow(page, "Codex");
           await page.getByRole("button", { name: "Create Agent API key" }).click();
           await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
           const apiKeyId = await readOnlyAgentApiKeyId(fixture);
 
+          await openRow(page, "Codex");
           await expect(page.getByLabel("Allowed virtual models")).toBeVisible({ timeout: 3_000 });
           await page
             .getByLabel("Allowed virtual models")
@@ -61,6 +67,7 @@ test("default virtual model must be in allowed list", async ({ browser }) => {
             .selectOption({ label: "Coding Fast (coding-fast)" });
           await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
 
+          await openRow(page, "Codex");
           await expect(
             page.getByText("Allowed Virtual Models: Coding Fast (coding-fast), Coding Strong"),
           ).toBeVisible();
@@ -121,6 +128,7 @@ async function createVirtualModel(
   page: Page,
   input: { displayName: string; name: string },
 ): Promise<void> {
+  await openDisclosure(page, "New virtual model");
   await page.getByRole("textbox", { exact: true, name: "Virtual model name" }).fill(input.name);
   await page
     .getByRole("textbox", { exact: true, name: "Virtual model display name" })

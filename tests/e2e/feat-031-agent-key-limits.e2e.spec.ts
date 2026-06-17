@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("agent key limit form saves budget rpm tpm token rules without manual price fields", async ({
@@ -22,25 +23,29 @@ test("agent key limit form saves budget rpm tpm token rules without manual price
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/agents`);
 
+          await openDisclosure(page, "New agent");
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
 
+          await openRow(page, "Codex");
           await page.getByRole("button", { name: "Create Agent API key" }).click();
           await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
           await readOnlyAgentApiKeyId(fixture);
 
+          await openRow(page, "Codex");
           await expect(page.getByLabel("Budget USD limit")).toBeVisible({ timeout: 3_000 });
           await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
           await expect(page.getByLabel("Budget price model id")).toHaveCount(0);
@@ -52,6 +57,7 @@ test("agent key limit form saves budget rpm tpm token rules without manual price
           await page.getByLabel("Token limit").fill("8000");
           await page.getByRole("button", { name: "Save Agent API key limits" }).click();
 
+          await openRow(page, "Codex");
           await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
           await expect(page.getByText("RPM Limit: 60 requests / minute")).toBeVisible();
           await expect(page.getByText("TPM Limit: 120000 tokens / minute")).toBeVisible();

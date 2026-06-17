@@ -8,6 +8,7 @@ import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
+import { openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -70,13 +71,15 @@ test("missing referenced model marked unavailable excluded from routing and warn
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/routing`);
+          await openRow(page, "Soft Delete Coding");
 
           await expect(
             page.getByText(

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("agent key plaintext once hash prefix status metadata persisted after rotate disable delete", async ({
@@ -22,19 +23,22 @@ test("agent key plaintext once hash prefix status metadata persisted after rotat
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/agents`);
 
+          await openDisclosure(page, "New agent");
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
 
+          await openRow(page, "Codex");
           await page.getByRole("button", { name: "Create Agent API key" }).click();
           await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
           const firstKey = await page.locator("code").innerText();
@@ -54,6 +58,7 @@ test("agent key plaintext once hash prefix status metadata persisted after rotat
 
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstKey)).toHaveCount(0);
+          await openRow(page, "Codex");
           await expect(
             page.getByText(`Agent API key prefix: ${firstKey.slice(0, 12)}`),
           ).toBeVisible();
@@ -61,6 +66,7 @@ test("agent key plaintext once hash prefix status metadata persisted after rotat
 
           await page.reload();
           await expect(page.getByText(firstKey)).toHaveCount(0);
+          await openRow(page, "Codex");
           await expect(
             page.getByText(`Agent API key prefix: ${firstKey.slice(0, 12)}`),
           ).toBeVisible();
@@ -83,15 +89,18 @@ test("agent key plaintext once hash prefix status metadata persisted after rotat
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstKey)).toHaveCount(0);
           await expect(page.getByText(rotatedKey)).toHaveCount(0);
+          await openRow(page, "Codex");
           await expect(
             page.getByText(`Agent API key prefix: ${rotatedKey.slice(0, 12)}`),
           ).toBeVisible();
 
           await page.getByRole("button", { name: "Disable Agent API key" }).click();
+          await openRow(page, "Codex");
           await expect(page.getByText("Agent API key status: Disabled")).toBeVisible();
           expect(await readAgentKeyStatuses(fixture)).toEqual([false]);
 
           await page.getByRole("button", { name: "Delete Agent API key" }).click();
+          await openRow(page, "Codex");
           await expect(page.getByText("No Agent API keys saved.")).toBeVisible();
           expect(await readAgentKeyStatuses(fixture)).toEqual([]);
         } finally {

@@ -22,7 +22,7 @@ test("first run creates admin protected pages require login valid login reaches 
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
         const password = "correct horse battery staple";
@@ -36,12 +36,12 @@ test("first run creates admin protected pages require login valid login reaches 
           await page.getByRole("button", { name: "Create admin" }).click();
 
           await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-          await expect(page.getByRole("heading", { name: "Dashboard" })).not.toBeVisible();
+          await expect(page.getByRole("heading", { name: "Overview" })).not.toBeVisible();
 
           await page.getByLabel("Admin password").fill(password);
           await page.getByRole("button", { name: "Sign in" }).click();
 
-          await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
           await expect(page.getByText("Signed in as admin")).toBeVisible();
         } finally {
           await context.close();

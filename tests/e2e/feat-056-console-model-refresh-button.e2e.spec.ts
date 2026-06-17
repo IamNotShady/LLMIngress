@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -36,7 +37,7 @@ test("console refresh models button enqueues job worker refreshes models and rou
       });
 
       try {
-        const consoleBaseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const consoleBaseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
@@ -44,11 +45,16 @@ test("console refresh models button enqueues job worker refreshes models and rou
           await waitForWorkerStarted(worker);
           await waitForConsole(consoleBaseUrl, consoleApp);
           await signInFromFirstRun(page, consoleBaseUrl);
+          await page.goto(`${consoleBaseUrl}/providers`);
 
           await storeProviderApiKey(page, providerApiKey);
+          await page.goto(`${consoleBaseUrl}/models`);
           await createVirtualModel(page);
+          await page.goto(`${consoleBaseUrl}/routing`);
           await expect(page.getByText("No provider models available.")).toBeVisible();
 
+          await page.goto(`${consoleBaseUrl}/providers`);
+          await openRow(page, "Refresh Button Provider");
           await page.getByRole("button", { name: "Refresh provider models" }).click();
           await expect(
             page.getByText("Model refresh queued for Refresh Button Provider."),
@@ -65,10 +71,13 @@ test("console refresh models button enqueues job worker refreshes models and rou
             },
           });
 
-          await page.reload();
+          await page.goto(`${consoleBaseUrl}/providers`);
+          await openRow(page, "Refresh Button Provider");
           await expect(
             page.getByText("Provider models: Refresh Button Model (refresh-button-model)"),
           ).toBeVisible();
+          await page.goto(`${consoleBaseUrl}/routing`);
+          await openDisclosure(page, "New route policy");
           await page.getByLabel("Route policy virtual model").selectOption({
             label: "Refresh Button VM (refresh-button-vm)",
           });
@@ -115,14 +124,17 @@ async function insertProvider(
 }
 
 async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<void> {
+  await openRow(page, "Refresh Button Provider");
   await page.getByLabel("Provider API key").fill(providerApiKey);
   await page.getByRole("button", { name: "Store provider API key" }).click();
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openRow(page, "Refresh Button Provider");
   await expect(page.getByText("Provider API key prefix: sk-refre")).toBeVisible();
 }
 
 async function createVirtualModel(page: Page): Promise<void> {
+  await openDisclosure(page, "New virtual model");
   await page.getByRole("textbox", { name: "Virtual model name" }).fill("refresh-button-vm");
   await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Refresh Button VM");
   await page.getByRole("button", { name: "Create virtual model" }).click();
@@ -157,7 +169,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string): Promise<void> {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

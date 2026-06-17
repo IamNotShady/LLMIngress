@@ -96,7 +96,7 @@ function renderOneTimeProviderKeyPage(input: {
           <dd>${escapeHtml(input.keyPrefix)}</dd>
         </div>
       </dl>
-      <a href="/">Back to dashboard</a>
+      <a href="/providers">Back to dashboard</a>
     </main>
   </body>
 </html>`;

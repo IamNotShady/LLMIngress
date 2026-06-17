@@ -1287,6 +1287,30 @@
       ],
       "status": "pending",
       "evidence": ""
+    },
+    {
+      "id": "feat-098",
+      "name": "Console Module Navigation Sidebar",
+      "description": "The authenticated console presents a persistent grouped sidebar that splits features into one module per route (Overview, Usage & Cost, Activity, Virtual Models, Route Policies, Agents, Providers, Pricing, Playground, Settings); selecting a nav item navigates to that module's own URL, renders only that module with a matching level-1 page heading, marks the active item with aria-current=page, and a theme toggle switches the console between light and dark themes.",
+      "verification": "pnpm exec vitest run tests/features/feat-098-console-sidebar-navigation.unit.test.ts && pnpm test:e2e tests/e2e/feat-098-console-sidebar-navigation.e2e.spec.ts --grep 'sidebar groups modules and routes each nav item to its own page with a theme toggle'",
+      "dependencies": [
+        "feat-013"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-16: TDD red first (unit imported the new _lib/nav config; e2e found no sidebar on the monolithic page). Implemented on the redesign/console-sidebar worktree: split the 1,636-line single page into one Next.js route per module behind a shared (dashboard)/layout.tsx auth-guarded sidebar shell (_components/sidebar, theme-toggle, page-header, auth-screens; _lib/nav single nav source; _modules/sections section components each self-fetching their src/server data). Rewrote globals.css as an OKLCH token design system with Bricolage Grotesque/Hanken Grotesk/Spline Sans Mono and persisted light+dark themes (no-flash bootstrap). Repointed all 15 api route redirects + the two secret-reveal back-links to owning modules; migrated ~34 console e2e specs to localhost base URL + per-module navigation. Verification passed: feat-098 unit (5) + real Chromium/PostgreSQL e2e; pnpm run verify (lint, typecheck, 293 unit tests, Next build emitting all 10 module routes) exit 0; full pnpm run verify:features re-verified all 96 prior passing features plus this one with no regressions (feat-065 individual re-run confirmed a flaky batch timeout, not a regression)."
+    },
+    {
+      "id": "feat-099",
+      "name": "Gateway Runtime Status Heartbeat",
+      "description": "A running Gateway records its own liveness into the gateway_runtime_status table by upserting a single row keyed by GATEWAY_INSTANCE_ID (default 'gateway'): on boot it writes started_at and an initial heartbeat with status 'healthy'; it refreshes heartbeat_at on a periodic heartbeat interval; and on each config snapshot reload it records the applied and target config versions plus the last reload status, error, and time. The authenticated Console Overview (Runtime) then shows the live gateway instance with a Healthy heartbeat, current applied/target config version, and reload result instead of 'No gateway runtime status recorded.'",
+      "verification": "pnpm exec vitest run tests/features/feat-099-gateway-runtime-status-heartbeat.unit.test.ts && pnpm test:e2e tests/e2e/feat-099-gateway-runtime-status-heartbeat.e2e.spec.ts --grep 'running gateway records heartbeat and config version visible on console overview'",
+      "dependencies": [
+        "feat-009",
+        "feat-012",
+        "feat-048"
+      ],
+      "status": "pending",
+      "evidence": ""
     }
   ]
 }

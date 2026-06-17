@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("agent crud works and delete with active dependencies is blocked", async ({ browser }) => {
@@ -20,14 +21,16 @@ test("agent crud works and delete with active dependencies is blocked", async ({
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/agents`);
 
+          await openDisclosure(page, "New agent");
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
@@ -35,6 +38,7 @@ test("agent crud works and delete with active dependencies is blocked", async ({
           await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
           await expect(page.getByText("Type: coding")).toBeVisible();
 
+          await openRow(page, "Codex");
           await page.getByLabel("Edit agent name").fill("Codex CLI");
           await page.getByLabel("Edit agent type").selectOption("terminal");
           await page.getByRole("button", { name: "Save agent" }).click();
@@ -42,6 +46,7 @@ test("agent crud works and delete with active dependencies is blocked", async ({
           await expect(page.getByRole("heading", { name: "Codex CLI" })).toBeVisible();
           await expect(page.getByText("Type: terminal")).toBeVisible();
 
+          await openRow(page, "Codex CLI");
           await page.getByRole("button", { name: "Delete agent" }).click();
           await expect(page.getByText("No agents configured.")).toBeVisible();
 

@@ -2,13 +2,29 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-16 15:18 AWST
-**Active Feature:** none - 96 tracked features are `passing`; feat-097 is `pending`
+**Last Updated:** 2026-06-16 (console sidebar redesign)
+**Active Feature:** none — feat-098 (Console Module Navigation Sidebar) is `passing`; 97 features passing, feat-097 `pending`
+**Worktree:** `redesign/console-sidebar` (isolated; branched from dev HEAD)
 
 ## Status
 
 ### What's Done
 
+- [x] **Console list-page density redesign (extends feat-098)**:
+  - Tamed the dense Providers / Agents / Route Policies / Virtual Models / Activity pages: each list item is now a compact summary row (title + key facts + status) that expands on demand via native `<details>`; create forms, the provider template selector, and agent integration snippets moved behind collapsible disclosures.
+  - Added page-based pagination (8/page, `?page=N`) driven entirely by the URL — `_lib/pagination.ts` (`paginate`, `buildQueryHref`) + `_components/list-ui.tsx` (`Pager`, `Row`, `Disclosure`). New CSS: collapsed rows with chevron, disclosures, pager.
+  - Repointed all 15 list-section bodies through the new primitives (`_modules/sections.tsx`); removed redundant section sub-headings.
+  - Migrated ~25 console E2E specs to an "expand-then-interact" model via a new idempotent `tests/support/console-ui.ts` (`openDisclosure`, `openRow` — ensure-open, never toggle-closed); renamed `.provider-list`→`.row-list` / `article.provider-item`→`details.row` locators.
+  - Verified: targeted E2E across every touched feature pass serially; `pnpm run verify` exit 0; full `pnpm run verify:features` re-verified all 97 passing features with no regressions. Design context captured in `.impeccable.md`.
+- [x] **feat-098 — Console Module Navigation Sidebar (redesign)**:
+  - Split the 1,636-line monolithic Console `page.tsx` into one Next.js route per module behind a shared sidebar shell: `/` (Overview/Runtime), `/usage`, `/activity`, `/models`, `/routing`, `/agents`, `/providers`, `/pricing`, `/playground`, `/settings`.
+  - New shell: `(dashboard)/layout.tsx` (auth guard + sidebar + theme), `_components/` (sidebar, theme-toggle, page-header, auth-screens), `_lib/nav.ts` (single nav-config source shared by sidebar + tests), `_modules/sections.tsx` (section components extracted verbatim from the monolith, each self-fetching its own `src/server/*` data + searchParams).
+  - Distinctive visual system (`globals.css` rewrite): OKLCH design tokens tinted toward an iris brand hue, 4-pt spacing scale, fixed-rem type scale, Bricolage Grotesque / Hanken Grotesk / Spline Sans Mono font pairing via `next/font`, light **and** dark themes with a persisted toggle and no-flash pre-paint bootstrap, instrument-style metric readouts, grouped sidebar with real active-state treatment. No AI-slop tells (no left-border accent stripes, no gradient text).
+  - Removed redundant inner section headings where they duplicated the page title (Activity, Usage & Cost, Settings, Route policies); those sections are now ARIA `region`s labelled via `aria-label`.
+  - Repointed all 15 `src/app/api/*` post-mutation redirects + the two one-time secret-reveal "Back to dashboard" links from `/` to their owning module route.
+  - Updated ~34 console-driving E2E specs: console base URL switched to `localhost` (Next dev canonicalizes the cookie host), per-module navigation inserted after sign-in, multi-module flows (feat-050/056/057/058/096/029/030) walked module-by-module, `"Dashboard"` heading assertions → `"Overview"`/page title, region-scoping helpers (feat-078/079/080) switched to `getByRole("region", …)`.
+  - Added TDD artifacts first: `tests/features/feat-098-*.unit.test.ts` (nav config invariants) and `tests/e2e/feat-098-*.e2e.spec.ts` (grouped sidebar renders, each nav item routes to its own URL + matching `<h1>`, `aria-current=page`, theme toggle flips `data-theme`).
+  - Verified: feat-098 unit + e2e green; all 34 console-driving e2e specs pass serially; `pnpm run verify` (lint → typecheck → test 293/293 → build, 10 module routes emitted) exits 0; `pnpm run verify:features` re-verified all 96 prior passing features + feat-098 with no regressions (feat-065's single batch timeout was a flake — passed on individual re-run).
 - [x] Built the minimum monorepo scaffold for Gateway, Console, Worker, and shared packages (feat-001).
 - [x] Split the MVP scope from `docs/PLAN.md` into 54 independently developable and testable features.
 - [x] Standardized feature tracker schema on `description` / `status` with strict verification contracts.

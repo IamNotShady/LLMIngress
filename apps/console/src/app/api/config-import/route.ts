@@ -22,9 +22,8 @@ export async function POST(request: NextRequest) {
       databaseUrl,
       document: JSON.parse(configJson),
     });
-    const redirectUrl = new URL("/", request.url);
+    const redirectUrl = new URL("/settings", request.url);
     redirectUrl.searchParams.set("configImportVersion", String(result.version));
-    redirectUrl.hash = "settings";
     return NextResponse.redirect(redirectUrl, { status: 303 });
   } catch (error) {
     return NextResponse.json(

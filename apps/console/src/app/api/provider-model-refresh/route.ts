@@ -25,7 +25,10 @@ export async function POST(request: NextRequest) {
     });
     await enqueueProviderModelRefreshJob({ databaseUrl, providerId: input.providerId });
     return NextResponse.redirect(
-      new URL(`/?modelRefreshProviderId=${encodeURIComponent(input.providerId)}`, request.url),
+      new URL(
+        `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}`,
+        request.url,
+      ),
       { status: 303 },
     );
   } catch (error) {

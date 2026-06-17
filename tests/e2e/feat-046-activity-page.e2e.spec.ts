@@ -23,13 +23,14 @@ test("activity page lists request and detail shows model cost route fallback err
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/activity`);
 
           await expect(page.getByRole("heading", { exact: true, name: "Activity" })).toBeVisible();
           await expect(page.getByRole("link", { name: "req_console_success_046" })).toBeVisible();

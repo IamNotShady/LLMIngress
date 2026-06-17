@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("provider template selector lists categories fixed capabilities and rejects arbitrary endpoints", async ({
@@ -22,14 +23,16 @@ test("provider template selector lists categories fixed capabilities and rejects
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/providers`);
 
+          await openDisclosure(page, "Add from template");
           const remoteTemplates = page.getByRole("group", {
             name: "Remote API-key templates",
           });
@@ -62,8 +65,9 @@ test("provider template selector lists categories fixed capabilities and rejects
           await page.getByLabel("Provider template").selectOption("deepseek");
           await page.getByRole("button", { name: "Add template provider" }).click();
 
-          const providerList = page.locator(".provider-list");
+          const providerList = page.locator(".row-list");
           await expect(providerList.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
+          await openRow(page, "DeepSeek");
           await expect(
             providerList.getByText("Template provider base URL: https://api.deepseek.com"),
           ).toBeVisible();
@@ -139,7 +143,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string) {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

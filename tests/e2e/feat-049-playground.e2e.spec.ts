@@ -43,17 +43,17 @@ test("playground uses pasted key in memory direct gateway call and usage increme
         });
 
         try {
-          const consoleBaseUrl = `http://127.0.0.1:${consoleApp.port}`;
+          const consoleBaseUrl = `http://localhost:${consoleApp.port}`;
           const context = await browser.newContext();
           const page = await context.newPage();
 
           try {
             await waitForConsole(consoleBaseUrl, consoleApp);
             await signInFromFirstRun(page, consoleBaseUrl);
+            await page.goto(`${consoleBaseUrl}/usage`);
+            await expect(page.getByLabel("Usage").getByText("Requests: 0")).toBeVisible();
 
-            const usageSection = page.getByLabel("Usage");
-            await expect(usageSection.getByText("Requests: 0")).toBeVisible();
-
+            await page.goto(`${consoleBaseUrl}/playground`);
             const playgroundSection = page.getByLabel("Playground");
             await expect(
               playgroundSection.getByRole("heading", { exact: true, name: "Playground" }),
@@ -91,8 +91,9 @@ test("playground uses pasted key in memory direct gateway call and usage increme
             }));
             expect(JSON.stringify(browserStorage)).not.toContain(agentApiKey);
 
-            await page.reload();
+            await page.goto(`${consoleBaseUrl}/usage`);
             await expect(page.getByLabel("Usage").getByText("Requests: 1")).toBeVisible();
+            await page.goto(`${consoleBaseUrl}/playground`);
             await expect(page.getByLabel("Playground").getByLabel("Agent API key")).toHaveValue("");
           } finally {
             await context.close();

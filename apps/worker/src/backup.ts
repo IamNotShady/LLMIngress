@@ -91,7 +91,6 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "provider_health_events",
     "provider_health_summary",
     "gateway_runtime_status",
-    "process_heartbeats",
     "runtime_errors",
     "billing_reconciliation_runs",
     "billing_reconciliation_items",

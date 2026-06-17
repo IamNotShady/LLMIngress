@@ -29,7 +29,6 @@ describe("feat-009 runtime records and jobs schema migration", () => {
       "provider_health_events",
       "provider_health_summary",
       "gateway_runtime_status",
-      "process_heartbeats",
       "runtime_errors",
     ]) {
       expect(sql).toContain(`create table if not exists ${tableName}`);

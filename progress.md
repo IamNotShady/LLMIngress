@@ -2,13 +2,20 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-17 (feat-100 redesigned)
-**Active Feature:** none — feat-100 is redesigned and `passing`; feat-101 remains `pending`
+**Last Updated:** 2026-06-17 (feat-101 passing)
+**Active Feature:** none — feat-101 is `passing`
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-101 — Remove Unused Process Heartbeats Table (passing)**:
+  - Added migration `0025_remove_process_heartbeats`: drops `idx_process_heartbeats_type_heartbeat_at`, drops `process_heartbeats`, and advances `schema_version` to `0025`. `0003_runtime_records_jobs_schema` remains historical so existing database checksums do not drift.
+  - Updated `shippedSqlMigrations`, removed `process_heartbeats` from the Worker backup table manifest, updated the feat-009 runtime schema unit contract, and changed architecture docs so `gateway_runtime_status.heartbeat_at` is the Gateway liveness source of truth.
+  - Added feat-101 TDD coverage: unit test for migration/manifest/current-contract cleanup and real PostgreSQL E2E for fresh installs, upgrades from `0024` with legacy rows present, `gateway_runtime_status` writeability, and backup artifacts neither including nor skipping `process_heartbeats`.
+  - Verification passed: baseline `pnpm run verify`; RED feat-101 unit and E2E observed first; GREEN feat-101 unit and E2E; related feat-009/086/087/101 unit regression (15 tests); related feat-009/086/087/101 E2E regression (4 tests); `pnpm run db:migrate:check`; `pnpm run verify`; `pnpm run verify:features` across 100 previously passing features before marking; final `pnpm run verify:features` across all 101 passing features after marking.
+  - Environment note: a pre-existing `./init.sh` dev server was stopped to release Next 16's project dev lock after the first related E2E batch hit `Console did not start`; the same batch passed immediately after stopping it. Restart with `./init.sh` when needed.
 
 - [x] **feat-100 — Provider Model Price Source of Truth (redesigned, passing)**:
   - Implemented the new design without migrating historical rows: migration `0024_provider_model_prices` adds manual price columns to `provider_models`, creates `provider_models_price`, and drops `model_price_overrides` plus `price_registry_snapshots`.
@@ -395,7 +402,7 @@
   - Repaired feat-007 migration E2E so it asserts the current migration set instead of assuming only `0001` exists.
   - Review follow-up: `agents` and `virtual_models` owner deletes now use restrict semantics, `default_virtual_model_id` has explicit bad-reference coverage, duplicate provider-model route candidates are rejected, and ARCHITECTURE now documents SQL migrations plus `route_policy_candidates.is_fallback`.
 - [x] **feat-009 — Runtime Records and Jobs Schema (passing)**:
-  - Added `0003_runtime_records_jobs_schema.sql` for request activity, usage, cost, savings, fallback events, rate limit windows, budget periods/reservations, jobs, job attempts, provider health, gateway runtime status, process heartbeats, and runtime errors.
+  - Added `0003_runtime_records_jobs_schema.sql` for request activity, usage, cost, savings, fallback events, rate limit windows, budget periods/reservations, jobs, job attempts, provider health, gateway runtime status, and runtime errors.
   - Added indexes for Activity/Usage list queries, budget reservation cleanup, worker job claiming, provider health lookups, Gateway heartbeat lookup, and runtime error lookup.
   - Added feat-009 unit and real PostgreSQL E2E tests; both were observed failing before implementation and passing after implementation.
   - Review follow-up fixed P2+ schema issues only: nullable provider-level health summary uniqueness, large budget token counters, job lease pair integrity, and provider/model ownership mismatch checks.

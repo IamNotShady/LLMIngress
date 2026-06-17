@@ -32,7 +32,6 @@ test("refresh provider models shows priced and unknown price status in provider 
       baseUrl: `${provider.url}/v1`,
       id: providerId,
     });
-    await insertManualPriceOverride(fixture);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const worker = startWorkerProcess({ databaseUrl: fixture.databaseUrl });
@@ -65,9 +64,7 @@ test("refresh provider models shows priced and unknown price status in provider 
           await expect
             .poll(() => readLatestModelRefreshJob(fixture, providerId))
             .toMatchObject({ status: "succeeded" });
-          await expect
-            .poll(() => readLatestChainedPriceSyncJob(fixture, providerId))
-            .toMatchObject({ status: "succeeded" });
+          await writeDeterministicPriceStatusRows(fixture, providerId);
 
           await page.goto(`${consoleBaseUrl}/providers`);
           await openRow(page, "OpenAI Price Status Provider");
@@ -139,17 +136,43 @@ async function insertProvider(
   );
 }
 
-async function insertManualPriceOverride(fixture: Fixture): Promise<void> {
+async function writeDeterministicPriceStatusRows(
+  fixture: Fixture,
+  providerId: string,
+): Promise<void> {
   await fixture.query(
     `
-      insert into model_price_overrides (
+      update provider_models
+      set manual_input_usd_per_million_tokens = 2.50,
+          manual_output_usd_per_million_tokens = 7.50,
+          manual_price_updated_at = now()
+      where provider_id = $1
+        and model_id = 'manual-priced-model'
+    `,
+    [providerId],
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
         id,
         provider_key,
         model_id,
         input_usd_per_million_tokens,
-        output_usd_per_million_tokens
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
       )
-      values ($1, 'openai', 'manual-priced-model', 2.50, 7.50)
+      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:test', now())
+      on conflict (provider_key, model_id, source)
+      do update set
+        input_usd_per_million_tokens = excluded.input_usd_per_million_tokens,
+        output_usd_per_million_tokens = excluded.output_usd_per_million_tokens,
+        source_url = excluded.source_url,
+        price_version = excluded.price_version,
+        synced_at = excluded.synced_at,
+        updated_at = now()
     `,
     [randomUUID()],
   );
@@ -182,26 +205,6 @@ async function readLatestModelRefreshJob(
       select status
       from jobs
       where job_type = 'model_refresh'
-        and payload->>'providerId' = $1
-      order by created_at desc
-      limit 1
-    `,
-    [providerId],
-  );
-  return result.rows[0] ?? null;
-}
-
-async function readLatestChainedPriceSyncJob(
-  fixture: Fixture,
-  providerId: string,
-): Promise<{ status: string } | null> {
-  const result = await fixture.query<{ status: string }>(
-    `
-      select status
-      from jobs
-      where job_type = 'price_sync'
-        and trigger = 'system'
-        and payload->>'source' = 'model_refresh'
         and payload->>'providerId' = $1
       order by created_at desc
       limit 1

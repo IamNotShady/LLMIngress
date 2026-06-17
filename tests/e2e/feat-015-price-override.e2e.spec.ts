@@ -5,7 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("console shows built-in prices and manual price override changes subsequent cost estimate", async ({
+test("console shows unknown current price and manual price override changes subsequent cost estimate", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -14,6 +14,7 @@ test("console shows built-in prices and manual price override changes subsequent
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedPricedProviderModel(fixture);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const consoleApp = startConsoleProcess({
@@ -32,10 +33,10 @@ test("console shows built-in prices and manual price override changes subsequent
           await page.goto(`${baseUrl}/pricing`);
 
           await expect(page.getByRole("heading", { name: "Pricing" })).toBeVisible();
-          await expect(page.getByText("Built-in price")).toBeVisible();
-          await expect(page.getByText("$0.40 / 1M input")).toBeVisible();
-          await expect(page.getByText("$1.60 / 1M output")).toBeVisible();
-          await expect(page.getByText("Sample estimate: $2.00")).toBeVisible();
+          await expect(page.getByText("Unknown price")).toBeVisible();
+          await expect(page.getByText("Unknown input price")).toBeVisible();
+          await expect(page.getByText("Unknown output price")).toBeVisible();
+          await expect(page.getByText("Sample estimate: unavailable")).toBeVisible();
 
           await page.getByLabel("Override input price").fill("9");
           await page.getByLabel("Override output price").fill("10");
@@ -77,10 +78,30 @@ async function countPriceOverrideConfigChanges(
       select count(*)::integer as count
       from config_change_events
       where source = 'console'
-        and changed_table = 'model_price_overrides'
+        and changed_table = 'provider_models'
     `,
   );
   return result.rows[0]?.count ?? 0;
+}
+
+async function seedPricedProviderModel(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+): Promise<void> {
+  const providerId = randomUUID();
+  await fixture.query(
+    `
+      insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+      values ($1, 'api_key', 'openai', 'OpenAI Pricing Provider', 'https://api.openai.com/v1', true)
+    `,
+    [providerId],
+  );
+  await fixture.query(
+    `
+      insert into provider_models (id, provider_id, model_id, display_name, availability)
+      values ($1, $2, 'gpt-4.1-mini', 'GPT-4.1 Mini', 'available')
+    `,
+    [randomUUID(), providerId],
+  );
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {
@@ -116,7 +137,13 @@ async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess): Prom
     .poll(
       async () => {
         if (consoleApp.child.exitCode !== null) {
-          return `exited:${consoleApp.child.exitCode}`;
+          throw new Error(
+            [
+              `Console exited with code ${consoleApp.child.exitCode}.`,
+              ...consoleApp.stderr,
+              ...consoleApp.stdout,
+            ].join("\n"),
+          );
         }
 
         try {

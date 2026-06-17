@@ -89,20 +89,17 @@ describe("feat-096 Agent budget automatic price validation", () => {
 
     await fixture.query(
       `
-        insert into model_price_overrides (
-          id,
-          provider_key,
-          model_id,
-          input_usd_per_million_tokens,
-          output_usd_per_million_tokens
-        )
-        values ($1, 'openai', 'unknown-primary-model', 1.25, 5.50)
+        update provider_models
+        set manual_input_usd_per_million_tokens = 1.25,
+            manual_output_usd_per_million_tokens = 5.50,
+            manual_price_updated_at = now()
+        where id = $1
       `,
-      [randomUUID()],
+      [seeded.unknownPrimaryModelId],
     );
     await fixture.query(
       `
-        insert into price_registry_snapshots (
+        insert into provider_models_price (
           id,
           provider_key,
           model_id,
@@ -111,9 +108,9 @@ describe("feat-096 Agent budget automatic price validation", () => {
           source,
           source_url,
           price_version,
-          snapshot_at
+          synced_at
         )
-        values ($1, 'openai', 'unknown-fallback-model', 0.75, 2.25, 'test', 'test://prices', 'price-sync:096', now())
+        values ($1, 'openai', 'unknown-fallback-model', 0.75, 2.25, 'models.dev', 'test://prices', 'price-sync:096', now())
       `,
       [randomUUID()],
     );
@@ -138,6 +135,7 @@ describe("feat-096 Agent budget automatic price validation", () => {
 
 async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   agentApiKeyId: string;
+  unknownPrimaryModelId: string;
 }> {
   const providerId = randomUUID();
   const unknownPrimaryModelId = randomUUID();
@@ -175,6 +173,23 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
       unrelatedUnknownModelId,
       providerId,
     ],
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:096', now())
+    `,
+    [randomUUID()],
   );
   await fixture.query(
     `
@@ -263,7 +278,7 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
     [agentApiKeyId, defaultVirtualModelId, allowedVirtualModelId],
   );
 
-  return { agentApiKeyId };
+  return { agentApiKeyId, unknownPrimaryModelId };
 }
 
 async function countAgentLimits(fixture: Fixture, agentApiKeyId: string): Promise<number> {

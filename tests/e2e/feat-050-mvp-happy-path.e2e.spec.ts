@@ -41,8 +41,8 @@ test("clean setup request activity usage and hot reload after route change", asy
           await waitForConsole(consoleBaseUrl, consoleApp);
           await signInFromFirstRun(page, consoleBaseUrl);
 
-          await configurePriceOverride(page);
           const modelOptions = await seedProviderAndModels(fixture, `${provider.url}/v1`);
+          await configurePriceOverride(page);
           await page.goto(`${consoleBaseUrl}/providers`);
           await expect(
             page.getByRole("heading", { exact: true, name: mvpHappyPathNames.providerDisplayName }),

@@ -68,6 +68,7 @@ type BillingReconciliationCandidateRow = QueryResultRow & {
   cost_source: string;
   input_cost_usd: string | null;
   input_tokens: number;
+  manual_cached_input_usd_per_million_tokens: string | null;
   manual_input_usd_per_million_tokens: string | null;
   manual_output_usd_per_million_tokens: string | null;
   manual_updated_at: Date | null;
@@ -361,22 +362,24 @@ async function readReconciliationCandidates(
              request_savings.id::text as request_savings_id,
              request_savings.baseline_cost_usd::text,
              request_savings.savings_usd::text,
-             model_price_overrides.input_usd_per_million_tokens::text
+             provider_models.manual_input_usd_per_million_tokens::text
                as manual_input_usd_per_million_tokens,
-             model_price_overrides.output_usd_per_million_tokens::text
+             provider_models.manual_cached_input_usd_per_million_tokens::text
+               as manual_cached_input_usd_per_million_tokens,
+             provider_models.manual_output_usd_per_million_tokens::text
                as manual_output_usd_per_million_tokens,
-             model_price_overrides.updated_at as manual_updated_at,
-             latest_price_registry_snapshot.input_usd_per_million_tokens::text
+             provider_models.manual_price_updated_at as manual_updated_at,
+             latest_provider_model_price.input_usd_per_million_tokens::text
                as synced_input_usd_per_million_tokens,
-             latest_price_registry_snapshot.cached_input_usd_per_million_tokens::text
+             latest_provider_model_price.cached_input_usd_per_million_tokens::text
                as synced_cached_input_usd_per_million_tokens,
-             latest_price_registry_snapshot.output_usd_per_million_tokens::text
+             latest_provider_model_price.output_usd_per_million_tokens::text
                as synced_output_usd_per_million_tokens,
-             latest_price_registry_snapshot.price_version
+             latest_provider_model_price.price_version
                as synced_price_version,
-             latest_price_registry_snapshot.source_url
+             latest_provider_model_price.source_url
                as synced_source_url,
-             latest_price_registry_snapshot.snapshot_at
+             latest_provider_model_price.synced_at
                as synced_at
       from request_activity
       join request_usage on request_usage.request_activity_id = request_activity.id
@@ -384,22 +387,25 @@ async function readReconciliationCandidates(
       left join request_savings on request_savings.request_activity_id = request_activity.id
       join provider_models on provider_models.id = request_usage.provider_model_id
       join providers on providers.id = provider_models.provider_id
-      left join model_price_overrides
-        on lower(model_price_overrides.provider_key) = lower(providers.provider_key)
-       and model_price_overrides.model_id = provider_models.model_id
       left join lateral (
         select input_usd_per_million_tokens,
                cached_input_usd_per_million_tokens,
                output_usd_per_million_tokens,
                price_version,
                source_url,
-               snapshot_at
-        from price_registry_snapshots
-        where lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
-          and price_registry_snapshots.model_id = provider_models.model_id
-        order by snapshot_at desc, created_at desc
+               synced_at
+        from provider_models_price
+        where lower(provider_models_price.provider_key) = lower(providers.provider_key)
+          and provider_models_price.model_id = provider_models.model_id
+        order by case provider_models_price.source
+                   when 'models.dev' then 0
+                   when 'litellm' then 1
+                   else 2
+                 end,
+                 synced_at desc,
+                 updated_at desc
         limit 1
-      ) latest_price_registry_snapshot on true
+      ) latest_provider_model_price on true
       where request_activity.status = 'succeeded'
         and ($1::text[] is null or request_activity.request_id = any($1::text[]))
       order by request_activity.created_at, request_activity.id
@@ -651,6 +657,10 @@ function rowToManualPriceOverride(
   }
 
   return {
+    cachedInputUsdPerMillionTokens:
+      row.manual_cached_input_usd_per_million_tokens === null
+        ? null
+        : Number(row.manual_cached_input_usd_per_million_tokens),
     inputUsdPerMillionTokens: Number(row.manual_input_usd_per_million_tokens),
     modelId: row.model_id,
     outputUsdPerMillionTokens: Number(row.manual_output_usd_per_million_tokens),

@@ -2,13 +2,20 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-17 (feat-100 rollback)
-**Active Feature:** none — feat-100 implementation rolled back at user request; feat-099 is `passing`, feat-100 is `pending`
+**Last Updated:** 2026-06-17 (feat-100 redesigned)
+**Active Feature:** none — feat-100 is redesigned and `passing`; feat-101 remains `pending`
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-100 — Provider Model Price Source of Truth (redesigned, passing)**:
+  - Implemented the new design without migrating historical rows: migration `0024_provider_model_prices` adds manual price columns to `provider_models`, creates `provider_models_price`, and drops `model_price_overrides` plus `price_registry_snapshots`.
+  - Added Worker price-source sync from `https://models.dev/api.json` as primary and LiteLLM `model_prices_and_context_window.json` as auxiliary. The refresh-models flow still finishes `model_refresh` asynchronously, then triggers the chained `price_sync` job to fetch/upsert `provider_models_price`.
+  - Current effective price precedence is now `provider_models` manual price > `provider_models_price` synced price > unknown. The built-in static registry remains for feat-014 direct registry behavior, but it is no longer the current-price fallback for Console/Gateway/Worker budget and usage paths.
+  - Updated Console/Gateway/Worker price reads, Agent budget validation, route-policy validation, billing reconciliation, backup table list, migration status, and related E2E fixtures to the new schema.
+  - Verification passed: feat-100 unit and real PostgreSQL E2E, related feat-015/045/050/053/057/059/071/073/074/096 regression E2Es, `pnpm run db:migrate:check`, `pnpm run lint`, `pnpm run verify`, `pnpm run verify:features` across all 99 previously passing features before marking feat-100 passing, and final `pnpm run verify:features` across all 100 passing features after marking.
 
 - [x] **feat-100 rollback**:
   - Rolled back the provider-model price source-of-truth implementation at the user's request. Removed the `0024_provider_model_prices` migration, `apps/worker/src/price-source.ts`, feat-100 unit/E2E tests, and the production/test rewrites that moved current pricing from `model_price_overrides` / `price_registry_snapshots` into `provider_models`.

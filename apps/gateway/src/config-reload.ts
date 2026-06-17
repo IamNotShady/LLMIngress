@@ -86,6 +86,7 @@ type RoutePolicyCandidateRow = {
   candidateOrder: number;
   displayName: string;
   id: string;
+  cachedInputUsdPerMillionTokens: string | null;
   inputUsdPerMillionTokens: string | null;
   isFallback: boolean;
   modelId: string;
@@ -272,22 +273,24 @@ export async function loadGatewayConfigSnapshot(
                provider_models.display_name as "displayName",
                providers.id::text as "providerId",
                providers.provider_key as "providerKey",
-               model_price_overrides.input_usd_per_million_tokens::text
+               provider_models.manual_input_usd_per_million_tokens::text
                  as "inputUsdPerMillionTokens",
-               model_price_overrides.output_usd_per_million_tokens::text
+               provider_models.manual_cached_input_usd_per_million_tokens::text
+                 as "cachedInputUsdPerMillionTokens",
+               provider_models.manual_output_usd_per_million_tokens::text
                  as "outputUsdPerMillionTokens",
-               model_price_overrides.updated_at as "updatedAt",
-               latest_price_registry_snapshot.input_usd_per_million_tokens::text
+               provider_models.manual_price_updated_at as "updatedAt",
+               latest_provider_model_price.input_usd_per_million_tokens::text
                  as "syncedInputUsdPerMillionTokens",
-               latest_price_registry_snapshot.cached_input_usd_per_million_tokens::text
+               latest_provider_model_price.cached_input_usd_per_million_tokens::text
                  as "syncedCachedInputUsdPerMillionTokens",
-               latest_price_registry_snapshot.output_usd_per_million_tokens::text
+               latest_provider_model_price.output_usd_per_million_tokens::text
                  as "syncedOutputUsdPerMillionTokens",
-               latest_price_registry_snapshot.price_version
+               latest_provider_model_price.price_version
                  as "syncedPriceVersion",
-               latest_price_registry_snapshot.source_url
+               latest_provider_model_price.source_url
                  as "syncedSourceUrl",
-               latest_price_registry_snapshot.snapshot_at
+               latest_provider_model_price.synced_at
                  as "syncedAt"
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
@@ -295,22 +298,25 @@ export async function loadGatewayConfigSnapshot(
           on route_policy_candidates.route_policy_id = route_policies.id
         join provider_models on provider_models.id = route_policy_candidates.provider_model_id
         join providers on providers.id = provider_models.provider_id
-        left join model_price_overrides
-          on lower(model_price_overrides.provider_key) = lower(providers.provider_key)
-         and model_price_overrides.model_id = provider_models.model_id
         left join lateral (
           select input_usd_per_million_tokens,
                  cached_input_usd_per_million_tokens,
                  output_usd_per_million_tokens,
                  price_version,
                  source_url,
-                 snapshot_at
-          from price_registry_snapshots
-          where lower(price_registry_snapshots.provider_key) = lower(providers.provider_key)
-            and price_registry_snapshots.model_id = provider_models.model_id
-          order by snapshot_at desc, created_at desc
+                 synced_at
+          from provider_models_price
+          where lower(provider_models_price.provider_key) = lower(providers.provider_key)
+            and provider_models_price.model_id = provider_models.model_id
+          order by case provider_models_price.source
+                     when 'models.dev' then 0
+                     when 'litellm' then 1
+                     else 2
+                   end,
+                   synced_at desc,
+                   updated_at desc
           limit 1
-        ) latest_price_registry_snapshot on true
+        ) latest_provider_model_price on true
         where virtual_models.enabled = true
           and providers.enabled = true
           and provider_models.availability = 'available'
@@ -378,6 +384,10 @@ function rowToManualPriceOverride(row: RoutePolicyCandidateRow): ManualPriceOver
   }
 
   return {
+    cachedInputUsdPerMillionTokens:
+      row.cachedInputUsdPerMillionTokens === null
+        ? null
+        : Number(row.cachedInputUsdPerMillionTokens),
     inputUsdPerMillionTokens: Number(row.inputUsdPerMillionTokens),
     modelId: row.modelId,
     outputUsdPerMillionTokens: Number(row.outputUsdPerMillionTokens),

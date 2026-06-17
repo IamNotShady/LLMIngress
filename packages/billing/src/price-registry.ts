@@ -19,9 +19,9 @@ export type PricedModelTokenPrice = {
 
 export type UnknownModelTokenPrice = {
   modelId: string;
-  priceVersion: typeof BUILT_IN_PRICE_REGISTRY_VERSION;
+  priceVersion: string;
   providerKey: string;
-  reason: "model_not_in_builtin_registry";
+  reason: "model_not_in_builtin_registry" | "no_current_price";
   status: "unknown_price";
 };
 
@@ -34,6 +34,7 @@ export type TokenUsage = {
 };
 
 export type ManualPriceOverride = {
+  cachedInputUsdPerMillionTokens?: number | null;
   inputUsdPerMillionTokens: number;
   modelId: string;
   outputUsdPerMillionTokens: number;
@@ -180,6 +181,10 @@ export function resolveEffectiveModelTokenPrice(input: {
 
   if (matchesManualOverride(input.manualOverride, providerKey, modelId)) {
     return {
+      ...(input.manualOverride.cachedInputUsdPerMillionTokens !== null &&
+      input.manualOverride.cachedInputUsdPerMillionTokens !== undefined
+        ? { cachedInputUsdPerMillionTokens: input.manualOverride.cachedInputUsdPerMillionTokens }
+        : {}),
       currency: "USD",
       inputUsdPerMillionTokens: input.manualOverride.inputUsdPerMillionTokens,
       modelId,
@@ -188,7 +193,7 @@ export function resolveEffectiveModelTokenPrice(input: {
       providerKey,
       snapshotDate: "2026-06-13",
       source: "manual_override",
-      sourceUrl: "manual://console/model-price-overrides",
+      sourceUrl: "manual://provider_models",
       status: "priced",
       unit: "per_1m_tokens",
     };
@@ -214,7 +219,13 @@ export function resolveEffectiveModelTokenPrice(input: {
     };
   }
 
-  return resolveModelTokenPrice({ modelId, providerKey });
+  return {
+    modelId,
+    priceVersion: "provider-model-current",
+    providerKey,
+    reason: "no_current_price",
+    status: "unknown_price",
+  };
 }
 
 export function calculateTokenCostUsd(

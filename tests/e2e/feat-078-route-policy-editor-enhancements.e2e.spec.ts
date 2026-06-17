@@ -247,6 +247,23 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
       fireworksProviderId,
     ],
   );
+  await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:078', now())
+    `,
+    [randomUUID()],
+  );
   await seedProviderHealth(fixture, {
     providerId: anthropicProviderId,
     providerModelId: anthropicClaudeId,
@@ -266,7 +283,7 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
     openaiGpt: {
       id: openaiGptId,
       optionLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini)",
-      selectorLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini) - Priced (built-in)",
+      selectorLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini) - Priced (price sync)",
     },
     virtualModelId,
   };

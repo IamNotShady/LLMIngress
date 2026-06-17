@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   calculateTokenCostUsd,
   resolveEffectiveModelTokenPrice,
-  resolveModelTokenPrice,
 } from "../../packages/billing/src/index";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
@@ -36,7 +35,7 @@ describe("feat-015 model price override management", () => {
     });
   });
 
-  it("keeps the built-in price when the override belongs to a different model", () => {
+  it("returns unknown current price when the manual price belongs to a different model", () => {
     expect(
       resolveEffectiveModelTokenPrice({
         manualOverride: {
@@ -49,19 +48,21 @@ describe("feat-015 model price override management", () => {
         modelId: "gpt-4.1-mini",
         providerKey: "openai",
       }),
-    ).toEqual(resolveModelTokenPrice({ modelId: "gpt-4.1-mini", providerKey: "openai" }));
+    ).toMatchObject({
+      modelId: "gpt-4.1-mini",
+      providerKey: "openai",
+      reason: "no_current_price",
+      status: "unknown_price",
+    });
   });
 
-  it("defines unique non-negative model price overrides in the database schema", () => {
-    const migration = loadSqlMigrations().find((candidate) => candidate.id === "0005");
+  it("stores manual model prices on provider_models in the current schema", () => {
+    const migration = loadSqlMigrations().find((candidate) => candidate.id === "0024");
 
-    expect(migration?.sql).toContain("create table if not exists model_price_overrides");
-    expect(migration?.sql).toContain("provider_key text not null");
-    expect(migration?.sql).toContain("model_id text not null");
-    expect(migration?.sql).toContain("input_usd_per_million_tokens numeric(20, 8) not null");
-    expect(migration?.sql).toContain("output_usd_per_million_tokens numeric(20, 8) not null");
-    expect(migration?.sql).toContain("input_usd_per_million_tokens >= 0");
-    expect(migration?.sql).toContain("output_usd_per_million_tokens >= 0");
-    expect(migration?.sql).toContain("unique (provider_key, model_id)");
+    expect(migration?.sql).toContain("alter table provider_models");
+    expect(migration?.sql).toContain("manual_input_usd_per_million_tokens numeric(20, 8)");
+    expect(migration?.sql).toContain("manual_output_usd_per_million_tokens numeric(20, 8)");
+    expect(migration?.sql).toContain("manual_price_updated_at timestamptz");
+    expect(migration?.sql).toContain("drop table if exists model_price_overrides");
   });
 });

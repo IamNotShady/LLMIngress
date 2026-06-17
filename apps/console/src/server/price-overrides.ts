@@ -1,14 +1,15 @@
-import { randomUUID } from "node:crypto";
 import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
 
 type PriceOverrideRow = QueryResultRow & {
+  id: string;
+  cached_input_usd_per_million_tokens: string | null;
   input_usd_per_million_tokens: string;
   model_id: string;
   output_usd_per_million_tokens: string;
   provider_key: string;
-  updated_at: Date;
+  manual_price_updated_at: Date;
 };
 
 export async function getManualPriceOverride(input: {
@@ -20,13 +21,20 @@ export async function getManualPriceOverride(input: {
     const result = await client.query<PriceOverrideRow>(
       `
         select provider_key,
+               provider_models.id::text as id,
                model_id,
-               input_usd_per_million_tokens::text,
-               output_usd_per_million_tokens::text,
-               updated_at
-        from model_price_overrides
-        where provider_key = $1
-          and model_id = $2
+               manual_input_usd_per_million_tokens::text as input_usd_per_million_tokens,
+               manual_cached_input_usd_per_million_tokens::text
+                 as cached_input_usd_per_million_tokens,
+               manual_output_usd_per_million_tokens::text as output_usd_per_million_tokens,
+               manual_price_updated_at
+        from provider_models
+        join providers on providers.id = provider_models.provider_id
+        where lower(providers.provider_key) = lower($1)
+          and provider_models.model_id = $2
+          and provider_models.manual_input_usd_per_million_tokens is not null
+          and provider_models.manual_output_usd_per_million_tokens is not null
+          and provider_models.manual_price_updated_at is not null
       `,
       [normalizeProviderKey(input.providerKey), input.modelId.trim()],
     );
@@ -54,36 +62,31 @@ export async function saveManualPriceOverride(input: {
   await publisher.publish({
     source: "console",
     description: `Update manual price override for ${providerKey}/${modelId}`,
-    changes: [{ table: "model_price_overrides", recordId: null }],
+    changes: [{ table: "provider_models", recordId: null }],
     write: async (client) => {
       const result = await client.query<PriceOverrideRow>(
         `
-          insert into model_price_overrides (
-            id,
-            provider_key,
-            model_id,
-            input_usd_per_million_tokens,
-            output_usd_per_million_tokens
-          )
-          values ($1, $2, $3, $4, $5)
-          on conflict (provider_key, model_id)
-          do update set
-            input_usd_per_million_tokens = excluded.input_usd_per_million_tokens,
-            output_usd_per_million_tokens = excluded.output_usd_per_million_tokens,
-            updated_at = now()
-          returning provider_key,
-                    model_id,
-                    input_usd_per_million_tokens::text,
-                    output_usd_per_million_tokens::text,
-                    updated_at
+          update provider_models
+          set manual_input_usd_per_million_tokens = $3,
+              manual_output_usd_per_million_tokens = $4,
+              manual_price_updated_at = now(),
+              updated_at = now()
+          from providers
+          where providers.id = provider_models.provider_id
+            and lower(providers.provider_key) = lower($1)
+            and provider_models.model_id = $2
+          returning provider_models.id::text as id,
+                    providers.provider_key,
+                    provider_models.model_id,
+                    provider_models.manual_input_usd_per_million_tokens::text
+                      as input_usd_per_million_tokens,
+                    provider_models.manual_cached_input_usd_per_million_tokens::text
+                      as cached_input_usd_per_million_tokens,
+                    provider_models.manual_output_usd_per_million_tokens::text
+                      as output_usd_per_million_tokens,
+                    provider_models.manual_price_updated_at
         `,
-        [
-          randomUUID(),
-          providerKey,
-          modelId,
-          input.inputUsdPerMillionTokens,
-          input.outputUsdPerMillionTokens,
-        ],
+        [providerKey, modelId, input.inputUsdPerMillionTokens, input.outputUsdPerMillionTokens],
       );
       const row = result.rows[0];
       if (!row) {
@@ -101,11 +104,15 @@ export async function saveManualPriceOverride(input: {
 
 function rowToManualPriceOverride(row: PriceOverrideRow): ManualPriceOverride {
   return {
+    cachedInputUsdPerMillionTokens:
+      row.cached_input_usd_per_million_tokens === null
+        ? null
+        : Number(row.cached_input_usd_per_million_tokens),
     inputUsdPerMillionTokens: Number(row.input_usd_per_million_tokens),
     modelId: row.model_id,
     outputUsdPerMillionTokens: Number(row.output_usd_per_million_tokens),
     providerKey: row.provider_key,
-    updatedAt: row.updated_at,
+    updatedAt: row.manual_price_updated_at,
   };
 }
 

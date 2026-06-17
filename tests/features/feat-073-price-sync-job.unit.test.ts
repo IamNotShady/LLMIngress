@@ -3,16 +3,15 @@ import { resolveEffectiveModelTokenPrice } from "../../packages/billing/src/inde
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-073 price sync job", () => {
-  it("declares price registry snapshots for synced prices", () => {
+  it("declares provider model prices for synced prices", () => {
     const migration = loadSqlMigrations().find(
-      (candidate) => candidate.id === "0014" && candidate.name === "price_registry_snapshots",
+      (candidate) => candidate.id === "0024" && candidate.name === "provider_model_prices",
     );
 
-    expect(migration?.sql).toContain("create table if not exists price_registry_snapshots");
-    expect(migration?.sql).toContain("job_id uuid references jobs (id) on delete set null");
+    expect(migration?.sql).toContain("create table if not exists provider_models_price");
     expect(migration?.sql).toContain("cached_input_usd_per_million_tokens numeric(20, 8)");
-    expect(migration?.sql).toContain("unique (provider_key, model_id, price_version)");
-    expect(migration?.sql).toContain("idx_price_registry_snapshots_effective");
+    expect(migration?.sql).toContain("unique (provider_key, model_id, source)");
+    expect(migration?.sql).toContain("idx_provider_models_price_effective");
   });
 
   it("uses synced prices when no manual override exists and keeps manual overrides first", () => {

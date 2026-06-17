@@ -6,7 +6,7 @@ import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-
 import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-test("manual and scheduled price sync writes snapshots and updates effective prices without historical rewrite", async () => {
+test("manual and scheduled price sync writes current provider model prices without historical rewrite", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_price_sync_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -17,7 +17,7 @@ test("manual and scheduled price sync writes snapshots and updates effective pri
     await seedPriceSyncConfig(fixture);
 
     await expect(readRouteCandidatePrice(fixture)).resolves.toMatchObject({
-      reason: "model_not_in_builtin_registry",
+      reason: "no_current_price",
       status: "unknown_price",
     });
     const historicalCostBefore = await readHistoricalCost(fixture);
@@ -62,12 +62,11 @@ test("manual and scheduled price sync writes snapshots and updates effective pri
       {
         cached_input_usd_per_million_tokens: "0.25000000",
         input_usd_per_million_tokens: "1.25000000",
-        job_id: manualJobId,
         model_id: "synced-model",
         output_usd_per_million_tokens: "2.50000000",
         price_version: "price-sync:test-v1",
         provider_key: "synced-provider",
-        source: "price_sync",
+        source: "models.dev",
         source_url: "test://prices/v1",
       },
     ]);
@@ -107,7 +106,18 @@ test("manual and scheduled price sync writes snapshots and updates effective pri
       },
       status: "succeeded",
     });
-    await expect(readPriceSnapshots(fixture)).resolves.toHaveLength(2);
+    await expect(readPriceSnapshots(fixture)).resolves.toEqual([
+      {
+        cached_input_usd_per_million_tokens: "0.50000000",
+        input_usd_per_million_tokens: "2.00000000",
+        model_id: "synced-model",
+        output_usd_per_million_tokens: "4.00000000",
+        price_version: "price-sync:test-v2",
+        provider_key: "synced-provider",
+        source: "models.dev",
+        source_url: "test://prices/v2",
+      },
+    ]);
     await expect(readRouteCandidatePrice(fixture)).resolves.toMatchObject({
       cachedInputUsdPerMillionTokens: 0.5,
       inputUsdPerMillionTokens: 2,
@@ -147,7 +157,6 @@ type ScheduledPriceSyncJobInput = Omit<PriceSyncJobInput, "jobId" | "trigger">;
 type PriceSnapshotRow = {
   cached_input_usd_per_million_tokens: string | null;
   input_usd_per_million_tokens: string;
-  job_id: string | null;
   model_id: string;
   output_usd_per_million_tokens: string;
   price_version: string;
@@ -383,8 +392,7 @@ async function readRouteCandidatePrice(fixture: Fixture) {
 async function readPriceSnapshots(fixture: Fixture): Promise<PriceSnapshotRow[]> {
   const result = await fixture.query<PriceSnapshotRow>(
     `
-      select job_id::text,
-             provider_key,
+      select provider_key,
              model_id,
              input_usd_per_million_tokens::text,
              cached_input_usd_per_million_tokens::text,
@@ -392,8 +400,8 @@ async function readPriceSnapshots(fixture: Fixture): Promise<PriceSnapshotRow[]>
              source,
              source_url,
              price_version
-      from price_registry_snapshots
-      order by snapshot_at, created_at, price_version
+      from provider_models_price
+      order by provider_key, model_id, source
     `,
   );
   return result.rows;
@@ -427,7 +435,7 @@ async function readConfigPublication(fixture: Fixture): Promise<{
                select count(*)::text
                from config_change_events
                where source = 'worker'
-                 and changed_table = 'price_registry_snapshots'
+                 and changed_table = 'provider_models_price'
              ) as price_registry_change_count,
              (
                select count(*)::text

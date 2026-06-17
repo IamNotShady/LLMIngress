@@ -40,16 +40,13 @@ describe("feat-058 budget-safe route policy validation", () => {
 
     await fixture.query(
       `
-        insert into model_price_overrides (
-          id,
-          provider_key,
-          model_id,
-          input_usd_per_million_tokens,
-          output_usd_per_million_tokens
-        )
-        values ($1, 'openai', 'unknown-budget-model', 1.25, 5.50)
+        update provider_models
+        set manual_input_usd_per_million_tokens = 1.25,
+            manual_output_usd_per_million_tokens = 5.50,
+            manual_price_updated_at = now()
+        where id = $1
       `,
-      [randomUUID()],
+      [seeded.providerModelId],
     );
 
     await expect(

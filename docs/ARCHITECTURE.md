@@ -676,8 +676,7 @@ PostgreSQL database
 ├── Provider / model config
 │   ├── providers
 │   ├── provider_keys
-│   ├── provider_models
-│   └── model_price_overrides
+│   └── provider_models (including manual price fields)
 │
 ├── Routing config
 │   ├── virtual_models
@@ -711,7 +710,7 @@ PostgreSQL database
 │   └── export_tasks
 │
 ├── Billing / pricing
-│   ├── price_registry_snapshots
+│   ├── provider_models_price
 │   ├── billing_reconciliation_runs
 │   └── billing_reconciliation_items
 │

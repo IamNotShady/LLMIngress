@@ -64,7 +64,7 @@ test("prompt caching tokens use cached input pricing fallback and affect usage c
           input_tokens: 1000,
           output_cost_usd: "0.00008000",
           output_tokens: 200,
-          price_source: "built_in_static_snapshot",
+          price_source: "price_sync",
           provider_model_id: seeded.actualProviderModelId,
           reasoning_tokens: 25,
           request_id: "req_prompt_cache_071",
@@ -167,6 +167,25 @@ async function seedPromptCachingRoute(
              ($3, $2, 'gpt-4.1-nano', 'GPT 4.1 Nano', 128000, true, true, 'available')
     `,
     [baselineProviderModelId, providerId, actualProviderModelId],
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        cached_input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', 'gpt-4.1', 2, 0.5, 8, 'models.dev', 'test://prices/feat-071', 'test:feat-071', '2026-06-17T00:00:00.000Z'),
+             ($2, 'openai', 'gpt-4.1-nano', 0.1, 0.025, 0.4, 'models.dev', 'test://prices/feat-071', 'test:feat-071', '2026-06-17T00:00:00.000Z')
+    `,
+    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     "insert into virtual_models (id, name, display_name, enabled) values ($1, 'prompt-cache-coding', 'Prompt Cache Coding', true)",

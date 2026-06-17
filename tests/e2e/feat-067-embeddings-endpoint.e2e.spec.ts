@@ -221,16 +221,13 @@ async function seedEmbeddingsRoute(
   );
   await fixture.query(
     `
-      insert into model_price_overrides (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens
-      )
-      values ($1, 'fake-openai-embeddings', $2, 0.02, 0)
+      update provider_models
+      set manual_input_usd_per_million_tokens = 0.02,
+          manual_output_usd_per_million_tokens = 0,
+          manual_price_updated_at = now()
+      where id = $1
     `,
-    [randomUUID(), providerModelIdText],
+    [providerModelId],
   );
   await fixture.query(
     "insert into config_versions (version, source, description) values (1, 'console', 'Embeddings route config')",

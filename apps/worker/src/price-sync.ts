@@ -1,28 +1,38 @@
 import { randomUUID } from "node:crypto";
-import { listBuiltInModelTokenPrices } from "@llmingress/billing/price-registry";
 import {
   type ConfigPublishClient,
   createConfigPublisher,
 } from "@llmingress/config/config-publisher";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
+import {
+  fetchProviderModelPrices,
+  type ProviderModelPriceSource,
+  type ProviderModelSyncedPrice,
+} from "./price-source.js";
 
 export type PriceSyncJobHandlerOptions = {
   databaseUrl: string;
+  fetch?: typeof globalThis.fetch;
   now?: () => Date;
+  priceSource?: () => Promise<ProviderModelSyncedPrice[]>;
 };
 
 type PriceSyncPriceEntry = {
   cachedInputUsdPerMillionTokens: number | null;
   inputUsdPerMillionTokens: number;
+  metadata?: Record<string, unknown>;
   modelId: string;
   outputUsdPerMillionTokens: number;
+  priceVersion: string;
+  source: ProviderModelPriceSource;
   providerKey: string;
-  sourceUrl: string | null;
+  sourceUrl: string;
+  syncedAt: Date;
 };
 
 type NormalizedPriceSyncPayload = {
-  priceVersion: string;
-  prices: PriceSyncPriceEntry[];
+  priceVersion: string | null;
+  prices: PriceSyncPriceEntry[] | null;
 };
 
 export function createPriceSyncJobHandler(options: PriceSyncJobHandlerOptions): JobHandler {
@@ -31,26 +41,34 @@ export function createPriceSyncJobHandler(options: PriceSyncJobHandlerOptions): 
   return async (job) => {
     const observedAt = now();
     const payload = normalizePriceSyncPayload(job.payload, observedAt);
-    let snapshotCount = 0;
+    const prices =
+      payload.prices ??
+      (options.priceSource
+        ? await options.priceSource()
+        : await fetchProviderModelPrices({ fetch: options.fetch, now: () => observedAt }));
+    let syncedPriceCount = 0;
 
     const publisher = createConfigPublisher({ databaseUrl: options.databaseUrl });
     const publishResult = await publisher.publish({
       source: "worker",
-      description: `Sync model prices ${payload.priceVersion}`,
-      changes: [{ table: "price_registry_snapshots", recordId: null }],
+      description: `Sync provider model prices ${payload.priceVersion ?? observedAt.toISOString()}`,
+      changes: [{ table: "provider_models_price", recordId: null }],
       write: async (client) => {
-        snapshotCount = await writePriceSnapshots(client, {
+        syncedPriceCount = await writeProviderModelPrices(client, {
           jobId: job.id,
           observedAt,
-          payload,
+          prices,
         });
       },
     });
 
     return {
       configVersion: publishResult.version,
-      priceVersion: payload.priceVersion,
-      snapshotCount,
+      priceVersion:
+        payload.priceVersion ??
+        (prices.length === 1 ? prices[0]?.priceVersion : `price-sync:${observedAt.toISOString()}`),
+      snapshotCount: syncedPriceCount,
+      syncedPriceCount,
       trigger: job.trigger,
     };
   };
@@ -65,17 +83,12 @@ function normalizePriceSyncPayload(
   const priceVersion =
     readOptionalString(payload.priceVersion) ?? `price-sync:${observedAt.toISOString()}`;
   const prices = Array.isArray(payload.prices)
-    ? payload.prices.map((price) => normalizePayloadPrice(price, sourceUrl))
-    : listBuiltInModelTokenPrices().map((price) => ({
-        cachedInputUsdPerMillionTokens: price.cachedInputUsdPerMillionTokens ?? null,
-        inputUsdPerMillionTokens: price.inputUsdPerMillionTokens,
-        modelId: price.modelId,
-        outputUsdPerMillionTokens: price.outputUsdPerMillionTokens,
-        providerKey: price.providerKey,
-        sourceUrl: price.sourceUrl,
-      }));
+    ? payload.prices.map((price) =>
+        normalizePayloadPrice(price, { observedAt, priceVersion, sourceUrl }),
+      )
+    : null;
 
-  if (prices.length === 0) {
+  if (prices !== null && prices.length === 0) {
     throw new JobHandlerError("price_sync_empty_registry", "Price sync payload has no prices.");
   }
 
@@ -87,11 +100,16 @@ function normalizePriceSyncPayload(
 
 function normalizePayloadPrice(
   rawPrice: unknown,
-  defaultSourceUrl: string | null,
+  defaults: {
+    observedAt: Date;
+    priceVersion: string;
+    sourceUrl: string | null;
+  },
 ): PriceSyncPriceEntry {
   const price = readObject(rawPrice);
   const providerKey = readRequiredString(price.providerKey, "providerKey").toLowerCase();
   const modelId = readRequiredString(price.modelId, "modelId");
+  const source = readPriceSource(price.source) ?? "models.dev";
 
   return {
     cachedInputUsdPerMillionTokens: readOptionalNonNegativeNumber(
@@ -107,27 +125,34 @@ function normalizePayloadPrice(
       price.outputUsdPerMillionTokens,
       `${providerKey}/${modelId} output price`,
     ),
+    priceVersion: defaults.priceVersion,
+    source,
     providerKey,
-    sourceUrl: readOptionalString(price.sourceUrl) ?? defaultSourceUrl,
+    sourceUrl:
+      readOptionalString(price.sourceUrl) ?? defaults.sourceUrl ?? "manual://price_sync_payload",
+    syncedAt: defaults.observedAt,
   };
 }
 
-async function writePriceSnapshots(
+async function writeProviderModelPrices(
   client: ConfigPublishClient,
   input: {
     jobId: string;
     observedAt: Date;
-    payload: NormalizedPriceSyncPayload;
+    prices: PriceSyncPriceEntry[];
   },
 ): Promise<number> {
-  let snapshotCount = 0;
+  if (input.prices.length === 0) {
+    throw new JobHandlerError("price_sync_empty_registry", "Price sync has no prices to write.");
+  }
 
-  for (const price of input.payload.prices) {
+  let syncedPriceCount = 0;
+
+  for (const price of input.prices) {
     const result = await client.query<{ id: string }>(
       `
-        insert into price_registry_snapshots (
+        insert into provider_models_price (
           id,
-          job_id,
           provider_key,
           model_id,
           input_usd_per_million_tokens,
@@ -136,7 +161,7 @@ async function writePriceSnapshots(
           source,
           source_url,
           price_version,
-          snapshot_at,
+          synced_at,
           metadata,
           updated_at
         )
@@ -148,43 +173,43 @@ async function writePriceSnapshots(
           $5,
           $6,
           $7,
-          'price_sync',
           $8,
           $9,
           $10::timestamptz,
-          '{}'::jsonb,
-          $10::timestamptz
+          $11::jsonb,
+          $12::timestamptz
         )
-        on conflict (provider_key, model_id, price_version)
+        on conflict (provider_key, model_id, source)
         do update set
-          job_id = excluded.job_id,
           input_usd_per_million_tokens = excluded.input_usd_per_million_tokens,
           cached_input_usd_per_million_tokens = excluded.cached_input_usd_per_million_tokens,
           output_usd_per_million_tokens = excluded.output_usd_per_million_tokens,
-          source = excluded.source,
           source_url = excluded.source_url,
-          snapshot_at = excluded.snapshot_at,
+          price_version = excluded.price_version,
+          synced_at = excluded.synced_at,
           metadata = excluded.metadata,
           updated_at = excluded.updated_at
         returning id::text
       `,
       [
         randomUUID(),
-        input.jobId,
         price.providerKey,
         price.modelId,
         price.inputUsdPerMillionTokens,
         price.cachedInputUsdPerMillionTokens,
         price.outputUsdPerMillionTokens,
+        price.source,
         price.sourceUrl,
-        input.payload.priceVersion,
+        price.priceVersion,
+        price.syncedAt.toISOString(),
+        JSON.stringify({ ...(price.metadata ?? {}), jobId: input.jobId }),
         input.observedAt.toISOString(),
       ],
     );
-    snapshotCount += result.rows.length;
+    syncedPriceCount += result.rows.length;
   }
 
-  return snapshotCount;
+  return syncedPriceCount;
 }
 
 function readObject(value: unknown): Record<string, unknown> {
@@ -211,6 +236,14 @@ function readOptionalString(value: unknown): string | null {
   }
   const normalized = value.trim();
   return normalized || null;
+}
+
+function readPriceSource(value: unknown): ProviderModelPriceSource | null {
+  const normalized = readOptionalString(value);
+  if (normalized === "models.dev" || normalized === "litellm") {
+    return normalized;
+  }
+  return null;
 }
 
 function readRequiredNonNegativeNumber(value: unknown, fieldName: string): number {

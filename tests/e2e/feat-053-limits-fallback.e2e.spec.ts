@@ -207,6 +207,24 @@ async function seedLimitsFallbackGateway(
     [successProviderModelId, successProviderId, failedProviderModelId, failedProviderId],
   );
   await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        cached_input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', 'gpt-4.1-mini', 0.4, null, 1.6, 'models.dev', 'test://prices/feat-053', 'test:feat-053', '2026-06-17T00:00:00.000Z')
+    `,
+    [randomUUID()],
+  );
+  await fixture.query(
     "insert into agents (id, name, agent_type, enabled) values ($1, 'Limits Fallback Agent', 'coding', true)",
     [agentId],
   );

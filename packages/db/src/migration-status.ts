@@ -165,6 +165,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0023",
     name: "fallback_exhaustion_alerts",
   },
+  {
+    checksum: "bf88fbe37f7a3c443bdc9c66f41235ceacf5306dba5f42af8bb0ac87e8a46121",
+    id: "0024",
+    name: "provider_model_prices",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

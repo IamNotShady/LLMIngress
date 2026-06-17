@@ -308,16 +308,33 @@ async function seedBudgetRoutes(
   );
   await fixture.query(
     `
-      insert into model_price_overrides (
+      update provider_models
+      set manual_input_usd_per_million_tokens = 0.5,
+          manual_output_usd_per_million_tokens = 1.5,
+          manual_price_updated_at = now()
+      from providers
+      where providers.id = provider_models.provider_id
+        and providers.provider_key = 'manual-budget-provider'
+        and provider_models.model_id = 'manual-budget-model'
+    `,
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
         id,
         provider_key,
         model_id,
         input_usd_per_million_tokens,
-        output_usd_per_million_tokens
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
       )
-      values ($1, 'manual-budget-provider', 'manual-budget-model', 0.5, 1.5)
+      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:042', now()),
+             ($2, 'anthropic', 'claude-sonnet-4-6', 3.00, 15.00, 'models.dev', 'https://models.dev/api.json', 'models.dev:042', now())
     `,
-    [randomUUID()],
+    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     "insert into config_versions (version, source, description) values (1, 'console', 'Budget config')",

@@ -190,7 +190,7 @@ async function seedBillingReconciliationData(
   );
   await fixture.query(
     `
-      insert into price_registry_snapshots (
+      insert into provider_models_price (
         id,
         provider_key,
         model_id,
@@ -200,7 +200,7 @@ async function seedBillingReconciliationData(
         source,
         source_url,
         price_version,
-        snapshot_at
+        synced_at
       )
       values (
         $1,
@@ -209,7 +209,7 @@ async function seedBillingReconciliationData(
         2,
         0.5,
         4,
-        'price_sync',
+        'models.dev',
         'test://prices/reconcile',
         'price-sync:reconcile-v1',
         '2026-06-16T00:00:00.000Z'

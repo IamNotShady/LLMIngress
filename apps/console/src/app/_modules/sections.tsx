@@ -1,8 +1,4 @@
 import {
-  calculateTokenCostUsd,
-  resolveEffectiveModelTokenPrice,
-} from "@llmingress/billing/price-registry";
-import {
   type ConsoleActivity,
   formatConsoleActivityCost,
   formatConsoleActivityFallbackAttempts,
@@ -32,7 +28,6 @@ import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
 } from "../../server/notification-channels";
-import { getManualPriceOverride } from "../../server/price-overrides";
 import {
   type ConsoleProviderHealthSummary,
   formatProviderHealthFailureCount,
@@ -49,6 +44,7 @@ import {
 import { listProviders } from "../../server/providers";
 import {
   buildRoutePolicyHealthWarnings,
+  type ConsoleProviderModelOption,
   filterRoutePolicyEditorProviderModelOptions,
   listProviderModelOptions,
   listRoutePolicies,
@@ -77,8 +73,6 @@ import { buildQueryHref, paginate, readPageParam } from "../_lib/pagination";
 
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 
-const previewProviderKey = "openai";
-const previewModelId = "gpt-4.1-mini";
 const providerTemplateGroups = listProviderTemplateSelectorGroups();
 const remoteProviderTemplateGroup = requireProviderTemplateGroup("remote_api_key");
 const localProviderTemplateGroup = requireProviderTemplateGroup("local");
@@ -1807,13 +1801,18 @@ function LimitsConfigPanel({
   );
 }
 
-export async function ModelsSection() {
+export async function ModelsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
   const providerModelOptions = await listProviderModelOptions(databaseUrl);
   const providers = new Set(providerModelOptions.map((option) => option.providerKey));
   const pricedCount = providerModelOptions.filter(
     (option) => option.priceStatus !== "unknown_price",
   ).length;
+  const selectedModelId = readSingleSearchParam(searchParams.model);
+  const selectedModel =
+    providerModelOptions.find((option) => option.id === selectedModelId) ??
+    providerModelOptions[0] ??
+    null;
 
   return (
     <section className="providers-panel" aria-label="Model directory">
@@ -1822,85 +1821,110 @@ export async function ModelsSection() {
         <StatCard icon="PR" label="Providers" value={String(providers.size)} />
         <StatCard icon="$" label="Priced models" value={String(pricedCount)} />
       </div>
-      <div className="chart-card">
-        <h2 className="chart-card-title">Model directory</h2>
-        {providerModelOptions.length === 0 ? (
+      {providerModelOptions.length === 0 ? (
+        <div className="chart-card">
+          <h2 className="chart-card-title">Model directory</h2>
           <p>No provider models discovered yet. Refresh models on the Providers page.</p>
-        ) : (
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Model</th>
-                  <th>Model ID</th>
-                  <th className="num">Context</th>
-                  <th>Price source</th>
-                  <th>Availability</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {providerModelOptions.map((option) => (
-                  <tr key={option.id}>
-                    <td>{option.providerDisplayName}</td>
-                    <td>{option.modelDisplayName}</td>
-                    <td className="mono">{option.modelId}</td>
-                    <td className="num">
-                      {formatCompactNumber(placeholderInt(option.id, 8, 256, 4) * 1024)}
-                    </td>
-                    <td>{option.priceStatusLabel}</td>
-                    <td>{option.availability}</td>
-                    <td>
-                      {option.providerEnabled ? (
-                        <span className="pill--ok pill">Enabled</span>
-                      ) : (
-                        <span className="pill">Disabled</span>
-                      )}
-                    </td>
+        </div>
+      ) : (
+        <div className="detail-layout">
+          <div className="chart-card">
+            <h2 className="chart-card-title">Model directory</h2>
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th>Model ID</th>
+                    <th className="num">Input</th>
+                    <th className="num">Output</th>
+                    <th>Price source</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {providerModelOptions.map((option) => (
+                    <tr
+                      key={option.id}
+                      className={selectedModel?.id === option.id ? "is-selected" : "is-clickable"}
+                    >
+                      <td>{option.providerDisplayName}</td>
+                      <td>
+                        <a href={buildQueryHref(searchParams, { model: option.id })}>
+                          {option.modelDisplayName}
+                        </a>
+                      </td>
+                      <td className="mono">{option.modelId}</td>
+                      <td className="num">
+                        {formatModelPriceCell(option.inputUsdPerMillionTokens)}
+                      </td>
+                      <td className="num">
+                        {formatModelPriceCell(option.outputUsdPerMillionTokens)}
+                      </td>
+                      <td>{option.priceStatusLabel}</td>
+                      <td>
+                        {option.providerEnabled ? (
+                          <span className="pill--ok pill">Enabled</span>
+                        ) : (
+                          <span className="pill">Disabled</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
-        <p className="callout">
-          Context window is a placeholder until provider metadata is captured.
-        </p>
-      </div>
+          {selectedModel ? <ModelPricePanel model={selectedModel} /> : null}
+        </div>
+      )}
     </section>
   );
 }
 
-export async function PricingSection() {
-  const databaseUrl = getConsoleDatabaseUrl();
-  const pricePanel = await getPricePanel(databaseUrl);
+function formatModelPriceCell(value: number | null): string {
+  return value === null ? "—" : `$${value.toFixed(2)}`;
+}
+
+function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
+  const input = model.inputUsdPerMillionTokens;
+  const output = model.outputUsdPerMillionTokens;
+  const isPriced = input !== null && output !== null;
+  const inputLabel = input === null ? "Unknown input price" : `$${input.toFixed(2)} / 1M input`;
+  const outputLabel =
+    output === null ? "Unknown output price" : `$${output.toFixed(2)} / 1M output`;
+  const estimateLabel = isPriced
+    ? `Sample estimate: $${(input + output).toFixed(2)}`
+    : "Sample estimate: unavailable";
+
   return (
-    <section className="price-panel" aria-labelledby="price-title">
-      <div className="section-heading">
+    <div className="detail-panel price-panel">
+      <div className="detail-panel-head">
         <div>
-          <p className="eyebrow">Prices</p>
-          <h2 id="price-title">{previewModelId}</h2>
+          <p className="detail-section-label">Prices</p>
+          <h2 className="detail-panel-title">{model.modelId}</h2>
         </div>
-        <p className="price-source">{pricePanel.sourceLabel}</p>
+        <span className="price-source">{model.priceStatusLabel}</span>
       </div>
-      <dl className="price-grid">
-        <div>
+      <dl className="detail-field-list">
+        <div className="detail-field">
           <dt>Input</dt>
-          <dd>{pricePanel.inputPriceLabel}</dd>
+          <dd>{inputLabel}</dd>
         </div>
-        <div>
+        <div className="detail-field">
           <dt>Output</dt>
-          <dd>{pricePanel.outputPriceLabel}</dd>
+          <dd>{outputLabel}</dd>
         </div>
-        <div>
+        <div className="detail-field">
           <dt>Estimate</dt>
-          <dd>{pricePanel.estimateLabel}</dd>
+          <dd>{estimateLabel}</dd>
         </div>
       </dl>
       <form className="price-form" action="/api/prices/override" method="post">
-        <input type="hidden" name="providerKey" value={previewProviderKey} />
-        <input type="hidden" name="modelId" value={previewModelId} />
+        <input type="hidden" name="providerKey" value={model.providerKey} />
+        <input type="hidden" name="modelId" value={model.modelId} />
+        <input type="hidden" name="redirectModel" value={model.id} />
         <label htmlFor="override-input-price">Override input price</label>
         <input
           id="override-input-price"
@@ -1908,7 +1932,7 @@ export async function PricingSection() {
           type="number"
           min="0"
           step="0.00000001"
-          defaultValue={pricePanel.inputPriceValue}
+          defaultValue={input ?? ""}
           required
         />
         <label htmlFor="override-output-price">Override output price</label>
@@ -1918,12 +1942,12 @@ export async function PricingSection() {
           type="number"
           min="0"
           step="0.00000001"
-          defaultValue={pricePanel.outputPriceValue}
+          defaultValue={output ?? ""}
           required
         />
         <button type="submit">Save price override</button>
       </form>
-    </section>
+    </div>
   );
 }
 
@@ -2433,45 +2457,6 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
   );
 }
 
-async function getPricePanel(databaseUrl: string) {
-  const manualOverride = await getManualPriceOverride({
-    databaseUrl,
-    modelId: previewModelId,
-    providerKey: previewProviderKey,
-  });
-  const price = resolveEffectiveModelTokenPrice({
-    manualOverride,
-    modelId: previewModelId,
-    providerKey: previewProviderKey,
-  });
-
-  if (price.status === "unknown_price") {
-    return {
-      estimateLabel: "Sample estimate: unavailable",
-      inputPriceLabel: "Unknown input price",
-      inputPriceValue: "",
-      outputPriceLabel: "Unknown output price",
-      outputPriceValue: "",
-      sourceLabel: "Unknown price",
-    };
-  }
-
-  const estimate = calculateTokenCostUsd(price, {
-    inputTokens: 1_000_000,
-    outputTokens: 1_000_000,
-  });
-  const totalCost = estimate.status === "estimated" ? estimate.totalCostUsd : 0;
-
-  return {
-    estimateLabel: `Sample estimate: ${formatUsd(totalCost)}`,
-    inputPriceLabel: `${formatUsd(price.inputUsdPerMillionTokens)} / 1M input`,
-    inputPriceValue: String(price.inputUsdPerMillionTokens),
-    outputPriceLabel: `${formatUsd(price.outputUsdPerMillionTokens)} / 1M output`,
-    outputPriceValue: String(price.outputUsdPerMillionTokens),
-    sourceLabel: price.source === "manual_override" ? "Manual override" : "Built-in price",
-  };
-}
-
 function formatNotificationChannelConfig(channel: ConsoleNotificationChannel): string {
   if (channel.channelType === "email") {
     const config = channel.config as { from?: string; to?: string };
@@ -2498,10 +2483,6 @@ function formatWebhookUrlForDisplay(rawUrl: string | undefined): string {
   } catch {
     return "Invalid webhook URL";
   }
-}
-
-function formatUsd(value: number): string {
-  return `$${value.toFixed(2)}`;
 }
 
 function getPlaygroundGatewayBaseUrl(): string {

@@ -35,6 +35,10 @@ export type ConsoleProviderModelOption = {
   pricedOptionLabel: string;
   priceStatus: ModelTokenPrice["status"];
   priceStatusLabel: string;
+  /** Effective input price (manual override > synced > built-in); null when unknown. */
+  inputUsdPerMillionTokens: number | null;
+  /** Effective output price; null when unknown. */
+  outputUsdPerMillionTokens: number | null;
   providerDisplayName: string;
   providerId: string;
   providerKey: string;
@@ -939,6 +943,10 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     }),
     priceStatus: price.status,
     priceStatusLabel,
+    inputUsdPerMillionTokens:
+      price.status === "unknown_price" ? null : price.inputUsdPerMillionTokens,
+    outputUsdPerMillionTokens:
+      price.status === "unknown_price" ? null : price.outputUsdPerMillionTokens,
     providerDisplayName: row.provider_display_name,
     providerEnabled: row.provider_enabled,
     providerId: row.provider_id,

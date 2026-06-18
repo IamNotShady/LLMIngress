@@ -33,8 +33,8 @@ test("console shows unknown current price and manual price override changes subs
           await page.goto(`${baseUrl}/pricing`);
 
           await expect(page.getByRole("heading", { level: 1, name: "Models" })).toBeVisible();
-          // Scope to the price-override panel ("Unknown price" / "Manual override" also
-          // appear as the price-source column in the model directory table above it).
+          // The single seeded model is auto-selected; its price-override panel sits beside
+          // the directory table. Scope to it (the price status also shows as a table column).
           const pricePanel = page.locator(".price-panel");
           await expect(pricePanel.getByText("Unknown price")).toBeVisible();
           await expect(pricePanel.getByText("Unknown input price")).toBeVisible();
@@ -45,7 +45,7 @@ test("console shows unknown current price and manual price override changes subs
           await page.getByLabel("Override output price").fill("10");
           await page.getByRole("button", { name: "Save price override" }).click();
 
-          await expect(pricePanel.getByText("Manual override")).toBeVisible();
+          await expect(pricePanel.getByText("Priced (manual override)")).toBeVisible();
           await expect(pricePanel.getByText("$9.00 / 1M input")).toBeVisible();
           await expect(pricePanel.getByText("$10.00 / 1M output")).toBeVisible();
           await expect(pricePanel.getByText("Sample estimate: $19.00")).toBeVisible();

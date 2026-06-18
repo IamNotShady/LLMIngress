@@ -1,16 +1,20 @@
 import { PageHeader } from "../../_components/page-header";
-import { ModelsSection, PricingSection } from "../../_modules/sections";
+import { type ConsoleSearchParams, ModelsSection } from "../../_modules/sections";
 
-export default function ModelsPage() {
+export default async function ModelsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<ConsoleSearchParams>;
+}) {
+  const resolved = searchParams ? await searchParams : {};
   return (
     <div className="page">
       <PageHeader
         eyebrow="Infrastructure"
         title="Models"
-        description="Provider model directory with input / output prices and price source."
+        description="Provider model directory with input / output prices and per-model price override."
       />
-      <ModelsSection />
-      <PricingSection />
+      <ModelsSection searchParams={resolved} />
     </div>
   );
 }

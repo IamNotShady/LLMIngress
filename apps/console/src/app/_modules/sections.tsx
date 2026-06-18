@@ -1107,8 +1107,75 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
   );
   const agentLimitsByApiKeyId = groupByAgentApiKeyId(agentLimits);
   const view = paginate(agents, readPageParam(searchParams));
+  const connectedAgentCount = agents.filter((agent) => agent.activeApiKeyCount > 0).length;
   return (
     <section className="providers-panel" aria-label="Agents">
+      <div className="stat-grid">
+        <StatCard icon="AG" label="Agents" value={String(agents.length)} />
+        <StatCard icon="ON" label="Connected" value={String(connectedAgentCount)} />
+        <StatCard
+          icon="RQ"
+          label="Requests today"
+          value={formatCompactNumber(placeholderInt("agents-requests", 2000, 22000))}
+          delta="placeholder"
+        />
+        <StatCard
+          icon="$"
+          label="Cost this week"
+          value={`$${placeholderFloat("agents-cost", 8, 60).toFixed(2)}`}
+          delta="placeholder"
+        />
+      </div>
+      <div className="chart-card">
+        <h2 className="chart-card-title">Agent list</h2>
+        {agents.length === 0 ? (
+          <p>No agents configured.</p>
+        ) : (
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Type</th>
+                  <th>API key</th>
+                  <th className="num">Allowed VMs</th>
+                  <th className="num">Requests today</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agents.map((agent) => {
+                  const keys = agentApiKeysByAgentId.get(agent.id) ?? [];
+                  const firstKey = keys[0];
+                  const access = firstKey
+                    ? agentApiKeyVirtualModelAccessById.get(firstKey.id)
+                    : undefined;
+                  return (
+                    <tr key={agent.id}>
+                      <td>{agent.name}</td>
+                      <td>{agent.agentType}</td>
+                      <td className="mono">{firstKey ? firstKey.keyPrefix : "No key"}</td>
+                      <td className="num">{access?.allowedVirtualModels.length ?? 0}</td>
+                      <td className="num">
+                        {formatCompactNumber(placeholderInt(agent.id, 0, 9000, 7))}
+                      </td>
+                      <td>
+                        {agent.activeApiKeyCount > 0 ? (
+                          <span className="pill--ok pill">Online</span>
+                        ) : (
+                          <span className="pill">Idle</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="callout">Requests today is a placeholder until per-agent rollups land.</p>
+      </div>
+      <h3 className="chart-card-title">Manage agents</h3>
       <Disclosure tone="add" summary="New agent">
         <form className="provider-create-form" action="/api/agents" method="post">
           <input type="hidden" name="action" value="create" />

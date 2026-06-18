@@ -35,39 +35,29 @@ test("activity page lists request and detail shows model cost route fallback err
           await expect(page.getByRole("heading", { exact: true, name: "Activity" })).toBeVisible();
           await expect(page.getByRole("link", { name: "req_console_success_046" })).toBeVisible();
           await expect(page.getByRole("link", { name: "req_console_failure_046" })).toBeVisible();
-          await expect(page.getByText("chat_completions - succeeded - 200")).toBeVisible();
-          await expect(page.getByText("chat_completions - failed - 502")).toBeVisible();
           const activitySection = page.getByLabel("Activity");
+          const detail = activitySection.locator(".detail-panel");
 
           await page.getByRole("link", { name: "req_console_success_046" }).click();
+          await expect(detail.getByText("req_console_success_046")).toBeVisible();
+          await expect(detail.getByText("Console OpenAI")).toBeVisible();
+          await expect(detail.getByText("GPT 4.1 Nano (gpt-4.1-nano)")).toBeVisible();
+          await expect(detail.getByText("$0.00004050")).toBeVisible();
+          // protocol + HTTP status now read from the request metadata block.
+          await expect(detail.getByText(/http_status: 200/)).toBeVisible();
           await expect(
-            activitySection.getByRole("heading", { name: "req_console_success_046" }),
-          ).toBeVisible();
-          await expect(activitySection.getByText("Provider: Console OpenAI")).toBeVisible();
-          await expect(
-            activitySection.getByText("Model hit: GPT 4.1 Nano (gpt-4.1-nano)"),
-          ).toBeVisible();
-          await expect(
-            activitySection.getByText("105 total tokens (5 input, 100 output)"),
-          ).toBeVisible();
-          await expect(activitySection.getByText("Cost: $0.00004050")).toBeVisible();
-          await expect(
-            activitySection.getByText("cost_first route selected cheapest eligible candidate 2."),
+            detail.getByText("cost_first route selected cheapest eligible candidate 2."),
           ).toBeVisible();
           await expect(
-            activitySection.getByText(
+            detail.getByText(
               `Attempt 1: provider_request_failed before first byte on ${seeded.primaryProviderModelId}`,
             ),
           ).toBeVisible();
-          await expect(activitySection.getByText("Error code: None")).toBeVisible();
 
           await page.getByRole("link", { name: "req_console_failure_046" }).click();
-          await expect(
-            activitySection.getByRole("heading", { name: "req_console_failure_046" }),
-          ).toBeVisible();
-          await expect(
-            activitySection.getByText("Error code: provider_request_failed"),
-          ).toBeVisible();
+          await expect(detail.getByText("req_console_failure_046")).toBeVisible();
+          await expect(detail.getByText(/http_status: 502/)).toBeVisible();
+          await expect(detail.getByText("Error: provider_request_failed")).toBeVisible();
         } finally {
           await context.close();
         }

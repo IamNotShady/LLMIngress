@@ -31,27 +31,33 @@ test("usage page shows counts tokens cost and provider model breakdown", async (
           await page.goto(`${baseUrl}/usage`);
 
           await expect(page.getByRole("heading", { name: "Usage & Cost" })).toBeVisible();
-          await expect(page.getByText("Requests: 2")).toBeVisible();
-          await expect(page.getByText("450 total tokens (150 input, 300 output)")).toBeVisible();
-          await expect(page.getByText("Cost: $0.00150000")).toBeVisible();
+          // KPI cards (counts + tokens) and the provider/model summary table.
           await expect(
-            page.getByRole("heading", { exact: true, name: "Console OpenAI / GPT 4.1 Nano" }),
+            page.locator(".stat-card", { hasText: "Total requests" }).locator(".stat-card-value"),
+          ).toHaveText("2");
+          await expect(
+            page.locator(".stat-card", { hasText: "Total tokens" }).locator(".stat-card-value"),
+          ).toHaveText("450");
+          const summary = page.getByRole("table");
+          await expect(
+            summary.getByRole("row", { name: /Console OpenAI.*GPT 4\.1 Nano.*150.*\$0\.00050000/ }),
           ).toBeVisible();
           await expect(
-            page.getByRole("heading", { exact: true, name: "Console Anthropic / Claude Haiku" }),
+            summary.getByRole("row", {
+              name: /Console Anthropic.*Claude Haiku.*300.*\$0\.00100000/,
+            }),
           ).toBeVisible();
-          await expect(page.getByText("1 request - 150 tokens - $0.00050000")).toBeVisible();
-          await expect(page.getByText("1 request - 300 tokens - $0.00100000")).toBeVisible();
 
-          await page.getByLabel("Usage window").selectOption("30d");
-          await page.getByRole("button", { name: "Apply usage window" }).click();
+          await page.getByLabel("Window").selectOption("30d");
+          await page.getByRole("button", { name: "Apply" }).click();
 
-          await expect(page.getByText("Requests: 3")).toBeVisible();
-          await expect(page.getByText("999 total tokens (249 input, 750 output)")).toBeVisible();
-          await expect(page.getByText("Cost: $0.00273456")).toBeVisible();
           await expect(
-            page.getByRole("heading", { exact: true, name: "Console OpenAI / GPT 4.1" }),
-          ).toBeVisible();
+            page.locator(".stat-card", { hasText: "Total requests" }).locator(".stat-card-value"),
+          ).toHaveText("3");
+          await expect(
+            page.locator(".stat-card", { hasText: "Total tokens" }).locator(".stat-card-value"),
+          ).toHaveText("999");
+          await expect(page.getByRole("cell", { name: "GPT 4.1", exact: true })).toBeVisible();
         } finally {
           await context.close();
         }

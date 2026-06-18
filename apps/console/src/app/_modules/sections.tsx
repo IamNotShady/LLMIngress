@@ -397,10 +397,20 @@ export async function RuntimeSection() {
             </dd>
           </div>
           {gateway ? (
-            <div className="detail-field">
-              <dt>Config reload</dt>
-              <dd>{formatRuntimeReloadResult(gateway)}</dd>
-            </div>
+            <>
+              <div className="detail-field">
+                <dt>Applied config</dt>
+                <dd>{formatConfigVersion(gateway.appliedConfigVersion)}</dd>
+              </div>
+              <div className="detail-field">
+                <dt>Target config</dt>
+                <dd>{formatConfigVersion(gateway.targetConfigVersion)}</dd>
+              </div>
+              <div className="detail-field">
+                <dt>Config reload</dt>
+                <dd>{formatRuntimeReloadResult(gateway)}</dd>
+              </div>
+            </>
           ) : null}
         </dl>
       </div>
@@ -681,7 +691,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                       >
                         <td className="mono">
                           <a href={buildQueryHref(searchParams, { activityId: activity.id })}>
-                            {activity.requestId.slice(0, 12)}
+                            {activity.requestId}
                           </a>
                         </td>
                         <td>{formatActivityModelSummary(activity)}</td>

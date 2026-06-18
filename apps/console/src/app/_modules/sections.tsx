@@ -1771,8 +1771,74 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
   const modelRefreshProvider = providers.find((provider) => provider.id === modelRefreshProviderId);
   const view = paginate(providers, readPageParam(searchParams));
+  const healthyProviderCount = providerHealthSummaries.filter(
+    (summary) => summary.status === "healthy",
+  ).length;
   return (
     <section className="providers-panel" aria-label="Providers">
+      <div className="stat-grid">
+        <StatCard icon="PR" label="Providers" value={String(providers.length)} />
+        <StatCard
+          icon="ON"
+          label="Enabled"
+          value={String(providers.filter((provider) => provider.enabled).length)}
+        />
+        <StatCard icon="MO" label="Models" value={String(providerModelOptions.length)} />
+        <StatCard icon="HL" label="Healthy" value={String(healthyProviderCount)} />
+      </div>
+      <div className="chart-card">
+        <h2 className="chart-card-title">Provider list</h2>
+        {providers.length === 0 ? (
+          <p>No providers configured.</p>
+        ) : (
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Key</th>
+                  <th>Type</th>
+                  <th className="num">Models</th>
+                  <th>Health</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {providers.map((provider) => {
+                  const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
+                  const providerHealth = providerHealthByProviderId.get(provider.id);
+                  const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
+                  return (
+                    <tr key={provider.id}>
+                      <td>{provider.displayName}</td>
+                      <td className="mono">
+                        {providerKeyMetadata ? providerKeyMetadata.keyPrefix : "No key"}
+                      </td>
+                      <td>{provider.providerTemplateId ? "Template" : "API key"}</td>
+                      <td className="num">{providerModels.length}</td>
+                      <td>
+                        {providerHealth ? (
+                          <ProviderHealthPill status={providerHealth.status} />
+                        ) : (
+                          <span className="pill">unknown</span>
+                        )}
+                      </td>
+                      <td>
+                        {provider.enabled ? (
+                          <span className="pill--ok pill">Enabled</span>
+                        ) : (
+                          <span className="pill">Disabled</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <h3 className="chart-card-title">Manage providers</h3>
       <Disclosure tone="add" summary="New provider">
         <form className="provider-create-form" action="/api/providers" method="post">
           <input type="hidden" name="action" value="create" />

@@ -50,12 +50,12 @@ test("provider crud enable disable and disabled provider leaves routing snapshot
 
           await openRow(page, "OpenAI API");
           await page.getByRole("button", { name: "Disable provider" }).click();
-          await expect(page.getByText("Disabled")).toBeVisible();
+          await expect(page.getByText("Disabled").first()).toBeVisible();
           await expect.poll(() => routingProviderKeys(fixture.databaseUrl)).toEqual([]);
 
           await openRow(page, "OpenAI API");
           await page.getByRole("button", { name: "Enable provider" }).click();
-          await expect(page.getByText("Enabled")).toBeVisible();
+          await expect(page.getByText("Enabled").first()).toBeVisible();
           await expect.poll(() => routingProviderKeys(fixture.databaseUrl)).toEqual(["openai"]);
           await expect.poll(async () => countProviderConfigChanges(fixture)).toBe(4);
         } finally {

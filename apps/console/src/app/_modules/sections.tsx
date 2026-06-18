@@ -813,7 +813,7 @@ export async function VirtualModelsSection({
         <div className="chart-card">
           <h2 className="chart-card-title">Virtual Model list</h2>
           {virtualModels.length === 0 ? (
-            <p>No virtual models configured.</p>
+            <p>No virtual models yet — create one below.</p>
           ) : (
             <div className="data-table-wrap">
               <table className="data-table">
@@ -1224,7 +1224,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
       <div className="chart-card">
         <h2 className="chart-card-title">Agent list</h2>
         {agents.length === 0 ? (
-          <p>No agents configured.</p>
+          <p>No agents yet — create one below.</p>
         ) : (
           <div className="data-table-wrap">
             <table className="data-table">
@@ -1951,7 +1951,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       <div className="chart-card">
         <h2 className="chart-card-title">Provider list</h2>
         {providers.length === 0 ? (
-          <p>No providers configured.</p>
+          <p>No providers yet — add one below.</p>
         ) : (
           <div className="data-table-wrap">
             <table className="data-table">

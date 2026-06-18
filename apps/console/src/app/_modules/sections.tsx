@@ -28,6 +28,7 @@ import {
 } from "../../server/agent-limits";
 import { listAgents } from "../../server/agents";
 import { getConsoleDatabaseUrl } from "../../server/auth";
+import { placeholderInt } from "../../server/mock-data";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
@@ -73,6 +74,7 @@ import {
 } from "../../server/usage";
 import { listVirtualModels } from "../../server/virtual-models";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
+import { StatCard } from "../_components/stat-card";
 import { buildQueryHref, paginate, readPageParam } from "../_lib/pagination";
 
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
@@ -923,6 +925,251 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
       )}
       <Pager view={view} searchParams={searchParams} />
     </section>
+  );
+}
+
+export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
+  const databaseUrl = getConsoleDatabaseUrl();
+  const selectedKeyId = readSingleSearchParam(searchParams.selected);
+  const agents = await listAgents(databaseUrl);
+  const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
+  const agentLimits = await listAgentLimits(databaseUrl);
+  const agentApiKeyVirtualModelAccess = await listAgentApiKeyVirtualModelAccess(databaseUrl);
+  const agentNameById = new Map(agents.map((agent) => [agent.id, agent.name]));
+  const agentLimitsByApiKeyId = groupByAgentApiKeyId(agentLimits);
+  const accessById = new Map(
+    agentApiKeyVirtualModelAccess.map((access) => [access.agentApiKeyId, access]),
+  );
+
+  // Only keys with at least one configured limit are "rules" in the mockup.
+  const ruleKeys = agentApiKeys.filter(
+    (key) => (agentLimitsByApiKeyId.get(key.id) ?? []).length > 0,
+  );
+  const selectedKey =
+    ruleKeys.find((key) => key.id === selectedKeyId) ?? ruleKeys[0] ?? agentApiKeys[0] ?? null;
+
+  const rows = ruleKeys.map((key) => {
+    const limits = agentLimitsByApiKeyId.get(key.id) ?? [];
+    const summaries = formatAgentLimitSummaries(limits);
+    // Usage % and concurrency are not yet tracked by the backend; seeded so the
+    // value is stable across renders (real enforcement lands in feat-107).
+    const usagePercent = placeholderInt(key.id, 0, 98, 1);
+    const concurrency = placeholderInt(key.id, 2, 12, 2);
+    return { key, limits, summaries, usagePercent, concurrency };
+  });
+
+  const nearBudgetCount = rows.filter((row) => row.usagePercent >= 80).length;
+
+  return (
+    <section className="providers-panel" aria-label="Limits">
+      <div className="stat-grid">
+        <StatCard icon="R" label="Configured rules" value={String(rows.length)} />
+        <StatCard
+          icon="O"
+          label="Over-limit today"
+          value={String(placeholderInt("limits-over", 0, 5))}
+          delta="placeholder"
+        />
+        <StatCard icon="B" label="Near budget" value={String(nearBudgetCount)} delta="≥ 80% used" />
+        <StatCard
+          icon="L"
+          label="Rate-limit hits 24h"
+          value={String(placeholderInt("limits-rate", 0, 40))}
+          delta="placeholder"
+        />
+      </div>
+      <div className="detail-layout">
+        <div className="data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>API key</th>
+                <th className="num">Budget</th>
+                <th className="num">Tokens</th>
+                <th className="num">RPM</th>
+                <th className="num">TPM</th>
+                <th className="num">Concurrency</th>
+                <th className="num">Usage</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={10}>No limit rules configured.</td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr
+                    key={row.key.id}
+                    className={selectedKey?.id === row.key.id ? "is-selected" : "is-clickable"}
+                  >
+                    <td>{agentNameById.get(row.key.agentId) ?? "Unknown agent"}</td>
+                    <td className="mono">{row.key.keyPrefix}</td>
+                    <td className="num">{row.summaries.budget}</td>
+                    <td className="num">{row.summaries.token}</td>
+                    <td className="num">{row.summaries.rpm}</td>
+                    <td className="num">{row.summaries.tpm}</td>
+                    <td className="num">{row.concurrency}</td>
+                    <td className="num">{row.usagePercent}%</td>
+                    <td>
+                      <LimitUsagePill usagePercent={row.usagePercent} enabled={row.key.enabled} />
+                    </td>
+                    <td>
+                      <a href={buildQueryHref(searchParams, { selected: row.key.id })}>Edit</a>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {selectedKey ? (
+          <LimitsConfigPanel
+            agentApiKey={selectedKey}
+            agentName={agentNameById.get(selectedKey.agentId) ?? "Unknown agent"}
+            limits={agentLimitsByApiKeyId.get(selectedKey.id) ?? []}
+            allowedVirtualModels={accessById.get(selectedKey.id)?.allowedVirtualModels ?? []}
+            usagePercent={placeholderInt(selectedKey.id, 0, 98, 1)}
+          />
+        ) : null}
+      </div>
+      <p className="callout callout--warn">
+        Current version: requests over budget are throttled gateway-wide; per-rule throttle vs. hard
+        block and live concurrency enforcement are not yet supported.
+      </p>
+    </section>
+  );
+}
+
+function LimitUsagePill({ usagePercent, enabled }: { usagePercent: number; enabled: boolean }) {
+  if (!enabled) {
+    return <span className="pill">Disabled</span>;
+  }
+  if (usagePercent >= 95) {
+    return <span className="pill--danger pill">Exceeded</span>;
+  }
+  if (usagePercent >= 80) {
+    return <span className="pill--warn pill">Warning</span>;
+  }
+  return <span className="pill--ok pill">Normal</span>;
+}
+
+function LimitsConfigPanel({
+  agentApiKey,
+  agentName,
+  limits,
+  allowedVirtualModels,
+  usagePercent,
+}: {
+  agentApiKey: { id: string; keyPrefix: string };
+  agentName: string;
+  limits: readonly ConsoleAgentLimit[];
+  allowedVirtualModels: ReadonlyArray<{ id: string; displayName: string; name: string }>;
+  usagePercent: number;
+}) {
+  const budgetLimit = findAgentLimit(limits, "budget");
+  const rpmLimit = findAgentLimit(limits, "rpm");
+  const tpmLimit = findAgentLimit(limits, "tpm");
+  const tokenLimit = findAgentLimit(limits, "token");
+  const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
+
+  return (
+    <div className="detail-panel">
+      <div className="detail-panel-head">
+        <h2 className="detail-panel-title">{agentName}</h2>
+        <span className="mono">{agentApiKey.keyPrefix}</span>
+      </div>
+      <div className="panel-tabs" role="presentation">
+        <span className="panel-tab is-active">Budget</span>
+        <span className="panel-tab">Rate Limit</span>
+        <span className="panel-tab">Allowed Models</span>
+      </div>
+      <form className="provider-edit-form" action="/api/agent-limits" method="post">
+        <input type="hidden" name="action" value="saveLimitRules" />
+        <input type="hidden" name="agentApiKeyId" value={agentApiKey.id} />
+        <label htmlFor={`limits-budget-${agentApiKey.id}`}>Budget USD limit</label>
+        <input
+          id={`limits-budget-${agentApiKey.id}`}
+          name="budgetUsd"
+          type="number"
+          min="0.000001"
+          step="0.000001"
+          defaultValue={budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd}
+          required
+        />
+        <label htmlFor={`limits-budget-period-${agentApiKey.id}`}>Budget period</label>
+        <select
+          id={`limits-budget-period-${agentApiKey.id}`}
+          name="budgetPeriod"
+          defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+          required
+        >
+          <option value="day">day</option>
+          <option value="week">week</option>
+          <option value="month">month</option>
+        </select>
+        <div className="usage-bar">
+          <div className="usage-bar-head">
+            <span>Current usage</span>
+            <span>{usagePercent}%</span>
+          </div>
+          <div className="usage-bar-track">
+            <div
+              className={`usage-bar-fill ${usageTone}`.trim()}
+              style={{ width: `${usagePercent}%` }}
+            />
+          </div>
+        </div>
+        <label htmlFor={`limits-rpm-${agentApiKey.id}`}>RPM limit</label>
+        <input
+          id={`limits-rpm-${agentApiKey.id}`}
+          name="rpm"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
+          required
+        />
+        <label htmlFor={`limits-tpm-${agentApiKey.id}`}>TPM limit</label>
+        <input
+          id={`limits-tpm-${agentApiKey.id}`}
+          name="tpm"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
+          required
+        />
+        <label htmlFor={`limits-token-${agentApiKey.id}`}>Token limit</label>
+        <input
+          id={`limits-token-${agentApiKey.id}`}
+          name="tokenLimit"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
+          required
+        />
+        <div>
+          <p className="detail-section-label">Allowed virtual models</p>
+          <div className="tag-row">
+            {allowedVirtualModels.length === 0 ? (
+              <span className="tag-chip">All virtual models</span>
+            ) : (
+              allowedVirtualModels.map((virtualModel) => (
+                <span className="tag-chip" key={virtualModel.id}>
+                  {virtualModel.name}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+        <button type="submit">Save rule</button>
+      </form>
+    </div>
   );
 }
 

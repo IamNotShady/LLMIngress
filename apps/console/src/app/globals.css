@@ -1148,3 +1148,600 @@ details.disclosure[open] > .disclosure-summary {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ============================================================================
+   Redesign (docs/UI/*) — shell chrome, KPI cards, master-detail, charts,
+   tables, pills, tabs, wizard, bars. Reuses the existing token system.
+   ========================================================================== */
+
+/* ---- Sidebar: flat icon-chip list ---- */
+.sidebar-wordmark {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.sidebar-wordmark-sub {
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.sidebar-nav .nav-item {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.nav-item-icon {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  color: var(--text-subtle);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.nav-item.is-active .nav-item-icon {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.nav-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.sidebar-version {
+  padding: 0 var(--space-sm);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+/* ---- Topbar ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) clamp(var(--space-md), 2vw, var(--space-2xl));
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 80%, transparent);
+  backdrop-filter: blur(6px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.topbar-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+.topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.topbar-status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+}
+.topbar-link {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.topbar-account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.topbar-account-avatar {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+
+/* The page already centers itself; nothing extra needed under the topbar. */
+
+/* ---- KPI stat cards ---- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-md);
+}
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.stat-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.stat-card-icon {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+.stat-card-label {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.stat-card-value {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.stat-card-delta {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+.stat-card-delta.is-up {
+  color: var(--ok);
+}
+.stat-card-delta.is-down {
+  color: var(--danger);
+}
+
+/* ---- Master-detail layout (list + right detail panel) ---- */
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.95fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+.detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  position: sticky;
+  top: calc(var(--space-md) + 3rem);
+}
+.detail-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.detail-panel-title {
+  font-size: var(--text-md);
+}
+.detail-field {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: var(--text-sm);
+}
+.detail-field dt {
+  color: var(--text-faint);
+}
+.detail-field dd {
+  margin: 0;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.detail-section-label {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* ---- Data tables ---- */
+.data-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.data-table th,
+.data-table td {
+  padding: var(--space-xs) var(--space-sm);
+  text-align: left;
+  white-space: nowrap;
+}
+.data-table thead th {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+.data-table tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+.data-table tbody tr:last-child {
+  border-bottom: none;
+}
+.data-table tbody tr.is-selected {
+  background: var(--accent-soft);
+}
+.data-table tbody tr.is-clickable:hover {
+  background: var(--surface-sunken);
+}
+.data-table td.num,
+.data-table th.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+.data-table a {
+  color: inherit;
+}
+
+/* ---- Charts ---- */
+.chart-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.chart-card-title {
+  font-size: var(--text-md);
+}
+.chart-surface {
+  width: 100%;
+}
+.donut {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr);
+  align-items: center;
+  gap: var(--space-md);
+}
+.donut-ring {
+  min-width: 0;
+}
+.donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+.donut-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.donut-legend-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 3px;
+  flex: none;
+}
+.donut-legend-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.donut-legend-value {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+  color: var(--text);
+}
+
+/* ---- Status pills ---- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: 2px var(--space-xs);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  background: var(--surface-inset);
+  color: var(--text-subtle);
+}
+.pill--ok {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+.pill--warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+.pill--danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.pill--info {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+/* ---- Tabbed config panel ---- */
+.panel-tabs {
+  display: flex;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+}
+.panel-tab {
+  flex: 1 1 auto;
+  text-align: center;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.panel-tab.is-active {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Wizard steps (route policy editor) ---- */
+.wizard {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.5fr) minmax(0, 2fr);
+  gap: var(--space-xl);
+  align-items: start;
+}
+.wizard-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  position: sticky;
+  top: calc(var(--space-md) + 3rem);
+}
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.wizard-step.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.wizard-step-num {
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+.wizard-step.is-active .wizard-step-num {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.wizard-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+/* ---- Progress / usage bars ---- */
+.usage-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+.usage-bar-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.usage-bar-track {
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+.usage-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+.usage-bar-fill.is-warn {
+  background: var(--warn);
+}
+.usage-bar-fill.is-danger {
+  background: var(--danger);
+}
+
+/* ---- Selectable strategy / option cards (route editor, candidates) ---- */
+.option-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-sm);
+}
+.option-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--space-md);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+}
+.option-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.option-card-title {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+.option-card-desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ---- Code / key display ---- */
+.code-block {
+  margin: 0;
+  padding: var(--space-md);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  color: var(--text-muted);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.key-display {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* ---- Tag chips (allowed virtual models, capabilities) ---- */
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+.tag-chip {
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+}
+
+/* ---- Section sub-grid for charts side by side ---- */
+.chart-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-md);
+}
+.chart-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-md);
+}
+
+/* ---- Note / callout box ---- */
+.callout {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+.callout--warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: color-mix(in oklch, var(--warn) 30%, var(--border));
+}
+.callout--info {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-border);
+}
+
+/* ---- Filter bar ---- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: end;
+}
+.filter-bar .console-field {
+  flex: 1 1 160px;
+}
+
+@media (max-width: 56rem) {
+  .detail-layout,
+  .wizard {
+    grid-template-columns: 1fr;
+  }
+  .detail-panel,
+  .wizard-steps {
+    position: static;
+  }
+}

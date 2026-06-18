@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { consoleNavGroups, findActiveNavItem } from "../_lib/nav";
+import { consoleNavItems, findActiveNavItem } from "../_lib/nav";
 import { ThemeToggle } from "./theme-toggle";
 
 export function Sidebar() {
@@ -17,35 +17,36 @@ export function Sidebar() {
         </span>
         <span className="sidebar-wordmark">
           LLM<span>Ingress</span>
+          <em className="sidebar-wordmark-sub">Console</em>
         </span>
       </div>
 
       <nav className="sidebar-nav" aria-label="Console sections">
-        {consoleNavGroups.map((group) => (
-          <div className="nav-group" key={group.label}>
-            <p className="nav-group-label">{group.label}</p>
-            <ul className="nav-list">
-              {group.items.map((item) => {
-                const isActive = active?.href === item.href;
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      // Explicit name keeps the link's accessible name exactly the
-                      // module label (the hint is supplementary visual context).
-                      aria-label={item.label}
-                      aria-current={isActive ? "page" : undefined}
-                      className={`nav-item${isActive ? " is-active" : ""}`}
-                    >
-                      <span className="nav-item-label">{item.label}</span>
-                      <span className="nav-item-hint">{item.hint}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+        <ul className="nav-list">
+          {consoleNavItems.map((item) => {
+            const isActive = active?.href === item.href;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  // Explicit name keeps the link's accessible name exactly the
+                  // module label (the icon + hint are supplementary context).
+                  aria-label={item.label}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`nav-item${isActive ? " is-active" : ""}`}
+                >
+                  <span className="nav-item-icon" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  <span className="nav-item-text">
+                    <span className="nav-item-label">{item.label}</span>
+                    <span className="nav-item-hint">{item.hint}</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
 
       <div className="sidebar-footer">
@@ -61,6 +62,7 @@ export function Sidebar() {
             </button>
           </form>
         </div>
+        <p className="sidebar-version">v0.1.0</p>
       </div>
     </aside>
   );

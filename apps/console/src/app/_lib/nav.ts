@@ -9,6 +9,8 @@ export type ConsoleNavItem = {
   href: string;
   /** Short supporting line shown under the label in the sidebar. */
   hint: string;
+  /** Two-letter chip rendered as the nav item's icon (matches the prototype). */
+  icon: string;
 };
 
 export type ConsoleNavGroup = {
@@ -17,44 +19,26 @@ export type ConsoleNavGroup = {
   items: ConsoleNavItem[];
 };
 
-export const consoleNavGroups: ConsoleNavGroup[] = [
-  {
-    label: "Monitor",
-    items: [
-      { label: "Overview", href: "/", hint: "Gateway runtime health" },
-      { label: "Usage & Cost", href: "/usage", hint: "Spend, tokens, savings" },
-      { label: "Activity", href: "/activity", hint: "Recent requests" },
-    ],
-  },
-  {
-    label: "Routing",
-    items: [
-      { label: "Virtual Models", href: "/models", hint: "Public model names" },
-      { label: "Route Policies", href: "/routing", hint: "Primary & fallback routes" },
-    ],
-  },
-  {
-    label: "Access",
-    items: [{ label: "Agents", href: "/agents", hint: "Agents & API keys" }],
-  },
-  {
-    label: "Infrastructure",
-    items: [
-      { label: "Providers", href: "/providers", hint: "Upstreams & health" },
-      { label: "Pricing", href: "/pricing", hint: "Model price overrides" },
-    ],
-  },
-  {
-    label: "Tools",
-    items: [{ label: "Playground", href: "/playground", hint: "Send a live request" }],
-  },
-  {
-    label: "System",
-    items: [{ label: "Settings", href: "/settings", hint: "Notifications & config" }],
-  },
+// Flat, ordered module list matching the redesigned console prototype
+// (docs/UI/*). The sidebar renders this as a single icon-chip list.
+export const consoleNavItems: ConsoleNavItem[] = [
+  { label: "Overview", href: "/", hint: "Gateway & spend at a glance", icon: "OV" },
+  { label: "Agents", href: "/agents", hint: "Agents & API keys", icon: "AG" },
+  { label: "Providers", href: "/providers", hint: "Upstreams & health", icon: "PR" },
+  { label: "Models", href: "/pricing", hint: "Provider models & prices", icon: "MO" },
+  { label: "Virtual Models", href: "/models", hint: "Names, routes & fallback", icon: "VM" },
+  { label: "Activity", href: "/activity", hint: "Recent requests", icon: "AC" },
+  { label: "Usage & Cost", href: "/usage", hint: "Spend, tokens, savings", icon: "UC" },
+  { label: "Limits", href: "/limits", hint: "Budgets & rate limits", icon: "LI" },
+  { label: "Playground", href: "/playground", hint: "Send a live request", icon: "PG" },
+  { label: "Gateway Runtime", href: "/runtime", hint: "Status & connectivity", icon: "GW" },
+  { label: "Settings", href: "/settings", hint: "Config, export, danger zone", icon: "ST" },
 ];
 
-export const consoleNavItems: ConsoleNavItem[] = consoleNavGroups.flatMap((group) => group.items);
+// Back-compat single group so existing imports resolve. The redesigned sidebar
+// renders the flat `consoleNavItems` list (no visible group labels), matching
+// the prototype.
+export const consoleNavGroups: ConsoleNavGroup[] = [{ label: "Console", items: consoleNavItems }];
 
 /** Resolve the active nav item for a given pathname (longest matching href wins). */
 export function findActiveNavItem(pathname: string): ConsoleNavItem | undefined {

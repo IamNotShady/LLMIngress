@@ -28,7 +28,7 @@ import {
 } from "../../server/agent-limits";
 import { listAgents } from "../../server/agents";
 import { getConsoleDatabaseUrl } from "../../server/auth";
-import { placeholderInt, placeholderTrend } from "../../server/mock-data";
+import { placeholderFloat, placeholderInt, placeholderTrend } from "../../server/mock-data";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
@@ -64,11 +64,8 @@ import {
   getConsoleRuntimeSnapshot,
 } from "../../server/runtime";
 import {
-  type ConsoleUsageBreakdown,
   type ConsoleUsageDimensionBreakdown,
-  formatConsoleUsageBreakdownStats,
   formatConsoleUsageCost,
-  formatConsoleUsageTokens,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
 } from "../../server/usage";
@@ -338,82 +335,175 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
   const databaseUrl = getConsoleDatabaseUrl();
   const usageWindow = parseConsoleUsageWindow(readSingleSearchParam(searchParams.usageWindow));
   const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: usageWindow });
+
+  const failureRate =
+    usageSummary.requestCount > 0
+      ? `${((usageSummary.failureCount / usageSummary.requestCount) * 100).toFixed(2)}%`
+      : "0.00%";
+  const totalCost = Number(usageSummary.totalCostUsd ?? 0);
+  const totalSavings = Number(usageSummary.totalSavingsUsd ?? 0);
+  const savingsRatio =
+    totalCost + totalSavings > 0
+      ? `${((totalSavings / (totalCost + totalSavings)) * 100).toFixed(1)}%`
+      : "0.0%";
+  // Average latency is not part of the usage rollup yet; seeded placeholder.
+  const avgLatency = `${placeholderFloat(`usage-latency-${usageSummary.window}`, 0.8, 2.6).toFixed(2)}s`;
+  const trend = placeholderTrend(`usage-trend-${usageSummary.window}`, 14);
+
   return (
     <section className="providers-panel" id="usage" aria-label="Usage & Cost">
-      <form className="usage-window-form" action="/usage" method="get">
-        <label htmlFor="usage-window">Usage window</label>
-        <select id="usage-window" name="usageWindow" defaultValue={usageSummary.window}>
-          <option value="24h">Last 24 hours</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-        </select>
-        <button type="submit">Apply usage window</button>
+      <form className="filter-bar" action="/usage" method="get">
+        <div className="console-field">
+          <label htmlFor="usage-window">Window</label>
+          <select id="usage-window" name="usageWindow" defaultValue={usageSummary.window}>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </div>
+        <div className="console-actions">
+          <button type="submit">Apply</button>
+        </div>
       </form>
-      <dl className="usage-summary-grid">
-        <div>
-          <dt>Requests</dt>
-          <dd>Requests: {usageSummary.requestCount}</dd>
+
+      <div className="stat-grid">
+        <StatCard
+          icon="$"
+          label="Total cost"
+          value={formatConsoleUsageCost(usageSummary.totalCostUsd)}
+        />
+        <StatCard
+          icon="TK"
+          label="Total tokens"
+          value={formatCompactNumber(usageSummary.totalTokens)}
+        />
+        <StatCard
+          icon="RQ"
+          label="Total requests"
+          value={formatCompactNumber(usageSummary.requestCount)}
+        />
+        <StatCard icon="LT" label="Avg latency" value={avgLatency} />
+        <StatCard icon="FR" label="Failure rate" value={failureRate} />
+        <StatCard
+          icon="SV"
+          label="Savings"
+          value={formatConsoleUsageCost(usageSummary.totalSavingsUsd)}
+        />
+      </div>
+
+      <div className="chart-grid-2">
+        <div className="chart-card">
+          <h2 className="chart-card-title">Cost trend</h2>
+          <TrendLineChart
+            ariaLabel="Cost trend"
+            data={trend}
+            series={[{ key: "costUsd", name: "Cost (USD)", color: chartOk }]}
+          />
         </div>
-        <div>
-          <dt>Tokens</dt>
-          <dd>{formatConsoleUsageTokens(usageSummary)}</dd>
+        <div className="chart-card">
+          <h2 className="chart-card-title">Tokens trend</h2>
+          <TrendLineChart
+            ariaLabel="Tokens trend"
+            data={trend}
+            series={[{ key: "requests", name: "Requests", color: chartAccent }]}
+          />
         </div>
-        <div>
-          <dt>Cost</dt>
-          <dd>Cost: {formatConsoleUsageCost(usageSummary.totalCostUsd)}</dd>
+      </div>
+
+      <div className="chart-grid-3">
+        <div className="chart-card">
+          <h2 className="chart-card-title">Agent cost</h2>
+          <UsageCostDonut breakdowns={usageSummary.agentBreakdowns} label="agent" />
         </div>
-        <div>
-          <dt>Failures</dt>
-          <dd>Failures: {usageSummary.failureCount}</dd>
+        <div className="chart-card">
+          <h2 className="chart-card-title">Virtual Model cost</h2>
+          <UsageCostDonut breakdowns={usageSummary.virtualModelBreakdowns} label="virtual model" />
         </div>
-        <div>
-          <dt>Savings</dt>
-          <dd>Savings: {formatConsoleUsageCost(usageSummary.totalSavingsUsd)}</dd>
+        <div className="chart-card">
+          <h2 className="chart-card-title">Provider cost</h2>
+          <UsageCostDonut breakdowns={usageSummary.providerBreakdowns} label="provider" />
         </div>
-      </dl>
-      <div className="usage-breakdown-list">
-        {usageSummary.requestCount === 0 ? (
-          <p>No usage recorded for this window.</p>
-        ) : (
-          <>
-            <UsageBreakdownSection
-              breakdowns={usageSummary.agentBreakdowns}
-              title="Agent breakdown"
-            />
-            <UsageBreakdownSection
-              breakdowns={usageSummary.agentApiKeyBreakdowns}
-              title="Agent API Key breakdown"
-            />
-            <UsageBreakdownSection
-              breakdowns={usageSummary.virtualModelBreakdowns}
-              title="Virtual Model breakdown"
-            />
-            <UsageBreakdownSection
-              breakdowns={usageSummary.providerBreakdowns}
-              title="Provider breakdown"
-            />
-            <UsageBreakdownSection
-              breakdowns={usageSummary.modelBreakdowns}
-              title="Model breakdown"
-            />
-            <section className="usage-breakdown-group" aria-labelledby="provider-model-breakdown">
-              <h3 id="provider-model-breakdown">Provider / Model breakdown</h3>
-              {usageSummary.breakdowns.map((breakdown) => (
-                <article
-                  className="usage-breakdown-item"
-                  key={`${breakdown.providerId}:${breakdown.modelId}`}
-                >
-                  <h3>
-                    {breakdown.providerLabel} / {breakdown.modelLabel}
-                  </h3>
-                  <p>{formatUsageBreakdownStats(breakdown)}</p>
-                </article>
-              ))}
-            </section>
-          </>
-        )}
+      </div>
+
+      <div className="detail-layout">
+        <div className="chart-card">
+          <h2 className="chart-card-title">Provider / Model summary</h2>
+          {usageSummary.breakdowns.length === 0 ? (
+            <p>No usage recorded for this window.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th className="num">Requests</th>
+                    <th className="num">Tokens</th>
+                    <th className="num">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usageSummary.breakdowns.map((breakdown) => (
+                    <tr key={`${breakdown.providerId}:${breakdown.modelId}`}>
+                      <td>{breakdown.providerLabel}</td>
+                      <td>{breakdown.modelLabel}</td>
+                      <td className="num">{formatCompactNumber(breakdown.requestCount)}</td>
+                      <td className="num">{formatCompactNumber(breakdown.totalTokens)}</td>
+                      <td className="num">{formatConsoleUsageCost(breakdown.totalCostUsd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="detail-panel">
+          <div className="detail-panel-head">
+            <h2 className="detail-panel-title">Savings</h2>
+          </div>
+          <dl className="detail-field-list">
+            <div className="detail-field">
+              <dt>Saved amount</dt>
+              <dd>{formatConsoleUsageCost(usageSummary.totalSavingsUsd)}</dd>
+            </div>
+            <div className="detail-field">
+              <dt>Savings ratio</dt>
+              <dd>{savingsRatio}</dd>
+            </div>
+            <div className="detail-field">
+              <dt>Billed cost</dt>
+              <dd>{formatConsoleUsageCost(usageSummary.totalCostUsd)}</dd>
+            </div>
+          </dl>
+          <p className="callout">
+            Savings estimate the difference vs. each request's most expensive candidate.
+          </p>
+        </div>
       </div>
     </section>
+  );
+}
+
+function UsageCostDonut({
+  breakdowns,
+  label,
+}: {
+  breakdowns: ConsoleUsageDimensionBreakdown[];
+  label: string;
+}) {
+  const slices = breakdowns
+    .map((breakdown) => ({ name: breakdown.label, value: Number(breakdown.totalCostUsd ?? 0) }))
+    .filter((slice) => slice.value > 0)
+    .slice(0, 6);
+  if (slices.length === 0) {
+    return <p>No {label} cost recorded.</p>;
+  }
+  return (
+    <DonutBreakdown
+      ariaLabel={`${label} cost breakdown`}
+      data={slices}
+      valueFormatter={(value) => `$${value.toFixed(2)}`}
+    />
   );
 }
 
@@ -1903,33 +1993,6 @@ function formatActivityModelHitLabel(activity: ConsoleActivity): string {
   const displayName = activity.providerModelDisplayName ?? "Unknown model";
   const modelName = activity.providerModelName ?? activity.providerModelId ?? "unknown";
   return `${displayName} (${modelName})`;
-}
-
-function UsageBreakdownSection({
-  breakdowns,
-  title,
-}: {
-  breakdowns: ConsoleUsageDimensionBreakdown[];
-  title: string;
-}) {
-  const headingId = title.toLowerCase().replaceAll(" ", "-");
-
-  return (
-    <section className="usage-breakdown-group" aria-labelledby={headingId}>
-      <h3 id={headingId}>{title}</h3>
-      {breakdowns.map((breakdown) => (
-        <article className="usage-breakdown-item" key={breakdown.id}>
-          <p className="usage-breakdown-label">{breakdown.label}</p>
-          <p>{formatConsoleUsageBreakdownStats(breakdown)}</p>
-        </article>
-      ))}
-    </section>
-  );
-}
-
-function formatUsageBreakdownStats(breakdown: ConsoleUsageBreakdown): string {
-  const requestLabel = breakdown.requestCount === 1 ? "request" : "requests";
-  return `${breakdown.requestCount} ${requestLabel} - ${breakdown.totalTokens} tokens - ${formatConsoleUsageCost(breakdown.totalCostUsd)}`;
 }
 
 function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string }>): string {

@@ -28,7 +28,7 @@ import {
 } from "../../server/agent-limits";
 import { listAgents } from "../../server/agents";
 import { getConsoleDatabaseUrl } from "../../server/auth";
-import { placeholderInt } from "../../server/mock-data";
+import { placeholderInt, placeholderTrend } from "../../server/mock-data";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
@@ -73,6 +73,9 @@ import {
   parseConsoleUsageWindow,
 } from "../../server/usage";
 import { listVirtualModels } from "../../server/virtual-models";
+import { DonutBreakdown } from "../_components/charts/donut-breakdown";
+import { chartAccent, chartOk } from "../_components/charts/palette";
+import { TrendLineChart } from "../_components/charts/trend-line-chart";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref, paginate, readPageParam } from "../_lib/pagination";
@@ -84,6 +87,171 @@ const previewModelId = "gpt-4.1-mini";
 const providerTemplateGroups = listProviderTemplateSelectorGroups();
 const remoteProviderTemplateGroup = requireProviderTemplateGroup("remote_api_key");
 const localProviderTemplateGroup = requireProviderTemplateGroup("local");
+
+export async function OverviewSection() {
+  const databaseUrl = getConsoleDatabaseUrl();
+  const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: "24h" });
+  const activities = await listConsoleActivities(databaseUrl);
+  const agents = await listAgents(databaseUrl);
+  const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
+  const gateway = runtimeSnapshot.gateways[0] ?? null;
+
+  const recentActivities = activities.slice(0, 8);
+  const onlineAgents = agents.filter((agent) => agent.enabled).length;
+  const failureRate =
+    usageSummary.requestCount > 0
+      ? `${((usageSummary.failureCount / usageSummary.requestCount) * 100).toFixed(2)}%`
+      : "0.00%";
+  const trend = placeholderTrend("overview-trend", 14);
+  const topAgents = usageSummary.agentBreakdowns
+    .slice(0, 5)
+    .map((breakdown) => ({ name: breakdown.label, value: breakdown.requestCount }));
+
+  return (
+    <section className="providers-panel" aria-label="Overview">
+      <div className="stat-grid">
+        <StatCard
+          icon="RQ"
+          label="Requests today"
+          value={formatCompactNumber(usageSummary.requestCount)}
+        />
+        <StatCard
+          icon="$"
+          label="Cost today"
+          value={formatConsoleUsageCost(usageSummary.totalCostUsd)}
+        />
+        <StatCard
+          icon="TK"
+          label="Tokens today"
+          value={formatCompactNumber(usageSummary.totalTokens)}
+        />
+        <StatCard icon="FR" label="Failure rate" value={failureRate} />
+        <StatCard
+          icon="SV"
+          label="Savings"
+          value={formatConsoleUsageCost(usageSummary.totalSavingsUsd)}
+        />
+        <StatCard icon="AG" label="Online agents" value={String(onlineAgents)} />
+      </div>
+
+      <div className="detail-layout">
+        <div className="chart-card">
+          <h2 className="chart-card-title">Recent requests</h2>
+          {recentActivities.length === 0 ? (
+            <p>No activity recorded.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Request</th>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th className="num">Tokens</th>
+                    <th className="num">Cost</th>
+                    <th className="num">Latency</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentActivities.map((activity) => (
+                    <tr key={activity.id}>
+                      <td className="mono">{activity.requestId.slice(0, 10)}</td>
+                      <td>{formatActivityProviderLabel(activity)}</td>
+                      <td>{formatActivityModelSummary(activity)}</td>
+                      <td className="num">{formatCompactNumber(activity.totalTokens ?? 0)}</td>
+                      <td className="num">{formatConsoleActivityCost(activity.totalCostUsd)}</td>
+                      <td className="num">{formatActivityLatency(activity.latencyMs)}</td>
+                      <td>
+                        <ActivityStatusPill status={activity.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="detail-panel">
+          <div className="detail-panel-head">
+            <h2 className="detail-panel-title">Gateway status</h2>
+            <span className={gateway ? "pill--ok pill" : "pill--warn pill"}>
+              {gateway ? gateway.status : "Unknown"}
+            </span>
+          </div>
+          <dl className="detail-field-list">
+            <div className="detail-field">
+              <dt>Instance</dt>
+              <dd>{gateway?.gatewayInstanceId ?? "No gateway"}</dd>
+            </div>
+            <div className="detail-field">
+              <dt>Config version</dt>
+              <dd>{formatConfigVersion(gateway?.appliedConfigVersion ?? null)}</dd>
+            </div>
+            <div className="detail-field">
+              <dt>Last heartbeat</dt>
+              <dd>{formatNullableDateTime(gateway?.heartbeatAt ?? null)}</dd>
+            </div>
+            <div className="detail-field">
+              <dt>Schema version</dt>
+              <dd>{runtimeSnapshot.migrations.currentSchemaVersion ?? "—"}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <div className="chart-grid-2">
+        <div className="chart-card">
+          <h2 className="chart-card-title">Requests &amp; cost trend</h2>
+          <TrendLineChart
+            ariaLabel="Requests and cost trend"
+            data={trend}
+            series={[
+              { key: "requests", name: "Requests", color: chartAccent },
+              { key: "costUsd", name: "Cost (USD)", color: chartOk },
+            ]}
+          />
+        </div>
+        <div className="chart-card">
+          <h2 className="chart-card-title">Top agents</h2>
+          {topAgents.length === 0 ? (
+            <p>No agent activity recorded.</p>
+          ) : (
+            <DonutBreakdown ariaLabel="Top agents by requests" data={topAgents} />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatCompactNumber(value: number): string {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  }
+  return String(value);
+}
+
+function formatActivityLatency(latencyMs: number | null): string {
+  if (latencyMs === null) {
+    return "—";
+  }
+  return `${(latencyMs / 1000).toFixed(2)}s`;
+}
+
+function ActivityStatusPill({ status }: { status: string }) {
+  const normalized = status.toLowerCase();
+  if (normalized === "success" || normalized === "succeeded" || normalized === "ok") {
+    return <span className="pill--ok pill">{status}</span>;
+  }
+  if (normalized === "error" || normalized === "failed" || normalized === "failure") {
+    return <span className="pill--danger pill">{status}</span>;
+  }
+  return <span className="pill">{status}</span>;
+}
 
 export async function RuntimeSection() {
   const databaseUrl = getConsoleDatabaseUrl();

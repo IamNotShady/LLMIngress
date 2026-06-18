@@ -6,8 +6,8 @@ export default function PricingPage() {
     <div className="page">
       <PageHeader
         eyebrow="Infrastructure"
-        title="Pricing"
-        description="Model price overrides and sample cost estimates."
+        title="Models"
+        description="Provider model directory with input / output prices and price source."
       />
       <PricingSection />
     </div>

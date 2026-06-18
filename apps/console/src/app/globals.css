@@ -1377,6 +1377,12 @@ details.disclosure[open] > .disclosure-summary {
   text-transform: uppercase;
   color: var(--text-faint);
 }
+.detail-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+}
 
 /* ---- Data tables ---- */
 .data-table-wrap {

@@ -83,11 +83,16 @@ test("clean setup request activity usage and hot reload after route change", asy
               }),
             ).toBeVisible();
             await page.goto(`${consoleBaseUrl}/usage`);
-            await expect(page.getByLabel("Usage").getByText("Requests: 1")).toBeVisible();
             await expect(
-              page.getByRole("heading", {
+              page
+                .getByLabel("Usage")
+                .locator(".stat-card", { hasText: "Total requests" })
+                .locator(".stat-card-value"),
+            ).toHaveText("1");
+            await expect(
+              page.getByLabel("Usage").getByRole("cell", {
+                name: mvpHappyPathNames.initialProviderModelDisplayName,
                 exact: true,
-                name: `${mvpHappyPathNames.providerDisplayName} / ${mvpHappyPathNames.initialProviderModelDisplayName}`,
               }),
             ).toBeVisible();
 
@@ -122,11 +127,16 @@ test("clean setup request activity usage and hot reload after route change", asy
                 .getByRole("link", { name: buildMvpHappyPathRequestId("reloaded") }),
             ).toBeVisible();
             await page.goto(`${consoleBaseUrl}/usage`);
-            await expect(page.getByLabel("Usage").getByText("Requests: 2")).toBeVisible();
             await expect(
-              page.getByRole("heading", {
+              page
+                .getByLabel("Usage")
+                .locator(".stat-card", { hasText: "Total requests" })
+                .locator(".stat-card-value"),
+            ).toHaveText("2");
+            await expect(
+              page.getByLabel("Usage").getByRole("cell", {
+                name: mvpHappyPathNames.reloadedProviderModelDisplayName,
                 exact: true,
-                name: `${mvpHappyPathNames.providerDisplayName} / ${mvpHappyPathNames.reloadedProviderModelDisplayName}`,
               }),
             ).toBeVisible();
           } finally {

@@ -389,6 +389,16 @@ export async function RuntimeSection() {
             </dd>
           </div>
           <div className="detail-field">
+            <dt>Pending migrations</dt>
+            <dd>
+              {runtimeSnapshot.migrations.pendingMigrations.length === 0
+                ? "none"
+                : runtimeSnapshot.migrations.pendingMigrations
+                    .map((migration) => `${migration.id}_${migration.name}`)
+                    .join(", ")}
+            </dd>
+          </div>
+          <div className="detail-field">
             <dt>db:migrate:check</dt>
             <dd>
               {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready"

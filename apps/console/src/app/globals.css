@@ -1383,6 +1383,37 @@ details.disclosure[open] > .disclosure-summary {
   gap: var(--space-xs);
   margin: 0;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.note-list li {
+  padding-left: var(--space-md);
+  position: relative;
+}
+.note-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--ok);
+}
 .timeline {
   list-style: none;
   margin: var(--space-2xs) 0 0;

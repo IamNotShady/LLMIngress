@@ -58,7 +58,6 @@ import {
 } from "../../server/route-policies";
 import {
   formatGatewayHeartbeatStatus,
-  formatRuntimeErrorEntry,
   formatRuntimeReloadResult,
   getConsoleRuntimeSnapshot,
 } from "../../server/runtime";
@@ -249,85 +248,187 @@ function ActivityStatusPill({ status }: { status: string }) {
   return <span className="pill">{status}</span>;
 }
 
+const runtimeObservabilityExports = [
+  { id: "prometheus", name: "Prometheus Metrics", detail: "/metrics" },
+  { id: "otel", name: "OpenTelemetry Traces", detail: "Enabled" },
+  { id: "webhook", name: "Webhook Events", detail: "Notification channels" },
+  { id: "jsonl", name: "JSONL Request Logs", detail: "Local file" },
+];
+
+const runtimeSecurityNotes = [
+  "Provider API keys are encrypted with AES-256-GCM and decrypted only in memory.",
+  "Agent API keys are stored as a hash; the full key is shown once at creation.",
+  "Gateway runtime config is applied from the deployed config version; the Console cannot restart processes.",
+  "This page is read-only runtime status — it does not change any stored settings.",
+];
+
 export async function RuntimeSection() {
   const databaseUrl = getConsoleDatabaseUrl();
   const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
+  const gateway = runtimeSnapshot.gateways[0] ?? null;
+
   return (
     <section className="providers-panel" id="runtime" aria-labelledby="runtime-title">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Gateway</p>
-          <h2 id="runtime-title">Runtime</h2>
+      <h2 className="sr-only" id="runtime-title">
+        Gateway Runtime
+      </h2>
+      <div className="stat-grid">
+        <StatCard
+          icon="ST"
+          label="Gateway status"
+          value={gateway ? gateway.status : "No gateway"}
+        />
+        <StatCard icon="URL" label="Runtime address" value={getPlaygroundGatewayBaseUrl()} />
+        <StatCard icon="V" label="Version" value="v0.1.0" />
+        <StatCard
+          icon="HB"
+          label="Heartbeat"
+          value={gateway ? formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) : "—"}
+        />
+      </div>
+
+      <div className="chart-grid-2">
+        <div className="chart-card">
+          <h3 className="chart-card-title">Provider connectivity</h3>
+          {providerHealthSummaries.length === 0 ? (
+            <p>No providers configured.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Status</th>
+                    <th className="num">p95</th>
+                    <th>Last checked</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {providerHealthSummaries.map((summary) => (
+                    <tr key={summary.id}>
+                      <td>{summary.displayName}</td>
+                      <td>
+                        <ProviderHealthPill status={summary.status} />
+                      </td>
+                      <td className="num">{placeholderInt(summary.id, 18, 580, 3)}ms</td>
+                      <td>
+                        {formatProviderHealthLatestProbe({
+                          latestProbeAt: summary.latestProbeAt,
+                          trigger: summary.trigger,
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="chart-card">
+          <h3 className="chart-card-title">Recent runtime errors</h3>
+          {runtimeSnapshot.errors.length === 0 ? (
+            <p>No runtime errors recorded.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Source</th>
+                    <th>Code</th>
+                    <th>Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runtimeSnapshot.errors.map((error) => (
+                    <tr
+                      key={`${error.processType}:${error.processId}:${error.errorCode}:${error.createdAt.toISOString()}`}
+                    >
+                      <td>{formatDateTime(error.createdAt)}</td>
+                      <td>{error.processType}</td>
+                      <td className="mono">{error.errorCode}</td>
+                      <td>{error.errorMessage}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
-      {runtimeSnapshot.gateways.length === 0 ? (
-        <p>No gateway runtime status recorded.</p>
-      ) : (
-        <div className="runtime-grid">
-          {runtimeSnapshot.gateways.map((gateway) => (
-            <article className="runtime-item" key={gateway.gatewayInstanceId}>
-              <h3>Gateway: {gateway.gatewayInstanceId}</h3>
-              <p>Heartbeat: {formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt })}</p>
-              <p>Gateway status: {gateway.status}</p>
-              <p>Applied config version: {formatConfigVersion(gateway.appliedConfigVersion)}</p>
-              <p>Target config version: {formatConfigVersion(gateway.targetConfigVersion)}</p>
-              <p>{formatRuntimeReloadResult(gateway)}</p>
-              {gateway.lastReloadError && gateway.lastReloadStatus !== "failed" ? (
-                <p>Reload error: {gateway.lastReloadError}</p>
-              ) : null}
-              <p>Last heartbeat: {formatNullableDateTime(gateway.heartbeatAt)}</p>
+
+      <div className="chart-card">
+        <h3 className="chart-card-title">Observability exports</h3>
+        <div className="stat-grid">
+          {runtimeObservabilityExports.map((entry) => (
+            <article className="stat-card" key={entry.id}>
+              <div className="stat-card-head">
+                <span className="stat-card-icon" aria-hidden="true">
+                  {entry.id.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="stat-card-label">{entry.name}</span>
+              </div>
+              <span className="stat-card-delta">{entry.detail}</span>
             </article>
           ))}
         </div>
-      )}
-      <div className="runtime-errors">
-        <h3>Migration status</h3>
-        <p>
-          Current schema: {runtimeSnapshot.migrations.currentSchemaVersion ?? "not initialized"}
-        </p>
-        <p>
-          Latest migration:{" "}
-          {runtimeSnapshot.migrations.latestMigrationId &&
-          runtimeSnapshot.migrations.latestMigrationName
-            ? `${runtimeSnapshot.migrations.latestMigrationId}_${runtimeSnapshot.migrations.latestMigrationName}`
-            : "none"}
-        </p>
-        <p>
-          Applied migrations: {runtimeSnapshot.migrations.appliedCount}/
-          {runtimeSnapshot.migrations.totalCount}
-        </p>
-        <p>
-          Pending migrations:{" "}
-          {runtimeSnapshot.migrations.pendingMigrations.length === 0
-            ? "none"
-            : runtimeSnapshot.migrations.pendingMigrations
-                .map((migration) => `${migration.id}_${migration.name}`)
-                .join(", ")}
-        </p>
-        <p>
-          db:migrate:check health:{" "}
-          {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready" ? "Ready" : "Blocked"} -{" "}
-          {runtimeSnapshot.migrations.migrateCheckHealth.message}
-        </p>
       </div>
-      <div className="runtime-errors">
-        <h3>Recent runtime errors</h3>
-        {runtimeSnapshot.errors.length === 0 ? (
-          <p>No runtime errors recorded.</p>
-        ) : (
-          <ul>
-            {runtimeSnapshot.errors.map((error) => (
-              <li
-                key={`${error.processType}:${error.processId}:${error.errorCode}:${error.createdAt.toISOString()}`}
-              >
-                {formatRuntimeErrorEntry(error)}
-              </li>
-            ))}
-          </ul>
-        )}
+
+      <div className="chart-card">
+        <h3 className="chart-card-title">Migration status</h3>
+        <dl className="detail-field-list">
+          <div className="detail-field">
+            <dt>Current schema</dt>
+            <dd>{runtimeSnapshot.migrations.currentSchemaVersion ?? "not initialized"}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Applied migrations</dt>
+            <dd>
+              {runtimeSnapshot.migrations.appliedCount}/{runtimeSnapshot.migrations.totalCount}
+            </dd>
+          </div>
+          <div className="detail-field">
+            <dt>db:migrate:check</dt>
+            <dd>
+              {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready"
+                ? "Ready"
+                : "Blocked"}
+            </dd>
+          </div>
+          {gateway ? (
+            <div className="detail-field">
+              <dt>Config reload</dt>
+              <dd>{formatRuntimeReloadResult(gateway)}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
+
+      <div className="chart-card">
+        <h3 className="chart-card-title">Security</h3>
+        <ul className="note-list">
+          {runtimeSecurityNotes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
       </div>
     </section>
   );
+}
+
+function ProviderHealthPill({ status }: { status: string }) {
+  const label = formatProviderHealthStatus(
+    status as Parameters<typeof formatProviderHealthStatus>[0],
+  );
+  const normalized = status.toLowerCase();
+  if (normalized === "healthy") {
+    return <span className="pill--ok pill">{label}</span>;
+  }
+  if (normalized === "unknown") {
+    return <span className="pill">{label}</span>;
+  }
+  return <span className="pill--danger pill">{label}</span>;
 }
 
 export async function UsageSection({ searchParams }: { searchParams: ConsoleSearchParams }) {

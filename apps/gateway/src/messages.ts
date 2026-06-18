@@ -34,7 +34,7 @@ import {
   type NormalizedAnthropicMessage,
   type NormalizedAnthropicMessagesRequest,
 } from "./provider-adapters/anthropic.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,
   type GatewayRequestMetadata,
@@ -207,6 +207,7 @@ export async function executeGatewayAnthropicMessages(input: {
     };
   }
 
+  const concurrencyLease = rateLimit.concurrencyLease;
   let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
@@ -307,6 +308,11 @@ export async function executeGatewayAnthropicMessages(input: {
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
+  } finally {
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
+    });
   }
 }
 

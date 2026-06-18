@@ -200,6 +200,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0030",
     name: "advanced_route_rules_preview",
   },
+  {
+    checksum: "aade4f0ce0fd5ba37b4cc2216a152cb2b51c4a0d953932ffb6a0b79e478d9a61",
+    id: "0031",
+    name: "concurrency_limit_policy",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

@@ -27,6 +27,7 @@ import {
   type OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
 import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
+import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
 import { recordGatewayProviderTrace } from "./tracing.js";
@@ -54,6 +55,7 @@ export type GatewayEmbeddingsErrorBody = {
 export type GatewayEmbeddingsResponse = {
   activity?: GatewayRequestActivityRoute;
   body: unknown;
+  headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
   usageCost?: GatewayUsageCostDetails;
@@ -141,6 +143,7 @@ export function createGatewayEmbeddingsProviderAdapter(input: {
 }
 
 export async function executeGatewayOpenAIEmbeddings(input: {
+  agentApiKeyId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl: string;
   masterKeySource?: MasterKeySource;
@@ -163,6 +166,22 @@ export async function executeGatewayOpenAIEmbeddings(input: {
     request: normalized.request,
   });
 
+  const rateLimit = await enforceGatewayRateLimits({
+    agentApiKeyId: input.agentApiKeyId,
+    databaseUrl: input.databaseUrl,
+    requestId: input.requestId,
+    requestMetadata,
+  });
+  if (!rateLimit.ok) {
+    return {
+      body: rateLimit.body,
+      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
+      requestMetadata,
+      statusCode: rateLimit.statusCode,
+    };
+  }
+
+  const concurrencyLease = rateLimit.concurrencyLease;
   let activity: GatewayRequestActivityRoute | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
   try {
@@ -237,6 +256,11 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
+  } finally {
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
+    });
   }
 }
 

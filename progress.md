@@ -1334,3 +1334,11 @@
   - Console backend activity queries now support filters, pagination, requestId/activity detail lookup, and ordered fallback timeline without frontend UI changes.
   - Updated legacy fallback/schema E2E contracts for final success events and schema_version 0028.
   - Verification passed: feat-104 unit, feat-104 real PostgreSQL/Gateway E2E, focused legacy regressions feat-033/041/044/053/070/101, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` across all 103 previously passing features before marking.
+
+- [x] 2026-06-18 feat-107 Concurrency Limits and Enforcement Policy:
+  - Red phase: `pnpm exec vitest run tests/features/feat-107-concurrency-limit-policy.unit.test.ts` failed because `getConcurrencyWindow` and limit policy defaults were missing, and warn_only/manual_bypass still blocked over-limit requests.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-107-concurrency-limit-policy.e2e.spec.ts --grep 'concurrency limits increment release and respect block or warn enforcement policy'` failed because `agent_limits.alert_threshold` did not exist.
+  - Added migration `0031_concurrency_limit_policy` for `agent_limits.limit_type = 'concurrency'`, `alert_threshold`, `enforcement_policy`, `manual_bypass`, concurrency period/unit validation, schema version `0031`, and migration-status checksum.
+  - Gateway rate-limit enforcement now reads RPM, TPM, and concurrency rules, uses `rate_limit_windows.active_count` with a fixed concurrency window, increments before provider calls, returns stable 429 for block policy, lets warn_only/manual_bypass pass while still counting, and releases active_count on JSON success/failure, budget early returns, stream end/error/close, and client cancellation.
+  - `/v1/embeddings` now uses the same rate/concurrency path; Console backend and config import/export round-trip the new fields with default policy values without Console UI changes.
+  - Verification passed: feat-107 unit (4) and real PostgreSQL/Gateway/fake-provider E2E (1), `pnpm run db:migrate:check`, related feat-031/041/042/053/080/087/096 regressions, `pnpm run verify`, `pnpm run verify:features` across all 106 previously passing features before marking, and final `pnpm run verify:features` across all 107 passing features after marking.

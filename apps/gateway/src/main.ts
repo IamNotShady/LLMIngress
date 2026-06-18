@@ -219,6 +219,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       databaseUrl,
       execute: (requestActivityId) =>
         executeGatewayOpenAIEmbeddings({
+          agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
           requestActivityId,
           requestBody: request.body,

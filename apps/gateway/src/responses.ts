@@ -32,7 +32,7 @@ import {
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildOpenAIResponsesRequestMetadata,
   type GatewayRequestMetadata,
@@ -172,6 +172,7 @@ export async function executeGatewayOpenAIResponse(input: {
     };
   }
 
+  const concurrencyLease = rateLimit.concurrencyLease;
   let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
@@ -276,6 +277,11 @@ export async function executeGatewayOpenAIResponse(input: {
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
+  } finally {
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
+    });
   }
 }
 

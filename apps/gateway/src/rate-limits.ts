@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Client, type QueryResultRow } from "pg";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 
-export type GatewayRateLimitType = "rpm" | "tpm";
+export type GatewayRateLimitType = "concurrency" | "rpm" | "tpm";
+export type GatewayRateLimitEnforcementPolicy = "block" | "warn_only";
 
 export type GatewayRateLimitErrorBody = {
   error: {
@@ -16,7 +17,10 @@ export type GatewayRateLimitErrorBody = {
 };
 
 export type GatewayRateLimitDecision =
-  | { ok: true }
+  | {
+      concurrencyLease?: GatewayConcurrencyLease;
+      ok: true;
+    }
   | {
       body: GatewayRateLimitErrorBody;
       ok: false;
@@ -24,12 +28,20 @@ export type GatewayRateLimitDecision =
       statusCode: 429;
     };
 
+export type GatewayConcurrencyLease = {
+  agentApiKeyId: string;
+  window: WindowBoundary;
+};
+
 type AgentLimitRow = QueryResultRow & {
+  enforcement_policy: GatewayRateLimitEnforcementPolicy;
   limit_type: GatewayRateLimitType;
   limit_value: string;
+  manual_bypass: boolean;
 };
 
 type RateLimitWindowRow = QueryResultRow & {
+  active_count: number;
   request_count: number;
   token_count: number;
 };
@@ -50,7 +62,7 @@ export async function enforceGatewayRateLimits(input: {
 
   try {
     await client.query("begin");
-    const limits = await readEnabledMinuteLimits(client, input.agentApiKeyId);
+    const limits = await readEnabledGatewayRateLimits(client, input.agentApiKeyId);
     if (limits.length === 0) {
       await client.query("commit");
       return { ok: true };
@@ -59,29 +71,43 @@ export async function enforceGatewayRateLimits(input: {
     const now = new Date();
     const window = getMinuteWindow(now);
     const increments = limits.map((limit) => ({
+      enforcementPolicy: limit.enforcementPolicy,
       increment:
         limit.limitType === "rpm"
           ? 1
-          : input.requestMetadata.estimatedInputTokens +
-            input.requestMetadata.estimatedOutputTokens,
+          : limit.limitType === "tpm"
+            ? input.requestMetadata.estimatedInputTokens +
+              input.requestMetadata.estimatedOutputTokens
+            : 1,
       limitType: limit.limitType,
       limitValue: limit.limitValue,
+      manualBypass: limit.manualBypass,
+      window: limit.limitType === "concurrency" ? getConcurrencyWindow() : window,
     }));
 
     for (const increment of increments) {
       const currentCount = await lockRateLimitWindow(client, {
         agentApiKeyId: input.agentApiKeyId,
         limitType: increment.limitType,
-        window,
+        window: increment.window,
       });
       const decision = evaluateGatewayRateLimitWindow({
         currentCount:
-          increment.limitType === "rpm" ? currentCount.requestCount : currentCount.tokenCount,
+          increment.limitType === "rpm"
+            ? currentCount.requestCount
+            : increment.limitType === "tpm"
+              ? currentCount.tokenCount
+              : currentCount.activeCount,
+        enforcementPolicy: increment.enforcementPolicy,
         increment: increment.increment,
         limitType: increment.limitType,
         limitValue: increment.limitValue,
+        manualBypass: increment.manualBypass,
         requestId: input.requestId,
-        retryAfterMs: Math.max(1, window.windowEnd.getTime() - now.getTime()),
+        retryAfterMs:
+          increment.limitType === "concurrency"
+            ? 1
+            : Math.max(1, window.windowEnd.getTime() - now.getTime()),
       });
       if (!decision.ok) {
         await client.query("rollback");
@@ -94,15 +120,51 @@ export async function enforceGatewayRateLimits(input: {
         agentApiKeyId: input.agentApiKeyId,
         increment: increment.increment,
         limitType: increment.limitType,
-        window,
+        window: increment.window,
       });
     }
 
     await client.query("commit");
-    return { ok: true };
+    const concurrencyIncrement = increments.find(
+      (increment) => increment.limitType === "concurrency",
+    );
+    return {
+      concurrencyLease: concurrencyIncrement
+        ? { agentApiKeyId: input.agentApiKeyId, window: concurrencyIncrement.window }
+        : undefined,
+      ok: true,
+    };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+export async function releaseGatewayConcurrency(input: {
+  databaseUrl: string;
+  lease: GatewayConcurrencyLease | undefined;
+}): Promise<void> {
+  if (!input.lease) {
+    return;
+  }
+
+  const client = new Client({ connectionString: input.databaseUrl });
+  await client.connect();
+
+  try {
+    await client.query(
+      `
+        update rate_limit_windows
+        set active_count = greatest(active_count - 1, 0),
+            updated_at = now()
+        where agent_api_key_id = $1
+          and limit_type = 'concurrency'
+          and window_start = $2
+      `,
+      [input.lease.agentApiKeyId, input.lease.window.windowStart],
+    );
   } finally {
     await client.end();
   }
@@ -116,15 +178,27 @@ export function getMinuteWindow(date: Date): WindowBoundary {
   return { windowEnd, windowStart };
 }
 
+export function getConcurrencyWindow(): WindowBoundary {
+  return {
+    windowEnd: new Date("9999-12-31T23:59:59.999Z"),
+    windowStart: new Date("1970-01-01T00:00:00.000Z"),
+  };
+}
+
 export function evaluateGatewayRateLimitWindow(input: {
   currentCount: number;
+  enforcementPolicy?: GatewayRateLimitEnforcementPolicy;
   increment: number;
   limitType: GatewayRateLimitType;
   limitValue: number;
+  manualBypass?: boolean;
   requestId: string;
   retryAfterMs: number;
 }): GatewayRateLimitDecision {
   if (input.currentCount + input.increment <= input.limitValue) {
+    return { ok: true };
+  }
+  if (input.manualBypass || input.enforcementPolicy === "warn_only") {
     return { ok: true };
   }
 
@@ -160,28 +234,41 @@ export function createGatewayRateLimitErrorBody(input: {
   };
 }
 
-async function readEnabledMinuteLimits(
+async function readEnabledGatewayRateLimits(
   client: Client,
   agentApiKeyId: string,
-): Promise<Array<{ limitType: GatewayRateLimitType; limitValue: number }>> {
+): Promise<
+  Array<{
+    enforcementPolicy: GatewayRateLimitEnforcementPolicy;
+    limitType: GatewayRateLimitType;
+    limitValue: number;
+    manualBypass: boolean;
+  }>
+> {
   const result = await client.query<AgentLimitRow>(
     `
       select limit_type,
-             limit_value::text
+             limit_value::text,
+             enforcement_policy,
+             manual_bypass
       from agent_limits
       where agent_api_key_id = $1
         and enabled = true
-        and period = 'minute'
-        and ((limit_type = 'rpm' and unit = 'requests')
-          or (limit_type = 'tpm' and unit = 'tokens'))
-      order by case limit_type when 'rpm' then 1 else 2 end
+        and (
+          (limit_type = 'concurrency' and period = 'request' and unit = 'requests')
+          or (limit_type = 'rpm' and period = 'minute' and unit = 'requests')
+          or (limit_type = 'tpm' and period = 'minute' and unit = 'tokens')
+        )
+      order by case limit_type when 'concurrency' then 1 when 'rpm' then 2 else 3 end
     `,
     [agentApiKeyId],
   );
 
   return result.rows.map((row) => ({
+    enforcementPolicy: row.enforcement_policy,
     limitType: row.limit_type,
     limitValue: Number(row.limit_value),
+    manualBypass: row.manual_bypass,
   }));
 }
 
@@ -192,7 +279,7 @@ async function lockRateLimitWindow(
     limitType: GatewayRateLimitType;
     window: WindowBoundary;
   },
-): Promise<{ requestCount: number; tokenCount: number }> {
+): Promise<{ activeCount: number; requestCount: number; tokenCount: number }> {
   await client.query(
     `
       insert into rate_limit_windows (
@@ -217,7 +304,8 @@ async function lockRateLimitWindow(
   const result = await client.query<RateLimitWindowRow>(
     `
       select request_count,
-             token_count
+             token_count,
+             active_count
       from rate_limit_windows
       where agent_api_key_id = $1
         and limit_type = $2
@@ -232,6 +320,7 @@ async function lockRateLimitWindow(
   }
 
   return {
+    activeCount: Number(row.active_count),
     requestCount: Number(row.request_count),
     tokenCount: Number(row.token_count),
   };
@@ -251,14 +340,16 @@ async function incrementRateLimitWindow(
       update rate_limit_windows
       set request_count = request_count + $1,
           token_count = token_count + $2,
+          active_count = active_count + $3,
           updated_at = now()
-      where agent_api_key_id = $3
-        and limit_type = $4
-        and window_start = $5
+      where agent_api_key_id = $4
+        and limit_type = $5
+        and window_start = $6
     `,
     [
       input.limitType === "rpm" ? 1 : 0,
       input.limitType === "tpm" ? input.increment : 0,
+      input.limitType === "concurrency" ? input.increment : 0,
       input.agentApiKeyId,
       input.limitType,
       input.window.windowStart,

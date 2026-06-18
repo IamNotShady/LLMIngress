@@ -29,7 +29,7 @@ import type {
   NormalizedOpenAIChatRequest,
   OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildOpenAIChatCompletionRequestMetadata,
   type GatewayRequestMetadata,
@@ -181,6 +181,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     };
   }
 
+  const concurrencyLease = rateLimit.concurrencyLease;
   let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   let selectedActivityCandidate: GatewayRouteCandidateSnapshot | undefined;
@@ -285,6 +286,11 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
+  } finally {
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
+    });
   }
 }
 

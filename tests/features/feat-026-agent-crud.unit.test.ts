@@ -13,7 +13,9 @@ describe("feat-026 agent CRUD", () => {
       }),
     ).toEqual({
       agentType: "coding",
+      integrationPlatform: "other",
       name: "Codex CLI",
+      requestLoggingEnabled: true,
     });
   });
 

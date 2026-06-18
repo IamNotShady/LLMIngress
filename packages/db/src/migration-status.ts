@@ -180,6 +180,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0026",
     name: "provider_key_operational_metadata",
   },
+  {
+    checksum: "81567da886f409a2d0364d853f103b07d01ea57899058f3afc3825c9a726fefa",
+    id: "0027",
+    name: "agent_platform_status_logging",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

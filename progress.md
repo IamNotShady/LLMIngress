@@ -1300,3 +1300,11 @@
   - Previous provider_models-only implementation was rolled back at the user's request.
   - Current code remains on the pre-feat-100 pricing contract: built-in static registry, manual overrides in `model_price_overrides`, and price sync snapshots in `price_registry_snapshots`.
   - Do not resume the old `0024_provider_model_prices` / provider_models-only approach without a fresh design pass.
+
+- [x] 2026-06-18 feat-103 Agent Platform, Request Logging, and Derived Status:
+  - Red phase: `pnpm exec vitest run tests/features/feat-103-agent-platform-status.unit.test.ts` failed because migration 0027, Agent platform/logging normalization, derived status helper, and Gateway logging sanitizer did not exist.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-103-agent-platform-status.e2e.spec.ts --grep 'agents persist integration platform request logging and derived status from recent activity and risks'` failed because created Agents did not expose `integrationPlatform`, `requestLoggingEnabled`, or derived `status`.
+  - Added migration `0027_agent_platform_status_logging` for `agents.integration_platform`, `agents.request_logging_enabled`, and `request_activity.request_metadata`; updated `shippedSqlMigrations` and latest schema-version expectations.
+  - Console Agent create/update/list now persists integration platform and request logging while keeping `agent_type` unchanged. Listing status is derived from recent requests, obvious failure rate, active limit usage, and reachable unhealthy Provider/model health; no process or Agent heartbeat table was restored.
+  - Gateway auth now loads `agents.request_logging_enabled`; activity completion preserves accounting fields and usage/cost rows while stripping `request_metadata`, `route_reason`, `fallback_attempts`, and `error_message` when logging is disabled.
+  - Verification passed: feat-103 unit, feat-103 real PostgreSQL/Gateway E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` across all 102 previously passing features.

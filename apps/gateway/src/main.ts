@@ -127,6 +127,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
             }),
           model: virtualModelAccess.virtualModel.name,
           protocol: "chat_completions",
+          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
@@ -150,6 +151,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         }),
       model: virtualModelAccess.virtualModel.name,
       protocol: "chat_completions",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
@@ -225,6 +227,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         }),
       model: virtualModelAccess.virtualModel.name,
       protocol: "embeddings",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
@@ -279,6 +282,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
             }),
           model: virtualModelAccess.virtualModel.name,
           protocol: "responses",
+          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
@@ -301,6 +305,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         }),
       model: virtualModelAccess.virtualModel.name,
       protocol: "responses",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
@@ -355,6 +360,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
             }),
           model: virtualModelAccess.virtualModel.name,
           protocol: "messages",
+          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
@@ -377,6 +383,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         }),
       model: virtualModelAccess.virtualModel.name,
       protocol: "messages",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
@@ -532,6 +539,7 @@ async function executeRecordedGatewayJsonRequest(input: {
   }>;
   model: string;
   protocol: GatewayRequestActivityProtocol;
+  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }) {
@@ -549,6 +557,8 @@ async function executeRecordedGatewayJsonRequest(input: {
   await completeGatewayRequestActivity({
     activityId: activity.id,
     databaseUrl: input.databaseUrl,
+    requestLoggingEnabled: input.requestLoggingEnabled,
+    requestMetadata: response.requestMetadata,
     responseBody: response.body,
     route: response.activity,
     startedAt: activity.startedAt,
@@ -583,6 +593,7 @@ async function executeRecordedGatewayStreamingRequest(input: {
   execute: () => Promise<GatewayStreamingResult>;
   model: string;
   protocol: GatewayRequestActivityProtocol;
+  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }): Promise<GatewayStreamingResult> {
@@ -601,6 +612,8 @@ async function executeRecordedGatewayStreamingRequest(input: {
     await completeGatewayRequestActivity({
       activityId: activity.id,
       databaseUrl: input.databaseUrl,
+      requestLoggingEnabled: input.requestLoggingEnabled,
+      requestMetadata: response.requestMetadata,
       responseBody: response.body,
       route: response.activity,
       startedAt: activity.startedAt,
@@ -616,6 +629,8 @@ async function executeRecordedGatewayStreamingRequest(input: {
         completeGatewayRequestActivity({
           activityId: activity.id,
           databaseUrl: input.databaseUrl,
+          requestLoggingEnabled: input.requestLoggingEnabled,
+          requestMetadata: response.requestMetadata,
           responseBody: {},
           route: response.activity,
           startedAt: activity.startedAt,

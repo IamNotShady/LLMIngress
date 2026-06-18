@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
+import type { GatewayRequestMetadata } from "./request-metadata.js";
 
 export type GatewayRequestActivityProtocol =
   | "chat_completions"
@@ -47,6 +48,8 @@ type CompleteGatewayRequestActivityInput = {
   activityId: string;
   completedAt?: Date;
   databaseUrl: string;
+  requestLoggingEnabled: boolean;
+  requestMetadata?: GatewayRequestMetadata;
   responseBody: unknown;
   route?: GatewayRequestActivityRoute;
   startedAt: Date;
@@ -107,6 +110,12 @@ export async function completeGatewayRequestActivity(
     startedAt: input.startedAt,
     statusCode: input.statusCode,
   });
+  const loggingPolicy = applyGatewayRequestLoggingPolicy({
+    completion,
+    requestLoggingEnabled: input.requestLoggingEnabled,
+    requestMetadata: input.requestMetadata,
+    route: input.route,
+  });
   const client = new Client({ connectionString: input.databaseUrl });
   await client.connect();
 
@@ -119,24 +128,26 @@ export async function completeGatewayRequestActivity(
             provider_model_id = $4,
             route_reason = $5::jsonb,
             fallback_attempts = $6::jsonb,
-            status = $7,
-            error_code = $8,
-            error_message = $9,
-            http_status = $10,
-            latency_ms = $11,
-            completed_at = $12
+            request_metadata = $7::jsonb,
+            status = $8,
+            error_code = $9,
+            error_message = $10,
+            http_status = $11,
+            latency_ms = $12,
+            completed_at = $13
         where id = $1
       `,
       [
         input.activityId,
-        input.route?.routePolicyId ?? null,
-        input.route?.providerId ?? null,
-        input.route?.providerModelId ?? null,
-        JSON.stringify(input.route?.routeReason ?? {}),
-        JSON.stringify(input.route?.fallbackAttempts ?? []),
+        loggingPolicy.route?.routePolicyId ?? null,
+        loggingPolicy.route?.providerId ?? null,
+        loggingPolicy.route?.providerModelId ?? null,
+        JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
+        JSON.stringify(loggingPolicy.route?.fallbackAttempts ?? []),
+        JSON.stringify(loggingPolicy.requestMetadata),
         completion.status,
         completion.errorCode,
-        completion.errorMessage,
+        loggingPolicy.errorMessage,
         completion.httpStatus,
         completion.latencyMs,
         completion.completedAt.toISOString(),
@@ -145,6 +156,41 @@ export async function completeGatewayRequestActivity(
   } finally {
     await client.end();
   }
+}
+
+export function applyGatewayRequestLoggingPolicy(input: {
+  completion: GatewayActivityCompletion;
+  requestLoggingEnabled: boolean;
+  requestMetadata?: GatewayRequestMetadata;
+  route?: GatewayRequestActivityRoute;
+}): {
+  errorMessage: string | null;
+  requestMetadata: GatewayRequestMetadata | Record<string, never>;
+  route?: GatewayRequestActivityRoute;
+} {
+  if (input.requestLoggingEnabled) {
+    return {
+      errorMessage: input.completion.errorMessage,
+      requestMetadata: input.requestMetadata ?? {},
+      route: input.route,
+    };
+  }
+
+  return {
+    errorMessage: null,
+    requestMetadata: {},
+    route: input.route
+      ? {
+          modelId: input.route.modelId,
+          providerId: input.route.providerId,
+          providerKey: input.route.providerKey,
+          providerModelId: input.route.providerModelId,
+          routePolicyId: input.route.routePolicyId,
+          fallbackAttempts: [],
+          routeReason: {},
+        }
+      : undefined,
+  };
 }
 
 export function buildGatewayActivityCompletion(input: {

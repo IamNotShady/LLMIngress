@@ -120,6 +120,7 @@ export async function executeGatewayStreamingRequest(input: {
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
       snapshot: input.snapshot,
+      usesTools: normalized.requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);

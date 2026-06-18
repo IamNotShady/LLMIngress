@@ -8,6 +8,13 @@ import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
 } from "@llmingress/config";
+import {
+  normalizeProviderModelCapabilities,
+  normalizeRoutePolicyRules,
+  type ProviderModelCapabilities,
+  type RoutePolicyRules,
+  type RoutePolicyStrategy,
+} from "@llmingress/domain";
 import { Client } from "pg";
 import {
   createGatewayRuntimeStatusRecorder,
@@ -22,10 +29,12 @@ export type GatewayProviderSnapshot = {
   displayName: string;
 };
 
-export type GatewayRoutePolicyStrategy = "fixed" | "cost_first" | "balanced" | "quality_first";
+export type GatewayRoutePolicyStrategy = RoutePolicyStrategy;
 
 export type GatewayRouteCandidateSnapshot = {
   candidateOrder: number;
+  capabilities?: ProviderModelCapabilities;
+  contextWindow?: number | null;
   displayName: string;
   isFallback: boolean;
   modelId: string;
@@ -33,11 +42,13 @@ export type GatewayRouteCandidateSnapshot = {
   providerId: string;
   providerKey: string;
   providerModelId: string;
+  supportsTools?: boolean;
 };
 
 export type GatewayRoutePolicySnapshot = {
   candidates: GatewayRouteCandidateSnapshot[];
   id: string;
+  rules?: RoutePolicyRules;
   strategy: GatewayRoutePolicyStrategy;
   virtualModelId: string;
   virtualModelName: string;
@@ -84,9 +95,11 @@ type ProviderRow = {
 
 type RoutePolicyCandidateRow = {
   candidateOrder: number;
+  capabilityMetadata: unknown;
   displayName: string;
   id: string;
   cachedInputUsdPerMillionTokens: string | null;
+  contextWindow: number | null;
   inputUsdPerMillionTokens: string | null;
   isFallback: boolean;
   modelId: string;
@@ -94,7 +107,9 @@ type RoutePolicyCandidateRow = {
   providerId: string;
   providerKey: string;
   providerModelId: string;
+  rules: unknown;
   strategy: GatewayRoutePolicyStrategy;
+  supportsTools: boolean;
   syncedAt: Date | null;
   syncedCachedInputUsdPerMillionTokens: string | null;
   syncedInputUsdPerMillionTokens: string | null;
@@ -264,6 +279,7 @@ export async function loadGatewayConfigSnapshot(
       `
         select route_policies.id::text as id,
                route_policies.strategy,
+               route_policies.rules,
                virtual_models.id::text as "virtualModelId",
                virtual_models.name as "virtualModelName",
                route_policy_candidates.provider_model_id::text as "providerModelId",
@@ -271,6 +287,9 @@ export async function loadGatewayConfigSnapshot(
                route_policy_candidates.is_fallback as "isFallback",
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
+               provider_models.context_window as "contextWindow",
+               provider_models.supports_tools as "supportsTools",
+               provider_models.capability_metadata as "capabilityMetadata",
                providers.id::text as "providerId",
                providers.provider_key as "providerKey",
                provider_models.manual_input_usd_per_million_tokens::text
@@ -347,6 +366,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
       routePolicy = {
         candidates: [],
         id: row.id,
+        rules: normalizeRoutePolicyRules(row.rules),
         strategy: row.strategy,
         virtualModelId: row.virtualModelId,
         virtualModelName: row.virtualModelName,
@@ -356,6 +376,8 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
 
     routePolicy.candidates.push({
       candidateOrder: row.candidateOrder,
+      capabilities: normalizeProviderModelCapabilities(row.capabilityMetadata),
+      contextWindow: row.contextWindow,
       displayName: row.displayName,
       isFallback: row.isFallback,
       modelId: row.modelId,
@@ -368,6 +390,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
       providerId: row.providerId,
       providerKey: row.providerKey,
       providerModelId: row.providerModelId,
+      supportsTools: row.supportsTools,
     });
   }
 

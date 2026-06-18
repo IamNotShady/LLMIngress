@@ -44,6 +44,9 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@llmingress/security':
         specifier: workspace:*
         version: link:../../packages/security
@@ -78,6 +81,9 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@llmingress/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -126,7 +132,11 @@ importers:
         specifier: ^8.21.0
         version: 8.21.0
 
-  packages/domain: {}
+  packages/domain:
+    dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../billing
 
   packages/observability: {}
 

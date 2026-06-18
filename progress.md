@@ -2,13 +2,22 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-18 (feat-105 passing)
-**Active Feature:** none — feat-105 is `passing`; feat-106 is next
+**Last Updated:** 2026-06-18 (feat-106 passing)
+**Active Feature:** none — feat-106 is `passing`; feat-107 is next
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-106 — Advanced Route Policy Rules and Preview (passing)**:
+  - Added migration `0030_advanced_route_rules_preview`: `route_policies.rules` and `provider_models.capability_metadata` JSONB object fields, schema version `0030`, and migration checksum registration.
+  - Added `@llmingress/domain` route-rule contracts, stdlib validation helpers, shared candidate eligibility filtering, and route decision explanations for selected/excluded candidates.
+  - Gateway snapshots now load route policy rules and provider model context/tool/capability metadata, and Gateway request paths pass `usesTools` into shared route selection while preserving existing empty-rule feat-032 behavior.
+  - Added authenticated Console backend preview API `POST /api/route-policies/preview`, backed by current DB config and shared routing logic, with no provider credential attachment or provider calls.
+  - Console import/export now round-trips route policy rules and provider model capability metadata.
+  - TDD red observed first: feat-106 unit/E2E failed on missing migration, missing normalization/route explanation behavior, and missing preview API.
+  - Verification passed: feat-106 unit and real PostgreSQL Console preview E2E; related feat-032/080 unit and E2E regressions; feat-044 activity E2E regression; `pnpm run db:migrate:check`; `pnpm run verify`; `pnpm run verify:features` re-verified all 105 previously passing features before marking; final `pnpm run verify:features` re-verified all 106 passing features after marking.
 
 - [x] **feat-105 — Overview, Usage, and Route Analytics Backend (passing)**:
   - Added `apps/console/src/server/analytics.ts` for backend-only analytics snapshots: arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window KPIs, hour/day timeseries, top Agents/provider models/Virtual Models/routes, savings, failure rate, p95 latency, and route/fallback metrics.

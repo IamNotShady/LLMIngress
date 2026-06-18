@@ -195,6 +195,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0029",
     name: "analytics_backend_indexes",
   },
+  {
+    checksum: "824d5fa0b5dd07005b38c2a6d8ddcee33c69ec3fade3630f7026443b32cefdda",
+    id: "0030",
+    name: "advanced_route_rules_preview",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

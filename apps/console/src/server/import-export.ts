@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
+import {
+  normalizeProviderModelCapabilities,
+  normalizeRoutePolicyRules,
+  type ProviderModelCapabilities,
+  type RoutePolicyRules,
+} from "@llmingress/domain";
 import { Client, type QueryResultRow } from "pg";
 import { listProviderTemplateSelectorGroups } from "./provider-templates";
 
@@ -27,6 +33,7 @@ export type ExportedProvider = {
 
 export type ExportedProviderModel = {
   availability: "available" | "deprecated" | "not_listed" | "unavailable";
+  capabilityMetadata: ProviderModelCapabilities;
   contextWindow: number | null;
   displayName: string;
   id: string;
@@ -51,6 +58,7 @@ export type ExportedRoutePolicy = {
   fallbackProviderModelIds: string[];
   id: string;
   primaryProviderModelIds: string[];
+  rules: RoutePolicyRules;
   strategy: "balanced" | "cost_first" | "fixed" | "quality_first";
   virtualModelId: string;
 };
@@ -110,6 +118,7 @@ type ProviderRow = QueryResultRow & {
 
 type ProviderModelRow = QueryResultRow & {
   availability: ExportedProviderModel["availability"];
+  capability_metadata: unknown;
   context_window: number | null;
   display_name: string;
   id: string;
@@ -133,6 +142,7 @@ type VirtualModelRow = QueryResultRow & {
 
 type RoutePolicyRow = QueryResultRow & {
   id: string;
+  rules: unknown;
   strategy: ExportedRoutePolicy["strategy"];
   virtual_model_id: string;
 };
@@ -294,6 +304,7 @@ async function readProviderModels(
              context_window,
              supports_streaming,
              supports_tools,
+             capability_metadata,
              availability
       from provider_models
       order by provider_id, model_id
@@ -304,6 +315,7 @@ async function readProviderModels(
     const models = grouped.get(row.provider_id) ?? [];
     models.push({
       availability: row.availability,
+      capabilityMetadata: normalizeProviderModelCapabilities(row.capability_metadata),
       contextWindow: row.context_window,
       displayName: row.display_name,
       id: row.id,
@@ -363,6 +375,7 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
     `
       select id::text,
              virtual_model_id::text,
+             rules,
              strategy
       from route_policies
       order by id
@@ -395,6 +408,7 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
       primaryProviderModelIds: policyCandidates
         .filter((candidate) => !candidate.is_fallback)
         .map((candidate) => candidate.provider_model_id),
+      rules: normalizeRoutePolicyRules(policy.rules),
       strategy: policy.strategy,
       virtualModelId: policy.virtual_model_id,
     };
@@ -515,9 +529,9 @@ async function writeProviderModels(
         `
           insert into provider_models (
             id, provider_id, model_id, display_name, context_window, supports_streaming,
-            supports_tools, availability
+            supports_tools, availability, capability_metadata
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
           on conflict (id) do update
           set provider_id = excluded.provider_id,
               model_id = excluded.model_id,
@@ -526,6 +540,7 @@ async function writeProviderModels(
               supports_streaming = excluded.supports_streaming,
               supports_tools = excluded.supports_tools,
               availability = excluded.availability,
+              capability_metadata = excluded.capability_metadata,
               updated_at = now()
         `,
         [
@@ -537,6 +552,7 @@ async function writeProviderModels(
           model.supportsStreaming,
           model.supportsTools,
           model.availability,
+          JSON.stringify(model.capabilityMetadata),
         ],
       );
     }
@@ -684,14 +700,20 @@ async function writeRoutePolicies(
   for (const routePolicy of routePolicies) {
     await client.query(
       `
-        insert into route_policies (id, virtual_model_id, strategy)
-        values ($1, $2, $3)
+        insert into route_policies (id, virtual_model_id, strategy, rules)
+        values ($1, $2, $3, $4::jsonb)
         on conflict (id) do update
         set virtual_model_id = excluded.virtual_model_id,
             strategy = excluded.strategy,
+            rules = excluded.rules,
             updated_at = now()
       `,
-      [routePolicy.id, routePolicy.virtualModelId, routePolicy.strategy],
+      [
+        routePolicy.id,
+        routePolicy.virtualModelId,
+        routePolicy.strategy,
+        JSON.stringify(routePolicy.rules),
+      ],
     );
   }
 }
@@ -817,6 +839,7 @@ function normalizeProviderModels(value: unknown, path: string): ExportedProvider
         ["available", "deprecated", "not_listed", "unavailable"],
         `${path}[${index}].availability`,
       ),
+      capabilityMetadata: normalizeProviderModelCapabilities(input.capabilityMetadata ?? {}),
       contextWindow: normalizeNullablePositiveInteger(
         input.contextWindow,
         `${path}[${index}].contextWindow`,
@@ -877,6 +900,7 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
         input.primaryProviderModelIds,
         `routePolicies[${index}].primaryProviderModelIds`,
       ),
+      rules: normalizeRoutePolicyRules(input.rules ?? {}),
       strategy: normalizeEnum(
         input.strategy,
         ["balanced", "cost_first", "fixed", "quality_first"],

@@ -7,7 +7,6 @@ import {
   formatConsoleActivityCost,
   formatConsoleActivityFallbackAttempts,
   formatConsoleActivityRouteReason,
-  formatConsoleActivityTokens,
   listConsoleActivities,
 } from "../../server/activity";
 import {
@@ -510,48 +509,139 @@ function UsageCostDonut({
 export async function ActivitySection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
   const selectedActivityId = readSingleSearchParam(searchParams.activityId);
-  const activities = await listConsoleActivities(databaseUrl);
+  const statusFilter = readSingleSearchParam(searchParams.status) ?? "";
+  const requestQuery = (readSingleSearchParam(searchParams.q) ?? "").trim();
+  const allActivities = await listConsoleActivities(databaseUrl);
+  const statusOptions = Array.from(
+    new Set(allActivities.map((activity) => activity.status)),
+  ).sort();
+
+  // Filtering runs over the fetched rows (the activity query is unparameterized).
+  const activities = allActivities.filter((activity) => {
+    if (statusFilter && activity.status !== statusFilter) {
+      return false;
+    }
+    if (requestQuery && !activity.requestId.toLowerCase().includes(requestQuery.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
+
   const selectedActivity =
     activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
   const view = paginate(activities, readPageParam(searchParams));
+
   return (
     <section className="providers-panel" id="activity" aria-label="Activity">
-      {activities.length === 0 ? (
+      <form className="filter-bar" action="/activity" method="get">
+        <div className="console-field">
+          <label htmlFor="activity-status">Status</label>
+          <select id="activity-status" name="status" defaultValue={statusFilter}>
+            <option value="">All statuses</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="console-field">
+          <label htmlFor="activity-q">Request ID</label>
+          <input id="activity-q" name="q" defaultValue={requestQuery} placeholder="req_..." />
+        </div>
+        <div className="console-actions">
+          <button type="submit">Apply</button>
+        </div>
+      </form>
+
+      {allActivities.length === 0 ? (
         <p>No activity recorded.</p>
       ) : (
-        <div className="activity-layout">
+        <div className="detail-layout">
           <div className="activity-list-col">
-            <nav className="activity-list" aria-label="Recent requests">
-              {view.items.map((activity) => (
-                <a
-                  className={
-                    selectedActivity?.id === activity.id
-                      ? "activity-list-item activity-list-item-selected"
-                      : "activity-list-item"
-                  }
-                  href={buildQueryHref(searchParams, { activityId: activity.id })}
-                  key={activity.id}
-                >
-                  <span className="activity-request-id">{activity.requestId}</span>
-                  <span>{formatActivityListStatus(activity)}</span>
-                  <span>{formatActivityModelSummary(activity)}</span>
-                </a>
-              ))}
-            </nav>
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Request</th>
+                    <th>Provider / Model</th>
+                    <th className="num">Tokens</th>
+                    <th className="num">Cost</th>
+                    <th className="num">Latency</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {view.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={6}>No requests match the filters.</td>
+                    </tr>
+                  ) : (
+                    view.items.map((activity) => (
+                      <tr
+                        key={activity.id}
+                        className={
+                          selectedActivity?.id === activity.id ? "is-selected" : "is-clickable"
+                        }
+                      >
+                        <td className="mono">
+                          <a href={buildQueryHref(searchParams, { activityId: activity.id })}>
+                            {activity.requestId.slice(0, 12)}
+                          </a>
+                        </td>
+                        <td>{formatActivityModelSummary(activity)}</td>
+                        <td className="num">{formatCompactNumber(activity.totalTokens ?? 0)}</td>
+                        <td className="num">{formatConsoleActivityCost(activity.totalCostUsd)}</td>
+                        <td className="num">{formatActivityLatency(activity.latencyMs)}</td>
+                        <td>
+                          <ActivityStatusPill status={activity.status} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
             <Pager view={view} searchParams={searchParams} />
           </div>
           {selectedActivity ? (
-            <article className="activity-detail" aria-labelledby="activity-detail-title">
-              <h2 id="activity-detail-title">{selectedActivity.requestId}</h2>
-              <p>Provider: {formatActivityProviderLabel(selectedActivity)}</p>
-              <p>Model hit: {formatActivityModelHitLabel(selectedActivity)}</p>
-              <p>{formatConsoleActivityTokens(selectedActivity)}</p>
-              <p>Cost: {formatConsoleActivityCost(selectedActivity.totalCostUsd)}</p>
-              <p>Route reason: {formatConsoleActivityRouteReason(selectedActivity.routeReason)}</p>
-              <p>Error code: {selectedActivity.errorCode ?? "None"}</p>
-              <div className="activity-fallbacks">
-                <p>Fallback attempts</p>
-                <ul>
+            <section className="detail-panel" aria-labelledby="activity-detail-title">
+              <div className="detail-panel-head">
+                <h2 className="detail-panel-title" id="activity-detail-title">
+                  Request detail
+                </h2>
+                <ActivityStatusPill status={selectedActivity.status} />
+              </div>
+              <p className="key-display">{selectedActivity.requestId}</p>
+              <dl className="detail-field-list">
+                <div className="detail-field">
+                  <dt>Provider</dt>
+                  <dd>{formatActivityProviderLabel(selectedActivity)}</dd>
+                </div>
+                <div className="detail-field">
+                  <dt>Model hit</dt>
+                  <dd>{formatActivityModelHitLabel(selectedActivity)}</dd>
+                </div>
+                <div className="detail-field">
+                  <dt>Tokens</dt>
+                  <dd>{formatCompactNumber(selectedActivity.totalTokens ?? 0)}</dd>
+                </div>
+                <div className="detail-field">
+                  <dt>Cost</dt>
+                  <dd>{formatConsoleActivityCost(selectedActivity.totalCostUsd)}</dd>
+                </div>
+                <div className="detail-field">
+                  <dt>Latency</dt>
+                  <dd>{formatActivityLatency(selectedActivity.latencyMs)}</dd>
+                </div>
+                <div className="detail-field">
+                  <dt>Route reason</dt>
+                  <dd>{formatConsoleActivityRouteReason(selectedActivity.routeReason)}</dd>
+                </div>
+              </dl>
+              <div>
+                <p className="detail-section-label">Fallback timeline</p>
+                <ul className="timeline">
                   {formatConsoleActivityFallbackAttempts(selectedActivity.fallbackAttempts).map(
                     (attempt) => (
                       <li key={attempt}>{attempt}</li>
@@ -559,7 +649,20 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                   )}
                 </ul>
               </div>
-            </article>
+              {selectedActivity.errorCode ? (
+                <p className="callout callout--warn">Error: {selectedActivity.errorCode}</p>
+              ) : null}
+              <div>
+                <p className="detail-section-label">Request metadata</p>
+                <pre className="code-block">
+                  {`protocol: ${selectedActivity.protocol}
+http_status: ${selectedActivity.httpStatus ?? "—"}
+model: ${selectedActivity.model ?? "—"}
+started_at: ${formatDateTime(selectedActivity.startedAt)}`}
+                </pre>
+                <p className="callout">Prompt / response bodies are not stored.</p>
+              </div>
+            </section>
           ) : null}
         </div>
       )}
@@ -1975,10 +2078,6 @@ function readSingleSearchParam(value: string | string[] | undefined): string | u
     return value[0];
   }
   return value;
-}
-
-function formatActivityListStatus(activity: ConsoleActivity): string {
-  return `${activity.protocol} - ${activity.status} - ${activity.httpStatus ?? "no status"}`;
 }
 
 function formatActivityProviderLabel(activity: ConsoleActivity): string {

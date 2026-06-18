@@ -1,6 +1,6 @@
 "use client";
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import type { CSSProperties } from "react";
 import { categoricalColor } from "./palette";
 
 export type DonutSlice = {
@@ -18,6 +18,9 @@ export type DonutValueFormat = "number" | "usd" | "percent";
 
 function formatDonutValue(value: number, format: DonutValueFormat): string {
   if (format === "usd") {
+    if (value > 0 && value < 0.01) {
+      return `$${value.toFixed(4)}`;
+    }
     return `$${value.toFixed(2)}`;
   }
   if (format === "percent") {
@@ -42,41 +45,15 @@ export function DonutBreakdown({
     ...slice,
     color: slice.color ?? categoricalColor(index),
   }));
+  const ringStyle = {
+    "--donut-fill": buildDonutGradient(colored, total),
+    height,
+  } as CSSProperties;
 
   return (
     <div className="donut" role="img" aria-label={ariaLabel}>
-      <div className="donut-ring" style={{ height }}>
-        <ResponsiveContainer width="100%" height={height}>
-          <PieChart>
-            <Pie
-              data={colored}
-              dataKey="value"
-              nameKey="name"
-              innerRadius="62%"
-              outerRadius="100%"
-              paddingAngle={1.5}
-              stroke="var(--surface)"
-              strokeWidth={2}
-            >
-              {colored.map((slice) => (
-                <Cell key={slice.name} fill={slice.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                fontSize: 12,
-                color: "var(--text)",
-              }}
-              formatter={(value, name) => [
-                formatDonutValue(Number(value), valueFormat),
-                String(name),
-              ]}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+      <div className="donut-ring" style={ringStyle}>
+        <span className="donut-ring-graphic" aria-hidden />
       </div>
       <ul className="donut-legend">
         {colored.map((slice) => {
@@ -85,11 +62,27 @@ export function DonutBreakdown({
             <li key={slice.name}>
               <span className="donut-legend-dot" style={{ background: slice.color }} aria-hidden />
               <span className="donut-legend-name">{slice.name}</span>
-              <span className="donut-legend-value">{share}%</span>
+              <span className="donut-legend-value">
+                {valueFormat === "usd" ? `${formatDonutValue(slice.value, valueFormat)} / ` : null}
+                {share}%
+              </span>
             </li>
           );
         })}
       </ul>
     </div>
   );
+}
+
+function buildDonutGradient(data: Array<DonutSlice & { color: string }>, total: number): string {
+  if (total <= 0) {
+    return "conic-gradient(var(--border) 0turn 1turn)";
+  }
+  let cursor = 0;
+  const segments = data.map((slice) => {
+    const start = cursor;
+    cursor += slice.value / total;
+    return `${slice.color} ${start}turn ${cursor}turn`;
+  });
+  return `conic-gradient(${segments.join(", ")})`;
 }

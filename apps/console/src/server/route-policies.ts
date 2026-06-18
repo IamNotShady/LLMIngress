@@ -28,6 +28,7 @@ export type NormalizedRoutePolicyFormInput = {
 
 export type ConsoleProviderModelOption = {
   availability: string;
+  contextWindow: number | null;
   id: string;
   modelDisplayName: string;
   modelId: string;
@@ -43,6 +44,8 @@ export type ConsoleProviderModelOption = {
   providerId: string;
   providerKey: string;
   providerEnabled: boolean;
+  supportsStreaming: boolean;
+  supportsTools: boolean;
 };
 
 export type ConsoleRoutePolicyCandidate = ConsoleProviderModelOption & {
@@ -128,6 +131,7 @@ type CandidateRow = QueryResultRow & {
 
 type ProviderModelOptionRow = QueryResultRow & {
   availability: string;
+  context_window?: number | null;
   id: string;
   model_display_name: string;
   model_id: string;
@@ -145,6 +149,8 @@ type ProviderModelOptionRow = QueryResultRow & {
   provider_enabled: boolean;
   provider_id: string;
   provider_key: string;
+  supports_streaming?: boolean | null;
+  supports_tools?: boolean | null;
 };
 
 type BudgetedVirtualModelUsageRow = QueryResultRow & {
@@ -836,6 +842,9 @@ function providerModelOptionsSelectSql(): string {
            providers.enabled as provider_enabled,
            provider_models.model_id,
            provider_models.display_name as model_display_name,
+           provider_models.context_window,
+           provider_models.supports_streaming,
+           provider_models.supports_tools,
            provider_models.availability,
            provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
            provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
@@ -927,6 +936,7 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
 
   return {
     availability: row.availability,
+    contextWindow: row.context_window ?? null,
     id: row.id,
     modelDisplayName: row.model_display_name,
     modelId: row.model_id,
@@ -951,6 +961,8 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     providerEnabled: row.provider_enabled,
     providerId: row.provider_id,
     providerKey: row.provider_key,
+    supportsStreaming: row.supports_streaming ?? false,
+    supportsTools: row.supports_tools ?? false,
   };
 }
 

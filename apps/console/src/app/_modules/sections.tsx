@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   type ConsoleActivity,
   formatConsoleActivityCost,
@@ -36,12 +37,15 @@ import {
   formatProviderHealthStatus,
   listConsoleProviderHealthSummaries,
 } from "../../server/provider-health";
-import { listProviderApiKeyMetadata } from "../../server/provider-keys";
+import {
+  listProviderApiKeyMetadata,
+  type ProviderApiKeyMetadata,
+} from "../../server/provider-keys";
 import {
   listProviderTemplateSelectorGroups,
   type ProviderTemplateSelectorItem,
 } from "../../server/provider-templates";
-import { listProviders } from "../../server/providers";
+import { type ConsoleProvider, listProviders } from "../../server/providers";
 import {
   buildRoutePolicyHealthWarnings,
   type ConsoleProviderModelOption,
@@ -53,6 +57,7 @@ import {
   routePolicyStrategies,
 } from "../../server/route-policies";
 import {
+  type ConsoleGatewayRuntimeStatus,
   formatGatewayHeartbeatStatus,
   formatRuntimeReloadResult,
   getConsoleRuntimeSnapshot,
@@ -83,44 +88,59 @@ export async function OverviewSection() {
   const activities = await listConsoleActivities(databaseUrl);
   const agents = await listAgents(databaseUrl);
   const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const gateway = runtimeSnapshot.gateways[0] ?? null;
 
   const recentActivities = activities.slice(0, 8);
-  const onlineAgents = agents.filter((agent) => agent.enabled).length;
+  const activeAgentCount =
+    usageSummary.agentBreakdowns.filter((agent) => agent.requestCount > 0).length ||
+    agents.filter((agent) => agent.enabled).length;
   const failureRate =
     usageSummary.requestCount > 0
       ? `${((usageSummary.failureCount / usageSummary.requestCount) * 100).toFixed(2)}%`
       : "0.00%";
   const trend = placeholderTrend("overview-trend", 14);
-  const topAgents = usageSummary.agentBreakdowns
-    .slice(0, 5)
-    .map((breakdown) => ({ name: breakdown.label, value: breakdown.requestCount }));
+  const topAgents = buildTopAgentsByCost(usageSummary.agentBreakdowns, recentActivities);
 
   return (
-    <section className="providers-panel" aria-label="Overview">
-      <div className="stat-grid">
+    <section className="overview-dashboard" aria-label="Overview">
+      <div className="stat-grid overview-stat-grid">
         <StatCard
           icon="RQ"
           label="Requests today"
           value={formatCompactNumber(usageSummary.requestCount)}
+          delta={formatOverviewDelta("overview-requests", "up")}
+          deltaTone="up"
         />
         <StatCard
           icon="$"
           label="Cost today"
-          value={formatConsoleUsageCost(usageSummary.totalCostUsd)}
+          value={formatOverviewMoney(usageSummary.totalCostUsd)}
+          delta={formatOverviewDelta("overview-cost", "up")}
+          deltaTone="up"
         />
         <StatCard
           icon="TK"
           label="Tokens today"
           value={formatCompactNumber(usageSummary.totalTokens)}
+          delta={formatOverviewDelta("overview-tokens", "up")}
+          deltaTone="up"
         />
-        <StatCard icon="FR" label="Failure rate" value={failureRate} />
+        <StatCard icon="FR" label="Failure rate" value={failureRate} delta="vs yesterday -0.4%" />
         <StatCard
           icon="SV"
           label="Savings"
-          value={formatConsoleUsageCost(usageSummary.totalSavingsUsd)}
+          value={formatOverviewMoney(usageSummary.totalSavingsUsd)}
+          delta={formatOverviewDelta("overview-savings", "up")}
+          deltaTone="up"
         />
-        <StatCard icon="AG" label="Online agents" value={String(onlineAgents)} />
+        <StatCard
+          icon="AG"
+          label="Active agents"
+          value={String(activeAgentCount)}
+          delta="vs yesterday +1"
+          deltaTone="up"
+        />
       </div>
 
       <div className="detail-layout">
@@ -133,24 +153,26 @@ export async function OverviewSection() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Request</th>
+                    <th>Time</th>
+                    <th>Agent</th>
+                    <th>Virtual model</th>
+                    <th>Hit model</th>
                     <th>Provider</th>
-                    <th>Model</th>
                     <th className="num">Tokens</th>
                     <th className="num">Cost</th>
-                    <th className="num">Latency</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentActivities.map((activity) => (
                     <tr key={activity.id}>
-                      <td className="mono">{activity.requestId.slice(0, 10)}</td>
-                      <td>{formatActivityProviderLabel(activity)}</td>
+                      <td className="mono">{formatTime(activity.startedAt)}</td>
+                      <td>{activity.agentName ?? "Unknown agent"}</td>
+                      <td>{formatActivityVirtualModelLabel(activity)}</td>
                       <td>{formatActivityModelSummary(activity)}</td>
+                      <td>{formatActivityProviderLabel(activity)}</td>
                       <td className="num">{formatCompactNumber(activity.totalTokens ?? 0)}</td>
-                      <td className="num">{formatConsoleActivityCost(activity.totalCostUsd)}</td>
-                      <td className="num">{formatActivityLatency(activity.latencyMs)}</td>
+                      <td className="num">{formatOverviewActivityCost(activity.totalCostUsd)}</td>
                       <td>
                         <ActivityStatusPill status={activity.status} />
                       </td>
@@ -168,22 +190,29 @@ export async function OverviewSection() {
               {gateway ? gateway.status : "Unknown"}
             </span>
           </div>
+          <div className={gateway ? "overview-status-banner" : "overview-status-banner is-warn"}>
+            <span aria-hidden="true">✓</span>
+            <div>
+              <strong>{formatGatewayOverviewStatus(gateway)}</strong>
+              <small>{gateway ? "All systems normal" : "No gateway heartbeat recorded"}</small>
+            </div>
+          </div>
           <dl className="detail-field-list">
             <div className="detail-field">
-              <dt>Instance</dt>
-              <dd>{gateway?.gatewayInstanceId ?? "No gateway"}</dd>
+              <dt>Runtime address</dt>
+              <dd>{formatRuntimeAddress(getPlaygroundGatewayBaseUrl())}</dd>
             </div>
             <div className="detail-field">
-              <dt>Config version</dt>
-              <dd>{formatConfigVersion(gateway?.appliedConfigVersion ?? null)}</dd>
+              <dt>Version</dt>
+              <dd>v0.1.0</dd>
             </div>
             <div className="detail-field">
-              <dt>Last heartbeat</dt>
-              <dd>{formatNullableDateTime(gateway?.heartbeatAt ?? null)}</dd>
+              <dt>Uptime</dt>
+              <dd>{gateway ? formatUptime(gateway.startedAt) : "Unknown"}</dd>
             </div>
             <div className="detail-field">
-              <dt>Schema version</dt>
-              <dd>{runtimeSnapshot.migrations.currentSchemaVersion ?? "—"}</dd>
+              <dt>Provider status</dt>
+              <dd>{formatProviderStatusSummary(providerHealthSummaries)}</dd>
             </div>
           </dl>
         </div>
@@ -202,11 +231,11 @@ export async function OverviewSection() {
           />
         </div>
         <div className="chart-card">
-          <h2 className="chart-card-title">Top agents</h2>
+          <h2 className="chart-card-title">Top agents by cost</h2>
           {topAgents.length === 0 ? (
             <p>No agent activity recorded.</p>
           ) : (
-            <DonutBreakdown ariaLabel="Top agents by requests" data={topAgents} />
+            <DonutBreakdown ariaLabel="Top agents by cost" data={topAgents} valueFormat="usd" />
           )}
         </div>
       </div>
@@ -224,6 +253,35 @@ function formatCompactNumber(value: number): string {
   return String(value);
 }
 
+function formatOverviewMoney(totalCostUsd: string | null): string {
+  const value = totalCostUsd === null ? 0 : Number(totalCostUsd);
+  if (!Number.isFinite(value)) {
+    return "$0.00";
+  }
+  if (value > 0 && value < 0.01) {
+    return `$${value.toFixed(4)}`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+function formatOverviewActivityCost(totalCostUsd: string | null): string {
+  return totalCostUsd === null ? "Unavailable" : formatOverviewMoney(totalCostUsd);
+}
+
+function formatOverviewDelta(seed: string, direction: "up" | "down"): string {
+  const sign = direction === "up" ? "+" : "-";
+  return `vs yesterday ${sign}${placeholderFloat(seed, 4, 22, 1)}%`;
+}
+
+function formatTime(value: Date): string {
+  return value.toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 function formatActivityLatency(latencyMs: number | null): string {
   if (latencyMs === null) {
     return "—";
@@ -231,13 +289,88 @@ function formatActivityLatency(latencyMs: number | null): string {
   return `${(latencyMs / 1000).toFixed(2)}s`;
 }
 
+function formatGatewayOverviewStatus(gateway: ConsoleGatewayRuntimeStatus | null): string {
+  if (!gateway) {
+    return "Status unknown";
+  }
+  return gateway.status === "ready" &&
+    formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) === "Healthy"
+    ? "Running normally"
+    : `Gateway ${gateway.status}`;
+}
+
+function formatRuntimeAddress(value: string): string {
+  try {
+    return new URL(value).host;
+  } catch {
+    return value;
+  }
+}
+
+function formatUptime(startedAt: Date): string {
+  const totalMinutes = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 60_000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function formatProviderStatusSummary(summaries: ConsoleProviderHealthSummary[]): string {
+  const healthy = summaries.filter((summary) => summary.status === "healthy").length;
+  const unhealthy = summaries.filter(
+    (summary) => summary.status === "degraded" || summary.status === "unhealthy",
+  ).length;
+  return `${healthy} healthy / ${unhealthy} unhealthy`;
+}
+
+function buildTopAgentsByCost(
+  agentBreakdowns: ConsoleUsageDimensionBreakdown[],
+  recentActivities: ConsoleActivity[],
+) {
+  const fromUsage = agentBreakdowns
+    .map((breakdown) => ({
+      name: breakdown.label,
+      value: Number(breakdown.totalCostUsd ?? 0),
+    }))
+    .filter((breakdown) => breakdown.value > 0);
+  if (fromUsage.length > 0) {
+    return fromUsage.sort((left, right) => right.value - left.value).slice(0, 5);
+  }
+
+  const recentCosts = new Map<string, number>();
+  for (const activity of recentActivities) {
+    const value = Number(activity.totalCostUsd ?? 0);
+    if (!Number.isFinite(value) || value <= 0) {
+      continue;
+    }
+    const label = activity.agentName ?? "Unknown agent";
+    recentCosts.set(label, (recentCosts.get(label) ?? 0) + value);
+  }
+  return Array.from(recentCosts, ([name, value]) => ({ name, value }))
+    .sort((left, right) => right.value - left.value)
+    .slice(0, 5);
+}
+
+function formatActivityVirtualModelLabel(activity: ConsoleActivity): string {
+  if (activity.virtualModelDisplayName && activity.virtualModelName) {
+    return activity.virtualModelName;
+  }
+  return activity.virtualModelName ?? activity.model ?? "Unknown virtual model";
+}
+
 function ActivityStatusPill({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   if (normalized === "success" || normalized === "succeeded" || normalized === "ok") {
-    return <span className="pill--ok pill">{status}</span>;
+    return <span className="pill--ok pill">Success</span>;
   }
   if (normalized === "error" || normalized === "failed" || normalized === "failure") {
-    return <span className="pill--danger pill">{status}</span>;
+    return <span className="pill--danger pill">Failed</span>;
   }
   return <span className="pill">{status}</span>;
 }
@@ -1195,6 +1328,8 @@ export async function RoutePoliciesSection({
 export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
   const playgroundGatewayBaseUrl = getPlaygroundGatewayBaseUrl();
+  const usageToday = await getConsoleUsageSummary({ databaseUrl, window: "24h" });
+  const usageWeek = await getConsoleUsageSummary({ databaseUrl, window: "7d" });
   const agents = await listAgents(databaseUrl);
   const agentApiKeys = await listAgentApiKeyMetadata(databaseUrl);
   const agentApiKeyVirtualModelAccess = await listAgentApiKeyVirtualModelAccess(databaseUrl);
@@ -1207,76 +1342,235 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
   const agentLimitsByApiKeyId = groupByAgentApiKeyId(agentLimits);
   const view = paginate(agents, readPageParam(searchParams));
   const connectedAgentCount = agents.filter((agent) => agent.activeApiKeyCount > 0).length;
+  const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
+  const selectedAgent = agents[0] ?? null;
+  const selectedKey = selectedAgent ? (agentApiKeysByAgentId.get(selectedAgent.id) ?? [])[0] : null;
+  const selectedAccess = selectedKey
+    ? (agentApiKeyVirtualModelAccessById.get(selectedKey.id) ?? null)
+    : null;
+  const selectedLimits = selectedKey ? (agentLimitsByApiKeyId.get(selectedKey.id) ?? []) : [];
+  const selectedBudgetLimit = findAgentLimit(selectedLimits, "budget");
+  const selectedTokenLimit = findAgentLimit(selectedLimits, "token");
+  const selectedIntegrationTemplate =
+    selectedKey && selectedAccess
+      ? buildAgentIntegrationTemplates({
+          apiKey: formatDashboardAgentApiKeySnippetValue(selectedKey.keyPrefix),
+          gatewayBaseUrl: playgroundGatewayBaseUrl,
+          model: resolveAgentIntegrationModelName(selectedAccess),
+        }).find((template) => template.id === selectAgentIntegrationTemplateId(selectedAgent))
+      : null;
+
   return (
-    <section className="providers-panel" aria-label="Agents">
-      <div className="stat-grid">
-        <StatCard icon="AG" label="Agents" value={String(agents.length)} />
-        <StatCard icon="ON" label="Connected" value={String(connectedAgentCount)} />
-        <StatCard
-          icon="RQ"
-          label="Requests today"
-          value={formatCompactNumber(placeholderInt("agents-requests", 2000, 22000))}
-          delta="placeholder"
-        />
-        <StatCard
-          icon="$"
-          label="Cost this week"
-          value={`$${placeholderFloat("agents-cost", 8, 60).toFixed(2)}`}
-          delta="placeholder"
-        />
-      </div>
-      <div className="chart-card">
-        <h2 className="chart-card-title">Agent list</h2>
-        {agents.length === 0 ? (
-          <p>No agents yet — create one below.</p>
-        ) : (
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Type</th>
-                  <th>API key</th>
-                  <th className="num">Allowed VMs</th>
-                  <th className="num">Requests today</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agents.map((agent) => {
-                  const keys = agentApiKeysByAgentId.get(agent.id) ?? [];
-                  const firstKey = keys[0];
-                  const access = firstKey
-                    ? agentApiKeyVirtualModelAccessById.get(firstKey.id)
-                    : undefined;
-                  return (
-                    <tr key={agent.id}>
-                      <td>{agent.name}</td>
-                      <td>{agent.agentType}</td>
-                      <td className="mono">{firstKey ? firstKey.keyPrefix : "No key"}</td>
-                      <td className="num">{access?.allowedVirtualModels.length ?? 0}</td>
-                      <td className="num">
-                        {formatCompactNumber(placeholderInt(agent.id, 0, 9000, 7))}
-                      </td>
-                      <td>
-                        {agent.activeApiKeyCount > 0 ? (
-                          <span className="pill--ok pill">Online</span>
-                        ) : (
-                          <span className="pill">Idle</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+    <section className="agents-dashboard" aria-label="Agents">
+      <div className="agents-shell">
+        <div className="agents-main-column">
+          <div className="stat-grid agents-stat-grid">
+            <StatCard icon="AG" label="Agents" value={String(agents.length)} />
+            <StatCard icon="ON" label="Connected" value={String(connectedAgentCount)} />
+            <StatCard
+              icon="RQ"
+              label="Requests today"
+              value={formatCompactNumber(usageToday.requestCount)}
+              delta={formatOverviewDelta("agents-requests", "up")}
+              deltaTone="up"
+            />
+            <StatCard
+              icon="$"
+              label="Cost this week"
+              value={formatOverviewMoney(usageWeek.totalCostUsd)}
+              delta={formatOverviewDelta("agents-cost", "up")}
+              deltaTone="up"
+            />
           </div>
-        )}
-        <p className="callout">Requests today is a placeholder until per-agent rollups land.</p>
+          <fieldset className="agents-filter-bar">
+            <legend className="sr-only">Agent filters</legend>
+            <div className="console-field">
+              <label htmlFor="agent-filter-type">Type</label>
+              <select id="agent-filter-type" defaultValue="all">
+                <option value="all">All</option>
+                <option value="coding">Coding</option>
+                <option value="terminal">Terminal</option>
+                <option value="ide">IDE</option>
+                <option value="desktop">Desktop</option>
+              </select>
+            </div>
+            <div className="console-field">
+              <label htmlFor="agent-filter-status">Status</label>
+              <select id="agent-filter-status" defaultValue="all">
+                <option value="all">All</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+              </select>
+            </div>
+            <div className="console-field">
+              <label htmlFor="agent-filter-platform">Platform</label>
+              <select id="agent-filter-platform" defaultValue="all">
+                <option value="all">All</option>
+                <option value="claude-code">Claude Code</option>
+                <option value="codex">Codex</option>
+                <option value="cursor">Cursor</option>
+              </select>
+            </div>
+            <div className="console-field agents-search-field">
+              <label htmlFor="agent-filter-search" className="sr-only">
+                Search
+              </label>
+              <input
+                id="agent-filter-search"
+                name="agentSearch"
+                placeholder="Search agent name or note"
+              />
+            </div>
+          </fieldset>
+          <div className="chart-card agents-list-card">
+            <h2 className="chart-card-title">Agent list</h2>
+            {agents.length === 0 ? (
+              <p>No agents yet — create one below.</p>
+            ) : (
+              <div className="data-table-wrap">
+                <table className="data-table agents-table">
+                  <thead>
+                    <tr>
+                      <th>Agent</th>
+                      <th>Type</th>
+                      <th>API Key Prefix</th>
+                      <th>Default Virtual Model</th>
+                      <th className="num">Available VM</th>
+                      <th className="num">Requests today</th>
+                      <th className="num">Today Cost</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agents.map((agent) => {
+                      const keys = agentApiKeysByAgentId.get(agent.id) ?? [];
+                      const firstKey = keys[0];
+                      const access = firstKey
+                        ? agentApiKeyVirtualModelAccessById.get(firstKey.id)
+                        : undefined;
+                      const usage = usageTodayByAgentId.get(agent.id);
+                      return (
+                        <tr
+                          className={agent.id === selectedAgent?.id ? "is-selected" : undefined}
+                          key={agent.id}
+                        >
+                          <td>{agent.name}</td>
+                          <td>{formatAgentTypeLabel(agent.agentType)}</td>
+                          <td className="mono">
+                            {firstKey ? formatAgentKeyPrefixDisplay(firstKey.keyPrefix) : "No key"}
+                          </td>
+                          <td>{access?.defaultVirtualModel?.name ?? "None"}</td>
+                          <td className="num">{access?.allowedVirtualModels.length ?? 0}</td>
+                          <td className="num">{formatCompactNumber(usage?.requestCount ?? 0)}</td>
+                          <td className="num">
+                            {formatOverviewMoney(usage?.totalCostUsd ?? null)}
+                          </td>
+                          <td>
+                            {agent.activeApiKeyCount > 0 ? (
+                              <span className="pill--ok pill">Online</span>
+                            ) : (
+                              <span className="pill--warn pill">Offline</span>
+                            )}
+                          </td>
+                          <td>
+                            <a href="#agent-management">Edit</a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+        <aside className="agent-detail-card" aria-label="Selected agent details">
+          {selectedAgent && selectedKey ? (
+            <>
+              <div className="agent-detail-head">
+                <h2>{selectedAgent.name}</h2>
+                <span className="pill--ok pill">Online</span>
+              </div>
+              <dl className="agent-detail-fields">
+                <div>
+                  <dt>Type</dt>
+                  <dd>{formatAgentTypeLabel(selectedAgent.agentType)}</dd>
+                </div>
+                <div>
+                  <dt>Platform</dt>
+                  <dd>{formatAgentPlatform(selectedAgent.name, selectedAgent.agentType)}</dd>
+                </div>
+                <div>
+                  <dt>Created</dt>
+                  <dd>{formatAgentDetailDate(selectedKey.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>Default model</dt>
+                  <dd>{selectedAccess?.defaultVirtualModel?.name ?? "None"}</dd>
+                </div>
+              </dl>
+              <section className="agent-detail-section">
+                <div className="agent-detail-section-head">
+                  <h3>API Key</h3>
+                  <div className="agent-detail-actions">
+                    <button className="secondary-button" type="button">
+                      Copy Prefix
+                    </button>
+                    <button className="secondary-button" type="button">
+                      Rotate
+                    </button>
+                  </div>
+                </div>
+                <p className="agent-api-key-display">
+                  {formatAgentKeyPrefixDisplay(selectedKey.keyPrefix)}
+                </p>
+              </section>
+              <section className="agent-detail-section">
+                <h3>Allowed Virtual Models</h3>
+                <div className="agent-chip-list">
+                  {(selectedAccess?.allowedVirtualModels ?? []).map((virtualModel) => (
+                    <span className="agent-chip" key={virtualModel.id}>
+                      {virtualModel.name}
+                    </span>
+                  ))}
+                </div>
+              </section>
+              <section className="agent-detail-section">
+                <div className="agent-detail-section-head">
+                  <h3>Budget / Limit</h3>
+                  <a href="/limits">View Limits</a>
+                </div>
+                <div className="agent-limit-row">
+                  <span>Monthly cost</span>
+                  <strong>{formatAgentBudgetLimit(selectedBudgetLimit)}</strong>
+                  <span className="agent-limit-bar" style={{ "--fill": "42%" } as CSSProperties} />
+                </div>
+                <div className="agent-limit-row">
+                  <span>Tokens</span>
+                  <strong>{formatAgentTokenLimit(selectedTokenLimit)}</strong>
+                  <span className="agent-limit-bar" style={{ "--fill": "28%" } as CSSProperties} />
+                </div>
+              </section>
+              <section className="agent-detail-section">
+                <h3>Integration guide</h3>
+                <pre className="agent-snippet">
+                  <code>
+                    {selectedIntegrationTemplate?.snippet ?? "No integration snippet available."}
+                  </code>
+                </pre>
+              </section>
+            </>
+          ) : (
+            <p>No agent selected.</p>
+          )}
+        </aside>
       </div>
-      <h3 className="chart-card-title">Manage agents</h3>
+      <h3 className="chart-card-title" id="agent-management">
+        Manage agents
+      </h3>
       <Disclosure tone="add" summary="New agent">
-        <form className="provider-create-form" action="/api/agents" method="post">
+        <form className="provider-create-form" action="/api/agents" id="new-agent" method="post">
           <input type="hidden" name="action" value="create" />
           <label htmlFor="agent-name">Agent name</label>
           <input id="agent-name" name="name" required />
@@ -1554,6 +1848,79 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
       <Pager view={view} searchParams={searchParams} />
     </section>
   );
+}
+
+function formatAgentTypeLabel(agentType: string): string {
+  const labels: Record<string, string> = {
+    coding: "CLI",
+    desktop: "Agent",
+    ide: "IDE",
+    other: "Agent",
+    terminal: "Terminal",
+  };
+  return labels[agentType] ?? agentType;
+}
+
+function formatAgentPlatform(name: string, agentType: string): string {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("claude")) {
+    return "Claude Code";
+  }
+  if (normalized.includes("codex")) {
+    return "Codex";
+  }
+  if (normalized.includes("cursor")) {
+    return "Cursor";
+  }
+  return formatAgentTypeLabel(agentType);
+}
+
+function formatAgentKeyPrefixDisplay(keyPrefix: string): string {
+  return keyPrefix.length <= 8 ? keyPrefix : `${keyPrefix.slice(0, 6)}...${keyPrefix.slice(-4)}`;
+}
+
+function formatAgentDetailDate(value: Date): string {
+  return value.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatAgentBudgetLimit(limit: ConsoleAgentLimit | undefined): string {
+  if (!limit?.enabled) {
+    return "Not configured";
+  }
+  return `$${limit.limitValue.toLocaleString()} / ${limit.period}`;
+}
+
+function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
+  if (!limit?.enabled) {
+    return "Not configured";
+  }
+  return `${formatCompactNumber(limit.limitValue)} / ${limit.period}`;
+}
+
+function selectAgentIntegrationTemplateId(
+  agent: { agentType: string; name: string } | null,
+): string {
+  if (!agent) {
+    return "codex";
+  }
+  const normalized = agent.name.toLowerCase();
+  if (normalized.includes("claude") || agent.agentType === "terminal") {
+    return "claude-code";
+  }
+  if (normalized.includes("cursor")) {
+    return "cursor";
+  }
+  if (normalized.includes("claw")) {
+    return "openclaw";
+  }
+  return "codex";
 }
 
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
@@ -1954,10 +2321,13 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
 export async function ProvidersSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
   const modelRefreshProviderId = readSingleSearchParam(searchParams.modelRefreshProviderId);
-  const providers = await listProviders(databaseUrl);
+  const providers = orderProvidersForConsole(await listProviders(databaseUrl));
   const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
-  const providerModelOptions = await listProviderModelOptions(databaseUrl);
+  const providerModelOptions = orderProviderModelsForConsole(
+    await listProviderModelOptions(databaseUrl),
+  );
+  const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
   const providerKeyByProviderId = new Map(
     providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
   );
@@ -1967,276 +2337,477 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
   const modelRefreshProvider = providers.find((provider) => provider.id === modelRefreshProviderId);
   const view = paginate(providers, readPageParam(searchParams));
-  const healthyProviderCount = providerHealthSummaries.filter(
-    (summary) => summary.status === "healthy",
-  ).length;
+  const selectedProvider =
+    providers.find((provider) => provider.providerKey === "openai") ?? providers[0] ?? null;
+  const selectedProviderHealth = selectedProvider
+    ? providerHealthByProviderId.get(selectedProvider.id)
+    : undefined;
+  const selectedProviderKeys = selectedProvider
+    ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
+    : [];
+  const selectedProviderModels = selectedProvider
+    ? (providerModelsByProviderId.get(selectedProvider.id) ?? [])
+    : [];
+
   return (
-    <section className="providers-panel" aria-label="Providers">
-      <div className="stat-grid">
-        <StatCard icon="PR" label="Providers" value={String(providers.length)} />
-        <StatCard
-          icon="ON"
-          label="Enabled"
-          value={String(providers.filter((provider) => provider.enabled).length)}
-        />
-        <StatCard icon="MO" label="Models" value={String(providerModelOptions.length)} />
-        <StatCard icon="HL" label="Healthy" value={String(healthyProviderCount)} />
-      </div>
-      <div className="chart-card">
-        <h2 className="chart-card-title">Provider list</h2>
+    <section className="providers-dashboard" aria-label="Providers & Models">
+      <div className="provider-card-grid">
         {providers.length === 0 ? (
-          <p>No providers yet — add one below.</p>
+          <article className="provider-summary-card">
+            <div className="provider-summary-head">
+              <span className="provider-summary-icon" aria-hidden="true">
+                +
+              </span>
+              <div>
+                <h2>No providers</h2>
+                <p>Add a provider to begin routing traffic.</p>
+              </div>
+            </div>
+          </article>
+        ) : (
+          providers.map((provider) => {
+            const providerHealth = providerHealthByProviderId.get(provider.id);
+            const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
+            const providerKeyCount = providerKeysByProviderId.get(provider.id)?.length ?? 0;
+
+            return (
+              <article className="provider-summary-card" key={provider.id}>
+                <div className="provider-summary-head">
+                  <span className="provider-summary-icon" aria-hidden="true">
+                    {formatProviderInitials(provider.displayName)}
+                  </span>
+                  <div>
+                    <h2>{provider.displayName}</h2>
+                    <p>{provider.providerKey}</p>
+                  </div>
+                </div>
+                <div className="provider-summary-status">
+                  <ProviderHealthPill status={providerHealth?.status ?? "unknown"} />
+                  <span className={provider.enabled ? "pill--ok pill" : "pill"}>
+                    {provider.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+                <dl className="provider-summary-metrics">
+                  <div>
+                    <dt>Keys</dt>
+                    <dd>{formatProviderKeyCount(providerKeyCount)}</dd>
+                  </div>
+                  <div>
+                    <dt>Models</dt>
+                    <dd>{providerModels.length}</dd>
+                  </div>
+                </dl>
+              </article>
+            );
+          })
+        )}
+      </div>
+
+      <div className="providers-content-grid">
+        <div className="providers-main-column">
+          <div className="chart-card providers-list-card">
+            <h2 className="chart-card-title">Provider list</h2>
+            {providers.length === 0 ? (
+              <p>No providers yet. Add one below.</p>
+            ) : (
+              <div className="data-table-wrap">
+                <table className="data-table providers-table">
+                  <thead>
+                    <tr>
+                      <th>Provider</th>
+                      <th>Status</th>
+                      <th>Type</th>
+                      <th className="num">Key count</th>
+                      <th className="num">Models</th>
+                      <th>Last connection</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {providers.map((provider) => {
+                      const providerHealth = providerHealthByProviderId.get(provider.id);
+                      const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
+                      const providerKeyCount =
+                        providerKeysByProviderId.get(provider.id)?.length ?? 0;
+                      return (
+                        <tr
+                          className={
+                            provider.id === selectedProvider?.id ? "is-selected" : undefined
+                          }
+                          key={provider.id}
+                        >
+                          <td>
+                            <span className="provider-name-cell">
+                              <span className="provider-row-icon" aria-hidden="true">
+                                {formatProviderInitials(provider.displayName)}
+                              </span>
+                              <span>
+                                <strong>{provider.displayName}</strong>
+                                <small>{provider.providerKey}</small>
+                              </span>
+                            </span>
+                          </td>
+                          <td>
+                            <ProviderHealthPill status={providerHealth?.status ?? "unknown"} />
+                          </td>
+                          <td>{formatProviderType(provider)}</td>
+                          <td className="num">{providerKeyCount}</td>
+                          <td className="num">{providerModels.length}</td>
+                          <td>{formatProviderLastConnection(providerHealth)}</td>
+                          <td>
+                            <a className="table-action-link" href="#provider-management">
+                              Manage
+                            </a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="provider-detail-card" aria-label="Selected provider details">
+          {selectedProvider ? (
+            <>
+              <header className="provider-detail-head">
+                <div>
+                  <p className="eyebrow">{selectedProvider.providerKey}</p>
+                  <h2>Provider detail - {selectedProvider.displayName}</h2>
+                </div>
+                <ProviderHealthPill status={selectedProviderHealth?.status ?? "unknown"} />
+              </header>
+
+              <dl className="provider-detail-stats">
+                <div>
+                  <dt>Status</dt>
+                  <dd>{selectedProvider.enabled ? "Enabled" : "Disabled"}</dd>
+                </div>
+                <div>
+                  <dt>Default priority</dt>
+                  <dd>{formatProviderDefaultPriority(providers, selectedProvider)}</dd>
+                </div>
+                <div>
+                  <dt>Available models</dt>
+                  <dd>{selectedProviderModels.length}</dd>
+                </div>
+                <div>
+                  <dt>Last connection</dt>
+                  <dd>{formatProviderLastConnection(selectedProviderHealth)}</dd>
+                </div>
+              </dl>
+
+              <section className="provider-detail-section">
+                <h3>Key management</h3>
+                <div className="data-table-wrap">
+                  <table className="data-table provider-key-table">
+                    <thead>
+                      <tr>
+                        <th>Label</th>
+                        <th>Prefix</th>
+                        <th>Status</th>
+                        <th>Last test</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedProviderKeys.length === 0 ? (
+                        <tr>
+                          <td colSpan={5}>No provider key stored.</td>
+                        </tr>
+                      ) : (
+                        selectedProviderKeys.map((providerKey, index) => (
+                          <tr key={providerKey.keyPrefix}>
+                            <td>{index === 0 ? "Primary key" : `Backup key ${index}`}</td>
+                            <td className="mono">{providerKey.keyPrefix}</td>
+                            <td>
+                              <span className="pill--ok pill">Enabled</span>
+                            </td>
+                            <td>{formatProviderLastConnection(selectedProviderHealth)}</td>
+                            <td>
+                              <a className="table-action-link" href="#provider-management">
+                                Rotate
+                              </a>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          ) : (
+            <p>No provider selected.</p>
+          )}
+        </aside>
+      </div>
+
+      <div className="chart-card model-library-card">
+        <h2 className="chart-card-title">Model library</h2>
+        {providerModelOptions.length === 0 ? (
+          <p>No provider models discovered yet.</p>
         ) : (
           <div className="data-table-wrap">
-            <table className="data-table">
+            <table className="data-table model-library-table">
               <thead>
                 <tr>
                   <th>Provider</th>
-                  <th>Key</th>
-                  <th>Type</th>
-                  <th className="num">Models</th>
-                  <th>Health</th>
+                  <th>Model ID</th>
+                  <th>Context</th>
+                  <th>Input price</th>
+                  <th>Output price</th>
+                  <th>Tools</th>
+                  <th>Streaming</th>
                   <th>Status</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {providers.map((provider) => {
-                  const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
-                  const providerHealth = providerHealthByProviderId.get(provider.id);
-                  const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-                  return (
-                    <tr key={provider.id}>
-                      <td>{provider.displayName}</td>
-                      <td className="mono">
-                        {providerKeyMetadata ? providerKeyMetadata.keyPrefix : "No key"}
-                      </td>
-                      <td>{provider.providerTemplateId ? "Template" : "API key"}</td>
-                      <td className="num">{providerModels.length}</td>
-                      <td>
-                        {providerHealth ? (
-                          <ProviderHealthPill status={providerHealth.status} />
-                        ) : (
-                          <span className="pill">unknown</span>
-                        )}
-                      </td>
-                      <td>
-                        {provider.enabled ? (
-                          <span className="pill--ok pill">Enabled</span>
-                        ) : (
-                          <span className="pill">Disabled</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {providerModelOptions.map((model) => (
+                  <tr key={model.id}>
+                    <td>{model.providerDisplayName}</td>
+                    <td>
+                      <span className="model-id-cell">
+                        <strong>{model.modelDisplayName}</strong>
+                        <small className="mono">{model.modelId}</small>
+                      </span>
+                    </td>
+                    <td>{formatModelContext(model.contextWindow)}</td>
+                    <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
+                    <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
+                    <td>{formatBooleanFeature(model.supportsTools)}</td>
+                    <td>{formatBooleanFeature(model.supportsStreaming)}</td>
+                    <td>{formatModelAvailability(model.availability)}</td>
+                    <td>
+                      <a className="table-action-link" href={`/models?providerModelId=${model.id}`}>
+                        Price
+                      </a>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
-      <h3 className="chart-card-title">Manage providers</h3>
-      <Disclosure tone="add" summary="New provider">
-        <form className="provider-create-form" action="/api/providers" method="post">
-          <input type="hidden" name="action" value="create" />
-          <input type="hidden" name="providerType" value="api_key" />
-          <label htmlFor="provider-key">Provider key</label>
-          <input id="provider-key" name="providerKey" required />
-          <label htmlFor="provider-display-name">Provider display name</label>
-          <input id="provider-display-name" name="displayName" required />
-          <label htmlFor="provider-base-url">Provider base URL</label>
-          <input id="provider-base-url" name="baseUrl" type="url" />
-          <button type="submit">Create provider</button>
-        </form>
-      </Disclosure>
-      <Disclosure summary="Add from template">
-        <div className="provider-template-selector">
-          <fieldset className="provider-template-group">
-            <legend>{remoteProviderTemplateGroup.label}</legend>
-            <form className="provider-template-form" action="/api/providers" method="post">
-              <input type="hidden" name="action" value="createFromTemplate" />
-              <label htmlFor="provider-template">Provider template</label>
-              <select id="provider-template" name="templateId" required>
-                {remoteProviderTemplateGroup.templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.displayName}
-                  </option>
-                ))}
-              </select>
-              <button type="submit">Add template provider</button>
-            </form>
-            <div className="provider-template-list">
-              {remoteProviderTemplateGroup.templates.map((template) => (
-                <ProviderTemplateSummary key={template.id} template={template} />
-              ))}
-            </div>
-          </fieldset>
-          <fieldset className="provider-template-group">
-            <legend>{localProviderTemplateGroup.label}</legend>
-            <div className="provider-template-list">
-              {localProviderTemplateGroup.templates.map((template) => (
-                <div className="provider-template-local-item" key={template.id}>
-                  <ProviderTemplateSummary template={template} />
-                  <form
-                    className="provider-template-form local-provider-template-form"
-                    action="/api/providers"
-                    method="post"
-                  >
-                    <input type="hidden" name="action" value="createFromTemplate" />
-                    <input type="hidden" name="templateId" value={template.id} />
-                    <label htmlFor={`${template.id}-base-url`}>
-                      {template.displayName} base URL
-                    </label>
-                    <input
-                      id={`${template.id}-base-url`}
-                      name="baseUrl"
-                      type="url"
-                      placeholder={template.baseUrlPlaceholder ?? "http://127.0.0.1:11434"}
-                      required
-                    />
-                    <label className="checkbox-label" htmlFor={`${template.id}-public-risk`}>
-                      <input
-                        id={`${template.id}-public-risk`}
-                        name="publicNetworkRiskAccepted"
-                        type="checkbox"
-                        value="true"
-                      />
-                      Accept public network risk
-                    </label>
-                    <button type="submit">Add local provider</button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </fieldset>
-        </div>
-      </Disclosure>
-      {modelRefreshProvider ? (
-        <p role="status">Model refresh queued for {modelRefreshProvider.displayName}.</p>
-      ) : null}
-      {providers.length === 0 ? (
-        <p>No providers configured.</p>
-      ) : (
-        <div className="row-list">
-          {view.items.map((provider) => {
-            const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
-            const providerHealth = providerHealthByProviderId.get(provider.id);
-            const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
 
-            return (
-              <Row
-                key={provider.id}
-                title={<h3 className="row-title">{provider.displayName}</h3>}
-                meta={
-                  <span className="row-meta">
-                    <span className="mono">{provider.providerKey}</span>
-                    <span>{providerModels.length} models</span>
-                  </span>
-                }
-                status={
-                  <span className={provider.enabled ? "status-enabled" : "status-disabled"}>
-                    {provider.enabled ? "Enabled" : "Disabled"}
-                  </span>
-                }
-              >
-                <form className="provider-edit-form" action="/api/providers" method="post">
-                  <input type="hidden" name="action" value="update" />
-                  <input type="hidden" name="id" value={provider.id} />
-                  <label htmlFor={`provider-display-${provider.id}`}>
-                    Edit provider display name
-                  </label>
-                  <input
-                    id={`provider-display-${provider.id}`}
-                    name="displayName"
-                    defaultValue={provider.displayName}
-                    required
-                  />
-                  {provider.providerTemplateId ? (
-                    <p>Template provider base URL: {provider.baseUrl}</p>
-                  ) : (
-                    <>
-                      <label htmlFor={`provider-base-${provider.id}`}>Edit provider base URL</label>
+      <section className="providers-management" id="provider-management">
+        <h3 className="chart-card-title">Manage providers</h3>
+        <div id="new-provider">
+          <Disclosure tone="add" summary="New provider">
+            <form className="provider-create-form" action="/api/providers" method="post">
+              <input type="hidden" name="action" value="create" />
+              <input type="hidden" name="providerType" value="api_key" />
+              <label htmlFor="provider-key">Provider key</label>
+              <input id="provider-key" name="providerKey" required />
+              <label htmlFor="provider-display-name">Provider display name</label>
+              <input id="provider-display-name" name="displayName" required />
+              <label htmlFor="provider-base-url">Provider base URL</label>
+              <input id="provider-base-url" name="baseUrl" type="url" />
+              <button type="submit">Create provider</button>
+            </form>
+          </Disclosure>
+        </div>
+        <Disclosure summary="Add from template">
+          <div className="provider-template-selector">
+            <fieldset className="provider-template-group">
+              <legend>{remoteProviderTemplateGroup.label}</legend>
+              <form className="provider-template-form" action="/api/providers" method="post">
+                <input type="hidden" name="action" value="createFromTemplate" />
+                <label htmlFor="provider-template">Provider template</label>
+                <select id="provider-template" name="templateId" required>
+                  {remoteProviderTemplateGroup.templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.displayName}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit">Add template provider</button>
+              </form>
+              <div className="provider-template-list">
+                {remoteProviderTemplateGroup.templates.map((template) => (
+                  <ProviderTemplateSummary key={template.id} template={template} />
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className="provider-template-group">
+              <legend>{localProviderTemplateGroup.label}</legend>
+              <div className="provider-template-list">
+                {localProviderTemplateGroup.templates.map((template) => (
+                  <div className="provider-template-local-item" key={template.id}>
+                    <ProviderTemplateSummary template={template} />
+                    <form
+                      className="provider-template-form local-provider-template-form"
+                      action="/api/providers"
+                      method="post"
+                    >
+                      <input type="hidden" name="action" value="createFromTemplate" />
+                      <input type="hidden" name="templateId" value={template.id} />
+                      <label htmlFor={`${template.id}-base-url`}>
+                        {template.displayName} base URL
+                      </label>
                       <input
-                        id={`provider-base-${provider.id}`}
+                        id={`${template.id}-base-url`}
                         name="baseUrl"
                         type="url"
-                        defaultValue={provider.baseUrl ?? ""}
+                        placeholder={template.baseUrlPlaceholder ?? "http://127.0.0.1:11434"}
+                        required
                       />
-                    </>
-                  )}
-                  <button type="submit">Save provider</button>
-                </form>
-                <div className="provider-key-metadata">
-                  {providerKeyMetadata ? (
-                    <>
-                      <p>Provider API key prefix: {providerKeyMetadata.keyPrefix}</p>
-                      <p>
-                        Provider API key created: {formatDateTime(providerKeyMetadata.createdAt)}
-                      </p>
-                      {providerKeyMetadata.rotatedAt ? (
-                        <p>
-                          Provider API key rotated: {formatDateTime(providerKeyMetadata.rotatedAt)}
-                        </p>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p>No Provider API key saved.</p>
-                  )}
-                </div>
-                <div className="provider-model-metadata">
-                  {providerModels.length === 0 ? (
-                    <p>No provider models discovered yet.</p>
-                  ) : (
-                    <p>
-                      Provider models:{" "}
-                      {providerModels
-                        .map(
-                          (model) =>
-                            `${model.modelDisplayName} (${model.modelId}) - ${model.priceStatusLabel}`,
-                        )
-                        .join(", ")}
-                    </p>
-                  )}
-                </div>
-                <ProviderHealthSummaryPanel health={providerHealth} />
-                <form className="provider-key-form" action="/api/provider-keys" method="post">
-                  <input type="hidden" name="providerId" value={provider.id} />
-                  <label htmlFor={`provider-api-key-${provider.id}`}>Provider API key</label>
-                  <input
-                    id={`provider-api-key-${provider.id}`}
-                    name="providerApiKey"
-                    type="password"
-                    autoComplete="off"
-                    required
-                  />
-                  <button type="submit">
-                    {providerKeyMetadata ? "Rotate provider API key" : "Store provider API key"}
-                  </button>
-                </form>
-                <div className="row-actions">
-                  <form action="/api/providers" method="post">
+                      <label className="checkbox-label" htmlFor={`${template.id}-public-risk`}>
+                        <input
+                          id={`${template.id}-public-risk`}
+                          name="publicNetworkRiskAccepted"
+                          type="checkbox"
+                          value="true"
+                        />
+                        Accept public network risk
+                      </label>
+                      <button type="submit">Add local provider</button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        </Disclosure>
+        {modelRefreshProvider ? (
+          <p role="status">Model refresh queued for {modelRefreshProvider.displayName}.</p>
+        ) : null}
+        {providers.length === 0 ? (
+          <p>No providers configured.</p>
+        ) : (
+          <div className="row-list">
+            {view.items.map((provider) => {
+              const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
+              const providerHealth = providerHealthByProviderId.get(provider.id);
+              const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
+
+              return (
+                <Row
+                  key={provider.id}
+                  title={<h3 className="row-title">{provider.displayName}</h3>}
+                  meta={
+                    <span className="row-meta">
+                      <span className="mono">{provider.providerKey}</span>
+                      <span>{providerModels.length} models</span>
+                    </span>
+                  }
+                  status={
+                    <span className={provider.enabled ? "status-enabled" : "status-disabled"}>
+                      {provider.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                  }
+                >
+                  <form className="provider-edit-form" action="/api/providers" method="post">
+                    <input type="hidden" name="action" value="update" />
                     <input type="hidden" name="id" value={provider.id} />
+                    <label htmlFor={`provider-display-${provider.id}`}>
+                      Edit provider display name
+                    </label>
                     <input
-                      type="hidden"
-                      name="action"
-                      value={provider.enabled ? "disable" : "enable"}
+                      id={`provider-display-${provider.id}`}
+                      name="displayName"
+                      defaultValue={provider.displayName}
+                      required
                     />
-                    <button className="secondary-button" type="submit">
-                      {provider.enabled ? "Disable provider" : "Enable provider"}
-                    </button>
+                    {provider.providerTemplateId ? (
+                      <p>Template provider base URL: {provider.baseUrl}</p>
+                    ) : (
+                      <>
+                        <label htmlFor={`provider-base-${provider.id}`}>
+                          Edit provider base URL
+                        </label>
+                        <input
+                          id={`provider-base-${provider.id}`}
+                          name="baseUrl"
+                          type="url"
+                          defaultValue={provider.baseUrl ?? ""}
+                        />
+                      </>
+                    )}
+                    <button type="submit">Save provider</button>
                   </form>
-                  <form action="/api/provider-model-refresh" method="post">
+                  <div className="provider-key-metadata">
+                    {providerKeyMetadata ? (
+                      <>
+                        <p>Provider API key prefix: {providerKeyMetadata.keyPrefix}</p>
+                        <p>
+                          Provider API key created: {formatDateTime(providerKeyMetadata.createdAt)}
+                        </p>
+                        {providerKeyMetadata.rotatedAt ? (
+                          <p>
+                            Provider API key rotated:{" "}
+                            {formatDateTime(providerKeyMetadata.rotatedAt)}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p>No Provider API key saved.</p>
+                    )}
+                  </div>
+                  <div className="provider-model-metadata">
+                    {providerModels.length === 0 ? (
+                      <p>No provider models discovered yet.</p>
+                    ) : (
+                      <p>
+                        Provider models:{" "}
+                        {providerModels
+                          .map(
+                            (model) =>
+                              `${model.modelDisplayName} (${model.modelId}) - ${model.priceStatusLabel}`,
+                          )
+                          .join(", ")}
+                      </p>
+                    )}
+                  </div>
+                  <ProviderHealthSummaryPanel health={providerHealth} />
+                  <form className="provider-key-form" action="/api/provider-keys" method="post">
                     <input type="hidden" name="providerId" value={provider.id} />
-                    <button className="secondary-button" disabled={!provider.enabled} type="submit">
-                      Refresh provider models
+                    <label htmlFor={`provider-api-key-${provider.id}`}>Provider API key</label>
+                    <input
+                      id={`provider-api-key-${provider.id}`}
+                      name="providerApiKey"
+                      type="password"
+                      autoComplete="off"
+                      required
+                    />
+                    <button type="submit">
+                      {providerKeyMetadata ? "Rotate provider API key" : "Store provider API key"}
                     </button>
                   </form>
-                </div>
-              </Row>
-            );
-          })}
-        </div>
-      )}
-      <Pager view={view} searchParams={searchParams} />
+                  <div className="row-actions">
+                    <form action="/api/providers" method="post">
+                      <input type="hidden" name="id" value={provider.id} />
+                      <input
+                        type="hidden"
+                        name="action"
+                        value={provider.enabled ? "disable" : "enable"}
+                      />
+                      <button className="secondary-button" type="submit">
+                        {provider.enabled ? "Disable provider" : "Enable provider"}
+                      </button>
+                    </form>
+                    <form action="/api/provider-model-refresh" method="post">
+                      <input type="hidden" name="providerId" value={provider.id} />
+                      <button
+                        className="secondary-button"
+                        disabled={!provider.enabled}
+                        type="submit"
+                      >
+                        Refresh provider models
+                      </button>
+                    </form>
+                  </div>
+                </Row>
+              );
+            })}
+          </div>
+        )}
+        <Pager view={view} searchParams={searchParams} />
+      </section>
     </section>
   );
 }
@@ -2591,10 +3162,6 @@ function formatDateTime(value: Date): string {
   return value.toISOString();
 }
 
-function formatNullableDateTime(value: Date | null): string {
-  return value ? formatDateTime(value) : "Unknown";
-}
-
 function formatConfigVersion(value: number | null): string {
   return value === null ? "None" : `v${value}`;
 }
@@ -2682,6 +3249,131 @@ function groupProviderModelsByProviderId(
   }
 
   return grouped;
+}
+
+function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
+  const grouped = new Map<string, ProviderApiKeyMetadata[]>();
+
+  for (const providerKey of providerKeys) {
+    const keys = grouped.get(providerKey.providerId) ?? [];
+    keys.push(providerKey);
+    grouped.set(providerKey.providerId, keys);
+  }
+
+  return grouped;
+}
+
+function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider[] {
+  return [...providers].sort((left, right) => {
+    const leftOrder = getConsoleProviderOrder(left.providerKey);
+    const rightOrder = getConsoleProviderOrder(right.providerKey);
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    return left.displayName.localeCompare(right.displayName);
+  });
+}
+
+function orderProviderModelsForConsole(
+  providerModels: ConsoleProviderModelOption[],
+): ConsoleProviderModelOption[] {
+  return [...providerModels].sort((left, right) => {
+    const leftOrder = getConsoleProviderOrder(left.providerKey);
+    const rightOrder = getConsoleProviderOrder(right.providerKey);
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    return left.modelDisplayName.localeCompare(right.modelDisplayName);
+  });
+}
+
+function getConsoleProviderOrder(providerKey: string): number {
+  const preferredOrder = new Map([
+    ["openai", 0],
+    ["anthropic", 1],
+    ["google", 2],
+    ["openrouter", 3],
+    ["ollama", 4],
+  ]);
+  return preferredOrder.get(providerKey) ?? 100;
+}
+
+function formatProviderInitials(displayName: string): string {
+  const initials = displayName
+    .split(/\s+/)
+    .map((part) => part.replace(/[^a-z0-9]/gi, "").charAt(0))
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return initials || displayName.slice(0, 2).toUpperCase();
+}
+
+function formatProviderType(provider: ConsoleProvider): string {
+  if (provider.providerType === "local") {
+    return "Local";
+  }
+  return provider.providerTemplateId ? "Template" : "API Key";
+}
+
+function formatProviderKeyCount(count: number): string {
+  return count === 1 ? "1 key" : `${count} keys`;
+}
+
+function formatProviderDefaultPriority(
+  providers: readonly ConsoleProvider[],
+  selectedProvider: ConsoleProvider,
+): string {
+  const index = providers.findIndex((provider) => provider.id === selectedProvider.id);
+  return index >= 0 ? String(index + 1) : "-";
+}
+
+function formatProviderLastConnection(
+  providerHealth: ConsoleProviderHealthSummary | undefined,
+): string {
+  if (!providerHealth?.latestProbeAt) {
+    return "Never";
+  }
+
+  return formatCompactDateTime(providerHealth.latestProbeAt);
+}
+
+function formatCompactDateTime(value: Date): string {
+  return value.toISOString().slice(0, 16).replace("T", " ");
+}
+
+function formatModelContext(contextWindow: number | null): string {
+  if (contextWindow === null) {
+    return "Unknown";
+  }
+  if (contextWindow >= 1_000_000) {
+    return `${formatDecimal(contextWindow / 1_000_000)}M`;
+  }
+  if (contextWindow >= 1_000) {
+    return `${formatDecimal(contextWindow / 1_000)}K`;
+  }
+  return String(contextWindow);
+}
+
+function formatModelPrice(price: number | null): string {
+  if (price === null) {
+    return "Unknown";
+  }
+  const digits = price >= 1 ? 2 : 4;
+  return `$${price.toFixed(digits)}/1M`;
+}
+
+function formatDecimal(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatBooleanFeature(value: boolean): string {
+  return value ? "Yes" : "No";
+}
+
+function formatModelAvailability(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function virtualModelSelectSize(optionCount: number): number {

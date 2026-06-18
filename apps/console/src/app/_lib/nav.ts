@@ -3,8 +3,10 @@
 // nav and its verification can never drift apart.
 
 export type ConsoleNavItem = {
-  /** Accessible link label, also used as the destination page's <h1>. */
+  /** Accessible link label shown in the sidebar. */
   label: string;
+  /** Optional module title when the page heading is longer than the nav label. */
+  pageTitle?: string;
   /** App Router path for this module. */
   href: string;
   /** Short supporting line shown under the label in the sidebar. */
@@ -24,7 +26,13 @@ export type ConsoleNavGroup = {
 export const consoleNavItems: ConsoleNavItem[] = [
   { label: "Overview", href: "/", hint: "Gateway & spend at a glance", icon: "OV" },
   { label: "Agents", href: "/agents", hint: "Agents & API keys", icon: "AG" },
-  { label: "Providers", href: "/providers", hint: "Upstreams & health", icon: "PR" },
+  {
+    label: "Providers",
+    pageTitle: "Providers & Models",
+    href: "/providers",
+    hint: "Upstreams & health",
+    icon: "PR",
+  },
   { label: "Models", href: "/pricing", hint: "Provider models & prices", icon: "MO" },
   { label: "Virtual Models", href: "/models", hint: "Names, routes & fallback", icon: "VM" },
   { label: "Activity", href: "/activity", hint: "Recent requests", icon: "AC" },

@@ -8,11 +8,15 @@ export default async function ProvidersPage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page providers-page">
       <PageHeader
-        eyebrow="Infrastructure"
-        title="Providers"
-        description="Upstream providers, API keys, discovered models, and health."
+        title="Providers & Models"
+        description="Configure provider keys, refresh model lists, and manage model pricing."
+        actions={
+          <a className="btn" href="#new-provider">
+            + Add Provider
+          </a>
+        }
       />
       <ProvidersSection searchParams={resolved} />
     </div>

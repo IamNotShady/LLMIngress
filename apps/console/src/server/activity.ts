@@ -1,6 +1,7 @@
 import { Client, type QueryResultRow } from "pg";
 
 export type ConsoleActivity = {
+  agentName: string | null;
   completedAt: Date | null;
   errorCode: string | null;
   fallbackAttempts: unknown;
@@ -22,9 +23,12 @@ export type ConsoleActivity = {
   status: string;
   totalCostUsd: string | null;
   totalTokens: number | null;
+  virtualModelDisplayName: string | null;
+  virtualModelName: string | null;
 };
 
 type ActivityRow = QueryResultRow & {
+  agent_name: string | null;
   completed_at: Date | null;
   error_code: string | null;
   fallback_attempts: unknown;
@@ -46,6 +50,8 @@ type ActivityRow = QueryResultRow & {
   status: string;
   total_cost_usd: string | null;
   total_tokens: number | null;
+  virtual_model_display_name: string | null;
+  virtual_model_name: string | null;
 };
 
 export async function listConsoleActivities(
@@ -70,6 +76,9 @@ export async function listConsoleActivities(
                request_activity.completed_at,
                request_activity.route_reason,
                request_activity.fallback_attempts,
+               agents.name as agent_name,
+               virtual_models.display_name as virtual_model_display_name,
+               virtual_models.name as virtual_model_name,
                providers.display_name as provider_display_name,
                providers.provider_key,
                request_activity.provider_model_id::text as provider_model_id,
@@ -80,6 +89,9 @@ export async function listConsoleActivities(
                request_usage.total_tokens,
                request_costs.total_cost_usd::text
         from request_activity
+        left join agent_api_keys on agent_api_keys.id = request_activity.agent_api_key_id
+        left join agents on agents.id = agent_api_keys.agent_id
+        left join virtual_models on virtual_models.id = request_activity.virtual_model_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -163,6 +175,7 @@ export function formatConsoleActivityFallbackAttempts(fallbackAttempts: unknown)
 
 function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
   return {
+    agentName: row.agent_name,
     completedAt: row.completed_at,
     errorCode: row.error_code,
     fallbackAttempts: row.fallback_attempts,
@@ -184,6 +197,8 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     status: row.status,
     totalCostUsd: row.total_cost_usd,
     totalTokens: row.total_tokens,
+    virtualModelDisplayName: row.virtual_model_display_name,
+    virtualModelName: row.virtual_model_name,
   };
 }
 

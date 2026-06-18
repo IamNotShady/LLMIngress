@@ -39,9 +39,10 @@ test("sidebar groups modules and routes each nav item to its own page with a the
           for (const item of consoleNavItems) {
             await sidebar.getByRole("link", { name: item.label, exact: true }).click();
             const expectedPath = item.href === "/" ? "/" : item.href;
+            const expectedHeading = item.pageTitle ?? item.label;
             await page.waitForURL((url) => url.pathname === expectedPath);
             await expect(
-              page.getByRole("heading", { level: 1, name: item.label, exact: true }),
+              page.getByRole("heading", { level: 1, name: expectedHeading, exact: true }),
             ).toBeVisible();
             // The active item is marked for assistive tech.
             await expect(

@@ -12,7 +12,7 @@ export function Topbar() {
 
   return (
     <header className="topbar">
-      <p className="topbar-title">{active?.label ?? "Console"}</p>
+      <p className="topbar-title">{active?.pageTitle ?? active?.label ?? "Console"}</p>
       <div className="topbar-actions">
         <span className="topbar-status">
           <span className="topbar-status-dot" aria-hidden="true" />

@@ -1,31 +1,117 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { Client } from "pg";
 import { withConsoleDevServer } from "../support/console-dev-server";
 
 test("overview dashboard renders KPI cards, recent requests, gateway status, and charts", async ({
   browser,
 }) => {
-  await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
-    await page.goto(baseUrl);
+  await withConsoleDevServer(
+    browser,
+    async ({ page, baseUrl }) => {
+      await page.goto(baseUrl);
 
-    // Page heading.
-    await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+      // Page heading.
+      await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
 
-    // The six KPI metric tiles.
-    for (const label of [
-      "Requests today",
-      "Cost today",
-      "Tokens today",
-      "Failure rate",
-      "Savings",
-      "Online agents",
-    ]) {
-      await expect(page.getByText(label, { exact: true })).toBeVisible();
-    }
+      // The six KPI metric tiles.
+      for (const label of [
+        "Requests today",
+        "Cost today",
+        "Tokens today",
+        "Failure rate",
+        "Savings",
+        "Active agents",
+      ]) {
+        await expect(page.getByText(label, { exact: true })).toBeVisible();
+      }
 
-    // The dashboard panels and charts.
-    await expect(page.getByRole("heading", { name: "Recent requests" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Gateway status" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Requests & cost trend" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Top agents" })).toBeVisible();
-  });
+      // The dashboard panels and charts.
+      await expect(page.getByRole("heading", { name: "Recent requests" })).toBeVisible();
+      for (const header of [
+        "Time",
+        "Agent",
+        "Virtual model",
+        "Hit model",
+        "Provider",
+        "Tokens",
+        "Cost",
+        "Status",
+      ]) {
+        await expect(page.getByRole("columnheader", { name: header })).toBeVisible();
+      }
+      await expect(page.getByRole("heading", { name: "Gateway status" })).toBeVisible();
+      await expect(page.getByText("Running normally")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Requests & cost trend" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Top agents by cost" })).toBeVisible();
+      await expect(page.getByRole("img", { name: "Top agents by cost" })).toBeVisible();
+    },
+    { seed: seedOverviewData },
+  );
 });
+
+async function seedOverviewData(databaseUrl: string): Promise<void> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const agentId = randomUUID();
+    const keyId = randomUUID();
+    const providerId = randomUUID();
+    const modelId = randomUUID();
+    const virtualModelId = randomUUID();
+    const requestId = randomUUID();
+
+    await client.query("insert into config_versions (version, source) values (1, 'console')");
+    await client.query(
+      `insert into gateway_runtime_status
+         (id, gateway_instance_id, status, applied_config_version, heartbeat_at, started_at)
+       values ($1, 'gateway', 'ready', 1, now(), now() - interval '2 hours')`,
+      [randomUUID()],
+    );
+    await client.query(
+      "insert into providers (id, provider_type, provider_key, display_name, enabled) values ($1, 'api_key', 'openai', 'OpenAI', true)",
+      [providerId],
+    );
+    await client.query(
+      "insert into provider_models (id, provider_id, model_id, display_name) values ($1, $2, 'gpt-4o-mini', 'GPT-4o Mini')",
+      [modelId, providerId],
+    );
+    await client.query(
+      "insert into virtual_models (id, name, display_name, enabled) values ($1, 'smart', 'Smart', true)",
+      [virtualModelId],
+    );
+    await client.query(
+      "insert into agents (id, name, agent_type, enabled) values ($1, 'Codex', 'coding', true)",
+      [agentId],
+    );
+    await client.query(
+      `insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
+       values ($1, $2, 'codex000', 'sha256:v1:overview', $3, true)`,
+      [keyId, agentId, virtualModelId],
+    );
+    await client.query(
+      `insert into request_activity
+         (id, request_id, agent_api_key_id, virtual_model_id, provider_id, provider_model_id,
+          agent_api_key_prefix, protocol, model, status, http_status, latency_ms, started_at, completed_at)
+       values ($1, 'req_overview_seed', $2, $3, $4, $5, 'codex000',
+          'chat_completions', 'smart', 'succeeded', 200, 240, now(), now())`,
+      [requestId, keyId, virtualModelId, providerId, modelId],
+    );
+    await client.query(
+      `insert into request_usage
+         (id, request_activity_id, agent_api_key_id, virtual_model_id, provider_model_id,
+          input_tokens, output_tokens, total_tokens, token_source)
+       values ($1, $2, $3, $4, $5, 1000, 234, 1234, 'provider')`,
+      [randomUUID(), requestId, keyId, virtualModelId, modelId],
+    );
+    await client.query(
+      `insert into request_costs
+         (id, request_activity_id, agent_api_key_id, provider_model_id,
+          input_cost_usd, output_cost_usd, total_cost_usd, cost_source)
+       values ($1, $2, $3, $4, 0.01, 0.02, 0.03, 'provider')`,
+      [randomUUID(), requestId, keyId, modelId],
+    );
+  } finally {
+    await client.end();
+  }
+}

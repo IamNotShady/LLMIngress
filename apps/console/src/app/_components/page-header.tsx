@@ -6,7 +6,7 @@ export function PageHeader({
   description,
   actions,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
@@ -14,7 +14,7 @@ export function PageHeader({
   return (
     <header className="page-header">
       <div className="page-header-text">
-        <p className="page-eyebrow">{eyebrow}</p>
+        {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
         <h1 className="page-title">{title}</h1>
         {description ? <p className="page-description">{description}</p> : null}
       </div>

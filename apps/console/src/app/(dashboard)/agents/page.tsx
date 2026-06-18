@@ -8,11 +8,15 @@ export default async function AgentsPage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page agents-page">
       <PageHeader
-        eyebrow="Access"
         title="Agents"
         description="Agents, their API keys, virtual model access, and per-key limits."
+        actions={
+          <a className="btn" href="#new-agent">
+            + Create Agent
+          </a>
+        }
       />
       <AgentsSection searchParams={resolved} />
     </div>

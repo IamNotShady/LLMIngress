@@ -3,9 +3,8 @@ import { OverviewSection } from "../_modules/sections";
 
 export default function OverviewPage() {
   return (
-    <div className="page">
+    <div className="page overview-page">
       <PageHeader
-        eyebrow="Monitor"
         title="Overview"
         description="Gateway status and today's key metrics at a glance."
       />

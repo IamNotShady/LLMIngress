@@ -12,11 +12,9 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <span className="sidebar-mark" aria-hidden="true">
-          ⌁
-        </span>
+        <span className="sidebar-mark" aria-hidden="true" />
         <span className="sidebar-wordmark">
-          LLM<span>Ingress</span>
+          <span className="sidebar-wordmark-main">LLMIngress</span>
           <em className="sidebar-wordmark-sub">Console</em>
         </span>
       </div>
@@ -50,6 +48,13 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
+        <div className="sidebar-runtime-card">
+          <span className="sidebar-account-dot" aria-hidden="true" />
+          <span>
+            Gateway running
+            <em>v0.1.0</em>
+          </span>
+        </div>
         <div className="sidebar-account">
           <span className="sidebar-account-dot" aria-hidden="true" />
           <span>Signed in as admin</span>

@@ -598,13 +598,7 @@ function UsageCostDonut({
   if (slices.length === 0) {
     return <p>No {label} cost recorded.</p>;
   }
-  return (
-    <DonutBreakdown
-      ariaLabel={`${label} cost breakdown`}
-      data={slices}
-      valueFormatter={(value) => `$${value.toFixed(2)}`}
-    />
-  );
+  return <DonutBreakdown ariaLabel={`${label} cost breakdown`} data={slices} valueFormat="usd" />;
 }
 
 export async function ActivitySection({ searchParams }: { searchParams: ConsoleSearchParams }) {
@@ -778,9 +772,100 @@ export async function VirtualModelsSection({
 }) {
   const databaseUrl = getConsoleDatabaseUrl();
   const virtualModels = await listVirtualModels(databaseUrl);
+  const routePolicies = await listRoutePolicies(databaseUrl);
+  const routePolicyByVmId = new Map(routePolicies.map((policy) => [policy.virtualModelId, policy]));
   const view = paginate(virtualModels, readPageParam(searchParams));
+  const routedCount = virtualModels.filter((vm) => vm.routePolicyCount > 0).length;
+  const fallbackOverview = [
+    { name: "No fallback", value: placeholderInt("vm-fallback-none", 70, 88) },
+    { name: "Secondary model", value: placeholderInt("vm-fallback-secondary", 6, 18, 1) },
+    { name: "Other", value: placeholderInt("vm-fallback-other", 2, 10, 2) },
+  ];
   return (
     <section className="providers-panel" aria-label="Virtual models">
+      <div className="stat-grid">
+        <StatCard icon="VM" label="Virtual Models" value={String(virtualModels.length)} />
+        <StatCard icon="RT" label="With routes" value={String(routedCount)} />
+        <StatCard
+          icon="RQ"
+          label="Requests today"
+          value={formatCompactNumber(placeholderInt("vm-requests", 1500, 20000))}
+          delta="placeholder"
+        />
+        <StatCard
+          icon="FR"
+          label="Avg failure rate"
+          value={`${placeholderFloat("vm-failure", 0.3, 2.4, 2).toFixed(2)}%`}
+          delta="placeholder"
+        />
+      </div>
+      <div className="chart-grid-2">
+        <div className="chart-card">
+          <h2 className="chart-card-title">Virtual Model list</h2>
+          {virtualModels.length === 0 ? (
+            <p>No virtual models configured.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Virtual Model</th>
+                    <th>Strategy</th>
+                    <th className="num">Candidates</th>
+                    <th className="num">Allowed keys</th>
+                    <th className="num">Requests today</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {virtualModels.map((virtualModel) => {
+                    const policy = routePolicyByVmId.get(virtualModel.id);
+                    return (
+                      <tr key={virtualModel.id}>
+                        <td>{virtualModel.displayName}</td>
+                        <td>
+                          {policy ? (
+                            <span className="pill--info pill">{policy.strategy}</span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="num">{policy ? policy.candidates.length : 0}</td>
+                        <td className="num">{virtualModel.allowedApiKeyCount}</td>
+                        <td className="num">
+                          {formatCompactNumber(placeholderInt(virtualModel.id, 0, 9000, 5))}
+                        </td>
+                        <td>
+                          {virtualModel.enabled ? (
+                            <span className="pill--ok pill">Enabled</span>
+                          ) : (
+                            <span className="pill">Disabled</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="callout callout--info">
+            Edit primary &amp; fallback routes in the <a href="/routing">route policy editor</a>.
+          </p>
+        </div>
+        <div className="chart-card">
+          <h2 className="chart-card-title">Fallback overview</h2>
+          <DonutBreakdown
+            ariaLabel="Fallback overview"
+            data={fallbackOverview}
+            valueFormat="percent"
+          />
+          <p className="callout">
+            Fallback distribution is a placeholder until routing rollups land.
+          </p>
+        </div>
+      </div>
+      <h3 className="chart-card-title">Manage virtual models</h3>
       <Disclosure tone="add" summary="New virtual model">
         <form className="provider-create-form" action="/api/virtual-models" method="post">
           <input type="hidden" name="action" value="create" />

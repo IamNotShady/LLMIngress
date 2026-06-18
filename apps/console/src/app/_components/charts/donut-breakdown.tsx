@@ -12,16 +12,30 @@ export type DonutSlice = {
 
 // Donut breakdown used across Overview / Usage / Virtual Models. Renders the
 // ring plus a side legend with per-slice values.
+// Value formatting is selected by a serializable string (not a function) so
+// this client component can be used from server components.
+export type DonutValueFormat = "number" | "usd" | "percent";
+
+function formatDonutValue(value: number, format: DonutValueFormat): string {
+  if (format === "usd") {
+    return `$${value.toFixed(2)}`;
+  }
+  if (format === "percent") {
+    return `${value}%`;
+  }
+  return String(value);
+}
+
 export function DonutBreakdown({
   data,
   height = 180,
   ariaLabel,
-  valueFormatter = (value) => String(value),
+  valueFormat = "number",
 }: {
   data: DonutSlice[];
   height?: number;
   ariaLabel?: string;
-  valueFormatter?: (value: number) => string;
+  valueFormat?: DonutValueFormat;
 }) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
   const colored = data.map((slice, index) => ({
@@ -56,7 +70,10 @@ export function DonutBreakdown({
                 fontSize: 12,
                 color: "var(--text)",
               }}
-              formatter={(value, name) => [valueFormatter(Number(value)), String(name)]}
+              formatter={(value, name) => [
+                formatDonutValue(Number(value), valueFormat),
+                String(name),
+              ]}
             />
           </PieChart>
         </ResponsiveContainer>

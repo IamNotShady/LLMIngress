@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
+import {
+  normalizeProviderModelCapabilities,
+  normalizeRoutePolicyRules,
+  type ProviderModelCapabilities,
+  type RoutePolicyRules,
+} from "@llmingress/domain";
 import { Client, type QueryResultRow } from "pg";
 import { listProviderTemplateSelectorGroups } from "./provider-templates";
 
@@ -27,6 +33,7 @@ export type ExportedProvider = {
 
 export type ExportedProviderModel = {
   availability: "available" | "deprecated" | "not_listed" | "unavailable";
+  capabilityMetadata: ProviderModelCapabilities;
   contextWindow: number | null;
   displayName: string;
   id: string;
@@ -51,6 +58,7 @@ export type ExportedRoutePolicy = {
   fallbackProviderModelIds: string[];
   id: string;
   primaryProviderModelIds: string[];
+  rules: RoutePolicyRules;
   strategy: "balanced" | "cost_first" | "fixed" | "quality_first";
   virtualModelId: string;
 };
@@ -74,9 +82,12 @@ export type ExportedAgentApiKey = {
 };
 
 export type ExportedAgentLimit = {
+  alertThreshold: number | null;
   enabled: boolean;
-  limitType: "budget" | "rpm" | "token" | "tpm";
+  enforcementPolicy: "block" | "warn_only";
+  limitType: "budget" | "concurrency" | "rpm" | "token" | "tpm";
   limitValue: number;
+  manualBypass: boolean;
   period: "day" | "hour" | "minute" | "month" | "request" | "week";
   unit: "requests" | "tokens" | "usd";
 };
@@ -110,6 +121,7 @@ type ProviderRow = QueryResultRow & {
 
 type ProviderModelRow = QueryResultRow & {
   availability: ExportedProviderModel["availability"];
+  capability_metadata: unknown;
   context_window: number | null;
   display_name: string;
   id: string;
@@ -133,6 +145,7 @@ type VirtualModelRow = QueryResultRow & {
 
 type RoutePolicyRow = QueryResultRow & {
   id: string;
+  rules: unknown;
   strategy: ExportedRoutePolicy["strategy"];
   virtual_model_id: string;
 };
@@ -165,10 +178,13 @@ type AgentApiKeyVirtualModelRow = QueryResultRow & {
 };
 
 type AgentLimitRow = QueryResultRow & {
+  alert_threshold: string | null;
   agent_api_key_id: string;
   enabled: boolean;
+  enforcement_policy: ExportedAgentLimit["enforcementPolicy"];
   limit_type: ExportedAgentLimit["limitType"];
   limit_value: string;
+  manual_bypass: boolean;
   period: ExportedAgentLimit["period"];
   unit: ExportedAgentLimit["unit"];
 };
@@ -294,6 +310,7 @@ async function readProviderModels(
              context_window,
              supports_streaming,
              supports_tools,
+             capability_metadata,
              availability
       from provider_models
       order by provider_id, model_id
@@ -304,6 +321,7 @@ async function readProviderModels(
     const models = grouped.get(row.provider_id) ?? [];
     models.push({
       availability: row.availability,
+      capabilityMetadata: normalizeProviderModelCapabilities(row.capability_metadata),
       contextWindow: row.context_window,
       displayName: row.display_name,
       id: row.id,
@@ -363,6 +381,7 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
     `
       select id::text,
              virtual_model_id::text,
+             rules,
              strategy
       from route_policies
       order by id
@@ -395,6 +414,7 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
       primaryProviderModelIds: policyCandidates
         .filter((candidate) => !candidate.is_fallback)
         .map((candidate) => candidate.provider_model_id),
+      rules: normalizeRoutePolicyRules(policy.rules),
       strategy: policy.strategy,
       virtualModelId: policy.virtual_model_id,
     };
@@ -438,7 +458,10 @@ async function readAgents(client: QueryClient): Promise<ExportedAgent[]> {
                period,
                limit_value::text,
                unit,
-               enabled
+               enabled,
+               alert_threshold::text,
+               enforcement_policy,
+               manual_bypass
         from agent_limits
         order by agent_api_key_id, limit_type, period
       `,
@@ -457,9 +480,12 @@ async function readAgents(client: QueryClient): Promise<ExportedAgent[]> {
       id: apiKey.id,
       keyPrefix: apiKey.key_prefix,
       limits: (limitsByKeyId.get(apiKey.id) ?? []).map((limit) => ({
+        alertThreshold: limit.alert_threshold === null ? null : Number(limit.alert_threshold),
         enabled: limit.enabled,
+        enforcementPolicy: limit.enforcement_policy,
         limitType: limit.limit_type,
         limitValue: Number(limit.limit_value),
+        manualBypass: limit.manual_bypass,
         period: limit.period,
         unit: limit.unit,
       })),
@@ -515,9 +541,9 @@ async function writeProviderModels(
         `
           insert into provider_models (
             id, provider_id, model_id, display_name, context_window, supports_streaming,
-            supports_tools, availability
+            supports_tools, availability, capability_metadata
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
           on conflict (id) do update
           set provider_id = excluded.provider_id,
               model_id = excluded.model_id,
@@ -526,6 +552,7 @@ async function writeProviderModels(
               supports_streaming = excluded.supports_streaming,
               supports_tools = excluded.supports_tools,
               availability = excluded.availability,
+              capability_metadata = excluded.capability_metadata,
               updated_at = now()
         `,
         [
@@ -537,6 +564,7 @@ async function writeProviderModels(
           model.supportsStreaming,
           model.supportsTools,
           model.availability,
+          JSON.stringify(model.capabilityMetadata),
         ],
       );
     }
@@ -658,9 +686,18 @@ async function writeAgentLimits(
         await client.query(
           `
             insert into agent_limits (
-              id, agent_api_key_id, limit_type, period, limit_value, unit, enabled
+              id,
+              agent_api_key_id,
+              limit_type,
+              period,
+              limit_value,
+              unit,
+              enabled,
+              alert_threshold,
+              enforcement_policy,
+              manual_bypass
             )
-            values ($1, $2, $3, $4, $5, $6, $7)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           `,
           [
             randomUUID(),
@@ -670,6 +707,9 @@ async function writeAgentLimits(
             limit.limitValue,
             limit.unit,
             limit.enabled,
+            limit.alertThreshold,
+            limit.enforcementPolicy,
+            limit.manualBypass,
           ],
         );
       }
@@ -684,14 +724,20 @@ async function writeRoutePolicies(
   for (const routePolicy of routePolicies) {
     await client.query(
       `
-        insert into route_policies (id, virtual_model_id, strategy)
-        values ($1, $2, $3)
+        insert into route_policies (id, virtual_model_id, strategy, rules)
+        values ($1, $2, $3, $4::jsonb)
         on conflict (id) do update
         set virtual_model_id = excluded.virtual_model_id,
             strategy = excluded.strategy,
+            rules = excluded.rules,
             updated_at = now()
       `,
-      [routePolicy.id, routePolicy.virtualModelId, routePolicy.strategy],
+      [
+        routePolicy.id,
+        routePolicy.virtualModelId,
+        routePolicy.strategy,
+        JSON.stringify(routePolicy.rules),
+      ],
     );
   }
 }
@@ -817,6 +863,7 @@ function normalizeProviderModels(value: unknown, path: string): ExportedProvider
         ["available", "deprecated", "not_listed", "unavailable"],
         `${path}[${index}].availability`,
       ),
+      capabilityMetadata: normalizeProviderModelCapabilities(input.capabilityMetadata ?? {}),
       contextWindow: normalizeNullablePositiveInteger(
         input.contextWindow,
         `${path}[${index}].contextWindow`,
@@ -877,6 +924,7 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
         input.primaryProviderModelIds,
         `routePolicies[${index}].primaryProviderModelIds`,
       ),
+      rules: normalizeRoutePolicyRules(input.rules ?? {}),
       strategy: normalizeEnum(
         input.strategy,
         ["balanced", "cost_first", "fixed", "quality_first"],
@@ -938,13 +986,32 @@ function normalizeAgentLimits(value: unknown, path: string): ExportedAgentLimit[
       throw new Error(`${path}[${index}] must be an object.`);
     }
     return {
+      alertThreshold:
+        input.alertThreshold === undefined
+          ? null
+          : normalizeNullablePositiveNumber(
+              input.alertThreshold,
+              `${path}[${index}].alertThreshold`,
+            ),
       enabled: normalizeBoolean(input.enabled, `${path}[${index}].enabled`),
+      enforcementPolicy:
+        input.enforcementPolicy === undefined
+          ? "block"
+          : normalizeEnum(
+              input.enforcementPolicy,
+              ["block", "warn_only"],
+              `${path}[${index}].enforcementPolicy`,
+            ),
       limitType: normalizeEnum(
         input.limitType,
-        ["budget", "rpm", "token", "tpm"],
+        ["budget", "concurrency", "rpm", "token", "tpm"],
         `${path}[${index}].limitType`,
       ),
       limitValue: normalizePositiveNumber(input.limitValue, `${path}[${index}].limitValue`),
+      manualBypass:
+        input.manualBypass === undefined
+          ? false
+          : normalizeBoolean(input.manualBypass, `${path}[${index}].manualBypass`),
       period: normalizeEnum(
         input.period,
         ["day", "hour", "minute", "month", "request", "week"],
@@ -1215,6 +1282,13 @@ function normalizeNullablePositiveInteger(value: unknown, path: string): number 
     throw new Error(`${path} must be a positive integer or null.`);
   }
   return value;
+}
+
+function normalizeNullablePositiveNumber(value: unknown, path: string): number | null {
+  if (value === null) {
+    return null;
+  }
+  return normalizePositiveNumber(value, path);
 }
 
 function normalizePositiveNumber(value: unknown, path: string): number {

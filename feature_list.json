@@ -1028,7 +1028,14 @@
       "name": "Provider Model Price Source of Truth",
       "description": "Provider model current pricing uses models.dev as the primary sync source and LiteLLM model_prices_and_context_window as the auxiliary source. A new provider_models_price table stores all synced provider/model price rows. The provider_models table stores user-entered manual price fields, replacing model_price_overrides. Effective current price resolution prefers provider_models manual prices over provider_models_price synced prices; when neither exists, Console/Gateway/Worker surfaces an explicit unknown price. The old model_price_overrides and price_registry_snapshots tables are removed from the current schema without migrating their historical rows. Clicking refresh models still completes model_refresh asynchronously, then triggers the chained price_sync job that fetches the two external price sources and updates provider_models_price without rewriting historical request costs.",
       "verification": "pnpm exec vitest run tests/features/feat-100-provider-model-price-source.unit.test.ts && pnpm test:e2e tests/e2e/feat-100-provider-model-price-source.e2e.spec.ts --grep 'refresh models syncs provider model prices with manual override precedence'",
-      "dependencies": ["feat-014", "feat-015", "feat-057", "feat-073", "feat-096", "feat-097"],
+      "dependencies": [
+        "feat-014",
+        "feat-015",
+        "feat-057",
+        "feat-073",
+        "feat-096",
+        "feat-097"
+      ],
       "status": "passing",
       "evidence": "2026-06-17: TDD red observed first for feat-100 unit coverage (missing 0024 migration, missing external price-source normalizer/fetcher, and effective price still falling back to built-in prices) and real PostgreSQL E2E (provider_models lacked manual price columns). Added migration 0024_provider_model_prices with provider_models manual price columns, new provider_models_price current-price table, and drops for model_price_overrides and price_registry_snapshots without historical data migration. Added models.dev primary and LiteLLM auxiliary price-source fetch/normalization/merge logic, updated Worker price_sync to fetch/upsert provider_models_price, and kept refresh models asynchronous through the existing chained price_sync job. Updated Console/Gateway/Worker price reads so current price precedence is provider_models manual > provider_models_price synced > unknown, and adjusted budget, routing, reconciliation, backup, and related regression tests to seed synced prices explicitly. Verification passed: feat-100 unit test, real model_refresh-to-price_sync E2E, related feat-015/045/050/053/057/059/071/073/074/096 regressions, db:migrate:check, pnpm run lint, pnpm run verify, pnpm run verify:features across all 99 prior passing features before marking feat-100 passing, and final pnpm run verify:features across all 100 passing features after marking."
     },
@@ -1040,6 +1047,92 @@
       "dependencies": ["feat-009", "feat-048", "feat-099"],
       "status": "passing",
       "evidence": "2026-06-17: TDD red observed first: feat-101 unit failed because 0025_remove_process_heartbeats was missing and backup/current runtime contracts still referenced process_heartbeats; real PostgreSQL E2E failed because a freshly migrated database still created process_heartbeats. Added migration 0025_remove_process_heartbeats to drop idx_process_heartbeats_type_heartbeat_at and process_heartbeats, advance schema_version to 0025, and update shippedSqlMigrations. Removed process_heartbeats from the backup table manifest, updated the feat-009 runtime schema unit contract, and changed ARCHITECTURE runtime liveness wording to make gateway_runtime_status the lean Gateway liveness source of truth. E2E verifies fresh installs no longer create process_heartbeats, upgrades from 0024 drop the legacy table even with rows present, gateway_runtime_status remains writable, and current-schema backup artifacts neither include nor skip process_heartbeats. Verification passed: feat-101 unit, feat-101 real PostgreSQL E2E, related feat-009/086/087/101 unit regression (15 tests), related feat-009/086/087/101 E2E regression (4 tests; first run hit a pre-existing ./init.sh Next dev-lock conflict and passed after stopping that dev server), pnpm run db:migrate:check, pnpm run verify, pnpm run verify:features across all 100 previously passing features before marking feat-101 passing, and final pnpm run verify:features across all 101 passing features after marking."
+    },
+    {
+      "id": "feat-102",
+      "name": "Provider Operational Metadata and Key Management",
+      "description": "Backend supports Provider default priority plus Provider API key label, enabled flag, priority, last used time, last tested time, last test status, and last test error. Gateway uses enabled Provider API keys ordered by priority, skips disabled keys, and writes last_used_at after a successful provider request. Worker provider_connectivity_check can target one Provider API key and records that key's last test result.",
+      "verification": "pnpm exec vitest run tests/features/feat-102-provider-key-operational-metadata.unit.test.ts && pnpm test:e2e tests/e2e/feat-102-provider-key-operational-metadata.e2e.spec.ts --grep 'provider key management records label status priority usage and per key connectivity'",
+      "dependencies": ["feat-017", "feat-024", "feat-070", "feat-100"],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-102 unit failed because migration 0026 and Provider key metadata mapping did not exist; feat-102 E2E failed because providers.default_priority was missing. Added migration 0026_provider_key_operational_metadata for Provider default priority and Provider API key label/enabled/priority/last_used_at/last_tested_at/last_test_status/error fields, updated shippedSqlMigrations, and extended Console server Provider and Provider-key data APIs. Gateway now filters disabled Provider keys, orders candidates by Provider default priority plus key priority, and records last_used_at on successful chat/messages/responses/embeddings/streaming provider calls. Worker provider_connectivity_check accepts providerApiKeyId and records per-key last test status/error. Verification passed: feat-102 unit, feat-102 real PostgreSQL E2E, related feat-017/024/070/102 unit regression, related feat-024/070/102 E2E regression, pnpm run db:migrate:check, pnpm run verify, feat-101 E2E contract updated for schema_version 0026 and passed, pnpm run verify:features re-verified all 101 previously passing features before marking, and final pnpm run verify:features re-verified all 102 passing features after marking."
+    },
+    {
+      "id": "feat-103",
+      "name": "Agent Platform, Request Logging, and Derived Status",
+      "description": "Agents persist integration_platform and request_logging_enabled while keeping the existing agent_type contract. Agent online, offline, and high-risk state is derived from recent requests, failure rate, limit usage, and reachable Provider health without restoring process or Agent heartbeat tables. When request logging is disabled, Gateway keeps minimum accounting rows for budget and usage but skips detailed request metadata.",
+      "verification": "pnpm exec vitest run tests/features/feat-103-agent-platform-status.unit.test.ts && pnpm test:e2e tests/e2e/feat-103-agent-platform-status.e2e.spec.ts --grep 'agents persist integration platform request logging and derived status from recent activity and risks'",
+      "dependencies": [
+        "feat-026",
+        "feat-027",
+        "feat-031",
+        "feat-075",
+        "feat-077",
+        "feat-101"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-103 unit failed because migration 0027, Agent integration platform/logging normalization, derived status helper, and Gateway logging sanitizer did not exist; feat-103 E2E failed because createAgent did not return integrationPlatform/requestLoggingEnabled/status. Added migration 0027_agent_platform_status_logging for agents.integration_platform, agents.request_logging_enabled, and request_activity.request_metadata, updated shippedSqlMigrations and schema-version expectations. Console Agent create/update/list now persists integrationPlatform/requestLoggingEnabled, keeps agent_type unchanged, and derives offline/online/high-risk from request_activity, recent failure rate, active budget/RPM/TPM usage, and reachable unhealthy Provider/model health without process_heartbeats. Gateway auth now loads agents.request_logging_enabled and activity completion keeps accounting rows while clearing request_metadata, route_reason, fallback_attempts, and error_message when logging is disabled. Verification passed: feat-103 unit, feat-103 real PostgreSQL/Gateway E2E, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features re-verified all 102 previously passing features."
+    },
+    {
+      "id": "feat-104",
+      "name": "Activity Detail, Safe Metadata, and Fallback Timeline",
+      "description": "Request activity persists safe allowlisted request_metadata and response_metadata plus Provider API key attribution without storing prompt text, response text, or secrets. Activity backend supports filters, pagination, requestId detail, and fallback_events timeline. Fallback events include failed attempts and final success attempts across fallback-capable chat, messages, responses, and embeddings request paths.",
+      "verification": "pnpm exec vitest run tests/features/feat-104-activity-detail-fallback-metadata.unit.test.ts && pnpm test:e2e tests/e2e/feat-104-activity-detail-fallback-metadata.e2e.spec.ts --grep 'activity filters details safe metadata and fallback timeline are persisted'",
+      "dependencies": [
+        "feat-040",
+        "feat-044",
+        "feat-070",
+        "feat-102",
+        "feat-103"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-104 unit failed because migration 0028, safe response metadata builder, and backend activity filter normalization were missing; feat-104 E2E failed because responses did not fallback after primary first-byte failure and no activity detail/timeline backend existed. Added migration 0028_activity_detail_metadata for request_activity Provider API key attribution, safe response_metadata, and activity filter indexes; updated shippedSqlMigrations. Gateway activity completion now stores allowlisted request/response metadata and final Provider API key attribution, strips detailed metadata when Agent request logging is disabled, and records fallback_events for both failed attempts and final success attempts across chat, responses, messages, and embeddings. Console backend activity queries now support filters, pagination, requestId/activity detail, and ordered fallback timeline without frontend UI changes. Updated legacy fallback/schema E2E contracts for final success events and schema_version 0028. Verification passed: feat-104 unit, feat-104 real PostgreSQL/Gateway E2E, focused legacy regressions feat-033/041/044/053/070/101, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features re-verified all 103 previously passing features before marking."
+    },
+    {
+      "id": "feat-105",
+      "name": "Overview, Usage, and Route Analytics Backend",
+      "description": "Usage, Overview, and Virtual Models backend queries support arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window comparison, timeseries, top agents/models/routes, savings, failure rate, p95 latency, and route/fallback metrics using existing runtime tables plus only necessary indexes.",
+      "verification": "pnpm exec vitest run tests/features/feat-105-ui-analytics-backend.unit.test.ts && pnpm test:e2e tests/e2e/feat-105-ui-analytics-backend.e2e.spec.ts --grep 'analytics backend returns filtered kpis trends p95 route and savings metrics'",
+      "dependencies": [
+        "feat-045",
+        "feat-047",
+        "feat-075",
+        "feat-079",
+        "feat-099",
+        "feat-104"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-105 unit and E2E failed because apps/console/src/server/analytics was missing. Added Console backend analytics helper for arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window comparison, hour/day timeseries, top Agents/provider models/Virtual Models/routes, savings, failure rate, p95 latency, and route/fallback metrics using existing runtime tables without Console UI changes. Added migration 0029_analytics_backend_indexes for request_activity started_at, virtual_model, and route_policy lookup indexes; updated shippedSqlMigrations. Updated feat-101 E2E schema-version assertion to follow the latest migration id so new schema-only migrations do not regress the process_heartbeats cleanup contract. Verification passed: feat-105 unit, feat-105 real PostgreSQL E2E, focused feat-101 unit/E2E regression, pnpm run db:migrate:check, pnpm run verify, pnpm run verify:features re-verified all 104 previously passing features before marking, and final pnpm run verify:features re-verified all 105 passing features after marking."
+    },
+    {
+      "id": "feat-106",
+      "name": "Advanced Route Policy Rules and Preview",
+      "description": "Route policies store validated JSONB rules and provider models expose capability metadata for coding, reasoning, tools, and related matching. Route engine filters candidates by task type, context tokens, tools, capabilities, timeout/retry rules, and emits route reason details. Backend exposes a dry-run preview that explains the decision without calling a real Provider.",
+      "verification": "pnpm exec vitest run tests/features/feat-106-advanced-route-rules-preview.unit.test.ts && pnpm test:e2e tests/e2e/feat-106-advanced-route-rules-preview.e2e.spec.ts --grep 'advanced route rules select candidates and dry run preview explains the decision'",
+      "dependencies": [
+        "feat-029",
+        "feat-032",
+        "feat-040",
+        "feat-078",
+        "feat-100"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-106 unit/E2E initially failed because migration 0030, shared rule normalization, route filtering explanations, and Console preview API were missing. Added migration 0030_advanced_route_rules_preview with route_policies.rules and provider_models.capability_metadata JSONB object checks plus schema_version 0030 and migration checksum. Added @llmingress/domain route rule/capability contracts, validation helpers, and shared selectRouteCandidate logic used by Gateway and Console preview. Gateway config snapshots now load policy rules plus provider model context_window, supports_tools, and capability metadata; Gateway request paths pass usesTools while preserving empty-rule feat-032 behavior. Console import/export round-trips rules and capability metadata. Added authenticated POST /api/route-policies/preview dry-run backend that validates input, loads current DB routing config, explains selected/excluded candidates, and does not call providers. Updated feat-044 activity E2E to accept the new route_reason explanation fields while still asserting legacy route reason fields. Verification passed: feat-106 unit and real PostgreSQL Console preview E2E, related feat-032/080 unit and E2E regressions, feat-044 activity E2E regression, pnpm run db:migrate:check, pnpm run verify, pnpm run verify:features re-verified all 105 previously passing features before marking, and final pnpm run verify:features re-verified all 106 passing features after marking."
+    },
+    {
+      "id": "feat-107",
+      "name": "Concurrency Limits and Enforcement Policy",
+      "description": "Agent limits support concurrency, alert threshold, block or warn_only enforcement, and manual bypass flag. Gateway uses rate_limit_windows.active_count to increment and release in-flight concurrency on success, failure, and cancellation while preserving current RPM, TPM, and budget behavior.",
+      "verification": "pnpm exec vitest run tests/features/feat-107-concurrency-limit-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-107-concurrency-limit-policy.e2e.spec.ts --grep 'concurrency limits increment release and respect block or warn enforcement policy'",
+      "dependencies": [
+        "feat-031",
+        "feat-041",
+        "feat-042",
+        "feat-053",
+        "feat-089"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-107 unit tests failed because getConcurrencyWindow and policy defaults were missing, warn_only/manual_bypass still blocked over-limit requests, and existing Console limit normalization did not emit policy defaults. feat-107 E2E then failed because agent_limits.alert_threshold did not exist. Added migration 0031_concurrency_limit_policy for concurrency limit_type, alert_threshold, enforcement_policy, manual_bypass, concurrency period/unit validation, schema_version 0031, and shipped migration checksum. Gateway rate-limit enforcement now reads RPM, TPM, and concurrency rules, uses rate_limit_windows.active_count with a fixed concurrency window, increments in-flight concurrency before provider calls, returns stable 429 rate_limit_exceeded for block policy, allows warn_only/manual_bypass while still counting, and releases active_count on JSON success/failure, budget early returns, streaming end/error/close, and client cancellation. /v1/embeddings now uses the same rate/concurrency path. Console server and config import/export round-trip the new backend fields without Console UI changes, defaulting old inputs to alertThreshold=null, enforcementPolicy=block, and manualBypass=false. Verification passed: feat-107 unit (4) and real PostgreSQL/Gateway/fake-provider E2E (1), pnpm run db:migrate:check, related feat-031/041/042/053/080/087/096 regressions, pnpm run verify, pnpm run verify:features re-verified all 106 previously passing features before marking, and final pnpm run verify:features re-verified all 107 passing features after marking."
     }
   ]
 }

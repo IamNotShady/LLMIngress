@@ -68,11 +68,11 @@ test("success and failure requests create activity rows with route fallback late
             provider_model_id: seeded.successProviderModelId,
             request_id: "req_activity_success_044",
             route_policy_id: seeded.fallbackRoutePolicyId,
-            route_reason: {
+            route_reason: expect.objectContaining({
               message: "fixed route for activity-fallback selected configured candidate 1.",
               selectedCandidateOrder: 1,
               strategy: "fixed",
-            },
+            }),
             status: "succeeded",
             virtual_model_id: seeded.fallbackVirtualModelId,
           },
@@ -93,11 +93,11 @@ test("success and failure requests create activity rows with route fallback late
             provider_model_id: seeded.hardFailureProviderModelId,
             request_id: "req_activity_failure_044",
             route_policy_id: seeded.failureRoutePolicyId,
-            route_reason: {
+            route_reason: expect.objectContaining({
               message: "fixed route for activity-failure selected configured candidate 1.",
               selectedCandidateOrder: 1,
               strategy: "fixed",
-            },
+            }),
             status: "failed",
             virtual_model_id: seeded.failureVirtualModelId,
           },
@@ -112,6 +112,12 @@ test("success and failure requests create activity rows with route fallback late
           error_code: "provider_request_failed",
           failed_before_first_byte: true,
           provider_model_id: seeded.failedFallbackProviderModelId,
+          request_id: "req_activity_success_044",
+        },
+        {
+          error_code: null,
+          failed_before_first_byte: false,
+          provider_model_id: seeded.successProviderModelId,
           request_id: "req_activity_success_044",
         },
         {

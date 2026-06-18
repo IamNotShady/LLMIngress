@@ -81,6 +81,7 @@ test("limits return expected errors and first byte failure falls back successful
       await expectFallbackEvents(fixture, {
         failedProviderModelId: seeded.failedProviderModelId,
         requestId: buildLimitsFallbackRequestId("fallback"),
+        successProviderModelId: seeded.successProviderModelId,
       });
     } finally {
       await stopGatewayProcess(gateway);
@@ -399,7 +400,7 @@ async function readFallbackActivity(
 
 async function expectFallbackEvents(
   fixture: Fixture,
-  input: { failedProviderModelId: string; requestId: string },
+  input: { failedProviderModelId: string; requestId: string; successProviderModelId: string },
 ): Promise<void> {
   const result = await fixture.query<{
     error_code: string | null;
@@ -429,6 +430,13 @@ async function expectFallbackEvents(
       provider_model_id: input.failedProviderModelId,
       request_id: input.requestId,
       status: "failed",
+    },
+    {
+      error_code: null,
+      failed_before_first_byte: false,
+      provider_model_id: input.successProviderModelId,
+      request_id: input.requestId,
+      status: "succeeded",
     },
   ]);
 }

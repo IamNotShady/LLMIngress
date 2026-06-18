@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
       await createAgent({
         agent: normalizeAgentFormInput({
           agentType: readText(form, "agentType"),
+          integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
+          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         databaseUrl,
       });
@@ -36,7 +38,9 @@ export async function POST(request: NextRequest) {
       await updateAgent({
         agent: normalizeAgentFormInput({
           agentType: readText(form, "agentType"),
+          integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
+          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         databaseUrl,
         id: readRequiredText(form, "id"),

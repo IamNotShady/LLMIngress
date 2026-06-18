@@ -296,12 +296,16 @@ async function handleRequest(
         "cache-control": "no-cache",
       });
       response.write('data: {"delta":"fake"}\n\n');
-      const secondChunkTimer = setTimeout(() => {
-        response.write('data: {"delta":" stream"}\n\n');
-      }, 300);
+      const streamEndMs = readPositiveIntegerQuery(url, "stream_end_ms", 700);
+      const secondChunkTimer = setTimeout(
+        () => {
+          response.write('data: {"delta":" stream"}\n\n');
+        },
+        Math.min(300, streamEndMs),
+      );
       const endTimer = setTimeout(() => {
         response.end("data: [DONE]\n\n");
-      }, 700);
+      }, streamEndMs);
       response.once("close", () => {
         clearTimeout(secondChunkTimer);
         clearTimeout(endTimer);
@@ -384,6 +388,11 @@ function readMode(url: URL): FakeProviderMode {
     return mode;
   }
   return "json";
+}
+
+function readPositiveIntegerQuery(url: URL, name: string, fallback: number): number {
+  const value = Number(url.searchParams.get(name));
+  return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 function writeJson(response: ServerResponse<IncomingMessage>, status: number, body: unknown): void {

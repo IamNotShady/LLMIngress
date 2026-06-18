@@ -37,6 +37,13 @@ export type FallbackFailedAttempt = {
   providerModelId: string;
 };
 
+export type FallbackSucceededAttempt = {
+  attemptOrder: number;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
+  providerModelId: string;
+};
+
 export type FallbackChainResult = {
   failedAttempts: FallbackFailedAttempt[];
   result: OpenAIAdapterSuccess;
@@ -51,6 +58,12 @@ export type ExecuteFallbackChainInput = {
   request: NormalizedOpenAIChatRequest;
   requestActivityId?: string;
   requestId?: string;
+};
+
+type FallbackAttemptErrorLike = {
+  errorCode: string;
+  errorMessage: string;
+  statusCode: number | null;
 };
 
 export function buildFallbackAttemptCandidates(input: {
@@ -116,6 +129,14 @@ export async function executeFallbackChain(
       });
 
       if (result.ok) {
+        await recordSucceededAttemptInDatabase(input, {
+          attemptOrder,
+          ...(providerApiKey.providerApiKeyId
+            ? { providerApiKeyId: providerApiKey.providerApiKeyId }
+            : {}),
+          ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
+          providerModelId: candidate.providerModelId,
+        });
         return {
           failedAttempts,
           result,
@@ -129,17 +150,12 @@ export async function executeFallbackChain(
       }
 
       lastError = result;
-      const failedAttempt: FallbackFailedAttempt = {
+      const failedAttempt = buildFallbackFailedAttempt({
         attemptOrder,
-        errorCode: result.errorCode,
-        errorMessage: result.errorMessage,
-        failedBeforeFirstByte: result.statusCode === null,
-        ...(providerApiKey.providerApiKeyId
-          ? { providerApiKeyId: providerApiKey.providerApiKeyId }
-          : {}),
-        ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
+        result,
+        providerApiKey,
         providerModelId: candidate.providerModelId,
-      };
+      });
       failedAttempts.push(failedAttempt);
       candidateFailedAttempts.push(failedAttempt);
       await input.recordFailedAttempt?.(failedAttempt);
@@ -156,7 +172,28 @@ export async function executeFallbackChain(
   throw new Error(lastError?.errorMessage ?? "All fallback candidates failed.");
 }
 
-function readFallbackProviderApiKeys(
+export function buildFallbackFailedAttempt(input: {
+  attemptOrder: number;
+  providerApiKey: FallbackProviderApiKey;
+  providerModelId: string;
+  result: FallbackAttemptErrorLike;
+}): FallbackFailedAttempt {
+  return {
+    attemptOrder: input.attemptOrder,
+    errorCode: input.result.errorCode,
+    errorMessage: input.result.errorMessage,
+    failedBeforeFirstByte: input.result.statusCode === null,
+    ...(input.providerApiKey.providerApiKeyId
+      ? { providerApiKeyId: input.providerApiKey.providerApiKeyId }
+      : {}),
+    ...(input.providerApiKey.keyPrefix
+      ? { providerApiKeyPrefix: input.providerApiKey.keyPrefix }
+      : {}),
+    providerModelId: input.providerModelId,
+  };
+}
+
+export function readFallbackProviderApiKeys(
   candidate: FallbackChainCandidate,
 ): readonly FallbackProviderApiKey[] {
   if (candidate.providerApiKeys && candidate.providerApiKeys.length > 0) {
@@ -172,8 +209,47 @@ function readFallbackProviderApiKeys(
   ];
 }
 
-async function recordFailedAttemptInDatabase(
-  input: ExecuteFallbackChainInput,
+export async function recordSucceededAttemptInDatabase(
+  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
+  attempt: FallbackSucceededAttempt,
+): Promise<void> {
+  if (!input.databaseUrl || !input.requestActivityId) {
+    return;
+  }
+
+  const client = new Client({ connectionString: input.databaseUrl });
+  await client.connect();
+  try {
+    await client.query(
+      `
+        insert into fallback_events (
+          id,
+          request_activity_id,
+          provider_model_id,
+          provider_api_key_id,
+          provider_api_key_prefix,
+          attempt_order,
+          status,
+          failed_before_first_byte
+        )
+        values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
+      `,
+      [
+        randomUUID(),
+        input.requestActivityId,
+        attempt.providerModelId,
+        attempt.providerApiKeyId || null,
+        attempt.providerApiKeyPrefix || null,
+        attempt.attemptOrder,
+      ],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+export async function recordFailedAttemptInDatabase(
+  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
   attempt: FallbackFailedAttempt,
 ): Promise<void> {
   if (!input.databaseUrl || !input.requestActivityId) {

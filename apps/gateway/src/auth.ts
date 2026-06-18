@@ -11,6 +11,7 @@ export type GatewayAuthenticatedAgentApiKey = {
   defaultVirtualModelId: string | null;
   id: string;
   keyPrefix: string;
+  requestLoggingEnabled: boolean;
 };
 
 export type GatewayAuthSuccess = {
@@ -43,6 +44,7 @@ type AgentApiKeyAuthRow = QueryResultRow & {
   enabled: boolean;
   id: string;
   key_prefix: string;
+  request_logging_enabled: boolean;
 };
 
 export function buildGatewayAgentApiKeyHash(plaintext: string): string {
@@ -102,6 +104,7 @@ export async function authenticateGatewayRequest(input: {
       defaultVirtualModelId: row.default_virtual_model_id,
       id: row.id,
       keyPrefix: row.key_prefix,
+      requestLoggingEnabled: row.request_logging_enabled,
     },
     ok: true,
     requestId,
@@ -129,12 +132,14 @@ async function readAgentApiKeyByHash(
   try {
     const result = await client.query<AgentApiKeyAuthRow>(
       `
-        select id::text,
-               agent_id::text,
-               key_prefix,
-               default_virtual_model_id::text,
-               enabled
+        select agent_api_keys.id::text,
+               agent_api_keys.agent_id::text,
+               agent_api_keys.key_prefix,
+               agent_api_keys.default_virtual_model_id::text,
+               agent_api_keys.enabled,
+               agents.request_logging_enabled
         from agent_api_keys
+        join agents on agents.id = agent_api_keys.agent_id
         where key_hash = $1
       `,
       [keyHash],

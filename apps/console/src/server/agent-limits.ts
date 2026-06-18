@@ -4,13 +4,17 @@ import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-regis
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
 
-export type AgentLimitType = "budget" | "rpm" | "token" | "tpm";
+export type AgentLimitType = "budget" | "concurrency" | "rpm" | "token" | "tpm";
+export type AgentLimitEnforcementPolicy = "block" | "warn_only";
 export type AgentLimitPeriod = "day" | "hour" | "minute" | "month" | "request" | "week";
 export type AgentLimitUnit = "requests" | "tokens" | "usd";
 
 export type AgentLimitRuleInput = {
+  alertThreshold?: number | null;
+  enforcementPolicy?: AgentLimitEnforcementPolicy;
   limitType: AgentLimitType;
   limitValue: number;
+  manualBypass?: boolean;
   period: AgentLimitPeriod;
   unit: AgentLimitUnit;
 };
@@ -36,11 +40,14 @@ export type ConsoleAgentLimit = AgentLimitRuleInput & {
 };
 
 type AgentLimitRow = QueryResultRow & {
+  alert_threshold: string | null;
   agent_api_key_id: string;
   enabled: boolean;
+  enforcement_policy: AgentLimitEnforcementPolicy;
   id: string;
   limit_type: AgentLimitType;
   limit_value: string;
+  manual_bypass: boolean;
   period: AgentLimitPeriod;
   unit: AgentLimitUnit;
 };
@@ -93,26 +100,38 @@ export function normalizeAgentLimitFormInput(
     agentApiKeyId,
     rules: [
       {
+        alertThreshold: null,
+        enforcementPolicy: "block",
         limitType: "budget",
         limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
+        manualBypass: false,
         period: budgetPeriod,
         unit: "usd",
       },
       {
+        alertThreshold: null,
+        enforcementPolicy: "block",
         limitType: "rpm",
         limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
+        manualBypass: false,
         period: "minute",
         unit: "requests",
       },
       {
+        alertThreshold: null,
+        enforcementPolicy: "block",
         limitType: "tpm",
         limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
+        manualBypass: false,
         period: "minute",
         unit: "tokens",
       },
       {
+        alertThreshold: null,
+        enforcementPolicy: "block",
         limitType: "token",
         limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
+        manualBypass: false,
         period: "request",
         unit: "tokens",
       },
@@ -122,7 +141,7 @@ export function normalizeAgentLimitFormInput(
 
 export function formatAgentLimitSummaries(
   limits: readonly ConsoleAgentLimit[],
-): Record<AgentLimitType, string> {
+): Record<Exclude<AgentLimitType, "concurrency">, string> {
   return {
     budget: formatLimitSummary(limits.find((limit) => limit.limitType === "budget")),
     rpm: formatLimitSummary(limits.find((limit) => limit.limitType === "rpm")),
@@ -171,9 +190,12 @@ export async function saveAgentLimitRules(input: {
               period,
               limit_value,
               unit,
-              enabled
+              enabled,
+              alert_threshold,
+              enforcement_policy,
+              manual_bypass
             )
-            values ($1, $2, $3, $4, $5, $6, true)
+            values ($1, $2, $3, $4, $5, $6, true, $7, $8, $9)
           `,
           [
             randomUUID(),
@@ -182,6 +204,9 @@ export async function saveAgentLimitRules(input: {
             rule.period,
             rule.limitValue,
             rule.unit,
+            rule.alertThreshold ?? null,
+            rule.enforcementPolicy ?? "block",
+            rule.manualBypass ?? false,
           ],
         );
       }
@@ -375,7 +400,10 @@ async function readAgentLimits(
              period,
              limit_value::text,
              unit,
-             enabled
+             enabled,
+             alert_threshold::text,
+             enforcement_policy,
+             manual_bypass
       from agent_limits
       where ($1::uuid is null or agent_api_key_id = $1::uuid)
       order by agent_api_key_id, limit_type
@@ -383,11 +411,14 @@ async function readAgentLimits(
     [agentApiKeyId ?? null],
   );
   return result.rows.map((row) => ({
+    alertThreshold: row.alert_threshold === null ? null : Number(row.alert_threshold),
     agentApiKeyId: row.agent_api_key_id,
     enabled: row.enabled,
+    enforcementPolicy: row.enforcement_policy,
     id: row.id,
     limitType: row.limit_type,
     limitValue: Number(row.limit_value),
+    manualBypass: row.manual_bypass,
     period: row.period,
     unit: row.unit,
   }));

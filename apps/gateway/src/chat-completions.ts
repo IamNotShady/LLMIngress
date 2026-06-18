@@ -29,7 +29,7 @@ import type {
   NormalizedOpenAIChatRequest,
   OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildOpenAIChatCompletionRequestMetadata,
   type GatewayRequestMetadata,
@@ -181,6 +181,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     };
   }
 
+  const concurrencyLease = rateLimit.concurrencyLease;
   let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   let selectedActivityCandidate: GatewayRouteCandidateSnapshot | undefined;
@@ -190,6 +191,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
+      usesTools: requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
@@ -242,6 +244,10 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       requestActivityId: input.requestActivityId,
       requestId: input.requestId,
     });
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: result.selectedCandidate.providerApiKeyId,
+    });
     activity = buildRequestActivityRoute({
       candidate: result.selectedCandidate,
       fallbackAttempts: result.failedAttempts,
@@ -280,17 +286,27 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
+  } finally {
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
+    });
   }
 }
 
 function buildRequestActivityRoute(input: {
-  candidate: GatewayRouteCandidateSnapshot;
+  candidate: GatewayRouteCandidateSnapshot & {
+    providerApiKeyId?: string;
+    providerApiKeyPrefix?: string;
+  };
   fallbackAttempts: FallbackFailedAttempt[];
   routeDecision: ReturnType<typeof selectRouteCandidate>;
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: input.fallbackAttempts,
     modelId: input.candidate.modelId,
+    providerApiKeyId: input.candidate.providerApiKeyId,
+    providerApiKeyPrefix: input.candidate.providerApiKeyPrefix,
     providerId: input.candidate.providerId,
     providerKey: input.candidate.providerKey,
     providerModelId: input.candidate.providerModelId,
@@ -470,7 +486,12 @@ async function readProviderCredentials(input: {
         join provider_api_keys on provider_api_keys.provider_id = providers.id
         where providers.id = any($1::uuid[])
           and providers.enabled = true
-        order by providers.id, provider_api_keys.created_at asc, provider_api_keys.id asc
+          and provider_api_keys.enabled = true
+        order by providers.default_priority asc,
+                 providers.id,
+                 provider_api_keys.priority asc,
+                 provider_api_keys.created_at asc,
+                 provider_api_keys.id asc
       `,
       [input.providerIds],
     );
@@ -495,6 +516,31 @@ async function readProviderCredentials(input: {
       credentials.set(row.provider_id, providerCredentials);
     }
     return credentials;
+  } finally {
+    await client.end();
+  }
+}
+
+export async function recordGatewayProviderApiKeyLastUsed(input: {
+  databaseUrl: string;
+  providerApiKeyId?: string;
+}): Promise<void> {
+  if (!input.providerApiKeyId) {
+    return;
+  }
+
+  const client = new Client({ connectionString: input.databaseUrl });
+  await client.connect();
+  try {
+    await client.query(
+      `
+        update provider_api_keys
+        set last_used_at = now(),
+            updated_at = now()
+        where id = $1
+      `,
+      [input.providerApiKeyId],
+    );
   } finally {
     await client.end();
   }

@@ -175,6 +175,36 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0025",
     name: "remove_process_heartbeats",
   },
+  {
+    checksum: "d6a8228d1de41ff485fa3ebbe7a3edfc34fcf45336abdc22852a0ea431e09bd0",
+    id: "0026",
+    name: "provider_key_operational_metadata",
+  },
+  {
+    checksum: "81567da886f409a2d0364d853f103b07d01ea57899058f3afc3825c9a726fefa",
+    id: "0027",
+    name: "agent_platform_status_logging",
+  },
+  {
+    checksum: "f95f77c77c9d3a05b6b57656b4e958106581ac8c4218a7c4588f4e8b9592dd6a",
+    id: "0028",
+    name: "activity_detail_metadata",
+  },
+  {
+    checksum: "44a2a8a3d47f0ad29f7d563e1ad21439de29088fcb7a029afb91734fbfe3b15d",
+    id: "0029",
+    name: "analytics_backend_indexes",
+  },
+  {
+    checksum: "824d5fa0b5dd07005b38c2a6d8ddcee33c69ec3fade3630f7026443b32cefdda",
+    id: "0030",
+    name: "advanced_route_rules_preview",
+  },
+  {
+    checksum: "aade4f0ce0fd5ba37b4cc2216a152cb2b51c4a0d953932ffb6a0b79e478d9a61",
+    id: "0031",
+    name: "concurrency_limit_policy",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

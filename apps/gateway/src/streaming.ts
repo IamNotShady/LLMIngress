@@ -12,6 +12,7 @@ import {
   attachGatewayProviderCredentials,
   normalizeOpenAIChatCompletionRequest,
   readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
 } from "./chat-completions.js";
 import type {
   GatewayConfigSnapshot,
@@ -21,7 +22,11 @@ import type {
 import { mapGatewayErrorStatus } from "./error-mapping.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
 import { openRouterAttributionHeaders } from "./provider-adapters/openrouter.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import {
+  enforceGatewayRateLimits,
+  type GatewayConcurrencyLease,
+  releaseGatewayConcurrency,
+} from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,
   buildOpenAIChatCompletionRequestMetadata,
@@ -114,11 +119,13 @@ export async function executeGatewayStreamingRequest(input: {
   }
 
   let budgetReservation: GatewayBudgetReservation | undefined;
+  let concurrencyLease = rateLimit.concurrencyLease;
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
       snapshot: input.snapshot,
+      usesTools: normalized.requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
@@ -139,6 +146,11 @@ export async function executeGatewayStreamingRequest(input: {
       requestMetadata: normalized.requestMetadata,
     });
     if (!budget.ok) {
+      await releaseGatewayConcurrency({
+        databaseUrl: input.databaseUrl,
+        lease: concurrencyLease,
+      });
+      concurrencyLease = undefined;
       return {
         activity,
         body: budget.body,
@@ -191,6 +203,11 @@ export async function executeGatewayStreamingRequest(input: {
         reservation: budgetReservation,
       });
       budgetReservation = undefined;
+      await releaseGatewayConcurrency({
+        databaseUrl: input.databaseUrl,
+        lease: concurrencyLease,
+      });
+      concurrencyLease = undefined;
       return {
         activity,
         body: createGatewayStreamingErrorBody("provider_request_failed", input.requestId),
@@ -199,29 +216,40 @@ export async function executeGatewayStreamingRequest(input: {
         statusCode: 502,
       };
     }
-    const body = wrapProviderStreamWithBudgetFinalization(
-      wrapProviderStreamWithErrorRecording(
-        Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: selected.providerApiKeyId,
+    });
+    const body = wrapProviderStreamWithConcurrencyRelease(
+      wrapProviderStreamWithBudgetFinalization(
+        wrapProviderStreamWithErrorRecording(
+          Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
+          {
+            recordRuntimeError: (error) =>
+              recordGatewayRuntimeError({
+                databaseUrl: input.databaseUrl,
+                error,
+                metadata: {
+                  protocol: input.protocol,
+                  providerModelId: selected.providerModelId,
+                  requestId: input.requestId,
+                  virtualModelId: input.virtualModel.id,
+                },
+              }),
+          },
+        ),
         {
-          recordRuntimeError: (error) =>
-            recordGatewayRuntimeError({
-              databaseUrl: input.databaseUrl,
-              error,
-              metadata: {
-                protocol: input.protocol,
-                providerModelId: selected.providerModelId,
-                requestId: input.requestId,
-                virtualModelId: input.virtualModel.id,
-              },
-            }),
+          databaseUrl: input.databaseUrl,
+          reservation: budgetReservation,
         },
       ),
       {
         databaseUrl: input.databaseUrl,
-        reservation: budgetReservation,
+        lease: concurrencyLease,
       },
     );
     budgetReservation = undefined;
+    concurrencyLease = undefined;
 
     return {
       activity,
@@ -235,6 +263,10 @@ export async function executeGatewayStreamingRequest(input: {
     await releaseGatewayBudgetReservation({
       databaseUrl: input.databaseUrl,
       reservation: budgetReservation,
+    });
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
     });
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyStreamingError(message);
@@ -354,6 +386,27 @@ function wrapProviderStreamWithBudgetFinalization(
     settled = true;
     void releaseGatewayBudgetReservation(input);
   });
+  return source;
+}
+
+function wrapProviderStreamWithConcurrencyRelease(
+  source: Readable,
+  input: {
+    databaseUrl: string;
+    lease: GatewayConcurrencyLease | undefined;
+  },
+): Readable {
+  let settled = false;
+  const release = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    void releaseGatewayConcurrency(input);
+  };
+  source.once("end", release);
+  source.once("error", release);
+  source.once("close", release);
   return source;
 }
 

@@ -22,7 +22,7 @@ import {
   formatAgentLimitSummaries,
   listAgentLimits,
 } from "../../server/agent-limits";
-import { listAgents } from "../../server/agents";
+import { agentIntegrationPlatforms, listAgents } from "../../server/agents";
 import { getConsoleDatabaseUrl } from "../../server/auth";
 import { placeholderFloat, placeholderInt, placeholderTrend } from "../../server/mock-data";
 import {
@@ -1582,6 +1582,29 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             <option value="ide">ide</option>
             <option value="other">other</option>
           </select>
+          <label htmlFor="agent-integration-platform">Integration platform</label>
+          <select
+            id="agent-integration-platform"
+            name="integrationPlatform"
+            required
+            defaultValue="other"
+          >
+            {agentIntegrationPlatforms.map((platform) => (
+              <option key={platform} value={platform}>
+                {platform}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="agent-request-logging">Request logging</label>
+          <select
+            id="agent-request-logging"
+            name="requestLoggingEnabled"
+            required
+            defaultValue="true"
+          >
+            <option value="true">enabled</option>
+            <option value="false">disabled</option>
+          </select>
           <button type="submit">Create agent</button>
         </form>
       </Disclosure>
@@ -1596,12 +1619,15 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
               meta={
                 <span className="row-meta">
                   <span>Type: {agent.agentType}</span>
+                  <span>Platform: {agent.integrationPlatform}</span>
+                  <span>Logging: {formatAgentRequestLogging(agent.requestLoggingEnabled)}</span>
                   <span>{agent.activeApiKeyCount} active keys</span>
+                  <span>{agent.enabled ? "Enabled" : "Disabled"}</span>
                 </span>
               }
               status={
-                <span className={agent.enabled ? "status-enabled" : "status-disabled"}>
-                  {agent.enabled ? "Enabled" : "Disabled"}
+                <span className={agent.status === "online" ? "status-enabled" : "status-disabled"}>
+                  {formatAgentDerivedStatus(agent.status)}
                 </span>
               }
             >
@@ -1628,8 +1654,36 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                   <option value="ide">ide</option>
                   <option value="other">other</option>
                 </select>
+                <label htmlFor={`agent-integration-platform-${agent.id}`}>
+                  Edit integration platform
+                </label>
+                <select
+                  id={`agent-integration-platform-${agent.id}`}
+                  name="integrationPlatform"
+                  defaultValue={agent.integrationPlatform}
+                  required
+                >
+                  {agentIntegrationPlatforms.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {platform}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor={`agent-request-logging-${agent.id}`}>Edit request logging</label>
+                <select
+                  id={`agent-request-logging-${agent.id}`}
+                  name="requestLoggingEnabled"
+                  defaultValue={String(agent.requestLoggingEnabled)}
+                  required
+                >
+                  <option value="true">enabled</option>
+                  <option value="false">disabled</option>
+                </select>
                 <button type="submit">Save agent</button>
               </form>
+              <p>Integration platform: {agent.integrationPlatform}</p>
+              <p>Derived status: {formatAgentDerivedStatus(agent.status)}</p>
+              <p>Request logging: {formatAgentRequestLogging(agent.requestLoggingEnabled)}</p>
               <p>Active API keys: {agent.activeApiKeyCount}</p>
               <p>Request attribution records: {agent.requestAttributionCount}</p>
               <div className="provider-key-metadata">
@@ -3392,6 +3446,20 @@ function findAgentLimit(
   limitType: ConsoleAgentLimit["limitType"],
 ): ConsoleAgentLimit | undefined {
   return limits.find((limit) => limit.limitType === limitType);
+}
+
+function formatAgentDerivedStatus(status: string): string {
+  if (status === "high-risk") {
+    return "High-risk";
+  }
+  if (status === "online") {
+    return "Online";
+  }
+  return "Offline";
+}
+
+function formatAgentRequestLogging(enabled: boolean): string {
+  return enabled ? "Enabled" : "Disabled";
 }
 
 function groupByAgentApiKeyId<T extends { agentApiKeyId: string }>(values: T[]): Map<string, T[]> {

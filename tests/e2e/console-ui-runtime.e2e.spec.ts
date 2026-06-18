@@ -11,7 +11,9 @@ test("gateway runtime page renders status cards, connectivity, errors, exports, 
 
     // Status KPI cards.
     for (const label of ["Gateway status", "Runtime address", "Version", "Heartbeat"]) {
-      await expect(page.locator(".stat-card-label", { hasText: new RegExp(`^${label}$`) })).toBeVisible();
+      await expect(
+        page.locator(".stat-card-label", { hasText: new RegExp(`^${label}$`) }),
+      ).toBeVisible();
     }
 
     // Section panels.

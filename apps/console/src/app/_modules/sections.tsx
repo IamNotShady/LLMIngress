@@ -1635,6 +1635,71 @@ function LimitsConfigPanel({
   );
 }
 
+export async function ModelsSection() {
+  const databaseUrl = getConsoleDatabaseUrl();
+  const providerModelOptions = await listProviderModelOptions(databaseUrl);
+  const providers = new Set(providerModelOptions.map((option) => option.providerKey));
+  const pricedCount = providerModelOptions.filter(
+    (option) => option.priceStatus !== "unknown_price",
+  ).length;
+
+  return (
+    <section className="providers-panel" aria-label="Model directory">
+      <div className="stat-grid">
+        <StatCard icon="MO" label="Models" value={String(providerModelOptions.length)} />
+        <StatCard icon="PR" label="Providers" value={String(providers.size)} />
+        <StatCard icon="$" label="Priced models" value={String(pricedCount)} />
+      </div>
+      <div className="chart-card">
+        <h2 className="chart-card-title">Model directory</h2>
+        {providerModelOptions.length === 0 ? (
+          <p>No provider models discovered yet. Refresh models on the Providers page.</p>
+        ) : (
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Model</th>
+                  <th>Model ID</th>
+                  <th className="num">Context</th>
+                  <th>Price source</th>
+                  <th>Availability</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {providerModelOptions.map((option) => (
+                  <tr key={option.id}>
+                    <td>{option.providerDisplayName}</td>
+                    <td>{option.modelDisplayName}</td>
+                    <td className="mono">{option.modelId}</td>
+                    <td className="num">
+                      {formatCompactNumber(placeholderInt(option.id, 8, 256, 4) * 1024)}
+                    </td>
+                    <td>{option.priceStatusLabel}</td>
+                    <td>{option.availability}</td>
+                    <td>
+                      {option.providerEnabled ? (
+                        <span className="pill--ok pill">Enabled</span>
+                      ) : (
+                        <span className="pill">Disabled</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="callout">
+          Context window is a placeholder until provider metadata is captured.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export async function PricingSection() {
   const databaseUrl = getConsoleDatabaseUrl();
   const pricePanel = await getPricePanel(databaseUrl);

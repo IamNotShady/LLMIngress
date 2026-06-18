@@ -7,6 +7,7 @@ export type ProviderType = "api_key" | "local";
 
 export type ProviderFormInput = {
   baseUrl?: string | null;
+  defaultPriority?: number | string | null;
   displayName?: string | null;
   providerKey?: string | null;
   providerType?: string | null;
@@ -14,6 +15,7 @@ export type ProviderFormInput = {
 
 export type NormalizedProviderFormInput = {
   baseUrl: string | null;
+  defaultPriority: number;
   displayName: string;
   providerKey: string;
   providerType: ProviderType;
@@ -27,6 +29,7 @@ export type ConsoleProvider = NormalizedProviderFormInput & {
 
 type ProviderRow = QueryResultRow & {
   base_url: string | null;
+  default_priority: number;
   display_name: string;
   enabled: boolean;
   id: string;
@@ -78,6 +81,7 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
 
   return {
     baseUrl,
+    defaultPriority: normalizeDefaultPriority(input.defaultPriority),
     displayName,
     providerKey,
     providerType,
@@ -94,6 +98,7 @@ export async function listProviders(databaseUrl: string): Promise<ConsoleProvide
                provider_template_id,
                display_name,
                base_url,
+               default_priority,
                enabled
         from providers
         order by provider_key
@@ -124,15 +129,17 @@ export async function createProvider(input: {
             provider_key,
             display_name,
             base_url,
+            default_priority,
             enabled
           )
-          values ($1, $2, $3, $4, $5, true)
+          values ($1, $2, $3, $4, $5, $6, true)
           returning id::text,
                     provider_type,
                     provider_key,
                     provider_template_id,
                     display_name,
                     base_url,
+                    default_priority,
                     enabled
         `,
         [
@@ -141,6 +148,7 @@ export async function createProvider(input: {
           input.provider.providerKey,
           input.provider.displayName,
           input.provider.baseUrl,
+          input.provider.defaultPriority,
         ],
       );
       provider = rowToConsoleProvider(requireRow(result.rows[0]));
@@ -172,15 +180,17 @@ export async function createProviderFromTemplate(input: {
             provider_template_id,
             display_name,
             base_url,
+            default_priority,
             enabled
           )
-          values ($1, $2, $3, $4, $5, $6, true)
+          values ($1, $2, $3, $4, $5, $6, 100, true)
           returning id::text,
                     provider_type,
                     provider_key,
                     provider_template_id,
                     display_name,
                     base_url,
+                    default_priority,
                     enabled
         `,
         [
@@ -202,11 +212,13 @@ export async function createProviderFromTemplate(input: {
 export async function updateProvider(input: {
   baseUrl?: string | null;
   databaseUrl: string;
+  defaultPriority?: number | string | null;
   displayName: string;
   id: string;
 }): Promise<ConsoleProvider> {
   const displayName = input.displayName.trim();
   const baseUrl = input.baseUrl?.trim() || null;
+  const defaultPriority = normalizeDefaultPriority(input.defaultPriority);
   if (!displayName) {
     throw new Error("Provider display name is required.");
   }
@@ -231,6 +243,7 @@ export async function updateProvider(input: {
                      provider_template_id,
                      display_name,
                      base_url,
+                     default_priority,
                      enabled
               from providers
               where id = $1
@@ -246,6 +259,7 @@ export async function updateProvider(input: {
           update providers
           set display_name = $2,
               base_url = $3,
+              default_priority = $4,
               updated_at = now()
           where id = $1
           returning id::text,
@@ -254,9 +268,10 @@ export async function updateProvider(input: {
                     provider_template_id,
                     display_name,
                     base_url,
+                    default_priority,
                     enabled
         `,
-        [input.id, displayName, nextBaseUrl],
+        [input.id, displayName, nextBaseUrl, defaultPriority],
       );
       provider = rowToConsoleProvider(requireRow(result.rows[0]));
     },
@@ -289,6 +304,7 @@ export async function setProviderEnabled(input: {
                     provider_template_id,
                     display_name,
                     base_url,
+                    default_priority,
                     enabled
         `,
         [input.id, input.enabled],
@@ -303,6 +319,7 @@ export async function setProviderEnabled(input: {
 function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
   return {
     baseUrl: row.base_url,
+    defaultPriority: row.default_priority,
     displayName: row.display_name,
     enabled: row.enabled,
     id: row.id,
@@ -381,6 +398,17 @@ function assertUrl(value: string): void {
   } catch {
     throw new Error("Provider base URL must be a valid URL.");
   }
+}
+
+function normalizeDefaultPriority(value: number | string | null | undefined): number {
+  if (value === null || value === undefined || value === "") {
+    return 100;
+  }
+  const priority = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(priority) || priority < 0) {
+    throw new Error("Provider default priority must be a non-negative integer.");
+  }
+  return priority;
 }
 
 async function withClient<T>(

@@ -8,6 +8,7 @@ import {
 import {
   attachGatewayProviderCredentials,
   readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
 } from "./chat-completions.js";
 import type {
   GatewayConfigSnapshot,
@@ -247,6 +248,10 @@ export async function executeGatewayOpenAIResponse(input: {
     await finalizeGatewayBudgetReservation({
       databaseUrl: input.databaseUrl,
       reservation: budgetReservation,
+    });
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: selected.providerApiKeyId,
     });
 
     return {

@@ -13,6 +13,7 @@ describe("feat-016 provider CRUD and enablement", () => {
       }),
     ).toEqual({
       baseUrl: "https://api.openai.com/v1",
+      defaultPriority: 100,
       displayName: "OpenAI API",
       providerKey: "openai",
       providerType: "api_key",

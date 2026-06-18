@@ -22,7 +22,7 @@ describe("feat-101 remove process heartbeats table", () => {
     );
     expect(migration.sql).toContain("drop table if exists process_heartbeats");
     expect(migration.sql).toContain("set version = '0025'");
-    expect(shippedSqlMigrations.at(-1)).toEqual({
+    expect(shippedSqlMigrations.find((entry) => entry.id === "0025")).toEqual({
       checksum: migration.checksum,
       id: "0025",
       name: "remove_process_heartbeats",

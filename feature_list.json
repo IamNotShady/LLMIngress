@@ -1040,6 +1040,78 @@
       "dependencies": ["feat-009", "feat-048", "feat-099"],
       "status": "passing",
       "evidence": "2026-06-17: TDD red observed first: feat-101 unit failed because 0025_remove_process_heartbeats was missing and backup/current runtime contracts still referenced process_heartbeats; real PostgreSQL E2E failed because a freshly migrated database still created process_heartbeats. Added migration 0025_remove_process_heartbeats to drop idx_process_heartbeats_type_heartbeat_at and process_heartbeats, advance schema_version to 0025, and update shippedSqlMigrations. Removed process_heartbeats from the backup table manifest, updated the feat-009 runtime schema unit contract, and changed ARCHITECTURE runtime liveness wording to make gateway_runtime_status the lean Gateway liveness source of truth. E2E verifies fresh installs no longer create process_heartbeats, upgrades from 0024 drop the legacy table even with rows present, gateway_runtime_status remains writable, and current-schema backup artifacts neither include nor skip process_heartbeats. Verification passed: feat-101 unit, feat-101 real PostgreSQL E2E, related feat-009/086/087/101 unit regression (15 tests), related feat-009/086/087/101 E2E regression (4 tests; first run hit a pre-existing ./init.sh Next dev-lock conflict and passed after stopping that dev server), pnpm run db:migrate:check, pnpm run verify, pnpm run verify:features across all 100 previously passing features before marking feat-101 passing, and final pnpm run verify:features across all 101 passing features after marking."
+    },
+    {
+      "id": "feat-102",
+      "name": "Provider Operational Metadata and Key Management",
+      "description": "Backend supports Provider default priority plus Provider API key label, enabled flag, priority, last used time, last tested time, last test status, and last test error. Gateway uses enabled Provider API keys ordered by priority, skips disabled keys, and writes last_used_at after a successful provider request. Worker provider_connectivity_check can target one Provider API key and records that key's last test result.",
+      "verification": "pnpm exec vitest run tests/features/feat-102-provider-key-operational-metadata.unit.test.ts && pnpm test:e2e tests/e2e/feat-102-provider-key-operational-metadata.e2e.spec.ts --grep 'provider key management records label status priority usage and per key connectivity'",
+      "dependencies": ["feat-017", "feat-024", "feat-070", "feat-100"],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-102 unit failed because migration 0026 and Provider key metadata mapping did not exist; feat-102 E2E failed because providers.default_priority was missing. Added migration 0026_provider_key_operational_metadata for Provider default priority and Provider API key label/enabled/priority/last_used_at/last_tested_at/last_test_status/error fields, updated shippedSqlMigrations, and extended Console server Provider and Provider-key data APIs. Gateway now filters disabled Provider keys, orders candidates by Provider default priority plus key priority, and records last_used_at on successful chat/messages/responses/embeddings/streaming provider calls. Worker provider_connectivity_check accepts providerApiKeyId and records per-key last test status/error. Verification passed: feat-102 unit, feat-102 real PostgreSQL E2E, related feat-017/024/070/102 unit regression, related feat-024/070/102 E2E regression, pnpm run db:migrate:check, pnpm run verify, feat-101 E2E contract updated for schema_version 0026 and passed, pnpm run verify:features re-verified all 101 previously passing features before marking, and final pnpm run verify:features re-verified all 102 passing features after marking."
+    },
+    {
+      "id": "feat-103",
+      "name": "Agent Platform, Request Logging, and Derived Status",
+      "description": "Agents persist integration_platform and request_logging_enabled while keeping the existing agent_type contract. Agent online, offline, and high-risk state is derived from recent requests, failure rate, limit usage, and reachable Provider health without restoring process or Agent heartbeat tables. When request logging is disabled, Gateway keeps minimum accounting rows for budget and usage but skips detailed request metadata.",
+      "verification": "pnpm exec vitest run tests/features/feat-103-agent-platform-status.unit.test.ts && pnpm test:e2e tests/e2e/feat-103-agent-platform-status.e2e.spec.ts --grep 'agents persist integration platform request logging and derived status from recent activity and risks'",
+      "dependencies": ["feat-026", "feat-027", "feat-031", "feat-075", "feat-077", "feat-101"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-104",
+      "name": "Activity Detail, Safe Metadata, and Fallback Timeline",
+      "description": "Request activity persists safe allowlisted request_metadata and response_metadata plus Provider API key attribution without storing prompt text, response text, or secrets. Activity backend supports filters, pagination, requestId detail, and fallback_events timeline. Fallback events include failed attempts and final success attempts across fallback-capable chat, messages, responses, and embeddings request paths.",
+      "verification": "pnpm exec vitest run tests/features/feat-104-activity-detail-fallback-metadata.unit.test.ts && pnpm test:e2e tests/e2e/feat-104-activity-detail-fallback-metadata.e2e.spec.ts --grep 'activity filters details safe metadata and fallback timeline are persisted'",
+      "dependencies": ["feat-040", "feat-044", "feat-070", "feat-102", "feat-103"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-105",
+      "name": "Overview, Usage, and Route Analytics Backend",
+      "description": "Usage, Overview, and Virtual Models backend queries support arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window comparison, timeseries, top agents/models/routes, savings, failure rate, p95 latency, and route/fallback metrics using existing runtime tables plus only necessary indexes.",
+      "verification": "pnpm exec vitest run tests/features/feat-105-ui-analytics-backend.unit.test.ts && pnpm test:e2e tests/e2e/feat-105-ui-analytics-backend.e2e.spec.ts --grep 'analytics backend returns filtered kpis trends p95 route and savings metrics'",
+      "dependencies": ["feat-045", "feat-047", "feat-075", "feat-079", "feat-099", "feat-104"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-106",
+      "name": "Advanced Route Policy Rules and Preview",
+      "description": "Route policies store validated JSONB rules and provider models expose capability metadata for coding, reasoning, tools, and related matching. Route engine filters candidates by task type, context tokens, tools, capabilities, timeout/retry rules, and emits route reason details. Backend exposes a dry-run preview that explains the decision without calling a real Provider.",
+      "verification": "pnpm exec vitest run tests/features/feat-106-advanced-route-rules-preview.unit.test.ts && pnpm test:e2e tests/e2e/feat-106-advanced-route-rules-preview.e2e.spec.ts --grep 'advanced route rules select candidates and dry run preview explains the decision'",
+      "dependencies": ["feat-029", "feat-032", "feat-040", "feat-078", "feat-100"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-107",
+      "name": "Concurrency Limits and Enforcement Policy",
+      "description": "Agent limits support concurrency, alert threshold, block or warn_only enforcement, and manual bypass flag. Gateway uses rate_limit_windows.active_count to increment and release in-flight concurrency on success, failure, and cancellation while preserving current RPM, TPM, and budget behavior.",
+      "verification": "pnpm exec vitest run tests/features/feat-107-concurrency-limit-policy.unit.test.ts && pnpm test:e2e tests/e2e/feat-107-concurrency-limit-policy.e2e.spec.ts --grep 'concurrency limits increment release and respect block or warn enforcement policy'",
+      "dependencies": ["feat-031", "feat-041", "feat-042", "feat-053", "feat-089"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-108",
+      "name": "Settings, Security, and Export Backend",
+      "description": "Typed app settings persist language, timezone, currency, Gateway public URL, CORS origins, data retention, export defaults, and metadata capture switch. Auth backend supports changing the admin password plus listing and revoking sessions. Export backend supports creating JSONL and cost report jobs, listing export_tasks history, and reading local artifact paths. Danger operations support deleting Provider keys, deleting Agents, and clearing request metadata.",
+      "verification": "pnpm exec vitest run tests/features/feat-108-settings-security-export-backend.unit.test.ts && pnpm test:e2e tests/e2e/feat-108-settings-security-export-backend.e2e.spec.ts --grep 'settings security export history and danger operations are persisted and safe'",
+      "dependencies": ["feat-013", "feat-080", "feat-081", "feat-082", "feat-085", "feat-102", "feat-104"],
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "feat-109",
+      "name": "Runtime Health and Observability Backend",
+      "description": "Runtime backend exposes Gateway public URL, version, uptime, and hot reload status. Provider health queries return status, last error, last checked, p95 latency, and 24h availability. Observability snapshot returns Prometheus, OpenTelemetry, webhook, and JSONL request log export availability without implementing process restart.",
+      "verification": "pnpm exec vitest run tests/features/feat-109-runtime-health-observability-backend.unit.test.ts && pnpm test:e2e tests/e2e/feat-109-runtime-health-observability-backend.e2e.spec.ts --grep 'runtime health exposes version uptime provider p95 availability and observability status'",
+      "dependencies": ["feat-048", "feat-075", "feat-084", "feat-092", "feat-093", "feat-099", "feat-105", "feat-108"],
+      "status": "pending",
+      "evidence": ""
     }
   ]
 }

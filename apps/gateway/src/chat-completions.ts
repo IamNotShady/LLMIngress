@@ -242,6 +242,10 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       requestActivityId: input.requestActivityId,
       requestId: input.requestId,
     });
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: result.selectedCandidate.providerApiKeyId,
+    });
     activity = buildRequestActivityRoute({
       candidate: result.selectedCandidate,
       fallbackAttempts: result.failedAttempts,
@@ -470,7 +474,12 @@ async function readProviderCredentials(input: {
         join provider_api_keys on provider_api_keys.provider_id = providers.id
         where providers.id = any($1::uuid[])
           and providers.enabled = true
-        order by providers.id, provider_api_keys.created_at asc, provider_api_keys.id asc
+          and provider_api_keys.enabled = true
+        order by providers.default_priority asc,
+                 providers.id,
+                 provider_api_keys.priority asc,
+                 provider_api_keys.created_at asc,
+                 provider_api_keys.id asc
       `,
       [input.providerIds],
     );
@@ -495,6 +504,31 @@ async function readProviderCredentials(input: {
       credentials.set(row.provider_id, providerCredentials);
     }
     return credentials;
+  } finally {
+    await client.end();
+  }
+}
+
+export async function recordGatewayProviderApiKeyLastUsed(input: {
+  databaseUrl: string;
+  providerApiKeyId?: string;
+}): Promise<void> {
+  if (!input.providerApiKeyId) {
+    return;
+  }
+
+  const client = new Client({ connectionString: input.databaseUrl });
+  await client.connect();
+  try {
+    await client.query(
+      `
+        update provider_api_keys
+        set last_used_at = now(),
+            updated_at = now()
+        where id = $1
+      `,
+      [input.providerApiKeyId],
+    );
   } finally {
     await client.end();
   }

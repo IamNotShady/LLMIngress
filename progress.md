@@ -2,13 +2,22 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-17 (feat-101 passing)
-**Active Feature:** none — feat-101 is `passing`
+**Last Updated:** 2026-06-18 (feat-102 passing)
+**Active Feature:** none — feat-102 is `passing`; feat-103 is next
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-102 — Provider Operational Metadata and Key Management (passing)**:
+  - Added migration `0026_provider_key_operational_metadata`: Provider default priority plus Provider API key label, enabled flag, priority, last-used time, last-tested time, last-test status, and last-test error fields.
+  - Updated Console server Provider and Provider-key data functions to persist and return the new operational metadata without touching Console TSX UI.
+  - Gateway now selects only enabled Provider keys, orders Provider/key candidates by Provider default priority and key priority, and records `last_used_at` after successful chat, messages, responses, embeddings, and streaming provider calls.
+  - Worker `provider_connectivity_check` can target a single Provider API key and records that key's `last_tested_at`, `last_test_status`, and error fields.
+  - TDD red observed first: feat-102 unit failed on missing migration/metadata fields, and feat-102 E2E failed on missing `providers.default_priority`.
+  - Verification passed: feat-102 unit and real PostgreSQL E2E; related feat-017/024/070/102 unit regression; related feat-024/070/102 E2E regression; `pnpm run db:migrate:check`; `pnpm run verify`; `feat-101` E2E after updating latest schema-version assertion to `0026`; `pnpm run verify:features` re-verified all 101 previously passing features before marking; final `pnpm run verify:features` re-verified all 102 passing features after marking.
+  - `feat-103` through `feat-109` were appended to `feature_list.json` as pending backend/database support features for the new UI plan.
 
 - [x] **feat-101 — Remove Unused Process Heartbeats Table (passing)**:
   - Added migration `0025_remove_process_heartbeats`: drops `idx_process_heartbeats_type_heartbeat_at`, drops `process_heartbeats`, and advances `schema_version` to `0025`. `0003_runtime_records_jobs_schema` remains historical so existing database checksums do not drift.

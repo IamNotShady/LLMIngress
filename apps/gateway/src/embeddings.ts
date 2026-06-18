@@ -3,6 +3,7 @@ import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   attachGatewayProviderCredentials,
   readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
 } from "./chat-completions.js";
 import type {
   GatewayConfigSnapshot,
@@ -203,6 +204,10 @@ export async function executeGatewayOpenAIEmbeddings(input: {
     if (!result.ok) {
       throw new Error(result.errorMessage);
     }
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: selected.providerApiKeyId,
+    });
 
     return {
       activity,

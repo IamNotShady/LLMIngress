@@ -12,6 +12,7 @@ import {
   attachGatewayProviderCredentials,
   normalizeOpenAIChatCompletionRequest,
   readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
 } from "./chat-completions.js";
 import type {
   GatewayConfigSnapshot,
@@ -199,6 +200,10 @@ export async function executeGatewayStreamingRequest(input: {
         statusCode: 502,
       };
     }
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: selected.providerApiKeyId,
+    });
     const body = wrapProviderStreamWithBudgetFinalization(
       wrapProviderStreamWithErrorRecording(
         Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),

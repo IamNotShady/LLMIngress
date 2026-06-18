@@ -51,7 +51,7 @@ test("runtime schema no longer creates or keeps process_heartbeats", async () =>
     await runMigrations({ databaseUrl: upgradeFixture.databaseUrl });
 
     await expect(tableExists(upgradeFixture, "process_heartbeats")).resolves.toBe(false);
-    await expect(readSchemaVersion(upgradeFixture)).resolves.toBe("0025");
+    await expect(readSchemaVersion(upgradeFixture)).resolves.toBe("0026");
     await expect(readAppliedMigration(upgradeFixture, "0025")).resolves.toEqual({
       id: "0025",
       name: "remove_process_heartbeats",

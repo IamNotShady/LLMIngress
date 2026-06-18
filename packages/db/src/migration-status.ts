@@ -175,6 +175,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0025",
     name: "remove_process_heartbeats",
   },
+  {
+    checksum: "d6a8228d1de41ff485fa3ebbe7a3edfc34fcf45336abdc22852a0ea431e09bd0",
+    id: "0026",
+    name: "provider_key_operational_metadata",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

@@ -11,7 +11,11 @@ describe("feat-020 OpenAI-compatible provider template", () => {
     const template = getOpenAICompatibleProviderTemplate("deepseek");
 
     expect(template).toEqual({
-      baseUrl: "https://api.deepseek.com/v1",
+      auth: {
+        header: "Authorization",
+        scheme: "Bearer",
+      },
+      baseUrl: "https://api.deepseek.com",
       capabilities: {
         chatCompletions: true,
         streaming: true,

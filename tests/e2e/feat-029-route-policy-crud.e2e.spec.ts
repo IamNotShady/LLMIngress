@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("route policy CRUD persists candidates cost preference and fallback chain", async ({
@@ -23,14 +24,16 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/models`);
 
+          await openDisclosure(page, "New virtual model");
           await page.getByRole("textbox", { name: "Virtual model name" }).fill("Coding Fast");
           await page
             .getByRole("textbox", { name: "Virtual model display name" })
@@ -38,6 +41,8 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
           await page.getByRole("button", { name: "Create virtual model" }).click();
           await expect(page.getByRole("heading", { name: "Coding Fast" })).toBeVisible();
 
+          await page.goto(`${baseUrl}/routing`);
+          await openDisclosure(page, "New route policy");
           await page
             .getByLabel("Route policy virtual model")
             .selectOption({ label: "Coding Fast (coding-fast)" });
@@ -51,8 +56,9 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
           await page.getByRole("button", { name: "Create route policy" }).click();
 
           await expect(
-            page.getByRole("heading", { name: "Route policy", exact: true }),
+            page.getByRole("heading", { name: "Coding Fast", exact: true }),
           ).toBeVisible();
+          await openRow(page, "Coding Fast");
           await expect(page.getByText("Virtual Model: Coding Fast (coding-fast)")).toBeVisible();
           await expect(page.getByText("Strategy: balanced")).toBeVisible();
           await expect(
@@ -93,6 +99,7 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
             .selectOption({ label: seededModels.openai.selectorLabel });
           await page.getByRole("button", { name: "Save route policy" }).click();
 
+          await openRow(page, "Coding Fast");
           await expect(page.getByText("Strategy: quality_first")).toBeVisible();
           await expect(
             page.getByText(
@@ -192,6 +199,23 @@ async function seedProviderModels(fixture: Fixture): Promise<{
     `,
     [openaiModelId, openaiProviderId, anthropicModelId, anthropicProviderId],
   );
+  await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:029', now())
+    `,
+    [randomUUID()],
+  );
 
   return {
     anthropic: {
@@ -202,7 +226,7 @@ async function seedProviderModels(fixture: Fixture): Promise<{
     openai: {
       id: openaiModelId,
       optionLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini)",
-      selectorLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini) - Priced (built-in)",
+      selectorLabel: "OpenAI - GPT 4.1 Mini (gpt-4.1-mini) - Priced (price sync)",
     },
   };
 }

@@ -12,6 +12,8 @@
   "dependencies": {
     "@llmingress/billing": "workspace:*",
     "@llmingress/config": "workspace:*",
+    "@llmingress/db": "workspace:*",
+    "@llmingress/observability": "workspace:*",
     "@llmingress/security": "workspace:*",
     "fastify": "^5.8.5",
     "pg": "^8.21.0"

@@ -6,7 +6,7 @@ import {
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
 import { Client, type QueryResultRow } from "pg";
-import type { JobHandler } from "./job-runner.js";
+import { JOB_CREATED_CHANNEL, type JobHandler } from "./job-runner.js";
 
 export type ProviderModelAvailability = "available" | "unavailable" | "not_listed" | "deprecated";
 
@@ -32,6 +32,7 @@ export type ProviderModelRefreshPlan = {
 };
 
 export type ProviderModelRefreshResult = {
+  chainedPriceSyncJobId: string | null;
   fetchedModelCount: number;
   insertedModelCount: number;
   markedAvailableCount: number;
@@ -40,6 +41,13 @@ export type ProviderModelRefreshResult = {
   providerId: string;
   publishedConfigVersion: number | null;
   routingVisibleChangeCount: number;
+};
+
+export type ChainedPriceSyncJobPayload = {
+  modelIds: string[];
+  providerId: string;
+  providerKey: string;
+  source: "model_refresh";
 };
 
 type CreateModelRefreshJobHandlerOptions = {
@@ -173,8 +181,15 @@ export async function refreshProviderModels(
   const listedModels = await fetchListedProviderModels(fetchImpl, provider, apiKey);
   const existingModels = await readExistingProviderModels(options.databaseUrl, provider.id);
   const plan = planProviderModelRefresh({ existingModels, listedModels });
-  const writePlan = (client: QueryClient) =>
-    applyProviderModelRefreshPlan(client, provider.id, plan);
+  let chainedPriceSyncJobId: string | null = null;
+  const writePlan = async (client: QueryClient) => {
+    await applyProviderModelRefreshPlan(client, provider.id, plan);
+    chainedPriceSyncJobId = await enqueueChainedPriceSyncJob(client, {
+      listedModels,
+      providerId: provider.id,
+      providerKey: provider.provider_key,
+    });
+  };
   let publishedConfigVersion: number | null = null;
 
   if (plan.routingVisibleChanges.length > 0) {
@@ -200,6 +215,7 @@ export async function refreshProviderModels(
   }
 
   return {
+    chainedPriceSyncJobId,
     fetchedModelCount: listedModels.length,
     insertedModelCount: plan.insertModels.length,
     markedAvailableCount: plan.markAvailable.length,
@@ -209,6 +225,72 @@ export async function refreshProviderModels(
     publishedConfigVersion,
     routingVisibleChangeCount: plan.routingVisibleChanges.length,
   };
+}
+
+export function buildChainedPriceSyncJobPayload(input: {
+  listedModels: ListedProviderModel[];
+  providerId: string;
+  providerKey: string;
+}): ChainedPriceSyncJobPayload {
+  return {
+    modelIds: [...new Set(input.listedModels.map((model) => model.modelId))].sort(),
+    providerId: input.providerId,
+    providerKey: input.providerKey.trim().toLowerCase(),
+    source: "model_refresh",
+  };
+}
+
+export function isUnfinishedChainedPriceSyncStatus(status: string): boolean {
+  return status === "pending" || status === "running";
+}
+
+async function enqueueChainedPriceSyncJob(
+  client: QueryClient,
+  input: {
+    listedModels: ListedProviderModel[];
+    providerId: string;
+    providerKey: string;
+  },
+): Promise<string> {
+  await client.query("select pg_advisory_xact_lock(hashtext($1))", [
+    `model_refresh_price_sync:${input.providerId}`,
+  ]);
+
+  const existing = await client.query<{ id: string; status: string }>(
+    `
+      select id::text, status
+      from jobs
+      where job_type = 'price_sync'
+        and trigger = 'system'
+        and payload->>'source' = 'model_refresh'
+        and payload->>'providerId' = $1
+        and status in ('pending', 'running')
+      order by created_at
+      limit 1
+      for update
+    `,
+    [input.providerId],
+  );
+  const existingJob = existing.rows.find((row) => isUnfinishedChainedPriceSyncStatus(row.status));
+  if (existingJob) {
+    await notifyJobCreated(client, existingJob.id);
+    return existingJob.id;
+  }
+
+  const jobId = randomUUID();
+  await client.query(
+    `
+      insert into jobs (id, job_type, status, trigger, payload, max_attempts)
+      values ($1, 'price_sync', 'pending', 'system', $2::jsonb, 3)
+    `,
+    [jobId, JSON.stringify(buildChainedPriceSyncJobPayload(input))],
+  );
+  await notifyJobCreated(client, jobId);
+  return jobId;
+}
+
+async function notifyJobCreated(client: QueryClient, jobId: string): Promise<void> {
+  await client.query("select pg_notify($1, $2)", [JOB_CREATED_CHANNEL, JSON.stringify({ jobId })]);
 }
 
 type QueryClient = {
@@ -315,6 +397,12 @@ export function buildProviderModelListRequest(input: {
           "anthropic-version": "2023-06-01",
           "content-type": "application/json",
         };
+  } else if (providerKey === "openrouter" && input.apiKey) {
+    init.headers = {
+      "HTTP-Referer": "https://llmingress.local",
+      "X-OpenRouter-Title": "LLMIngress",
+      authorization: `Bearer ${input.apiKey}`,
+    };
   } else if (input.apiKey) {
     init.headers = {
       authorization: `Bearer ${input.apiKey}`,

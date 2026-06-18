@@ -16,11 +16,13 @@ import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
+import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
   buildFallbackAttemptCandidates,
   executeFallbackChain,
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
+  type FallbackProviderApiKey,
 } from "./fallback-chain.js";
 import type {
   NormalizedOpenAIChatMessage,
@@ -33,7 +35,11 @@ import {
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
-import { type GatewayUsageCostDetails, selectGatewayBaselineCandidate } from "./usage-recorder.js";
+import {
+  type GatewayUsageCostDetails,
+  readGatewayProviderTokenUsage,
+  selectGatewayBaselineCandidate,
+} from "./usage-recorder.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayChatCompletionErrorCode =
@@ -77,7 +83,14 @@ export type GatewayChatCompletionRequestResult =
 type ProviderCredentialRow = QueryResultRow & {
   base_url: string | null;
   encrypted_key: unknown;
+  key_prefix: string;
+  provider_api_key_id: string;
   provider_id: string;
+};
+
+type ProviderCredentials = {
+  baseUrl: string;
+  keys: FallbackProviderApiKey[];
 };
 
 export function normalizeOpenAIChatCompletionRequest(
@@ -227,6 +240,11 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       },
       request: normalized.request,
       requestActivityId: input.requestActivityId,
+      requestId: input.requestId,
+    });
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: result.selectedCandidate.providerApiKeyId,
     });
     activity = buildRequestActivityRoute({
       candidate: result.selectedCandidate,
@@ -249,6 +267,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
         baselineProviderModelId: baselineCandidate.providerModelId,
         estimatedInputTokens: requestMetadata.estimatedInputTokens,
         estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
+        providerUsage: readGatewayProviderTokenUsage(result.result.body),
         providerModelId: result.selectedCandidate.providerModelId,
       },
     };
@@ -263,19 +282,26 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       activity,
       body: createGatewayChatCompletionErrorBody(code, input.requestId),
       requestMetadata,
-      statusCode: code === "provider_request_failed" ? 502 : 500,
+      statusCode: mapGatewayErrorStatus(code),
     };
   }
 }
 
 function buildRequestActivityRoute(input: {
-  candidate: GatewayRouteCandidateSnapshot;
+  candidate: GatewayRouteCandidateSnapshot & {
+    providerApiKeyId?: string;
+    providerApiKeyPrefix?: string;
+  };
   fallbackAttempts: FallbackFailedAttempt[];
   routeDecision: ReturnType<typeof selectRouteCandidate>;
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: input.fallbackAttempts,
+    modelId: input.candidate.modelId,
+    providerApiKeyId: input.candidate.providerApiKeyId,
+    providerApiKeyPrefix: input.candidate.providerApiKeyPrefix,
     providerId: input.candidate.providerId,
+    providerKey: input.candidate.providerKey,
     providerModelId: input.candidate.providerModelId,
     routePolicyId: input.routeDecision.routePolicyId,
     routeReason: input.routeDecision.routeReason,
@@ -299,11 +325,18 @@ export async function attachGatewayProviderCredentials(input: {
     if (!credential) {
       throw new Error(`Provider credentials are missing for provider ${candidate.providerId}.`);
     }
+    const primaryKey = credential.keys[0];
+    if (!primaryKey) {
+      throw new Error(`Provider credentials are missing for provider ${candidate.providerId}.`);
+    }
 
     return {
       ...candidate,
-      apiKey: credential.apiKey,
+      apiKey: primaryKey.apiKey,
       baseUrl: credential.baseUrl,
+      providerApiKeyId: primaryKey.providerApiKeyId,
+      providerApiKeyPrefix: primaryKey.keyPrefix,
+      providerApiKeys: credential.keys,
     };
   });
 }
@@ -425,7 +458,7 @@ async function readProviderCredentials(input: {
   databaseUrl: string;
   masterKeySource: MasterKeySource;
   providerIds: string[];
-}): Promise<Map<string, { apiKey: string; baseUrl: string }>> {
+}): Promise<Map<string, ProviderCredentials>> {
   if (input.providerIds.length === 0) {
     return new Map();
   }
@@ -439,28 +472,67 @@ async function readProviderCredentials(input: {
       `
         select providers.id::text as provider_id,
                providers.base_url,
+               provider_api_keys.id::text as provider_api_key_id,
+               provider_api_keys.key_prefix,
                provider_api_keys.encrypted_key
         from providers
         join provider_api_keys on provider_api_keys.provider_id = providers.id
         where providers.id = any($1::uuid[])
           and providers.enabled = true
+          and provider_api_keys.enabled = true
+        order by providers.default_priority asc,
+                 providers.id,
+                 provider_api_keys.priority asc,
+                 provider_api_keys.created_at asc,
+                 provider_api_keys.id asc
       `,
       [input.providerIds],
     );
-    return new Map(
-      result.rows.map((row) => {
-        if (!row.base_url?.trim()) {
-          throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
-        }
+    const credentials = new Map<string, ProviderCredentials>();
+    for (const row of result.rows) {
+      if (!row.base_url?.trim()) {
+        throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
+      }
 
-        return [
-          row.provider_id,
-          {
-            apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
-            baseUrl: row.base_url,
-          },
-        ];
-      }),
+      const existing = credentials.get(row.provider_id);
+      const providerCredentials =
+        existing ??
+        ({
+          baseUrl: row.base_url,
+          keys: [],
+        } satisfies ProviderCredentials);
+      providerCredentials.keys.push({
+        apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
+        keyPrefix: row.key_prefix,
+        providerApiKeyId: row.provider_api_key_id,
+      });
+      credentials.set(row.provider_id, providerCredentials);
+    }
+    return credentials;
+  } finally {
+    await client.end();
+  }
+}
+
+export async function recordGatewayProviderApiKeyLastUsed(input: {
+  databaseUrl: string;
+  providerApiKeyId?: string;
+}): Promise<void> {
+  if (!input.providerApiKeyId) {
+    return;
+  }
+
+  const client = new Client({ connectionString: input.databaseUrl });
+  await client.connect();
+  try {
+    await client.query(
+      `
+        update provider_api_keys
+        set last_used_at = now(),
+            updated_at = now()
+        where id = $1
+      `,
+      [input.providerApiKeyId],
     );
   } finally {
     await client.end();

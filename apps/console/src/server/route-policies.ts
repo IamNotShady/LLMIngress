@@ -3,6 +3,7 @@ import {
   type ManualPriceOverride,
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
+  type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
@@ -61,6 +62,25 @@ export type ConsoleRoutePolicy = {
 export type RoutePolicyWarningCandidate = {
   availability: string;
   optionLabel: string;
+  priceStatus?: ModelTokenPrice["status"];
+};
+
+export type RoutePolicyEditorFilterInput = {
+  modelQuery?: string | null;
+  providerKey?: string | null;
+};
+
+export type RoutePolicyEditorFilters = {
+  modelQuery: string | null;
+  providerKey: string | null;
+};
+
+export type RoutePolicyHealthWarningCandidate = {
+  modelHealthIsStale?: boolean;
+  modelHealthStatus?: string | null;
+  optionLabel: string;
+  providerHealthIsStale?: boolean;
+  providerHealthStatus?: string | null;
 };
 
 export type RouteReasonMetadataInput = {
@@ -85,9 +105,16 @@ type CandidateRow = QueryResultRow & {
   is_fallback: boolean;
   model_display_name: string;
   model_id: string;
+  price_override_cached_input_usd_per_million_tokens: string | null;
   price_override_input_usd_per_million_tokens: string | null;
   price_override_output_usd_per_million_tokens: string | null;
   price_override_updated_at: Date | null;
+  price_sync_cached_input_usd_per_million_tokens: string | null;
+  price_sync_input_usd_per_million_tokens: string | null;
+  price_sync_output_usd_per_million_tokens: string | null;
+  price_sync_price_version: string | null;
+  price_sync_source_url: string | null;
+  price_sync_synced_at: Date | null;
   provider_display_name: string;
   provider_enabled: boolean;
   provider_id: string;
@@ -100,9 +127,16 @@ type ProviderModelOptionRow = QueryResultRow & {
   id: string;
   model_display_name: string;
   model_id: string;
+  price_override_cached_input_usd_per_million_tokens: string | null;
   price_override_input_usd_per_million_tokens: string | null;
   price_override_output_usd_per_million_tokens: string | null;
   price_override_updated_at: Date | null;
+  price_sync_cached_input_usd_per_million_tokens: string | null;
+  price_sync_input_usd_per_million_tokens: string | null;
+  price_sync_output_usd_per_million_tokens: string | null;
+  price_sync_price_version: string | null;
+  price_sync_source_url: string | null;
+  price_sync_synced_at: Date | null;
   provider_display_name: string;
   provider_enabled: boolean;
   provider_id: string;
@@ -168,12 +202,105 @@ export function buildRouteReasonMetadata(input: RouteReasonMetadataInput): strin
 export function buildRoutePolicyWarnings(
   candidates: readonly RoutePolicyWarningCandidate[],
 ): string[] {
-  return candidates
-    .filter((candidate) => candidate.availability !== "available")
-    .map(
-      (candidate) =>
+  const warnings: string[] = [];
+
+  for (const candidate of candidates) {
+    if (candidate.priceStatus === "unknown_price") {
+      warnings.push(
+        `Price warning: ${candidate.optionLabel} has unknown price; save a manual price override before using budgeted routes.`,
+      );
+    }
+    if (candidate.availability !== "available") {
+      warnings.push(
         `Route warning: ${candidate.optionLabel} is ${candidate.availability} and excluded from Gateway routing.`,
-    );
+      );
+    }
+  }
+
+  return warnings;
+}
+
+export function buildRoutePolicyHealthWarnings(
+  candidates: readonly RoutePolicyHealthWarningCandidate[],
+): string[] {
+  const warnings: string[] = [];
+
+  for (const candidate of candidates) {
+    if (isWarningHealthStatus(candidate.providerHealthStatus)) {
+      warnings.push(
+        `Health warning: ${candidate.optionLabel} provider health is ${formatRoutePolicyHealthStatus(
+          candidate.providerHealthStatus,
+        )}.`,
+      );
+    }
+    if (isWarningHealthStatus(candidate.modelHealthStatus)) {
+      warnings.push(
+        `Health warning: ${candidate.optionLabel} model health is ${formatRoutePolicyHealthStatus(
+          candidate.modelHealthStatus,
+        )}.`,
+      );
+    }
+    if (candidate.providerHealthIsStale) {
+      warnings.push(`Health warning: ${candidate.optionLabel} provider health is stale.`);
+    }
+    if (candidate.modelHealthIsStale) {
+      warnings.push(`Health warning: ${candidate.optionLabel} model health is stale.`);
+    }
+  }
+
+  return warnings;
+}
+
+export function normalizeRoutePolicyEditorFilters(
+  input: RoutePolicyEditorFilterInput,
+): RoutePolicyEditorFilters {
+  return {
+    modelQuery: normalizeOptionalFilter(input.modelQuery),
+    providerKey: normalizeOptionalFilter(input.providerKey),
+  };
+}
+
+export function filterRoutePolicyEditorProviderModelOptions(
+  options: readonly ConsoleProviderModelOption[],
+  filters: RoutePolicyEditorFilters,
+): ConsoleProviderModelOption[] {
+  const providerKey = filters.providerKey?.toLowerCase() ?? null;
+  const modelQuery = filters.modelQuery?.toLowerCase() ?? null;
+
+  return options.filter((option) => {
+    if (providerKey && option.providerKey.toLowerCase() !== providerKey) {
+      return false;
+    }
+    if (
+      modelQuery &&
+      ![
+        option.modelDisplayName,
+        option.modelId,
+        option.providerDisplayName,
+        option.providerKey,
+      ].some((value) => value.toLowerCase().includes(modelQuery))
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function mergeRoutePolicyEditorProviderModelOptions(
+  filteredOptions: readonly ConsoleProviderModelOption[],
+  selectedCandidates: readonly ConsoleProviderModelOption[],
+): ConsoleProviderModelOption[] {
+  const merged = [...filteredOptions];
+  const existingIds = new Set(merged.map((option) => option.id));
+
+  for (const candidate of selectedCandidates) {
+    if (!existingIds.has(candidate.id)) {
+      merged.push(candidate);
+      existingIds.add(candidate.id);
+    }
+  }
+
+  return merged;
 }
 
 export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): string {
@@ -181,7 +308,13 @@ export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): str
     return "Unknown price";
   }
 
-  return price.source === "manual_override" ? "Priced (manual override)" : "Priced (built-in)";
+  if (price.source === "manual_override") {
+    return "Priced (manual override)";
+  }
+  if (price.source === "price_sync") {
+    return "Priced (price sync)";
+  }
+  return "Priced (built-in)";
 }
 
 export function formatProviderModelOptionLabel(input: {
@@ -240,17 +373,40 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                        provider_models.model_id,
                        provider_models.display_name as model_display_name,
                        provider_models.availability,
-                       model_price_overrides.input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
-                       model_price_overrides.output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
-                       model_price_overrides.updated_at as price_override_updated_at,
+                       provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
+                       provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
+                       provider_models.manual_output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
+                       provider_models.manual_price_updated_at as price_override_updated_at,
+                       latest_provider_model_price.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+                       latest_provider_model_price.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+                       latest_provider_model_price.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+                       latest_provider_model_price.price_version as price_sync_price_version,
+                       latest_provider_model_price.source_url as price_sync_source_url,
+                       latest_provider_model_price.synced_at as price_sync_synced_at,
                        route_policy_candidates.candidate_order,
                        route_policy_candidates.is_fallback
                 from route_policy_candidates
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
-                left join model_price_overrides
-                  on model_price_overrides.provider_key = providers.provider_key
-                 and model_price_overrides.model_id = provider_models.model_id
+                left join lateral (
+                  select input_usd_per_million_tokens,
+                         cached_input_usd_per_million_tokens,
+                         output_usd_per_million_tokens,
+                         price_version,
+                         source_url,
+                         synced_at
+                  from provider_models_price
+                  where lower(provider_models_price.provider_key) = lower(providers.provider_key)
+                    and provider_models_price.model_id = provider_models.model_id
+                  order by case provider_models_price.source
+                             when 'models.dev' then 0
+                             when 'litellm' then 1
+                             else 2
+                           end,
+                           synced_at desc,
+                           updated_at desc
+                  limit 1
+                ) latest_provider_model_price on true
                 where route_policy_candidates.route_policy_id = any($1::uuid[])
                 order by route_policy_candidates.candidate_order
               `,
@@ -555,83 +711,69 @@ async function writeRoutePolicyCandidates(
   for (const [index, candidate] of candidateInputs.entries()) {
     const result = await client.query<CandidateRow>(
       `
-        insert into route_policy_candidates (
-          id,
-          route_policy_id,
-          provider_model_id,
-          candidate_order,
-          is_fallback
+        with inserted as (
+          insert into route_policy_candidates (
+            id,
+            route_policy_id,
+            provider_model_id,
+            candidate_order,
+            is_fallback
+          )
+          values ($1, $2, $3, $4, $5)
+          returning route_policy_id,
+                    provider_model_id,
+                    candidate_order,
+                    is_fallback
         )
-        values ($1, $2, $3, $4, $5)
-        returning route_policy_id::text,
-                  provider_model_id::text as id,
-                  (
-                    select provider_models.provider_id::text
-                    from provider_models
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as provider_id,
-                  (
-                    select providers.provider_key
-                    from provider_models
-                    join providers on providers.id = provider_models.provider_id
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as provider_key,
-                  (
-                    select providers.display_name
-                    from provider_models
-                    join providers on providers.id = provider_models.provider_id
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as provider_display_name,
-                  (
-                    select providers.enabled
-                    from provider_models
-                    join providers on providers.id = provider_models.provider_id
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as provider_enabled,
-                  (
-                    select provider_models.model_id
-                    from provider_models
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as model_id,
-                  (
-                    select provider_models.display_name
-                    from provider_models
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as model_display_name,
-                  (
-                    select provider_models.availability
-                    from provider_models
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as availability,
-                  (
-                    select model_price_overrides.input_usd_per_million_tokens::text
-                    from provider_models
-                    join providers on providers.id = provider_models.provider_id
-                    join model_price_overrides
-                      on model_price_overrides.provider_key = providers.provider_key
-                     and model_price_overrides.model_id = provider_models.model_id
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as price_override_input_usd_per_million_tokens,
-                  (
-                    select model_price_overrides.output_usd_per_million_tokens::text
-                    from provider_models
-                    join providers on providers.id = provider_models.provider_id
-                    join model_price_overrides
-                      on model_price_overrides.provider_key = providers.provider_key
-                     and model_price_overrides.model_id = provider_models.model_id
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as price_override_output_usd_per_million_tokens,
-                  (
-                    select model_price_overrides.updated_at
-                    from provider_models
-                    join providers on providers.id = provider_models.provider_id
-                    join model_price_overrides
-                      on model_price_overrides.provider_key = providers.provider_key
-                     and model_price_overrides.model_id = provider_models.model_id
-                    where provider_models.id = route_policy_candidates.provider_model_id
-                  ) as price_override_updated_at,
-                  candidate_order,
-                  is_fallback
+        select inserted.route_policy_id::text,
+               provider_models.id::text as id,
+               providers.id::text as provider_id,
+               providers.provider_key,
+               providers.display_name as provider_display_name,
+               providers.enabled as provider_enabled,
+               provider_models.model_id,
+               provider_models.display_name as model_display_name,
+               provider_models.availability,
+               provider_models.manual_input_usd_per_million_tokens::text
+                 as price_override_input_usd_per_million_tokens,
+               provider_models.manual_cached_input_usd_per_million_tokens::text
+                 as price_override_cached_input_usd_per_million_tokens,
+               provider_models.manual_output_usd_per_million_tokens::text
+                 as price_override_output_usd_per_million_tokens,
+               provider_models.manual_price_updated_at as price_override_updated_at,
+               latest_provider_model_price.input_usd_per_million_tokens::text
+                 as price_sync_input_usd_per_million_tokens,
+               latest_provider_model_price.cached_input_usd_per_million_tokens::text
+                 as price_sync_cached_input_usd_per_million_tokens,
+               latest_provider_model_price.output_usd_per_million_tokens::text
+                 as price_sync_output_usd_per_million_tokens,
+               latest_provider_model_price.price_version as price_sync_price_version,
+               latest_provider_model_price.source_url as price_sync_source_url,
+               latest_provider_model_price.synced_at as price_sync_synced_at,
+               inserted.candidate_order,
+               inserted.is_fallback
+        from inserted
+        join provider_models on provider_models.id = inserted.provider_model_id
+        join providers on providers.id = provider_models.provider_id
+        left join lateral (
+          select input_usd_per_million_tokens,
+                 cached_input_usd_per_million_tokens,
+                 output_usd_per_million_tokens,
+                 price_version,
+                 source_url,
+                 synced_at
+          from provider_models_price
+          where lower(provider_models_price.provider_key) = lower(providers.provider_key)
+            and provider_models_price.model_id = provider_models.model_id
+          order by case provider_models_price.source
+                     when 'models.dev' then 0
+                     when 'litellm' then 1
+                     else 2
+                   end,
+                   synced_at desc,
+                   updated_at desc
+          limit 1
+        ) latest_provider_model_price on true
       `,
       [randomUUID(), routePolicyId, candidate.providerModelId, index + 1, candidate.isFallback],
     );
@@ -657,6 +799,19 @@ function isRoutePolicyStrategy(value: string | null | undefined): value is Route
   return routePolicyStrategies.includes(value as RoutePolicyStrategy);
 }
 
+function isWarningHealthStatus(value: string | null | undefined): value is string {
+  return value === "degraded" || value === "unhealthy";
+}
+
+function formatRoutePolicyHealthStatus(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function normalizeOptionalFilter(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -678,14 +833,37 @@ function providerModelOptionsSelectSql(): string {
            provider_models.model_id,
            provider_models.display_name as model_display_name,
            provider_models.availability,
-           model_price_overrides.input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
-           model_price_overrides.output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
-           model_price_overrides.updated_at as price_override_updated_at
+           provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
+           provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
+           provider_models.manual_output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
+           provider_models.manual_price_updated_at as price_override_updated_at,
+           latest_provider_model_price.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+           latest_provider_model_price.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+           latest_provider_model_price.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+           latest_provider_model_price.price_version as price_sync_price_version,
+           latest_provider_model_price.source_url as price_sync_source_url,
+           latest_provider_model_price.synced_at as price_sync_synced_at
     from provider_models
     join providers on providers.id = provider_models.provider_id
-    left join model_price_overrides
-      on model_price_overrides.provider_key = providers.provider_key
-     and model_price_overrides.model_id = provider_models.model_id
+    left join lateral (
+      select input_usd_per_million_tokens,
+             cached_input_usd_per_million_tokens,
+             output_usd_per_million_tokens,
+             price_version,
+             source_url,
+             synced_at
+      from provider_models_price
+      where lower(provider_models_price.provider_key) = lower(providers.provider_key)
+        and provider_models_price.model_id = provider_models.model_id
+      order by case provider_models_price.source
+                 when 'models.dev' then 0
+                 when 'litellm' then 1
+                 else 2
+               end,
+               synced_at desc,
+               updated_at desc
+      limit 1
+    ) latest_provider_model_price on true
   `;
 }
 
@@ -739,6 +917,7 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     manualOverride: rowToManualPriceOverride(row),
     modelId: row.model_id,
     providerKey: row.provider_key,
+    syncedPrice: rowToSyncedPriceSnapshot(row),
   });
   const priceStatusLabel = formatProviderModelPriceStatusLabel(price);
 
@@ -777,11 +956,40 @@ function rowToManualPriceOverride(row: ProviderModelOptionRow): ManualPriceOverr
   }
 
   return {
+    cachedInputUsdPerMillionTokens:
+      row.price_override_cached_input_usd_per_million_tokens === null
+        ? null
+        : Number(row.price_override_cached_input_usd_per_million_tokens),
     inputUsdPerMillionTokens: Number(row.price_override_input_usd_per_million_tokens),
     modelId: row.model_id,
     outputUsdPerMillionTokens: Number(row.price_override_output_usd_per_million_tokens),
     providerKey: row.provider_key,
     updatedAt: row.price_override_updated_at,
+  };
+}
+
+function rowToSyncedPriceSnapshot(row: ProviderModelOptionRow): SyncedPriceSnapshot | null {
+  if (
+    !row.price_sync_input_usd_per_million_tokens ||
+    !row.price_sync_output_usd_per_million_tokens ||
+    !row.price_sync_price_version ||
+    !row.price_sync_synced_at
+  ) {
+    return null;
+  }
+
+  return {
+    cachedInputUsdPerMillionTokens:
+      row.price_sync_cached_input_usd_per_million_tokens === null
+        ? null
+        : Number(row.price_sync_cached_input_usd_per_million_tokens),
+    inputUsdPerMillionTokens: Number(row.price_sync_input_usd_per_million_tokens),
+    modelId: row.model_id,
+    outputUsdPerMillionTokens: Number(row.price_sync_output_usd_per_million_tokens),
+    priceVersion: row.price_sync_price_version,
+    providerKey: row.provider_key,
+    sourceUrl: row.price_sync_source_url,
+    syncedAt: row.price_sync_synced_at,
   };
 }
 

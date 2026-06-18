@@ -1,3 +1,4 @@
+import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
@@ -19,6 +20,8 @@ export type ProviderConnectivityCheckResult = {
   errorMessage: string | null;
   latencyMs: number;
   ok: boolean;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
   providerId: string;
   providerKey: string;
   retryable: boolean;
@@ -42,12 +45,15 @@ type CheckProviderConnectivityOptions = {
 };
 
 type ConnectivityCheckPayload = {
+  providerApiKeyId?: string;
   providerId: string;
   timeoutMs?: number;
 };
 
 type ProviderApiKeyRow = QueryResultRow & {
   encrypted_key: unknown;
+  id: string;
+  key_prefix: string;
 };
 
 type ProviderRow = QueryResultRow & {
@@ -66,18 +72,47 @@ export function createProviderConnectivityCheckJobHandler(
   return async (job) => {
     const payload = readConnectivityCheckPayload(job.payload);
     const provider = await readProvider(options.databaseUrl, payload.providerId);
-    const apiKey = await readProviderApiKey({
+    const providerApiKey = await readProviderApiKey({
       databaseUrl: options.databaseUrl,
       masterKeySource: options.masterKeySource ?? readWorkerMasterKeySource(),
+      providerApiKeyId: payload.providerApiKeyId,
       providerId: provider.id,
     });
 
-    return checkProviderConnectivity({
-      apiKey,
+    const checkResult = await checkProviderConnectivity({
+      apiKey: providerApiKey.apiKey,
       fetch: options.fetch,
       provider,
       timeoutMs: payload.timeoutMs ?? options.timeoutMs,
     });
+    const result = {
+      ...checkResult,
+      providerApiKeyId: providerApiKey.id,
+      providerApiKeyPrefix: providerApiKey.keyPrefix,
+    };
+    await updateProviderApiKeyTestResult({
+      databaseUrl: options.databaseUrl,
+      result,
+    });
+    await recordProviderHealthEvent({
+      databaseUrl: options.databaseUrl,
+      errorCode: result.errorCode,
+      errorMessage: result.errorMessage,
+      jobId: job.id,
+      latencyMs: result.latencyMs,
+      metadata: {
+        checkedAt: result.checkedAt,
+        providerApiKeyPrefix: result.providerApiKeyPrefix,
+        providerKey: result.providerKey,
+        retryable: result.retryable,
+        statusCode: result.statusCode,
+      },
+      observedAt: new Date(result.checkedAt),
+      providerId: provider.id,
+      status: result.ok ? "healthy" : "failed",
+      trigger: job.trigger === "manual" ? "manual" : "worker_probe",
+    });
+    return result;
   };
 }
 
@@ -201,8 +236,12 @@ function readConnectivityCheckPayload(payload: unknown): ConnectivityCheckPayloa
   if (typeof payload.providerId !== "string" || !payload.providerId.trim()) {
     throw new Error("provider_connectivity_check job payload requires providerId.");
   }
+  if (payload.providerApiKeyId !== undefined && typeof payload.providerApiKeyId !== "string") {
+    throw new Error("provider_connectivity_check job payload providerApiKeyId must be a string.");
+  }
 
   return {
+    providerApiKeyId: payload.providerApiKeyId?.trim() || undefined,
     providerId: payload.providerId,
     timeoutMs:
       typeof payload.timeoutMs === "number" && Number.isFinite(payload.timeoutMs)
@@ -214,25 +253,71 @@ function readConnectivityCheckPayload(payload: unknown): ConnectivityCheckPayloa
 async function readProviderApiKey(input: {
   databaseUrl: string;
   masterKeySource: MasterKeySource;
+  providerApiKeyId?: string;
   providerId: string;
-}): Promise<string> {
-  const encrypted = await withClient(input.databaseUrl, async (client) => {
+}): Promise<{ apiKey: string; id: string; keyPrefix: string }> {
+  const stored = await withClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderApiKeyRow>(
       `
-        select encrypted_key
+        select id::text,
+               key_prefix,
+               encrypted_key
         from provider_api_keys
         where provider_id = $1
+          and enabled = true
+          and ($2::uuid is null or id = $2::uuid)
+        order by priority asc,
+                 created_at asc,
+                 id asc
+        limit 1
       `,
-      [input.providerId],
+      [input.providerId, input.providerApiKeyId ?? null],
     );
     const row = result.rows[0];
     if (!row) {
       throw new Error("Provider API key was not found.");
     }
-    return readEncryptedSecret(row.encrypted_key);
+    return {
+      encryptedKey: readEncryptedSecret(row.encrypted_key),
+      id: row.id,
+      keyPrefix: row.key_prefix,
+    };
   });
 
-  return createSecretEncryption(input.masterKeySource).decrypt(encrypted);
+  return {
+    apiKey: createSecretEncryption(input.masterKeySource).decrypt(stored.encryptedKey),
+    id: stored.id,
+    keyPrefix: stored.keyPrefix,
+  };
+}
+
+async function updateProviderApiKeyTestResult(input: {
+  databaseUrl: string;
+  result: ProviderConnectivityCheckResult & {
+    providerApiKeyId: string;
+    providerApiKeyPrefix: string;
+  };
+}): Promise<void> {
+  await withClient(input.databaseUrl, async (client) => {
+    await client.query(
+      `
+        update provider_api_keys
+        set last_tested_at = $2::timestamptz,
+            last_test_status = $3,
+            last_test_error_code = $4,
+            last_test_error_message = $5,
+            updated_at = now()
+        where id = $1
+      `,
+      [
+        input.result.providerApiKeyId,
+        input.result.checkedAt,
+        input.result.ok ? "healthy" : "failed",
+        input.result.errorCode,
+        input.result.errorMessage,
+      ],
+    );
+  });
 }
 
 export function readWorkerMasterKeySource(

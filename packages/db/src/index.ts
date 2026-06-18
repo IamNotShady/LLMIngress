@@ -1,7 +1,26 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Client, type QueryResult, type QueryResultRow } from "pg";
+import {
+  type AppliedMigrationStatus,
+  type MigrationStatusSummary,
+  summarizeMigrationStatus,
+} from "./migration-status.js";
+
+export type {
+  AppliedMigrationStatus,
+  MigrationChecksumMismatch,
+  MigrationStatusKind,
+  MigrationStatusMigration,
+  MigrationStatusSummary,
+} from "./migration-status.js";
+export {
+  formatMigrationStatusReport,
+  getMigrationStatusFromDatabase,
+  shippedSqlMigrations,
+  summarizeMigrationStatus,
+} from "./migration-status.js";
 
 type TestPostgresEnvironment = Record<string, string | undefined>;
 
@@ -45,6 +64,22 @@ export type MigrationRunResult = {
   skipped: SqlMigration[];
 };
 
+type GetMigrationStatusOptions = {
+  databaseUrl: string;
+  migrationsDirectory?: string;
+};
+
+type AppliedMigrationRow = QueryResultRow & {
+  applied_at: Date;
+  checksum: string;
+  id: string;
+  name: string;
+};
+
+type SchemaVersionRow = QueryResultRow & {
+  version: string;
+};
+
 const migrationFilePattern = /^(\d{4,})_([a-z0-9][a-z0-9_]*)\.sql$/;
 const migrationAdvisoryLockId = 7_790_077;
 
@@ -63,14 +98,14 @@ export function buildIsolatedDatabaseUrl(maintenanceUrl: string, databaseName: s
 }
 
 export function getDefaultMigrationsDirectory(): string {
-  return resolve(process.cwd(), "packages/db/migrations");
+  return findMigrationsDirectory(process.cwd());
 }
 
 export function loadSqlMigrations(options: LoadSqlMigrationsOptions = {}): SqlMigration[] {
   const migrationsDirectory = options.migrationsDirectory ?? getDefaultMigrationsDirectory();
   const seenIds = new Set<string>();
 
-  return readdirSync(migrationsDirectory)
+  return readdirSync(/* turbopackIgnore: true */ migrationsDirectory)
     .filter((filename) => filename.endsWith(".sql"))
     .sort()
     .map((filename) => {
@@ -80,8 +115,8 @@ export function loadSqlMigrations(options: LoadSqlMigrationsOptions = {}): SqlMi
       }
       seenIds.add(parsed.id);
 
-      const fullPath = join(migrationsDirectory, filename);
-      const sql = readFileSync(fullPath, "utf8");
+      const fullPath = join(/* turbopackIgnore: true */ migrationsDirectory, filename);
+      const sql = readFileSync(/* turbopackIgnore: true */ fullPath, "utf8");
 
       return {
         ...parsed,
@@ -141,6 +176,29 @@ export async function runMigrations(options: RunMigrationsOptions): Promise<Migr
       await client.query("rollback");
       throw error;
     }
+  });
+}
+
+export async function getMigrationStatus(
+  options: GetMigrationStatusOptions,
+): Promise<MigrationStatusSummary> {
+  const migrations = loadSqlMigrations({
+    migrationsDirectory: options.migrationsDirectory,
+  });
+
+  return withClient(options.databaseUrl, async (client) => {
+    const [hasMigrationHistory, hasSchemaVersion] = await Promise.all([
+      tableExists(client, "migration_history"),
+      tableExists(client, "schema_version"),
+    ]);
+    const appliedMigrations = hasMigrationHistory ? await readAppliedMigrations(client) : [];
+    const currentSchemaVersion = hasSchemaVersion ? await readCurrentSchemaVersion(client) : null;
+
+    return summarizeMigrationStatus({
+      appliedMigrations,
+      currentSchemaVersion,
+      migrations,
+    });
   });
 }
 
@@ -257,6 +315,22 @@ function assertSafeIdentifierPrefix(identifier: string): void {
   }
 }
 
+function findMigrationsDirectory(startDirectory: string): string {
+  const candidates = [
+    join(/* turbopackIgnore: true */ startDirectory, "packages/db/migrations"),
+    join(/* turbopackIgnore: true */ startDirectory, "../../packages/db/migrations"),
+    join(/* turbopackIgnore: true */ startDirectory, "migrations"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0] ?? join(startDirectory, "packages/db/migrations");
+}
+
 async function withClient<T>(
   connectionString: string,
   fn: (client: Client) => Promise<T>,
@@ -280,6 +354,52 @@ function parseMigrationFilename(filename: string): Pick<SqlMigration, "id" | "na
     id: match[1],
     name: match[2],
   };
+}
+
+async function tableExists(client: Client, tableName: string): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    `
+      select exists (
+        select 1
+        from information_schema.tables
+        where table_schema = 'public'
+          and table_name = $1
+          and table_type = 'BASE TABLE'
+      )
+    `,
+    [tableName],
+  );
+  return result.rows[0]?.exists ?? false;
+}
+
+async function readAppliedMigrations(client: Client): Promise<AppliedMigrationStatus[]> {
+  const result = await client.query<AppliedMigrationRow>(
+    `
+      select id,
+             name,
+             checksum,
+             applied_at
+      from migration_history
+      order by id
+    `,
+  );
+  return result.rows.map((row) => ({
+    appliedAt: row.applied_at,
+    checksum: row.checksum,
+    id: row.id,
+    name: row.name,
+  }));
+}
+
+async function readCurrentSchemaVersion(client: Client): Promise<string | null> {
+  const result = await client.query<SchemaVersionRow>(
+    `
+      select version
+      from schema_version
+      where id = 1
+    `,
+  );
+  return result.rows[0]?.version ?? null;
 }
 
 const createMigrationHistoryTableSql = `

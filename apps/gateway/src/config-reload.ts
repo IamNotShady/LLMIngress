@@ -2,12 +2,19 @@ import {
   type ManualPriceOverride,
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
+  type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
 import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
 } from "@llmingress/config";
 import { Client } from "pg";
+import {
+  createGatewayRuntimeStatusRecorder,
+  type GatewayRuntimeStatusEvent,
+  noopRuntimeStatusRecorder,
+  type RecordGatewayRuntimeStatus,
+} from "./gateway-runtime-status.js";
 
 export type GatewayProviderSnapshot = {
   id: string;
@@ -62,7 +69,10 @@ type GatewayConfigRuntimeOptions = {
   createConfigChangedListener?: CreateConfigChangedListener;
   databaseUrl?: string;
   enableNotifications?: boolean;
+  gatewayInstanceId?: string;
+  heartbeatIntervalMs?: number;
   loadLatestSnapshot?: () => Promise<GatewayConfigSnapshot>;
+  recordRuntimeStatus?: RecordGatewayRuntimeStatus;
   reconcileIntervalMs?: number;
 };
 
@@ -76,6 +86,7 @@ type RoutePolicyCandidateRow = {
   candidateOrder: number;
   displayName: string;
   id: string;
+  cachedInputUsdPerMillionTokens: string | null;
   inputUsdPerMillionTokens: string | null;
   isFallback: boolean;
   modelId: string;
@@ -84,6 +95,12 @@ type RoutePolicyCandidateRow = {
   providerKey: string;
   providerModelId: string;
   strategy: GatewayRoutePolicyStrategy;
+  syncedAt: Date | null;
+  syncedCachedInputUsdPerMillionTokens: string | null;
+  syncedInputUsdPerMillionTokens: string | null;
+  syncedOutputUsdPerMillionTokens: string | null;
+  syncedPriceVersion: string | null;
+  syncedSourceUrl: string | null;
   updatedAt: Date | null;
   virtualModelId: string;
   virtualModelName: string;
@@ -106,11 +123,28 @@ export function createGatewayConfigRuntime(
   const loadLatestSnapshot = options.loadLatestSnapshot ?? createPostgresSnapshotLoader(options);
   const enableNotifications = options.enableNotifications !== false;
   const reconcileIntervalMs = options.reconcileIntervalMs ?? 30_000;
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 0;
+  const gatewayInstanceId = options.gatewayInstanceId ?? "gateway";
+  const recordRuntimeStatus =
+    options.recordRuntimeStatus ??
+    (options.databaseUrl
+      ? createGatewayRuntimeStatusRecorder({ databaseUrl: options.databaseUrl, gatewayInstanceId })
+      : noopRuntimeStatusRecorder);
 
   let currentSnapshot = emptySnapshot;
   let listener: ConfigChangedListener | undefined;
   let reconcileTimer: NodeJS.Timeout | undefined;
+  let heartbeatTimer: NodeJS.Timeout | undefined;
   let reloadInFlight: Promise<void> | undefined;
+
+  // Recording runtime status must never crash gateway boot or abort a config reload.
+  async function recordRuntimeStatusSafe(event: GatewayRuntimeStatusEvent): Promise<void> {
+    try {
+      await recordRuntimeStatus(event);
+    } catch (error) {
+      console.error("[gateway] failed to record runtime status", error);
+    }
+  }
 
   async function reloadIfNewer(targetVersion?: number): Promise<void> {
     if (targetVersion !== undefined && targetVersion <= currentSnapshot.version) {
@@ -126,9 +160,25 @@ export function createGatewayConfigRuntime(
     }
 
     reloadInFlight = (async () => {
-      const nextSnapshot = await loadLatestSnapshot();
+      let nextSnapshot: GatewayConfigSnapshot;
+      try {
+        nextSnapshot = await loadLatestSnapshot();
+      } catch (error) {
+        await recordRuntimeStatusSafe({
+          type: "reload-failed",
+          targetConfigVersion: targetVersion ?? null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+
       if (nextSnapshot.version > currentSnapshot.version) {
         currentSnapshot = nextSnapshot;
+        await recordRuntimeStatusSafe({
+          type: "reload-succeeded",
+          appliedConfigVersion: nextSnapshot.version,
+          targetConfigVersion: targetVersion ?? nextSnapshot.version,
+        });
       }
     })();
 
@@ -144,6 +194,11 @@ export function createGatewayConfigRuntime(
     reconcile: () => reloadIfNewer(),
     start: async () => {
       currentSnapshot = await loadLatestSnapshot();
+      await recordRuntimeStatusSafe({
+        type: "startup",
+        appliedConfigVersion: currentSnapshot.version,
+        startedAt: new Date(),
+      });
 
       if (enableNotifications) {
         const createConfigChangedListener =
@@ -159,11 +214,25 @@ export function createGatewayConfigRuntime(
         }, reconcileIntervalMs);
         reconcileTimer.unref?.();
       }
+
+      if (heartbeatIntervalMs > 0) {
+        heartbeatTimer = setInterval(() => {
+          void recordRuntimeStatusSafe({
+            type: "heartbeat",
+            appliedConfigVersion: currentSnapshot.version,
+          });
+        }, heartbeatIntervalMs);
+        heartbeatTimer.unref?.();
+      }
     },
     stop: async () => {
       if (reconcileTimer) {
         clearInterval(reconcileTimer);
         reconcileTimer = undefined;
+      }
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = undefined;
       }
       await listener?.close();
       listener = undefined;
@@ -204,20 +273,50 @@ export async function loadGatewayConfigSnapshot(
                provider_models.display_name as "displayName",
                providers.id::text as "providerId",
                providers.provider_key as "providerKey",
-               model_price_overrides.input_usd_per_million_tokens::text
+               provider_models.manual_input_usd_per_million_tokens::text
                  as "inputUsdPerMillionTokens",
-               model_price_overrides.output_usd_per_million_tokens::text
+               provider_models.manual_cached_input_usd_per_million_tokens::text
+                 as "cachedInputUsdPerMillionTokens",
+               provider_models.manual_output_usd_per_million_tokens::text
                  as "outputUsdPerMillionTokens",
-               model_price_overrides.updated_at as "updatedAt"
+               provider_models.manual_price_updated_at as "updatedAt",
+               latest_provider_model_price.input_usd_per_million_tokens::text
+                 as "syncedInputUsdPerMillionTokens",
+               latest_provider_model_price.cached_input_usd_per_million_tokens::text
+                 as "syncedCachedInputUsdPerMillionTokens",
+               latest_provider_model_price.output_usd_per_million_tokens::text
+                 as "syncedOutputUsdPerMillionTokens",
+               latest_provider_model_price.price_version
+                 as "syncedPriceVersion",
+               latest_provider_model_price.source_url
+                 as "syncedSourceUrl",
+               latest_provider_model_price.synced_at
+                 as "syncedAt"
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
         join route_policy_candidates
           on route_policy_candidates.route_policy_id = route_policies.id
         join provider_models on provider_models.id = route_policy_candidates.provider_model_id
         join providers on providers.id = provider_models.provider_id
-        left join model_price_overrides
-          on lower(model_price_overrides.provider_key) = lower(providers.provider_key)
-         and model_price_overrides.model_id = provider_models.model_id
+        left join lateral (
+          select input_usd_per_million_tokens,
+                 cached_input_usd_per_million_tokens,
+                 output_usd_per_million_tokens,
+                 price_version,
+                 source_url,
+                 synced_at
+          from provider_models_price
+          where lower(provider_models_price.provider_key) = lower(providers.provider_key)
+            and provider_models_price.model_id = provider_models.model_id
+          order by case provider_models_price.source
+                     when 'models.dev' then 0
+                     when 'litellm' then 1
+                     else 2
+                   end,
+                   synced_at desc,
+                   updated_at desc
+          limit 1
+        ) latest_provider_model_price on true
         where virtual_models.enabled = true
           and providers.enabled = true
           and provider_models.availability = 'available'
@@ -264,6 +363,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
         manualOverride: rowToManualPriceOverride(row),
         modelId: row.modelId,
         providerKey: row.providerKey,
+        syncedPrice: rowToSyncedPriceSnapshot(row),
       }),
       providerId: row.providerId,
       providerKey: row.providerKey,
@@ -284,11 +384,40 @@ function rowToManualPriceOverride(row: RoutePolicyCandidateRow): ManualPriceOver
   }
 
   return {
+    cachedInputUsdPerMillionTokens:
+      row.cachedInputUsdPerMillionTokens === null
+        ? null
+        : Number(row.cachedInputUsdPerMillionTokens),
     inputUsdPerMillionTokens: Number(row.inputUsdPerMillionTokens),
     modelId: row.modelId,
     outputUsdPerMillionTokens: Number(row.outputUsdPerMillionTokens),
     providerKey: row.providerKey,
     updatedAt: row.updatedAt,
+  };
+}
+
+function rowToSyncedPriceSnapshot(row: RoutePolicyCandidateRow): SyncedPriceSnapshot | null {
+  if (
+    row.syncedInputUsdPerMillionTokens === null ||
+    row.syncedOutputUsdPerMillionTokens === null ||
+    row.syncedPriceVersion === null ||
+    row.syncedAt === null
+  ) {
+    return null;
+  }
+
+  return {
+    cachedInputUsdPerMillionTokens:
+      row.syncedCachedInputUsdPerMillionTokens === null
+        ? null
+        : Number(row.syncedCachedInputUsdPerMillionTokens),
+    inputUsdPerMillionTokens: Number(row.syncedInputUsdPerMillionTokens),
+    modelId: row.modelId,
+    outputUsdPerMillionTokens: Number(row.syncedOutputUsdPerMillionTokens),
+    priceVersion: row.syncedPriceVersion,
+    providerKey: row.providerKey,
+    sourceUrl: row.syncedSourceUrl,
+    syncedAt: row.syncedAt,
   };
 }
 

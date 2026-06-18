@@ -7,6 +7,14 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./provider-health": {
+      "types": "./src/provider-health.ts",
+      "default": "./src/provider-health.ts"
+    },
+    "./migration-status": {
+      "types": "./src/migration-status.ts",
+      "default": "./src/migration-status.ts"
     }
   },
   "scripts": {

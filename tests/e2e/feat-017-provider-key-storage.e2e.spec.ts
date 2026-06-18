@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("provider key plaintext once on create and rotate ciphertext stored metadata only after reload", async ({
@@ -22,7 +23,7 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
         const firstSecret = "sk-live-provider-secret-017";
@@ -31,13 +32,16 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/providers`);
 
+          await openDisclosure(page, "New provider");
           await page.getByLabel("Provider key").fill("OpenAI");
           await page.getByLabel("Provider display name").fill("OpenAI");
           await page.getByLabel("Provider base URL").fill("https://api.openai.com/v1");
           await page.getByRole("button", { name: "Create provider" }).click();
           await expect(page.getByRole("heading", { name: "OpenAI" })).toBeVisible();
 
+          await openRow(page, "OpenAI");
           await page.getByLabel("Provider API key").fill(firstSecret);
           await page.getByRole("button", { name: "Store provider API key" }).click();
 
@@ -57,10 +61,12 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
 
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
+          await openRow(page, "OpenAI");
           await expect(page.getByText("Provider API key prefix: sk-live-")).toBeVisible();
 
           await page.reload();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
+          await openRow(page, "OpenAI");
           await expect(page.getByText("Provider API key prefix: sk-live-")).toBeVisible();
 
           await page.getByLabel("Provider API key").fill(rotatedSecret);
@@ -85,6 +91,7 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
           await expect(page.getByText(rotatedSecret)).toHaveCount(0);
+          await openRow(page, "OpenAI");
           await expect(page.getByText("Provider API key prefix: sk-rotat")).toBeVisible();
         } finally {
           await context.close();

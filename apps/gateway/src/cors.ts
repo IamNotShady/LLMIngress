@@ -33,7 +33,7 @@ export function gatewayCorsHeaders(origin: string | undefined): Record<string, s
     "access-control-allow-headers": "authorization, content-type, x-api-key, x-request-id",
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-origin": origin,
-    "access-control-expose-headers": "retry-after, x-llmingress-request-metadata",
+    "access-control-expose-headers": "retry-after, x-llmingress-request-metadata, x-request-id",
     vary: "Origin",
   };
 }

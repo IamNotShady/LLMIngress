@@ -1,0 +1,490 @@
+import { randomUUID } from "node:crypto";
+import { expect, test } from "@playwright/test";
+import { enqueueProviderModelRefreshJob } from "../../apps/console/src/server/model-refresh-jobs";
+import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
+import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
+import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
+import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
+import { createFakeProviderServer } from "../support/fake-provider";
+
+const masterKeySource = { kind: "inline" as const, value: "test-master-key" };
+const syncedAt = new Date("2026-06-17T00:00:00.000Z");
+
+test("refresh models syncs provider model prices with manual override precedence", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_provider_model_price_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const provider = await createFakeProviderServer({
+    models: [
+      { id: "manual-priced-model", name: "Manual Priced Model" },
+      { id: "sync-priced-model", name: "Sync Priced Model" },
+      { id: "litellm-priced-model", name: "LiteLLM Priced Model" },
+      { id: "unknown-price-model", name: "Unknown Price Model" },
+    ],
+  });
+  const providerId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await insertProvider(fixture, {
+      baseUrl: `${provider.url}/v1`,
+      id: providerId,
+      providerKey: "openai",
+    });
+    await insertProviderApiKey(fixture, providerId);
+
+    const modelRefreshRunner = createPostgresJobRunner({
+      databaseUrl: fixture.databaseUrl,
+      handlers: {
+        model_refresh: createModelRefreshJobHandler({
+          databaseUrl: fixture.databaseUrl,
+          masterKeySource,
+        }),
+      },
+      workerId: `worker-model-refresh-price-source-${randomUUID()}`,
+    });
+    const queuedRefresh = await enqueueProviderModelRefreshJob({
+      databaseUrl: fixture.databaseUrl,
+      providerId,
+    });
+
+    await expect(modelRefreshRunner.runOnce()).resolves.toBe(true);
+    const chainedPriceSyncJobId = await readChainedPriceSyncJobId(fixture, queuedRefresh.id);
+
+    await setManualProviderModelPrice(fixture, {
+      cachedInputUsdPerMillionTokens: 9,
+      inputUsdPerMillionTokens: 10,
+      modelId: "manual-priced-model",
+      outputUsdPerMillionTokens: 20,
+      providerId,
+    });
+    const routeSeed = await seedRoutePolicyForProviderModels(fixture, providerId, [
+      "manual-priced-model",
+      "sync-priced-model",
+      "litellm-priced-model",
+      "unknown-price-model",
+    ]);
+
+    const priceSyncRunner = createPostgresJobRunner({
+      databaseUrl: fixture.databaseUrl,
+      handlers: {
+        price_sync: createPriceSyncJobHandler({
+          databaseUrl: fixture.databaseUrl,
+          now: () => syncedAt,
+          priceSource: async () => [
+            {
+              cachedInputUsdPerMillionTokens: 0.4,
+              inputUsdPerMillionTokens: 1,
+              modelId: "manual-priced-model",
+              outputUsdPerMillionTokens: 3,
+              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+              providerKey: "openai",
+              source: "models.dev",
+              sourceUrl: "https://models.dev/api.json",
+              syncedAt,
+            },
+            {
+              cachedInputUsdPerMillionTokens: 0.5,
+              inputUsdPerMillionTokens: 1.25,
+              modelId: "sync-priced-model",
+              outputUsdPerMillionTokens: 4,
+              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+              providerKey: "openai",
+              source: "models.dev",
+              sourceUrl: "https://models.dev/api.json",
+              syncedAt,
+            },
+            {
+              cachedInputUsdPerMillionTokens: null,
+              inputUsdPerMillionTokens: 0.75,
+              modelId: "litellm-priced-model",
+              outputUsdPerMillionTokens: 1.5,
+              priceVersion: "litellm:2026-06-17T00:00:00.000Z",
+              providerKey: "openai",
+              source: "litellm",
+              sourceUrl:
+                "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+              syncedAt,
+            },
+            {
+              cachedInputUsdPerMillionTokens: null,
+              inputUsdPerMillionTokens: 2,
+              modelId: "claude-side-model",
+              outputUsdPerMillionTokens: 10,
+              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+              providerKey: "anthropic",
+              source: "models.dev",
+              sourceUrl: "https://models.dev/api.json",
+              syncedAt,
+            },
+          ],
+        } satisfies PriceSyncOptions),
+      },
+      workerId: `worker-price-source-sync-${randomUUID()}`,
+    });
+
+    await expect(priceSyncRunner.runOnce()).resolves.toBe(true);
+
+    await expect(readJobResult(fixture, chainedPriceSyncJobId)).resolves.toMatchObject({
+      result: {
+        syncedPriceCount: 4,
+        trigger: "system",
+      },
+      status: "succeeded",
+    });
+    await expect(readProviderModelPriceRows(fixture)).resolves.toEqual([
+      {
+        cached_input_usd_per_million_tokens: null,
+        input_usd_per_million_tokens: "2.00000000",
+        model_id: "claude-side-model",
+        output_usd_per_million_tokens: "10.00000000",
+        price_version: "models.dev:2026-06-17T00:00:00.000Z",
+        provider_key: "anthropic",
+        source: "models.dev",
+        source_url: "https://models.dev/api.json",
+      },
+      {
+        cached_input_usd_per_million_tokens: null,
+        input_usd_per_million_tokens: "0.75000000",
+        model_id: "litellm-priced-model",
+        output_usd_per_million_tokens: "1.50000000",
+        price_version: "litellm:2026-06-17T00:00:00.000Z",
+        provider_key: "openai",
+        source: "litellm",
+        source_url:
+          "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      },
+      {
+        cached_input_usd_per_million_tokens: "0.40000000",
+        input_usd_per_million_tokens: "1.00000000",
+        model_id: "manual-priced-model",
+        output_usd_per_million_tokens: "3.00000000",
+        price_version: "models.dev:2026-06-17T00:00:00.000Z",
+        provider_key: "openai",
+        source: "models.dev",
+        source_url: "https://models.dev/api.json",
+      },
+      {
+        cached_input_usd_per_million_tokens: "0.50000000",
+        input_usd_per_million_tokens: "1.25000000",
+        model_id: "sync-priced-model",
+        output_usd_per_million_tokens: "4.00000000",
+        price_version: "models.dev:2026-06-17T00:00:00.000Z",
+        provider_key: "openai",
+        source: "models.dev",
+        source_url: "https://models.dev/api.json",
+      },
+    ]);
+    await expect(readRouteCandidatePrices(fixture, routeSeed.routePolicyId)).resolves.toEqual([
+      {
+        cachedInputUsdPerMillionTokens: 9,
+        inputUsdPerMillionTokens: 10,
+        modelId: "manual-priced-model",
+        outputUsdPerMillionTokens: 20,
+        source: "manual_override",
+        status: "priced",
+      },
+      {
+        cachedInputUsdPerMillionTokens: 0.5,
+        inputUsdPerMillionTokens: 1.25,
+        modelId: "sync-priced-model",
+        outputUsdPerMillionTokens: 4,
+        source: "price_sync",
+        status: "priced",
+      },
+      {
+        inputUsdPerMillionTokens: 0.75,
+        modelId: "litellm-priced-model",
+        outputUsdPerMillionTokens: 1.5,
+        source: "price_sync",
+        status: "priced",
+      },
+      {
+        modelId: "unknown-price-model",
+        reason: "no_current_price",
+        status: "unknown_price",
+      },
+    ]);
+    await expect(readConfigPublication(fixture)).resolves.toEqual({
+      providerModelsPriceChangeCount: "1",
+      workerVersionCount: "1",
+    });
+  } finally {
+    await provider.close();
+    await fixture.dispose();
+  }
+});
+
+type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
+
+type PriceSourceRow = {
+  cachedInputUsdPerMillionTokens: number | null;
+  inputUsdPerMillionTokens: number;
+  modelId: string;
+  outputUsdPerMillionTokens: number;
+  priceVersion: string;
+  providerKey: string;
+  source: "litellm" | "models.dev";
+  sourceUrl: string;
+  syncedAt: Date;
+};
+
+type PriceSyncOptions = Parameters<typeof createPriceSyncJobHandler>[0] & {
+  priceSource: () => Promise<PriceSourceRow[]>;
+};
+
+type ProviderInput = {
+  baseUrl: string;
+  id: string;
+  providerKey: string;
+};
+
+type ManualPriceInput = {
+  cachedInputUsdPerMillionTokens: number;
+  inputUsdPerMillionTokens: number;
+  modelId: string;
+  outputUsdPerMillionTokens: number;
+  providerId: string;
+};
+
+type RouteSeed = {
+  routePolicyId: string;
+};
+
+type ProviderModelPriceRow = {
+  cached_input_usd_per_million_tokens: string | null;
+  input_usd_per_million_tokens: string;
+  model_id: string;
+  output_usd_per_million_tokens: string;
+  price_version: string;
+  provider_key: string;
+  source: string;
+  source_url: string;
+};
+
+async function insertProvider(fixture: Fixture, input: ProviderInput): Promise<void> {
+  await fixture.query(
+    `
+      insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+      values ($1, 'api_key', $2, $3, $4, true)
+    `,
+    [input.id, input.providerKey, input.providerKey, input.baseUrl],
+  );
+}
+
+async function insertProviderApiKey(fixture: Fixture, providerId: string): Promise<void> {
+  const encrypted = createSecretEncryption(masterKeySource).encrypt("sk-provider-model-price");
+  await fixture.query(
+    `
+      insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id)
+      values ($1, $2, 'sk-price', $3, $4)
+    `,
+    [randomUUID(), providerId, JSON.stringify(encrypted), encrypted.keyId],
+  );
+}
+
+async function readChainedPriceSyncJobId(
+  fixture: Fixture,
+  modelRefreshJobId: string,
+): Promise<string> {
+  const result = await fixture.query<{ result: unknown; status: string }>(
+    "select status, result from jobs where id = $1",
+    [modelRefreshJobId],
+  );
+  expect(result.rows[0]?.status).toBe("succeeded");
+  const jobId = readResultString(result.rows[0]?.result, "chainedPriceSyncJobId");
+  await expect(readJobResult(fixture, jobId)).resolves.toMatchObject({
+    status: "pending",
+  });
+  return jobId;
+}
+
+async function setManualProviderModelPrice(
+  fixture: Fixture,
+  input: ManualPriceInput,
+): Promise<void> {
+  await fixture.query(
+    `
+      update provider_models
+      set manual_input_usd_per_million_tokens = $3,
+          manual_cached_input_usd_per_million_tokens = $4,
+          manual_output_usd_per_million_tokens = $5,
+          manual_price_updated_at = $6::timestamptz
+      where provider_id = $1
+        and model_id = $2
+    `,
+    [
+      input.providerId,
+      input.modelId,
+      input.inputUsdPerMillionTokens,
+      input.cachedInputUsdPerMillionTokens,
+      input.outputUsdPerMillionTokens,
+      "2026-06-17T00:01:00.000Z",
+    ],
+  );
+}
+
+async function seedRoutePolicyForProviderModels(
+  fixture: Fixture,
+  providerId: string,
+  modelIds: string[],
+): Promise<RouteSeed> {
+  const virtualModelId = randomUUID();
+  const routePolicyId = randomUUID();
+  const models = await fixture.query<{ id: string; model_id: string }>(
+    `
+      select id::text, model_id
+      from provider_models
+      where provider_id = $1
+        and model_id = any($2::text[])
+      order by model_id
+    `,
+    [providerId, modelIds],
+  );
+  const modelsById = new Map(models.rows.map((row) => [row.model_id, row.id]));
+
+  for (const modelId of modelIds) {
+    if (!modelsById.has(modelId)) {
+      throw new Error(`Provider model ${modelId} was not refreshed.`);
+    }
+  }
+
+  await fixture.query(
+    `
+      insert into virtual_models (id, name, display_name, enabled)
+      values ($1, 'feat-100-price-source', 'Feat 100 Price Source', true)
+    `,
+    [virtualModelId],
+  );
+  await fixture.query(
+    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
+    [routePolicyId, virtualModelId],
+  );
+
+  let order = 1;
+  for (const modelId of modelIds) {
+    await fixture.query(
+      `
+        insert into route_policy_candidates (
+          id,
+          route_policy_id,
+          provider_model_id,
+          candidate_order,
+          is_fallback
+        )
+        values ($1, $2, $3, $4, $5)
+      `,
+      [randomUUID(), routePolicyId, modelsById.get(modelId), order, order > 1],
+    );
+    order += 1;
+  }
+
+  return { routePolicyId };
+}
+
+async function readProviderModelPriceRows(fixture: Fixture): Promise<ProviderModelPriceRow[]> {
+  const result = await fixture.query<ProviderModelPriceRow>(
+    `
+      select provider_key,
+             model_id,
+             input_usd_per_million_tokens::text,
+             cached_input_usd_per_million_tokens::text,
+             output_usd_per_million_tokens::text,
+             source,
+             source_url,
+             price_version
+      from provider_models_price
+      order by provider_key, model_id, source
+    `,
+  );
+  return result.rows;
+}
+
+async function readRouteCandidatePrices(fixture: Fixture, routePolicyId: string) {
+  const snapshot = await loadGatewayConfigSnapshot(fixture.databaseUrl);
+  const routePolicy = snapshot.routePolicies.find((candidate) => candidate.id === routePolicyId);
+
+  if (!routePolicy) {
+    throw new Error("Route policy was not loaded.");
+  }
+
+  return routePolicy.candidates.map((candidate) => {
+    if (candidate.price.status === "unknown_price") {
+      return {
+        modelId: candidate.modelId,
+        reason: candidate.price.reason,
+        status: candidate.price.status,
+      };
+    }
+    return {
+      ...(candidate.price.cachedInputUsdPerMillionTokens === undefined
+        ? {}
+        : { cachedInputUsdPerMillionTokens: candidate.price.cachedInputUsdPerMillionTokens }),
+      inputUsdPerMillionTokens: candidate.price.inputUsdPerMillionTokens,
+      modelId: candidate.modelId,
+      outputUsdPerMillionTokens: candidate.price.outputUsdPerMillionTokens,
+      source: candidate.price.source,
+      status: candidate.price.status,
+    };
+  });
+}
+
+async function readConfigPublication(fixture: Fixture): Promise<{
+  providerModelsPriceChangeCount: string;
+  workerVersionCount: string;
+}> {
+  const result = await fixture.query<{
+    provider_models_price_change_count: string;
+    worker_version_count: string;
+  }>(
+    `
+      select (
+               select count(*)::text
+               from config_change_events
+               where source = 'worker'
+                 and changed_table = 'provider_models_price'
+             ) as provider_models_price_change_count,
+             (
+               select count(*)::text
+               from config_versions
+               where source = 'worker'
+             ) as worker_version_count
+    `,
+  );
+  const row = result.rows[0];
+  return {
+    providerModelsPriceChangeCount: row?.provider_models_price_change_count ?? "0",
+    workerVersionCount: row?.worker_version_count ?? "0",
+  };
+}
+
+async function readJobResult(
+  fixture: Fixture,
+  jobId: string,
+): Promise<{
+  result: unknown;
+  status: string | null;
+}> {
+  const result = await fixture.query<{ result: unknown; status: string }>(
+    "select status, result from jobs where id = $1",
+    [jobId],
+  );
+  return {
+    result: result.rows[0]?.result ?? null,
+    status: result.rows[0]?.status ?? null,
+  };
+}
+
+function readResultString(result: unknown, key: string): string {
+  if (
+    result &&
+    typeof result === "object" &&
+    !Array.isArray(result) &&
+    typeof (result as Record<string, unknown>)[key] === "string"
+  ) {
+    return (result as Record<string, string>)[key];
+  }
+  throw new Error(`Expected job result ${key} to be a string.`);
+}

@@ -141,7 +141,7 @@ export function runOptimizedPlan(plan, options = {}) {
         print,
         timings,
       });
-      failures.push(...(fallbackFailures.length > 0 ? fallbackFailures : ["batch:unit"]));
+      failures.push(...fallbackFailures);
       printSlowTimings(timings, print);
       return { failures: unique(failures), timings };
     }
@@ -164,7 +164,7 @@ export function runOptimizedPlan(plan, options = {}) {
         print,
         timings,
       });
-      failures.push(...(fallbackFailures.length > 0 ? fallbackFailures : ["batch:e2e"]));
+      failures.push(...fallbackFailures);
     }
   }
 

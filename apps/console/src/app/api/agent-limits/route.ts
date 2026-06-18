@@ -27,8 +27,6 @@ export async function POST(request: NextRequest) {
       limits: normalizeAgentLimitFormInput({
         agentApiKeyId: readRequiredText(form, "agentApiKeyId"),
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
-        budgetPriceModelId: readRequiredText(form, "budgetPriceModelId"),
-        budgetPriceProviderKey: readRequiredText(form, "budgetPriceProviderKey"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
         rpm: readRequiredText(form, "rpm"),
         tokenLimit: readRequiredText(form, "tokenLimit"),
@@ -42,7 +40,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
 }
 
 function readRequiredText(form: FormData, name: string): string {

@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
 }
 
 function readText(form: FormData, name: string): string | undefined {

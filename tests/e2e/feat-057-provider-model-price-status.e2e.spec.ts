@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -31,7 +32,6 @@ test("refresh provider models shows priced and unknown price status in provider 
       baseUrl: `${provider.url}/v1`,
       id: providerId,
     });
-    await insertManualPriceOverride(fixture);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const worker = startWorkerProcess({ databaseUrl: fixture.databaseUrl });
@@ -41,7 +41,7 @@ test("refresh provider models shows priced and unknown price status in provider 
       });
 
       try {
-        const consoleBaseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const consoleBaseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
@@ -49,9 +49,13 @@ test("refresh provider models shows priced and unknown price status in provider 
           await waitForWorkerStarted(worker);
           await waitForConsole(consoleBaseUrl, consoleApp);
           await signInFromFirstRun(page, consoleBaseUrl);
+          await page.goto(`${consoleBaseUrl}/providers`);
 
           await storeProviderApiKey(page, providerApiKey);
+          await page.goto(`${consoleBaseUrl}/models`);
           await createVirtualModel(page);
+          await page.goto(`${consoleBaseUrl}/providers`);
+          await openRow(page, "OpenAI Price Status Provider");
           await page.getByRole("button", { name: "Refresh provider models" }).click();
           await expect(
             page.getByText("Model refresh queued for OpenAI Price Status Provider."),
@@ -60,11 +64,13 @@ test("refresh provider models shows priced and unknown price status in provider 
           await expect
             .poll(() => readLatestModelRefreshJob(fixture, providerId))
             .toMatchObject({ status: "succeeded" });
+          await writeDeterministicPriceStatusRows(fixture, providerId);
 
-          await page.reload();
+          await page.goto(`${consoleBaseUrl}/providers`);
+          await openRow(page, "OpenAI Price Status Provider");
           const providerModelMetadata = page.locator(".provider-model-metadata");
           await expect(
-            providerModelMetadata.getByText("GPT-4.1 Mini (gpt-4.1-mini) - Priced (built-in)"),
+            providerModelMetadata.getByText("GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)"),
           ).toBeVisible();
           await expect(
             providerModelMetadata.getByText(
@@ -77,11 +83,13 @@ test("refresh provider models shows priced and unknown price status in provider 
             ),
           ).toBeVisible();
 
+          await page.goto(`${consoleBaseUrl}/routing`);
+          await openDisclosure(page, "New route policy");
           await page.getByLabel("Route policy virtual model").selectOption({
             label: "Price Status VM (price-status-vm)",
           });
           await expect(page.getByLabel("Primary provider models")).toContainText(
-            "OpenAI Price Status Provider - GPT-4.1 Mini (gpt-4.1-mini) - Priced (built-in)",
+            "OpenAI Price Status Provider - GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)",
           );
           await expect(page.getByLabel("Primary provider models")).toContainText(
             "OpenAI Price Status Provider - Manual Priced Model (manual-priced-model) - Priced (manual override)",
@@ -128,31 +136,60 @@ async function insertProvider(
   );
 }
 
-async function insertManualPriceOverride(fixture: Fixture): Promise<void> {
+async function writeDeterministicPriceStatusRows(
+  fixture: Fixture,
+  providerId: string,
+): Promise<void> {
   await fixture.query(
     `
-      insert into model_price_overrides (
+      update provider_models
+      set manual_input_usd_per_million_tokens = 2.50,
+          manual_output_usd_per_million_tokens = 7.50,
+          manual_price_updated_at = now()
+      where provider_id = $1
+        and model_id = 'manual-priced-model'
+    `,
+    [providerId],
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
         id,
         provider_key,
         model_id,
         input_usd_per_million_tokens,
-        output_usd_per_million_tokens
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
       )
-      values ($1, 'openai', 'manual-priced-model', 2.50, 7.50)
+      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:test', now())
+      on conflict (provider_key, model_id, source)
+      do update set
+        input_usd_per_million_tokens = excluded.input_usd_per_million_tokens,
+        output_usd_per_million_tokens = excluded.output_usd_per_million_tokens,
+        source_url = excluded.source_url,
+        price_version = excluded.price_version,
+        synced_at = excluded.synced_at,
+        updated_at = now()
     `,
     [randomUUID()],
   );
 }
 
 async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<void> {
+  await openRow(page, "OpenAI Price Status Provider");
   await page.getByLabel("Provider API key").fill(providerApiKey);
   await page.getByRole("button", { name: "Store provider API key" }).click();
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
+  await openRow(page, "OpenAI Price Status Provider");
   await expect(page.getByText("Provider API key prefix: sk-price")).toBeVisible();
 }
 
 async function createVirtualModel(page: Page): Promise<void> {
+  await openDisclosure(page, "New virtual model");
   await page.getByRole("textbox", { name: "Virtual model name" }).fill("price-status-vm");
   await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Price Status VM");
   await page.getByRole("button", { name: "Create virtual model" }).click();
@@ -187,7 +224,7 @@ async function signInFromFirstRun(page: Page, baseUrl: string): Promise<void> {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 async function getFreePort(): Promise<number> {

@@ -12,7 +12,11 @@ export type FakeProviderMode =
   | "error"
   | "timeout"
   | "first-byte-failure"
-  | "midstream-error";
+  | "midstream-error"
+  | "openrouter-error"
+  | "gemini"
+  | "embeddings"
+  | "cached-usage";
 
 export type CapturedFakeProviderRequest = {
   method: string;
@@ -194,6 +198,89 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "cached-usage") {
+      writeJson(response, 200, {
+        id: "fake-provider-cached-usage",
+        object: "chat.completion",
+        choices: [{ index: 0, message: { role: "assistant", content: "fake cached response" } }],
+        usage: {
+          completion_tokens: 200,
+          completion_tokens_details: {
+            reasoning_tokens: 25,
+          },
+          prompt_tokens: 1000,
+          prompt_tokens_details: {
+            cached_tokens: 400,
+          },
+          total_tokens: 1200,
+        },
+      });
+      return;
+    }
+
+    if (mode === "embeddings" && url.pathname.endsWith("/embeddings")) {
+      writeJson(response, 200, {
+        data: [
+          {
+            embedding: [0.1, 0.2, 0.3],
+            index: 0,
+            object: "embedding",
+          },
+        ],
+        model: "text-embedding-3-small",
+        object: "list",
+        usage: {
+          prompt_tokens: 5,
+          total_tokens: 5,
+        },
+      });
+      return;
+    }
+
+    if (mode === "embeddings") {
+      writeJson(response, 404, {
+        error: {
+          code: "fake_embeddings_path_error",
+          message: "Fake provider expected embeddings path",
+        },
+      });
+      return;
+    }
+
+    if (mode === "gemini" && url.pathname.includes(":generateContent")) {
+      writeJson(response, 200, {
+        candidates: [
+          {
+            content: {
+              role: "model",
+              parts: [{ text: "fake gemini response" }],
+            },
+            finishReason: "STOP",
+            index: 0,
+          },
+        ],
+        modelVersion: "gemini-3.5-flash",
+        responseId: "fake-gemini-response",
+        usageMetadata: {
+          candidatesTokenCount: 4,
+          promptTokenCount: 6,
+          totalTokenCount: 10,
+        },
+      });
+      return;
+    }
+
+    if (mode === "gemini") {
+      writeJson(response, 404, {
+        error: {
+          code: 404,
+          message: "Gemini fake provider expected generateContent path",
+          status: "NOT_FOUND",
+        },
+      });
+      return;
+    }
+
     if (mode === "json") {
       writeJson(response, 200, {
         id: "fake-provider-response",
@@ -245,6 +332,19 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "openrouter-error") {
+      writeJson(response, 402, {
+        error: {
+          code: 402,
+          message: "OpenRouter account has insufficient credits",
+          metadata: {
+            provider_name: "OpenRouter",
+          },
+        },
+      });
+      return;
+    }
+
     if (mode === "timeout") {
       const timer = setTimeout(() => {
         if (!response.destroyed) {
@@ -275,7 +375,11 @@ function readMode(url: URL): FakeProviderMode {
     mode === "error" ||
     mode === "timeout" ||
     mode === "first-byte-failure" ||
-    mode === "midstream-error"
+    mode === "midstream-error" ||
+    mode === "openrouter-error" ||
+    mode === "gemini" ||
+    mode === "embeddings" ||
+    mode === "cached-usage"
   ) {
     return mode;
   }

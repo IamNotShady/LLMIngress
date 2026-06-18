@@ -55,13 +55,13 @@ test("success and failure requests create activity rows with route fallback late
             agent_api_key_prefix: agentApiKey.slice(0, 12),
             error_code: null,
             fallback_attempts: [
-              {
+              expect.objectContaining({
                 attemptOrder: 1,
                 errorCode: "provider_request_failed",
                 errorMessage: expect.any(String),
                 failedBeforeFirstByte: true,
                 providerModelId: seeded.failedFallbackProviderModelId,
-              },
+              }),
             ],
             http_status: 200,
             model: "activity-fallback",
@@ -80,13 +80,13 @@ test("success and failure requests create activity rows with route fallback late
             agent_api_key_prefix: agentApiKey.slice(0, 12),
             error_code: "provider_request_failed",
             fallback_attempts: [
-              {
+              expect.objectContaining({
                 attemptOrder: 1,
                 errorCode: "fake_provider_error",
                 errorMessage: expect.any(String),
                 failedBeforeFirstByte: false,
                 providerModelId: seeded.hardFailureProviderModelId,
-              },
+              }),
             ],
             http_status: 502,
             model: "activity-failure",
@@ -112,6 +112,12 @@ test("success and failure requests create activity rows with route fallback late
           error_code: "provider_request_failed",
           failed_before_first_byte: true,
           provider_model_id: seeded.failedFallbackProviderModelId,
+          request_id: "req_activity_success_044",
+        },
+        {
+          error_code: null,
+          failed_before_first_byte: false,
+          provider_model_id: seeded.successProviderModelId,
           request_id: "req_activity_success_044",
         },
         {

@@ -31,8 +31,10 @@ describe("feat-045 usage cost baseline and savings recorder", () => {
         savingsUsd: 0.0057,
       },
       requestUsage: {
+        cachedInputTokens: 0,
         inputTokens: 1_000,
         outputTokens: 500,
+        reasoningTokens: 0,
         tokenSource: "estimated",
         totalTokens: 1_500,
       },
@@ -107,8 +109,10 @@ describe("feat-045 usage cost baseline and savings recorder", () => {
         savingsUsd: null,
       },
       requestUsage: {
+        cachedInputTokens: 0,
         inputTokens: 100,
         outputTokens: 200,
+        reasoningTokens: 0,
         totalTokens: 300,
       },
     });

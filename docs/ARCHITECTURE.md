@@ -551,7 +551,7 @@ Gateway Request Pipeline
       Console Activity / Usage / Runtime pages
 ```
 
-Console 从 Postgres 读取 Activity、Usage、Cost、Runtime 状态、Provider health summary 和 Worker job 状态。Gateway 和 Worker 周期性写入 `process_heartbeats`；V1 建议每 10 秒写一次 heartbeat，Runtime 页面默认把超过 30 秒未更新的进程标记为 stale / down。
+Console 从 Postgres 读取 Activity、Usage、Cost、Runtime 状态、Provider health summary 和 Worker job 状态。Gateway 周期性写入 `gateway_runtime_status.heartbeat_at`，Runtime 页面默认把超过 30 秒未更新的 Gateway 标记为 stale / down。
 
 对于实时刷新页面，可以由 Console Web 使用 polling、SSE 或 WebSocket 拉取 Console API。Console API 如果要订阅 Postgres notification channel，必须运行在常驻 Node.js 进程中；不假设 edge runtime 或 serverless 短生命周期函数可以长期 `LISTEN`。如果部署环境不适合长连接 listener，Console 使用 polling 读取 Postgres 状态即可。
 
@@ -676,8 +676,7 @@ PostgreSQL database
 ├── Provider / model config
 │   ├── providers
 │   ├── provider_keys
-│   ├── provider_models
-│   └── model_price_overrides
+│   └── provider_models (including manual price fields)
 │
 ├── Routing config
 │   ├── virtual_models
@@ -700,7 +699,6 @@ PostgreSQL database
 │   ├── provider_health_events
 │   ├── provider_health_summary
 │   ├── gateway_runtime_status
-│   ├── process_heartbeats
 │   └── runtime_errors
 │
 ├── Background jobs
@@ -711,7 +709,7 @@ PostgreSQL database
 │   └── export_tasks
 │
 ├── Billing / pricing
-│   ├── price_registry_snapshots
+│   ├── provider_models_price
 │   ├── billing_reconciliation_runs
 │   └── billing_reconciliation_items
 │

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { Client } from "pg";
 import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
+import { createGeminiProviderAdapter } from "./provider-adapters/gemini.js";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIChatRequest,
@@ -8,10 +10,21 @@ import {
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
 } from "./provider-adapters/openai.js";
+import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
+import { recordGatewayProviderTrace } from "./tracing.js";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
   baseUrl: string;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
+  providerApiKeys?: readonly FallbackProviderApiKey[];
+};
+
+export type FallbackProviderApiKey = {
+  apiKey: string;
+  keyPrefix?: string;
+  providerApiKeyId?: string;
 };
 
 export type FallbackFailedAttempt = {
@@ -19,6 +32,15 @@ export type FallbackFailedAttempt = {
   errorCode: string;
   errorMessage: string;
   failedBeforeFirstByte: boolean;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
+  providerModelId: string;
+};
+
+export type FallbackSucceededAttempt = {
+  attemptOrder: number;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
   providerModelId: string;
 };
 
@@ -35,6 +57,13 @@ export type ExecuteFallbackChainInput = {
   recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void>;
   request: NormalizedOpenAIChatRequest;
   requestActivityId?: string;
+  requestId?: string;
+};
+
+type FallbackAttemptErrorLike = {
+  errorCode: string;
+  errorMessage: string;
+  statusCode: number | null;
 };
 
 export function buildFallbackAttemptCandidates(input: {
@@ -62,50 +91,165 @@ export async function executeFallbackChain(
     throw new Error("Fallback chain requires at least one candidate.");
   }
 
-  const adapter = input.adapter ?? createOpenAIProviderAdapter();
+  const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
+  const geminiAdapter = input.adapter ?? createGeminiProviderAdapter();
+  const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
   const failedAttempts: FallbackFailedAttempt[] = [];
   let lastError: OpenAIAdapterError | undefined;
 
-  for (const [index, candidate] of input.candidates.entries()) {
-    const result = await adapter.chatCompletion({
-      request: input.request,
-      target: {
-        apiKey: candidate.apiKey,
-        baseUrl: candidate.baseUrl,
-        modelId: candidate.modelId,
-      },
-    });
+  let attemptOrder = 0;
+  for (const candidate of input.candidates) {
+    const adapter =
+      candidate.providerKey === "gemini"
+        ? geminiAdapter
+        : candidate.providerKey === "openrouter"
+          ? openRouterAdapter
+          : genericAdapter;
+    const providerApiKeys = readFallbackProviderApiKeys(candidate);
+    const candidateFailedAttempts: FallbackFailedAttempt[] = [];
 
-    if (result.ok) {
-      return {
-        failedAttempts,
+    for (const providerApiKey of providerApiKeys) {
+      attemptOrder += 1;
+      const providerStartedAt = new Date();
+      const result = await adapter.chatCompletion({
+        request: input.request,
+        target: {
+          apiKey: providerApiKey.apiKey,
+          baseUrl: candidate.baseUrl,
+          modelId: candidate.modelId,
+        },
+      });
+      await recordGatewayProviderTrace({
+        errorCode: result.ok ? null : result.errorCode,
+        modelId: candidate.modelId,
+        providerKey: candidate.providerKey,
+        requestId: input.requestId,
+        startedAt: providerStartedAt,
+        status: result.ok ? "succeeded" : "failed",
+      });
+
+      if (result.ok) {
+        await recordSucceededAttemptInDatabase(input, {
+          attemptOrder,
+          ...(providerApiKey.providerApiKeyId
+            ? { providerApiKeyId: providerApiKey.providerApiKeyId }
+            : {}),
+          ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
+          providerModelId: candidate.providerModelId,
+        });
+        return {
+          failedAttempts,
+          result,
+          selectedCandidate: {
+            ...candidate,
+            apiKey: providerApiKey.apiKey,
+            providerApiKeyId: providerApiKey.providerApiKeyId,
+            providerApiKeyPrefix: providerApiKey.keyPrefix,
+          },
+        };
+      }
+
+      lastError = result;
+      const failedAttempt = buildFallbackFailedAttempt({
+        attemptOrder,
         result,
-        selectedCandidate: candidate,
-      };
+        providerApiKey,
+        providerModelId: candidate.providerModelId,
+      });
+      failedAttempts.push(failedAttempt);
+      candidateFailedAttempts.push(failedAttempt);
+      await input.recordFailedAttempt?.(failedAttempt);
+      await recordFailedAttemptInDatabase(input, failedAttempt);
     }
 
-    lastError = result;
-    const failedAttempt = {
-      attemptOrder: index + 1,
-      errorCode: result.errorCode,
-      errorMessage: result.errorMessage,
-      failedBeforeFirstByte: result.statusCode === null,
-      providerModelId: candidate.providerModelId,
-    };
-    failedAttempts.push(failedAttempt);
-    await input.recordFailedAttempt?.(failedAttempt);
-    await recordFailedAttemptInDatabase(input, failedAttempt);
+    await recordCandidateHealthFailure(input, candidate, candidateFailedAttempts);
 
-    if (!failedAttempt.failedBeforeFirstByte) {
-      throw new Error(result.errorMessage);
+    if (candidateFailedAttempts.some((attempt) => !attempt.failedBeforeFirstByte)) {
+      throw new Error(lastError?.errorMessage ?? "Provider request failed.");
     }
   }
 
   throw new Error(lastError?.errorMessage ?? "All fallback candidates failed.");
 }
 
-async function recordFailedAttemptInDatabase(
-  input: ExecuteFallbackChainInput,
+export function buildFallbackFailedAttempt(input: {
+  attemptOrder: number;
+  providerApiKey: FallbackProviderApiKey;
+  providerModelId: string;
+  result: FallbackAttemptErrorLike;
+}): FallbackFailedAttempt {
+  return {
+    attemptOrder: input.attemptOrder,
+    errorCode: input.result.errorCode,
+    errorMessage: input.result.errorMessage,
+    failedBeforeFirstByte: input.result.statusCode === null,
+    ...(input.providerApiKey.providerApiKeyId
+      ? { providerApiKeyId: input.providerApiKey.providerApiKeyId }
+      : {}),
+    ...(input.providerApiKey.keyPrefix
+      ? { providerApiKeyPrefix: input.providerApiKey.keyPrefix }
+      : {}),
+    providerModelId: input.providerModelId,
+  };
+}
+
+export function readFallbackProviderApiKeys(
+  candidate: FallbackChainCandidate,
+): readonly FallbackProviderApiKey[] {
+  if (candidate.providerApiKeys && candidate.providerApiKeys.length > 0) {
+    return candidate.providerApiKeys;
+  }
+
+  return [
+    {
+      apiKey: candidate.apiKey,
+      ...(candidate.providerApiKeyPrefix ? { keyPrefix: candidate.providerApiKeyPrefix } : {}),
+      ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
+    },
+  ];
+}
+
+export async function recordSucceededAttemptInDatabase(
+  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
+  attempt: FallbackSucceededAttempt,
+): Promise<void> {
+  if (!input.databaseUrl || !input.requestActivityId) {
+    return;
+  }
+
+  const client = new Client({ connectionString: input.databaseUrl });
+  await client.connect();
+  try {
+    await client.query(
+      `
+        insert into fallback_events (
+          id,
+          request_activity_id,
+          provider_model_id,
+          provider_api_key_id,
+          provider_api_key_prefix,
+          attempt_order,
+          status,
+          failed_before_first_byte
+        )
+        values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
+      `,
+      [
+        randomUUID(),
+        input.requestActivityId,
+        attempt.providerModelId,
+        attempt.providerApiKeyId || null,
+        attempt.providerApiKeyPrefix || null,
+        attempt.attemptOrder,
+      ],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+export async function recordFailedAttemptInDatabase(
+  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
   attempt: FallbackFailedAttempt,
 ): Promise<void> {
   if (!input.databaseUrl || !input.requestActivityId) {
@@ -121,18 +265,22 @@ async function recordFailedAttemptInDatabase(
           id,
           request_activity_id,
           provider_model_id,
+          provider_api_key_id,
+          provider_api_key_prefix,
           attempt_order,
           status,
           error_code,
           error_message,
           failed_before_first_byte
         )
-        values ($1, $2, $3, $4, 'failed', $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
       `,
       [
         randomUUID(),
         input.requestActivityId,
         attempt.providerModelId,
+        attempt.providerApiKeyId || null,
+        attempt.providerApiKeyPrefix || null,
         attempt.attemptOrder,
         attempt.errorCode,
         attempt.errorMessage,
@@ -142,4 +290,42 @@ async function recordFailedAttemptInDatabase(
   } finally {
     await client.end();
   }
+}
+
+async function recordCandidateHealthFailure(
+  input: ExecuteFallbackChainInput,
+  candidate: FallbackChainCandidate,
+  failedAttempts: FallbackFailedAttempt[],
+): Promise<void> {
+  if (!input.databaseUrl || failedAttempts.length === 0) {
+    return;
+  }
+
+  const latestAttempt = failedAttempts[failedAttempts.length - 1];
+  if (!latestAttempt) {
+    return;
+  }
+
+  const shared = {
+    databaseUrl: input.databaseUrl,
+    errorCode: latestAttempt.errorCode,
+    errorMessage: latestAttempt.errorMessage,
+    metadata: {
+      attemptCount: failedAttempts.length,
+      failedBeforeFirstByte: latestAttempt.failedBeforeFirstByte,
+      providerApiKeyPrefix: latestAttempt.providerApiKeyPrefix ?? null,
+    },
+    status: "failed" as const,
+    trigger: "request_path" as const,
+  };
+
+  await recordProviderHealthEvent({
+    ...shared,
+    providerId: candidate.providerId,
+  });
+  await recordProviderHealthEvent({
+    ...shared,
+    providerId: candidate.providerId,
+    providerModelId: candidate.providerModelId,
+  });
 }

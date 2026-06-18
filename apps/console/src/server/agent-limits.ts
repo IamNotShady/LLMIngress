@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
+import type { ManualPriceOverride, SyncedPriceSnapshot } from "@llmingress/billing/price-registry";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
 import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
@@ -18,8 +18,6 @@ export type AgentLimitRuleInput = {
 export type AgentLimitFormInput = {
   agentApiKeyId?: string | null;
   budgetPeriod?: string | null;
-  budgetPriceModelId?: string | null;
-  budgetPriceProviderKey?: string | null;
   budgetUsd?: string | number | null;
   rpm?: string | number | null;
   tokenLimit?: string | number | null;
@@ -28,10 +26,6 @@ export type AgentLimitFormInput = {
 
 export type NormalizedAgentLimitFormInput = {
   agentApiKeyId: string;
-  budgetPriceCheck: {
-    modelId: string;
-    providerKey: string;
-  };
   rules: AgentLimitRuleInput[];
 };
 
@@ -51,12 +45,25 @@ type AgentLimitRow = QueryResultRow & {
   unit: AgentLimitUnit;
 };
 
-type PriceOverrideRow = QueryResultRow & {
-  input_usd_per_million_tokens: string;
+type AccessibleRouteCandidatePriceRow = QueryResultRow & {
+  candidate_order: number;
+  is_fallback: boolean;
+  model_display_name: string;
   model_id: string;
-  output_usd_per_million_tokens: string;
+  price_override_cached_input_usd_per_million_tokens: string | null;
+  price_override_input_usd_per_million_tokens: string | null;
+  price_override_output_usd_per_million_tokens: string | null;
+  price_override_updated_at: Date | null;
+  price_sync_cached_input_usd_per_million_tokens: string | null;
+  price_sync_input_usd_per_million_tokens: string | null;
+  price_sync_output_usd_per_million_tokens: string | null;
+  price_sync_price_version: string | null;
+  price_sync_source_url: string | null;
+  price_sync_synced_at: Date | null;
+  provider_display_name: string;
   provider_key: string;
-  updated_at: Date;
+  virtual_model_display_name: string;
+  virtual_model_name: string;
 };
 
 type QueryClient = {
@@ -70,8 +77,6 @@ const budgetPeriods = ["day", "week", "month"] as const;
 
 export const defaultAgentLimitFormValues = {
   budgetPeriod: "month",
-  budgetPriceModelId: "gpt-4.1-mini",
-  budgetPriceProviderKey: "openai",
   budgetUsd: 10,
   rpm: 60,
   tokenLimit: 200_000,
@@ -83,18 +88,9 @@ export function normalizeAgentLimitFormInput(
 ): NormalizedAgentLimitFormInput {
   const agentApiKeyId = normalizeRequiredText(input.agentApiKeyId, "Agent API key id");
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
-  const providerKey = normalizeRequiredText(
-    input.budgetPriceProviderKey,
-    "Budget price provider key",
-  ).toLowerCase();
-  const modelId = normalizeRequiredText(input.budgetPriceModelId, "Budget price model id");
 
   return {
     agentApiKeyId,
-    budgetPriceCheck: {
-      modelId,
-      providerKey,
-    },
     rules: [
       {
         limitType: "budget",
@@ -122,18 +118,6 @@ export function normalizeAgentLimitFormInput(
       },
     ],
   };
-}
-
-export function getCostBudgetPriceValidationError(input: {
-  manualOverride: ManualPriceOverride | null;
-  modelId: string;
-  providerKey: string;
-}): string | null {
-  const price = resolveEffectiveModelTokenPrice(input);
-  if (price.status === "unknown_price") {
-    return `Cannot enable cost budget for ${input.providerKey}/${input.modelId} because the model has unknown price. Save a manual price override first.`;
-  }
-  return null;
 }
 
 export function formatAgentLimitSummaries(
@@ -164,7 +148,9 @@ export async function saveAgentLimitRules(input: {
     changes: [{ table: "agent_limits", recordId: input.limits.agentApiKeyId }],
     write: async (client) => {
       await assertAgentApiKeyExists(client, input.limits.agentApiKeyId);
-      await assertCostBudgetPriceKnown(client, input.limits.budgetPriceCheck);
+      if (input.limits.rules.some((rule) => rule.limitType === "budget" && rule.unit === "usd")) {
+        await assertAccessibleRouteCandidatePricesKnown(client, input.limits.agentApiKeyId);
+      }
 
       await client.query(
         `
@@ -217,47 +203,164 @@ async function assertAgentApiKeyExists(client: QueryClient, id: string): Promise
   }
 }
 
-async function assertCostBudgetPriceKnown(
+async function assertAccessibleRouteCandidatePricesKnown(
   client: QueryClient,
-  input: { modelId: string; providerKey: string },
+  agentApiKeyId: string,
 ): Promise<void> {
-  const validationError = getCostBudgetPriceValidationError({
-    manualOverride: await readManualPriceOverride(client, input),
-    modelId: input.modelId,
-    providerKey: input.providerKey,
+  const candidates = await readAccessibleRouteCandidatePrices(client, agentApiKeyId);
+  const missingPriceCandidates = candidates.filter((candidate) => {
+    const price = resolveEffectiveModelTokenPrice({
+      manualOverride: rowToManualPriceOverride(candidate),
+      modelId: candidate.model_id,
+      providerKey: candidate.provider_key,
+      syncedPrice: rowToSyncedPriceSnapshot(candidate),
+    });
+    return price.status === "unknown_price";
   });
-  if (validationError) {
-    throw new Error(validationError);
+
+  if (missingPriceCandidates.length === 0) {
+    return;
   }
+
+  const candidateLabels = missingPriceCandidates
+    .map((candidate) => {
+      const routeRole = candidate.is_fallback ? "fallback" : "primary";
+      return `${candidate.virtual_model_display_name} (${candidate.virtual_model_name}) ${routeRole} candidate ${candidate.provider_display_name} - ${candidate.model_display_name} (${candidate.model_id})`;
+    })
+    .join("; ");
+  throw new Error(
+    `Cannot enable cost budget because the Agent API key can reach route candidates with unknown price: ${candidateLabels}. Save a manual price override, sync prices, or choose priced replacements before enabling the budget.`,
+  );
 }
 
-async function readManualPriceOverride(
+async function readAccessibleRouteCandidatePrices(
   client: QueryClient,
-  input: { modelId: string; providerKey: string },
-): Promise<ManualPriceOverride | null> {
-  const result = await client.query<PriceOverrideRow>(
+  agentApiKeyId: string,
+): Promise<AccessibleRouteCandidatePriceRow[]> {
+  const result = await client.query<AccessibleRouteCandidatePriceRow>(
     `
-      select provider_key,
-             model_id,
-             input_usd_per_million_tokens::text,
-             output_usd_per_million_tokens::text,
-             updated_at
-      from model_price_overrides
-      where provider_key = $1
-        and model_id = $2
+      with accessible_virtual_models as (
+        select distinct virtual_models.id,
+               virtual_models.name,
+               virtual_models.display_name
+        from agent_api_keys
+        join virtual_models
+          on virtual_models.enabled = true
+         and (
+              agent_api_keys.default_virtual_model_id = virtual_models.id
+              or exists (
+                select 1
+                from agent_api_key_virtual_models
+                where agent_api_key_virtual_models.agent_api_key_id = agent_api_keys.id
+                  and agent_api_key_virtual_models.virtual_model_id = virtual_models.id
+              )
+         )
+        where agent_api_keys.id = $1
+      )
+      select accessible_virtual_models.name as virtual_model_name,
+             accessible_virtual_models.display_name as virtual_model_display_name,
+             route_policy_candidates.candidate_order,
+             route_policy_candidates.is_fallback,
+             providers.provider_key,
+             providers.display_name as provider_display_name,
+             provider_models.model_id,
+             provider_models.display_name as model_display_name,
+             provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
+             provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
+             provider_models.manual_output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
+             provider_models.manual_price_updated_at as price_override_updated_at,
+             latest_provider_model_price.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+             latest_provider_model_price.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+             latest_provider_model_price.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+             latest_provider_model_price.price_version as price_sync_price_version,
+             latest_provider_model_price.source_url as price_sync_source_url,
+             latest_provider_model_price.synced_at as price_sync_synced_at
+      from accessible_virtual_models
+      join route_policies on route_policies.virtual_model_id = accessible_virtual_models.id
+      join route_policy_candidates on route_policy_candidates.route_policy_id = route_policies.id
+      join provider_models on provider_models.id = route_policy_candidates.provider_model_id
+      join providers on providers.id = provider_models.provider_id
+      left join lateral (
+        select input_usd_per_million_tokens,
+               cached_input_usd_per_million_tokens,
+               output_usd_per_million_tokens,
+               price_version,
+               source_url,
+               synced_at
+        from provider_models_price
+        where lower(provider_models_price.provider_key) = lower(providers.provider_key)
+          and provider_models_price.model_id = provider_models.model_id
+        order by case provider_models_price.source
+                   when 'models.dev' then 0
+                   when 'litellm' then 1
+                   else 2
+                 end,
+                 synced_at desc,
+                 updated_at desc
+        limit 1
+      ) latest_provider_model_price on true
+      where providers.enabled = true
+        and provider_models.availability = 'available'
+      order by accessible_virtual_models.name,
+               route_policy_candidates.is_fallback,
+               route_policy_candidates.candidate_order,
+               providers.provider_key,
+               provider_models.model_id
     `,
-    [input.providerKey, input.modelId],
+    [agentApiKeyId],
   );
-  const row = result.rows[0];
-  return row
-    ? {
-        inputUsdPerMillionTokens: Number(row.input_usd_per_million_tokens),
-        modelId: row.model_id,
-        outputUsdPerMillionTokens: Number(row.output_usd_per_million_tokens),
-        providerKey: row.provider_key,
-        updatedAt: row.updated_at,
-      }
-    : null;
+  return result.rows;
+}
+
+function rowToManualPriceOverride(
+  row: AccessibleRouteCandidatePriceRow,
+): ManualPriceOverride | null {
+  if (
+    row.price_override_input_usd_per_million_tokens === null ||
+    row.price_override_output_usd_per_million_tokens === null ||
+    row.price_override_updated_at === null
+  ) {
+    return null;
+  }
+
+  return {
+    cachedInputUsdPerMillionTokens:
+      row.price_override_cached_input_usd_per_million_tokens === null
+        ? null
+        : Number(row.price_override_cached_input_usd_per_million_tokens),
+    inputUsdPerMillionTokens: Number(row.price_override_input_usd_per_million_tokens),
+    modelId: row.model_id,
+    outputUsdPerMillionTokens: Number(row.price_override_output_usd_per_million_tokens),
+    providerKey: row.provider_key,
+    updatedAt: row.price_override_updated_at,
+  };
+}
+
+function rowToSyncedPriceSnapshot(
+  row: AccessibleRouteCandidatePriceRow,
+): SyncedPriceSnapshot | null {
+  if (
+    row.price_sync_input_usd_per_million_tokens === null ||
+    row.price_sync_output_usd_per_million_tokens === null ||
+    row.price_sync_price_version === null ||
+    row.price_sync_synced_at === null
+  ) {
+    return null;
+  }
+
+  return {
+    cachedInputUsdPerMillionTokens:
+      row.price_sync_cached_input_usd_per_million_tokens === null
+        ? null
+        : Number(row.price_sync_cached_input_usd_per_million_tokens),
+    inputUsdPerMillionTokens: Number(row.price_sync_input_usd_per_million_tokens),
+    modelId: row.model_id,
+    outputUsdPerMillionTokens: Number(row.price_sync_output_usd_per_million_tokens),
+    priceVersion: row.price_sync_price_version,
+    providerKey: row.provider_key,
+    sourceUrl: row.price_sync_source_url,
+    syncedAt: row.price_sync_synced_at,
+  };
 }
 
 async function readAgentLimits(

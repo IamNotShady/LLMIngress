@@ -88,7 +88,6 @@ async function seedRouteEngineConfig(fixture: Fixture): Promise<SeededRouteEngin
   const costVirtualModelId = randomUUID();
   const fixedRoutePolicyId = randomUUID();
   const costRoutePolicyId = randomUUID();
-  const manualOverrideId = randomUUID();
 
   await fixture.query(
     `
@@ -126,16 +125,13 @@ async function seedRouteEngineConfig(fixture: Fixture): Promise<SeededRouteEngin
   );
   await fixture.query(
     `
-      insert into model_price_overrides (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens
-      )
-      values ($1, 'custom-ai', 'custom-low-cost', 0.01, 0.02)
+      update provider_models
+      set manual_input_usd_per_million_tokens = 0.01,
+          manual_output_usd_per_million_tokens = 0.02,
+          manual_price_updated_at = now()
+      where id = $1
     `,
-    [manualOverrideId],
+    [manualPricedModelId],
   );
   await fixture.query(
     `

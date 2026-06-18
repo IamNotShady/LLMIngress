@@ -12,7 +12,7 @@ describe("feat-057 provider model price status", () => {
     await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
   });
 
-  it("resolves provider model options to built-in manual and unknown price statuses", async () => {
+  it("resolves provider model options to synced manual and unknown price statuses", async () => {
     const fixture = await createTestPostgresFixture({
       databaseNamePrefix: `llmingress_price_status_unit_${randomUUID().replaceAll("-", "_")}`,
     });
@@ -34,8 +34,9 @@ describe("feat-057 provider model price status", () => {
       {
         modelId: "gpt-4.1-mini",
         optionLabel: "OpenAI Test Provider - GPT-4.1 Mini (gpt-4.1-mini)",
-        pricedOptionLabel: "OpenAI Test Provider - GPT-4.1 Mini (gpt-4.1-mini) - Priced (built-in)",
-        priceStatusLabel: "Priced (built-in)",
+        pricedOptionLabel:
+          "OpenAI Test Provider - GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)",
+        priceStatusLabel: "Priced (price sync)",
       },
       {
         modelId: "manual-priced-model",
@@ -76,14 +77,29 @@ async function seedProviderModels(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into model_price_overrides (
+      update provider_models
+      set manual_input_usd_per_million_tokens = 2.50,
+          manual_output_usd_per_million_tokens = 7.50,
+          manual_price_updated_at = now()
+      where provider_id = $1
+        and model_id = 'manual-priced-model'
+    `,
+    [providerId],
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
         id,
         provider_key,
         model_id,
         input_usd_per_million_tokens,
-        output_usd_per_million_tokens
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
       )
-      values ($1, 'openai', 'manual-priced-model', 2.50, 7.50)
+      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:test', now())
     `,
     [randomUUID()],
   );

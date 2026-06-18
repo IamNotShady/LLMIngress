@@ -7,6 +7,7 @@ import {
   rotateAgentApiKey,
   updateAgentApiKeyVirtualModelAccess,
 } from "../../../server/agent-api-keys";
+import { buildAgentIntegrationTemplates } from "../../../server/agent-integrations";
 import {
   getConsoleDatabaseUrl,
   sessionCookieName,
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
 }
 
 function renderOneTimeAgentApiKeyResponse(input: {
@@ -80,6 +81,24 @@ function renderOneTimeAgentApiKeyResponse(input: {
   plaintext: string;
 }): NextResponse {
   const heading = input.action === "created" ? "Agent API key created" : "Agent API key rotated";
+  const integrationTemplates = buildAgentIntegrationTemplates({
+    apiKey: input.plaintext,
+    gatewayBaseUrl: getAgentIntegrationGatewayBaseUrl(),
+    model: "<Virtual Model Name>",
+  });
+  const integrationTemplateHtml = integrationTemplates
+    .map(
+      (template) => `
+        <div class="snippet">
+          <label for="${escapeHtml(template.id)}-setup-snippet">${escapeHtml(
+            template.displayName,
+          )} setup snippet</label>
+          <textarea id="${escapeHtml(template.id)}-setup-snippet" readonly rows="5">${escapeHtml(
+            template.snippet,
+          )}</textarea>
+        </div>`,
+    )
+    .join("");
 
   return new NextResponse(
     `<!doctype html>
@@ -98,6 +117,10 @@ function renderOneTimeAgentApiKeyResponse(input: {
       dt { color: #667085; font-size: 13px; font-weight: 700; }
       dd { margin: 0; color: #101828; font-size: 16px; overflow-wrap: anywhere; }
       code { border: 1px solid #d0d5dd; border-radius: 6px; background: #f9fafb; display: block; padding: 12px; }
+      .snippets { display: grid; gap: 12px; margin: 0 0 24px; }
+      .snippet { display: grid; gap: 6px; }
+      label { color: #344054; font-size: 14px; font-weight: 700; }
+      textarea { width: 100%; min-height: 116px; border: 1px solid #98a2b3; border-radius: 6px; background: #f9fafb; color: #101828; font: inherit; padding: 10px 12px; resize: vertical; }
       a { display: inline-flex; min-height: 44px; align-items: center; border-radius: 6px; background: #175cd3; color: #fff; font-weight: 700; padding: 10px 14px; text-decoration: none; }
     </style>
   </head>
@@ -114,7 +137,10 @@ function renderOneTimeAgentApiKeyResponse(input: {
           <dd>${escapeHtml(input.metadata.keyPrefix)}</dd>
         </div>
       </dl>
-      <a href="/">Back to dashboard</a>
+      <section class="snippets" aria-label="Agent integration templates">
+        ${integrationTemplateHtml}
+      </section>
+      <a href="/agents">Back to dashboard</a>
     </main>
   </body>
 </html>`,
@@ -126,6 +152,10 @@ function renderOneTimeAgentApiKeyResponse(input: {
       status: 200,
     },
   );
+}
+
+function getAgentIntegrationGatewayBaseUrl(): string {
+  return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
 }
 
 function readRequiredText(form: FormData, name: string): string {

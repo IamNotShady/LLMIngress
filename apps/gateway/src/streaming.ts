@@ -12,13 +12,16 @@ import {
   attachGatewayProviderCredentials,
   normalizeOpenAIChatCompletionRequest,
   readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
 } from "./chat-completions.js";
 import type {
   GatewayConfigSnapshot,
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
+import { mapGatewayErrorStatus } from "./error-mapping.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
+import { openRouterAttributionHeaders } from "./provider-adapters/openrouter.js";
 import { enforceGatewayRateLimits } from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,
@@ -28,6 +31,7 @@ import {
 } from "./request-metadata.js";
 import { normalizeOpenAIResponsesRequest } from "./responses.js";
 import { selectRouteCandidate } from "./route-engine.js";
+import { recordGatewayProviderTrace } from "./tracing.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";
@@ -55,6 +59,11 @@ export type GatewayRuntimeStreamError = {
   errorCode: "provider_stream_error";
   errorMessage: string;
 };
+
+type GatewayStreamingErrorCode =
+  | "provider_credentials_missing"
+  | "provider_request_failed"
+  | "route_not_found";
 
 type GatewayStreamingPayload = {
   estimatedInputTokens: number;
@@ -116,7 +125,9 @@ export async function executeGatewayStreamingRequest(input: {
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
     const activity = buildStreamingActivityRoute({
+      modelId: selectedCandidate.modelId,
       providerId: selectedCandidate.providerId,
+      providerKey: selectedCandidate.providerKey,
       providerModelId: selectedCandidate.providerModelId,
       routePolicyId: routeDecision.routePolicyId,
       routeReason: routeDecision.routeReason,
@@ -149,6 +160,7 @@ export async function executeGatewayStreamingRequest(input: {
       throw new Error("Provider credentials are missing for the selected route.");
     }
 
+    const providerStartedAt = new Date();
     const response = await (input.fetch ?? globalThis.fetch)(
       buildProviderUrl(selected.baseUrl, normalized.pathSuffix),
       {
@@ -157,10 +169,22 @@ export async function executeGatewayStreamingRequest(input: {
           model: selected.modelId,
           stream: true,
         }),
-        headers: normalized.headersWithApiKey(selected.apiKey),
+        headers: buildStreamingProviderHeaders({
+          apiKey: selected.apiKey,
+          headersWithApiKey: normalized.headersWithApiKey,
+          providerKey: selected.providerKey,
+        }),
         method: "POST",
       },
     );
+    await recordGatewayProviderTrace({
+      errorCode: response.ok && response.body ? null : "provider_request_failed",
+      modelId: selected.modelId,
+      providerKey: selected.providerKey,
+      requestId: input.requestId,
+      startedAt: providerStartedAt,
+      status: response.ok && response.body ? "succeeded" : "failed",
+    });
 
     if (!response.ok || !response.body) {
       await releaseGatewayBudgetReservation({
@@ -176,6 +200,10 @@ export async function executeGatewayStreamingRequest(input: {
         statusCode: 502,
       };
     }
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: selected.providerApiKeyId,
+    });
     const body = wrapProviderStreamWithBudgetFinalization(
       wrapProviderStreamWithErrorRecording(
         Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
@@ -213,15 +241,17 @@ export async function executeGatewayStreamingRequest(input: {
       databaseUrl: input.databaseUrl,
       reservation: budgetReservation,
     });
+    const message = error instanceof Error ? error.message : "Provider request failed.";
+    const code = classifyStreamingError(message);
     return {
       body: createGatewayStreamingErrorBody(
-        "provider_request_failed",
+        code,
         input.requestId,
-        error instanceof Error ? error.message : undefined,
+        code === "provider_request_failed" ? message : undefined,
       ),
       ok: false,
       requestMetadata: normalized.requestMetadata,
-      statusCode: 502,
+      statusCode: mapGatewayErrorStatus(code),
     };
   }
 }
@@ -433,11 +463,17 @@ function buildStreamingPayload(input: {
     pathSuffix: "messages",
     payload: omitUndefined({
       max_tokens: normalized.request.maxOutputTokens,
+      metadata: normalized.request.metadata,
       messages: normalized.request.messages,
+      service_tier: normalized.request.serviceTier,
+      stop_sequences: normalized.request.stopSequences,
       system: normalized.request.system,
       temperature: normalized.request.temperature,
+      thinking: normalized.request.thinking,
       tool_choice: normalized.request.toolChoice,
       tools: normalized.request.tools,
+      top_k: normalized.request.topK,
+      top_p: normalized.request.topP,
     }),
     requestMetadata,
   };
@@ -484,6 +520,21 @@ function buildProviderUrl(baseUrl: string, suffix: string): string {
   return url.toString();
 }
 
+function buildStreamingProviderHeaders(input: {
+  apiKey: string;
+  headersWithApiKey: (apiKey: string) => Record<string, string>;
+  providerKey: string;
+}): Record<string, string> {
+  const headers = input.headersWithApiKey(input.apiKey);
+  if (input.providerKey === "openrouter") {
+    return {
+      ...headers,
+      ...openRouterAttributionHeaders,
+    };
+  }
+  return headers;
+}
+
 function requireRoutePolicy(
   snapshot: GatewayConfigSnapshot,
   routePolicyId: string,
@@ -509,14 +560,18 @@ function requireSelectedCandidate(
 }
 
 function buildStreamingActivityRoute(input: {
+  modelId: string;
   providerId: string;
+  providerKey: string;
   providerModelId: string;
   routePolicyId: string;
   routeReason: unknown;
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: [],
+    modelId: input.modelId,
     providerId: input.providerId,
+    providerKey: input.providerKey,
     providerModelId: input.providerModelId,
     routePolicyId: input.routePolicyId,
     routeReason: input.routeReason,
@@ -524,9 +579,9 @@ function buildStreamingActivityRoute(input: {
 }
 
 function createGatewayStreamingErrorBody(
-  code: "provider_request_failed",
+  code: GatewayStreamingErrorCode,
   requestId: string,
-  message = "Provider request failed.",
+  message = streamingErrorMessage(code),
 ) {
   return {
     error: {
@@ -535,6 +590,26 @@ function createGatewayStreamingErrorBody(
     },
     requestId,
   };
+}
+
+function classifyStreamingError(message: string): GatewayStreamingErrorCode {
+  if (message.includes("No route policy") || message.includes("Route policy")) {
+    return "route_not_found";
+  }
+  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
+    return "provider_credentials_missing";
+  }
+  return "provider_request_failed";
+}
+
+function streamingErrorMessage(code: GatewayStreamingErrorCode): string {
+  if (code === "route_not_found") {
+    return "No route policy is available for the selected Virtual Model.";
+  }
+  if (code === "provider_credentials_missing") {
+    return "Provider credentials are not configured for the selected route.";
+  }
+  return "Provider request failed.";
 }
 
 function omitUndefined<T extends Record<string, unknown>>(value: T): T {

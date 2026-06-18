@@ -12,6 +12,7 @@
   "dependencies": {
     "@llmingress/billing": "workspace:*",
     "@llmingress/config": "workspace:*",
+    "@llmingress/db": "workspace:*",
     "@llmingress/security": "workspace:*",
     "next": "^16.2.9",
     "pg": "^8.21.0",

@@ -3,14 +3,15 @@ export const BUILT_IN_PRICE_REGISTRY_VERSION = "mvp-static-2026-06-13";
 export type PriceProviderKey = "anthropic" | "openai";
 
 export type PricedModelTokenPrice = {
+  cachedInputUsdPerMillionTokens?: number;
   currency: "USD";
   inputUsdPerMillionTokens: number;
   modelId: string;
   outputUsdPerMillionTokens: number;
   priceVersion: string;
   providerKey: string;
-  snapshotDate: "2026-06-13";
-  source: "built_in_static_snapshot" | "manual_override";
+  snapshotDate: string;
+  source: "built_in_static_snapshot" | "manual_override" | "price_sync";
   sourceUrl: string;
   status: "priced";
   unit: "per_1m_tokens";
@@ -18,25 +19,38 @@ export type PricedModelTokenPrice = {
 
 export type UnknownModelTokenPrice = {
   modelId: string;
-  priceVersion: typeof BUILT_IN_PRICE_REGISTRY_VERSION;
+  priceVersion: string;
   providerKey: string;
-  reason: "model_not_in_builtin_registry";
+  reason: "model_not_in_builtin_registry" | "no_current_price";
   status: "unknown_price";
 };
 
 export type ModelTokenPrice = PricedModelTokenPrice | UnknownModelTokenPrice;
 
 export type TokenUsage = {
+  cachedInputTokens?: number;
   inputTokens: number;
   outputTokens: number;
 };
 
 export type ManualPriceOverride = {
+  cachedInputUsdPerMillionTokens?: number | null;
   inputUsdPerMillionTokens: number;
   modelId: string;
   outputUsdPerMillionTokens: number;
   providerKey: string;
   updatedAt: Date;
+};
+
+export type SyncedPriceSnapshot = {
+  cachedInputUsdPerMillionTokens?: number | null;
+  inputUsdPerMillionTokens: number;
+  modelId: string;
+  outputUsdPerMillionTokens: number;
+  priceVersion: string;
+  providerKey: string;
+  sourceUrl?: string | null;
+  syncedAt: Date;
 };
 
 export type EstimatedTokenCost = {
@@ -136,16 +150,41 @@ export function resolveModelTokenPrice(input: {
   };
 }
 
+export function listBuiltInModelTokenPrices(): PricedModelTokenPrice[] {
+  return [...priceRegistry.entries()]
+    .map(([key, entry]) => {
+      const separatorIndex = key.indexOf(":");
+      const modelId = separatorIndex === -1 ? key : key.slice(separatorIndex + 1);
+      return {
+        ...entry,
+        modelId,
+        priceVersion: BUILT_IN_PRICE_REGISTRY_VERSION,
+        snapshotDate: "2026-06-13",
+        source: "built_in_static_snapshot" as const,
+        status: "priced" as const,
+        unit: "per_1m_tokens" as const,
+      };
+    })
+    .sort((left, right) =>
+      `${left.providerKey}:${left.modelId}`.localeCompare(`${right.providerKey}:${right.modelId}`),
+    );
+}
+
 export function resolveEffectiveModelTokenPrice(input: {
   manualOverride?: ManualPriceOverride | null;
   modelId: string;
   providerKey: string;
+  syncedPrice?: SyncedPriceSnapshot | null;
 }): ModelTokenPrice {
   const providerKey = input.providerKey.trim().toLowerCase();
   const modelId = input.modelId.trim();
 
   if (matchesManualOverride(input.manualOverride, providerKey, modelId)) {
     return {
+      ...(input.manualOverride.cachedInputUsdPerMillionTokens !== null &&
+      input.manualOverride.cachedInputUsdPerMillionTokens !== undefined
+        ? { cachedInputUsdPerMillionTokens: input.manualOverride.cachedInputUsdPerMillionTokens }
+        : {}),
       currency: "USD",
       inputUsdPerMillionTokens: input.manualOverride.inputUsdPerMillionTokens,
       modelId,
@@ -154,13 +193,39 @@ export function resolveEffectiveModelTokenPrice(input: {
       providerKey,
       snapshotDate: "2026-06-13",
       source: "manual_override",
-      sourceUrl: "manual://console/model-price-overrides",
+      sourceUrl: "manual://provider_models",
       status: "priced",
       unit: "per_1m_tokens",
     };
   }
 
-  return resolveModelTokenPrice({ modelId, providerKey });
+  if (matchesSyncedPrice(input.syncedPrice, providerKey, modelId)) {
+    return {
+      ...(input.syncedPrice.cachedInputUsdPerMillionTokens !== null &&
+      input.syncedPrice.cachedInputUsdPerMillionTokens !== undefined
+        ? { cachedInputUsdPerMillionTokens: input.syncedPrice.cachedInputUsdPerMillionTokens }
+        : {}),
+      currency: "USD",
+      inputUsdPerMillionTokens: input.syncedPrice.inputUsdPerMillionTokens,
+      modelId,
+      outputUsdPerMillionTokens: input.syncedPrice.outputUsdPerMillionTokens,
+      priceVersion: input.syncedPrice.priceVersion,
+      providerKey,
+      snapshotDate: input.syncedPrice.syncedAt.toISOString().slice(0, 10),
+      source: "price_sync",
+      sourceUrl: input.syncedPrice.sourceUrl ?? "price-sync://snapshot",
+      status: "priced",
+      unit: "per_1m_tokens",
+    };
+  }
+
+  return {
+    modelId,
+    priceVersion: "provider-model-current",
+    providerKey,
+    reason: "no_current_price",
+    status: "unknown_price",
+  };
 }
 
 export function calculateTokenCostUsd(
@@ -174,7 +239,13 @@ export function calculateTokenCostUsd(
     };
   }
 
-  const inputCostUsd = costFromTokens(usage.inputTokens, price.inputUsdPerMillionTokens);
+  const cachedInputTokens = clampCachedInputTokens(usage.cachedInputTokens ?? 0, usage.inputTokens);
+  const uncachedInputTokens = usage.inputTokens - cachedInputTokens;
+  const cachedInputPrice = price.cachedInputUsdPerMillionTokens ?? price.inputUsdPerMillionTokens;
+  const inputCostUsd = roundUsd(
+    costFromTokens(uncachedInputTokens, price.inputUsdPerMillionTokens) +
+      costFromTokens(cachedInputTokens, cachedInputPrice),
+  );
   const outputCostUsd = costFromTokens(usage.outputTokens, price.outputUsdPerMillionTokens);
 
   return {
@@ -192,6 +263,7 @@ function openai(
   sourceUrl: string,
 ): PriceRegistryEntry & { modelId: string } {
   return {
+    cachedInputUsdPerMillionTokens: inputUsdPerMillionTokens / 4,
     currency: "USD",
     inputUsdPerMillionTokens,
     modelId,
@@ -232,8 +304,26 @@ function matchesManualOverride(
   );
 }
 
+function matchesSyncedPrice(
+  syncedPrice: SyncedPriceSnapshot | null | undefined,
+  providerKey: string,
+  modelId: string,
+): syncedPrice is SyncedPriceSnapshot {
+  return (
+    syncedPrice?.providerKey.trim().toLowerCase() === providerKey &&
+    syncedPrice.modelId.trim() === modelId
+  );
+}
+
 function costFromTokens(tokens: number, usdPerMillionTokens: number): number {
   return roundUsd((tokens * usdPerMillionTokens) / 1_000_000);
+}
+
+function clampCachedInputTokens(cachedInputTokens: number, inputTokens: number): number {
+  if (!Number.isFinite(cachedInputTokens) || cachedInputTokens <= 0) {
+    return 0;
+  }
+  return Math.min(Math.floor(cachedInputTokens), inputTokens);
 }
 
 function roundUsd(value: number): number {

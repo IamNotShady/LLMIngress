@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
       await createAgent({
         agent: normalizeAgentFormInput({
           agentType: readText(form, "agentType"),
+          integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
+          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         databaseUrl,
       });
@@ -36,7 +38,9 @@ export async function POST(request: NextRequest) {
       await updateAgent({
         agent: normalizeAgentFormInput({
           agentType: readText(form, "agentType"),
+          integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
+          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         databaseUrl,
         id: readRequiredText(form, "id"),
@@ -56,7 +60,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
 }
 
 function readText(form: FormData, name: string): string | undefined {

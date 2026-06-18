@@ -42,7 +42,7 @@ test("clean local deployment records startup duration and completes one routed r
 
       try {
         const gatewayBaseUrl = `http://127.0.0.1:${gateway.port}`;
-        const consoleBaseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const consoleBaseUrl = `http://localhost:${consoleApp.port}`;
 
         // Health checks for all four components.
         await waitForGateway(gatewayBaseUrl, gateway);

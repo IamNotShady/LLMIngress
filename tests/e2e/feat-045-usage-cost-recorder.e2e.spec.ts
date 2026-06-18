@@ -54,7 +54,7 @@ test("usage record includes tokens actual cost baseline cost savings and unknown
             input_tokens: 5,
             output_cost_usd: "0.00004000",
             output_tokens: 100,
-            price_source: "built_in_static_snapshot",
+            price_source: "price_sync",
             provider_model_id: seeded.cheapProviderModelId,
             request_id: "req_usage_known_045",
             savings_usd: "0.00076950",
@@ -191,6 +191,25 @@ async function seedUsageRoutes(
       unknownProviderModelId,
       unknownProviderId,
     ],
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        cached_input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', 'gpt-4.1', 2, null, 8, 'models.dev', 'test://prices/feat-045', 'test:feat-045', '2026-06-17T00:00:00.000Z'),
+             ($2, 'openai', 'gpt-4.1-nano', 0.1, null, 0.4, 'models.dev', 'test://prices/feat-045', 'test:feat-045', '2026-06-17T00:00:00.000Z')
+    `,
+    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     `

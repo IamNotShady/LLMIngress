@@ -66,13 +66,13 @@ test("limits return expected errors and first byte failure falls back successful
         .poll(() => readFallbackActivity(fixture, buildLimitsFallbackRequestId("fallback")))
         .toEqual({
           fallback_attempts: [
-            {
+            expect.objectContaining({
               attemptOrder: 1,
               errorCode: "provider_request_failed",
               errorMessage: expect.any(String),
               failedBeforeFirstByte: true,
               providerModelId: seeded.failedProviderModelId,
-            },
+            }),
           ],
           http_status: 200,
           provider_model_id: seeded.successProviderModelId,
@@ -81,6 +81,7 @@ test("limits return expected errors and first byte failure falls back successful
       await expectFallbackEvents(fixture, {
         failedProviderModelId: seeded.failedProviderModelId,
         requestId: buildLimitsFallbackRequestId("fallback"),
+        successProviderModelId: seeded.successProviderModelId,
       });
     } finally {
       await stopGatewayProcess(gateway);
@@ -205,6 +206,24 @@ async function seedLimitsFallbackGateway(
              ($3, $4, 'failed-first-byte-model', 'Failed First Byte', 128000, true, true, 'available')
     `,
     [successProviderModelId, successProviderId, failedProviderModelId, failedProviderId],
+  );
+  await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        cached_input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', 'gpt-4.1-mini', 0.4, null, 1.6, 'models.dev', 'test://prices/feat-053', 'test:feat-053', '2026-06-17T00:00:00.000Z')
+    `,
+    [randomUUID()],
   );
   await fixture.query(
     "insert into agents (id, name, agent_type, enabled) values ($1, 'Limits Fallback Agent', 'coding', true)",
@@ -381,7 +400,7 @@ async function readFallbackActivity(
 
 async function expectFallbackEvents(
   fixture: Fixture,
-  input: { failedProviderModelId: string; requestId: string },
+  input: { failedProviderModelId: string; requestId: string; successProviderModelId: string },
 ): Promise<void> {
   const result = await fixture.query<{
     error_code: string | null;
@@ -411,6 +430,13 @@ async function expectFallbackEvents(
       provider_model_id: input.failedProviderModelId,
       request_id: input.requestId,
       status: "failed",
+    },
+    {
+      error_code: null,
+      failed_before_first_byte: false,
+      provider_model_id: input.successProviderModelId,
+      request_id: input.requestId,
+      status: "succeeded",
     },
   ]);
 }

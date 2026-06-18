@@ -27,7 +27,7 @@ const projects = [
   {
     name: "@llmingress/console",
     packagePath: "apps/console/package.json",
-    entryPath: "apps/console/src/app/page.tsx",
+    entryPath: "apps/console/src/app/layout.tsx",
     requiredScripts: ["dev", "build", "start", "typecheck"],
   },
   {

@@ -170,6 +170,24 @@ async function seedRealAgentOpenAICompatibleGateway(
     [providerModelId, providerId, realAgentOpenAICompatibleSmokeNames.providerModel],
   );
   await fixture.query(
+    `
+      insert into provider_models_price (
+        id,
+        provider_key,
+        model_id,
+        input_usd_per_million_tokens,
+        cached_input_usd_per_million_tokens,
+        output_usd_per_million_tokens,
+        source,
+        source_url,
+        price_version,
+        synced_at
+      )
+      values ($1, 'openai', $2, 0.4, null, 1.6, 'models.dev', 'test://prices/feat-059', 'test:feat-059', '2026-06-17T00:00:00.000Z')
+    `,
+    [randomUUID(), realAgentOpenAICompatibleSmokeNames.providerModel],
+  );
+  await fixture.query(
     "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, 'Real Agent OpenAI Compatible Smoke', true)",
     [virtualModelId, realAgentOpenAICompatibleSmokeNames.virtualModel],
   );

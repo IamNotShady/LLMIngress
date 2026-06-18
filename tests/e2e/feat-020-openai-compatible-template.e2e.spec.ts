@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("whitelisted template accepted arbitrary custom endpoint rejected", async ({ browser }) => {
@@ -20,26 +21,30 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
       });
 
       try {
-        const baseUrl = `http://127.0.0.1:${consoleApp.port}`;
+        const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
 
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/providers`);
 
+          await openDisclosure(page, "Add from template");
           await page.getByLabel("Provider template").selectOption("deepseek");
           await page.getByRole("button", { name: "Add template provider" }).click();
 
-          await expect(page.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
+          const providerList = page.locator(".row-list");
+          await expect(providerList.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
+          await openRow(page, "DeepSeek");
           await expect(
-            page.getByText("Template provider base URL: https://api.deepseek.com/v1"),
+            providerList.getByText("Template provider base URL: https://api.deepseek.com"),
           ).toBeVisible();
 
           const providers = await readTemplateProviders(fixture);
           expect(providers).toEqual([
             {
-              base_url: "https://api.deepseek.com/v1",
+              base_url: "https://api.deepseek.com",
               display_name: "DeepSeek",
               provider_key: "deepseek",
               provider_template_id: "deepseek",

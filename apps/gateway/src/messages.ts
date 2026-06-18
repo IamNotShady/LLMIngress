@@ -8,13 +8,25 @@ import {
 import {
   attachGatewayProviderCredentials,
   readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
 } from "./chat-completions.js";
 import type {
   GatewayConfigSnapshot,
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./config-reload.js";
+import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
+  buildFallbackAttemptCandidates,
+  buildFallbackFailedAttempt,
+  type FallbackChainCandidate,
+  type FallbackFailedAttempt,
+  readFallbackProviderApiKeys,
+  recordFailedAttemptInDatabase,
+  recordSucceededAttemptInDatabase,
+} from "./fallback-chain.js";
+import {
+  type AnthropicAdapterSuccess,
   type AnthropicContentBlock,
   type AnthropicMessageContent,
   type AnthropicProviderAdapter,
@@ -28,7 +40,12 @@ import {
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";
-import { type GatewayUsageCostDetails, selectGatewayBaselineCandidate } from "./usage-recorder.js";
+import { recordGatewayProviderTrace } from "./tracing.js";
+import {
+  type GatewayUsageCostDetails,
+  readGatewayProviderTokenUsage,
+  selectGatewayBaselineCandidate,
+} from "./usage-recorder.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayAnthropicMessagesErrorCode =
@@ -91,6 +108,30 @@ export function normalizeAnthropicMessagesRequest(
   if (temperature === null) {
     return invalidMessagesRequest(requestId);
   }
+  const topP = readOptionalFiniteNumber(body.top_p);
+  if (topP === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const topK = readOptionalPositiveInteger(body.top_k);
+  if (topK === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const stopSequences = readOptionalNonEmptyStringArray(body.stop_sequences);
+  if (stopSequences === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const metadata = readOptionalRecord(body.metadata);
+  if (metadata === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const thinking = readOptionalRecord(body.thinking);
+  if (thinking === null) {
+    return invalidMessagesRequest(requestId);
+  }
+  const serviceTier = readOptionalNonEmptyString(body.service_tier);
+  if (serviceTier === null) {
+    return invalidMessagesRequest(requestId);
+  }
 
   if (body.stream !== undefined && typeof body.stream !== "boolean") {
     return invalidMessagesRequest(requestId);
@@ -112,11 +153,17 @@ export function normalizeAnthropicMessagesRequest(
     request: omitUndefined({
       maxOutputTokens,
       messages: messages as NormalizedAnthropicMessage[],
+      metadata,
+      serviceTier,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
+      stopSequences,
       system: typeof body.system === "string" && body.system.trim() ? body.system : undefined,
       temperature,
+      thinking,
       toolChoice,
       tools,
+      topK,
+      topP,
     }),
   };
 }
@@ -125,6 +172,7 @@ export async function executeGatewayAnthropicMessages(input: {
   agentApiKeyId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl: string;
+  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -161,6 +209,7 @@ export async function executeGatewayAnthropicMessages(input: {
 
   let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
+  const fallbackAttempts: FallbackFailedAttempt[] = [];
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
@@ -170,14 +219,16 @@ export async function executeGatewayAnthropicMessages(input: {
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const selectedCandidate = requireSelectedCandidate(routePolicy, routeDecision.providerModelId);
-    activity = {
-      fallbackAttempts: [],
-      providerId: selectedCandidate.providerId,
-      providerModelId: selectedCandidate.providerModelId,
-      routePolicyId: routeDecision.routePolicyId,
-      routeReason: routeDecision.routeReason,
-    };
+    const attemptCandidates = buildFallbackAttemptCandidates({
+      routePolicy,
+      selectedProviderModelId: routeDecision.providerModelId,
+    });
+    const selectedCandidate = requireFirstCandidate(attemptCandidates);
+    activity = buildRequestActivityRoute({
+      candidate: selectedCandidate,
+      fallbackAttempts,
+      routeDecision,
+    });
     const budget = await reserveGatewayBudget({
       agentApiKeyId: input.agentApiKeyId,
       databaseUrl: input.databaseUrl,
@@ -196,54 +247,50 @@ export async function executeGatewayAnthropicMessages(input: {
     budgetReservation = budget.reservation;
 
     const candidates = await attachGatewayProviderCredentials({
-      candidates: [selectedCandidate],
+      candidates: attemptCandidates,
       databaseUrl: input.databaseUrl,
       masterKeySource: readGatewayMasterKeySource(),
     });
-    const selected = candidates[0];
-    if (!selected) {
-      throw new Error("Provider credentials are missing for the selected route.");
-    }
-
-    const result = await (input.adapter ?? createAnthropicProviderAdapter()).messages({
+    const success = await executeMessagesFallback({
+      adapter: input.adapter ?? createAnthropicProviderAdapter(),
+      candidates,
+      databaseUrl: input.databaseUrl,
+      fallbackAttempts,
       request: normalized.request,
-      target: {
-        apiKey: selected.apiKey,
-        baseUrl: selected.baseUrl,
-        modelId: selected.modelId,
-      },
+      requestActivityId: input.requestActivityId,
+      requestId: input.requestId,
     });
-    if (!result.ok) {
-      await releaseGatewayBudgetReservation({
-        databaseUrl: input.databaseUrl,
-        reservation: budgetReservation,
-      });
-      budgetReservation = undefined;
-      return {
-        activity,
-        body: createGatewayAnthropicMessagesErrorBody("provider_request_failed", input.requestId),
-        requestMetadata,
-        statusCode: 502,
-      };
+    if (!success) {
+      throw new Error("Provider request failed.");
     }
 
     await finalizeGatewayBudgetReservation({
       databaseUrl: input.databaseUrl,
       reservation: budgetReservation,
     });
+    await recordGatewayProviderApiKeyLastUsed({
+      databaseUrl: input.databaseUrl,
+      providerApiKeyId: success.candidate.providerApiKeyId,
+    });
+    activity = buildRequestActivityRoute({
+      candidate: success.candidate,
+      fallbackAttempts,
+      routeDecision,
+    });
 
     return {
       activity,
-      body: result.body,
+      body: success.result.body,
       requestMetadata,
-      statusCode: result.statusCode,
+      statusCode: success.result.statusCode,
       usageCost: {
-        actualPrice: selectedCandidate.price,
+        actualPrice: success.candidate.price,
         baselinePrice: baselineCandidate.price,
         baselineProviderModelId: baselineCandidate.providerModelId,
         estimatedInputTokens: requestMetadata.estimatedInputTokens,
         estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-        providerModelId: selectedCandidate.providerModelId,
+        providerUsage: readGatewayProviderTokenUsage(success.result.body),
+        providerModelId: success.candidate.providerModelId,
       },
     };
   } catch (error) {
@@ -257,9 +304,85 @@ export async function executeGatewayAnthropicMessages(input: {
       activity,
       body: createGatewayAnthropicMessagesErrorBody(code, input.requestId),
       requestMetadata,
-      statusCode: code === "provider_request_failed" ? 502 : 500,
+      statusCode: mapGatewayErrorStatus(code),
     };
   }
+}
+
+async function executeMessagesFallback(input: {
+  adapter: AnthropicProviderAdapter;
+  candidates: readonly FallbackChainCandidate[];
+  databaseUrl: string;
+  fallbackAttempts: FallbackFailedAttempt[];
+  request: NormalizedAnthropicMessagesRequest;
+  requestActivityId?: string;
+  requestId: string;
+}): Promise<
+  | {
+      candidate: FallbackChainCandidate & {
+        providerApiKeyId?: string;
+        providerApiKeyPrefix?: string;
+      };
+      result: AnthropicAdapterSuccess;
+    }
+  | undefined
+> {
+  let attemptOrder = 0;
+  for (const candidate of input.candidates) {
+    for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
+      attemptOrder += 1;
+      const providerStartedAt = new Date();
+      const result = await input.adapter.messages({
+        request: input.request,
+        target: {
+          apiKey: providerApiKey.apiKey,
+          baseUrl: candidate.baseUrl,
+          modelId: candidate.modelId,
+        },
+      });
+      await recordGatewayProviderTrace({
+        errorCode: result.ok ? null : result.errorCode,
+        modelId: candidate.modelId,
+        providerKey: candidate.providerKey,
+        requestId: input.requestId,
+        startedAt: providerStartedAt,
+        status: result.ok ? "succeeded" : "failed",
+      });
+
+      if (result.ok) {
+        await recordSucceededAttemptInDatabase(input, {
+          attemptOrder,
+          ...(providerApiKey.providerApiKeyId
+            ? { providerApiKeyId: providerApiKey.providerApiKeyId }
+            : {}),
+          ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
+          providerModelId: candidate.providerModelId,
+        });
+        return {
+          candidate: {
+            ...candidate,
+            apiKey: providerApiKey.apiKey,
+            providerApiKeyId: providerApiKey.providerApiKeyId,
+            providerApiKeyPrefix: providerApiKey.keyPrefix,
+          },
+          result,
+        };
+      }
+
+      const failedAttempt = buildFallbackFailedAttempt({
+        attemptOrder,
+        providerApiKey,
+        providerModelId: candidate.providerModelId,
+        result,
+      });
+      input.fallbackAttempts.push(failedAttempt);
+      await recordFailedAttemptInDatabase(input, failedAttempt);
+      if (!failedAttempt.failedBeforeFirstByte) {
+        return undefined;
+      }
+    }
+  }
+  return undefined;
 }
 
 export function createGatewayAnthropicMessagesErrorBody(
@@ -322,6 +445,13 @@ function readRequiredPositiveInteger(value: unknown): number | null {
   return value;
 }
 
+function readOptionalPositiveInteger(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return readRequiredPositiveInteger(value);
+}
+
 function readOptionalFiniteNumber(value: unknown): number | null | undefined {
   if (value === undefined) {
     return undefined;
@@ -340,6 +470,40 @@ function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | nu
     return null;
   }
   return value as Record<string, unknown>[];
+}
+
+function readOptionalRecord(value: unknown): Record<string, unknown> | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  return value;
+}
+
+function readOptionalNonEmptyString(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  return value;
+}
+
+function readOptionalNonEmptyStringArray(value: unknown): string[] | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((entry) => typeof entry !== "string" || !entry.trim())
+  ) {
+    return null;
+  }
+  return value;
 }
 
 function readOptionalToolChoice(value: unknown): Record<string, unknown> | null | undefined {
@@ -363,17 +527,35 @@ function requireRoutePolicy(
   return routePolicy;
 }
 
-function requireSelectedCandidate(
-  routePolicy: GatewayRoutePolicySnapshot,
-  providerModelId: string,
+function requireFirstCandidate(
+  candidates: readonly GatewayRouteCandidateSnapshot[],
 ): GatewayRouteCandidateSnapshot {
-  const candidate = routePolicy.candidates.find(
-    (routeCandidate) => routeCandidate.providerModelId === providerModelId,
-  );
+  const candidate = candidates[0];
   if (!candidate) {
-    throw new Error(`Route policy ${routePolicy.id} selected candidate was not found.`);
+    throw new Error("Selected route candidate was not found in route policy.");
   }
   return candidate;
+}
+
+function buildRequestActivityRoute(input: {
+  candidate: GatewayRouteCandidateSnapshot & {
+    providerApiKeyId?: string;
+    providerApiKeyPrefix?: string;
+  };
+  fallbackAttempts: FallbackFailedAttempt[];
+  routeDecision: ReturnType<typeof selectRouteCandidate>;
+}): GatewayRequestActivityRoute {
+  return {
+    fallbackAttempts: input.fallbackAttempts,
+    modelId: input.candidate.modelId,
+    providerApiKeyId: input.candidate.providerApiKeyId,
+    providerApiKeyPrefix: input.candidate.providerApiKeyPrefix,
+    providerId: input.candidate.providerId,
+    providerKey: input.candidate.providerKey,
+    providerModelId: input.candidate.providerModelId,
+    routePolicyId: input.routeDecision.routePolicyId,
+    routeReason: input.routeDecision.routeReason,
+  };
 }
 
 function invalidMessagesRequest(requestId: string): GatewayAnthropicMessagesRequestFailure {

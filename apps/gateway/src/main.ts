@@ -6,12 +6,16 @@ import {
   createGatewayRequestActivity,
   type GatewayRequestActivityProtocol,
   type GatewayRequestActivityRoute,
+  readGatewayActivityError,
 } from "./activity-recorder.js";
 import { authenticateGatewayRequest } from "./auth.js";
 import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
 import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
 import { gatewayCorsHeaders } from "./cors.js";
+import { executeGatewayOpenAIEmbeddings } from "./embeddings.js";
+import { gatewayRequestIdHeader } from "./error-mapping.js";
 import { executeGatewayAnthropicMessages } from "./messages.js";
+import { getPrometheusMetricsDocument } from "./metrics.js";
 import {
   type GatewayRequestMetadata,
   gatewayRequestMetadataHeader,
@@ -25,6 +29,7 @@ import {
   readGatewayStreamingFlag,
   wrapProviderStreamWithActivityCompletion,
 } from "./streaming.js";
+import { recordGatewayRequestTrace } from "./tracing.js";
 import {
   type GatewayUsageCostDetails,
   recordGatewayUsageCostAndSavings,
@@ -67,6 +72,13 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     };
   });
 
+  app.get("/metrics", async (_request, reply) => {
+    const document = await getPrometheusMetricsDocument({
+      databaseUrl: requireGatewayDatabaseUrl(options),
+    });
+    return reply.header("content-type", document.contentType).send(document.body);
+  });
+
   app.post("/v1/chat/completions", async (request, reply) => {
     const databaseUrl = requireGatewayDatabaseUrl(options);
     const auth = await authenticateGatewayRequest({
@@ -75,7 +87,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -89,7 +101,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
     });
     if (!virtualModelAccess.ok) {
-      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
     }
 
     if (readGatewayStreamingFlag(request.body)) {
@@ -111,9 +127,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
             }),
           model: virtualModelAccess.virtualModel.name,
           protocol: "chat_completions",
+          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
+        auth.requestId,
       );
     }
 
@@ -133,10 +151,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         }),
       model: virtualModelAccess.virtualModel.name,
       protocol: "chat_completions",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
-    return sendGatewayJsonResponse(reply, chatCompletion);
+    return sendGatewayJsonResponse(reply, chatCompletion, auth.requestId);
   });
 
   app.get("/v1/models", async (request, reply) => {
@@ -147,7 +166,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -155,17 +174,17 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       databaseUrl,
     });
 
-    return {
+    return reply.header(gatewayRequestIdHeader, auth.requestId).send({
       data: allowedVirtualModels.map((virtualModel) => ({
         id: virtualModel.name,
         object: "model",
       })),
       object: "list",
       requestId: auth.requestId,
-    };
+    });
   });
 
-  app.post("/v1/responses", async (request, reply) => {
+  app.post("/v1/embeddings", async (request, reply) => {
     const databaseUrl = requireGatewayDatabaseUrl(options);
     const auth = await authenticateGatewayRequest({
       databaseUrl,
@@ -173,7 +192,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -187,7 +206,62 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
     });
     if (!virtualModelAccess.ok) {
-      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
+    }
+
+    const embeddings = await executeRecordedGatewayJsonRequest({
+      agentApiKeyId: auth.agentApiKey.id,
+      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
+      databaseUrl,
+      execute: (requestActivityId) =>
+        executeGatewayOpenAIEmbeddings({
+          databaseUrl,
+          requestActivityId,
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      model: virtualModelAccess.virtualModel.name,
+      protocol: "embeddings",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+      requestId: auth.requestId,
+      virtualModelId: virtualModelAccess.virtualModel.id,
+    });
+    return sendGatewayJsonResponse(reply, embeddings, auth.requestId);
+  });
+
+  app.post("/v1/responses", async (request, reply) => {
+    const databaseUrl = requireGatewayDatabaseUrl(options);
+    const auth = await authenticateGatewayRequest({
+      databaseUrl,
+      headers: request.headers,
+    });
+
+    if (!auth.ok) {
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
+    }
+
+    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
+      agentApiKeyId: auth.agentApiKey.id,
+      databaseUrl,
+    });
+    const virtualModelAccess = resolveGatewayVirtualModelRequest({
+      allowedVirtualModels,
+      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
+      requestedModelName: readRequestedModelName(request.body),
+      requestId: auth.requestId,
+    });
+    if (!virtualModelAccess.ok) {
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
     }
 
     if (readGatewayStreamingFlag(request.body)) {
@@ -209,9 +283,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
             }),
           model: virtualModelAccess.virtualModel.name,
           protocol: "responses",
+          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
+        auth.requestId,
       );
     }
 
@@ -219,10 +295,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      execute: () =>
+      execute: (requestActivityId) =>
         executeGatewayOpenAIResponse({
           agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
+          requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
@@ -230,10 +307,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         }),
       model: virtualModelAccess.virtualModel.name,
       protocol: "responses",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
-    return sendGatewayJsonResponse(reply, response);
+    return sendGatewayJsonResponse(reply, response, auth.requestId);
   });
 
   app.post("/v1/messages", async (request, reply) => {
@@ -244,7 +322,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
 
     if (!auth.ok) {
-      return reply.code(auth.statusCode).send(auth.body);
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
@@ -258,7 +336,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       requestId: auth.requestId,
     });
     if (!virtualModelAccess.ok) {
-      return reply.code(virtualModelAccess.statusCode).send(virtualModelAccess.body);
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
     }
 
     if (readGatewayStreamingFlag(request.body)) {
@@ -280,9 +362,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
             }),
           model: virtualModelAccess.virtualModel.name,
           protocol: "messages",
+          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
+        auth.requestId,
       );
     }
 
@@ -290,10 +374,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      execute: () =>
+      execute: (requestActivityId) =>
         executeGatewayAnthropicMessages({
           agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
+          requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
@@ -301,10 +386,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         }),
       model: virtualModelAccess.virtualModel.name,
       protocol: "messages",
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
-    return sendGatewayJsonResponse(reply, message);
+    return sendGatewayJsonResponse(reply, message, auth.requestId);
   });
 
   app.addHook("onClose", async () => {
@@ -319,6 +405,8 @@ export async function startGateway() {
   const configRuntime = createGatewayConfigRuntime({
     databaseUrl: config.databaseUrl,
     enableNotifications: readBooleanEnv("GATEWAY_CONFIG_NOTIFICATIONS", true),
+    gatewayInstanceId: process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
+    heartbeatIntervalMs: readNonNegativeIntegerEnv("GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000),
     reconcileIntervalMs: readNonNegativeIntegerEnv("GATEWAY_CONFIG_RECONCILE_INTERVAL_MS", 30_000),
   });
   await configRuntime.start();
@@ -367,7 +455,12 @@ function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
   return snapshot;
 }
 
-function sendGatewayStreamingResponse(reply: FastifyReply, stream: GatewayStreamingResult) {
+function sendGatewayStreamingResponse(
+  reply: FastifyReply,
+  stream: GatewayStreamingResult,
+  requestId: string,
+) {
+  writeGatewayRequestIdHeader(reply, requestId);
   writeGatewayRequestMetadataDebugHeader(reply, stream.requestMetadata);
   writeGatewayResponseHeaders(reply, stream.headers);
   if (!stream.ok) {
@@ -386,10 +479,25 @@ function sendGatewayJsonResponse(
     requestMetadata?: GatewayRequestMetadata;
     statusCode: number;
   },
+  requestId: string,
 ) {
+  writeGatewayRequestIdHeader(reply, requestId);
   writeGatewayRequestMetadataDebugHeader(reply, response.requestMetadata);
   writeGatewayResponseHeaders(reply, response.headers);
   return reply.code(response.statusCode).send(response.body);
+}
+
+function sendGatewayErrorResponse(
+  reply: FastifyReply,
+  statusCode: number,
+  body: { requestId: string },
+) {
+  writeGatewayRequestIdHeader(reply, body.requestId);
+  return reply.code(statusCode).send(body);
+}
+
+function writeGatewayRequestIdHeader(reply: FastifyReply, requestId: string) {
+  reply.header(gatewayRequestIdHeader, requestId);
 }
 
 function writeGatewayResponseHeaders(
@@ -434,6 +542,7 @@ async function executeRecordedGatewayJsonRequest(input: {
   }>;
   model: string;
   protocol: GatewayRequestActivityProtocol;
+  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }) {
@@ -451,6 +560,8 @@ async function executeRecordedGatewayJsonRequest(input: {
   await completeGatewayRequestActivity({
     activityId: activity.id,
     databaseUrl: input.databaseUrl,
+    requestLoggingEnabled: input.requestLoggingEnabled,
+    requestMetadata: response.requestMetadata,
     responseBody: response.body,
     route: response.activity,
     startedAt: activity.startedAt,
@@ -465,6 +576,16 @@ async function executeRecordedGatewayJsonRequest(input: {
       virtualModelId: input.virtualModelId,
     });
   }
+  await recordGatewayRequestTrace({
+    errorCode: readGatewayActivityError(response.body)?.errorCode ?? null,
+    httpStatus: response.statusCode,
+    modelId: response.activity?.modelId ?? null,
+    protocol: input.protocol,
+    providerKey: response.activity?.providerKey ?? null,
+    requestId: input.requestId,
+    startedAt: activity.startedAt,
+    status: response.statusCode < 400 ? "succeeded" : "failed",
+  });
   return response;
 }
 
@@ -475,6 +596,7 @@ async function executeRecordedGatewayStreamingRequest(input: {
   execute: () => Promise<GatewayStreamingResult>;
   model: string;
   protocol: GatewayRequestActivityProtocol;
+  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }): Promise<GatewayStreamingResult> {
@@ -493,6 +615,8 @@ async function executeRecordedGatewayStreamingRequest(input: {
     await completeGatewayRequestActivity({
       activityId: activity.id,
       databaseUrl: input.databaseUrl,
+      requestLoggingEnabled: input.requestLoggingEnabled,
+      requestMetadata: response.requestMetadata,
       responseBody: response.body,
       route: response.activity,
       startedAt: activity.startedAt,
@@ -508,6 +632,8 @@ async function executeRecordedGatewayStreamingRequest(input: {
         completeGatewayRequestActivity({
           activityId: activity.id,
           databaseUrl: input.databaseUrl,
+          requestLoggingEnabled: input.requestLoggingEnabled,
+          requestMetadata: response.requestMetadata,
           responseBody: {},
           route: response.activity,
           startedAt: activity.startedAt,

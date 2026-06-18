@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
+import { readGatewayProviderTokenUsage } from "./usage-recorder.js";
 
 export type GatewayRequestActivityProtocol =
   | "chat_completions"
@@ -11,6 +12,8 @@ export type GatewayRequestActivityProtocol =
 export type GatewayRequestActivityRoute = {
   fallbackAttempts?: unknown[];
   modelId?: string;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
   providerId?: string;
   providerKey?: string;
   providerModelId?: string;
@@ -30,6 +33,17 @@ export type GatewayActivityCompletion = {
   httpStatus: number;
   latencyMs: number;
   status: "failed" | "succeeded";
+};
+
+export type GatewayResponseMetadata = {
+  finishReason?: string;
+  providerRequestId?: string;
+  status: "failed" | "succeeded";
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
 };
 
 type CreateGatewayRequestActivityInput = {
@@ -114,6 +128,10 @@ export async function completeGatewayRequestActivity(
     completion,
     requestLoggingEnabled: input.requestLoggingEnabled,
     requestMetadata: input.requestMetadata,
+    responseMetadata: buildGatewayResponseMetadata({
+      completion,
+      responseBody: input.responseBody,
+    }),
     route: input.route,
   });
   const client = new Client({ connectionString: input.databaseUrl });
@@ -129,12 +147,15 @@ export async function completeGatewayRequestActivity(
             route_reason = $5::jsonb,
             fallback_attempts = $6::jsonb,
             request_metadata = $7::jsonb,
-            status = $8,
-            error_code = $9,
-            error_message = $10,
-            http_status = $11,
-            latency_ms = $12,
-            completed_at = $13
+            response_metadata = $8::jsonb,
+            provider_api_key_id = $9,
+            provider_api_key_prefix = $10,
+            status = $11,
+            error_code = $12,
+            error_message = $13,
+            http_status = $14,
+            latency_ms = $15,
+            completed_at = $16
         where id = $1
       `,
       [
@@ -145,6 +166,9 @@ export async function completeGatewayRequestActivity(
         JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
         JSON.stringify(loggingPolicy.route?.fallbackAttempts ?? []),
         JSON.stringify(loggingPolicy.requestMetadata),
+        JSON.stringify(loggingPolicy.responseMetadata),
+        loggingPolicy.route?.providerApiKeyId ?? null,
+        loggingPolicy.route?.providerApiKeyPrefix ?? null,
         completion.status,
         completion.errorCode,
         loggingPolicy.errorMessage,
@@ -162,16 +186,19 @@ export function applyGatewayRequestLoggingPolicy(input: {
   completion: GatewayActivityCompletion;
   requestLoggingEnabled: boolean;
   requestMetadata?: GatewayRequestMetadata;
+  responseMetadata: GatewayResponseMetadata;
   route?: GatewayRequestActivityRoute;
 }): {
   errorMessage: string | null;
   requestMetadata: GatewayRequestMetadata | Record<string, never>;
+  responseMetadata: GatewayResponseMetadata | Record<string, never>;
   route?: GatewayRequestActivityRoute;
 } {
   if (input.requestLoggingEnabled) {
     return {
       errorMessage: input.completion.errorMessage,
       requestMetadata: input.requestMetadata ?? {},
+      responseMetadata: input.responseMetadata,
       route: input.route,
     };
   }
@@ -182,6 +209,8 @@ export function applyGatewayRequestLoggingPolicy(input: {
     route: input.route
       ? {
           modelId: input.route.modelId,
+          providerApiKeyId: input.route.providerApiKeyId,
+          providerApiKeyPrefix: input.route.providerApiKeyPrefix,
           providerId: input.route.providerId,
           providerKey: input.route.providerKey,
           providerModelId: input.route.providerModelId,
@@ -190,7 +219,42 @@ export function applyGatewayRequestLoggingPolicy(input: {
           routeReason: {},
         }
       : undefined,
+    responseMetadata: {},
   };
+}
+
+export function buildGatewayResponseMetadata(input: {
+  completion: GatewayActivityCompletion;
+  responseBody: unknown;
+}): GatewayResponseMetadata {
+  const metadata: GatewayResponseMetadata = {
+    status: input.completion.status,
+  };
+  const providerRequestId = readNonEmptyStringProperty(input.responseBody, "id");
+  if (providerRequestId) {
+    metadata.providerRequestId = providerRequestId;
+  } else {
+    const responseId = readNonEmptyStringProperty(input.responseBody, "responseId");
+    if (responseId) {
+      metadata.providerRequestId = responseId;
+    }
+  }
+
+  const finishReason = readGatewayFinishReason(input.responseBody);
+  if (finishReason) {
+    metadata.finishReason = finishReason;
+  }
+
+  const usage = readGatewayProviderTokenUsage(input.responseBody);
+  if (usage) {
+    metadata.tokenUsage = {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.inputTokens + usage.outputTokens,
+    };
+  }
+
+  return metadata;
 }
 
 export function buildGatewayActivityCompletion(input: {
@@ -232,4 +296,33 @@ export function readGatewayActivityError(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readGatewayFinishReason(responseBody: unknown): string | undefined {
+  if (!isRecord(responseBody)) {
+    return undefined;
+  }
+  const direct =
+    readNonEmptyStringProperty(responseBody, "finish_reason") ??
+    readNonEmptyStringProperty(responseBody, "stop_reason");
+  if (direct) {
+    return direct;
+  }
+  if (Array.isArray(responseBody.choices)) {
+    const firstChoice = responseBody.choices.find(isRecord);
+    return readNonEmptyStringProperty(firstChoice, "finish_reason");
+  }
+  if (Array.isArray(responseBody.candidates)) {
+    const firstCandidate = responseBody.candidates.find(isRecord);
+    return readNonEmptyStringProperty(firstCandidate, "finishReason");
+  }
+  return undefined;
+}
+
+function readNonEmptyStringProperty(value: unknown, key: string): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const candidate = value[key];
+  return typeof candidate === "string" && candidate.trim() ? candidate : undefined;
 }

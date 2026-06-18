@@ -288,13 +288,18 @@ export async function executeGatewayOpenAIChatCompletion(input: {
 }
 
 function buildRequestActivityRoute(input: {
-  candidate: GatewayRouteCandidateSnapshot;
+  candidate: GatewayRouteCandidateSnapshot & {
+    providerApiKeyId?: string;
+    providerApiKeyPrefix?: string;
+  };
   fallbackAttempts: FallbackFailedAttempt[];
   routeDecision: ReturnType<typeof selectRouteCandidate>;
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: input.fallbackAttempts,
     modelId: input.candidate.modelId,
+    providerApiKeyId: input.candidate.providerApiKeyId,
+    providerApiKeyPrefix: input.candidate.providerApiKeyPrefix,
     providerId: input.candidate.providerId,
     providerKey: input.candidate.providerKey,
     providerModelId: input.candidate.providerModelId,

@@ -115,6 +115,12 @@ test("success and failure requests create activity rows with route fallback late
           request_id: "req_activity_success_044",
         },
         {
+          error_code: null,
+          failed_before_first_byte: false,
+          provider_model_id: seeded.successProviderModelId,
+          request_id: "req_activity_success_044",
+        },
+        {
           error_code: "fake_provider_error",
           failed_before_first_byte: false,
           provider_model_id: seeded.hardFailureProviderModelId,

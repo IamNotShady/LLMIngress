@@ -217,9 +217,10 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      execute: () =>
+      execute: (requestActivityId) =>
         executeGatewayOpenAIEmbeddings({
           databaseUrl,
+          requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
@@ -294,10 +295,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      execute: () =>
+      execute: (requestActivityId) =>
         executeGatewayOpenAIResponse({
           agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
+          requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
@@ -372,10 +374,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       databaseUrl,
-      execute: () =>
+      execute: (requestActivityId) =>
         executeGatewayAnthropicMessages({
           agentApiKeyId: auth.agentApiKey.id,
           databaseUrl,
+          requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),

@@ -78,6 +78,13 @@ test("first-byte failure falls back and records failed attempt", async () => {
         provider_model_id: seeded.failedProviderModelId,
         status: "failed",
       },
+      {
+        attempt_order: 2,
+        error_code: null,
+        failed_before_first_byte: false,
+        provider_model_id: seeded.successfulProviderModelId,
+        status: "succeeded",
+      },
     ]);
   } finally {
     await server.close();

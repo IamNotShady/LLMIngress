@@ -1308,3 +1308,12 @@
   - Console Agent create/update/list now persists integration platform and request logging while keeping `agent_type` unchanged. Listing status is derived from recent requests, obvious failure rate, active limit usage, and reachable unhealthy Provider/model health; no process or Agent heartbeat table was restored.
   - Gateway auth now loads `agents.request_logging_enabled`; activity completion preserves accounting fields and usage/cost rows while stripping `request_metadata`, `route_reason`, `fallback_attempts`, and `error_message` when logging is disabled.
   - Verification passed: feat-103 unit, feat-103 real PostgreSQL/Gateway E2E, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` across all 102 previously passing features.
+
+- [x] 2026-06-18 feat-104 Activity Detail, Safe Metadata, and Fallback Timeline:
+  - Red phase: feat-104 unit failed because migration 0028, safe response metadata builder, and backend activity filter normalization were missing.
+  - Red phase: feat-104 E2E failed because the Responses path did not fallback after a primary first-byte failure and activity detail/timeline backend support did not exist.
+  - Added migration `0028_activity_detail_metadata` for request_activity Provider API key attribution, safe response metadata, and activity filter indexes; updated shipped migration status.
+  - Gateway activity completion now persists allowlisted request/response metadata and final Provider API key attribution, strips detailed metadata when Agent request logging is disabled, and records fallback_events for failed attempts plus final successful attempts across chat, responses, messages, and embeddings.
+  - Console backend activity queries now support filters, pagination, requestId/activity detail lookup, and ordered fallback timeline without frontend UI changes.
+  - Updated legacy fallback/schema E2E contracts for final success events and schema_version 0028.
+  - Verification passed: feat-104 unit, feat-104 real PostgreSQL/Gateway E2E, focused legacy regressions feat-033/041/044/053/070/101, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` across all 103 previously passing features before marking.

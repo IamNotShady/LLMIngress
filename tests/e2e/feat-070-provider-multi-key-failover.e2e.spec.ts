@@ -72,6 +72,15 @@ test("provider multi key schema accepts multiple keys and failover records faile
           provider_model_id: seeded.primaryProviderModelId,
           status: "failed",
         },
+        {
+          attempt_order: 2,
+          error_code: null,
+          failed_before_first_byte: false,
+          provider_api_key_id: seeded.goodProviderApiKeyId,
+          provider_api_key_prefix: goodProviderApiKey.slice(0, 8),
+          provider_model_id: seeded.primaryProviderModelId,
+          status: "succeeded",
+        },
       ]);
       await expectActivity(fixture, {
         fallback_attempts: [
@@ -105,6 +114,7 @@ type GatewayProcess = {
 
 type SeededMultiKeyGateway = {
   badProviderApiKeyId: string;
+  goodProviderApiKeyId: string;
   primaryProviderModelId: string;
 };
 
@@ -138,6 +148,7 @@ async function seedMultiKeyGateway(
   const agentId = randomUUID();
   const agentApiKeyId = randomUUID();
   const badProviderApiKeyId = randomUUID();
+  const goodProviderApiKeyId = randomUUID();
   const encryption = createSecretEncryption({ kind: "inline", value: masterKey });
 
   await fixture.query(
@@ -161,7 +172,7 @@ async function seedMultiKeyGateway(
       badProviderApiKey.slice(0, 8),
       JSON.stringify(encryption.encrypt(badProviderApiKey)),
       encryption.keyId,
-      randomUUID(),
+      goodProviderApiKeyId,
       goodProviderApiKey.slice(0, 8),
       JSON.stringify(encryption.encrypt(goodProviderApiKey)),
       encryption.keyId,
@@ -246,7 +257,7 @@ async function seedMultiKeyGateway(
     "insert into config_versions (version, source, description) values (1, 'console', 'Multi key config')",
   );
 
-  return { badProviderApiKeyId, primaryProviderModelId };
+  return { badProviderApiKeyId, goodProviderApiKeyId, primaryProviderModelId };
 }
 
 async function expectFallbackEvents(

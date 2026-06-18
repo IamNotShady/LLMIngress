@@ -2,13 +2,21 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-18 (feat-102 passing)
-**Active Feature:** none — feat-102 is `passing`; feat-103 is next
+**Last Updated:** 2026-06-18 (feat-105 passing)
+**Active Feature:** none — feat-105 is `passing`; feat-106 is next
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-105 — Overview, Usage, and Route Analytics Backend (passing)**:
+  - Added `apps/console/src/server/analytics.ts` for backend-only analytics snapshots: arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window KPIs, hour/day timeseries, top Agents/provider models/Virtual Models/routes, savings, failure rate, p95 latency, and route/fallback metrics.
+  - Added migration `0029_analytics_backend_indexes` with only request_activity lookup indexes for started_at, virtual_model+started_at, and route_policy+started_at; no tables or backfills.
+  - Added real PostgreSQL unit/E2E coverage and a shared analytics seed helper; no Console UI or API route was added.
+  - Updated feat-101's process_heartbeats E2E schema-version assertion to follow the latest migration id instead of hard-coding `0028`.
+  - TDD red observed first: feat-105 unit and E2E failed because the analytics helper did not exist.
+  - Verification passed: feat-105 unit and real PostgreSQL E2E; focused feat-101 unit/E2E regression; `pnpm run db:migrate:check`; `pnpm run verify`; `pnpm run verify:features` re-verified all 104 previously passing features before marking; final `pnpm run verify:features` re-verified all 105 passing features after marking.
 
 - [x] **feat-102 — Provider Operational Metadata and Key Management (passing)**:
   - Added migration `0026_provider_key_operational_metadata`: Provider default priority plus Provider API key label, enabled flag, priority, last-used time, last-tested time, last-test status, and last-test error fields.

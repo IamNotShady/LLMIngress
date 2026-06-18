@@ -1074,8 +1074,8 @@
       "description": "Usage, Overview, and Virtual Models backend queries support arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window comparison, timeseries, top agents/models/routes, savings, failure rate, p95 latency, and route/fallback metrics using existing runtime tables plus only necessary indexes.",
       "verification": "pnpm exec vitest run tests/features/feat-105-ui-analytics-backend.unit.test.ts && pnpm test:e2e tests/e2e/feat-105-ui-analytics-backend.e2e.spec.ts --grep 'analytics backend returns filtered kpis trends p95 route and savings metrics'",
       "dependencies": ["feat-045", "feat-047", "feat-075", "feat-079", "feat-099", "feat-104"],
-      "status": "pending",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red observed first: feat-105 unit and E2E failed because apps/console/src/server/analytics was missing. Added Console backend analytics helper for arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window comparison, hour/day timeseries, top Agents/provider models/Virtual Models/routes, savings, failure rate, p95 latency, and route/fallback metrics using existing runtime tables without Console UI changes. Added migration 0029_analytics_backend_indexes for request_activity started_at, virtual_model, and route_policy lookup indexes; updated shippedSqlMigrations. Updated feat-101 E2E schema-version assertion to follow the latest migration id so new schema-only migrations do not regress the process_heartbeats cleanup contract. Verification passed: feat-105 unit, feat-105 real PostgreSQL E2E, focused feat-101 unit/E2E regression, pnpm run db:migrate:check, pnpm run verify, pnpm run verify:features re-verified all 104 previously passing features before marking, and final pnpm run verify:features re-verified all 105 passing features after marking."
     },
     {
       "id": "feat-106",

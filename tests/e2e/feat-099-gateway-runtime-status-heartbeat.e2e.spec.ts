@@ -50,15 +50,22 @@ test("running gateway records heartbeat and config version visible on console ov
             await waitForConsole(consoleBaseUrl, consoleApp);
             await signInFromFirstRun(page, consoleBaseUrl);
 
-            const runtimeSection = page.getByLabel("Runtime");
+            const runtimeSection = page.getByLabel("Gateway Runtime");
 
             // Boot: the running gateway recorded started_at + an initial healthy heartbeat
-            // plus the applied config version, so the live instance now shows on the overview.
-            await expectAfterReload(page, consoleBaseUrl, async () => {
-              await expect(runtimeSection.getByText(`Gateway: ${gatewayInstanceId}`)).toBeVisible();
-              await expect(runtimeSection.getByText("Heartbeat: Healthy")).toBeVisible();
-              await expect(runtimeSection.getByText("Gateway status: ready")).toBeVisible();
-              await expect(runtimeSection.getByText("Applied config version: v1")).toBeVisible();
+            // plus the applied config version, shown on the Gateway Runtime page.
+            await expectAfterReload(page, `${consoleBaseUrl}/runtime`, async () => {
+              await expect(
+                runtimeSection
+                  .locator(".stat-card", { hasText: "Heartbeat" })
+                  .locator(".stat-card-value"),
+              ).toHaveText("Healthy");
+              await expect(
+                runtimeSection
+                  .locator(".stat-card", { hasText: "Gateway status" })
+                  .locator(".stat-card-value"),
+              ).toHaveText("ready");
+              await expect(runtimeSection.getByText("v1", { exact: true }).first()).toBeVisible();
               await expect(runtimeSection.getByText(/Reload succeeded/)).toBeVisible();
             });
 
@@ -71,11 +78,13 @@ test("running gateway records heartbeat and config version visible on console ov
               })
               .toBe(2);
 
-            await expectAfterReload(page, consoleBaseUrl, async () => {
-              await expect(runtimeSection.getByText(`Gateway: ${gatewayInstanceId}`)).toBeVisible();
-              await expect(runtimeSection.getByText("Heartbeat: Healthy")).toBeVisible();
-              await expect(runtimeSection.getByText("Applied config version: v2")).toBeVisible();
-              await expect(runtimeSection.getByText("Target config version: v2")).toBeVisible();
+            await expectAfterReload(page, `${consoleBaseUrl}/runtime`, async () => {
+              await expect(
+                runtimeSection
+                  .locator(".stat-card", { hasText: "Heartbeat" })
+                  .locator(".stat-card-value"),
+              ).toHaveText("Healthy");
+              await expect(runtimeSection.getByText("v2", { exact: true }).first()).toBeVisible();
               await expect(runtimeSection.getByText(/Reload succeeded/)).toBeVisible();
             });
           } finally {

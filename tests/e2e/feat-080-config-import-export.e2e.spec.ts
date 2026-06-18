@@ -36,7 +36,7 @@ test("config import export redacts secrets validates publishes config version an
 
           const settingsSection = page.getByRole("region", { name: "Settings" });
           await expect(
-            settingsSection.getByRole("heading", { name: "Config import/export" }),
+            settingsSection.getByRole("heading", { name: "Data", exact: true }),
           ).toBeVisible();
 
           const downloadPromise = page.waitForEvent("download");

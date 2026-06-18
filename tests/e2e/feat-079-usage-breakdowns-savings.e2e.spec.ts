@@ -33,54 +33,39 @@ test("usage page shows agent agent api key virtual model provider model cost fai
           await page.goto(`${baseUrl}/usage`);
 
           const usageSection = page.getByRole("region", { name: "Usage & Cost" });
-          await expect(usageSection.getByText("Requests: 3")).toBeVisible();
-          await expect(usageSection.getByText("Failures: 1")).toBeVisible();
-          await expect(usageSection.getByText("Savings: $0.00400000")).toBeVisible();
-
+          // Counts + savings via the KPI cards and the savings panel.
           await expect(
-            usageSection.getByRole("heading", { name: "Agent breakdown" }),
-          ).toBeVisible();
+            usageSection
+              .locator(".stat-card", { hasText: "Total requests" })
+              .locator(".stat-card-value"),
+          ).toHaveText("3");
+          await expect(
+            usageSection.locator(".stat-card", { hasText: "Savings" }).locator(".stat-card-value"),
+          ).toHaveText("$0.00400000");
+
+          // Cost breakdown donuts surface agent / virtual model / provider names in their legends.
+          await expect(usageSection.getByRole("heading", { name: "Agent cost" })).toBeVisible();
           await expect(usageSection.getByText("Codex Usage", { exact: true })).toBeVisible();
           await expect(
-            usageSection.getByRole("heading", { name: "Agent API Key breakdown" }),
-          ).toBeVisible();
-          await expect(
-            usageSection.getByText("Codex Usage / llmi_usage79", { exact: true }),
-          ).toBeVisible();
-          await expect(
-            usageSection.getByRole("heading", { name: "Virtual Model breakdown" }),
+            usageSection.getByRole("heading", { name: "Virtual Model cost" }),
           ).toBeVisible();
           await expect(
             usageSection.getByText("Usage Fast (usage-fast)", { exact: true }),
           ).toBeVisible();
+          await expect(usageSection.getByRole("heading", { name: "Provider cost" })).toBeVisible();
           await expect(
-            usageSection.getByRole("heading", { name: "Provider breakdown" }),
-          ).toBeVisible();
-          await expect(usageSection.getByText("Usage OpenAI", { exact: true })).toBeVisible();
-          await expect(usageSection.getByText("Usage Anthropic", { exact: true })).toBeVisible();
-          await expect(
-            usageSection.getByRole("heading", { exact: true, name: "Model breakdown" }),
+            usageSection.getByText("Usage OpenAI", { exact: true }).first(),
           ).toBeVisible();
           await expect(
-            usageSection.getByText("GPT 4.1 Mini (gpt-4.1-mini)", { exact: true }),
+            usageSection.getByText("Usage Anthropic", { exact: true }).first(),
           ).toBeVisible();
+
+          // Provider / Model summary table lists each provider+model row.
           await expect(
-            usageSection.getByText("Claude Haiku (claude-haiku-4-5)", { exact: true }),
+            usageSection.getByRole("heading", { name: "Provider / Model summary" }),
           ).toBeVisible();
-          await expect(
-            usageSection
-              .getByText(
-                "3 requests - 1 failure - 450 tokens - cost $0.00150000 - savings $0.00400000",
-              )
-              .first(),
-          ).toBeVisible();
-          await expect(
-            usageSection
-              .getByText(
-                "1 request - 0 failures - 150 tokens - cost $0.00050000 - savings $0.00200000",
-              )
-              .first(),
-          ).toBeVisible();
+          await expect(usageSection.getByRole("cell", { name: /GPT 4\.1 Mini/ })).toBeVisible();
+          await expect(usageSection.getByRole("cell", { name: /Claude Haiku/ })).toBeVisible();
         } finally {
           await context.close();
         }

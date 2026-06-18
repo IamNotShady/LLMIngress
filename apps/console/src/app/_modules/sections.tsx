@@ -1985,70 +1985,211 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
   const notificationChannels = await listNotificationChannels(databaseUrl);
   return (
     <section className="providers-panel" id="settings" aria-label="Settings">
-      <section
-        className="settings-panel"
-        id="notification-channels"
-        aria-labelledby="notification-channels-title"
-      >
-        <h3 id="notification-channels-title">Notification channels</h3>
-        <div className="provider-list">
-          {notificationChannels.length === 0 ? (
-            <p>No notification channels configured.</p>
-          ) : (
-            notificationChannels.map((channel) => (
-              <article className="provider-item" key={channel.id}>
-                <header className="provider-header">
-                  <div>
-                    <p className="eyebrow">{channel.channelType}</p>
-                    <h3>{channel.displayName}</h3>
-                  </div>
-                  <p className={channel.enabled ? "status-enabled" : "status-disabled"}>
-                    {channel.enabled ? "Enabled" : "Disabled"}
-                  </p>
-                </header>
-                <p>{formatNotificationChannelConfig(channel)}</p>
+      <div className="settings-layout">
+        <nav className="settings-subnav" aria-label="Settings sections">
+          <a href="#settings-general">General</a>
+          <a href="#settings-security">Security</a>
+          <a href="#settings-data">Data</a>
+          <a href="#notification-channels">Notifications</a>
+          <a href="#settings-danger">Danger Zone</a>
+        </nav>
+        <div className="settings-sections">
+          <section
+            className="settings-panel"
+            id="settings-general"
+            aria-labelledby="settings-general-title"
+          >
+            <h3 id="settings-general-title">General</h3>
+            <div className="settings-grid">
+              <div className="console-field">
+                <label htmlFor="settings-language">Default language</label>
+                <select id="settings-language" defaultValue="en" disabled>
+                  <option value="en">English</option>
+                  <option value="zh">中文</option>
+                </select>
+              </div>
+              <div className="console-field">
+                <label htmlFor="settings-range">Default time range</label>
+                <select id="settings-range" defaultValue="7d" disabled>
+                  <option value="24h">Last 24 hours</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+              </div>
+              <div className="console-field">
+                <label htmlFor="settings-currency">Default currency</label>
+                <select id="settings-currency" defaultValue="usd" disabled>
+                  <option value="usd">USD</option>
+                </select>
+              </div>
+            </div>
+            <p className="callout">Console preferences are display-only in this build.</p>
+          </section>
+
+          <section
+            className="settings-panel"
+            id="settings-security"
+            aria-labelledby="settings-security-title"
+          >
+            <h3 id="settings-security-title">Security</h3>
+            <dl className="detail-field-list">
+              <div className="detail-field">
+                <dt>Admin password</dt>
+                <dd>Set</dd>
+              </div>
+              <div className="detail-field">
+                <dt>Login</dt>
+                <dd>Enabled</dd>
+              </div>
+              <div className="detail-field">
+                <dt>Public access</dt>
+                <dd>Read-only reminder</dd>
+              </div>
+            </dl>
+            <p className="callout">
+              Password change and session management are managed via deployment configuration.
+            </p>
+          </section>
+
+          <section
+            className="settings-panel"
+            id="settings-data"
+            aria-labelledby="settings-data-title"
+          >
+            <h3 id="settings-data-title">Data</h3>
+            {configImportVersion ? (
+              <p className="status-enabled">
+                Config import published version v{configImportVersion}
+              </p>
+            ) : null}
+            <div className="settings-grid">
+              <article className="card">
+                <h4>Export config</h4>
+                <p>Providers, Models, Virtual Models, Agents, Limits.</p>
+                <a className="secondary-button" download href="/api/config-export">
+                  Export redacted config
+                </a>
               </article>
-            ))
-          )}
+              <article className="card">
+                <h4>Export request metadata</h4>
+                <p>Metadata only — no prompt / response content.</p>
+                <button className="secondary-button" type="button" disabled>
+                  Export CSV
+                </button>
+              </article>
+              <article className="card">
+                <h4>Export cost report</h4>
+                <p>Aggregated by Agent, Provider, Model.</p>
+                <button className="secondary-button" type="button" disabled>
+                  Export report
+                </button>
+              </article>
+            </div>
+            <form className="provider-create-form" action="/api/config-import" method="post">
+              <label htmlFor="config-import-json">Config import JSON</label>
+              <textarea id="config-import-json" name="configJson" required rows={8} />
+              <button type="submit">Import redacted config</button>
+            </form>
+          </section>
+
+          <section
+            className="settings-panel"
+            id="notification-channels"
+            aria-labelledby="notification-channels-title"
+          >
+            <h3 id="notification-channels-title">Notification channels</h3>
+            <div className="provider-list">
+              {notificationChannels.length === 0 ? (
+                <p>No notification channels configured.</p>
+              ) : (
+                notificationChannels.map((channel) => (
+                  <article className="provider-item" key={channel.id}>
+                    <header className="provider-header">
+                      <div>
+                        <p className="eyebrow">{channel.channelType}</p>
+                        <h3>{channel.displayName}</h3>
+                      </div>
+                      <p className={channel.enabled ? "status-enabled" : "status-disabled"}>
+                        {channel.enabled ? "Enabled" : "Disabled"}
+                      </p>
+                    </header>
+                    <p>{formatNotificationChannelConfig(channel)}</p>
+                  </article>
+                ))
+              )}
+            </div>
+            <div className="settings-grid">
+              <form
+                className="provider-create-form"
+                action="/api/notification-channels"
+                method="post"
+              >
+                <input type="hidden" name="action" value="create" />
+                <input type="hidden" name="channelType" value="email" />
+                <label htmlFor="notification-email-name">Email channel name</label>
+                <input id="notification-email-name" name="displayName" required />
+                <label htmlFor="notification-email-to">Email to</label>
+                <input id="notification-email-to" name="emailTo" type="email" required />
+                <label htmlFor="notification-email-from">Email from</label>
+                <input id="notification-email-from" name="emailFrom" type="email" required />
+                <button type="submit">Create email notification channel</button>
+              </form>
+              <form
+                className="provider-create-form"
+                action="/api/notification-channels"
+                method="post"
+              >
+                <input type="hidden" name="action" value="create" />
+                <input type="hidden" name="channelType" value="webhook" />
+                <label htmlFor="notification-webhook-name">Webhook channel name</label>
+                <input id="notification-webhook-name" name="displayName" required />
+                <label htmlFor="notification-webhook-url">Webhook URL</label>
+                <input id="notification-webhook-url" name="webhookUrl" type="url" required />
+                <button type="submit">Create webhook notification channel</button>
+              </form>
+            </div>
+          </section>
+
+          <section
+            className="settings-panel settings-danger"
+            id="settings-danger"
+            aria-labelledby="settings-danger-title"
+          >
+            <h3 id="settings-danger-title">Danger Zone</h3>
+            <ul className="danger-list">
+              <li>
+                <div>
+                  <p className="danger-action">Delete Provider Key</p>
+                  <p>Irreversible.</p>
+                </div>
+                <button className="secondary-button" type="button" disabled>
+                  Delete
+                </button>
+              </li>
+              <li>
+                <div>
+                  <p className="danger-action">Delete Agent</p>
+                  <p>Removes related API keys.</p>
+                </div>
+                <button className="secondary-button" type="button" disabled>
+                  Delete
+                </button>
+              </li>
+              <li>
+                <div>
+                  <p className="danger-action">Clear request metadata</p>
+                  <p>Keeps configuration data.</p>
+                </div>
+                <button className="secondary-button" type="button" disabled>
+                  Delete
+                </button>
+              </li>
+            </ul>
+            <p className="callout callout--warn">
+              Destructive actions are managed per-resource on their module pages.
+            </p>
+          </section>
         </div>
-        <div className="settings-grid">
-          <form className="provider-create-form" action="/api/notification-channels" method="post">
-            <input type="hidden" name="action" value="create" />
-            <input type="hidden" name="channelType" value="email" />
-            <label htmlFor="notification-email-name">Email channel name</label>
-            <input id="notification-email-name" name="displayName" required />
-            <label htmlFor="notification-email-to">Email to</label>
-            <input id="notification-email-to" name="emailTo" type="email" required />
-            <label htmlFor="notification-email-from">Email from</label>
-            <input id="notification-email-from" name="emailFrom" type="email" required />
-            <button type="submit">Create email notification channel</button>
-          </form>
-          <form className="provider-create-form" action="/api/notification-channels" method="post">
-            <input type="hidden" name="action" value="create" />
-            <input type="hidden" name="channelType" value="webhook" />
-            <label htmlFor="notification-webhook-name">Webhook channel name</label>
-            <input id="notification-webhook-name" name="displayName" required />
-            <label htmlFor="notification-webhook-url">Webhook URL</label>
-            <input id="notification-webhook-url" name="webhookUrl" type="url" required />
-            <button type="submit">Create webhook notification channel</button>
-          </form>
-        </div>
-      </section>
-      <div className="settings-grid">
-        <section className="settings-panel" aria-labelledby="config-import-export-title">
-          <h3 id="config-import-export-title">Config import/export</h3>
-          {configImportVersion ? (
-            <p className="status-enabled">Config import published version v{configImportVersion}</p>
-          ) : null}
-          <a className="secondary-button" download href="/api/config-export">
-            Export redacted config
-          </a>
-          <form className="provider-create-form" action="/api/config-import" method="post">
-            <label htmlFor="config-import-json">Config import JSON</label>
-            <textarea id="config-import-json" name="configJson" required rows={8} />
-            <button type="submit">Import redacted config</button>
-          </form>
-        </section>
       </div>
     </section>
   );

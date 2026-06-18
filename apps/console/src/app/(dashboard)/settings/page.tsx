@@ -12,7 +12,7 @@ export default async function SettingsPage({
       <PageHeader
         eyebrow="System"
         title="Settings"
-        description="Notification channels and redacted config import/export."
+        description="Console preferences, data export, notifications, and danger zone."
       />
       <SettingsSection searchParams={resolved} />
     </div>

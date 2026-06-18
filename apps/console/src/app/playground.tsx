@@ -110,79 +110,100 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   }
 
   return (
-    <section className="providers-panel" id="playground" aria-labelledby="playground-title">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Live test</p>
-          <h2 id="playground-title">Playground</h2>
+    <section className="providers-panel" id="playground" aria-label="Playground">
+      <div className="playground-layout">
+        <div className="chart-card">
+          <h2 className="chart-card-title">Request config</h2>
+          <div className="playground-config">
+            <div className="console-field">
+              <label htmlFor="playground-gateway-base-url">Gateway base URL</label>
+              <input
+                id="playground-gateway-base-url"
+                value={gatewayBaseUrl}
+                onChange={(event) => setGatewayBaseUrl(event.target.value)}
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor="playground-agent-api-key">Agent API key</label>
+              <input
+                id="playground-agent-api-key"
+                type="password"
+                autoComplete="off"
+                value={agentApiKey}
+                onChange={(event) => setAgentApiKey(event.target.value)}
+              />
+            </div>
+            <div className="console-actions">
+              <button type="button" onClick={() => void loadAllowedModels()}>
+                Load allowed models
+              </button>
+            </div>
+            <div className="console-field">
+              <label htmlFor="playground-model">Playground model</label>
+              <select
+                id="playground-model"
+                value={selectedModel}
+                onChange={(event) => setSelectedModel(event.target.value)}
+              >
+                <option value="">Select model</option>
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="console-field">
+              <label htmlFor="playground-prompt">Playground prompt</label>
+              <textarea
+                id="playground-prompt"
+                rows={5}
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+              />
+            </div>
+            <div className="console-actions">
+              <button
+                type="button"
+                disabled={!agentApiKey || !selectedModel}
+                onClick={() => void sendLiveRequest()}
+              >
+                Send live request
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="playground-form">
-        <div className="console-field">
-          <label htmlFor="playground-gateway-base-url">Gateway base URL</label>
-          <input
-            id="playground-gateway-base-url"
-            value={gatewayBaseUrl}
-            onChange={(event) => setGatewayBaseUrl(event.target.value)}
-          />
+
+        <div className="chart-card">
+          <h2 className="chart-card-title">Response preview</h2>
+          <div className="playground-result" role="status">
+            <p>{status}</p>
+            {result ? (
+              <>
+                <p className="detail-section-label">Request &amp; routing detail</p>
+                <dl className="detail-field-list">
+                  <div className="detail-field">
+                    <dt>Request ID</dt>
+                    <dd className="mono">{result.requestId}</dd>
+                  </div>
+                  <div className="detail-field">
+                    <dt>Model</dt>
+                    <dd>{selectedModel}</dd>
+                  </div>
+                </dl>
+                <p className="detail-section-label">Playground response</p>
+                <pre className="code-block">{result.responseText}</pre>
+              </>
+            ) : (
+              <p className="callout">
+                Send a request to preview the response and routing detail here.
+              </p>
+            )}
+          </div>
+          <p className="callout callout--info">
+            The Agent API key stays in your browser; the Console backend never stores it.
+          </p>
         </div>
-        <div className="console-field">
-          <label htmlFor="playground-agent-api-key">Agent API key</label>
-          <input
-            id="playground-agent-api-key"
-            type="password"
-            autoComplete="off"
-            value={agentApiKey}
-            onChange={(event) => setAgentApiKey(event.target.value)}
-          />
-        </div>
-        <div className="console-actions">
-          <button type="button" onClick={() => void loadAllowedModels()}>
-            Load allowed models
-          </button>
-        </div>
-        <div className="console-field">
-          <label htmlFor="playground-model">Playground model</label>
-          <select
-            id="playground-model"
-            value={selectedModel}
-            onChange={(event) => setSelectedModel(event.target.value)}
-          >
-            <option value="">Select model</option>
-            {models.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.id}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="console-field playground-prompt-field">
-          <label htmlFor="playground-prompt">Playground prompt</label>
-          <textarea
-            id="playground-prompt"
-            rows={4}
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-          />
-        </div>
-        <div className="console-actions playground-send-action">
-          <button
-            type="button"
-            disabled={!agentApiKey || !selectedModel}
-            onClick={() => void sendLiveRequest()}
-          >
-            Send live request
-          </button>
-        </div>
-      </div>
-      <div className="playground-result" role="status">
-        <p>{status}</p>
-        {result ? (
-          <>
-            <p>Playground request id: {result.requestId}</p>
-            <p>Playground response: {result.responseText}</p>
-          </>
-        ) : null}
       </div>
     </section>
   );

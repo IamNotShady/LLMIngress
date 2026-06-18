@@ -1842,6 +1842,30 @@ details.disclosure[open] > .disclosure-summary {
   background: var(--danger-soft);
 }
 
+/* ---- Playground two-column ---- */
+.playground-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+.playground-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+@media (max-width: 56rem) {
+  .playground-layout,
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-subnav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
 /* ---- Filter bar ---- */
 .filter-bar {
   display: flex;

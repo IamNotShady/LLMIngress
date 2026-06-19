@@ -10,9 +10,8 @@ export type JsonlRequestLogExportJobHandlerOptions = {
 };
 
 export type JsonlRequestLogActivityRow = QueryResultRow & {
-  agent_api_key_id: string;
-  agent_api_key_prefix: string;
   agent_id: string;
+  agent_key_prefix: string;
   agent_name: string;
   agent_type: string;
   completed_at: Date | null;
@@ -142,12 +141,9 @@ export function buildJsonlRequestLogRecord(input: JsonlRequestLogRecordInput) {
   return {
     agent: {
       id: activity.agent_id,
+      keyPrefix: activity.agent_key_prefix,
       name: activity.agent_name,
       type: activity.agent_type,
-    },
-    agentApiKey: {
-      id: activity.agent_api_key_id,
-      prefix: activity.agent_api_key_prefix,
     },
     completedAt: toIsoString(activity.completed_at),
     cost: input.cost
@@ -304,8 +300,8 @@ async function readRequestLogRows(
       select
         request_activity.id::text,
         request_activity.request_id,
-        request_activity.agent_api_key_id::text,
-        request_activity.agent_api_key_prefix,
+        request_activity.agent_id::text as agent_id,
+        request_activity.agent_key_prefix as agent_key_prefix,
         request_activity.protocol,
         request_activity.model,
         request_activity.stream,
@@ -344,8 +340,7 @@ async function readRequestLogRows(
         request_costs.price_source,
         request_costs.price_version
       from request_activity
-      join agent_api_keys on agent_api_keys.id = request_activity.agent_api_key_id
-      join agents on agents.id = agent_api_keys.agent_id
+      join agents on agents.id = request_activity.agent_id
       left join virtual_models on virtual_models.id = request_activity.virtual_model_id
       left join route_policies on route_policies.id = request_activity.route_policy_id
       left join providers on providers.id = request_activity.provider_id

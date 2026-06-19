@@ -17,7 +17,7 @@ create index if not exists idx_request_activity_provider_started_at
   on request_activity (provider_id, provider_model_id, started_at desc, id desc);
 
 create index if not exists idx_request_activity_agent_key_started_at
-  on request_activity (agent_api_key_id, started_at desc, id desc);
+  on request_activity (agent_id, started_at desc, id desc);
 
 insert into schema_version (id, version)
 values (1, '0028')

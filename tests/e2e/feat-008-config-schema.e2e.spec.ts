@@ -28,9 +28,9 @@ test("core config schema accepts valid graph and rejects broken references", asy
       union all
       select 'agents', count(*)::text from agents
       union all
-      select 'agent_api_keys', count(*)::text from agent_api_keys
-      union all
       select 'virtual_models', count(*)::text from virtual_models
+      union all
+      select 'agent_virtual_models', count(*)::text from agent_virtual_models
       union all
       select 'route_policies', count(*)::text from route_policies
       union all
@@ -44,9 +44,9 @@ test("core config schema accepts valid graph and rejects broken references", asy
       order by table_name
     `);
     expect(counts.rows).toEqual([
-      { table_name: "agent_api_keys", row_count: "1" },
       { table_name: "agent_limits", row_count: "1" },
       { table_name: "agents", row_count: "1" },
+      { table_name: "agent_virtual_models", row_count: "1" },
       { table_name: "config_change_events", row_count: "1" },
       { table_name: "config_versions", row_count: "1" },
       { table_name: "provider_models", row_count: "1" },
@@ -64,12 +64,6 @@ test("core config schema accepts valid graph and rejects broken references", asy
     );
     await expectBrokenReference(
       fixture.query(
-        "insert into agent_api_keys (id, agent_id, key_prefix, key_hash) values ($1, $2, $3, $4)",
-        [randomUUID(), randomUUID(), "llmi_missing", "sha256:missing"],
-      ),
-    );
-    await expectBrokenReference(
-      fixture.query(
         "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, $3)",
         [randomUUID(), randomUUID(), "fixed"],
       ),
@@ -82,13 +76,13 @@ test("core config schema accepts valid graph and rejects broken references", asy
     );
     await expectBrokenReference(
       fixture.query(
-        "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+        "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
         [randomUUID(), randomUUID()],
       ),
     );
     await expectBrokenReference(
       fixture.query(
-        "insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit) values ($1, $2, $3, $4, $5, $6)",
+        "insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit) values ($1, $2, $3, $4, $5, $6)",
         [randomUUID(), randomUUID(), "rpm", "minute", 60, "requests"],
       ),
     );
@@ -101,24 +95,20 @@ test("core config schema accepts valid graph and rejects broken references", asy
 
     const extraVirtualModelId = randomUUID();
     await expectBrokenReference(
-      fixture.query(
-        "insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id) values ($1, $2, $3, $4, $5)",
-        [
-          randomUUID(),
-          graph.agentId,
-          "llmi_bad_default",
-          "sha256:bad-default",
-          extraVirtualModelId,
-        ],
-      ),
+      fixture.query("update agents set default_virtual_model_id = $2 where id = $1", [
+        graph.agentId,
+        extraVirtualModelId,
+      ]),
     );
 
     await expectConstraintViolation(
       fixture.query("delete from virtual_models where id = $1", [graph.virtualModelId]),
     );
-    await expectConstraintViolation(
+    await expect(
       fixture.query("delete from agents where id = $1", [graph.agentId]),
-    );
+    ).resolves.toMatchObject({
+      rowCount: 1,
+    });
     await expectConstraintViolation(
       fixture.query(
         "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order, is_fallback) values ($1, $2, $3, $4, $5)",
@@ -146,7 +136,6 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
   const virtualModelId = randomUUID();
   const routePolicyId = randomUUID();
   const routePolicyCandidateId = randomUUID();
-  const agentApiKeyId = randomUUID();
   const agentLimitId = randomUUID();
   const configChangeEventId = randomUUID();
 
@@ -158,15 +147,24 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
     "insert into provider_models (id, provider_id, model_id, display_name, context_window, supports_streaming, supports_tools, availability) values ($1, $2, $3, $4, $5, $6, $7, $8)",
     [providerModelId, providerId, "gpt-4.1-mini", "GPT-4.1 Mini", 128_000, true, true, "available"],
   );
-  await query("insert into agents (id, name, agent_type, enabled) values ($1, $2, $3, $4)", [
-    agentId,
-    "Codex",
-    "coding",
-    true,
-  ]);
   await query(
     "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, $4)",
     [virtualModelId, "coding-balanced", "Coding Balanced", true],
+  );
+  await query(
+    `
+      insert into agents (
+        id,
+        name,
+        agent_type,
+        key_prefix,
+        key_hash,
+        default_virtual_model_id,
+        enabled
+      )
+      values ($1, $2, $3, $4, $5, $6, $7)
+    `,
+    [agentId, "Codex", "coding", "llmi_test", "sha256:test", virtualModelId, true],
   );
   await query("insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, $3)", [
     routePolicyId,
@@ -177,17 +175,13 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
     "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order, is_fallback) values ($1, $2, $3, $4, $5)",
     [routePolicyCandidateId, routePolicyId, providerModelId, 1, false],
   );
+  await query("insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)", [
+    agentId,
+    virtualModelId,
+  ]);
   await query(
-    "insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled) values ($1, $2, $3, $4, $5, $6)",
-    [agentApiKeyId, agentId, "llmi_test", "sha256:test", virtualModelId, true],
-  );
-  await query(
-    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
-    [agentApiKeyId, virtualModelId],
-  );
-  await query(
-    "insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled) values ($1, $2, $3, $4, $5, $6, $7)",
-    [agentLimitId, agentApiKeyId, "rpm", "minute", 60, "requests", true],
+    "insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled) values ($1, $2, $3, $4, $5, $6, $7)",
+    [agentLimitId, agentId, "rpm", "minute", 60, "requests", true],
   );
   const configVersion = await query<{ id: string }>(
     "insert into config_versions (version, source, description) values ($1, $2, $3) returning id::text",

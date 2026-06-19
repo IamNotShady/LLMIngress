@@ -62,7 +62,6 @@ describe("feat-092 prometheus metrics exporter", () => {
 async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
   const ids = {
     activityId: randomUUID(),
-    agentApiKeyId: randomUUID(),
     agentId: randomUUID(),
     fallbackEventId: randomUUID(),
     failedActivityId: randomUUID(),
@@ -102,21 +101,24 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_secret092', 'hash-secret-092', $3, true)
+      update agents
+      set key_prefix = 'llmi_secret092',
+          key_hash = 'hash-secret-092',
+          default_virtual_model_id = $2
+      where id = $1
     `,
-    [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
+    [ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -132,16 +134,16 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         now() - interval '5 minutes', now() - interval '4 minutes'
       )
     `,
-    [ids.activityId, ids.agentApiKeyId, ids.virtualModelId, ids.providerId, ids.providerModelId],
+    [ids.activityId, ids.agentId, ids.virtualModelId, ids.providerId, ids.providerModelId],
   );
   await fixture.query(
     `
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -160,21 +162,21 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         now() - interval '3 minutes', now() - interval '2 minutes'
       )
     `,
-    [ids.failedActivityId, ids.agentApiKeyId, ids.virtualModelId],
+    [ids.failedActivityId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         total_cost_usd,
         cost_source
       )
       values ($1, $2, $3, $4, 0.01230000, 'estimated')
     `,
-    [ids.requestCostId, ids.activityId, ids.agentApiKeyId, ids.providerModelId],
+    [ids.requestCostId, ids.activityId, ids.agentId, ids.providerModelId],
   );
   await fixture.query(
     `

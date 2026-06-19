@@ -25,19 +25,22 @@ create table if not exists provider_models (
   unique (provider_id, model_id)
 );
 
-create table if not exists agents (
+create table if not exists virtual_models (
   id uuid primary key,
-  name text not null,
-  agent_type text not null check (agent_type in ('coding', 'desktop', 'terminal', 'ide', 'other')),
+  name text not null unique,
+  display_name text not null,
   enabled boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table if not exists virtual_models (
+create table if not exists agents (
   id uuid primary key,
-  name text not null unique,
-  display_name text not null,
+  name text not null,
+  agent_type text not null check (agent_type in ('coding', 'desktop', 'terminal', 'ide', 'other')),
+  key_prefix text unique,
+  key_hash text unique,
+  default_virtual_model_id uuid references virtual_models (id) on delete restrict,
   enabled boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -62,27 +65,16 @@ create table if not exists route_policy_candidates (
   unique (route_policy_id, provider_model_id)
 );
 
-create table if not exists agent_api_keys (
-  id uuid primary key,
-  agent_id uuid not null references agents (id) on delete restrict,
-  key_prefix text not null unique,
-  key_hash text not null unique,
-  default_virtual_model_id uuid references virtual_models (id) on delete restrict,
-  enabled boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists agent_api_key_virtual_models (
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete cascade,
+create table if not exists agent_virtual_models (
+  agent_id uuid not null references agents (id) on delete cascade,
   virtual_model_id uuid not null references virtual_models (id) on delete restrict,
   created_at timestamptz not null default now(),
-  primary key (agent_api_key_id, virtual_model_id)
+  primary key (agent_id, virtual_model_id)
 );
 
 create table if not exists agent_limits (
   id uuid primary key,
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete cascade,
+  agent_id uuid not null references agents (id) on delete cascade,
   limit_type text not null check (limit_type in ('budget', 'rpm', 'tpm', 'token')),
   period text not null check (period in ('request', 'minute', 'hour', 'day', 'week', 'month')),
   limit_value numeric(20, 6) not null check (limit_value > 0),
@@ -90,7 +82,7 @@ create table if not exists agent_limits (
   enabled boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (agent_api_key_id, limit_type, period)
+  unique (agent_id, limit_type, period)
 );
 
 create table if not exists config_versions (

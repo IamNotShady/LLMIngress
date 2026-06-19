@@ -89,18 +89,17 @@ async function seedAgentsData(databaseUrl: string): Promise<void> {
         [agentId, name, agentType],
       );
       await client.query(
-        `insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-         values ($1, $2, $3, $4, $5, true)`,
+        `update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2`,
         [keyId, agentId, keyPrefix, `sha256:v1:${keyPrefix}`, defaultModel.id],
       );
       for (const virtualModel of virtualModels.slice(0, name === "Claude Code" ? 4 : 3)) {
         await client.query(
-          "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+          "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
           [keyId, virtualModel.id],
         );
       }
       await client.query(
-        `insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit)
+        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
          values
            ($1, $2, 'budget', 'month', 500, 'usd'),
            ($3, $2, 'token', 'request', 100000000, 'tokens')`,
@@ -110,13 +109,13 @@ async function seedAgentsData(databaseUrl: string): Promise<void> {
         const requestActivityId = randomUUID();
         await client.query(
           `insert into request_activity
-             (id, request_id, agent_api_key_id, agent_api_key_prefix, protocol, model, status, started_at)
+             (id, request_id, agent_id, agent_key_prefix, protocol, model, status, started_at)
            values ($1, $2, $3, $4, 'chat_completions', $5, 'succeeded', now())`,
           [requestActivityId, randomUUID(), keyId, keyPrefix, defaultModel.name],
         );
         await client.query(
           `insert into request_costs
-             (id, request_activity_id, agent_api_key_id, total_cost_usd, cost_source)
+             (id, request_activity_id, agent_id, total_cost_usd, cost_source)
            values ($1, $2, $3, $4, 'provider')`,
           [randomUUID(), requestActivityId, keyId, cost],
         );

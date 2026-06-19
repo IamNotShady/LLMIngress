@@ -149,8 +149,7 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'usage047', 'hash-usage-047', $3, true)
+      update agents set id = $1, key_prefix = 'usage047', key_hash = 'hash-usage-047', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, virtualModelId],
   );
@@ -212,11 +211,11 @@ async function insertUsageRequest(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -258,7 +257,7 @@ async function insertUsageRequest(
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -284,7 +283,7 @@ async function insertUsageRequest(
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         total_cost_usd,
         cost_source,

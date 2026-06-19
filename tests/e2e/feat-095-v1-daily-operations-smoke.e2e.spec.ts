@@ -60,12 +60,6 @@ test("v1 daily operations smoke verifies breakdowns exports alerts metrics trace
         requestCount: 5,
       }),
     ]);
-    expect(usage.agentApiKeyBreakdowns).toEqual([
-      expect.objectContaining({
-        label: "Daily Ops Agent / llmi_daily95",
-        requestCount: 5,
-      }),
-    ]);
     expect(usage.virtualModelBreakdowns).toEqual([
       expect.objectContaining({
         label: "Daily Ops Fast (daily-ops-fast)",
@@ -306,16 +300,13 @@ async function seedDailyOperationsData(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-      )
-      values ($1, $2, 'llmi_daily95', 'sha256:v1:daily-ops-agent-key-hash-095', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_daily95', key_hash = 'sha256:v1:daily-ops-agent-key-hash-095', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'budget', 'month', 10.000000, 'usd', true)
     `,
     [randomUUID(), ids.agentApiKeyId],
@@ -330,7 +321,7 @@ async function seedDailyOperationsData(
   await fixture.query(
     `
       insert into budget_periods (
-        id, agent_api_key_id, period_type, period_start, period_end,
+        id, agent_id, period_type, period_start, period_end,
         tokens_used, cost_used_usd, reserved_cost_usd, created_at, updated_at
       )
       values (
@@ -352,7 +343,7 @@ async function seedDailyOperationsData(
   await fixture.query(
     `
       insert into rate_limit_windows (
-        id, agent_api_key_id, limit_type, window_start, window_end,
+        id, agent_id, limit_type, window_start, window_end,
         request_count, token_count, created_at, updated_at
       )
       values (
@@ -558,8 +549,8 @@ async function insertRequestActivity(
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_api_key_id, virtual_model_id, provider_id,
-        provider_model_id, agent_api_key_prefix, protocol, model, stream,
+        id, request_id, agent_id, virtual_model_id, provider_id,
+        provider_model_id, agent_key_prefix, protocol, model, stream,
         status, error_code, error_message, http_status, latency_ms,
         started_at, completed_at, created_at
       )
@@ -605,7 +596,7 @@ async function insertUsageCostSavings(
   await fixture.query(
     `
       insert into request_usage (
-        id, request_activity_id, agent_api_key_id, virtual_model_id,
+        id, request_activity_id, agent_id, virtual_model_id,
         provider_model_id, input_tokens, output_tokens, total_tokens, token_source
       )
       values ($1, $2, $3, $4, $5, $6, $7, $8, 'provider')
@@ -624,7 +615,7 @@ async function insertUsageCostSavings(
   await fixture.query(
     `
       insert into request_costs (
-        id, request_activity_id, agent_api_key_id, provider_model_id,
+        id, request_activity_id, agent_id, provider_model_id,
         total_cost_usd, cost_source
       )
       values ($1, $2, $3, $4, $5, 'estimated')

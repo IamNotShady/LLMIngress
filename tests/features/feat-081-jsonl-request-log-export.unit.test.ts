@@ -32,8 +32,7 @@ describe("feat-081 JSONL request log export", () => {
   it("formats request metadata fallback events and errors without secrets", () => {
     const record = buildJsonlRequestLogRecord({
       activity: {
-        agent_api_key_id: "agent-key-081",
-        agent_api_key_prefix: "llmi_jsonl81",
+        agent_key_prefix: "llmi_jsonl81",
         agent_id: "agent-081",
         agent_name: "JSONL Agent",
         agent_type: "coding",
@@ -104,12 +103,9 @@ describe("feat-081 JSONL request log export", () => {
     expect(record).toMatchObject({
       agent: {
         id: "agent-081",
+        keyPrefix: "llmi_jsonl81",
         name: "JSONL Agent",
         type: "coding",
-      },
-      agentApiKey: {
-        id: "agent-key-081",
-        prefix: "llmi_jsonl81",
       },
       cost: {
         totalCostUsd: 0.0003,

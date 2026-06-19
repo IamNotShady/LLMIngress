@@ -142,10 +142,7 @@ async function createAgentApiKey(page: Page): Promise<void> {
   await page.getByLabel("Agent name").fill("Budget Agent");
   await page.getByLabel("Agent type").selectOption("coding");
   await page.getByRole("button", { name: "Create agent" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "Budget Agent" })).toBeVisible();
-  await openRow(page, "Budget Agent");
-  await page.getByRole("button", { name: "Create Agent API key" }).click();
-  await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
 }
 
@@ -154,7 +151,7 @@ async function assignVirtualModelAccess(page: Page): Promise<void> {
   await openRow(page, "Budget Agent");
   await page.getByLabel("Allowed virtual models").selectOption({ label });
   await page.getByLabel("Default virtual model").selectOption({ label });
-  await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
+  await page.getByRole("button", { name: "Save Agent virtual models" }).click();
   await openRow(page, "Budget Agent");
   await expect(page.getByText(`Default Virtual Model: ${label}`)).toBeVisible();
 }
@@ -166,7 +163,7 @@ async function saveKnownPriceCostBudget(page: Page): Promise<void> {
   await page.getByLabel("RPM limit").fill("60");
   await page.getByLabel("TPM limit").fill("120000");
   await page.getByLabel("Token limit").fill("8000");
-  await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+  await page.getByRole("button", { name: "Save Agent limits" }).click();
   await openRow(page, "Budget Agent");
   await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
 }
@@ -233,7 +230,7 @@ async function readVirtualModelId(fixture: Fixture): Promise<string> {
 }
 
 async function readOnlyAgentApiKeyId(fixture: Fixture): Promise<string> {
-  const result = await fixture.query<{ id: string }>("select id::text from agent_api_keys");
+  const result = await fixture.query<{ id: string }>("select id::text from agents");
   const row = result.rows[0];
   if (!row || result.rows.length !== 1) {
     throw new Error("Expected exactly one Agent API key.");
@@ -264,7 +261,7 @@ async function countBudgetLimitRows(fixture: Fixture, agentApiKeyId: string): Pr
     `
       select count(*)::integer as count
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
         and limit_type = 'budget'
         and enabled = true
     `,

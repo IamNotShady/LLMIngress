@@ -118,7 +118,8 @@ test("scheduled budget threshold evaluator uses configurable threshold and emits
     expect(webhook.requests[0]).toMatchObject({
       eventType: "budget_threshold",
       payload: {
-        agentApiKeyId: ids.nearBudgetAgentApiKeyId,
+        agentId: ids.nearBudgetAgentId,
+        agentApiKeyPrefix: "llmi_ba_near",
         alertKey: `budget_threshold:${ids.nearBudgetPeriodId}:0.75`,
         budgetLimitUsd: 100,
         thresholdRatio: 0.75,
@@ -153,7 +154,7 @@ test("scheduled budget threshold evaluator uses configurable threshold and emits
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 type BudgetAlertSeedIds = {
-  nearBudgetAgentApiKeyId: string;
+  nearBudgetAgentId: string;
   nearBudgetPeriodId: string;
 };
 
@@ -209,7 +210,7 @@ async function seedBudgetAlertData(fixture: Fixture): Promise<BudgetAlertSeedIds
   });
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'budget', 'month', 100, 'usd', true),
              ($3, $4, 'budget', 'month', 100, 'usd', true)
     `,
@@ -227,7 +228,7 @@ async function seedBudgetAlertData(fixture: Fixture): Promise<BudgetAlertSeedIds
   });
 
   return {
-    nearBudgetAgentApiKeyId: ids.nearBudgetAgentApiKeyId,
+    nearBudgetAgentId: ids.nearBudgetAgentApiKeyId,
     nearBudgetPeriodId: ids.nearBudgetPeriodId,
   };
 }
@@ -244,21 +245,22 @@ async function insertAgentApiKey(
 ): Promise<void> {
   await fixture.query(
     `
-      insert into agent_api_keys (
+      insert into agents (
         id,
-        agent_id,
+        name,
+        agent_type,
         key_prefix,
         key_hash,
         default_virtual_model_id,
         enabled
       )
-      values ($1, $2, $3, $4, $5, true)
+      values ($1, 'Budget Alerts Agent', 'coding', $2, $3, $4, true)
     `,
-    [input.agentApiKeyId, input.agentId, input.keyPrefix, input.keyHash, input.virtualModelId],
+    [input.agentApiKeyId, input.keyPrefix, input.keyHash, input.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [input.agentApiKeyId, input.virtualModelId],
@@ -277,7 +279,7 @@ async function insertBudgetPeriod(
     `
       insert into budget_periods (
         id,
-        agent_api_key_id,
+        agent_id,
         period_type,
         period_start,
         period_end,

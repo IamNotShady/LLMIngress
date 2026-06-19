@@ -84,9 +84,11 @@ test("manual and scheduled backup jobs create artifact for config operational ta
       mode: "scheduled",
       version: 1,
     });
+    expect(manualBackup.tables.config.agents).toHaveLength(1);
+    expect(manualBackup.tables.config.agent_virtual_models).toHaveLength(1);
     expect(manualBackup.tables.config.providers).toHaveLength(1);
     expect(manualBackup.tables.config.provider_api_keys).toHaveLength(1);
-    expect(manualBackup.tables.config.agent_api_keys).toHaveLength(1);
+    expect(manualBackup.tables.config).not.toHaveProperty("agent_api_keys");
     expect(manualBackup.tables.operational.request_activity).toHaveLength(1);
     expect(manualBackup.tables.operational.request_usage).toHaveLength(1);
     expect(manualBackup.tables.operational.jobs.length).toBeGreaterThanOrEqual(1);
@@ -239,16 +241,13 @@ async function seedBackupData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-      )
-      values ($1, $2, 'llmi_bak86', 'sha256:v1:backup-agent-key-hash-086', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_bak86', key_hash = 'sha256:v1:backup-agent-key-hash-086', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [ids.agentApiKeyId, ids.virtualModelId],
@@ -258,11 +257,11 @@ async function seedBackupData(fixture: Fixture): Promise<void> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -303,7 +302,7 @@ async function seedBackupData(fixture: Fixture): Promise<void> {
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,

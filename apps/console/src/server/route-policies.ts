@@ -154,7 +154,7 @@ type ProviderModelOptionRow = QueryResultRow & {
 };
 
 type BudgetedVirtualModelUsageRow = QueryResultRow & {
-  budgeted_agent_api_key_count: number;
+  budgeted_agent_count: number;
   display_name: string;
   name: string;
 };
@@ -603,7 +603,7 @@ async function assertBudgetSafeRoutePolicyCandidates(
   routePolicy: NormalizedRoutePolicyFormInput,
 ): Promise<void> {
   const budgetedUsage = await readBudgetedVirtualModelUsage(client, routePolicy.virtualModelId);
-  if (budgetedUsage.budgeted_agent_api_key_count === 0) {
+  if (budgetedUsage.budgeted_agent_count === 0) {
     return;
   }
 
@@ -635,21 +635,21 @@ async function readBudgetedVirtualModelUsage(
     `
       select virtual_models.name,
              virtual_models.display_name,
-             count(distinct agent_api_keys.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_api_key_count
+             count(distinct agents.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_count
       from virtual_models
-      left join agent_api_keys
-        on agent_api_keys.enabled = true
+      left join agents
+        on agents.enabled = true
        and (
-            agent_api_keys.default_virtual_model_id = virtual_models.id
+            agents.default_virtual_model_id = virtual_models.id
             or exists (
               select 1
-              from agent_api_key_virtual_models
-              where agent_api_key_virtual_models.agent_api_key_id = agent_api_keys.id
-                and agent_api_key_virtual_models.virtual_model_id = virtual_models.id
+              from agent_virtual_models
+              where agent_virtual_models.agent_id = agents.id
+                and agent_virtual_models.virtual_model_id = virtual_models.id
             )
        )
       left join agent_limits
-        on agent_limits.agent_api_key_id = agent_api_keys.id
+        on agent_limits.agent_id = agents.id
        and agent_limits.enabled = true
        and agent_limits.limit_type = 'budget'
        and agent_limits.unit = 'usd'

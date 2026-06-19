@@ -257,19 +257,19 @@ async function seedBudgetRoutes(
     );
     await fixture.query(
       `
-        insert into agent_api_keys (
+        insert into agents (
           id,
-          agent_id,
+          name,
+          agent_type,
           key_prefix,
           key_hash,
           default_virtual_model_id,
           enabled
         )
-        values ($1, $2, $3, $4, $5, true)
+        values ($1, 'Budget Agent', 'coding', $2, $3, $4, true)
       `,
       [
         route.agentApiKeyId,
-        agentId,
         route.key.slice(0, 12),
         buildGatewayAgentApiKeyHash(route.key),
         virtualModelId,
@@ -277,7 +277,7 @@ async function seedBudgetRoutes(
     );
     await fixture.query(
       `
-        insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+        insert into agent_virtual_models (agent_id, virtual_model_id)
         values ($1, $2)
       `,
       [route.agentApiKeyId, virtualModelId],
@@ -286,7 +286,7 @@ async function seedBudgetRoutes(
 
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'token', 'request', 80, 'tokens', true),
              ($3, $4, 'budget', 'month', 0.00015, 'usd', true),
              ($5, $6, 'budget', 'month', 1, 'usd', true),
@@ -394,7 +394,7 @@ async function expectFinalizedBudget(fixture: Fixture, agentApiKeyId: string): P
                  max(budget_reservations.status) as status
           from budget_periods
           join budget_reservations on budget_reservations.budget_period_id = budget_periods.id
-          where budget_periods.agent_api_key_id = $1
+          where budget_periods.agent_id = $1
           group by budget_periods.id
         `,
         [agentApiKeyId],

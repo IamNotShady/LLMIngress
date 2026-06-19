@@ -52,7 +52,7 @@ test("success and failure requests create activity rows with route fallback late
         .poll(() => readActivities(fixture))
         .toEqual([
           {
-            agent_api_key_prefix: agentApiKey.slice(0, 12),
+            agent_key_prefix: agentApiKey.slice(0, 12),
             error_code: null,
             fallback_attempts: [
               expect.objectContaining({
@@ -77,7 +77,7 @@ test("success and failure requests create activity rows with route fallback late
             virtual_model_id: seeded.fallbackVirtualModelId,
           },
           {
-            agent_api_key_prefix: agentApiKey.slice(0, 12),
+            agent_key_prefix: agentApiKey.slice(0, 12),
             error_code: "provider_request_failed",
             fallback_attempts: [
               expect.objectContaining({
@@ -164,7 +164,7 @@ type GatewayChatExpectation = {
 };
 
 type ActivityRow = {
-  agent_api_key_prefix: string;
+  agent_key_prefix: string;
   error_code: string | null;
   fallback_attempts: unknown;
   http_status: number;
@@ -316,15 +316,7 @@ async function seedActivityRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -336,7 +328,7 @@ async function seedActivityRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2),
              ($1, $3)
     `,
@@ -399,7 +391,7 @@ async function readActivities(fixture: Fixture): Promise<ActivityRow[]> {
   const result = await fixture.query<ActivityRow>(
     `
       select request_id,
-             agent_api_key_prefix,
+             agent_key_prefix,
              virtual_model_id::text,
              route_policy_id::text,
              provider_model_id::text,

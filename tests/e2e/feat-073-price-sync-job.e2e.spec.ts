@@ -237,15 +237,7 @@ async function seedPriceSyncConfig(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_price_073', $3, $4, true)
+      update agents set id = $1, key_prefix = 'llmi_price_073', key_hash = $3, default_virtual_model_id = $4, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, `hash-${randomUUID()}`, virtualModelId],
   );
@@ -254,12 +246,12 @@ async function seedPriceSyncConfig(fixture: Fixture): Promise<void> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -289,7 +281,7 @@ async function seedPriceSyncConfig(fixture: Fixture): Promise<void> {
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         input_cost_usd,
         output_cost_usd,

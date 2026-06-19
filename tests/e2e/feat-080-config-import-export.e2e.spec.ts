@@ -54,8 +54,8 @@ test("config import export redacts secrets validates publishes config version an
             agents: Array<Record<string, unknown>>;
           };
           exported.agents.push({
-            agentApiKeys: [],
             agentType: "coding",
+            apiKey: null,
             enabled: true,
             id: randomUUID(),
             name: "Imported Config Agent",
@@ -160,16 +160,13 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-      )
-      values ($1, $2, 'llmi_cfg80', 'sha256:v1:config-export-e2e-secret-hash-080', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_cfg80', key_hash = 'sha256:v1:config-export-e2e-secret-hash-080', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [ids.agentApiKeyId, ids.virtualModelId],

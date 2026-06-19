@@ -29,14 +29,6 @@ describe("feat-082 cost report export", () => {
 
   it("builds a cost report document from usage summary totals and breakdowns", () => {
     const usageSummary: CostReportUsageSummary = {
-      agentApiKeyBreakdowns: [
-        breakdown("agent-key-1", "Codex / llmi_cost82", {
-          requestCount: 2,
-          totalCostUsd: "0.00300000",
-          totalSavingsUsd: "0.00600000",
-          totalTokens: 600,
-        }),
-      ],
       agentBreakdowns: [
         breakdown("agent-1", "Codex", {
           requestCount: 2,
@@ -122,7 +114,6 @@ describe("feat-082 cost report export", () => {
         start: "2026-06-15T12:00:00.000Z",
       },
     });
-    expect(report.breakdowns.agentApiKeys).toEqual(usageSummary.agentApiKeyBreakdowns);
     expect(report.breakdowns.agents).toEqual(usageSummary.agentBreakdowns);
     expect(report.breakdowns.providerModels).toEqual(usageSummary.breakdowns);
     expect(report.breakdowns.virtualModels).toEqual(usageSummary.virtualModelBreakdowns);

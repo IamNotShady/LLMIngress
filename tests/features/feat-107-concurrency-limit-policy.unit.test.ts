@@ -68,7 +68,7 @@ describe("feat-107 concurrency limits and enforcement policy", () => {
 
   it("defaults new policy fields for existing Console limit form input", () => {
     const normalized = normalizeAgentLimitFormInput({
-      agentApiKeyId: "00000000-0000-4000-8000-000000000107",
+      agentId: "00000000-0000-4000-8000-000000000107",
       budgetPeriod: "month",
       budgetUsd: 10,
       rpm: 60,

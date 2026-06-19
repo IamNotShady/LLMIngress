@@ -84,9 +84,9 @@ export async function createGatewayRequestActivity(
         insert into request_activity (
           id,
           request_id,
-          agent_api_key_id,
+          agent_id,
           virtual_model_id,
-          agent_api_key_prefix,
+          agent_key_prefix,
           protocol,
           model,
           stream,

@@ -39,7 +39,7 @@ describe("feat-009 runtime records and jobs schema migration", () => {
     const sql = readRuntimeSchemaMigrationSql();
 
     expect(readCreateTableSql(sql, "request_activity")).toContain(
-      "agent_api_key_id uuid not null references agent_api_keys (id) on delete restrict",
+      "agent_id uuid not null references agents (id) on delete restrict",
     );
     expect(readCreateTableSql(sql, "request_activity")).toContain(
       "provider_model_id uuid references provider_models (id) on delete restrict",

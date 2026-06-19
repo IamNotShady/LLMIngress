@@ -2,13 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 
 export const analyticsIds = {
-  otherAgentApiKeyId: "00000000-0000-4000-8000-000000001105",
+  otherAgentApiKeyId: "00000000-0000-4000-8000-000000002105",
   otherAgentId: "00000000-0000-4000-8000-000000002105",
   otherProviderId: "00000000-0000-4000-8000-000000003105",
   otherProviderModelId: "00000000-0000-4000-8000-000000004105",
   otherRoutePolicyId: "00000000-0000-4000-8000-000000005105",
   otherVirtualModelId: "00000000-0000-4000-8000-000000006105",
-  targetAgentApiKeyId: "00000000-0000-4000-8000-000000007105",
+  targetAgentApiKeyId: "00000000-0000-4000-8000-000000008105",
   targetAgentId: "00000000-0000-4000-8000-000000008105",
   targetFallbackProviderModelId: "00000000-0000-4000-8000-000000009105",
   targetProviderId: "00000000-0000-4000-8000-000000010105",
@@ -72,16 +72,25 @@ export async function seedAnalyticsBackendData(fixture: TestPostgresFixture): Pr
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_analytics105', 'hash-analytics-105', $3, true),
-             ($4, $5, 'llmi_other105', 'hash-other-105', $6, true)
+      update agents
+      set key_prefix = case
+            when id = $1 then 'llmi_analytics105'
+            else 'llmi_other105'
+          end,
+          key_hash = case
+            when id = $1 then 'hash-analytics-105'
+            else 'hash-other-105'
+          end,
+          default_virtual_model_id = case
+            when id = $1 then $3::uuid
+            else $4::uuid
+          end
+      where id in ($1, $2)
     `,
     [
-      analyticsIds.targetAgentApiKeyId,
       analyticsIds.targetAgentId,
-      analyticsIds.targetVirtualModelId,
-      analyticsIds.otherAgentApiKeyId,
       analyticsIds.otherAgentId,
+      analyticsIds.targetVirtualModelId,
       analyticsIds.otherVirtualModelId,
     ],
   );
@@ -200,8 +209,8 @@ async function insertAnalyticsRequest(
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_api_key_id, virtual_model_id, route_policy_id, provider_id,
-        provider_model_id, agent_api_key_prefix, protocol, model, stream, status, error_code,
+        id, request_id, agent_id, virtual_model_id, route_policy_id, provider_id,
+        provider_model_id, agent_key_prefix, protocol, model, stream, status, error_code,
         http_status, latency_ms, started_at, completed_at
       )
       values (
@@ -229,7 +238,7 @@ async function insertAnalyticsRequest(
     await fixture.query(
       `
         insert into request_usage (
-          id, request_activity_id, agent_api_key_id, virtual_model_id, provider_model_id,
+          id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
           input_tokens, output_tokens, total_tokens, token_source
         )
         values ($8, $1, $2, $3, $4, $5, $6, $7, 'estimated')
@@ -250,7 +259,7 @@ async function insertAnalyticsRequest(
     await fixture.query(
       `
         insert into request_costs (
-          id, request_activity_id, agent_api_key_id, provider_model_id, total_cost_usd, cost_source
+          id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source
         )
         values ($5, $1, $2, $3, $4::numeric, 'estimated')
       `,

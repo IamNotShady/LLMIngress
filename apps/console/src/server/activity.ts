@@ -176,6 +176,7 @@ export async function listConsoleActivities(
                request_activity.completed_at,
                request_activity.route_reason,
                request_activity.fallback_attempts,
+               agents.name as agent_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
                request_activity.provider_api_key_prefix,
                providers.display_name as provider_display_name,
@@ -188,6 +189,7 @@ export async function listConsoleActivities(
                request_usage.total_tokens,
                request_costs.total_cost_usd::text
         from request_activity
+        left join agents on agents.id = request_activity.agent_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -236,6 +238,7 @@ export async function getConsoleActivityDetail(input: {
                request_activity.fallback_attempts,
                request_activity.request_metadata,
                request_activity.response_metadata,
+               agents.name as agent_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
                request_activity.provider_api_key_prefix,
                providers.display_name as provider_display_name,
@@ -248,8 +251,7 @@ export async function getConsoleActivityDetail(input: {
                request_usage.total_tokens,
                request_costs.total_cost_usd::text
         from request_activity
-        left join agent_api_keys on agent_api_keys.id = request_activity.agent_api_key_id
-        left join agents on agents.id = agent_api_keys.agent_id
+        left join agents on agents.id = request_activity.agent_id
         left join virtual_models on virtual_models.id = request_activity.virtual_model_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
@@ -356,7 +358,7 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
     add("request_activity.provider_model_id = ?::uuid", filters.providerModelId);
   }
   if (filters.agentApiKeyId) {
-    add("request_activity.agent_api_key_id = ?::uuid", filters.agentApiKeyId);
+    add("request_activity.agent_id = ?::uuid", filters.agentApiKeyId);
   }
   if (filters.requestId) {
     add("request_activity.request_id = ?", filters.requestId);

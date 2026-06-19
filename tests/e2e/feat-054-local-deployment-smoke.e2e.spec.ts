@@ -261,8 +261,7 @@ async function seedLocalDeployment(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -273,7 +272,7 @@ async function seedLocalDeployment(
     ],
   );
   await fixture.query(
-    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
     [agentApiKeyId, virtualModelId],
   );
   await fixture.query(
@@ -388,8 +387,7 @@ async function seedRealDeployment(fixture: Fixture): Promise<RealDeploymentSeed>
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -401,7 +399,7 @@ async function seedRealDeployment(fixture: Fixture): Promise<RealDeploymentSeed>
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2), ($1, $3)
     `,
     [agentApiKeyId, openaiVirtualModelId, anthropicVirtualModelId],
@@ -409,7 +407,7 @@ async function seedRealDeployment(fixture: Fixture): Promise<RealDeploymentSeed>
   // Hard USD 10 budget cap so a runaway real-provider call cannot overspend.
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'budget', 'month', 10, 'usd', true)
     `,
     [randomUUID(), agentApiKeyId],

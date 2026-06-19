@@ -152,8 +152,7 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'activity046', 'hash-activity-046', $3, true)
+      update agents set id = $1, key_prefix = 'activity046', key_hash = 'hash-activity-046', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, virtualModelId],
   );
@@ -162,12 +161,12 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -258,7 +257,7 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -275,7 +274,7 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         input_cost_usd,
         output_cost_usd,

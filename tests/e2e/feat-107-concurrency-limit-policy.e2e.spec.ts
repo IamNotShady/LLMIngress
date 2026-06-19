@@ -239,19 +239,19 @@ async function seedConcurrencyGateway(
   for (const key of Object.values(keys)) {
     await fixture.query(
       `
-        insert into agent_api_keys (
+        insert into agents (
           id,
-          agent_id,
+          name,
+          agent_type,
           key_prefix,
           key_hash,
           default_virtual_model_id,
           enabled
         )
-        values ($1, $2, $3, $4, $5, true)
+        values ($1, 'Concurrency Agent', 'coding', $2, $3, $4, true)
       `,
       [
         key.id,
-        agentId,
         key.apiKey.slice(0, 12),
         buildGatewayAgentApiKeyHash(key.apiKey),
         virtualModels.json.id,
@@ -260,7 +260,7 @@ async function seedConcurrencyGateway(
     for (const virtualModel of Object.values(virtualModels)) {
       await fixture.query(
         `
-          insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+          insert into agent_virtual_models (agent_id, virtual_model_id)
           values ($1, $2)
         `,
         [key.id, virtualModel.id],
@@ -272,7 +272,7 @@ async function seedConcurrencyGateway(
     `
       insert into agent_limits (
         id,
-        agent_api_key_id,
+        agent_id,
         limit_type,
         period,
         limit_value,
@@ -400,7 +400,7 @@ async function readActiveCount(fixture: Fixture, agentApiKeyId: string): Promise
     `
       select active_count
       from rate_limit_windows
-      where agent_api_key_id = $1
+      where agent_id = $1
         and limit_type = 'concurrency'
       order by updated_at desc
       limit 1

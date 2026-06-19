@@ -159,7 +159,7 @@ export async function releaseGatewayConcurrency(input: {
         update rate_limit_windows
         set active_count = greatest(active_count - 1, 0),
             updated_at = now()
-        where agent_api_key_id = $1
+        where agent_id = $1
           and limit_type = 'concurrency'
           and window_start = $2
       `,
@@ -252,7 +252,7 @@ async function readEnabledGatewayRateLimits(
              enforcement_policy,
              manual_bypass
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
         and enabled = true
         and (
           (limit_type = 'concurrency' and period = 'request' and unit = 'requests')
@@ -284,13 +284,13 @@ async function lockRateLimitWindow(
     `
       insert into rate_limit_windows (
         id,
-        agent_api_key_id,
+        agent_id,
         limit_type,
         window_start,
         window_end
       )
       values ($1, $2, $3, $4, $5)
-      on conflict (agent_api_key_id, limit_type, window_start) do nothing
+      on conflict (agent_id, limit_type, window_start) do nothing
     `,
     [
       randomUUID(),
@@ -307,7 +307,7 @@ async function lockRateLimitWindow(
              token_count,
              active_count
       from rate_limit_windows
-      where agent_api_key_id = $1
+      where agent_id = $1
         and limit_type = $2
         and window_start = $3
       for update
@@ -342,7 +342,7 @@ async function incrementRateLimitWindow(
           token_count = token_count + $2,
           active_count = active_count + $3,
           updated_at = now()
-      where agent_api_key_id = $4
+      where agent_id = $4
         and limit_type = $5
         and window_start = $6
     `,

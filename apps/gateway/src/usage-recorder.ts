@@ -70,7 +70,7 @@ export async function recordGatewayUsageCostAndSavings(
         insert into request_usage (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           virtual_model_id,
           provider_model_id,
           input_tokens,
@@ -101,7 +101,7 @@ export async function recordGatewayUsageCostAndSavings(
         insert into request_costs (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           provider_model_id,
           input_cost_usd,
           output_cost_usd,

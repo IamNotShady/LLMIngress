@@ -238,15 +238,7 @@ async function seedProviderKeyOperationalGateway(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi-pko-102', 'hash-not-used-102', $3, true)
+      update agents set id = $1, key_prefix = 'llmi-pko-102', key_hash = 'hash-not-used-102', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, virtualModelId],
   );

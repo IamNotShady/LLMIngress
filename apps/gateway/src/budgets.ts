@@ -142,7 +142,7 @@ export async function reserveGatewayBudget(input: {
       `
         insert into budget_reservations (
           id,
-          agent_api_key_id,
+          agent_id,
           budget_period_id,
           status,
           reserved_input_tokens,
@@ -304,7 +304,7 @@ async function readEnabledBudgetLimits(
              limit_value::text,
              unit
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
         and enabled = true
         and limit_type in ('budget', 'token')
       order by case period
@@ -338,13 +338,13 @@ async function lockBudgetPeriod(
     `
       insert into budget_periods (
         id,
-        agent_api_key_id,
+        agent_id,
         period_type,
         period_start,
         period_end
       )
       values ($1, $2, $3, $4, $5)
-      on conflict (agent_api_key_id, period_type, period_start) do nothing
+      on conflict (agent_id, period_type, period_start) do nothing
     `,
     [
       randomUUID(),
@@ -361,7 +361,7 @@ async function lockBudgetPeriod(
              cost_used_usd::text,
              reserved_cost_usd::text
       from budget_periods
-      where agent_api_key_id = $1
+      where agent_id = $1
         and period_type = $2
         and period_start = $3
       for update

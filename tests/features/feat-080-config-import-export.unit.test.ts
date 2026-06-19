@@ -47,7 +47,7 @@ describe("feat-080 config import export", () => {
     });
     expect(sameDatabaseImport.version).toBe(1);
     const preservedAgentKey = await source.query<{ key_hash: string }>(
-      "select key_hash from agent_api_keys where key_prefix = 'llmi_cfg80'",
+      "select key_hash from agents where key_prefix = 'llmi_cfg80'",
     );
     expect(preservedAgentKey.rows[0]?.key_hash).toBe("sha256:v1:config-export-secret-hash-080");
 
@@ -56,8 +56,8 @@ describe("feat-080 config import export", () => {
       document: exported,
     });
     expect(importResult).toMatchObject({
-      importedAgentApiKeyCount: 1,
       importedAgentCount: 1,
+      importedAgentKeyCount: 1,
       importedProviderCount: 1,
       importedProviderModelCount: 1,
       importedRoutePolicyCount: 1,
@@ -79,7 +79,7 @@ describe("feat-080 config import export", () => {
     expect(importedProviderSecrets.rows[0]?.count).toBe("0");
 
     const importedAgentKey = await target.query<{ key_hash: string }>(
-      "select key_hash from agent_api_keys where key_prefix = 'llmi_cfg80'",
+      "select key_hash from agents where key_prefix = 'llmi_cfg80'",
     );
     expect(importedAgentKey.rows[0]?.key_hash).toMatch(/^redacted-import:v1:/);
     expect(importedAgentKey.rows[0]?.key_hash).not.toBe("sha256:v1:config-export-secret-hash-080");
@@ -139,7 +139,7 @@ async function createFixture(suffix: string): Promise<Fixture> {
 
 async function seedConfigExportData(fixture: Fixture): Promise<void> {
   const ids = {
-    agentApiKeyId: "00000000-0000-4000-8000-000000000180",
+    agentApiKeyId: "00000000-0000-4000-8000-000000000080",
     agentId: "00000000-0000-4000-8000-000000000080",
     providerApiKeyId: "00000000-0000-4000-8000-000000000680",
     providerId: "00000000-0000-4000-8000-000000000280",
@@ -197,21 +197,23 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
     [randomUUID(), ids.routePolicyId, ids.providerModelId],
   );
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'Config Agent', 'coding', true)",
-    [ids.agentId],
-  );
-  await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
+      insert into agents (
+        id,
+        name,
+        agent_type,
+        key_prefix,
+        key_hash,
+        default_virtual_model_id,
+        enabled
       )
-      values ($1, $2, 'llmi_cfg80', 'sha256:v1:config-export-secret-hash-080', $3, true)
+      values ($1, 'Config Agent', 'coding', 'llmi_cfg80', 'sha256:v1:config-export-secret-hash-080', $2, true)
     `,
-    [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
+    [ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [ids.agentApiKeyId, ids.virtualModelId],
@@ -219,7 +221,7 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
   await fixture.query(
     `
       insert into agent_limits (
-        id, agent_api_key_id, limit_type, period, limit_value, unit, enabled
+        id, agent_id, limit_type, period, limit_value, unit, enabled
       )
       values ($1, $2, 'budget', 'month', 25.5, 'usd', true),
              ($3, $2, 'rpm', 'minute', 60, 'requests', true)

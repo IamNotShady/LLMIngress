@@ -56,12 +56,12 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "create_schema_version",
   },
   {
-    checksum: "b874655baab3e693783baa9ba34bab3cdcd7af2cab0ad73e9625a9ad64d31a53",
+    checksum: "2dc26fd292475ffa8b4e644e6e320815b232708684421e077ab42d5c200d67f9",
     id: "0002",
     name: "core_config_schema",
   },
   {
-    checksum: "1897fcdb0b25189e00f3456d80aef53993a7be5605c94c1d8185b5051ae1dfde",
+    checksum: "4895bcf4af76a2d5cd6108bf7acc8b11878177c3c324fa416ef9b8b26a1e9d15",
     id: "0003",
     name: "runtime_records_jobs_schema",
   },
@@ -121,7 +121,7 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "price_registry_snapshots",
   },
   {
-    checksum: "8a4a7d627fc704d64f7379a30c7dcf5fe4d8676fe0193c388d8009b4505b59ad",
+    checksum: "eedc6d995a2a318db24862be68ff9b9f5eec3c7307e40fabbde5e8384c020b11",
     id: "0015",
     name: "billing_reconciliation",
   },
@@ -186,7 +186,7 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "agent_platform_status_logging",
   },
   {
-    checksum: "f95f77c77c9d3a05b6b57656b4e958106581ac8c4218a7c4588f4e8b9592dd6a",
+    checksum: "d80ef98fea9a220107ed3cce14bf7aa0e9663dd12dc2c5e7929d5a26850cb32b",
     id: "0028",
     name: "activity_detail_metadata",
   },
@@ -204,6 +204,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     checksum: "aade4f0ce0fd5ba37b4cc2216a152cb2b51c4a0d953932ffb6a0b79e478d9a61",
     id: "0031",
     name: "concurrency_limit_policy",
+  },
+  {
+    checksum: "fee55665a009264ad29490823db64204cda0db46fe4fc70cd54b56974aa733b7",
+    id: "0032",
+    name: "agent_owned_api_key",
   },
 ];
 

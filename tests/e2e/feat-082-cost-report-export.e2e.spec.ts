@@ -48,7 +48,6 @@ test("cost report export matches usage breakdown totals", async () => {
     expect(rawReport).not.toContain("sha256:v1:cost-report-secret-hash");
     const report = JSON.parse(rawReport) as {
       breakdowns: {
-        agentApiKeys: unknown[];
         agents: unknown[];
         models: unknown[];
         providerModels: unknown[];
@@ -78,7 +77,6 @@ test("cost report export matches usage breakdown totals", async () => {
       },
     });
     expect(report.breakdowns.agents).toEqual(expectedUsage.agentBreakdowns);
-    expect(report.breakdowns.agentApiKeys).toEqual(expectedUsage.agentApiKeyBreakdowns);
     expect(report.breakdowns.providerModels).toEqual(expectedUsage.breakdowns);
     expect(report.breakdowns.virtualModels).toEqual(expectedUsage.virtualModelBreakdowns);
     expect(report.breakdowns.providers).toEqual(expectedUsage.providerBreakdowns);
@@ -154,8 +152,7 @@ async function seedCostReportUsageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_cost82', 'sha256:v1:cost-report-secret-hash', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_cost82', key_hash = 'sha256:v1:cost-report-secret-hash', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -234,11 +231,11 @@ async function insertCostReportRequest(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -276,7 +273,7 @@ async function insertCostReportRequest(
         insert into request_usage (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           virtual_model_id,
           provider_model_id,
           input_tokens,
@@ -302,7 +299,7 @@ async function insertCostReportRequest(
         insert into request_costs (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           provider_model_id,
           total_cost_usd,
           cost_source

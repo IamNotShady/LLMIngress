@@ -38,21 +38,18 @@ describe("feat-026 agent CRUD", () => {
   it("reports dependency errors before deleting agents", () => {
     expect(
       getAgentDeleteDependencyError({
-        activeApiKeyCount: 1,
         requestAttributionCount: 0,
       }),
-    ).toMatch(/active API keys/i);
+    ).toBeNull();
 
     expect(
       getAgentDeleteDependencyError({
-        activeApiKeyCount: 0,
         requestAttributionCount: 1,
       }),
     ).toMatch(/request attribution/i);
 
     expect(
       getAgentDeleteDependencyError({
-        activeApiKeyCount: 0,
         requestAttributionCount: 0,
       }),
     ).toBeNull();

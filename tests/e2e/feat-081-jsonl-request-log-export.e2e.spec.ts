@@ -52,11 +52,9 @@ test("jsonl request log export writes metadata fallback errors without secrets",
     expect(records).toHaveLength(2);
     expect(records[0]).toMatchObject({
       agent: {
+        keyPrefix: "llmi_jsonl81",
         name: "JSONL Export Agent",
         type: "coding",
-      },
-      agentApiKey: {
-        prefix: "llmi_jsonl81",
       },
       error: null,
       fallbackEvents: [],
@@ -180,10 +178,7 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-      )
-      values ($1, $2, 'llmi_jsonl81', 'sha256:v1:jsonl-agent-secret-hash', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_jsonl81', key_hash = 'sha256:v1:jsonl-agent-secret-hash', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -192,12 +187,12 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -233,12 +228,12 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -279,7 +274,7 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -304,7 +299,7 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         input_cost_usd,
         output_cost_usd,

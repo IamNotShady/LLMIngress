@@ -54,7 +54,7 @@ AI Agents
   │ OpenAI-compatible / Anthropic-compatible API
   ▼
 Gateway Service
-  ├── Agent API Key 鉴权
+  ├── Agent-owned API key 鉴权
   ├── Budget / Rate Limit 检查
   ├── Virtual Model / Route Policy 解析
   ├── Provider / Model 选择
@@ -120,7 +120,7 @@ Gateway Service
 │
 ├── Request Pipeline
 │   ├── Request ID / logging context
-│   ├── Agent API Key authentication
+│   ├── Agent-owned API key authentication
 │   ├── Agent permission check
 │   ├── Cheap RPM / concurrency check
 │   ├── Protocol normalization
@@ -168,7 +168,7 @@ Gateway 对 AI Agent 暴露统一 endpoint，优先覆盖：
 - `POST /v1/embeddings`
 - `GET /v1/models`
 
-其中 `GET /v1/models` 返回当前 Agent API Key 被授权使用的 Virtual Model Name，不直接暴露真实 Provider 模型列表。
+其中 `GET /v1/models` 返回当前 Agent 被授权使用的 Virtual Model Name，不直接暴露真实 Provider 模型列表。
 
 Public API 的默认调用方是 AI Agent。Playground 需要从浏览器直接调用 Gateway Public API 时，Gateway 只允许配置过的 Console origin 通过 CORS 访问；默认本机部署可允许 Console localhost origin，server 部署必须显式配置 allowed origins。Playground 使用的 Gateway Base URL 来自 Console 中展示给 Agent 的 Gateway URL / runtime setting；如果 Console 与 Gateway 不同端口或域名，用户必须配置浏览器可访问的 Gateway Base URL。
 
@@ -183,7 +183,7 @@ Public API 的默认调用方是 AI Agent。Playground 需要从浏览器直接�
 
 Routing Runtime 使用确定性规则引擎，不在 V1 默认额外调用 LLM 分类器。它根据以下输入选择真实 Provider 与 Model：
 
-- Agent API Key。
+- Agent-owned API key。
 - Agent 类型。
 - Virtual Model Name。
 - Route Policy。
@@ -201,7 +201,7 @@ Routing Runtime 使用确定性规则引擎，不在 V1 默认额外调用 LLM �
 
 Gateway 不在每个请求中直接拼装完整配置，而是在内存中维护一个 immutable config snapshot：
 
-- snapshot 来源于数据库中的 Agents、Agent API Keys、Providers、Models、Virtual Models、Route Policies、Limits 等配置。
+- snapshot 来源于数据库中的 Agents、Agent Virtual Model grants、Providers、Models、Virtual Models、Route Policies、Limits 等配置。
 - 每次配置热加载生成新的 snapshot。
 - 新请求读取当前最新 snapshot。
 - 已开始处理的请求继续使用它进入 pipeline 时捕获的 snapshot。
@@ -217,7 +217,7 @@ Gateway 负责同步请求路径中的可变运行时状态，包括限流计数
 
 - RPM / TPM window：Gateway 在内存中维护当前窗口的快速计数，并把窗口累计值周期性或按请求写入数据库，用于重启恢复和 Console 展示。
 - Concurrency：Gateway 在内存中维护当前进程内的并发计数，请求结束或取消时释放；Gateway 重启后并发计数自然归零。
-- Budget period：数据库保存每个 Agent API Key 当前预算周期的累计 token、cost 和 reservation；Gateway 在请求开始时做预算预留，在请求结束后用实际或估算 usage 结算。
+- Budget period：数据库保存每个 Agent 当前预算周期的累计 token、cost 和 reservation；Gateway 在请求开始时做预算预留，在请求结束后用实际或估算 usage 结算。
 - Budget reservation：请求开始时按输入 token 估算值和可用的输出上限做预留；streaming 输出 token 在请求开始时未知，请求结束后用实际输出 token 和实际或估算成本结算差额。
 - Usage record：`request_usage` 是审计与分析记录，不是同步限流检查的唯一来源。
 - Provider / Model health view：Gateway 维护进程内健康视图，综合请求路径内的失败、超时、429、首包延迟和 Worker 周期探测摘要；路由决策读取这份 in-memory health view，不在每个请求上查询 `provider_health_events`。
@@ -337,7 +337,7 @@ Console 的关键职责：
 
 - 写入并校验配置。
 - 在禁用或删除 Provider、Model、Route Policy 前做依赖检查。
-- 对 Provider Key 做加密写入，对 Agent API Key 做 hash 存储。
+- 对 Provider Key 做加密写入，对 Agent-owned API key 做 hash 存储。
 - 生成 Agent 接入说明和可复制配置。
 - 展示 Gateway 写入的 Activity、Usage、Cost、Fallback 和错误数据。
 - 管理 Gateway Runtime 设置，例如监听地址、端口、日志保留和数据导入导出。
@@ -386,8 +386,8 @@ Background Worker / Scheduler
 
 配置写入 owner 规则：
 
-- Console 是用户配置的 owner，写入 Agents、Agent API Keys、Providers、Virtual Models、Route Policies、Limits、Settings 等用户显式配置。
-- Worker 是 Provider 派生数据和异步运行数据的 owner：provider model list、price registry snapshot 等会进入配置版本；provider health summary、billing reconciliation result 等是运行数据，不进入 config snapshot。
+- Console 是用户配置的 owner，写入 Agents、Agent Virtual Model grants、Providers、Virtual Models、Route Policies、Limits、Settings 等用户显式配置。
+- Worker 是 Provider 派生数据和异步运行数据的 owner：provider model list、price registry snapshot 等会进入配置版本；provider health summary、billing reconciliation 对 `request_costs` / `request_savings` 的修正等是运行数据，不进入 config snapshot。
 - Console 和 Worker 都必须通过同一个 config publisher 发布 routing-visible config version；任何一方发布 config version 后，都通过 Postgres `config_changed` channel 唤醒 Gateway reload。Worker 的健康探测结果不发布 config version，而是通过 health summary 表和 `health_summary_changed` channel 进入 Gateway health view 的刷新链路。
 
 Worker 的运行边界：
@@ -426,7 +426,7 @@ Background Worker
 - 手动刷新：用户在 Console 点击 refresh，Console 创建一次模型刷新任务。
 - 周期刷新：Worker 按配置周期刷新模型列表；Provider 健康探测走 health summary 链路，不发布 config version。
 
-Gateway 的 `GET /v1/models` 不走 Provider discovery，它只基于当前 config snapshot 返回 Agent API Key 被授权使用的 Virtual Model Name。
+Gateway 的 `GET /v1/models` 不走 Provider discovery，它只基于当前 config snapshot 返回 Agent 被授权使用的 Virtual Model Name。
 
 Provider 派生模型数据的引用完整性规则：
 
@@ -599,18 +599,18 @@ Worker job 使用 Postgres 行锁、advisory lock 或 job lease 做去重，避�
 
 ### 7.5 Playground Public API 测试链路
 
-Playground 使用 Gateway Public API 做真实请求测试。Console 后端不代理 Playground 请求，也不保存、读取或恢复 Agent API Key 明文；用户需要在 Playground 页面手动输入 Agent API Key，然后选择一个 Virtual Model Name 作为请求中的 `model`。
+Playground 使用 Gateway Public API 做真实请求测试。Console 后端不代理 Playground 请求，也不保存、读取或恢复 Agent API key 明文；用户需要在 Playground 页面手动输入 Agent API key，然后选择一个 Virtual Model Name 作为请求中的 `model`。
 
 ```text
 User
   ▼
 Console Playground in browser
-  ├── input Agent API Key, held in page memory only
+  ├── input Agent API key, held in page memory only
   ├── GET /v1/models through Gateway Public API
   └── select Virtual Model Name
   ▼
 Gateway Public API
-  ├── normal Agent API Key authentication
+  ├── normal Agent-owned API key authentication
   ├── normal Virtual Model authorization
   ├── normal rate limit / budget / concurrency check
   ├── normal route policy / fallback execution
@@ -618,13 +618,13 @@ Gateway Public API
   └── normal activity / usage / cost record
 ```
 
-因为 Playground 走的是真实 Public API 请求，它默认计入该 Agent API Key 的 Rate Limit、Budget、Usage 和 Cost。Console 可以在页面内展示本次测试的 request id、route reason 和响应结果，但这些数据来自 Public API 响应和后续 Activity 查询，不需要内部测试 endpoint。
+因为 Playground 走的是真实 Public API 请求，它默认计入该 Agent 的 Rate Limit、Budget、Usage 和 Cost。Console 可以在页面内展示本次测试的 request id、route reason 和响应结果，但这些数据来自 Public API 响应和后续 Activity 查询，不需要内部测试 endpoint。
 
 Playground 安全边界：
 
-- Agent API Key 只保存在当前页面内存中，不写入 localStorage、sessionStorage、cookie 或 Console 后端日志。
+- Agent API key 只保存在当前页面内存中，不写入 localStorage、sessionStorage、cookie 或 Console 后端日志。
 - Console 与 Gateway 不同端口或域名时，Playground 使用用户配置的 Gateway Base URL，并要求 Gateway CORS allowlist 包含当前 Console origin。
-- 这是自托管单用户场景下可接受的显式操作；如果用户关闭页面或刷新页面，需要重新粘贴 Agent API Key。
+- 这是自托管单用户场景下可接受的显式操作；如果用户关闭页面或刷新页面，需要重新粘贴 Agent API key。
 
 ### 7.6 Postgres 通信与权限边界
 
@@ -641,7 +641,7 @@ Console 可以管理 Gateway Runtime 设置，但不是所有 runtime settings �
 
 | 设置类型 | 生效方式 | 生效执行方 |
 | --- | --- | --- |
-| Route Policy、Virtual Model、Agent API Key 权限、Provider 启用状态、模型元数据、价格、Limits | config version + snapshot 热加载 | Console / Worker 通过 shared config publisher |
+| Route Policy、Virtual Model、Agent 权限、Provider 启用状态、模型元数据、价格、Limits | config version + snapshot 热加载 | Console / Worker 通过 shared config publisher |
 | 日志保留周期、导出计划、告警阈值、通知目标 | Worker scheduler 下次 tick 或 job reload 生效 | Worker |
 | Console UI 偏好、报表筛选默认值 | Console API / Web App 即时生效 | Console |
 | Gateway listen host、port、TLS 配置、Postgres connection string、数据目录、master key 来源 | 需要 supervisor 重启相关进程 | local / deployment supervisor |
@@ -670,7 +670,7 @@ V1 直接使用 PostgreSQL 作为 canonical database，并把它作为 Gateway�
 PostgreSQL database
 ├── Identity / access
 │   ├── agents
-│   ├── agent_api_keys
+│   ├── agent_virtual_models
 │   └── console_users
 │
 ├── Provider / model config
@@ -709,9 +709,7 @@ PostgreSQL database
 │   └── export_tasks
 │
 ├── Billing / pricing
-│   ├── provider_models_price
-│   ├── billing_reconciliation_runs
-│   └── billing_reconciliation_items
+│   └── provider_models_price
 │
 ├── Config lifecycle
 │   ├── config_versions
@@ -736,7 +734,7 @@ Postgres notification channels：
 
 - Provider API Key：加密后存储，只展示 prefix 或 label。
 - Subscription Token：如未来支持，必须加密存储，并明确标注 Provider ToS 风险。
-- Agent API Key：只保存 hash，不保存明文；Console 只在创建或轮换时展示一次。Playground 无法从 Console 服务端取回既有 key，用户需要自行粘贴明文 key。
+- Agent API key：hash/prefix/default Virtual Model 存在 `agents` 上，Allowed Virtual Models 存在 `agent_virtual_models`；明文只在创建 Agent 时展示一次。Playground 无法从 Console 服务端取回既有 key，用户需要自行粘贴明文 key。V1 不支持 rotate/disable/history，key 丢失或泄露时删除并重建 Agent。
 - prompt / response 内容：默认不记录；用户显式开启后才进入 optional content records。
 - 数据导出：支持导出配置、成本报表和请求 metadata；导出 prompt / response 内容需要用户显式确认。
 
@@ -1081,10 +1079,10 @@ Agent 协议、Provider 协议、Route Policy、配置发布、配置校验、Po
 - Provider 派生模型数据采用 soft-delete / availability marker；硬删除必须经 Console 依赖检查。
 - Route Policy 的主候选和 fallback chain 当前统一存放在 `route_policy_candidates`，用 `candidate_order` 和 `is_fallback` 表达顺序与 fallback 语义；不单独维护 `fallback_chain_items` 表。
 - OpenAI-compatible 长尾 Provider 通过内置白名单 template 复用通用 adapter，不开放任意自定义 endpoint。
-- Playground 使用 Gateway Public API 测试；用户手动输入 Agent API Key 并选择 Virtual Model Name，Console 后端不代理请求也不保存该 key。
+- Playground 使用 Gateway Public API 测试；用户手动输入 Agent API key 并选择 Virtual Model Name，Console 后端不代理请求也不保存该 key。
 - Gateway 拥有同步限流、预算预留、并发计数和 in-memory health view；数据库保存可恢复的窗口、预算周期累计、健康事件和 health summary。
 - Gateway 在请求路径记录 baseline cost 和 request savings；Console 聚合展示，Worker 只在成本对账后修正 actual cost / savings。
 - Runtime settings 区分 hot-reloadable 与 restart-required；监听地址、端口、数据目录等由 supervisor 重启生效。
 - master key 存储在数据库之外，由 Gateway、Console、Worker 共享加载；Postgres 连接凭据与 master key 分离。
 - Migration 和升级前备份是部署期 / supervisor 关注点，不属于 Console 私有服务。
-- Provider Key 加密存储，Agent API Key hash 存储，prompt / response 默认不落库。
+- Provider Key 加密存储，Agent API key hash 存储，prompt / response 默认不落库。

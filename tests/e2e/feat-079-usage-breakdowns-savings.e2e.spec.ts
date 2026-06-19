@@ -5,7 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("usage page shows agent agent api key virtual model provider model cost failure and savings breakdowns", async ({
+test("usage page shows agent virtual model provider model cost failure and savings breakdowns", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -124,8 +124,7 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_usage79', 'hash-usage-079', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_usage79', key_hash = 'hash-usage-079', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -186,8 +185,8 @@ async function insertUsageBreakdownRequest(
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_api_key_id, virtual_model_id, provider_id,
-        provider_model_id, agent_api_key_prefix, protocol, model, stream,
+        id, request_id, agent_id, virtual_model_id, provider_id,
+        provider_model_id, agent_key_prefix, protocol, model, stream,
         status, error_code, http_status, started_at, completed_at
       )
       values (
@@ -213,7 +212,7 @@ async function insertUsageBreakdownRequest(
   await fixture.query(
     `
       insert into request_usage (
-        id, request_activity_id, agent_api_key_id, virtual_model_id, provider_model_id,
+        id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
         input_tokens, output_tokens, total_tokens, token_source
       )
       values ($1, $2, $3, $4, $5, $6, $7, $8, 'estimated')
@@ -232,7 +231,7 @@ async function insertUsageBreakdownRequest(
   await fixture.query(
     `
       insert into request_costs (
-        id, request_activity_id, agent_api_key_id, provider_model_id, total_cost_usd, cost_source
+        id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source
       )
       values ($1, $2, $3, $4, $5::numeric, 'estimated')
     `,

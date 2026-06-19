@@ -1,6 +1,6 @@
 create table if not exists rate_limit_windows (
   id uuid primary key,
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete restrict,
+  agent_id uuid not null references agents (id) on delete restrict,
   limit_type text not null check (limit_type in ('rpm', 'tpm', 'concurrency')),
   window_start timestamptz not null,
   window_end timestamptz not null,
@@ -10,12 +10,12 @@ create table if not exists rate_limit_windows (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (window_end > window_start),
-  unique (agent_api_key_id, limit_type, window_start)
+  unique (agent_id, limit_type, window_start)
 );
 
 create table if not exists budget_periods (
   id uuid primary key,
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete restrict,
+  agent_id uuid not null references agents (id) on delete restrict,
   period_type text not null check (period_type in ('hour', 'day', 'week', 'month')),
   period_start timestamptz not null,
   period_end timestamptz not null,
@@ -26,7 +26,7 @@ create table if not exists budget_periods (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (period_end > period_start),
-  unique (agent_api_key_id, period_type, period_start)
+  unique (agent_id, period_type, period_start)
 );
 
 create unique index if not exists uq_provider_models_provider_id_id
@@ -35,12 +35,12 @@ create unique index if not exists uq_provider_models_provider_id_id
 create table if not exists request_activity (
   id uuid primary key,
   request_id text not null unique,
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete restrict,
+  agent_id uuid not null references agents (id) on delete restrict,
   virtual_model_id uuid references virtual_models (id) on delete restrict,
   route_policy_id uuid references route_policies (id) on delete restrict,
   provider_id uuid references providers (id) on delete restrict,
   provider_model_id uuid references provider_models (id) on delete restrict,
-  agent_api_key_prefix text not null,
+  agent_key_prefix text not null,
   protocol text not null check (
     protocol in ('chat_completions', 'responses', 'messages', 'embeddings', 'models')
   ),
@@ -68,7 +68,7 @@ create table if not exists request_activity (
 create table if not exists request_usage (
   id uuid primary key,
   request_activity_id uuid not null unique references request_activity (id) on delete cascade,
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete restrict,
+  agent_id uuid not null references agents (id) on delete restrict,
   virtual_model_id uuid references virtual_models (id) on delete restrict,
   provider_model_id uuid references provider_models (id) on delete restrict,
   input_tokens integer not null default 0 check (input_tokens >= 0),
@@ -83,7 +83,7 @@ create table if not exists request_usage (
 create table if not exists request_costs (
   id uuid primary key,
   request_activity_id uuid not null unique references request_activity (id) on delete cascade,
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete restrict,
+  agent_id uuid not null references agents (id) on delete restrict,
   provider_model_id uuid references provider_models (id) on delete restrict,
   input_cost_usd numeric(20, 8) check (input_cost_usd is null or input_cost_usd >= 0),
   output_cost_usd numeric(20, 8) check (output_cost_usd is null or output_cost_usd >= 0),
@@ -123,7 +123,7 @@ create table if not exists fallback_events (
 
 create table if not exists budget_reservations (
   id uuid primary key,
-  agent_api_key_id uuid not null references agent_api_keys (id) on delete restrict,
+  agent_id uuid not null references agents (id) on delete restrict,
   budget_period_id uuid references budget_periods (id) on delete cascade,
   request_activity_id uuid references request_activity (id) on delete set null,
   status text not null check (status in ('pending', 'finalized', 'released', 'expired')),
@@ -267,13 +267,13 @@ create table if not exists runtime_errors (
 );
 
 create index if not exists idx_rate_limit_windows_agent_window
-  on rate_limit_windows (agent_api_key_id, limit_type, window_start desc);
+  on rate_limit_windows (agent_id, limit_type, window_start desc);
 
 create index if not exists idx_budget_periods_agent_period
-  on budget_periods (agent_api_key_id, period_type, period_start desc);
+  on budget_periods (agent_id, period_type, period_start desc);
 
 create index if not exists idx_request_activity_agent_created_at
-  on request_activity (agent_api_key_id, created_at desc);
+  on request_activity (agent_id, created_at desc);
 
 create index if not exists idx_request_activity_virtual_model_created_at
   on request_activity (virtual_model_id, created_at desc);
@@ -285,13 +285,13 @@ create index if not exists idx_request_activity_status_created_at
   on request_activity (status, created_at desc);
 
 create index if not exists idx_request_usage_agent_created_at
-  on request_usage (agent_api_key_id, created_at desc);
+  on request_usage (agent_id, created_at desc);
 
 create index if not exists idx_request_usage_provider_model_created_at
   on request_usage (provider_model_id, created_at desc);
 
 create index if not exists idx_request_costs_agent_created_at
-  on request_costs (agent_api_key_id, created_at desc);
+  on request_costs (agent_id, created_at desc);
 
 create index if not exists idx_request_savings_baseline_model_created_at
   on request_savings (baseline_provider_model_id, created_at desc);
@@ -304,7 +304,7 @@ create index if not exists idx_budget_reservations_pending_expires_at
   where status = 'pending';
 
 create index if not exists idx_budget_reservations_agent_status
-  on budget_reservations (agent_api_key_id, status, created_at desc);
+  on budget_reservations (agent_id, status, created_at desc);
 
 create index if not exists idx_jobs_pending_run_after
   on jobs (run_after, priority desc, created_at)

@@ -228,17 +228,17 @@
     {
       "id": "feat-026",
       "name": "Agent CRUD",
-      "description": "Console can create, edit, list, and delete Agents, and deleting an Agent with active API keys or request attribution is blocked with a dependency error.",
-      "verification": "pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with active dependencies is blocked'",
+      "description": "Console can create, edit, list, and delete Agents, and deleting an Agent with request attribution is blocked with a dependency error.",
+      "verification": "pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with request attribution is blocked'",
       "dependencies": ["feat-008", "feat-013"],
       "status": "passing",
       "evidence": "2026-06-14: TDD red observed for feat-026 unit/E2E because the Agent CRUD server module and /api/agents route were missing. Added Agent create/edit/list/delete helpers, authenticated Console API, Dashboard Agent management UI, dependency checks blocking deletes with active API keys or request attribution, and config publisher integration for Agent changes. P2+ review found and fixed delete checks using ConfigPublisher rowCount assumptions plus added row locking before dependency validation. Verification passed — feat-026 unit tests 3 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 24 prior passing features before marking feat-026 passing, and final verify:features passed all 25 passing features after marking."
     },
     {
       "id": "feat-027",
-      "name": "Agent API Key Lifecycle",
-      "description": "Console can create, rotate, disable, and delete Agent API keys; plaintext appears only once, and only hash, prefix, status, and metadata persist afterward.",
-      "verification": "pnpm exec vitest run tests/features/feat-027-agent-key-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/feat-027-agent-key-lifecycle.e2e.spec.ts --grep 'agent key plaintext once hash prefix status metadata persisted after rotate disable delete'",
+      "name": "Agent-Owned API Key",
+      "description": "Console returns one plaintext API key when an Agent is created; only hash and prefix persist on agents, plaintext is not shown after return to the dashboard, independent key lifecycle controls are absent, and legacy key tables are removed.",
+      "verification": "pnpm exec vitest run tests/features/feat-027-agent-key-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/feat-027-agent-key-lifecycle.e2e.spec.ts --grep 'agent creation returns one plaintext key and removes independent key lifecycle'",
       "dependencies": ["feat-010", "feat-026"],
       "status": "passing",
       "evidence": "2026-06-14: TDD red observed for feat-027 unit/E2E because the Agent API key lifecycle server module and /api/agent-api-keys route were missing. Added Agent API key generation, SHA-256 hash storage, prefix/status/metadata listing, one-time plaintext create/rotate pages, rotate, disable, delete, Dashboard controls, and request-attribution delete protection. P2+ review found no additional blocking issues after confirming plaintext is not persisted in Dashboard, key_hash, or metadata. Verification passed — feat-027 unit tests 3 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 25 prior passing features before marking feat-027 passing, and final verify:features passed all 26 passing features after marking."
@@ -264,7 +264,7 @@
     {
       "id": "feat-030",
       "name": "Allowed and Default Virtual Models",
-      "description": "Console can assign allowed Virtual Model Names and one default Virtual Model to an Agent API key; the default must be one of the allowed names.",
+      "description": "Console can assign allowed Virtual Model Names and one default Virtual Model to an Agent; the default must be one of the allowed names.",
       "verification": "pnpm exec vitest run tests/features/feat-030-allowed-default-models.unit.test.ts && pnpm test:e2e tests/e2e/feat-030-allowed-default-models.e2e.spec.ts --grep 'default virtual model must be in allowed list'",
       "dependencies": ["feat-027", "feat-028"],
       "status": "passing",
@@ -272,9 +272,9 @@
     },
     {
       "id": "feat-031",
-      "name": "Agent API Key Limit Configuration",
-      "description": "A user can configure Budget, RPM, TPM, and Token Limit rules for an Agent API key; budget price validation is now automatic accessible Route Policy candidate validation owned by feat-096, so this feature verifies scoped limit rules and form controls without manual price fields.",
-      "verification": "pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent key limit form saves budget rpm tpm token rules without manual price fields'",
+      "name": "Agent Limit Configuration",
+      "description": "A user can configure Budget, RPM, TPM, and Token Limit rules for an Agent; budget price validation is now automatic accessible Route Policy candidate validation owned by feat-096, so this feature verifies scoped limit rules and form controls without manual price fields.",
+      "verification": "pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts && pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent limit form saves budget rpm tpm token rules without manual price fields'",
       "dependencies": ["feat-014", "feat-015", "feat-027"],
       "status": "passing",
       "evidence": "2026-06-14: TDD red observed for feat-031 unit tests because apps/console/src/server/agent-limits was missing, and E2E failed because the Dashboard did not expose Budget USD limit controls. Added Agent API key limit server helpers, authenticated /api/agent-limits saveLimitRules action, Dashboard Budget/RPM/TPM/Token limit controls, config publisher integration, fixed period/unit combinations for each limit type, and a cost-budget guard that rejects unknown-price models until a manual price override exists. P2+ review found no blocking issues after checking key-row locking, transaction rollback before deleting old rules, unknown-price validation, stale period cleanup, and config change publication. Verification passed — feat-031 unit tests 4 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 29 prior passing features before marking feat-031 passing, and final verify:features passed all 30 passing features after marking. 2026-06-16 feat-096 follow-up: removed legacy manual budget price provider/model fields from feat-031 tests and verification; feat-031 now verifies the scoped Budget/RPM/TPM/Token limit form without manual price inputs. Verification passed: feat-031 unit tests (3) and real Chromium/PostgreSQL E2E (1)."
@@ -736,11 +736,11 @@
     {
       "id": "feat-074",
       "name": "Billing Reconciliation Job",
-      "description": "Billing reconciliation jobs reconcile stored request costs from provider or price data and record reconciliation runs and items.",
-      "verification": "pnpm exec vitest run tests/features/feat-074-billing-reconciliation-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-074-billing-reconciliation-job.e2e.spec.ts --grep 'billing reconciliation updates request costs and records runs and items'",
+      "description": "Billing reconciliation jobs reconcile stored request costs from provider or price data without separate reconciliation run or item tables.",
+      "verification": "pnpm exec vitest run tests/features/feat-074-billing-reconciliation-job.unit.test.ts && pnpm test:e2e tests/e2e/feat-074-billing-reconciliation-job.e2e.spec.ts --grep 'billing reconciliation updates request costs without audit tables'",
       "dependencies": ["feat-045", "feat-071", "feat-073"],
       "status": "passing",
-      "evidence": "2026-06-16: TDD red observed for feat-074 unit/E2E because billing reconciliation migration/handler support was missing, and follow-up unit red observed because the default Worker main did not register billing_reconciliation. Added migration 0015_billing_reconciliation for billing_reconciliation_runs and billing_reconciliation_items. Added a Worker billing_reconciliation handler that reconciles stored request_costs from provider actual cost payloads or effective price data, recomputes request_savings against the original baseline without changing the original request activity/model attribution, and records reconciliation runs/items. Worker startup now registers billing_reconciliation with the default job runner. Code review found and fixed the P2 Worker registration gap. Verification passed: feat-074 unit tests (3), real PostgreSQL E2E (1), db:migrate:check, related feat-045/071/073 unit and E2E regressions, pnpm run verify, full verify:features passed all 73 prior passing features before marking, and final verify:features passed all 74 passing features after marking."
+      "evidence": "2026-06-19 redesign: removed billing_reconciliation_runs and billing_reconciliation_items from the schema, Worker handler, backup table list, and docs because billing reconciliation now updates request_costs/request_savings directly and stores only aggregate counts on jobs.result. TDD red observed first against the old migration and handler table writes. Verification passed: feat-074 unit tests (4), real PostgreSQL feat-074 E2E (1), feat-086 backup unit/E2E regressions, db:migrate:check, pnpm run verify, and pnpm run verify:features across all 108 passing features."
     },
     {
       "id": "feat-075",
@@ -794,8 +794,8 @@
     {
       "id": "feat-079",
       "name": "Usage / Cost Breakdowns and Savings Summary",
-      "description": "Usage page breaks down Agent, Agent API Key, Virtual Model, provider, model, cost, failures, and savings.",
-      "verification": "pnpm exec vitest run tests/features/feat-079-usage-breakdowns-savings.unit.test.ts && pnpm test:e2e tests/e2e/feat-079-usage-breakdowns-savings.e2e.spec.ts --grep 'usage page shows agent agent api key virtual model provider model cost failure and savings breakdowns'",
+      "description": "Usage page breaks down Agent, Virtual Model, provider, model, cost, failures, and savings without an Agent API Key breakdown dimension.",
+      "verification": "pnpm exec vitest run tests/features/feat-079-usage-breakdowns-savings.unit.test.ts && pnpm test:e2e tests/e2e/feat-079-usage-breakdowns-savings.e2e.spec.ts --grep 'usage page shows agent virtual model provider model cost failure and savings breakdowns'",
       "dependencies": ["feat-047", "feat-071", "feat-074"],
       "status": "passing",
       "evidence": "2026-06-16: TDD red observed for feat-079 unit tests because Console usage summary lacked failure count, total savings, and Agent / Agent API Key / Virtual Model / provider / model breakdown arrays, and E2E red because the authenticated Usage page did not show Failures, Savings, or the new breakdown groups. Added usage aggregation for failures and request_savings, dimension breakdowns for Agent, Agent API Key, Virtual Model, provider, and model, and Console rendering for the new summary/breakdown sections while preserving the existing provider/model combined breakdown for feat-047 compatibility. P2+ review found and fixed a heading namespace regression where Usage breakdown item headings collided with Agent configuration headings; new dimension item labels now render as plain text while section headings remain accessible. Verification passed: feat-079 unit test (1), real Chromium/PostgreSQL Console E2E (1), related feat-026 and feat-047 E2E regressions, pnpm run lint, pnpm run verify, full verify:features passed all 78 prior passing features before marking, and final verify:features passed all 79 passing features after marking."
@@ -984,7 +984,7 @@
     {
       "id": "feat-096",
       "name": "Agent Budget Automatic Price Validation",
-      "description": "Agent budget configuration removes manual budget price provider/model fields, saves only Agent API key-scoped limit rules, updates the legacy feat-031 Agent limits tests/verification so verify:features no longer requires the removed fields, automatically validates every Route Policy primary/fallback candidate reachable through the Agent API key's allowed/default Virtual Models has an effective provider_models manual price or provider_models_price synced price, and reports each missing-price candidate before enabling the budget.",
+      "description": "Agent budget configuration removes manual budget price provider/model fields, saves only Agent-scoped limit rules, updates the legacy feat-031 Agent limits tests/verification so verify:features no longer requires the removed fields, automatically validates every Route Policy primary/fallback candidate reachable through the Agent's allowed/default Virtual Models has an effective provider_models manual price or provider_models_price synced price, and reports each missing-price candidate before enabling the budget.",
       "verification": "pnpm exec vitest run tests/features/feat-096-agent-budget-auto-price-validation.unit.test.ts && pnpm test:e2e tests/e2e/feat-096-agent-budget-auto-price-validation.e2e.spec.ts --grep 'agent budget saves without manual price fields and blocks accessible unknown-price route candidates'",
       "dependencies": [
         "feat-030",
@@ -1133,6 +1133,23 @@
       ],
       "status": "passing",
       "evidence": "2026-06-18: TDD red observed first: feat-107 unit tests failed because getConcurrencyWindow and policy defaults were missing, warn_only/manual_bypass still blocked over-limit requests, and existing Console limit normalization did not emit policy defaults. feat-107 E2E then failed because agent_limits.alert_threshold did not exist. Added migration 0031_concurrency_limit_policy for concurrency limit_type, alert_threshold, enforcement_policy, manual_bypass, concurrency period/unit validation, schema_version 0031, and shipped migration checksum. Gateway rate-limit enforcement now reads RPM, TPM, and concurrency rules, uses rate_limit_windows.active_count with a fixed concurrency window, increments in-flight concurrency before provider calls, returns stable 429 rate_limit_exceeded for block policy, allows warn_only/manual_bypass while still counting, and releases active_count on JSON success/failure, budget early returns, streaming end/error/close, and client cancellation. /v1/embeddings now uses the same rate/concurrency path. Console server and config import/export round-trip the new backend fields without Console UI changes, defaulting old inputs to alertThreshold=null, enforcementPolicy=block, and manualBypass=false. Verification passed: feat-107 unit (4) and real PostgreSQL/Gateway/fake-provider E2E (1), pnpm run db:migrate:check, related feat-031/041/042/053/080/087/096 regressions, pnpm run verify, pnpm run verify:features re-verified all 106 previously passing features before marking, and final pnpm run verify:features re-verified all 107 passing features after marking."
+    },
+    {
+      "id": "feat-108",
+      "name": "Agent-Owned Single API Key",
+      "description": "Each Agent owns exactly one API key generated at Agent creation. The plaintext key is returned once, only hash/prefix/default Virtual Model persist on agents, allowed Virtual Models live in agent_virtual_models, legacy agent_api_keys tables and routes are removed, Gateway auth uses agents.key_hash, and usage/exports/analytics do not expose an Agent API Key breakdown.",
+      "verification": "pnpm exec vitest run tests/features/feat-108-agent-owned-api-key.unit.test.ts && pnpm test:e2e tests/e2e/feat-108-agent-owned-api-key.e2e.spec.ts --grep 'agent creation returns one api key and gateway uses agent owned auth'",
+      "dependencies": [
+        "feat-027",
+        "feat-030",
+        "feat-031",
+        "feat-034",
+        "feat-079",
+        "feat-080",
+        "feat-107"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-18: TDD red added for Agent-owned single API key schema/auth/Console behavior and E2E create-to-Gateway flow. Added migration 0032_agent_owned_api_key: agents now store key_prefix, key_hash, default_virtual_model_id; agent_virtual_models stores allowed Virtual Models; runtime/accounting tables now use agent_id and agent_key_prefix; legacy agent_api_keys and agent_api_key_virtual_models are dropped. 2026-06-19 simplification: removed the test fixture legacy SQL shim, made baseline migrations 0002/0003 directly describe the Agent-owned schema for empty-database redesign, and updated old regression seeds instead of preserving key-table compatibility. Console Agent creation now generates one high-entropy API key, returns plaintext only on the one-time Agent created page, and removes create/rotate/disable/delete key UI and /api/agent-api-keys. Gateway auth now checks agents.key_hash; /v1/models and default model resolution use Agent allowed/default Virtual Models. Agent limits, budget/rate/concurrency accounting, backup/export/alerts/usage analytics, docs, and legacy regression tests were updated to Agent-owned credential semantics without Agent API Key breakdowns. Verification passed: feat-108 unit, feat-108 real Console/Gateway/PostgreSQL E2E, pnpm run db:migrate:check, pnpm run lint, pnpm run typecheck, pnpm test, pnpm run verify, focused regressions for feat-050/058/077/086/088/089/096/101, and pnpm run verify:features re-verified all 108 passing features after the no-compatibility redesign. 2026-06-19 cleanup: deleted the leftover Console agent-api-keys module, moved Agent Virtual Model access onto agents, changed Console Agents/Limits views from per-key arrays to per-Agent state, changed config import/export from agentApiKeys[] to a single apiKey object, renamed Agent limit and Virtual Model dependency code away from key counts, added a static feat-108 guard against multi-key Console surfaces, and reran focused unit/E2E, pnpm run verify, and pnpm run verify:features (all 108 passing features re-verified)."
     }
   ]
 }

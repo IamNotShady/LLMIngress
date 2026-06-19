@@ -46,11 +46,7 @@ test("agent integration templates show codex claude code cursor openclaw gateway
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
-          await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
-
-          await openRow(page, "Codex");
-          await page.getByRole("button", { name: "Create Agent API key" }).click();
-          await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           const plaintextKey = await page.locator("code").innerText();
           expect(plaintextKey).toMatch(/^llmi_[A-Za-z0-9_-]{32,}$/);
 
@@ -77,7 +73,7 @@ test("agent integration templates show codex claude code cursor openclaw gateway
           await page
             .getByLabel("Default virtual model")
             .selectOption({ label: "Integration VM (integration-vm)" });
-          await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
+          await page.getByRole("button", { name: "Save Agent virtual models" }).click();
 
           const dashboardPlaceholder = `paste one-time Agent API key for prefix ${plaintextKey.slice(
             0,

@@ -278,19 +278,19 @@ async function seedLimitsFallbackGateway(
     const route = routeRows[scenario as keyof typeof routeRows];
     await fixture.query(
       `
-        insert into agent_api_keys (
+        insert into agents (
           id,
-          agent_id,
+          name,
+          agent_type,
           key_prefix,
           key_hash,
           default_virtual_model_id,
           enabled
         )
-        values ($1, $2, $3, $4, $5, true)
+        values ($1, 'Limits Agent', 'coding', $2, $3, $4, true)
       `,
       [
         key.id,
-        agentId,
         key.apiKey.slice(0, 12),
         buildGatewayAgentApiKeyHash(key.apiKey),
         route.virtualModelId,
@@ -298,7 +298,7 @@ async function seedLimitsFallbackGateway(
     );
     await fixture.query(
       `
-        insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+        insert into agent_virtual_models (agent_id, virtual_model_id)
         values ($1, $2)
       `,
       [key.id, route.virtualModelId],
@@ -307,7 +307,7 @@ async function seedLimitsFallbackGateway(
 
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'rpm', 'minute', 1, 'requests', true),
              ($3, $4, 'tpm', 'minute', 10, 'tokens', true),
              ($5, $6, 'token', 'request', 20, 'tokens', true),

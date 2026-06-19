@@ -1,4 +1,4 @@
-import type { AgentApiKeyVirtualModelAccess } from "./agent-api-keys";
+import type { AgentVirtualModelAccess } from "./agents";
 
 export type AgentIntegrationTemplateId = "codex" | "claude-code" | "cursor" | "openclaw";
 
@@ -42,7 +42,7 @@ export function buildAgentIntegrationTemplates(input: {
   }));
 }
 
-export function resolveAgentIntegrationModelName(access: AgentApiKeyVirtualModelAccess): string {
+export function resolveAgentIntegrationModelName(access: AgentVirtualModelAccess): string {
   return (
     access.defaultVirtualModel?.name ?? access.allowedVirtualModels[0]?.name ?? modelPlaceholder
   );

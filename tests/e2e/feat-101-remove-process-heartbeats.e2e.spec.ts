@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { Client } from "pg";
 import { createBackupArtifact } from "../../apps/worker/src/backup";
 import {
   createTestPostgresFixture,
@@ -73,19 +74,26 @@ type BackupArtifact = {
 };
 
 async function applyMigrationsThrough(fixture: Fixture, targetId: string): Promise<void> {
-  for (const migration of loadSqlMigrations()) {
-    if (migration.id > targetId) {
-      break;
-    }
+  const client = new Client({ connectionString: fixture.databaseUrl });
+  await client.connect();
 
-    await fixture.query(migration.sql);
-    await fixture.query(
-      `
-        insert into migration_history (id, name, checksum)
-        values ($1, $2, $3)
-      `,
-      [migration.id, migration.name, migration.checksum],
-    );
+  try {
+    for (const migration of loadSqlMigrations()) {
+      if (migration.id > targetId) {
+        break;
+      }
+
+      await client.query(migration.sql);
+      await client.query(
+        `
+          insert into migration_history (id, name, checksum)
+          values ($1, $2, $3)
+        `,
+        [migration.id, migration.name, migration.checksum],
+      );
+    }
+  } finally {
+    await client.end();
   }
 }
 

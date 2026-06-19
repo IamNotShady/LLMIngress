@@ -118,7 +118,7 @@ type NormalizedWebhookEventExportPayload = {
 };
 
 type WebhookEventExportActivityRow = QueryResultRow & {
-  agent_api_key_prefix: string;
+  agent_key_prefix: string;
   completed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
@@ -396,7 +396,7 @@ async function readWebhookEventExportActivities(
     `
       select request_activity.id::text,
              request_activity.request_id,
-             request_activity.agent_api_key_prefix,
+             request_activity.agent_key_prefix as agent_key_prefix,
              request_activity.protocol,
              request_activity.model,
              request_activity.stream,
@@ -423,7 +423,7 @@ async function readWebhookEventExportActivities(
   );
 
   return result.rows.map((row) => ({
-    agentApiKeyPrefix: row.agent_api_key_prefix,
+    agentApiKeyPrefix: row.agent_key_prefix,
     completedAt: row.completed_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,

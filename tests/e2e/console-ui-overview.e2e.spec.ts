@@ -85,28 +85,27 @@ async function seedOverviewData(databaseUrl: string): Promise<void> {
       [agentId],
     );
     await client.query(
-      `insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-       values ($1, $2, 'codex000', 'sha256:v1:overview', $3, true)`,
+      `update agents set id = $1, key_prefix = 'codex000', key_hash = 'sha256:v1:overview', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2`,
       [keyId, agentId, virtualModelId],
     );
     await client.query(
       `insert into request_activity
-         (id, request_id, agent_api_key_id, virtual_model_id, provider_id, provider_model_id,
-          agent_api_key_prefix, protocol, model, status, http_status, latency_ms, started_at, completed_at)
+         (id, request_id, agent_id, virtual_model_id, provider_id, provider_model_id,
+          agent_key_prefix, protocol, model, status, http_status, latency_ms, started_at, completed_at)
        values ($1, 'req_overview_seed', $2, $3, $4, $5, 'codex000',
           'chat_completions', 'smart', 'succeeded', 200, 240, now(), now())`,
       [requestId, keyId, virtualModelId, providerId, modelId],
     );
     await client.query(
       `insert into request_usage
-         (id, request_activity_id, agent_api_key_id, virtual_model_id, provider_model_id,
+         (id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
           input_tokens, output_tokens, total_tokens, token_source)
        values ($1, $2, $3, $4, $5, 1000, 234, 1234, 'provider')`,
       [randomUUID(), requestId, keyId, virtualModelId, modelId],
     );
     await client.query(
       `insert into request_costs
-         (id, request_activity_id, agent_api_key_id, provider_model_id,
+         (id, request_activity_id, agent_id, provider_model_id,
           input_cost_usd, output_cost_usd, total_cost_usd, cost_source)
        values ($1, $2, $3, $4, 0.01, 0.02, 0.03, 'provider')`,
       [randomUUID(), requestId, keyId, modelId],

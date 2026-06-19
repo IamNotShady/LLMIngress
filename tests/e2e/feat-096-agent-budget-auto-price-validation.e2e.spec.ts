@@ -41,7 +41,11 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await signInFromFirstRun(page, baseUrl);
 
           await page.goto(`${baseUrl}/agents`);
-          await expect(page.getByRole("heading", { name: "Auto Budget Agent" })).toBeVisible();
+          await expect(
+            page
+              .getByLabel("Selected agent details")
+              .getByRole("heading", { name: "Auto Budget Agent" }),
+          ).toBeVisible();
           await openRow(page, "Auto Budget Agent");
           await expect(page.getByText("Default Virtual Model: Auto Budget VM")).toBeVisible();
           await expect(
@@ -102,7 +106,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await page.getByLabel("RPM limit").fill("120");
           await page.getByLabel("TPM limit").fill("640000");
           await page.getByLabel("Token limit").fill("32000");
-          await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+          await page.getByRole("button", { name: "Save Agent limits" }).click();
 
           await openRow(page, "Auto Budget Agent");
           await expect(page.getByText("Budget Limit: $25.00 / month")).toBeVisible();
@@ -142,7 +146,7 @@ type SeededIds = {
 };
 
 async function seedAgentBudgetRouteGraph(fixture: Fixture, ids: SeededIds): Promise<void> {
-  const agentId = randomUUID();
+  const agentId = ids.agentApiKeyId;
 
   await fixture.query(
     `
@@ -196,20 +200,12 @@ async function seedAgentBudgetRouteGraph(fixture: Fixture, ids: SeededIds): Prom
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_auto96', 'sha256:v1:auto-budget-e2e-096', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_auto96', key_hash = 'sha256:v1:auto-budget-e2e-096', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, agentId, ids.virtualModelId],
   );
   await fixture.query(
-    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
     [ids.agentApiKeyId, ids.virtualModelId],
   );
 }
@@ -274,7 +270,7 @@ async function countAgentLimits(fixture: Fixture, agentApiKeyId: string): Promis
     `
       select count(*)::integer as count
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
     `,
     [agentApiKeyId],
   );

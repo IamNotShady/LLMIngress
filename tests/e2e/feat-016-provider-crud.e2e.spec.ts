@@ -39,14 +39,18 @@ test("provider crud enable disable and disabled provider leaves routing snapshot
           await page.getByLabel("Provider base URL").fill("https://api.openai.com/v1");
           await page.getByRole("button", { name: "Create provider" }).click();
 
-          await expect(page.getByRole("heading", { name: "OpenAI" })).toBeVisible();
+          await expect(
+            page.locator("#provider-management").getByRole("heading", { name: "OpenAI" }),
+          ).toBeVisible();
           await expect.poll(() => routingProviderKeys(fixture.databaseUrl)).toEqual(["openai"]);
 
           await openRow(page, "OpenAI");
           await page.getByLabel("Edit provider display name").fill("OpenAI API");
           await page.getByRole("button", { name: "Save provider" }).click();
 
-          await expect(page.getByRole("heading", { name: "OpenAI API" })).toBeVisible();
+          await expect(
+            page.locator("#provider-management").getByRole("heading", { name: "OpenAI API" }),
+          ).toBeVisible();
 
           await openRow(page, "OpenAI API");
           await page.getByRole("button", { name: "Disable provider" }).click();

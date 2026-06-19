@@ -39,7 +39,9 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           await page.getByLabel("Provider display name").fill("OpenAI");
           await page.getByLabel("Provider base URL").fill("https://api.openai.com/v1");
           await page.getByRole("button", { name: "Create provider" }).click();
-          await expect(page.getByRole("heading", { name: "OpenAI" })).toBeVisible();
+          await expect(
+            page.locator("#provider-management").getByRole("heading", { name: "OpenAI" }),
+          ).toBeVisible();
 
           await openRow(page, "OpenAI");
           await page.getByLabel("Provider API key").fill(firstSecret);

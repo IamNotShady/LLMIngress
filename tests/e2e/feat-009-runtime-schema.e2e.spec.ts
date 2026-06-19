@@ -52,19 +52,19 @@ test("runtime schema persists activity usage reservations jobs health and gatewa
 
     await expectBrokenReference(
       fixture.query(
-        "insert into request_activity (id, request_id, agent_api_key_id, agent_api_key_prefix, protocol, status) values ($1, $2, $3, $4, $5, $6)",
+        "insert into request_activity (id, request_id, agent_id, agent_key_prefix, protocol, status) values ($1, $2, $3, $4, $5, $6)",
         [randomUUID(), "req_bad_key", randomUUID(), "llmi_bad", "chat_completions", "succeeded"],
       ),
     );
     await expectBrokenReference(
       fixture.query(
-        "insert into request_usage (id, request_activity_id, agent_api_key_id, input_tokens, output_tokens, total_tokens, token_source) values ($1, $2, $3, $4, $5, $6, $7)",
+        "insert into request_usage (id, request_activity_id, agent_id, input_tokens, output_tokens, total_tokens, token_source) values ($1, $2, $3, $4, $5, $6, $7)",
         [randomUUID(), randomUUID(), graph.agentApiKeyId, 1, 1, 2, "estimated"],
       ),
     );
     await expectBrokenReference(
       fixture.query(
-        "insert into budget_reservations (id, agent_api_key_id, budget_period_id, status, reserved_input_tokens, reserved_output_tokens, reserved_cost_usd, expires_at) values ($1, $2, $3, $4, $5, $6, $7, now())",
+        "insert into budget_reservations (id, agent_id, budget_period_id, status, reserved_input_tokens, reserved_output_tokens, reserved_cost_usd, expires_at) values ($1, $2, $3, $4, $5, $6, $7, now())",
         [randomUUID(), graph.agentApiKeyId, randomUUID(), "pending", 1, 1, 0.01],
       ),
     );
@@ -83,7 +83,7 @@ test("runtime schema persists activity usage reservations jobs health and gatewa
 
     await expectConstraintViolation(
       fixture.query(
-        "insert into budget_reservations (id, agent_api_key_id, budget_period_id, status, reserved_input_tokens, reserved_output_tokens, reserved_cost_usd, expires_at) values ($1, $2, $3, $4, $5, $6, $7, now())",
+        "insert into budget_reservations (id, agent_id, budget_period_id, status, reserved_input_tokens, reserved_output_tokens, reserved_cost_usd, expires_at) values ($1, $2, $3, $4, $5, $6, $7, now())",
         [randomUUID(), graph.agentApiKeyId, runtime.budgetPeriodId, "pending", -1, 1, 0.01],
       ),
     );
@@ -105,7 +105,7 @@ test("runtime schema persists activity usage reservations jobs health and gatewa
       reserved_tokens: string;
       tokens_used: string;
     }>(
-      "insert into budget_periods (id, agent_api_key_id, period_type, period_start, period_end, tokens_used, reserved_tokens) values ($1, $2, $3, timestamp '2026-01-01', timestamp '2026-02-01', $4, $5) returning tokens_used::text, reserved_tokens::text",
+      "insert into budget_periods (id, agent_id, period_type, period_start, period_end, tokens_used, reserved_tokens) values ($1, $2, $3, timestamp '2026-01-01', timestamp '2026-02-01', $4, $5) returning tokens_used::text, reserved_tokens::text",
       [randomUUID(), graph.agentApiKeyId, "month", largeTokenCount, largeTokenCount],
     );
     expect(largeBudgetPeriod.rows).toEqual([
@@ -119,7 +119,7 @@ test("runtime schema persists activity usage reservations jobs health and gatewa
     );
     await expectBrokenReference(
       fixture.query(
-        "insert into request_activity (id, request_id, agent_api_key_id, virtual_model_id, route_policy_id, provider_id, provider_model_id, agent_api_key_prefix, protocol, model, status) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+        "insert into request_activity (id, request_id, agent_id, virtual_model_id, route_policy_id, provider_id, provider_model_id, agent_key_prefix, protocol, model, status) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
         [
           randomUUID(),
           "req_wrong_provider_model",
@@ -239,13 +239,13 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
     [routePolicyCandidateId, routePolicyId, providerModelId, 1, false],
   );
   await query(
-    "insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled) values ($1, $2, $3, $4, $5, $6)",
+    "update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = $6, updated_at = now() where id = $2",
     [agentApiKeyId, agentId, "llmi_runtime", "sha256:runtime", virtualModelId, true],
   );
-  await query(
-    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
-    [agentApiKeyId, virtualModelId],
-  );
+  await query("insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)", [
+    agentApiKeyId,
+    virtualModelId,
+  ]);
   await query("insert into config_versions (version, source, description) values ($1, $2, $3)", [
     1,
     "console",
@@ -275,7 +275,7 @@ async function insertValidRuntimeRecords(
   const gatewayRuntimeStatusId = randomUUID();
 
   await query(
-    "insert into request_activity (id, request_id, agent_api_key_id, virtual_model_id, route_policy_id, provider_id, provider_model_id, agent_api_key_prefix, protocol, model, stream, route_reason, status, http_status, latency_ms) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+    "insert into request_activity (id, request_id, agent_id, virtual_model_id, route_policy_id, provider_id, provider_model_id, agent_key_prefix, protocol, model, stream, route_reason, status, http_status, latency_ms) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
     [
       requestActivityId,
       "req_runtime_1",
@@ -295,7 +295,7 @@ async function insertValidRuntimeRecords(
     ],
   );
   await query(
-    "insert into request_usage (id, request_activity_id, agent_api_key_id, virtual_model_id, provider_model_id, input_tokens, output_tokens, total_tokens, cached_input_tokens, reasoning_tokens, token_source) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+    "insert into request_usage (id, request_activity_id, agent_id, virtual_model_id, provider_model_id, input_tokens, output_tokens, total_tokens, cached_input_tokens, reasoning_tokens, token_source) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
     [
       requestUsageId,
       requestActivityId,
@@ -311,11 +311,11 @@ async function insertValidRuntimeRecords(
     ],
   );
   await query(
-    "insert into budget_periods (id, agent_api_key_id, period_type, period_start, period_end, tokens_used, cost_used_usd, reserved_tokens, reserved_cost_usd) values ($1, $2, $3, now(), now() + interval '1 day', $4, $5, $6, $7)",
+    "insert into budget_periods (id, agent_id, period_type, period_start, period_end, tokens_used, cost_used_usd, reserved_tokens, reserved_cost_usd) values ($1, $2, $3, now(), now() + interval '1 day', $4, $5, $6, $7)",
     [budgetPeriodId, graph.agentApiKeyId, "day", 15, 0.00001, 15, 0.00001],
   );
   await query(
-    "insert into budget_reservations (id, agent_api_key_id, budget_period_id, request_activity_id, status, reserved_input_tokens, reserved_output_tokens, reserved_cost_usd, actual_total_tokens, actual_cost_usd, expires_at, finalized_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now() + interval '5 minutes', now())",
+    "insert into budget_reservations (id, agent_id, budget_period_id, request_activity_id, status, reserved_input_tokens, reserved_output_tokens, reserved_cost_usd, actual_total_tokens, actual_cost_usd, expires_at, finalized_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now() + interval '5 minutes', now())",
     [
       budgetReservationId,
       graph.agentApiKeyId,

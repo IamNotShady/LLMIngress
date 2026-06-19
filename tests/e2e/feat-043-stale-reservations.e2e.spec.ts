@@ -88,8 +88,7 @@ async function seedBudgetReservations(fixture: Fixture): Promise<SeededReservati
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, enabled)
-      values ($1, $2, 'llmi_stale43', $3, true)
+      update agents set id = $1, key_prefix = 'stale43', key_hash = $3, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, `hash_${randomUUID()}`],
   );
@@ -97,7 +96,7 @@ async function seedBudgetReservations(fixture: Fixture): Promise<SeededReservati
     `
       insert into budget_periods (
         id,
-        agent_api_key_id,
+        agent_id,
         period_type,
         period_start,
         period_end,
@@ -120,7 +119,7 @@ async function seedBudgetReservations(fixture: Fixture): Promise<SeededReservati
     `
       insert into budget_reservations (
         id,
-        agent_api_key_id,
+        agent_id,
         budget_period_id,
         status,
         reserved_input_tokens,

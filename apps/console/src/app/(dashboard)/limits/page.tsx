@@ -12,7 +12,7 @@ export default async function LimitsPage({
       <PageHeader
         eyebrow="Access"
         title="Limits"
-        description="Budgets, token caps, RPM / TPM, and concurrency per Agent API key."
+        description="Budgets, token caps, RPM / TPM, and concurrency per Agent."
       />
       <LimitsSection searchParams={resolved} />
     </div>

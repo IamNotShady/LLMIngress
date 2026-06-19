@@ -15,10 +15,10 @@ describe("feat-096 Agent budget automatic price validation", () => {
     await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
   });
 
-  it("normalizes Agent API key-scoped limits without manual budget price fields", () => {
+  it("normalizes Agent-scoped limits without manual budget price fields", () => {
     expect(
       normalizeAgentLimitFormInput({
-        agentApiKeyId: " key-096 ",
+        agentId: " agent-096 ",
         budgetPeriod: " month ",
         budgetUsd: "12.50",
         rpm: "90",
@@ -26,7 +26,7 @@ describe("feat-096 Agent budget automatic price validation", () => {
         tpm: "240000",
       }),
     ).toEqual({
-      agentApiKeyId: "key-096",
+      agentId: "agent-096",
       rules: [
         {
           alertThreshold: null,
@@ -80,7 +80,7 @@ describe("feat-096 Agent budget automatic price validation", () => {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedAgentBudgetValidationGraph(fixture);
     const limits = normalizeAgentLimitFormInput({
-      agentApiKeyId: seeded.agentApiKeyId,
+      agentId: seeded.agentApiKeyId,
       budgetPeriod: "month",
       budgetUsd: "12.50",
       rpm: "90",
@@ -155,7 +155,7 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   const builtInModelId = randomUUID();
   const unrelatedUnknownModelId = randomUUID();
   const agentId = randomUUID();
-  const agentApiKeyId = randomUUID();
+  const agentApiKeyId = agentId;
   const defaultVirtualModelId = randomUUID();
   const allowedVirtualModelId = randomUUID();
   const unrelatedVirtualModelId = randomUUID();
@@ -269,21 +269,17 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_auto96', 'sha256:v1:auto-budget-096', $3, true)
+      update agents
+      set key_prefix = 'llmi_auto96',
+          key_hash = 'sha256:v1:auto-budget-096',
+          default_virtual_model_id = $2
+      where id = $1
     `,
-    [agentApiKeyId, agentId, defaultVirtualModelId],
+    [agentId, defaultVirtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2),
              ($1, $3)
     `,
@@ -298,7 +294,7 @@ async function countAgentLimits(fixture: Fixture, agentApiKeyId: string): Promis
     `
       select count(*)::integer as count
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
     `,
     [agentApiKeyId],
   );

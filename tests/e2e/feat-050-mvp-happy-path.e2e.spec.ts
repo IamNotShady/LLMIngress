@@ -45,7 +45,10 @@ test("clean setup request activity usage and hot reload after route change", asy
           await configurePriceOverride(page);
           await page.goto(`${consoleBaseUrl}/providers`);
           await expect(
-            page.getByRole("heading", { exact: true, name: mvpHappyPathNames.providerDisplayName }),
+            page.getByRole("article").getByRole("heading", {
+              exact: true,
+              name: mvpHappyPathNames.providerDisplayName,
+            }),
           ).toBeVisible();
           await storeProviderApiKey(page);
           await page.goto(`${consoleBaseUrl}/models`);
@@ -263,11 +266,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await page.getByLabel("Agent name").fill("MVP Codex");
   await page.getByLabel("Agent type").selectOption("coding");
   await page.getByRole("button", { name: "Create agent" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "MVP Codex" })).toBeVisible();
-
-  await openRow(page, "MVP Codex");
-  await page.getByRole("button", { name: "Create Agent API key" }).click();
-  await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
   const agentApiKey = await page.locator("code").innerText();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
 
@@ -275,7 +274,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await openRow(page, "MVP Codex");
   await page.getByLabel("Allowed virtual models").selectOption({ label: virtualModelLabel });
   await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
-  await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
+  await page.getByRole("button", { name: "Save Agent virtual models" }).click();
   await openRow(page, "MVP Codex");
   await expect(page.getByText(`Default Virtual Model: ${virtualModelLabel}`)).toBeVisible();
 
@@ -284,7 +283,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await page.getByLabel("RPM limit").fill("120");
   await page.getByLabel("TPM limit").fill("120000");
   await page.getByLabel("Token limit").fill("12000");
-  await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+  await page.getByRole("button", { name: "Save Agent limits" }).click();
   await openRow(page, "MVP Codex");
   await expect(page.getByText("Budget Limit: $100.00 / month")).toBeVisible();
 

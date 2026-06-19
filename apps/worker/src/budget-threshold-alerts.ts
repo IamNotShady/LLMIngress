@@ -30,8 +30,7 @@ type EvaluateBudgetThresholdAlertsOptions = CreateBudgetThresholdAlertsJobHandle
 };
 
 type BudgetThresholdCandidateRow = QueryResultRow & {
-  agent_api_key_id: string;
-  agent_api_key_prefix: string;
+  agent_key_prefix: string;
   agent_id: string;
   agent_name: string;
   budget_limit_usd: string;
@@ -44,7 +43,6 @@ type BudgetThresholdCandidateRow = QueryResultRow & {
 };
 
 type BudgetThresholdCandidate = {
-  agentApiKeyId: string;
   agentApiKeyPrefix: string;
   agentId: string;
   agentName: string;
@@ -157,7 +155,6 @@ function buildBudgetThresholdNotificationEvent(input: {
 }) {
   const roundedUsageRatio = roundRatio(input.usageRatio);
   const payload = {
-    agentApiKeyId: input.candidate.agentApiKeyId,
     agentApiKeyPrefix: input.candidate.agentApiKeyPrefix,
     agentId: input.candidate.agentId,
     agentName: input.candidate.agentName,
@@ -196,29 +193,26 @@ async function readBudgetThresholdCandidates(
     const result = await client.query<BudgetThresholdCandidateRow>(
       `
         select budget_periods.id::text as budget_period_id,
-               budget_periods.agent_api_key_id::text,
                budget_periods.period_type,
                budget_periods.period_start,
                budget_periods.period_end,
                budget_periods.cost_used_usd::text,
                budget_periods.reserved_cost_usd::text,
                agent_limits.limit_value::text as budget_limit_usd,
-               agent_api_keys.key_prefix as agent_api_key_prefix,
+               agents.key_prefix as agent_key_prefix,
                agents.id::text as agent_id,
                agents.name as agent_name
         from budget_periods
-        join agent_limits on agent_limits.agent_api_key_id = budget_periods.agent_api_key_id
-        join agent_api_keys on agent_api_keys.id = budget_periods.agent_api_key_id
-        join agents on agents.id = agent_api_keys.agent_id
+        join agent_limits on agent_limits.agent_id = budget_periods.agent_id
+        join agents on agents.id = budget_periods.agent_id
         where agent_limits.enabled = true
           and agent_limits.limit_type = 'budget'
           and agent_limits.unit = 'usd'
           and agent_limits.period = budget_periods.period_type
-          and agent_api_keys.enabled = true
           and agents.enabled = true
           and budget_periods.period_start <= $1::timestamptz
           and budget_periods.period_end > $1::timestamptz
-        order by agents.name, agent_api_keys.key_prefix, budget_periods.period_start
+        order by agents.name, agents.key_prefix, budget_periods.period_start
       `,
       [now.toISOString()],
     );
@@ -230,8 +224,7 @@ async function readBudgetThresholdCandidates(
 
 function rowToBudgetThresholdCandidate(row: BudgetThresholdCandidateRow): BudgetThresholdCandidate {
   return {
-    agentApiKeyId: row.agent_api_key_id,
-    agentApiKeyPrefix: row.agent_api_key_prefix,
+    agentApiKeyPrefix: row.agent_key_prefix,
     agentId: row.agent_id,
     agentName: row.agent_name,
     budgetLimitUsd: Number(row.budget_limit_usd),

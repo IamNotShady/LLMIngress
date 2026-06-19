@@ -23,6 +23,6 @@ export async function openDisclosure(page: Page, label: string): Promise<void> {
 
 /** Open a collapsed list row by its title heading (e.g. a provider/agent name). */
 export async function openRow(page: Page, name: string): Promise<void> {
-  const heading = page.getByRole("heading", { name, exact: true });
+  const heading = page.locator("summary.row-summary").getByRole("heading", { name, exact: true });
   await ensureOpen(heading, heading.locator("xpath=ancestor::details[1]"));
 }

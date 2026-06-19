@@ -329,7 +329,6 @@ function buildScopedActivityCte(
     sql: `
       scoped_activity as (
         select request_activity.*,
-               agents.id as agent_id,
                coalesce(agents.name, 'Unknown agent') as agent_label,
                coalesce(providers.display_name, 'Unknown provider') as provider_label,
                case
@@ -369,8 +368,7 @@ function buildScopedActivityCte(
                  end
                ) as provider_model_label
         from request_activity
-        left join agent_api_keys on agent_api_keys.id = request_activity.agent_api_key_id
-        left join agents on agents.id = agent_api_keys.agent_id
+        left join agents on agents.id = request_activity.agent_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join virtual_models on virtual_models.id = request_activity.virtual_model_id

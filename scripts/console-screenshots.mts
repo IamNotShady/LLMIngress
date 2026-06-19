@@ -77,8 +77,7 @@ async function seedActivity(fixture: Awaited<ReturnType<typeof createTestPostgre
     [agentId],
   );
   await fixture.query(
-    `insert into agent_api_keys (id, agent_id, key_prefix, key_hash, enabled)
-     values ($1, $2, 'shotkey0', 'sha256:v1:shot-hash', true)`,
+    `update agents set id = $1, key_prefix = 'shotkey0', key_hash = 'sha256:v1:shot-hash', enabled = true, updated_at = now() where id = $2`,
     [keyId, agentId],
   );
   const rows = [
@@ -89,7 +88,7 @@ async function seedActivity(fixture: Awaited<ReturnType<typeof createTestPostgre
   for (const [requestId, status, http] of rows) {
     await fixture.query(
       `insert into request_activity
-         (id, request_id, agent_api_key_id, agent_api_key_prefix, protocol, model, status, http_status, started_at, completed_at)
+         (id, request_id, agent_id, agent_key_prefix, protocol, model, status, http_status, started_at, completed_at)
        values ($1, $2, $3, 'shotkey0', 'chat_completions', 'claude-sonnet-4-6', $4, $5, now(), now())`,
       [randomUUID(), requestId, keyId, status, http],
     );
@@ -138,8 +137,7 @@ async function seedCatalog(fixture: Awaited<ReturnType<typeof createTestPostgres
       [agentId, `Agent ${i}`],
     );
     await fixture.query(
-      `insert into agent_api_keys (id, agent_id, key_prefix, key_hash, enabled)
-       values ($1, $2, $3, $4, true)`,
+      `update agents set id = $1, key_prefix = $3, key_hash = $4, enabled = true, updated_at = now() where id = $2`,
       [randomUUID(), agentId, `key${i}0000`, `sha256:v1:shot-hash-${i}`],
     );
   }

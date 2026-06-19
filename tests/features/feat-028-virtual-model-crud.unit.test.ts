@@ -36,24 +36,24 @@ describe("feat-028 virtual model CRUD", () => {
   it("reports dependency errors before deleting referenced virtual models", () => {
     expect(
       getVirtualModelDeleteDependencyError({
-        allowedApiKeyCount: 0,
-        defaultApiKeyCount: 0,
+        allowedAgentCount: 0,
+        defaultAgentCount: 0,
         routePolicyCount: 1,
       }),
     ).toMatch(/route/i);
 
     expect(
       getVirtualModelDeleteDependencyError({
-        allowedApiKeyCount: 1,
-        defaultApiKeyCount: 0,
+        allowedAgentCount: 1,
+        defaultAgentCount: 0,
         routePolicyCount: 0,
       }),
-    ).toMatch(/agent api key/i);
+    ).toMatch(/agent/i);
 
     expect(
       getVirtualModelDeleteDependencyError({
-        allowedApiKeyCount: 0,
-        defaultApiKeyCount: 0,
+        allowedAgentCount: 0,
+        defaultAgentCount: 0,
         routePolicyCount: 0,
       }),
     ).toBeNull();

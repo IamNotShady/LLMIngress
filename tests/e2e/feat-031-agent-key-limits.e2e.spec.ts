@@ -6,7 +6,7 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
-test("agent key limit form saves budget rpm tpm token rules without manual price fields", async ({
+test("agent limit form saves budget rpm tpm token rules without manual price fields", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -36,11 +36,7 @@ test("agent key limit form saves budget rpm tpm token rules without manual price
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
-          await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
-
-          await openRow(page, "Codex");
-          await page.getByRole("button", { name: "Create Agent API key" }).click();
-          await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
           await readOnlyAgentApiKeyId(fixture);
@@ -55,7 +51,7 @@ test("agent key limit form saves budget rpm tpm token rules without manual price
           await page.getByLabel("RPM limit").fill("60");
           await page.getByLabel("TPM limit").fill("120000");
           await page.getByLabel("Token limit").fill("8000");
-          await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+          await page.getByRole("button", { name: "Save Agent limits" }).click();
 
           await openRow(page, "Codex");
           await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
@@ -100,7 +96,9 @@ type AgentLimitRow = {
 };
 
 async function readOnlyAgentApiKeyId(fixture: Fixture): Promise<string> {
-  const result = await fixture.query<{ id: string }>("select id::text from agent_api_keys");
+  const result = await fixture.query<{ id: string }>(
+    "select id::text from agents where key_hash is not null",
+  );
   const row = result.rows[0];
   if (!row || result.rows.length !== 1) {
     throw new Error("Expected exactly one Agent API key.");

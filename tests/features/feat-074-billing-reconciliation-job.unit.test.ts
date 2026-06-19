@@ -6,22 +6,15 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 const root = resolve(__dirname, "../..");
 
 describe("feat-074 billing reconciliation job", () => {
-  it("declares reconciliation runs and items tables", () => {
+  it("keeps reconciliation results on request cost and savings rows without audit tables", () => {
     const migration = loadSqlMigrations().find(
       (candidate) => candidate.id === "0015" && candidate.name === "billing_reconciliation",
     );
 
-    expect(migration?.sql).toContain("create table if not exists billing_reconciliation_runs");
-    expect(migration?.sql).toContain("job_id uuid references jobs (id) on delete set null");
-    expect(migration?.sql).toContain("scanned_request_count integer not null default 0");
-    expect(migration?.sql).toContain("updated_request_count integer not null default 0");
-    expect(migration?.sql).toContain("create table if not exists billing_reconciliation_items");
-    expect(migration?.sql).toContain(
-      "run_id uuid not null references billing_reconciliation_runs (id) on delete cascade",
-    );
-    expect(migration?.sql).toContain("reconciliation_source text not null");
-    expect(migration?.sql).toContain("unique (run_id, request_activity_id)");
-    expect(migration?.sql).toContain("idx_billing_reconciliation_items_request");
+    expect(migration?.sql).toContain("values (1, '0015')");
+    expect(migration?.sql).not.toContain("billing_reconciliation_runs");
+    expect(migration?.sql).not.toContain("billing_reconciliation_items");
+    expect(migration?.sql).not.toContain("idx_billing_reconciliation_items_request");
   });
 
   it("registers billing reconciliation in the default Worker job handlers", () => {
@@ -29,6 +22,19 @@ describe("feat-074 billing reconciliation job", () => {
 
     expect(workerMain).toContain("createBillingReconciliationJobHandler");
     expect(workerMain).toContain("billing_reconciliation:");
+  });
+
+  it("does not write reconciliation runs or item ledgers", () => {
+    const handlerSource = readFileSync(
+      resolve(root, "apps/worker/src/billing-reconciliation.ts"),
+      "utf8",
+    );
+    const backupSource = readFileSync(resolve(root, "apps/worker/src/backup.ts"), "utf8");
+
+    expect(handlerSource).not.toContain("billing_reconciliation_runs");
+    expect(handlerSource).not.toContain("billing_reconciliation_items");
+    expect(backupSource).not.toContain("billing_reconciliation_runs");
+    expect(backupSource).not.toContain("billing_reconciliation_items");
   });
 
   it("builds provider and price-data reconciliation updates", async () => {

@@ -159,8 +159,7 @@ async function seedRetentionCleanupData(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_ret85', 'sha256:v1:retention-secret-hash', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_ret85', key_hash = 'sha256:v1:retention-secret-hash', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -197,7 +196,7 @@ async function seedRetentionCleanupData(
     `
       insert into budget_periods (
         id,
-        agent_api_key_id,
+        agent_id,
         period_type,
         period_start,
         period_end,
@@ -224,7 +223,7 @@ async function seedRetentionCleanupData(
     `
       insert into rate_limit_windows (
         id,
-        agent_api_key_id,
+        agent_id,
         limit_type,
         window_start,
         window_end,
@@ -268,11 +267,11 @@ async function insertRequestData(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -315,7 +314,7 @@ async function insertRequestData(
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -338,7 +337,7 @@ async function insertRequestData(
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         total_cost_usd,
         cost_source

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   calculateTokenCostUsd,
   type ManualPriceOverride,
@@ -105,35 +104,18 @@ export function createBillingReconciliationJobHandler(
   return async (job) => {
     const observedAt = now();
     const payload = normalizeBillingReconciliationPayload(job.payload);
-    const runId = randomUUID();
     const client = new Client({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
       await client.query("begin");
-      await insertReconciliationRun(client, {
-        jobId: job.id,
-        runId,
-        startedAt: observedAt,
-        trigger: job.trigger,
-      });
-
       const counts = await reconcileCandidateRequests(client, {
         observedAt,
         payload,
-        runId,
-      });
-      await completeReconciliationRun(client, {
-        completedAt: observedAt,
-        counts,
-        runId,
       });
       await client.query("commit");
 
-      return {
-        runId,
-        ...counts,
-      };
+      return counts;
     } catch (error) {
       await client.query("rollback").catch(() => undefined);
       throw error;
@@ -284,7 +266,6 @@ async function reconcileCandidateRequests(
   input: {
     observedAt: Date;
     payload: NormalizedBillingReconciliationPayload;
-    runId: string;
   },
 ): Promise<BillingReconciliationCounts> {
   const candidates = await readReconciliationCandidates(client, input.payload.requestIds);
@@ -329,11 +310,6 @@ async function reconcileCandidateRequests(
     } else {
       counts.skippedRequestCount += 1;
     }
-    await insertReconciliationItem(client, {
-      candidate,
-      runId: input.runId,
-      update,
-    });
   }
 
   return counts;
@@ -416,54 +392,6 @@ async function readReconciliationCandidates(
   return result.rows;
 }
 
-async function insertReconciliationRun(
-  client: Client,
-  input: { jobId: string; runId: string; startedAt: Date; trigger: string },
-): Promise<void> {
-  await client.query(
-    `
-      insert into billing_reconciliation_runs (
-        id,
-        job_id,
-        trigger,
-        status,
-        started_at
-      )
-      values ($1, $2, $3, 'running', $4::timestamptz)
-    `,
-    [input.runId, input.jobId, input.trigger, input.startedAt.toISOString()],
-  );
-}
-
-async function completeReconciliationRun(
-  client: Client,
-  input: {
-    completedAt: Date;
-    counts: BillingReconciliationCounts;
-    runId: string;
-  },
-): Promise<void> {
-  await client.query(
-    `
-      update billing_reconciliation_runs
-      set status = 'succeeded',
-          scanned_request_count = $2,
-          updated_request_count = $3,
-          skipped_request_count = $4,
-          completed_at = $5::timestamptz,
-          updated_at = $5::timestamptz
-      where id = $1
-    `,
-    [
-      input.runId,
-      input.counts.scannedRequestCount,
-      input.counts.updatedRequestCount,
-      input.counts.skippedRequestCount,
-      input.completedAt.toISOString(),
-    ],
-  );
-}
-
 async function updateReconciledCostAndSavings(
   client: Client,
   input: {
@@ -517,80 +445,6 @@ async function updateReconciledCostAndSavings(
       input.update.newSavings.savingsPercent,
       input.update.newCost.priceSource,
       input.update.newCost.priceVersion,
-    ],
-  );
-}
-
-async function insertReconciliationItem(
-  client: Client,
-  input: {
-    candidate: BillingReconciliationCandidateRow;
-    runId: string;
-    update: BillingReconciliationUpdate;
-  },
-): Promise<void> {
-  await client.query(
-    `
-      insert into billing_reconciliation_items (
-        id,
-        run_id,
-        request_activity_id,
-        request_cost_id,
-        request_savings_id,
-        reconciliation_source,
-        status,
-        previous_cost_source,
-        new_cost_source,
-        previous_total_cost_usd,
-        new_total_cost_usd,
-        previous_price_source,
-        new_price_source,
-        previous_price_version,
-        new_price_version,
-        previous_savings_usd,
-        new_savings_usd,
-        metadata
-      )
-      values (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        $11,
-        $12,
-        $13,
-        $14,
-        $15,
-        $16,
-        $17,
-        $18::jsonb
-      )
-    `,
-    [
-      randomUUID(),
-      input.runId,
-      input.candidate.activity_id,
-      input.candidate.request_cost_id,
-      input.candidate.request_savings_id,
-      input.update.reconciliationSource,
-      input.update.itemStatus,
-      input.candidate.cost_source,
-      input.update.newCost.costSource,
-      parseNullableNumber(input.candidate.total_cost_usd),
-      input.update.newCost.totalCostUsd,
-      input.candidate.price_source,
-      input.update.newCost.priceSource,
-      input.candidate.price_version,
-      input.update.newCost.priceVersion,
-      parseNullableNumber(input.candidate.savings_usd),
-      input.update.newSavings.savingsUsd,
-      JSON.stringify(input.update.skipReason ? { skipReason: input.update.skipReason } : {}),
     ],
   );
 }

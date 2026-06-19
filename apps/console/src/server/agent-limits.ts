@@ -20,7 +20,7 @@ export type AgentLimitRuleInput = {
 };
 
 export type AgentLimitFormInput = {
-  agentApiKeyId?: string | null;
+  agentId?: string | null;
   budgetPeriod?: string | null;
   budgetUsd?: string | number | null;
   rpm?: string | number | null;
@@ -29,19 +29,19 @@ export type AgentLimitFormInput = {
 };
 
 export type NormalizedAgentLimitFormInput = {
-  agentApiKeyId: string;
+  agentId: string;
   rules: AgentLimitRuleInput[];
 };
 
 export type ConsoleAgentLimit = AgentLimitRuleInput & {
-  agentApiKeyId: string;
+  agentId: string;
   enabled: boolean;
   id: string;
 };
 
 type AgentLimitRow = QueryResultRow & {
   alert_threshold: string | null;
-  agent_api_key_id: string;
+  agent_id: string;
   enabled: boolean;
   enforcement_policy: AgentLimitEnforcementPolicy;
   id: string;
@@ -93,11 +93,11 @@ export const defaultAgentLimitFormValues = {
 export function normalizeAgentLimitFormInput(
   input: AgentLimitFormInput,
 ): NormalizedAgentLimitFormInput {
-  const agentApiKeyId = normalizeRequiredText(input.agentApiKeyId, "Agent API key id");
+  const agentId = normalizeRequiredText(input.agentId, "Agent id");
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
 
   return {
-    agentApiKeyId,
+    agentId,
     rules: [
       {
         alertThreshold: null,
@@ -163,21 +163,21 @@ export async function saveAgentLimitRules(input: {
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
-    description: `Update Agent API key limits ${input.limits.agentApiKeyId}`,
-    changes: [{ table: "agent_limits", recordId: input.limits.agentApiKeyId }],
+    description: `Update Agent limits ${input.limits.agentId}`,
+    changes: [{ table: "agent_limits", recordId: input.limits.agentId }],
     write: async (client) => {
-      await assertAgentApiKeyExists(client, input.limits.agentApiKeyId);
+      await assertAgentExists(client, input.limits.agentId);
       if (input.limits.rules.some((rule) => rule.limitType === "budget" && rule.unit === "usd")) {
-        await assertAccessibleRouteCandidatePricesKnown(client, input.limits.agentApiKeyId);
+        await assertAccessibleRouteCandidatePricesKnown(client, input.limits.agentId);
       }
 
       await client.query(
         `
           delete from agent_limits
-          where agent_api_key_id = $1
+          where agent_id = $1
             and limit_type = any($2::text[])
         `,
-        [input.limits.agentApiKeyId, input.limits.rules.map((rule) => rule.limitType)],
+        [input.limits.agentId, input.limits.rules.map((rule) => rule.limitType)],
       );
 
       for (const rule of input.limits.rules) {
@@ -185,7 +185,7 @@ export async function saveAgentLimitRules(input: {
           `
             insert into agent_limits (
               id,
-              agent_api_key_id,
+              agent_id,
               limit_type,
               period,
               limit_value,
@@ -199,7 +199,7 @@ export async function saveAgentLimitRules(input: {
           `,
           [
             randomUUID(),
-            input.limits.agentApiKeyId,
+            input.limits.agentId,
             rule.limitType,
             rule.period,
             rule.limitValue,
@@ -211,28 +211,28 @@ export async function saveAgentLimitRules(input: {
         );
       }
 
-      savedLimits = await readAgentLimits(client, input.limits.agentApiKeyId);
+      savedLimits = await readAgentLimits(client, input.limits.agentId);
     },
   });
 
   if (!savedLimits) {
-    throw new Error("Agent API key limits were not saved.");
+    throw new Error("Agent limits were not saved.");
   }
   return savedLimits;
 }
 
-async function assertAgentApiKeyExists(client: QueryClient, id: string): Promise<void> {
-  const result = await client.query("select 1 from agent_api_keys where id = $1 for update", [id]);
+async function assertAgentExists(client: QueryClient, id: string): Promise<void> {
+  const result = await client.query("select 1 from agents where id = $1 for update", [id]);
   if (!result.rows[0]) {
-    throw new Error("Agent API key was not found.");
+    throw new Error("Agent was not found.");
   }
 }
 
 async function assertAccessibleRouteCandidatePricesKnown(
   client: QueryClient,
-  agentApiKeyId: string,
+  agentId: string,
 ): Promise<void> {
-  const candidates = await readAccessibleRouteCandidatePrices(client, agentApiKeyId);
+  const candidates = await readAccessibleRouteCandidatePrices(client, agentId);
   const missingPriceCandidates = candidates.filter((candidate) => {
     const price = resolveEffectiveModelTokenPrice({
       manualOverride: rowToManualPriceOverride(candidate),
@@ -254,13 +254,13 @@ async function assertAccessibleRouteCandidatePricesKnown(
     })
     .join("; ");
   throw new Error(
-    `Cannot enable cost budget because the Agent API key can reach route candidates with unknown price: ${candidateLabels}. Save a manual price override, sync prices, or choose priced replacements before enabling the budget.`,
+    `Cannot enable cost budget because the Agent can reach route candidates with unknown price: ${candidateLabels}. Save a manual price override, sync prices, or choose priced replacements before enabling the budget.`,
   );
 }
 
 async function readAccessibleRouteCandidatePrices(
   client: QueryClient,
-  agentApiKeyId: string,
+  agentId: string,
 ): Promise<AccessibleRouteCandidatePriceRow[]> {
   const result = await client.query<AccessibleRouteCandidatePriceRow>(
     `
@@ -268,19 +268,19 @@ async function readAccessibleRouteCandidatePrices(
         select distinct virtual_models.id,
                virtual_models.name,
                virtual_models.display_name
-        from agent_api_keys
+        from agents
         join virtual_models
           on virtual_models.enabled = true
          and (
-              agent_api_keys.default_virtual_model_id = virtual_models.id
+              agents.default_virtual_model_id = virtual_models.id
               or exists (
                 select 1
-                from agent_api_key_virtual_models
-                where agent_api_key_virtual_models.agent_api_key_id = agent_api_keys.id
-                  and agent_api_key_virtual_models.virtual_model_id = virtual_models.id
+                from agent_virtual_models
+                where agent_virtual_models.agent_id = agents.id
+                  and agent_virtual_models.virtual_model_id = virtual_models.id
               )
          )
-        where agent_api_keys.id = $1
+        where agents.id = $1
       )
       select accessible_virtual_models.name as virtual_model_name,
              accessible_virtual_models.display_name as virtual_model_display_name,
@@ -332,7 +332,7 @@ async function readAccessibleRouteCandidatePrices(
                providers.provider_key,
                provider_models.model_id
     `,
-    [agentApiKeyId],
+    [agentId],
   );
   return result.rows;
 }
@@ -390,12 +390,12 @@ function rowToSyncedPriceSnapshot(
 
 async function readAgentLimits(
   client: QueryClient,
-  agentApiKeyId?: string,
+  agentId?: string,
 ): Promise<ConsoleAgentLimit[]> {
   const result = await client.query<AgentLimitRow>(
     `
       select id::text,
-             agent_api_key_id::text,
+             agent_id::text as agent_id,
              limit_type,
              period,
              limit_value::text,
@@ -405,14 +405,14 @@ async function readAgentLimits(
              enforcement_policy,
              manual_bypass
       from agent_limits
-      where ($1::uuid is null or agent_api_key_id = $1::uuid)
-      order by agent_api_key_id, limit_type
+      where ($1::uuid is null or agent_id = $1::uuid)
+      order by agent_id, limit_type
     `,
-    [agentApiKeyId ?? null],
+    [agentId ?? null],
   );
   return result.rows.map((row) => ({
     alertThreshold: row.alert_threshold === null ? null : Number(row.alert_threshold),
-    agentApiKeyId: row.agent_api_key_id,
+    agentId: row.agent_id,
     enabled: row.enabled,
     enforcementPolicy: row.enforcement_policy,
     id: row.id,

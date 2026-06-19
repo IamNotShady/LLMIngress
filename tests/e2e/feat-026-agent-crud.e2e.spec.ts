@@ -38,7 +38,7 @@ test("agent crud works and delete with request attribution is blocked", async ({
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
           await expect(
-            page.locator("summary.row-summary").getByRole("heading", { name: "Codex" }),
+            page.locator(".agent-management-row").getByRole("heading", { name: "Codex" }),
           ).toBeVisible();
           await expect(page.getByText("Type: coding")).toBeVisible();
 
@@ -48,7 +48,7 @@ test("agent crud works and delete with request attribution is blocked", async ({
           await page.getByRole("button", { exact: true, name: "Save agent" }).click();
 
           await expect(
-            page.locator("summary.row-summary").getByRole("heading", { name: "Codex CLI" }),
+            page.locator(".agent-management-row").getByRole("heading", { name: "Codex CLI" }),
           ).toBeVisible();
           await expect(page.getByText("Type: terminal")).toBeVisible();
 
@@ -59,12 +59,12 @@ test("agent crud works and delete with request attribution is blocked", async ({
           const protectedAgents = await insertProtectedAgents(fixture);
           await page.reload();
           await expect(
-            page.locator("summary.row-summary").getByRole("heading", {
+            page.locator(".agent-management-row").getByRole("heading", {
               name: "Active Key Agent",
             }),
           ).toBeVisible();
           await expect(
-            page.locator("summary.row-summary").getByRole("heading", {
+            page.locator(".agent-management-row").getByRole("heading", {
               name: "Attributed Agent",
             }),
           ).toBeVisible();

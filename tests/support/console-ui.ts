@@ -18,11 +18,32 @@ async function ensureOpen(summaryOrControl: Locator, details: Locator): Promise<
 /** Open a standalone disclosure (e.g. "New provider", "Add from template"). */
 export async function openDisclosure(page: Page, label: string): Promise<void> {
   const summary = page.locator("summary.disclosure-summary", { hasText: label }).first();
-  await ensureOpen(summary, summary.locator("xpath=ancestor::details[1]"));
+  if ((await summary.count()) > 0) {
+    await ensureOpen(summary, summary.locator("xpath=ancestor::details[1]"));
+    return;
+  }
+
+  if (await page.getByRole("heading", { exact: true, name: label }).isVisible()) {
+    return;
+  }
+
+  await page.getByRole("link", { exact: true, name: label }).click();
 }
 
 /** Open a collapsed list row by its title heading (e.g. a provider/agent name). */
 export async function openRow(page: Page, name: string): Promise<void> {
+  if (await page.getByRole("dialog", { exact: true, name: `Edit ${name}` }).isVisible()) {
+    return;
+  }
+
   const heading = page.locator("summary.row-summary").getByRole("heading", { name, exact: true });
-  await ensureOpen(heading, heading.locator("xpath=ancestor::details[1]"));
+  if ((await heading.count()) > 0) {
+    await ensureOpen(heading, heading.locator("xpath=ancestor::details[1]"));
+    return;
+  }
+
+  const agentRow = page.locator(".agent-management-row", {
+    has: page.getByRole("heading", { exact: true, name }),
+  });
+  await agentRow.getByRole("link", { name: "Edit" }).click();
 }

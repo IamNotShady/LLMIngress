@@ -255,6 +255,7 @@ pre,
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
     clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);
+  animation: none;
 }
 
 .providers-page {
@@ -1110,6 +1111,77 @@ details.disclosure[open] > .disclosure-summary {
   flex-direction: column;
   gap: var(--space-md);
   padding: var(--space-md);
+}
+
+.console-dialog {
+  position: fixed;
+  top: 5vh;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(46rem, calc(100vw - 2rem));
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-lg);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+}
+.console-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: color-mix(in srgb, var(--canvas) 72%, transparent);
+}
+.console-dialog-head,
+.agent-management-head,
+.agent-management-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+.console-dialog-head {
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+.console-dialog-head h2 {
+  font-size: var(--text-xl);
+  letter-spacing: 0;
+}
+.console-dialog form + form,
+.console-dialog form + .agent-dialog-section,
+.console-dialog .agent-dialog-section + form {
+  margin-top: var(--space-md);
+}
+.agent-dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-block: var(--space-md);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.agent-dialog-section h3 {
+  font-size: var(--text-md);
+}
+.agent-management-head {
+  justify-content: space-between;
+}
+.agent-management-row {
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-xs);
+  border-top: 1px solid var(--border);
+}
+.agent-management-row:last-child {
+  border-bottom: 1px solid var(--border);
+}
+.agent-management-row .secondary-button {
+  flex: none;
 }
 
 /* ---- pager ---- */
@@ -2384,7 +2456,11 @@ details.disclosure[open] > .disclosure-summary {
 
 @media (max-width: 56rem) {
   .detail-layout,
+  .agents-shell,
   .wizard {
+    grid-template-columns: 1fr;
+  }
+  .agents-filter-bar {
     grid-template-columns: 1fr;
   }
   .overview-stat-grid {

@@ -47,10 +47,12 @@ test("agent budget saves without manual price fields and blocks accessible unkno
               .getByRole("heading", { name: "Auto Budget Agent" }),
           ).toBeVisible();
           await openRow(page, "Auto Budget Agent");
-          await expect(page.getByText("Default Virtual Model: Auto Budget VM")).toBeVisible();
-          await expect(
-            page.getByText("Allowed Virtual Models: Auto Budget VM (auto-budget-vm)"),
-          ).toBeVisible();
+          await expect(page.getByLabel("Default virtual model")).toHaveValue(
+            seededIds.virtualModelId,
+          );
+          await expect(page.getByLabel("Allowed virtual models")).toHaveValues([
+            seededIds.virtualModelId,
+          ]);
           await page.goto(`${baseUrl}/routing`);
           await openRow(page, "Auto Budget VM");
           await expect(
@@ -109,10 +111,11 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await page.getByRole("button", { name: "Save Agent limits" }).click();
 
           await openRow(page, "Auto Budget Agent");
-          await expect(page.getByText("Budget Limit: $25.00 / month")).toBeVisible();
-          await expect(page.getByText("RPM Limit: 120 requests / minute")).toBeVisible();
-          await expect(page.getByText("TPM Limit: 640000 tokens / minute")).toBeVisible();
-          await expect(page.getByText("Token Limit: 32000 tokens / request")).toBeVisible();
+          await expect(page.getByLabel("Budget USD limit")).toHaveValue("25");
+          await expect(page.getByLabel("Budget period")).toHaveValue("month");
+          await expect(page.getByLabel("RPM limit")).toHaveValue("120");
+          await expect(page.getByLabel("TPM limit")).toHaveValue("640000");
+          await expect(page.getByLabel("Token limit")).toHaveValue("32000");
           await expect.poll(() => countAgentLimits(fixture, seededIds.agentApiKeyId)).toBe(4);
           await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(1);
         } finally {

@@ -276,7 +276,9 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
   await page.getByRole("button", { name: "Save Agent virtual models" }).click();
   await openRow(page, "MVP Codex");
-  await expect(page.getByText(`Default Virtual Model: ${virtualModelLabel}`)).toBeVisible();
+  await expect(page.getByLabel("Default virtual model").locator("option:checked")).toHaveText(
+    virtualModelLabel,
+  );
 
   await page.getByLabel("Budget USD limit").fill("100");
   await page.getByLabel("Budget period").selectOption("month");
@@ -285,7 +287,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await page.getByLabel("Token limit").fill("12000");
   await page.getByRole("button", { name: "Save Agent limits" }).click();
   await openRow(page, "MVP Codex");
-  await expect(page.getByText("Budget Limit: $100.00 / month")).toBeVisible();
+  await expect(page.getByLabel("Budget USD limit")).toHaveValue("100");
 
   return agentApiKey;
 }

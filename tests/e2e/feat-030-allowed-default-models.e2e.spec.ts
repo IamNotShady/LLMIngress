@@ -64,12 +64,11 @@ test("default virtual model must be in allowed list", async ({ browser }) => {
           await page.getByRole("button", { name: "Save Agent virtual models" }).click();
 
           await openRow(page, "Codex");
-          await expect(
-            page.getByText("Allowed Virtual Models: Coding Fast (coding-fast), Coding Strong"),
-          ).toBeVisible();
-          await expect(
-            page.getByText("Default Virtual Model: Coding Fast (coding-fast)"),
-          ).toBeVisible();
+          await expect(page.getByLabel("Allowed virtual models")).toHaveValues([
+            virtualModels.fast.id,
+            virtualModels.strong.id,
+          ]);
+          await expect(page.getByLabel("Default virtual model")).toHaveValue(virtualModels.fast.id);
           await expect
             .poll(() => readAgentApiKeyVirtualModelAccess(fixture))
             .toEqual({

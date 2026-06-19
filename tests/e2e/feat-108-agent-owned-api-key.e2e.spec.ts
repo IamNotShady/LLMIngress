@@ -58,9 +58,7 @@ test("agent creation returns one api key and gateway uses agent owned auth", asy
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(agentApiKey)).toHaveCount(0);
           await openRow(page, "Agent Owned Codex");
-          await expect(
-            page.getByText(`Agent API key prefix: ${agentApiKey.slice(0, 12)}`),
-          ).toBeVisible();
+          await expect(page.getByText(/^Agent API key prefix:/)).toHaveCount(0);
 
           const virtualModelLabel = `${seeded.virtualModelDisplayName} (${seeded.virtualModelName})`;
           await page
@@ -69,7 +67,10 @@ test("agent creation returns one api key and gateway uses agent owned auth", asy
           await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
           await page.getByRole("button", { name: "Save Agent virtual models" }).click();
           await openRow(page, "Agent Owned Codex");
-          await expect(page.getByText(`Default Virtual Model: ${virtualModelLabel}`)).toBeVisible();
+          await expect(page.getByLabel("Default virtual model")).toHaveValue(seeded.virtualModelId);
+          await expect(page.getByLabel("Allowed virtual models")).toHaveValues([
+            seeded.virtualModelId,
+          ]);
 
           await page.getByLabel("RPM limit").fill("1");
           await page.getByLabel("Budget USD limit").fill("100");
@@ -78,7 +79,7 @@ test("agent creation returns one api key and gateway uses agent owned auth", asy
           await page.getByLabel("Token limit").fill("12000");
           await page.getByRole("button", { name: "Save Agent limits" }).click();
           await openRow(page, "Agent Owned Codex");
-          await expect(page.getByText("RPM Limit: 1 requests / minute")).toBeVisible();
+          await expect(page.getByLabel("RPM limit")).toHaveValue("1");
 
           const gateway = startGatewayProcess({
             databaseUrl: fixture.databaseUrl,
@@ -129,6 +130,7 @@ type GatewayProcess = ConsoleProcess;
 
 type SeededRoute = {
   virtualModelDisplayName: string;
+  virtualModelId: string;
   virtualModelName: string;
 };
 
@@ -207,6 +209,7 @@ async function seedProviderRoute(fixture: Fixture, providerBaseUrl: string): Pro
 
   return {
     virtualModelDisplayName: "Agent Owned Model 108",
+    virtualModelId,
     virtualModelName: "agent-owned-model-108",
   };
 }

@@ -54,10 +54,11 @@ test("agent limit form saves budget rpm tpm token rules without manual price fie
           await page.getByRole("button", { name: "Save Agent limits" }).click();
 
           await openRow(page, "Codex");
-          await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
-          await expect(page.getByText("RPM Limit: 60 requests / minute")).toBeVisible();
-          await expect(page.getByText("TPM Limit: 120000 tokens / minute")).toBeVisible();
-          await expect(page.getByText("Token Limit: 8000 tokens / request")).toBeVisible();
+          await expect(page.getByLabel("Budget USD limit")).toHaveValue("10");
+          await expect(page.getByLabel("Budget period")).toHaveValue("month");
+          await expect(page.getByLabel("RPM limit")).toHaveValue("60");
+          await expect(page.getByLabel("TPM limit")).toHaveValue("120000");
+          await expect(page.getByLabel("Token limit")).toHaveValue("8000");
           await expect
             .poll(() => readAgentLimits(fixture))
             .toEqual([

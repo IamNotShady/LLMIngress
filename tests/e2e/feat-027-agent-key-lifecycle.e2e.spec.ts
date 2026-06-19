@@ -55,9 +55,7 @@ test("agent creation returns one plaintext key and removes independent key lifec
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstKey)).toHaveCount(0);
           await openRow(page, "Codex");
-          await expect(
-            page.getByText(`Agent API key prefix: ${firstKey.slice(0, 12)}`),
-          ).toBeVisible();
+          await expect(page.getByText(/^Agent API key prefix:/)).toHaveCount(0);
           await expect(page.getByRole("button", { name: "Create Agent API key" })).toHaveCount(0);
           await expect(page.getByRole("button", { name: "Rotate Agent API key" })).toHaveCount(0);
           await expect(page.getByRole("button", { name: "Disable Agent API key" })).toHaveCount(0);
@@ -66,9 +64,7 @@ test("agent creation returns one plaintext key and removes independent key lifec
           await page.reload();
           await expect(page.getByText(firstKey)).toHaveCount(0);
           await openRow(page, "Codex");
-          await expect(
-            page.getByText(`Agent API key prefix: ${firstKey.slice(0, 12)}`),
-          ).toBeVisible();
+          await expect(page.getByText(/^Agent API key prefix:/)).toHaveCount(0);
         } finally {
           await context.close();
         }

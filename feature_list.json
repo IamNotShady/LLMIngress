@@ -1150,6 +1150,23 @@
       ],
       "status": "passing",
       "evidence": "2026-06-18: TDD red added for Agent-owned single API key schema/auth/Console behavior and E2E create-to-Gateway flow. Added migration 0032_agent_owned_api_key: agents now store key_prefix, key_hash, default_virtual_model_id; agent_virtual_models stores allowed Virtual Models; runtime/accounting tables now use agent_id and agent_key_prefix; legacy agent_api_keys and agent_api_key_virtual_models are dropped. 2026-06-19 simplification: removed the test fixture legacy SQL shim, made baseline migrations 0002/0003 directly describe the Agent-owned schema for empty-database redesign, and updated old regression seeds instead of preserving key-table compatibility. Console Agent creation now generates one high-entropy API key, returns plaintext only on the one-time Agent created page, and removes create/rotate/disable/delete key UI and /api/agent-api-keys. Gateway auth now checks agents.key_hash; /v1/models and default model resolution use Agent allowed/default Virtual Models. Agent limits, budget/rate/concurrency accounting, backup/export/alerts/usage analytics, docs, and legacy regression tests were updated to Agent-owned credential semantics without Agent API Key breakdowns. Verification passed: feat-108 unit, feat-108 real Console/Gateway/PostgreSQL E2E, pnpm run db:migrate:check, pnpm run lint, pnpm run typecheck, pnpm test, pnpm run verify, focused regressions for feat-050/058/077/086/088/089/096/101, and pnpm run verify:features re-verified all 108 passing features after the no-compatibility redesign. 2026-06-19 cleanup: deleted the leftover Console agent-api-keys module, moved Agent Virtual Model access onto agents, changed Console Agents/Limits views from per-key arrays to per-Agent state, changed config import/export from agentApiKeys[] to a single apiKey object, renamed Agent limit and Virtual Model dependency code away from key counts, added a static feat-108 guard against multi-key Console surfaces, and reran focused unit/E2E, pnpm run verify, and pnpm run verify:features (all 108 passing features re-verified)."
+    },
+    {
+      "id": "feat-109",
+      "name": "Agent Management Dialogs and Integration Snippets Layout",
+      "description": "Console Agents opens Agent creation and editing in a popup dialog, keeps integration snippets in the edit dialog instead of the right-side Integration Guide, and hides internal Agent metadata/status/key/limit readout rows from the management surface.",
+      "verification": "pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --grep 'agents page matches the designed list and detail layout'",
+      "dependencies": [
+        "feat-026",
+        "feat-027",
+        "feat-030",
+        "feat-031",
+        "feat-077",
+        "feat-096",
+        "feat-108"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-19: TDD red observed first: console-ui-agents E2E expected a New agent popup after clicking + Create Agent and failed because Agent creation/editing still rendered inline disclosure panels. Updated Console Agents so create and edit open query-driven popup dialogs, moved Integration snippets into the edit dialog, removed the right-side Integration Guide, and hid the internal management readout rows for integration platform, derived status, request logging, saved API key state, request attribution count, key prefix timestamps, virtual-model summaries, and limit summaries. Updated legacy Agent E2Es to use the dialog controls as the persisted-state surface, and fixed the shared openRow helper so repeated calls are idempotent when an edit dialog is already open behind the modal scrim. Browser verification passed on desktop and mobile with no blank screen, no framework overlay, no console errors, no horizontal overflow, visible create/edit dialogs, visible Integration snippets, and no hidden internal readout labels. Verification passed: focused console-ui-agents E2E, focused Agent regressions feat-026/027/030/031/050/058/077/096/108, pnpm run verify, and pnpm run verify:features re-verified all 109 passing features."
     }
   ]
 }

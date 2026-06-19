@@ -10,7 +10,11 @@ test("agents page matches the designed list and detail layout", async ({ browser
       await page.goto(`${baseUrl}/agents`);
 
       await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeVisible();
-      await expect(page.getByRole("link", { name: "+ Create Agent" })).toBeVisible();
+      await page.getByRole("link", { name: "+ Create Agent" }).click();
+      const createDialog = page.getByRole("dialog", { name: "New agent" });
+      await expect(createDialog.getByRole("heading", { name: "New agent" })).toBeVisible();
+      await expect(createDialog.getByLabel("Agent name")).toBeVisible();
+      await createDialog.getByRole("link", { name: "Close" }).click();
 
       for (const label of ["Agents", "Connected", "Requests today", "Cost this week"]) {
         await expect(page.locator(".stat-card-label", { hasText: label })).toBeVisible();
@@ -41,11 +45,35 @@ test("agents page matches the designed list and detail layout", async ({ browser
       await expect(details.getByRole("heading", { name: "API Key" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Allowed Virtual Models" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Budget / Limit" })).toBeVisible();
-      await expect(details.getByRole("heading", { name: "Integration guide" })).toBeVisible();
+      await expect(details.getByRole("heading", { name: "Integration guide" })).toHaveCount(0);
 
-      // Existing management control is preserved outside the first-screen detail layout.
       await expect(page.getByText("Manage agents", { exact: true })).toBeVisible();
-      await expect(page.getByText("New agent", { exact: true })).toBeVisible();
+      await page
+        .getByRole("row", { name: /Claude Code/ })
+        .getByRole("link", { name: "Edit" })
+        .click();
+      const editDialog = page.getByRole("dialog", { name: "Edit Claude Code" });
+      await expect(editDialog.getByRole("heading", { name: "Edit Claude Code" })).toBeVisible();
+      await expect(editDialog.getByRole("heading", { name: "Integration snippets" })).toBeVisible();
+
+      for (const hiddenText of [
+        /^Integration platform:/,
+        /^Derived status:/,
+        /^Request logging:/,
+        /^API key saved:/,
+        /^Request attribution records:/,
+        /^Agent API key prefix:/,
+        /^Agent API key created:/,
+        /^Agent API key updated:/,
+        /^Allowed Virtual Models:/,
+        /^Default Virtual Model:/,
+        /^Budget Limit:/,
+        /^RPM Limit:/,
+        /^TPM Limit:/,
+        /^Token Limit:/,
+      ]) {
+        await expect(page.getByText(hiddenText)).toHaveCount(0);
+      }
     },
     { seed: seedAgentsData },
   );

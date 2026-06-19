@@ -74,7 +74,9 @@ test("budget enabled agent cannot save route policy with unknown price provider 
 
           await page.goto(`${baseUrl}/agents`);
           await openRow(page, "Budget Agent");
-          await expect(page.getByText(`Default Virtual Model: Budget Safe VM`)).toBeVisible();
+          await expect(
+            page.getByLabel("Default virtual model").locator("option:checked"),
+          ).toHaveText("Budget Safe VM (budget-safe-vm)");
           await page.goto(`${baseUrl}/routing`);
           await openDisclosure(page, "New route policy");
           await page
@@ -153,7 +155,9 @@ async function assignVirtualModelAccess(page: Page): Promise<void> {
   await page.getByLabel("Default virtual model").selectOption({ label });
   await page.getByRole("button", { name: "Save Agent virtual models" }).click();
   await openRow(page, "Budget Agent");
-  await expect(page.getByText(`Default Virtual Model: ${label}`)).toBeVisible();
+  await expect(page.getByLabel("Default virtual model").locator("option:checked")).toHaveText(
+    label,
+  );
 }
 
 async function saveKnownPriceCostBudget(page: Page): Promise<void> {
@@ -165,7 +169,7 @@ async function saveKnownPriceCostBudget(page: Page): Promise<void> {
   await page.getByLabel("Token limit").fill("8000");
   await page.getByRole("button", { name: "Save Agent limits" }).click();
   await openRow(page, "Budget Agent");
-  await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
+  await expect(page.getByLabel("Budget USD limit")).toHaveValue("10");
 }
 
 async function postRoutePolicy(

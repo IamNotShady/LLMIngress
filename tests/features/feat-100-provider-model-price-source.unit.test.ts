@@ -4,24 +4,31 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-100 provider model price source", () => {
   it("declares provider model current price schema and removes legacy price tables", () => {
-    const migration = loadSqlMigrations().find(
+    const providerModelPriceMigration = loadSqlMigrations().find(
       (candidate) => candidate.id === "0024" && candidate.name === "provider_model_prices",
     );
-    const sql = migration?.sql ?? "";
+    const priceMergeMigration = loadSqlMigrations().find(
+      (candidate) => candidate.id === "0036" && candidate.name === "merge_provider_model_prices",
+    );
+    const providerModelPriceSql = providerModelPriceMigration?.sql ?? "";
+    const priceMergeSql = priceMergeMigration?.sql ?? "";
 
-    expect(sql).toContain("alter table provider_models");
-    expect(sql).toContain("manual_input_usd_per_million_tokens numeric(20, 8)");
-    expect(sql).toContain("manual_cached_input_usd_per_million_tokens numeric(20, 8)");
-    expect(sql).toContain("manual_output_usd_per_million_tokens numeric(20, 8)");
-    expect(sql).toContain("manual_price_updated_at timestamptz");
-    expect(sql).toContain("create table if not exists provider_models_price");
-    expect(sql).toContain("source text not null check (source in ('models.dev', 'litellm'))");
-    expect(sql).toContain("unique (provider_key, model_id, source)");
-    expect(sql).toContain("idx_provider_models_price_effective");
-    expect(sql).toContain("drop table if exists model_price_overrides");
-    expect(sql).toContain("drop table if exists price_registry_snapshots");
-    expect(sql).not.toContain("from model_price_overrides");
-    expect(sql).not.toContain("from price_registry_snapshots");
+    expect(providerModelPriceSql).toContain("alter table provider_models");
+    expect(providerModelPriceSql).toContain("manual_input_usd_per_million_tokens numeric(20, 8)");
+    expect(providerModelPriceSql).toContain(
+      "manual_cached_input_usd_per_million_tokens numeric(20, 8)",
+    );
+    expect(providerModelPriceSql).toContain("manual_output_usd_per_million_tokens numeric(20, 8)");
+    expect(providerModelPriceSql).toContain("manual_price_updated_at timestamptz");
+    expect(providerModelPriceSql).toContain("drop table if exists model_price_overrides");
+    expect(providerModelPriceSql).toContain("drop table if exists price_registry_snapshots");
+    expect(providerModelPriceSql).not.toContain("from model_price_overrides");
+    expect(providerModelPriceSql).not.toContain("from price_registry_snapshots");
+    expect(priceMergeSql).toContain("synced_input_usd_per_million_tokens numeric(20, 8)");
+    expect(priceMergeSql).toContain("synced_cached_input_usd_per_million_tokens numeric(20, 8)");
+    expect(priceMergeSql).toContain("synced_output_usd_per_million_tokens numeric(20, 8)");
+    expect(priceMergeSql).toContain("synced_price_source text");
+    expect(priceMergeSql).toContain("drop table if exists provider_models_price");
   });
 
   it("normalizes models.dev primary prices and LiteLLM auxiliary prices with primary precedence", async () => {
@@ -263,7 +270,7 @@ describe("feat-100 provider model price source", () => {
     );
   });
 
-  it("resolves current prices from provider_models manual fields, then provider_models_price, then unknown", () => {
+  it("resolves current prices from provider_models manual fields, then provider_models synced fields, then unknown", () => {
     expect(
       resolveEffectiveModelTokenPrice({
         modelId: "gpt-4.1-mini",

@@ -386,13 +386,15 @@ async function readPriceSnapshots(fixture: Fixture): Promise<PriceSnapshotRow[]>
     `
       select provider_key,
              model_id,
-             input_usd_per_million_tokens::text,
-             cached_input_usd_per_million_tokens::text,
-             output_usd_per_million_tokens::text,
-             source,
-             source_url,
-             price_version
-      from provider_models_price
+             synced_input_usd_per_million_tokens::text as input_usd_per_million_tokens,
+             synced_cached_input_usd_per_million_tokens::text as cached_input_usd_per_million_tokens,
+             synced_output_usd_per_million_tokens::text as output_usd_per_million_tokens,
+             synced_price_source as source,
+             synced_price_source_url as source_url,
+             synced_price_version as price_version
+      from provider_models
+      join providers on providers.id = provider_models.provider_id
+      where synced_price_version is not null
       order by provider_key, model_id, source
     `,
   );
@@ -427,7 +429,7 @@ async function readConfigPublication(fixture: Fixture): Promise<{
                select count(*)::text
                from config_change_events
                where source = 'worker'
-                 and changed_table = 'provider_models_price'
+                 and changed_table = 'provider_models'
              ) as price_registry_change_count,
              (
                select count(*)::text

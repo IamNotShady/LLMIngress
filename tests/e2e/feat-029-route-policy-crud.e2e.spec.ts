@@ -171,20 +171,16 @@ async function seedProviderModels(fixture: Fixture): Promise<{
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:029', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = 0.40,
+          synced_output_usd_per_million_tokens = 1.60,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:029',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      where model_id = 'gpt-4.1-mini'
     `,
-    [randomUUID()],
   );
 
   return {

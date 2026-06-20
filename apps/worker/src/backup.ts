@@ -71,7 +71,6 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "route_policy_candidates",
     "agent_virtual_models",
     "agent_limits",
-    "provider_models_price",
     "config_versions",
     "config_change_events",
     "notification_channels",

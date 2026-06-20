@@ -194,22 +194,22 @@ async function seedUsageRoutes(
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        cached_input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1', 2, null, 8, 'models.dev', 'test://prices/feat-045', 'test:feat-045', '2026-06-17T00:00:00.000Z'),
-             ($2, 'openai', 'gpt-4.1-nano', 0.1, null, 0.4, 'models.dev', 'test://prices/feat-045', 'test:feat-045', '2026-06-17T00:00:00.000Z')
+      update provider_models
+      set synced_input_usd_per_million_tokens = prices.input_price,
+          synced_cached_input_usd_per_million_tokens = prices.cached_input_price,
+          synced_output_usd_per_million_tokens = prices.output_price,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'test://prices/feat-045',
+          synced_price_version = 'test:feat-045',
+          synced_price_synced_at = '2026-06-17T00:00:00.000Z',
+          synced_price_updated_at = '2026-06-17T00:00:00.000Z'
+      from (
+        values
+          ('gpt-4.1', 2::numeric, null::numeric, 8::numeric),
+          ('gpt-4.1-nano', 0.1::numeric, null::numeric, 0.4::numeric)
+      ) as prices(model_id, input_price, cached_input_price, output_price)
+      where provider_models.model_id = prices.model_id
     `,
-    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     `

@@ -299,17 +299,17 @@ export async function loadGatewayConfigSnapshot(
                provider_models.manual_output_usd_per_million_tokens::text
                  as "outputUsdPerMillionTokens",
                provider_models.manual_price_updated_at as "updatedAt",
-               latest_provider_model_price.input_usd_per_million_tokens::text
+               provider_models.synced_input_usd_per_million_tokens::text
                  as "syncedInputUsdPerMillionTokens",
-               latest_provider_model_price.cached_input_usd_per_million_tokens::text
+               provider_models.synced_cached_input_usd_per_million_tokens::text
                  as "syncedCachedInputUsdPerMillionTokens",
-               latest_provider_model_price.output_usd_per_million_tokens::text
+               provider_models.synced_output_usd_per_million_tokens::text
                  as "syncedOutputUsdPerMillionTokens",
-               latest_provider_model_price.price_version
+               provider_models.synced_price_version
                  as "syncedPriceVersion",
-               latest_provider_model_price.source_url
+               provider_models.synced_price_source_url
                  as "syncedSourceUrl",
-               latest_provider_model_price.synced_at
+               provider_models.synced_price_synced_at
                  as "syncedAt"
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
@@ -317,25 +317,6 @@ export async function loadGatewayConfigSnapshot(
           on route_policy_candidates.route_policy_id = route_policies.id
         join provider_models on provider_models.id = route_policy_candidates.provider_model_id
         join providers on providers.id = provider_models.provider_id
-        left join lateral (
-          select input_usd_per_million_tokens,
-                 cached_input_usd_per_million_tokens,
-                 output_usd_per_million_tokens,
-                 price_version,
-                 source_url,
-                 synced_at
-          from provider_models_price
-          where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-            and provider_models_price.model_id = provider_models.model_id
-          order by case provider_models_price.source
-                     when 'models.dev' then 0
-                     when 'litellm' then 1
-                     else 2
-                   end,
-                   synced_at desc,
-                   updated_at desc
-          limit 1
-        ) latest_provider_model_price on true
         where virtual_models.enabled = true
           and providers.enabled = true
           and provider_models.availability = 'available'

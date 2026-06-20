@@ -709,7 +709,7 @@ PostgreSQL database
 │   └── export_tasks
 │
 ├── Billing / pricing
-│   └── provider_models_price
+│   └── provider_models manual and synced current price fields
 │
 ├── Config lifecycle
 │   ├── config_versions

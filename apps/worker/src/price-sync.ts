@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   type ConfigPublishClient,
   createConfigPublisher,
@@ -52,7 +51,7 @@ export function createPriceSyncJobHandler(options: PriceSyncJobHandlerOptions): 
     const publishResult = await publisher.publish({
       source: "worker",
       description: `Sync provider model prices ${payload.priceVersion ?? observedAt.toISOString()}`,
-      changes: [{ table: "provider_models_price", recordId: null }],
+      changes: [{ table: "provider_models", recordId: null }],
       write: async (client) => {
         syncedPriceCount = await writeProviderModelPrices(client, {
           jobId: job.id,
@@ -151,48 +150,24 @@ async function writeProviderModelPrices(
   for (const price of input.prices) {
     const result = await client.query<{ id: string }>(
       `
-        insert into provider_models_price (
-          id,
-          provider_key,
-          model_id,
-          input_usd_per_million_tokens,
-          cached_input_usd_per_million_tokens,
-          output_usd_per_million_tokens,
-          source,
-          source_url,
-          price_version,
-          synced_at,
-          metadata,
-          updated_at
-        )
-        values (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9,
-          $10::timestamptz,
-          $11::jsonb,
-          $12::timestamptz
-        )
-        on conflict (provider_key, model_id, source)
-        do update set
-          input_usd_per_million_tokens = excluded.input_usd_per_million_tokens,
-          cached_input_usd_per_million_tokens = excluded.cached_input_usd_per_million_tokens,
-          output_usd_per_million_tokens = excluded.output_usd_per_million_tokens,
-          source_url = excluded.source_url,
-          price_version = excluded.price_version,
-          synced_at = excluded.synced_at,
-          metadata = excluded.metadata,
-          updated_at = excluded.updated_at
-        returning id::text
+        update provider_models
+        set synced_input_usd_per_million_tokens = $3,
+            synced_cached_input_usd_per_million_tokens = $4,
+            synced_output_usd_per_million_tokens = $5,
+            synced_price_source = $6,
+            synced_price_source_url = $7,
+            synced_price_version = $8,
+            synced_price_synced_at = $9::timestamptz,
+            synced_price_metadata = $10::jsonb,
+            synced_price_updated_at = $11::timestamptz,
+            updated_at = $11::timestamptz
+        from providers
+        where providers.id = provider_models.provider_id
+          and lower(providers.provider_key) = lower($1)
+          and provider_models.model_id = $2
+        returning provider_models.id::text
       `,
       [
-        randomUUID(),
         price.providerKey,
         price.modelId,
         price.inputUsdPerMillionTokens,

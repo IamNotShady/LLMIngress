@@ -320,21 +320,21 @@ async function seedBudgetRoutes(
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:042', now()),
-             ($2, 'anthropic', 'claude-sonnet-4-6', 3.00, 15.00, 'models.dev', 'https://models.dev/api.json', 'models.dev:042', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = prices.input_price,
+          synced_output_usd_per_million_tokens = prices.output_price,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:042',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      from (
+        values
+          ('gpt-4.1-mini', 0.40::numeric, 1.60::numeric),
+          ('claude-sonnet-4-6', 3.00::numeric, 15.00::numeric)
+      ) as prices(model_id, input_price, output_price)
+      where provider_models.model_id = prices.model_id
     `,
-    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     "insert into config_versions (version, source, description) values (1, 'console', 'Budget config')",

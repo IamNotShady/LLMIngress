@@ -225,6 +225,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0035",
     name: "virtual_model_description_schema_version",
   },
+  {
+    checksum: "1a08ddf084191f6cdd0a2ef9bf3fd3683f766c3e2cedef2aabee4d96dfbbe43a",
+    id: "0036",
+    name: "merge_provider_model_prices",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

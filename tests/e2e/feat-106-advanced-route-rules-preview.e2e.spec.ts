@@ -174,21 +174,21 @@ async function seedAdvancedRoutePreview(
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'cheap-coder', 0.10, 0.20, 'models.dev', 'https://models.dev/api.json', 'models.dev:106', now()),
-             ($2, 'openai', 'advanced-coder', 3.00, 9.00, 'models.dev', 'https://models.dev/api.json', 'models.dev:106', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = prices.input_price,
+          synced_output_usd_per_million_tokens = prices.output_price,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:106',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      from (
+        values
+          ('cheap-coder', 0.10::numeric, 0.20::numeric),
+          ('advanced-coder', 3.00::numeric, 9.00::numeric)
+      ) as prices(model_id, input_price, output_price)
+      where provider_models.model_id = prices.model_id
     `,
-    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     `

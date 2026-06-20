@@ -387,36 +387,17 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                        provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
                        provider_models.manual_output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
                        provider_models.manual_price_updated_at as price_override_updated_at,
-                       latest_provider_model_price.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
-                       latest_provider_model_price.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
-                       latest_provider_model_price.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
-                       latest_provider_model_price.price_version as price_sync_price_version,
-                       latest_provider_model_price.source_url as price_sync_source_url,
-                       latest_provider_model_price.synced_at as price_sync_synced_at,
+                       provider_models.synced_input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+                       provider_models.synced_cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+                       provider_models.synced_output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+                       provider_models.synced_price_version as price_sync_price_version,
+                       provider_models.synced_price_source_url as price_sync_source_url,
+                       provider_models.synced_price_synced_at as price_sync_synced_at,
                        route_policy_candidates.candidate_order,
                        route_policy_candidates.is_fallback
                 from route_policy_candidates
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
-                left join lateral (
-                  select input_usd_per_million_tokens,
-                         cached_input_usd_per_million_tokens,
-                         output_usd_per_million_tokens,
-                         price_version,
-                         source_url,
-                         synced_at
-                  from provider_models_price
-                  where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-                    and provider_models_price.model_id = provider_models.model_id
-                  order by case provider_models_price.source
-                             when 'models.dev' then 0
-                             when 'litellm' then 1
-                             else 2
-                           end,
-                           synced_at desc,
-                           updated_at desc
-                  limit 1
-                ) latest_provider_model_price on true
                 where route_policy_candidates.route_policy_id = any($1::uuid[])
                 order by route_policy_candidates.candidate_order
               `,
@@ -751,39 +732,20 @@ async function writeRoutePolicyCandidates(
                provider_models.manual_output_usd_per_million_tokens::text
                  as price_override_output_usd_per_million_tokens,
                provider_models.manual_price_updated_at as price_override_updated_at,
-               latest_provider_model_price.input_usd_per_million_tokens::text
+               provider_models.synced_input_usd_per_million_tokens::text
                  as price_sync_input_usd_per_million_tokens,
-               latest_provider_model_price.cached_input_usd_per_million_tokens::text
+               provider_models.synced_cached_input_usd_per_million_tokens::text
                  as price_sync_cached_input_usd_per_million_tokens,
-               latest_provider_model_price.output_usd_per_million_tokens::text
+               provider_models.synced_output_usd_per_million_tokens::text
                  as price_sync_output_usd_per_million_tokens,
-               latest_provider_model_price.price_version as price_sync_price_version,
-               latest_provider_model_price.source_url as price_sync_source_url,
-               latest_provider_model_price.synced_at as price_sync_synced_at,
+               provider_models.synced_price_version as price_sync_price_version,
+               provider_models.synced_price_source_url as price_sync_source_url,
+               provider_models.synced_price_synced_at as price_sync_synced_at,
                inserted.candidate_order,
                inserted.is_fallback
         from inserted
         join provider_models on provider_models.id = inserted.provider_model_id
         join providers on providers.id = provider_models.provider_id
-        left join lateral (
-          select input_usd_per_million_tokens,
-                 cached_input_usd_per_million_tokens,
-                 output_usd_per_million_tokens,
-                 price_version,
-                 source_url,
-                 synced_at
-          from provider_models_price
-          where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-            and provider_models_price.model_id = provider_models.model_id
-          order by case provider_models_price.source
-                     when 'models.dev' then 0
-                     when 'litellm' then 1
-                     else 2
-                   end,
-                   synced_at desc,
-                   updated_at desc
-          limit 1
-        ) latest_provider_model_price on true
       `,
       [randomUUID(), routePolicyId, candidate.providerModelId, index + 1, candidate.isFallback],
     );
@@ -850,33 +812,14 @@ function providerModelOptionsSelectSql(): string {
            provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
            provider_models.manual_output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
            provider_models.manual_price_updated_at as price_override_updated_at,
-           latest_provider_model_price.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
-           latest_provider_model_price.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
-           latest_provider_model_price.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
-           latest_provider_model_price.price_version as price_sync_price_version,
-           latest_provider_model_price.source_url as price_sync_source_url,
-           latest_provider_model_price.synced_at as price_sync_synced_at
+           provider_models.synced_input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+           provider_models.synced_cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+           provider_models.synced_output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+           provider_models.synced_price_version as price_sync_price_version,
+           provider_models.synced_price_source_url as price_sync_source_url,
+           provider_models.synced_price_synced_at as price_sync_synced_at
     from provider_models
     join providers on providers.id = provider_models.provider_id
-    left join lateral (
-      select input_usd_per_million_tokens,
-             cached_input_usd_per_million_tokens,
-             output_usd_per_million_tokens,
-             price_version,
-             source_url,
-             synced_at
-      from provider_models_price
-      where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-        and provider_models_price.model_id = provider_models.model_id
-      order by case provider_models_price.source
-                 when 'models.dev' then 0
-                 when 'litellm' then 1
-                 else 2
-               end,
-               synced_at desc,
-               updated_at desc
-      limit 1
-    ) latest_provider_model_price on true
   `;
 }
 

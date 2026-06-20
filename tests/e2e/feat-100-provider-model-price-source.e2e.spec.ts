@@ -129,22 +129,12 @@ test("refresh models syncs provider model prices with manual override precedence
 
     await expect(readJobResult(fixture, chainedPriceSyncJobId)).resolves.toMatchObject({
       result: {
-        syncedPriceCount: 4,
+        syncedPriceCount: 3,
         trigger: "system",
       },
       status: "succeeded",
     });
     await expect(readProviderModelPriceRows(fixture)).resolves.toEqual([
-      {
-        cached_input_usd_per_million_tokens: null,
-        input_usd_per_million_tokens: "2.00000000",
-        model_id: "claude-side-model",
-        output_usd_per_million_tokens: "10.00000000",
-        price_version: "models.dev:2026-06-17T00:00:00.000Z",
-        provider_key: "anthropic",
-        source: "models.dev",
-        source_url: "https://models.dev/api.json",
-      },
       {
         cached_input_usd_per_million_tokens: null,
         input_usd_per_million_tokens: "0.75000000",
@@ -510,13 +500,15 @@ async function readProviderModelPriceRows(fixture: Fixture): Promise<ProviderMod
     `
       select provider_key,
              model_id,
-             input_usd_per_million_tokens::text,
-             cached_input_usd_per_million_tokens::text,
-             output_usd_per_million_tokens::text,
-             source,
-             source_url,
-             price_version
-      from provider_models_price
+             synced_input_usd_per_million_tokens::text as input_usd_per_million_tokens,
+             synced_cached_input_usd_per_million_tokens::text as cached_input_usd_per_million_tokens,
+             synced_output_usd_per_million_tokens::text as output_usd_per_million_tokens,
+             synced_price_source as source,
+             synced_price_source_url as source_url,
+             synced_price_version as price_version
+      from provider_models
+      join providers on providers.id = provider_models.provider_id
+      where synced_price_version is not null
       order by provider_key, model_id, source
     `,
   );
@@ -582,7 +574,7 @@ async function readConfigPublication(fixture: Fixture): Promise<{
                select count(*)::text
                from config_change_events
                where source = 'worker'
-                 and changed_table = 'provider_models_price'
+                 and changed_table = 'provider_models'
              ) as provider_models_price_change_count,
              (
                select count(*)::text

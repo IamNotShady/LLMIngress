@@ -111,20 +111,16 @@ describe("feat-096 Agent budget automatic price validation", () => {
     );
     await fixture.query(
       `
-        insert into provider_models_price (
-          id,
-          provider_key,
-          model_id,
-          input_usd_per_million_tokens,
-          output_usd_per_million_tokens,
-          source,
-          source_url,
-          price_version,
-          synced_at
-        )
-        values ($1, 'openai', 'unknown-fallback-model', 0.75, 2.25, 'models.dev', 'test://prices', 'price-sync:096', now())
+        update provider_models
+        set synced_input_usd_per_million_tokens = 0.75,
+            synced_output_usd_per_million_tokens = 2.25,
+            synced_price_source = 'models.dev',
+            synced_price_source_url = 'test://prices',
+            synced_price_version = 'price-sync:096',
+            synced_price_synced_at = now(),
+            synced_price_updated_at = now()
+        where model_id = 'unknown-fallback-model'
       `,
-      [randomUUID()],
     );
 
     await expect(
@@ -188,20 +184,16 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:096', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = 0.40,
+          synced_output_usd_per_million_tokens = 1.60,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:096',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      where model_id = 'gpt-4.1-mini'
     `,
-    [randomUUID()],
   );
   await fixture.query(
     `

@@ -345,17 +345,17 @@ async function readReconciliationCandidates(
              provider_models.manual_output_usd_per_million_tokens::text
                as manual_output_usd_per_million_tokens,
              provider_models.manual_price_updated_at as manual_updated_at,
-             latest_provider_model_price.input_usd_per_million_tokens::text
+             provider_models.synced_input_usd_per_million_tokens::text
                as synced_input_usd_per_million_tokens,
-             latest_provider_model_price.cached_input_usd_per_million_tokens::text
+             provider_models.synced_cached_input_usd_per_million_tokens::text
                as synced_cached_input_usd_per_million_tokens,
-             latest_provider_model_price.output_usd_per_million_tokens::text
+             provider_models.synced_output_usd_per_million_tokens::text
                as synced_output_usd_per_million_tokens,
-             latest_provider_model_price.price_version
+             provider_models.synced_price_version
                as synced_price_version,
-             latest_provider_model_price.source_url
+             provider_models.synced_price_source_url
                as synced_source_url,
-             latest_provider_model_price.synced_at
+             provider_models.synced_price_synced_at
                as synced_at
       from request_activity
       join request_usage on request_usage.request_activity_id = request_activity.id
@@ -363,25 +363,6 @@ async function readReconciliationCandidates(
       left join request_savings on request_savings.request_activity_id = request_activity.id
       join provider_models on provider_models.id = request_usage.provider_model_id
       join providers on providers.id = provider_models.provider_id
-      left join lateral (
-        select input_usd_per_million_tokens,
-               cached_input_usd_per_million_tokens,
-               output_usd_per_million_tokens,
-               price_version,
-               source_url,
-               synced_at
-        from provider_models_price
-        where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-          and provider_models_price.model_id = provider_models.model_id
-        order by case provider_models_price.source
-                   when 'models.dev' then 0
-                   when 'litellm' then 1
-                   else 2
-                 end,
-                 synced_at desc,
-                 updated_at desc
-        limit 1
-      ) latest_provider_model_price on true
       where request_activity.status = 'succeeded'
         and ($1::text[] is null or request_activity.request_id = any($1::text[]))
       order by request_activity.created_at, request_activity.id

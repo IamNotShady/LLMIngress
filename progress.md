@@ -1361,3 +1361,12 @@
   - Updated legacy Agent E2Es to assert persisted state through the dialog controls instead of the removed readout rows, and made the shared `openRow` helper return when the requested edit dialog is already open behind the modal scrim.
   - Browser verification passed on desktop and mobile: no blank page, no framework overlay, no console errors, no horizontal overflow, visible create/edit dialogs, visible Integration snippets, and hidden internal readout labels.
   - Verification passed: focused `console-ui-agents` E2E, focused Agent regressions for feat-026/027/030/031/050/058/077/096/108, `pnpm run verify`, and `pnpm run verify:features` with all 109 passing features re-verified.
+
+- [x] 2026-06-20 feat-110 Provider Model Synced Price Fields:
+  - Red phase: `pnpm exec vitest run tests/features/feat-110-provider-model-price-merge.unit.test.ts` failed because migration `0036` was missing and runtime code still referenced `provider_models_price`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-110-provider-model-price-merge.e2e.spec.ts --grep 'provider model synced prices live on provider_models without provider_models_price'` failed because `provider_models_price` still existed after migrations.
+  - Added migration `0036_merge_provider_model_prices`: synced current-price fields now live on `provider_models`, `provider_models_price` is dropped, and no historical rows are backfilled.
+  - Updated Worker `price_sync` to update matching `provider_models` rows and publish `provider_models` config changes; external price rows without a discovered provider model are ignored.
+  - Updated Gateway config reload, Console route policy/preview/budget validation, and Worker billing reconciliation to read synced prices directly from `provider_models`.
+  - Removed `provider_models_price` from backup coverage and architecture docs; updated old regression test seeds to write `provider_models.synced_*`.
+  - Verification passed: feat-110 unit, feat-110 real PostgreSQL E2E, related feat-057/073/096/100 unit checks, related feat-057/073/096/100 E2Es, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 110 passing features re-verified.

@@ -4,6 +4,7 @@ import {
   sessionCookieName,
   verifyConsoleSession,
 } from "../../../server/auth";
+import { enqueueProviderConnectivityCheckJob } from "../../../server/provider-connectivity-jobs";
 import { normalizeProviderTemplateFormInput } from "../../../server/provider-templates";
 import {
   createProvider,
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   try {
     if (action === "create") {
-      await createProvider({
+      const provider = await createProvider({
         databaseUrl,
         provider: normalizeProviderFormInput({
           baseUrl: readText(form, "baseUrl"),
@@ -36,8 +37,9 @@ export async function POST(request: NextRequest) {
           providerType: readText(form, "providerType"),
         }),
       });
+      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: provider.id });
     } else if (action === "createFromTemplate") {
-      await createProviderFromTemplate({
+      const provider = await createProviderFromTemplate({
         databaseUrl,
         template: normalizeProviderTemplateFormInput({
           baseUrl: readText(form, "baseUrl"),
@@ -45,27 +47,55 @@ export async function POST(request: NextRequest) {
           templateId: readText(form, "templateId"),
         }),
       });
+      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: provider.id });
     } else if (action === "update") {
-      await updateProvider({
+      const provider = await updateProvider({
         baseUrl: readText(form, "baseUrl"),
         databaseUrl,
         displayName: readRequiredText(form, "displayName"),
         id: readRequiredText(form, "id"),
       });
+      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: provider.id });
     } else if (action === "enable" || action === "disable") {
+      const providerId = readRequiredText(form, "id");
       await setProviderEnabled({
         databaseUrl,
         enabled: action === "enable",
-        id: readRequiredText(form, "id"),
+        id: providerId,
       });
+      if (action === "enable") {
+        await enqueueProviderConnectivityCheckJob({
+          databaseUrl,
+          providerId,
+        });
+      }
     } else {
       return NextResponse.json({ error: "Unknown provider action." }, { status: 400 });
     }
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Provider action failed." },
-      { status: 400 },
+    const message = normalizeProviderActionError(
+      error instanceof Error ? error.message : "Provider action failed.",
     );
+    if (action === "create" || action === "createFromTemplate") {
+      const redirectUrl = new URL("/providers", request.url);
+      redirectUrl.searchParams.set("providerDialog", "new");
+      redirectUrl.searchParams.set("providerError", message);
+      redirectUrl.searchParams.set("providerErrorField", "providerKey");
+      setSearchParam(redirectUrl, "providerKeyValue", readText(form, "providerKey"));
+      setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
+      setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
+      return NextResponse.redirect(redirectUrl, { status: 303 });
+    }
+    if (action === "update") {
+      const redirectUrl = new URL("/providers", request.url);
+      setSearchParam(redirectUrl, "providerDialog", readText(form, "id"));
+      redirectUrl.searchParams.set("providerError", message);
+      redirectUrl.searchParams.set("providerErrorField", "form");
+      setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
+      setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
+      return NextResponse.redirect(redirectUrl, { status: 303 });
+    }
+    return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
   }
 
   return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
@@ -82,4 +112,17 @@ function readRequiredText(form: FormData, name: string): string {
     throw new Error(`${name} is required.`);
   }
   return value;
+}
+
+function setSearchParam(url: URL, name: string, value: string | undefined): void {
+  if (value) {
+    url.searchParams.set(name, value);
+  }
+}
+
+function normalizeProviderActionError(message: string): string {
+  if (message.includes("providers_provider_key_key")) {
+    return "Provider type already exists.";
+  }
+  return message;
 }

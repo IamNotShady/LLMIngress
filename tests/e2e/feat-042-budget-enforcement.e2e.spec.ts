@@ -235,7 +235,7 @@ async function seedBudgetRoutes(
       [providerModelId, providerId, route.providerModel, route.providerModel],
     );
     await fixture.query(
-      "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+      "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
       [virtualModelId, route.virtualModel, route.virtualModel],
     );
     await fixture.query(

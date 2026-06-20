@@ -148,7 +148,7 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
     [providerModelId, providerId, "gpt-4.1-mini", "GPT-4.1 Mini", 128_000, true, true, "available"],
   );
   await query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, $4)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, $4)",
     [virtualModelId, "coding-balanced", "Coding Balanced", true],
   );
   await query(

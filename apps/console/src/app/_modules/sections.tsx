@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import {
   type ConsoleActivity,
   formatConsoleActivityCost,
@@ -32,9 +31,7 @@ import {
 } from "../../server/notification-channels";
 import {
   type ConsoleProviderHealthSummary,
-  formatProviderHealthFailureCount,
   formatProviderHealthLatestProbe,
-  formatProviderHealthStaleStatus,
   formatProviderHealthStatus,
   listConsoleProviderHealthSummaries,
 } from "../../server/provider-health";
@@ -42,14 +39,12 @@ import {
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
 } from "../../server/provider-keys";
-import {
-  listProviderTemplateSelectorGroups,
-  type ProviderTemplateSelectorItem,
-} from "../../server/provider-templates";
+import { listProviderTemplateSelectorGroups } from "../../server/provider-templates";
 import { type ConsoleProvider, listProviders } from "../../server/providers";
 import {
   buildRoutePolicyHealthWarnings,
   type ConsoleProviderModelOption,
+  type ConsoleRoutePolicy,
   filterRoutePolicyEditorProviderModelOptions,
   listProviderModelOptions,
   listRoutePolicies,
@@ -76,12 +71,48 @@ import { TrendLineChart } from "../_components/charts/trend-line-chart";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref, paginate, readPageParam } from "../_lib/pagination";
+import { ProviderCreateForm } from "./provider-create-form";
+import { VirtualModelRouteDialogClient } from "./virtual-model-route-dialog";
 
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 
 const providerTemplateGroups = listProviderTemplateSelectorGroups();
-const remoteProviderTemplateGroup = requireProviderTemplateGroup("remote_api_key");
-const localProviderTemplateGroup = requireProviderTemplateGroup("local");
+const directProviderCreateChoices = [
+  {
+    action: "create",
+    baseUrlMode: "fixed_create",
+    displayName: "OpenAI",
+    fixedBaseUrl: "https://api.openai.com/v1",
+    id: "openai",
+    providerKey: "openai",
+    providerType: "api_key",
+  },
+  {
+    action: "create",
+    baseUrlMode: "fixed_create",
+    displayName: "Anthropic",
+    fixedBaseUrl: "https://api.anthropic.com/v1",
+    id: "anthropic",
+    providerKey: "anthropic",
+    providerType: "api_key",
+  },
+] as const;
+const defaultProviderCreateChoice = directProviderCreateChoices[0];
+const providerCreateChoices = [
+  ...directProviderCreateChoices,
+  ...providerTemplateGroups.flatMap((group) =>
+    group.templates.map((template) => ({
+      action: "createFromTemplate",
+      baseUrlMode: template.baseUrlMode,
+      baseUrlPlaceholder: template.baseUrlPlaceholder,
+      displayName: template.displayName,
+      fixedBaseUrl: template.fixedBaseUrl,
+      id: template.id,
+      providerKey: template.providerKey,
+      providerType: template.providerType,
+    })),
+  ),
+];
 
 export async function OverviewSection() {
   const databaseUrl = getConsoleDatabaseUrl();
@@ -566,9 +597,30 @@ export async function RuntimeSection() {
 }
 
 function ProviderHealthPill({ status }: { status: string }) {
-  const label = formatProviderHealthStatus(
-    status as Parameters<typeof formatProviderHealthStatus>[0],
+  return (
+    <ProviderStatusPill
+      label={formatProviderHealthStatus(status as Parameters<typeof formatProviderHealthStatus>[0])}
+      status={status}
+    />
   );
+}
+
+function ProviderHealthPillZh({ status }: { status: string }) {
+  return <ProviderStatusPill label={formatProviderHealthStatusZhLabel(status)} status={status} />;
+}
+
+function ModelAvailabilityPill({ value }: { value: string }) {
+  const normalized = value.toLowerCase();
+  if (normalized === "available") {
+    return <span className="pill--ok pill">启用</span>;
+  }
+  if (normalized === "disabled") {
+    return <span className="pill--danger pill">禁用</span>;
+  }
+  return <span className="pill">{formatModelAvailability(value)}</span>;
+}
+
+function ProviderStatusPill({ label, status }: { label: string; status: string }) {
   const normalized = status.toLowerCase();
   if (normalized === "healthy") {
     return <span className="pill--ok pill">{label}</span>;
@@ -576,7 +628,24 @@ function ProviderHealthPill({ status }: { status: string }) {
   if (normalized === "unknown") {
     return <span className="pill">{label}</span>;
   }
+  if (normalized === "degraded") {
+    return <span className="pill--warn pill">{label}</span>;
+  }
   return <span className="pill--danger pill">{label}</span>;
+}
+
+function formatProviderHealthStatusZhLabel(status: string): string {
+  const normalized = status.toLowerCase();
+  if (normalized === "healthy") {
+    return "健康";
+  }
+  if (normalized === "disabled") {
+    return "禁用";
+  }
+  if (normalized === "degraded" || normalized === "unhealthy") {
+    return "异常";
+  }
+  return "未知";
 }
 
 export async function UsageSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
@@ -921,171 +990,347 @@ export async function VirtualModelsSection({
   const databaseUrl = getConsoleDatabaseUrl();
   const virtualModels = await listVirtualModels(databaseUrl);
   const routePolicies = await listRoutePolicies(databaseUrl);
+  const providerModelOptions = orderProviderModelsForConsole(
+    await listProviderModelOptions(databaseUrl),
+  );
   const routePolicyByVmId = new Map(routePolicies.map((policy) => [policy.virtualModelId, policy]));
-  const view = paginate(virtualModels, readPageParam(searchParams));
-  const routedCount = virtualModels.filter((vm) => vm.routePolicyCount > 0).length;
+  const statusFilter = readSingleSearchParam(searchParams.vmStatus) ?? "";
+  const strategyFilter = readSingleSearchParam(searchParams.vmStrategy) ?? "";
+  const queryFilter = readSingleSearchParam(searchParams.vmQuery)?.toLowerCase() ?? "";
+  const visibleVirtualModels = virtualModels.filter((virtualModel) => {
+    const policy = routePolicyByVmId.get(virtualModel.id);
+    if (statusFilter === "enabled" && !virtualModel.enabled) {
+      return false;
+    }
+    if (statusFilter === "disabled" && virtualModel.enabled) {
+      return false;
+    }
+    if (strategyFilter && policy?.strategy !== strategyFilter) {
+      return false;
+    }
+    if (
+      queryFilter &&
+      ![virtualModel.name, virtualModel.description].some((value) =>
+        value.toLowerCase().includes(queryFilter),
+      )
+    ) {
+      return false;
+    }
+    return true;
+  });
+  const selectedVirtualModelId = readSingleSearchParam(searchParams.selected);
+  const selectedVirtualModel =
+    visibleVirtualModels.find((virtualModel) => virtualModel.id === selectedVirtualModelId) ??
+    visibleVirtualModels[0] ??
+    null;
+  const selectedRoutePolicy = selectedVirtualModel
+    ? (routePolicyByVmId.get(selectedVirtualModel.id) ?? null)
+    : null;
+  const dialogTarget = readSingleSearchParam(searchParams.virtualModelDialog);
+  const dialogVirtualModel =
+    dialogTarget && dialogTarget !== "new"
+      ? (virtualModels.find((virtualModel) => virtualModel.id === dialogTarget) ?? null)
+      : null;
+  const dialogRoutePolicy = dialogVirtualModel
+    ? (routePolicyByVmId.get(dialogVirtualModel.id) ?? null)
+    : null;
+  const dialogCloseHref = buildQueryHref(searchParams, { virtualModelDialog: undefined });
   const fallbackOverview = [
-    { name: "No fallback", value: placeholderInt("vm-fallback-none", 70, 88) },
-    { name: "Secondary model", value: placeholderInt("vm-fallback-secondary", 6, 18, 1) },
-    { name: "Other", value: placeholderInt("vm-fallback-other", 2, 10, 2) },
+    { name: "未触发回退", value: 82 },
+    { name: "gpt-4o-mini", value: 12 },
+    { name: "其他", value: 6 },
   ];
   return (
-    <section className="providers-panel" aria-label="Virtual models">
+    <section className="vm-dashboard" aria-label="Virtual models and routes">
       <div className="stat-grid">
         <StatCard icon="VM" label="Virtual Models" value={String(virtualModels.length)} />
-        <StatCard icon="RT" label="With routes" value={String(routedCount)} />
         <StatCard
-          icon="RQ"
-          label="Requests today"
-          value={formatCompactNumber(placeholderInt("vm-requests", 1500, 20000))}
-          delta="placeholder"
+          icon="Q"
+          label="今日请求"
+          value={formatCompactNumber(placeholderInt("vm-requests", 4000, 20000))}
+          delta="较昨日 +12.5%"
         />
         <StatCard
-          icon="FR"
-          label="Avg failure rate"
-          value={`${placeholderFloat("vm-failure", 0.3, 2.4, 2).toFixed(2)}%`}
-          delta="placeholder"
+          icon="$"
+          label="本月成本"
+          value={formatVirtualModelCost(placeholderFloat("vm-cost", 80, 260, 2))}
+          delta="较上月 -8.3%"
+        />
+        <StatCard
+          icon="!"
+          label="平均失败率"
+          value={`${placeholderFloat("vm-failure", 0.8, 2.2, 2).toFixed(2)}%`}
+          delta="较昨日 -0.4pp"
         />
       </div>
-      <div className="chart-grid-2">
-        <div className="chart-card">
-          <h2 className="chart-card-title">Virtual Model list</h2>
-          {virtualModels.length === 0 ? (
-            <p>No virtual models yet — create one below.</p>
-          ) : (
-            <div className="data-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Virtual Model</th>
-                    <th>Strategy</th>
-                    <th className="num">Candidates</th>
-                    <th className="num">Allowed keys</th>
-                    <th className="num">Requests today</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {virtualModels.map((virtualModel) => {
-                    const policy = routePolicyByVmId.get(virtualModel.id);
-                    return (
-                      <tr key={virtualModel.id}>
-                        <td>{virtualModel.displayName}</td>
-                        <td>
-                          {policy ? (
-                            <span className="pill--info pill">{policy.strategy}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="num">{policy ? policy.candidates.length : 0}</td>
-                        <td className="num">{virtualModel.allowedAgentCount}</td>
-                        <td className="num">
-                          {formatCompactNumber(placeholderInt(virtualModel.id, 0, 9000, 5))}
-                        </td>
-                        <td>
-                          {virtualModel.enabled ? (
-                            <span className="pill--ok pill">Enabled</span>
-                          ) : (
-                            <span className="pill">Disabled</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="callout callout--info">
-            Edit primary &amp; fallback routes in the <a href="/routing">route policy editor</a>.
-          </p>
+      <form className="vm-filter-bar" action="/models" method="get">
+        <div>
+          <label htmlFor="vm-status-filter">状态</label>
+          <select id="vm-status-filter" name="vmStatus" defaultValue={statusFilter}>
+            <option value="">全部</option>
+            <option value="enabled">启用</option>
+            <option value="disabled">禁用</option>
+          </select>
         </div>
-        <div className="chart-card">
-          <h2 className="chart-card-title">Fallback overview</h2>
-          <DonutBreakdown
-            ariaLabel="Fallback overview"
-            data={fallbackOverview}
-            valueFormat="percent"
-          />
-          <p className="callout">
-            Fallback distribution is a placeholder until routing rollups land.
-          </p>
+        <div>
+          <label htmlFor="vm-strategy-filter">Strategy</label>
+          <select id="vm-strategy-filter" name="vmStrategy" defaultValue={strategyFilter}>
+            <option value="">全部</option>
+            {routePolicyStrategies.map((strategy) => (
+              <option key={strategy} value={strategy}>
+                {formatRouteStrategyLabel(strategy)}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
-      <h3 className="chart-card-title">Manage virtual models</h3>
-      <Disclosure tone="add" summary="New virtual model">
-        <form className="provider-create-form" action="/api/virtual-models" method="post">
-          <input type="hidden" name="action" value="create" />
-          <label htmlFor="virtual-model-name">Virtual model name</label>
-          <input id="virtual-model-name" name="name" required />
-          <label htmlFor="virtual-model-display-name">Virtual model display name</label>
-          <input id="virtual-model-display-name" name="displayName" required />
-          <button type="submit">Create virtual model</button>
-        </form>
-      </Disclosure>
-      {virtualModels.length === 0 ? (
-        <p>No virtual models configured.</p>
-      ) : (
-        <div className="row-list">
-          {view.items.map((virtualModel) => (
-            <Row
-              key={virtualModel.id}
-              title={<h3 className="row-title">{virtualModel.displayName}</h3>}
-              meta={
-                <span className="row-meta">
-                  <span className="mono">{virtualModel.name}</span>
-                  <span>{virtualModel.routePolicyCount} route policies</span>
-                  <span>{virtualModel.allowedAgentCount} allowed agents</span>
-                </span>
-              }
-              status={
-                <span className={virtualModel.enabled ? "status-enabled" : "status-disabled"}>
-                  {virtualModel.enabled ? "Enabled" : "Disabled"}
-                </span>
-              }
-            >
-              <form className="provider-edit-form" action="/api/virtual-models" method="post">
-                <input type="hidden" name="action" value="update" />
-                <input type="hidden" name="id" value={virtualModel.id} />
-                <label htmlFor={`virtual-model-name-${virtualModel.id}`}>
-                  Edit virtual model name
-                </label>
-                <input
-                  id={`virtual-model-name-${virtualModel.id}`}
-                  name="name"
-                  defaultValue={virtualModel.name}
-                  required
-                />
-                <label htmlFor={`virtual-model-display-${virtualModel.id}`}>
-                  Edit virtual model display name
-                </label>
-                <input
-                  id={`virtual-model-display-${virtualModel.id}`}
-                  name="displayName"
-                  defaultValue={virtualModel.displayName}
-                  required
-                />
-                <button type="submit">Save virtual model</button>
-              </form>
-              <p>Route policies: {virtualModel.routePolicyCount}</p>
-              <p>Default Agents: {virtualModel.defaultAgentCount}</p>
-              <p>Allowed Agents: {virtualModel.allowedAgentCount}</p>
-              <div className="row-actions">
-                <form action="/api/virtual-models" method="post">
-                  <input type="hidden" name="action" value="delete" />
-                  <input type="hidden" name="id" value={virtualModel.id} />
-                  <button className="secondary-button" type="submit">
-                    Delete virtual model
-                  </button>
-                </form>
+        <input
+          aria-label="Search Virtual Model Name"
+          name="vmQuery"
+          placeholder="搜索 Virtual Model Name"
+          defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}
+        />
+        <button type="submit">筛选</button>
+      </form>
+      <div className="vm-shell">
+        <div className="agents-main-column">
+          <div className="chart-card">
+            <h2 className="chart-card-title">Virtual Model 列表</h2>
+            {visibleVirtualModels.length === 0 ? (
+              <p>No virtual models configured.</p>
+            ) : (
+              <div className="data-table-wrap">
+                <table className="data-table vm-table">
+                  <thead>
+                    <tr>
+                      <th>Virtual Model</th>
+                      <th>Strategy</th>
+                      <th className="num">候选数</th>
+                      <th>默认命中模型</th>
+                      <th className="num">今日请求</th>
+                      <th className="num">今日成本</th>
+                      <th className="num">失败率</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleVirtualModels.map((virtualModel) => {
+                      const policy = routePolicyByVmId.get(virtualModel.id);
+                      const selected = virtualModel.id === selectedVirtualModel?.id;
+                      return (
+                        <tr
+                          className={selected ? "is-selected" : "is-clickable"}
+                          key={virtualModel.id}
+                        >
+                          <td>
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                selected: virtualModel.id,
+                                virtualModelDialog: undefined,
+                              })}
+                            >
+                              {virtualModel.name}
+                            </a>
+                          </td>
+                          <td>
+                            {policy ? (
+                              <span className="pill--info pill">
+                                {formatRouteStrategyLabel(policy.strategy)}
+                              </span>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="num">{policy?.candidates.length ?? 0}</td>
+                          <td>{formatDefaultCandidate(policy)}</td>
+                          <td className="num">
+                            {formatCompactNumber(
+                              placeholderInt(`${virtualModel.id}-requests`, 900, 9800),
+                            )}
+                          </td>
+                          <td className="num">
+                            {formatVirtualModelCost(
+                              placeholderFloat(`${virtualModel.id}-cost`, 5, 90, 2),
+                            )}
+                          </td>
+                          <td className="num">
+                            {placeholderFloat(`${virtualModel.id}-fail`, 0.5, 2.6, 1).toFixed(1)}%
+                          </td>
+                          <td>
+                            {virtualModel.enabled ? (
+                              <span className="pill--ok pill">启用</span>
+                            ) : (
+                              <span className="pill">禁用</span>
+                            )}
+                          </td>
+                          <td>
+                            <a
+                              className="table-action-link"
+                              href={buildQueryHref(searchParams, {
+                                virtualModelDialog: virtualModel.id,
+                              })}
+                            >
+                              编辑
+                            </a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </Row>
-          ))}
+            )}
+          </div>
         </div>
-      )}
-      <Pager view={view} searchParams={searchParams} />
+        <aside className="agent-detail-card vm-detail-card">
+          {selectedVirtualModel ? (
+            <>
+              <div className="agent-detail-head">
+                <h2>{selectedVirtualModel.name}</h2>
+                {selectedVirtualModel.enabled ? (
+                  <span className="pill--ok pill">启用</span>
+                ) : (
+                  <span className="pill">禁用</span>
+                )}
+              </div>
+              <dl className="agent-detail-fields">
+                <div>
+                  <dt>Strategy</dt>
+                  <dd>
+                    {selectedRoutePolicy
+                      ? formatRouteStrategyLabel(selectedRoutePolicy.strategy)
+                      : "-"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Candidates</dt>
+                  <dd>
+                    {selectedRoutePolicy ? `${selectedRoutePolicy.candidates.length} 个模型` : "-"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>默认命中</dt>
+                  <dd>{formatDefaultCandidate(selectedRoutePolicy)}</dd>
+                </div>
+                <div>
+                  <dt>今日请求</dt>
+                  <dd>
+                    {formatCompactNumber(
+                      placeholderInt(`${selectedVirtualModel.id}-detail-requests`, 900, 9800),
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>今日成本</dt>
+                  <dd>
+                    {formatVirtualModelCost(
+                      placeholderFloat(`${selectedVirtualModel.id}-detail-cost`, 5, 90, 2),
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>失败率</dt>
+                  <dd>
+                    {placeholderFloat(
+                      `${selectedVirtualModel.id}-detail-fail`,
+                      0.5,
+                      2.6,
+                      1,
+                    ).toFixed(1)}
+                    %
+                  </dd>
+                </div>
+              </dl>
+              <section className="agent-detail-section">
+                <h3>Candidates</h3>
+                {selectedRoutePolicy?.candidates.length ? (
+                  <div className="vm-candidate-list">
+                    {selectedRoutePolicy.candidates.map((candidate) => (
+                      <div
+                        className="vm-candidate-card"
+                        key={`${candidate.id}-${candidate.isFallback}`}
+                      >
+                        <div>
+                          <strong>
+                            {candidate.providerDisplayName} / {candidate.modelDisplayName}
+                          </strong>
+                          <span>
+                            {formatModelPrice(candidate.inputUsdPerMillionTokens)} /{" "}
+                            {formatModelPrice(candidate.outputUsdPerMillionTokens)}
+                          </span>
+                        </div>
+                        {candidate.availability === "available" ? (
+                          <span className="pill--ok pill">健康</span>
+                        ) : (
+                          <span className="pill--danger pill">禁用</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No candidates configured.</p>
+                )}
+              </section>
+              <section className="agent-detail-section">
+                <h3>Fallback 概览</h3>
+                <DonutBreakdown
+                  ariaLabel="Fallback overview"
+                  data={fallbackOverview}
+                  valueFormat="percent"
+                />
+              </section>
+            </>
+          ) : (
+            <p>No Virtual Model selected.</p>
+          )}
+        </aside>
+      </div>
+      {dialogTarget === "new" ? (
+        <VirtualModelRouteDialog
+          closeHref={dialogCloseHref}
+          mode="create"
+          providerModelOptions={providerModelOptions}
+          routePolicy={null}
+          virtualModel={null}
+        />
+      ) : dialogVirtualModel ? (
+        <VirtualModelRouteDialog
+          closeHref={dialogCloseHref}
+          mode="edit"
+          providerModelOptions={mergeRoutePolicyEditorProviderModelOptions(
+            providerModelOptions,
+            dialogRoutePolicy?.candidates ?? [],
+          )}
+          routePolicy={dialogRoutePolicy}
+          virtualModel={dialogVirtualModel}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function VirtualModelRouteDialog({
+  closeHref,
+  mode,
+  providerModelOptions,
+  routePolicy,
+  virtualModel,
+}: {
+  closeHref: string;
+  mode: "create" | "edit";
+  providerModelOptions: readonly ConsoleProviderModelOption[];
+  routePolicy: ConsoleRoutePolicy | null;
+  virtualModel: ConsoleVirtualModel | null;
+}) {
+  return (
+    <VirtualModelRouteDialogClient
+      closeHref={closeHref}
+      mode={mode}
+      providerModelOptions={[...providerModelOptions]}
+      routePolicy={routePolicy}
+      virtualModel={virtualModel}
+    />
   );
 }
 
@@ -1163,7 +1408,7 @@ export async function RoutePoliciesSection({
               </option>
               {virtualModelsWithoutRoutePolicy.map((virtualModel) => (
                 <option key={virtualModel.id} value={virtualModel.id}>
-                  {virtualModel.displayName} ({virtualModel.name})
+                  {virtualModel.name}
                 </option>
               ))}
             </select>
@@ -1339,19 +1584,39 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
     agentVirtualModelAccess.map((access) => [access.agentId, access]),
   );
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
-  const view = paginate(agents, readPageParam(searchParams));
   const connectedAgentCount = agents.filter((agent) => agent.hasApiKey).length;
   const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
-  const selectedAgent = agents[0] ?? null;
+  const selectedAgentId = readSingleSearchParam(searchParams.selected);
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
   const selectedAccess = selectedAgent
     ? (agentVirtualModelAccessByAgentId.get(selectedAgent.id) ?? null)
     : null;
   const selectedLimits = selectedAgent ? (agentLimitsByAgentId.get(selectedAgent.id) ?? []) : [];
   const selectedBudgetLimit = findAgentLimit(selectedLimits, "budget");
   const selectedTokenLimit = findAgentLimit(selectedLimits, "token");
+  const selectedRpmLimit = findAgentLimit(selectedLimits, "rpm");
+  const selectedTpmLimit = findAgentLimit(selectedLimits, "tpm");
+  const selectedIntegrationAccess = selectedAgent
+    ? (selectedAccess ?? {
+        agentId: selectedAgent.id,
+        allowedVirtualModels: [],
+        defaultVirtualModel: null,
+      })
+    : null;
+  const selectedIntegrationTemplates =
+    selectedAgent?.keyPrefix && selectedIntegrationAccess
+      ? buildAgentIntegrationTemplates({
+          apiKey: formatDashboardAgentApiKeySnippetValue(selectedAgent.keyPrefix),
+          gatewayBaseUrl: playgroundGatewayBaseUrl,
+          model: resolveAgentIntegrationModelName(selectedIntegrationAccess),
+        })
+      : [];
   const agentDialog = readSingleSearchParam(searchParams.agentDialog);
   const editDialogAgent = agents.find((agent) => agent.id === agentDialog) ?? null;
   const agentDialogCloseHref = buildQueryHref(searchParams, { agentDialog: undefined });
+  const deleteAgent = readSingleSearchParam(searchParams.deleteAgent);
+  const deleteDialogAgent = agents.find((agent) => agent.id === deleteAgent) ?? null;
+  const deleteDialogCloseHref = buildQueryHref(searchParams, { deleteAgent: undefined });
 
   return (
     <section className="agents-dashboard" aria-label="Agents">
@@ -1441,33 +1706,123 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                       const usage = usageTodayByAgentId.get(agent.id);
                       return (
                         <tr
-                          className={agent.id === selectedAgent?.id ? "is-selected" : undefined}
+                          className={
+                            agent.id === selectedAgent?.id ? "is-selected" : "is-clickable"
+                          }
                           key={agent.id}
                         >
-                          <td>{agent.name}</td>
-                          <td>{formatAgentTypeLabel(agent.agentType)}</td>
-                          <td className="mono">
-                            {agent.keyPrefix
-                              ? formatAgentKeyPrefixDisplay(agent.keyPrefix)
-                              : "No key"}
-                          </td>
-                          <td>{access?.defaultVirtualModel?.name ?? "None"}</td>
-                          <td className="num">{access?.allowedVirtualModels.length ?? 0}</td>
-                          <td className="num">{formatCompactNumber(usage?.requestCount ?? 0)}</td>
-                          <td className="num">
-                            {formatOverviewMoney(usage?.totalCostUsd ?? null)}
-                          </td>
                           <td>
-                            {agent.hasApiKey ? (
-                              <span className="pill--ok pill">Online</span>
-                            ) : (
-                              <span className="pill--warn pill">Offline</span>
-                            )}
-                          </td>
-                          <td>
-                            <a href={buildQueryHref(searchParams, { agentDialog: agent.id })}>
-                              Edit
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {agent.name}
                             </a>
+                          </td>
+                          <td>
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {formatAgentTypeLabel(agent.agentType)}
+                            </a>
+                          </td>
+                          <td className="mono">
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {agent.keyPrefix
+                                ? formatAgentKeyPrefixDisplay(agent.keyPrefix)
+                                : "No key"}
+                            </a>
+                          </td>
+                          <td>
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {access?.defaultVirtualModel?.name ?? "None"}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {access?.allowedVirtualModels.length ?? 0}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {formatCompactNumber(usage?.requestCount ?? 0)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {formatOverviewMoney(usage?.totalCostUsd ?? null)}
+                            </a>
+                          </td>
+                          <td>
+                            <a
+                              className="table-row-link"
+                              href={buildQueryHref(searchParams, {
+                                agentDialog: undefined,
+                                selected: agent.id,
+                              })}
+                            >
+                              {agent.hasApiKey ? (
+                                <span className="pill--ok pill">Online</span>
+                              ) : (
+                                <span className="pill--warn pill">Offline</span>
+                              )}
+                            </a>
+                          </td>
+                          <td>
+                            <span className="agent-table-actions">
+                              <a
+                                className="link-button agent-action-edit"
+                                href={buildQueryHref(searchParams, { agentDialog: agent.id })}
+                              >
+                                Edit
+                              </a>
+                              <a
+                                className="link-button agent-action-delete"
+                                href={buildQueryHref(searchParams, {
+                                  agentDialog: undefined,
+                                  deleteAgent: agent.id,
+                                })}
+                              >
+                                Delete
+                              </a>
+                            </span>
                           </td>
                         </tr>
                       );
@@ -1504,19 +1859,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                 </div>
               </dl>
               <section className="agent-detail-section">
-                <div className="agent-detail-section-head">
-                  <h3>API Key</h3>
-                  <div className="agent-detail-actions">
-                    <button className="secondary-button" type="button">
-                      Copy Prefix
-                    </button>
-                  </div>
-                </div>
-                <p className="agent-api-key-display">
-                  {formatAgentKeyPrefixDisplay(selectedAgent.keyPrefix)}
-                </p>
-              </section>
-              <section className="agent-detail-section">
                 <h3>Allowed Virtual Models</h3>
                 <div className="agent-chip-list">
                   {(selectedAccess?.allowedVirtualModels ?? []).map((virtualModel) => (
@@ -1527,20 +1869,46 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                 </div>
               </section>
               <section className="agent-detail-section">
-                <div className="agent-detail-section-head">
-                  <h3>Budget / Limit</h3>
-                  <a href="/limits">View Limits</a>
-                </div>
+                <h3>Budget / Limit</h3>
                 <div className="agent-limit-row">
-                  <span>Monthly cost</span>
+                  <span>Budget</span>
                   <strong>{formatAgentBudgetLimit(selectedBudgetLimit)}</strong>
-                  <span className="agent-limit-bar" style={{ "--fill": "42%" } as CSSProperties} />
                 </div>
                 <div className="agent-limit-row">
-                  <span>Tokens</span>
-                  <strong>{formatAgentTokenLimit(selectedTokenLimit)}</strong>
-                  <span className="agent-limit-bar" style={{ "--fill": "28%" } as CSSProperties} />
+                  <span>RPM</span>
+                  <strong>{formatAgentNumericLimit(selectedRpmLimit)}</strong>
                 </div>
+                <div className="agent-limit-row">
+                  <span>TPM</span>
+                  <strong>{formatAgentNumericLimit(selectedTpmLimit)}</strong>
+                </div>
+                <div className="agent-limit-row">
+                  <span>Token limit</span>
+                  <strong>{formatAgentTokenLimit(selectedTokenLimit)}</strong>
+                </div>
+              </section>
+              <section className="agent-detail-section">
+                <h3>Integration snippets</h3>
+                {selectedIntegrationTemplates.length > 0 ? (
+                  <fieldset className="agent-integration-snippets">
+                    <legend>Agent integration snippets</legend>
+                    {selectedIntegrationTemplates.map((template) => (
+                      <div className="agent-integration-snippet" key={template.id}>
+                        <label htmlFor={`${template.id}-setup-snippet-${selectedAgent.id}`}>
+                          {template.displayName} setup snippet
+                        </label>
+                        <textarea
+                          id={`${template.id}-setup-snippet-${selectedAgent.id}`}
+                          readOnly
+                          rows={4}
+                          defaultValue={template.snippet}
+                        />
+                      </div>
+                    ))}
+                  </fieldset>
+                ) : (
+                  <p>No integration snippets available.</p>
+                )}
               </section>
             </>
           ) : (
@@ -1548,13 +1916,9 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
           )}
         </aside>
       </div>
-      <div className="agent-management-head" id="agent-management">
-        <h3 className="chart-card-title">Manage agents</h3>
-        <a className="btn" href={buildQueryHref(searchParams, { agentDialog: "new" })}>
-          New agent
-        </a>
-      </div>
-      {agentDialog === "new" ? <AgentCreateDialog closeHref={agentDialogCloseHref} /> : null}
+      {agentDialog === "new" ? (
+        <AgentCreateDialog closeHref={agentDialogCloseHref} virtualModels={virtualModels} />
+      ) : null}
       {editDialogAgent ? (
         <AgentEditDialog
           agent={editDialogAgent}
@@ -1566,49 +1930,24 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             }
           }
           closeHref={agentDialogCloseHref}
-          gatewayBaseUrl={playgroundGatewayBaseUrl}
           limits={agentLimitsByAgentId.get(editDialogAgent.id) ?? []}
           virtualModels={virtualModels}
         />
       ) : null}
-      {agents.length === 0 ? (
-        <p>No agents configured.</p>
-      ) : (
-        <div className="row-list">
-          {view.items.map((agent) => {
-            return (
-              <article className="agent-management-row" key={agent.id}>
-                <span className="row-headline">
-                  <h3 className="row-title">{agent.name}</h3>
-                  <span className="row-meta">
-                    <span>Type: {agent.agentType}</span>
-                    <span>{agent.enabled ? "Enabled" : "Disabled"}</span>
-                  </span>
-                </span>
-                <span className="row-status">
-                  <span
-                    className={agent.status === "online" ? "status-enabled" : "status-disabled"}
-                  >
-                    {formatAgentDerivedStatus(agent.status)}
-                  </span>
-                </span>
-                <a
-                  className="secondary-button"
-                  href={buildQueryHref(searchParams, { agentDialog: agent.id })}
-                >
-                  Edit
-                </a>
-              </article>
-            );
-          })}
-        </div>
-      )}
-      <Pager view={view} searchParams={searchParams} />
+      {deleteDialogAgent ? (
+        <AgentDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
+      ) : null}
     </section>
   );
 }
 
-function AgentCreateDialog({ closeHref }: { closeHref: string }) {
+function AgentCreateDialog({
+  closeHref,
+  virtualModels,
+}: {
+  closeHref: string;
+  virtualModels: readonly ConsoleVirtualModel[];
+}) {
   return (
     <>
       <div className="console-dialog-scrim" aria-hidden="true" />
@@ -1659,6 +1998,79 @@ function AgentCreateDialog({ closeHref }: { closeHref: string }) {
             <option value="true">enabled</option>
             <option value="false">disabled</option>
           </select>
+          <label htmlFor="agent-allowed-virtual-models">Allowed virtual models</label>
+          <select
+            id="agent-allowed-virtual-models"
+            name="allowedVirtualModelIds"
+            multiple
+            size={virtualModelSelectSize(virtualModels.length)}
+          >
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="agent-default-virtual-model">Default virtual model</label>
+          <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
+            <option value="">No default virtual model</option>
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="agent-budget-usd">Budget USD limit</label>
+          <input
+            id="agent-budget-usd"
+            name="budgetUsd"
+            type="number"
+            min="0.000001"
+            step="0.000001"
+            defaultValue={defaultAgentLimitFormValues.budgetUsd}
+            required
+          />
+          <label htmlFor="agent-budget-period">Budget period</label>
+          <select
+            id="agent-budget-period"
+            name="budgetPeriod"
+            defaultValue={defaultAgentLimitFormValues.budgetPeriod}
+            required
+          >
+            <option value="day">day</option>
+            <option value="week">week</option>
+            <option value="month">month</option>
+          </select>
+          <label htmlFor="agent-rpm">RPM limit</label>
+          <input
+            id="agent-rpm"
+            name="rpm"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={defaultAgentLimitFormValues.rpm}
+            required
+          />
+          <label htmlFor="agent-tpm">TPM limit</label>
+          <input
+            id="agent-tpm"
+            name="tpm"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={defaultAgentLimitFormValues.tpm}
+            required
+          />
+          <label htmlFor="agent-token-limit">Token limit</label>
+          <input
+            id="agent-token-limit"
+            name="tokenLimit"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={defaultAgentLimitFormValues.tokenLimit}
+            required
+          />
           <button type="submit">Create agent</button>
         </form>
       </section>
@@ -1670,14 +2082,12 @@ function AgentEditDialog({
   access,
   agent,
   closeHref,
-  gatewayBaseUrl,
   limits,
   virtualModels,
 }: {
   access: AgentVirtualModelAccess;
   agent: ConsoleAgent;
   closeHref: string;
-  gatewayBaseUrl: string;
   limits: readonly ConsoleAgentLimit[];
   virtualModels: readonly ConsoleVirtualModel[];
 }) {
@@ -1685,13 +2095,6 @@ function AgentEditDialog({
   const rpmLimit = findAgentLimit(limits, "rpm");
   const tokenLimit = findAgentLimit(limits, "token");
   const tpmLimit = findAgentLimit(limits, "tpm");
-  const integrationTemplates = agent.keyPrefix
-    ? buildAgentIntegrationTemplates({
-        apiKey: formatDashboardAgentApiKeySnippetValue(agent.keyPrefix),
-        gatewayBaseUrl,
-        model: resolveAgentIntegrationModelName(access),
-      })
-    : [];
 
   return (
     <>
@@ -1709,7 +2112,7 @@ function AgentEditDialog({
           </a>
         </div>
         <form className="provider-edit-form" action="/api/agents" method="post">
-          <input type="hidden" name="action" value="update" />
+          <input type="hidden" name="action" value="saveAll" />
           <input type="hidden" name="id" value={agent.id} />
           <label htmlFor={`agent-name-${agent.id}`}>Edit agent name</label>
           <input id={`agent-name-${agent.id}`} name="name" defaultValue={agent.name} required />
@@ -1751,34 +2154,6 @@ function AgentEditDialog({
             <option value="true">enabled</option>
             <option value="false">disabled</option>
           </select>
-          <button type="submit">Save agent</button>
-        </form>
-        <section className="agent-dialog-section">
-          <h3>Integration snippets</h3>
-          {integrationTemplates.length > 0 ? (
-            <fieldset className="agent-integration-snippets">
-              <legend>Agent integration snippets</legend>
-              {integrationTemplates.map((template) => (
-                <div className="agent-integration-snippet" key={template.id}>
-                  <label htmlFor={`${template.id}-setup-snippet-${agent.id}`}>
-                    {template.displayName} setup snippet
-                  </label>
-                  <textarea
-                    id={`${template.id}-setup-snippet-${agent.id}`}
-                    readOnly
-                    rows={4}
-                    defaultValue={template.snippet}
-                  />
-                </div>
-              ))}
-            </fieldset>
-          ) : (
-            <p>No integration snippets available.</p>
-          )}
-        </section>
-        <form className="provider-edit-form" action="/api/agents" method="post">
-          <input type="hidden" name="action" value="updateVirtualModelAccess" />
-          <input type="hidden" name="id" value={agent.id} />
           <label htmlFor={`agent-allowed-virtual-models-${agent.id}`}>Allowed virtual models</label>
           <select
             id={`agent-allowed-virtual-models-${agent.id}`}
@@ -1806,11 +2181,6 @@ function AgentEditDialog({
               </option>
             ))}
           </select>
-          <button type="submit">Save Agent virtual models</button>
-        </form>
-        <form className="provider-edit-form" action="/api/agent-limits" method="post">
-          <input type="hidden" name="action" value="saveLimitRules" />
-          <input type="hidden" name="agentId" value={agent.id} />
           <label htmlFor={`agent-budget-usd-${agent.id}`}>Budget USD limit</label>
           <input
             id={`agent-budget-usd-${agent.id}`}
@@ -1862,15 +2232,39 @@ function AgentEditDialog({
             defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
             required
           />
-          <button type="submit">Save Agent limits</button>
+          <button type="submit">Save</button>
         </form>
-        <form className="row-actions" action="/api/agents" method="post">
-          <input type="hidden" name="action" value="delete" />
-          <input type="hidden" name="id" value={agent.id} />
-          <button className="secondary-button" type="submit">
-            Delete agent
-          </button>
-        </form>
+      </section>
+    </>
+  );
+}
+
+function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHref: string }) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`agent-delete-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id={`agent-delete-dialog-title-${agent.id}`}>Delete {agent.name}?</h2>
+        </div>
+        <p>This removes the Agent and its API key.</p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            Cancel
+          </a>
+          <form action="/api/agents" method="post">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="id" value={agent.id} />
+            <button className="agent-delete-confirm" type="submit">
+              Delete
+            </button>
+          </form>
+        </div>
       </section>
     </>
   );
@@ -1921,6 +2315,13 @@ function formatAgentBudgetLimit(limit: ConsoleAgentLimit | undefined): string {
     return "Not configured";
   }
   return `$${limit.limitValue.toLocaleString()} / ${limit.period}`;
+}
+
+function formatAgentNumericLimit(limit: ConsoleAgentLimit | undefined): string {
+  if (!limit?.enabled) {
+    return "Not configured";
+  }
+  return `${formatCompactNumber(limit.limitValue)} / ${limit.period}`;
 }
 
 function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
@@ -2319,7 +2720,6 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
 
 export async function ProvidersSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
-  const modelRefreshProviderId = readSingleSearchParam(searchParams.modelRefreshProviderId);
   const providers = orderProvidersForConsole(await listProviders(databaseUrl));
   const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
@@ -2327,23 +2727,51 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     await listProviderModelOptions(databaseUrl),
   );
   const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
-  const providerKeyByProviderId = new Map(
-    providerKeys.map((providerKey) => [providerKey.providerId, providerKey]),
-  );
   const providerHealthByProviderId = new Map(
     providerHealthSummaries.map((summary) => [summary.id, summary]),
   );
   const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
-  const modelRefreshProvider = providers.find((provider) => provider.id === modelRefreshProviderId);
-  const view = paginate(providers, readPageParam(searchParams));
+  const providerDialog = readSingleSearchParam(searchParams.providerDialog);
+  const providerError = readSingleSearchParam(searchParams.providerError);
+  const providerErrorField = readSingleSearchParam(searchParams.providerErrorField);
+  const providerDialogCloseHref = buildQueryHref(searchParams, {
+    providerBaseUrlValue: undefined,
+    providerDialog: undefined,
+    providerDisplayNameValue: undefined,
+    providerError: undefined,
+    providerErrorField: undefined,
+    providerKeyValue: undefined,
+  });
+  const providerFormValues = {
+    baseUrl: readSingleSearchParam(searchParams.providerBaseUrlValue) ?? "",
+    displayName: readSingleSearchParam(searchParams.providerDisplayNameValue) ?? "",
+    providerKey: readSingleSearchParam(searchParams.providerKeyValue) ?? "",
+  };
+  const providerKeyDialog = readSingleSearchParam(searchParams.providerKeyDialog);
+  const providerKeyDelete = readSingleSearchParam(searchParams.providerKeyDelete);
+  const providerKeyDialogCloseHref = buildQueryHref(searchParams, {
+    providerKeyDelete: undefined,
+    providerKeyDialog: undefined,
+  });
+  const editDialogProvider =
+    providerDialog && providerDialog !== "new"
+      ? (providers.find((provider) => provider.id === providerDialog) ?? null)
+      : null;
+  const selectedProviderId = readSingleSearchParam(searchParams.selected);
   const selectedProvider =
-    providers.find((provider) => provider.providerKey === "openai") ?? providers[0] ?? null;
+    providers.find((provider) => provider.id === selectedProviderId) ??
+    providers.find((provider) => provider.providerKey === "openai") ??
+    providers[0] ??
+    null;
   const selectedProviderHealth = selectedProvider
     ? providerHealthByProviderId.get(selectedProvider.id)
     : undefined;
   const selectedProviderKeys = selectedProvider
     ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
     : [];
+  const deleteProviderKey = selectedProviderKeys.find(
+    (providerKey) => providerKey.id === providerKeyDelete,
+  );
   const selectedProviderModels = selectedProvider
     ? (providerModelsByProviderId.get(selectedProvider.id) ?? [])
     : [];
@@ -2377,14 +2805,10 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   </span>
                   <div>
                     <h2>{provider.displayName}</h2>
-                    <p>{provider.providerKey}</p>
+                    <ProviderHealthPillZh
+                      status={provider.enabled ? (providerHealth?.status ?? "unknown") : "disabled"}
+                    />
                   </div>
-                </div>
-                <div className="provider-summary-status">
-                  <ProviderHealthPill status={providerHealth?.status ?? "unknown"} />
-                  <span className={provider.enabled ? "pill--ok pill" : "pill"}>
-                    {provider.enabled ? "Enabled" : "Disabled"}
-                  </span>
                 </div>
                 <dl className="provider-summary-metrics">
                   <div>
@@ -2405,21 +2829,21 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       <div className="providers-content-grid">
         <div className="providers-main-column">
           <div className="chart-card providers-list-card">
-            <h2 className="chart-card-title">Provider list</h2>
+            <h2 className="chart-card-title">Provider 列表</h2>
             {providers.length === 0 ? (
-              <p>No providers yet. Add one below.</p>
+              <p>No providers configured.</p>
             ) : (
               <div className="data-table-wrap">
                 <table className="data-table providers-table">
                   <thead>
                     <tr>
                       <th>Provider</th>
-                      <th>Status</th>
-                      <th>Type</th>
-                      <th className="num">Key count</th>
-                      <th className="num">Models</th>
-                      <th>Last connection</th>
-                      <th>Action</th>
+                      <th>状态</th>
+                      <th>类型</th>
+                      <th className="num">Key 数</th>
+                      <th className="num">模型数</th>
+                      <th>最近连接</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2428,35 +2852,96 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                       const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
                       const providerKeyCount =
                         providerKeysByProviderId.get(provider.id)?.length ?? 0;
+                      const providerHref = buildQueryHref(searchParams, {
+                        providerDialog: undefined,
+                        selected: provider.id,
+                      });
                       return (
                         <tr
                           className={
-                            provider.id === selectedProvider?.id ? "is-selected" : undefined
+                            provider.id === selectedProvider?.id ? "is-selected" : "is-clickable"
                           }
                           key={provider.id}
                         >
                           <td>
-                            <span className="provider-name-cell">
-                              <span className="provider-row-icon" aria-hidden="true">
-                                {formatProviderInitials(provider.displayName)}
-                              </span>
-                              <span>
-                                <strong>{provider.displayName}</strong>
-                                <small>{provider.providerKey}</small>
-                              </span>
-                            </span>
-                          </td>
-                          <td>
-                            <ProviderHealthPill status={providerHealth?.status ?? "unknown"} />
-                          </td>
-                          <td>{formatProviderType(provider)}</td>
-                          <td className="num">{providerKeyCount}</td>
-                          <td className="num">{providerModels.length}</td>
-                          <td>{formatProviderLastConnection(providerHealth)}</td>
-                          <td>
-                            <a className="table-action-link" href="#provider-management">
-                              Manage
+                            <a className="table-row-link" href={providerHref}>
+                              <strong>{provider.displayName}</strong>
                             </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={providerHref}>
+                              <ProviderHealthPillZh
+                                status={
+                                  provider.enabled
+                                    ? (providerHealth?.status ?? "unknown")
+                                    : "disabled"
+                                }
+                              />
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={providerHref}>
+                              {formatProviderType(provider)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={providerHref}>
+                              {providerKeyCount}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={providerHref}>
+                              {providerModels.length}
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={providerHref}>
+                              {formatProviderLastConnection(providerHealth)}
+                            </a>
+                          </td>
+                          <td>
+                            <span className="provider-table-actions">
+                              {provider.enabled ? (
+                                <>
+                                  <a
+                                    className="provider-action-button provider-action-edit"
+                                    href={buildQueryHref(searchParams, {
+                                      providerDialog: provider.id,
+                                      selected: provider.id,
+                                    })}
+                                    aria-label={`Edit ${provider.displayName}`}
+                                    title="Edit"
+                                  >
+                                    ✎
+                                  </a>
+                                  <form action="/api/providers" method="post">
+                                    <input type="hidden" name="action" value="disable" />
+                                    <input type="hidden" name="id" value={provider.id} />
+                                    <button
+                                      className="provider-action-button provider-action-delete"
+                                      aria-label={`Disable ${provider.displayName}`}
+                                      title="Disable"
+                                      type="submit"
+                                    >
+                                      ‖
+                                    </button>
+                                  </form>
+                                </>
+                              ) : (
+                                <form action="/api/providers" method="post">
+                                  <input type="hidden" name="action" value="enable" />
+                                  <input type="hidden" name="id" value={provider.id} />
+                                  <button
+                                    className="provider-action-button provider-action-enable"
+                                    aria-label={`Enable ${provider.displayName}`}
+                                    title="Enable"
+                                    type="submit"
+                                  >
+                                    ▶
+                                  </button>
+                                </form>
+                              )}
+                            </span>
                           </td>
                         </tr>
                       );
@@ -2473,61 +2958,101 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
             <>
               <header className="provider-detail-head">
                 <div>
-                  <p className="eyebrow">{selectedProvider.providerKey}</p>
-                  <h2>Provider detail - {selectedProvider.displayName}</h2>
+                  <h2>Provider 详情 - {selectedProvider.displayName}</h2>
                 </div>
-                <ProviderHealthPill status={selectedProviderHealth?.status ?? "unknown"} />
+                <form
+                  className="provider-refresh-form"
+                  action="/api/provider-model-refresh"
+                  method="post"
+                >
+                  <input type="hidden" name="providerId" value={selectedProvider.id} />
+                  <button
+                    className="provider-refresh-button"
+                    disabled={selectedProviderKeys.length === 0}
+                    aria-label="Refresh models"
+                    title="Refresh models"
+                    type="submit"
+                  >
+                    ↻
+                  </button>
+                  {selectedProviderKeys.length === 0 ? (
+                    <p className="field-error is-visible">请先添加 API KEY</p>
+                  ) : null}
+                </form>
               </header>
 
               <dl className="provider-detail-stats">
                 <div>
-                  <dt>Status</dt>
-                  <dd>{selectedProvider.enabled ? "Enabled" : "Disabled"}</dd>
+                  <dt>状态</dt>
+                  <dd>
+                    {formatProviderHealthStatusZhLabel(
+                      selectedProvider.enabled
+                        ? (selectedProviderHealth?.status ?? "unknown")
+                        : "disabled",
+                    )}
+                  </dd>
                 </div>
                 <div>
-                  <dt>Default priority</dt>
+                  <dt>默认优先级</dt>
                   <dd>{formatProviderDefaultPriority(providers, selectedProvider)}</dd>
                 </div>
                 <div>
-                  <dt>Available models</dt>
+                  <dt>可用模型</dt>
                   <dd>{selectedProviderModels.length}</dd>
                 </div>
                 <div>
-                  <dt>Last connection</dt>
+                  <dt>最近连接</dt>
                   <dd>{formatProviderLastConnection(selectedProviderHealth)}</dd>
                 </div>
               </dl>
 
               <section className="provider-detail-section">
-                <h3>Key management</h3>
+                <div className="provider-detail-section-head">
+                  <h3>Key 管理</h3>
+                  <a
+                    className="provider-key-add-button"
+                    href={buildQueryHref(searchParams, {
+                      providerKeyDialog: selectedProvider.id,
+                    })}
+                    aria-label="Add API key"
+                    title="Add API key"
+                  >
+                    +
+                  </a>
+                </div>
                 <div className="data-table-wrap">
                   <table className="data-table provider-key-table">
                     <thead>
                       <tr>
-                        <th>Label</th>
                         <th>Prefix</th>
-                        <th>Status</th>
-                        <th>Last test</th>
-                        <th>Action</th>
+                        <th>状态</th>
+                        <th>最近测试</th>
+                        <th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedProviderKeys.length === 0 ? (
                         <tr>
-                          <td colSpan={5}>No provider key stored.</td>
+                          <td colSpan={4}>No provider key stored.</td>
                         </tr>
                       ) : (
-                        selectedProviderKeys.map((providerKey, index) => (
-                          <tr key={providerKey.keyPrefix}>
-                            <td>{index === 0 ? "Primary key" : `Backup key ${index}`}</td>
+                        selectedProviderKeys.map((providerKey) => (
+                          <tr key={providerKey.id}>
                             <td className="mono">{providerKey.keyPrefix}</td>
                             <td>
-                              <span className="pill--ok pill">Enabled</span>
+                              <span className="pill--ok pill">启用</span>
                             </td>
                             <td>{formatProviderLastConnection(selectedProviderHealth)}</td>
                             <td>
-                              <a className="table-action-link" href="#provider-management">
-                                Rotate
+                              <a
+                                className="provider-key-delete-button"
+                                href={buildQueryHref(searchParams, {
+                                  providerKeyDelete: providerKey.id,
+                                })}
+                                aria-label="Delete API key"
+                                title="Delete API key"
+                              >
+                                🗑
                               </a>
                             </td>
                           </tr>
@@ -2545,8 +3070,10 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       </div>
 
       <div className="chart-card model-library-card">
-        <h2 className="chart-card-title">Model library</h2>
-        {providerModelOptions.length === 0 ? (
+        <h2 className="chart-card-title">
+          模型库{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
+        </h2>
+        {selectedProviderModels.length === 0 ? (
           <p>No provider models discovered yet.</p>
         ) : (
           <div className="data-table-wrap">
@@ -2556,16 +3083,16 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   <th>Provider</th>
                   <th>Model ID</th>
                   <th>Context</th>
-                  <th>Input price</th>
-                  <th>Output price</th>
+                  <th>输入价格</th>
+                  <th>输出价格</th>
                   <th>Tools</th>
                   <th>Streaming</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th>状态</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                {providerModelOptions.map((model) => (
+                {selectedProviderModels.map((model) => (
                   <tr key={model.id}>
                     <td>{model.providerDisplayName}</td>
                     <td>
@@ -2579,10 +3106,12 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                     <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
                     <td>{formatBooleanFeature(model.supportsTools)}</td>
                     <td>{formatBooleanFeature(model.supportsStreaming)}</td>
-                    <td>{formatModelAvailability(model.availability)}</td>
+                    <td>
+                      <ModelAvailabilityPill value={model.availability} />
+                    </td>
                     <td>
                       <a className="table-action-link" href={`/models?providerModelId=${model.id}`}>
-                        Price
+                        查看
                       </a>
                     </td>
                   </tr>
@@ -2592,222 +3121,243 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
           </div>
         )}
       </div>
-
-      <section className="providers-management" id="provider-management">
-        <h3 className="chart-card-title">Manage providers</h3>
-        <div id="new-provider">
-          <Disclosure tone="add" summary="New provider">
-            <form className="provider-create-form" action="/api/providers" method="post">
-              <input type="hidden" name="action" value="create" />
-              <input type="hidden" name="providerType" value="api_key" />
-              <label htmlFor="provider-key">Provider key</label>
-              <input id="provider-key" name="providerKey" required />
-              <label htmlFor="provider-display-name">Provider display name</label>
-              <input id="provider-display-name" name="displayName" required />
-              <label htmlFor="provider-base-url">Provider base URL</label>
-              <input id="provider-base-url" name="baseUrl" type="url" />
-              <button type="submit">Create provider</button>
-            </form>
-          </Disclosure>
-        </div>
-        <Disclosure summary="Add from template">
-          <div className="provider-template-selector">
-            <fieldset className="provider-template-group">
-              <legend>{remoteProviderTemplateGroup.label}</legend>
-              <form className="provider-template-form" action="/api/providers" method="post">
-                <input type="hidden" name="action" value="createFromTemplate" />
-                <label htmlFor="provider-template">Provider template</label>
-                <select id="provider-template" name="templateId" required>
-                  {remoteProviderTemplateGroup.templates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.displayName}
-                    </option>
-                  ))}
-                </select>
-                <button type="submit">Add template provider</button>
-              </form>
-              <div className="provider-template-list">
-                {remoteProviderTemplateGroup.templates.map((template) => (
-                  <ProviderTemplateSummary key={template.id} template={template} />
-                ))}
-              </div>
-            </fieldset>
-            <fieldset className="provider-template-group">
-              <legend>{localProviderTemplateGroup.label}</legend>
-              <div className="provider-template-list">
-                {localProviderTemplateGroup.templates.map((template) => (
-                  <div className="provider-template-local-item" key={template.id}>
-                    <ProviderTemplateSummary template={template} />
-                    <form
-                      className="provider-template-form local-provider-template-form"
-                      action="/api/providers"
-                      method="post"
-                    >
-                      <input type="hidden" name="action" value="createFromTemplate" />
-                      <input type="hidden" name="templateId" value={template.id} />
-                      <label htmlFor={`${template.id}-base-url`}>
-                        {template.displayName} base URL
-                      </label>
-                      <input
-                        id={`${template.id}-base-url`}
-                        name="baseUrl"
-                        type="url"
-                        placeholder={template.baseUrlPlaceholder ?? "http://127.0.0.1:11434"}
-                        required
-                      />
-                      <label className="checkbox-label" htmlFor={`${template.id}-public-risk`}>
-                        <input
-                          id={`${template.id}-public-risk`}
-                          name="publicNetworkRiskAccepted"
-                          type="checkbox"
-                          value="true"
-                        />
-                        Accept public network risk
-                      </label>
-                      <button type="submit">Add local provider</button>
-                    </form>
-                  </div>
-                ))}
-              </div>
-            </fieldset>
-          </div>
-        </Disclosure>
-        {modelRefreshProvider ? (
-          <p role="status">Model refresh queued for {modelRefreshProvider.displayName}.</p>
-        ) : null}
-        {providers.length === 0 ? (
-          <p>No providers configured.</p>
-        ) : (
-          <div className="row-list">
-            {view.items.map((provider) => {
-              const providerKeyMetadata = providerKeyByProviderId.get(provider.id);
-              const providerHealth = providerHealthByProviderId.get(provider.id);
-              const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-
-              return (
-                <Row
-                  key={provider.id}
-                  title={<h3 className="row-title">{provider.displayName}</h3>}
-                  meta={
-                    <span className="row-meta">
-                      <span className="mono">{provider.providerKey}</span>
-                      <span>{providerModels.length} models</span>
-                    </span>
-                  }
-                  status={
-                    <span className={provider.enabled ? "status-enabled" : "status-disabled"}>
-                      {provider.enabled ? "Enabled" : "Disabled"}
-                    </span>
-                  }
-                >
-                  <form className="provider-edit-form" action="/api/providers" method="post">
-                    <input type="hidden" name="action" value="update" />
-                    <input type="hidden" name="id" value={provider.id} />
-                    <label htmlFor={`provider-display-${provider.id}`}>
-                      Edit provider display name
-                    </label>
-                    <input
-                      id={`provider-display-${provider.id}`}
-                      name="displayName"
-                      defaultValue={provider.displayName}
-                      required
-                    />
-                    {provider.providerTemplateId ? (
-                      <p>Template provider base URL: {provider.baseUrl}</p>
-                    ) : (
-                      <>
-                        <label htmlFor={`provider-base-${provider.id}`}>
-                          Edit provider base URL
-                        </label>
-                        <input
-                          id={`provider-base-${provider.id}`}
-                          name="baseUrl"
-                          type="url"
-                          defaultValue={provider.baseUrl ?? ""}
-                        />
-                      </>
-                    )}
-                    <button type="submit">Save provider</button>
-                  </form>
-                  <div className="provider-key-metadata">
-                    {providerKeyMetadata ? (
-                      <>
-                        <p>Provider API key prefix: {providerKeyMetadata.keyPrefix}</p>
-                        <p>
-                          Provider API key created: {formatDateTime(providerKeyMetadata.createdAt)}
-                        </p>
-                        {providerKeyMetadata.rotatedAt ? (
-                          <p>
-                            Provider API key rotated:{" "}
-                            {formatDateTime(providerKeyMetadata.rotatedAt)}
-                          </p>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p>No Provider API key saved.</p>
-                    )}
-                  </div>
-                  <div className="provider-model-metadata">
-                    {providerModels.length === 0 ? (
-                      <p>No provider models discovered yet.</p>
-                    ) : (
-                      <p>
-                        Provider models:{" "}
-                        {providerModels
-                          .map(
-                            (model) =>
-                              `${model.modelDisplayName} (${model.modelId}) - ${model.priceStatusLabel}`,
-                          )
-                          .join(", ")}
-                      </p>
-                    )}
-                  </div>
-                  <ProviderHealthSummaryPanel health={providerHealth} />
-                  <form className="provider-key-form" action="/api/provider-keys" method="post">
-                    <input type="hidden" name="providerId" value={provider.id} />
-                    <label htmlFor={`provider-api-key-${provider.id}`}>Provider API key</label>
-                    <input
-                      id={`provider-api-key-${provider.id}`}
-                      name="providerApiKey"
-                      type="password"
-                      autoComplete="off"
-                      required
-                    />
-                    <button type="submit">
-                      {providerKeyMetadata ? "Rotate provider API key" : "Store provider API key"}
-                    </button>
-                  </form>
-                  <div className="row-actions">
-                    <form action="/api/providers" method="post">
-                      <input type="hidden" name="id" value={provider.id} />
-                      <input
-                        type="hidden"
-                        name="action"
-                        value={provider.enabled ? "disable" : "enable"}
-                      />
-                      <button className="secondary-button" type="submit">
-                        {provider.enabled ? "Disable provider" : "Enable provider"}
-                      </button>
-                    </form>
-                    <form action="/api/provider-model-refresh" method="post">
-                      <input type="hidden" name="providerId" value={provider.id} />
-                      <button
-                        className="secondary-button"
-                        disabled={!provider.enabled}
-                        type="submit"
-                      >
-                        Refresh provider models
-                      </button>
-                    </form>
-                  </div>
-                </Row>
-              );
-            })}
-          </div>
-        )}
-        <Pager view={view} searchParams={searchParams} />
-      </section>
+      {providerDialog === "new" ? (
+        <ProviderCreateDialog
+          closeHref={providerDialogCloseHref}
+          error={providerError}
+          errorField={providerErrorField}
+          formValues={providerFormValues}
+        />
+      ) : null}
+      {providerKeyDialog && selectedProvider ? (
+        <ProviderKeyCreateDialog
+          closeHref={providerKeyDialogCloseHref}
+          provider={selectedProvider}
+        />
+      ) : null}
+      {deleteProviderKey && selectedProvider ? (
+        <ProviderKeyDeleteDialog
+          closeHref={providerKeyDialogCloseHref}
+          keyPrefix={deleteProviderKey.keyPrefix}
+          provider={selectedProvider}
+        />
+      ) : null}
+      {editDialogProvider ? (
+        <ProviderEditDialog
+          closeHref={providerDialogCloseHref}
+          error={providerError}
+          errorField={providerErrorField}
+          formValues={{
+            baseUrl: providerFormValues.baseUrl || editDialogProvider.baseUrl || "",
+            displayName: providerFormValues.displayName || editDialogProvider.displayName,
+          }}
+          provider={editDialogProvider}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function ProviderCreateDialog({
+  closeHref,
+  error,
+  errorField,
+  formValues,
+}: {
+  closeHref: string;
+  error?: string;
+  errorField?: string;
+  formValues: { baseUrl: string; displayName: string; providerKey: string };
+}) {
+  const formError = error && errorField === "form" ? error : undefined;
+  const providerKeyError = errorField === "providerKey" ? error : undefined;
+  const displayNameError = errorField === "displayName" ? error : undefined;
+  const baseUrlError = errorField === "baseUrl" ? error : undefined;
+  const selectedChoice =
+    providerCreateChoices.find((choice) => choice.providerKey === formValues.providerKey) ??
+    defaultProviderCreateChoice;
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="new-provider-dialog-title"
+        aria-modal="true"
+        className="console-dialog provider-create-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="new-provider-dialog-title">添加 Provider</h2>
+          <a className="secondary-button" href={closeHref}>
+            Close
+          </a>
+        </div>
+        <ProviderCreateForm
+          baseUrlError={baseUrlError}
+          choices={providerCreateChoices}
+          displayNameError={displayNameError}
+          formError={formError}
+          initialBaseUrl={formValues.baseUrl}
+          initialDisplayName={formValues.displayName}
+          initialProviderKey={selectedChoice.providerKey}
+          providerKeyError={providerKeyError}
+        />
+      </section>
+    </>
+  );
+}
+
+function ProviderEditDialog({
+  closeHref,
+  error,
+  errorField,
+  formValues,
+  provider,
+}: {
+  closeHref: string;
+  error?: string;
+  errorField?: string;
+  formValues: { baseUrl: string; displayName: string };
+  provider: ConsoleProvider;
+}) {
+  const formError = error && errorField === "form" ? error : undefined;
+  const displayNameError = errorField === "displayName" ? error : undefined;
+  const baseUrlError = errorField === "baseUrl" ? error : undefined;
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="edit-provider-dialog-title"
+        aria-modal="true"
+        className="console-dialog provider-edit-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="edit-provider-dialog-title">编辑 {provider.displayName}</h2>
+          <a className="secondary-button" href={closeHref}>
+            Close
+          </a>
+        </div>
+        <form className="provider-create-form" action="/api/providers" method="post">
+          <input type="hidden" name="action" value="update" />
+          <input type="hidden" name="id" value={provider.id} />
+          {formError ? (
+            <p className="form-error" role="alert">
+              {formError}
+            </p>
+          ) : null}
+          <label htmlFor="provider-edit-display-name">Provider display name</label>
+          <input
+            aria-describedby="provider-edit-display-name-error"
+            aria-invalid={displayNameError ? true : undefined}
+            className={displayNameError ? "is-invalid" : undefined}
+            defaultValue={formValues.displayName}
+            id="provider-edit-display-name"
+            name="displayName"
+            required
+          />
+          <p
+            className={displayNameError ? "field-error is-visible" : "field-error"}
+            id="provider-edit-display-name-error"
+          >
+            {displayNameError}
+          </p>
+          <label htmlFor="provider-edit-base-url">Provider base URL</label>
+          <input
+            aria-describedby="provider-edit-base-url-error"
+            aria-invalid={baseUrlError ? true : undefined}
+            className={baseUrlError ? "is-invalid" : undefined}
+            defaultValue={formValues.baseUrl}
+            id="provider-edit-base-url"
+            name="baseUrl"
+            readOnly={Boolean(provider.providerTemplateId)}
+            type="url"
+          />
+          <p
+            className={baseUrlError ? "field-error is-visible" : "field-error"}
+            id="provider-edit-base-url-error"
+          >
+            {baseUrlError}
+          </p>
+          <button type="submit">Save provider</button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function ProviderKeyCreateDialog({
+  closeHref,
+  provider,
+}: {
+  closeHref: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-key-create-title"
+        aria-modal="true"
+        className="console-dialog provider-key-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="provider-key-create-title">新增 {provider.displayName} API key</h2>
+          <a className="secondary-button" href={closeHref}>
+            Close
+          </a>
+        </div>
+        <form className="provider-create-form" action="/api/provider-keys" method="post">
+          <input type="hidden" name="providerId" value={provider.id} />
+          <label htmlFor="provider-key-create-value">Provider API key</label>
+          <input
+            autoComplete="off"
+            id="provider-key-create-value"
+            name="providerApiKey"
+            required
+            type="password"
+          />
+          <button type="submit">Save API key</button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function ProviderKeyDeleteDialog({
+  closeHref,
+  keyPrefix,
+  provider,
+}: {
+  closeHref: string;
+  keyPrefix: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-key-delete-title"
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <h2 id="provider-key-delete-title">Delete API key?</h2>
+        <p>
+          This removes key {keyPrefix} from {provider.displayName}.
+        </p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            Cancel
+          </a>
+          <button className="agent-delete-confirm" type="button">
+            Delete
+          </button>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -3059,104 +3609,6 @@ function getPlaygroundGatewayBaseUrl(): string {
   return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
 }
 
-function ProviderTemplateSummary({ template }: { template: ProviderTemplateSelectorItem }) {
-  return (
-    <article className="provider-template-card">
-      <h3>{template.displayName}</h3>
-      {template.fixedBaseUrl ? <p>Fixed base URL: {template.fixedBaseUrl}</p> : null}
-      {template.baseUrlMode === "user_local_private" ? (
-        <p>Base URL: user-provided local/private URL</p>
-      ) : null}
-      {template.modelListPath ? <p>Model list path: {template.modelListPath}</p> : null}
-      {template.chatPath ? <p>Chat path: {template.chatPath}</p> : null}
-      {template.auth ? <p>Auth: {formatProviderTemplateAuth(template)}</p> : null}
-      <p>Capabilities: {formatProviderTemplateCapabilities(template)}</p>
-    </article>
-  );
-}
-
-function formatProviderTemplateCapabilities(template: ProviderTemplateSelectorItem): string {
-  return template.capabilities.map(formatProviderTemplateCapability).join(", ");
-}
-
-function formatProviderTemplateCapability(capability: string): string {
-  if (capability === "chat_completions") {
-    return "Chat completions";
-  }
-
-  return capability.charAt(0).toUpperCase() + capability.slice(1);
-}
-
-function formatProviderTemplateAuth(template: ProviderTemplateSelectorItem): string {
-  if (!template.auth) {
-    return "None";
-  }
-
-  return `${template.auth.header} ${template.auth.scheme} API key`;
-}
-
-function requireProviderTemplateGroup(id: "remote_api_key" | "local") {
-  const group = providerTemplateGroups.find((candidate) => candidate.id === id);
-  if (!group) {
-    throw new Error(`Provider template group ${id} is missing.`);
-  }
-  return group;
-}
-
-function ProviderHealthSummaryPanel({
-  health,
-}: {
-  health: ConsoleProviderHealthSummary | undefined;
-}) {
-  const providerHealth = health ?? {
-    consecutiveFailures: 0,
-    latestProbeAt: null,
-    models: [],
-    status: "unknown" as const,
-    trigger: null,
-  };
-
-  return (
-    <div className="provider-health-summary">
-      <p>Provider health: {formatProviderHealthStatus(providerHealth.status)}</p>
-      <p>
-        {formatProviderHealthLatestProbe({
-          latestProbeAt: providerHealth.latestProbeAt,
-          trigger: providerHealth.trigger,
-        })}
-      </p>
-      <p>{formatProviderHealthFailureCount(providerHealth.consecutiveFailures)}</p>
-      <p>
-        Provider health stale status:{" "}
-        {formatProviderHealthStaleStatus({ latestProbeAt: providerHealth.latestProbeAt })}
-      </p>
-      {providerHealth.models.length === 0 ? (
-        <p>No provider model health recorded.</p>
-      ) : (
-        <div className="provider-model-health-list">
-          {providerHealth.models.map((model) => (
-            <div className="provider-model-health-item" key={model.id}>
-              <p>Model: {model.displayName}</p>
-              <p>Model health: {formatProviderHealthStatus(model.status)}</p>
-              <p>
-                {formatProviderHealthLatestProbe({
-                  latestProbeAt: model.latestProbeAt,
-                  trigger: model.trigger,
-                })}
-              </p>
-              <p>{formatProviderHealthFailureCount(model.consecutiveFailures)}</p>
-              <p>
-                Model health stale status:{" "}
-                {formatProviderHealthStaleStatus({ latestProbeAt: model.latestProbeAt })}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function formatDateTime(value: Date): string {
   return value.toISOString();
 }
@@ -3190,6 +3642,24 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
   return candidates.length === 0
     ? "None"
     : candidates.map((candidate) => candidate.optionLabel).join(", ");
+}
+
+function formatDefaultCandidate(routePolicy: ConsoleRoutePolicy | null | undefined): string {
+  return routePolicy?.primaryCandidates[0]?.modelDisplayName ?? "-";
+}
+
+function formatVirtualModelCost(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
+function formatRouteStrategyLabel(strategy: string): string {
+  if (strategy === "cost_first") {
+    return "Cost First";
+  }
+  if (strategy === "quality_first") {
+    return "Quality First";
+  }
+  return strategy.charAt(0).toUpperCase() + strategy.slice(1);
 }
 
 function formatRoutePolicyFallbackOrder(candidates: Array<{ optionLabel: string }>): string {
@@ -3317,7 +3787,10 @@ function formatProviderType(provider: ConsoleProvider): string {
 }
 
 function formatProviderKeyCount(count: number): string {
-  return count === 1 ? "1 key" : `${count} keys`;
+  if (count === 0) {
+    return "-";
+  }
+  return count === 1 ? "1 Key" : `${count} Keys`;
 }
 
 function formatProviderDefaultPriority(
@@ -3332,14 +3805,24 @@ function formatProviderLastConnection(
   providerHealth: ConsoleProviderHealthSummary | undefined,
 ): string {
   if (!providerHealth?.latestProbeAt) {
-    return "Never";
+    return "-";
   }
 
-  return formatCompactDateTime(providerHealth.latestProbeAt);
+  return formatRelativeDateTime(providerHealth.latestProbeAt);
 }
 
-function formatCompactDateTime(value: Date): string {
-  return value.toISOString().slice(0, 16).replace("T", " ");
+function formatRelativeDateTime(value: Date): string {
+  const elapsedMs = Date.now() - value.getTime();
+  if (elapsedMs < 60_000) {
+    return "刚刚";
+  }
+  if (elapsedMs < 3_600_000) {
+    return `${Math.floor(elapsedMs / 60_000)} 分钟前`;
+  }
+  if (elapsedMs < 86_400_000) {
+    return `${Math.floor(elapsedMs / 3_600_000)} 小时前`;
+  }
+  return value.toISOString().slice(0, 10);
 }
 
 function formatModelContext(contextWindow: number | null): string {
@@ -3357,10 +3840,10 @@ function formatModelContext(contextWindow: number | null): string {
 
 function formatModelPrice(price: number | null): string {
   if (price === null) {
-    return "Unknown";
+    return "未知";
   }
   const digits = price >= 1 ? 2 : 4;
-  return `$${price.toFixed(digits)}/1M`;
+  return `$${price.toFixed(digits)}`;
 }
 
 function formatDecimal(value: number): string {
@@ -3368,10 +3851,16 @@ function formatDecimal(value: number): string {
 }
 
 function formatBooleanFeature(value: boolean): string {
-  return value ? "Yes" : "No";
+  return value ? "支持" : "不支持";
 }
 
 function formatModelAvailability(value: string): string {
+  if (value === "available") {
+    return "启用";
+  }
+  if (value === "disabled") {
+    return "禁用";
+  }
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
@@ -3380,10 +3869,12 @@ function virtualModelSelectSize(optionCount: number): number {
 }
 
 function formatVirtualModelOptionLabel(virtualModel: {
-  displayName: string;
+  description?: string;
+  displayName?: string;
   name: string;
 }): string {
-  return `${virtualModel.displayName} (${virtualModel.name})`;
+  const label = virtualModel.description ?? virtualModel.displayName ?? virtualModel.name;
+  return `${label} (${virtualModel.name})`;
 }
 
 function findAgentLimit(
@@ -3391,16 +3882,6 @@ function findAgentLimit(
   limitType: ConsoleAgentLimit["limitType"],
 ): ConsoleAgentLimit | undefined {
   return limits.find((limit) => limit.limitType === limitType);
-}
-
-function formatAgentDerivedStatus(status: string): string {
-  if (status === "high-risk") {
-    return "High-risk";
-  }
-  if (status === "online") {
-    return "Online";
-  }
-  return "Offline";
 }
 
 function groupByAgentId<T extends { agentId: string }>(values: T[]): Map<string, T[]> {

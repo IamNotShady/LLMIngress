@@ -7,20 +7,33 @@ import {
 } from "@llmingress/security/secret-encryption";
 import { Client, type QueryResultRow } from "pg";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./job-runner.js";
+import {
+  fetchProviderModelRegistryEntries,
+  findProviderModelRegistryEntry,
+  type ProviderModelRegistryEntry,
+} from "./price-source.js";
 
 export type ProviderModelAvailability = "available" | "unavailable" | "not_listed" | "deprecated";
 
 export type ListedProviderModel = {
+  capabilityMetadata?: Record<string, unknown>;
+  contextWindow?: number | null;
   displayName: string;
   modelId: string;
+  supportsStreaming?: boolean | null;
+  supportsTools?: boolean | null;
 };
 
 export type ExistingProviderModel = {
   availability: ProviderModelAvailability;
+  capabilityMetadata?: Record<string, unknown>;
+  contextWindow?: number | null;
   displayName: string;
   id: string;
   modelId: string;
   referenced: boolean;
+  supportsStreaming?: boolean;
+  supportsTools?: boolean;
 };
 
 export type ProviderModelRefreshPlan = {
@@ -54,6 +67,7 @@ type CreateModelRefreshJobHandlerOptions = {
   databaseUrl: string;
   fetch?: typeof globalThis.fetch;
   masterKeySource?: MasterKeySource;
+  modelRegistrySource?: () => Promise<ProviderModelRegistryEntry[]>;
 };
 
 type RefreshProviderModelsOptions = CreateModelRefreshJobHandlerOptions & {
@@ -75,11 +89,25 @@ type ProviderRow = QueryResultRow & {
 
 type ProviderModelRow = QueryResultRow & {
   availability: ProviderModelAvailability;
+  capability_metadata: unknown;
+  context_window: number | null;
   display_name: string;
   id: string;
   model_id: string;
   referenced: boolean;
+  supports_streaming: boolean;
+  supports_tools: boolean;
 };
+
+const workerManagedCapabilityMetadataKeys = [
+  "tools",
+  "reasoning",
+  "reasoningLevels",
+  "reasoningDefaultLevel",
+  "outputTokenLimit",
+  "registrySources",
+  "streamingInferred",
+] as const;
 
 export function createModelRefreshJobHandler(
   options: CreateModelRefreshJobHandlerOptions,
@@ -105,15 +133,24 @@ export function planProviderModelRefresh(
   for (const existing of input.existingModels) {
     const listed = listedById.get(existing.modelId);
     if (listed) {
-      if (existing.availability !== "available" || existing.displayName !== listed.displayName) {
+      const metadataChanged = providerModelMetadataChanged(existing, listed);
+      if (
+        existing.availability !== "available" ||
+        existing.displayName !== listed.displayName ||
+        metadataChanged
+      ) {
         markAvailable.push({
+          capabilityMetadata: listed.capabilityMetadata,
+          contextWindow: listed.contextWindow,
           displayName: listed.displayName,
           id: existing.id,
           modelId: listed.modelId,
           referenced: existing.referenced,
+          supportsStreaming: listed.supportsStreaming,
+          supportsTools: listed.supportsTools,
         });
 
-        if (existing.referenced && existing.availability !== "available") {
+        if (existing.referenced && (existing.availability !== "available" || metadataChanged)) {
           routingVisibleChanges.push({ table: "provider_models", recordId: existing.id });
         }
       }
@@ -165,6 +202,118 @@ function deduplicateListedModels(models: ListedProviderModel[]): ListedProviderM
   return deduplicated;
 }
 
+export function enrichListedProviderModels(input: {
+  listedModels: ListedProviderModel[];
+  providerKey: string;
+  registryEntries: ProviderModelRegistryEntry[];
+}): ListedProviderModel[] {
+  return input.listedModels.map((model) => {
+    const registryEntry = findProviderModelRegistryEntry(input.registryEntries, {
+      displayName: model.displayName,
+      modelId: model.modelId,
+      providerKey: input.providerKey,
+    });
+    if (!registryEntry) {
+      return model;
+    }
+
+    return {
+      ...model,
+      capabilityMetadata: buildProviderModelCapabilityMetadata(registryEntry),
+      ...(registryEntry.contextWindow === undefined || registryEntry.contextWindow === null
+        ? {}
+        : { contextWindow: registryEntry.contextWindow }),
+      ...(registryEntry.supportsStreaming === undefined || registryEntry.supportsStreaming === null
+        ? {}
+        : { supportsStreaming: registryEntry.supportsStreaming }),
+      ...(registryEntry.supportsTools === undefined || registryEntry.supportsTools === null
+        ? {}
+        : { supportsTools: registryEntry.supportsTools }),
+    };
+  });
+}
+
+function buildProviderModelCapabilityMetadata(
+  entry: ProviderModelRegistryEntry,
+): Record<string, unknown> {
+  return {
+    ...(entry.supportsTools === undefined || entry.supportsTools === null
+      ? {}
+      : { tools: entry.supportsTools }),
+    ...(entry.reasoningSupport === undefined || entry.reasoningSupport === null
+      ? {}
+      : { reasoning: entry.reasoningSupport }),
+    ...(entry.reasoningLevels?.length ? { reasoningLevels: entry.reasoningLevels } : {}),
+    ...(entry.reasoningDefaultLevel ? { reasoningDefaultLevel: entry.reasoningDefaultLevel } : {}),
+    ...(entry.outputTokenLimit === undefined || entry.outputTokenLimit === null
+      ? {}
+      : { outputTokenLimit: entry.outputTokenLimit }),
+    ...(entry.registrySources && Object.keys(entry.registrySources).length > 0
+      ? { registrySources: entry.registrySources }
+      : {}),
+    registrySyncedAt: entry.syncedAt.toISOString(),
+    ...(entry.streamingInferred === undefined
+      ? {}
+      : { streamingInferred: entry.streamingInferred }),
+  };
+}
+
+function providerModelMetadataChanged(
+  existing: ExistingProviderModel,
+  listed: ListedProviderModel,
+): boolean {
+  if (
+    listed.contextWindow !== undefined &&
+    listed.contextWindow !== null &&
+    listed.contextWindow !== existing.contextWindow
+  ) {
+    return true;
+  }
+  if (
+    listed.supportsTools !== undefined &&
+    listed.supportsTools !== null &&
+    listed.supportsTools !== existing.supportsTools
+  ) {
+    return true;
+  }
+  if (
+    listed.supportsStreaming !== undefined &&
+    listed.supportsStreaming !== null &&
+    listed.supportsStreaming !== existing.supportsStreaming
+  ) {
+    return true;
+  }
+
+  const listedMetadata = listed.capabilityMetadata ?? {};
+  const existingMetadata = existing.capabilityMetadata ?? {};
+  if (listed.capabilityMetadata !== undefined) {
+    for (const key of workerManagedCapabilityMetadataKeys) {
+      if (!jsonMetadataValueEqual(existingMetadata[key], listedMetadata[key])) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function jsonMetadataValueEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function readProviderModelRegistryEntries(input: {
+  fetch: typeof globalThis.fetch;
+  modelRegistrySource?: () => Promise<ProviderModelRegistryEntry[]>;
+}): Promise<ProviderModelRegistryEntry[]> {
+  try {
+    return input.modelRegistrySource
+      ? await input.modelRegistrySource()
+      : await fetchProviderModelRegistryEntries({ fetch: input.fetch });
+  } catch {
+    return [];
+  }
+}
+
 export async function refreshProviderModels(
   options: RefreshProviderModelsOptions,
 ): Promise<ProviderModelRefreshResult> {
@@ -178,7 +327,16 @@ export async function refreshProviderModels(
           providerId: provider.id,
         })
       : null;
-  const listedModels = await fetchListedProviderModels(fetchImpl, provider, apiKey);
+  const rawListedModels = await fetchListedProviderModels(fetchImpl, provider, apiKey);
+  const registryEntries = await readProviderModelRegistryEntries({
+    fetch: fetchImpl,
+    modelRegistrySource: options.modelRegistrySource,
+  });
+  const listedModels = enrichListedProviderModels({
+    listedModels: rawListedModels,
+    providerKey: provider.provider_key,
+    registryEntries,
+  });
   const existingModels = await readExistingProviderModels(options.databaseUrl, provider.id);
   const plan = planProviderModelRefresh({ existingModels, listedModels });
   let chainedPriceSyncJobId: string | null = null;
@@ -333,6 +491,10 @@ async function readExistingProviderModels(
                provider_models.model_id,
                provider_models.display_name,
                provider_models.availability,
+               provider_models.context_window,
+               provider_models.supports_streaming,
+               provider_models.supports_tools,
+               provider_models.capability_metadata,
                exists (
                  select 1
                  from route_policy_candidates
@@ -347,10 +509,14 @@ async function readExistingProviderModels(
 
     return result.rows.map((row) => ({
       availability: row.availability,
+      capabilityMetadata: readJsonRecord(row.capability_metadata),
+      contextWindow: row.context_window,
       displayName: row.display_name,
       id: row.id,
       modelId: row.model_id,
       referenced: row.referenced,
+      supportsStreaming: row.supports_streaming,
+      supportsTools: row.supports_tools,
     }));
   });
 }
@@ -461,15 +627,42 @@ async function applyProviderModelRefreshPlan(
           provider_id,
           model_id,
           display_name,
+          context_window,
+          supports_tools,
+          supports_streaming,
+          capability_metadata,
           availability
         )
-        values ($1, $2, $3, $4, 'available')
+        values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'available')
         on conflict (provider_id, model_id) do update
         set display_name = excluded.display_name,
+            context_window = coalesce(excluded.context_window, provider_models.context_window),
+            supports_tools = excluded.supports_tools,
+            supports_streaming = excluded.supports_streaming,
+            capability_metadata = (
+              provider_models.capability_metadata
+              - 'tools'
+              - 'reasoning'
+              - 'reasoningLevels'
+              - 'reasoningDefaultLevel'
+              - 'outputTokenLimit'
+              - 'registrySources'
+              - 'registrySyncedAt'
+              - 'streamingInferred'
+            ) || excluded.capability_metadata,
             availability = 'available',
             updated_at = now()
       `,
-      [randomUUID(), providerId, model.modelId, model.displayName],
+      [
+        randomUUID(),
+        providerId,
+        model.modelId,
+        model.displayName,
+        model.contextWindow ?? null,
+        model.supportsTools ?? false,
+        model.supportsStreaming ?? false,
+        JSON.stringify(model.capabilityMetadata ?? {}),
+      ],
     );
   }
 
@@ -479,10 +672,31 @@ async function applyProviderModelRefreshPlan(
         update provider_models
         set display_name = $2,
             availability = 'available',
+            context_window = coalesce($3::integer, context_window),
+            supports_tools = coalesce($4::boolean, supports_tools),
+            supports_streaming = coalesce($5::boolean, supports_streaming),
+            capability_metadata = (
+              capability_metadata
+              - 'tools'
+              - 'reasoning'
+              - 'reasoningLevels'
+              - 'reasoningDefaultLevel'
+              - 'outputTokenLimit'
+              - 'registrySources'
+              - 'registrySyncedAt'
+              - 'streamingInferred'
+            ) || $6::jsonb,
             updated_at = now()
         where id = $1
       `,
-      [model.id, model.displayName],
+      [
+        model.id,
+        model.displayName,
+        model.contextWindow ?? null,
+        model.supportsTools ?? null,
+        model.supportsStreaming ?? null,
+        JSON.stringify(model.capabilityMetadata ?? {}),
+      ],
     );
   }
 
@@ -596,6 +810,10 @@ async function readResponseBody(response: Response): Promise<unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readJsonRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }
 
 async function withClient<T>(

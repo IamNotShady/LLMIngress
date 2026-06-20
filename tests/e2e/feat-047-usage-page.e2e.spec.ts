@@ -124,7 +124,7 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'usage-console', 'Usage Console', true)
     `,
     [virtualModelId],

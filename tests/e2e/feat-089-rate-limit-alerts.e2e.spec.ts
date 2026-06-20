@@ -206,7 +206,7 @@ async function seedRateLimitAlertData(fixture: Fixture): Promise<RateLimitAlertS
   };
 
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'rate-limit-alerts-fast', 'Rate Limit Alerts Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'rate-limit-alerts-fast', 'Rate Limit Alerts Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(

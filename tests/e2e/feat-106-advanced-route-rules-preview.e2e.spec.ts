@@ -192,7 +192,7 @@ async function seedAdvancedRoutePreview(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, $2, 'Advanced Coding Preview', true)
     `,
     [virtualModelId, virtualModelName],

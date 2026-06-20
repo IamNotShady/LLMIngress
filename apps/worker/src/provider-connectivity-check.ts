@@ -11,6 +11,7 @@ export type ConnectivityCheckProvider = {
   baseUrl: string;
   displayName: string;
   id: string;
+  modelId: string;
   providerKey: string;
 };
 
@@ -24,6 +25,7 @@ export type ProviderConnectivityCheckResult = {
   providerApiKeyPrefix?: string;
   providerId: string;
   providerKey: string;
+  probeModelId: string;
   retryable: boolean;
   status: "healthy" | "failed";
   statusCode: number | null;
@@ -60,6 +62,7 @@ type ProviderRow = QueryResultRow & {
   base_url: string | null;
   display_name: string;
   id: string;
+  model_id: string | null;
   provider_key: string;
 };
 
@@ -102,6 +105,7 @@ export function createProviderConnectivityCheckJobHandler(
       latencyMs: result.latencyMs,
       metadata: {
         checkedAt: result.checkedAt,
+        probeModelId: result.probeModelId,
         providerApiKeyPrefix: result.providerApiKeyPrefix,
         providerKey: result.providerKey,
         retryable: result.retryable,
@@ -133,7 +137,7 @@ export async function checkProviderConnectivity(
         body: JSON.stringify({
           max_tokens: 1,
           messages: [{ content: "ping", role: "user" }],
-          model: "connectivity-check",
+          model: options.provider.modelId,
           stream: false,
         }),
         headers: {
@@ -155,6 +159,7 @@ export async function checkProviderConnectivity(
         errorMessage: error.message,
         latencyMs,
         ok: false,
+        probeModelId: options.provider.modelId,
         providerId: options.provider.id,
         providerKey: options.provider.providerKey,
         retryable: response.status === 429 || response.status >= 500,
@@ -169,6 +174,7 @@ export async function checkProviderConnectivity(
       errorMessage: null,
       latencyMs,
       ok: true,
+      probeModelId: options.provider.modelId,
       providerId: options.provider.id,
       providerKey: options.provider.providerKey,
       retryable: false,
@@ -189,6 +195,7 @@ export async function checkProviderConnectivity(
           : "Provider request failed.",
       latencyMs,
       ok: false,
+      probeModelId: options.provider.modelId,
       providerId: options.provider.id,
       providerKey: options.provider.providerKey,
       retryable: true,
@@ -205,10 +212,27 @@ async function readProvider(
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
-        select id::text, provider_key, display_name, base_url
+        select providers.id::text,
+               providers.provider_key,
+               providers.display_name,
+               providers.base_url,
+               probe_model.model_id
         from providers
-        where id = $1
-          and enabled = true
+        left join lateral (
+          select provider_models.model_id
+          from provider_models
+          where provider_models.provider_id = providers.id
+            and provider_models.availability = 'available'
+          order by case
+                     when provider_models.model_id ~* '(embedding|image|moderation|tts|whisper|sora|dall|davinci|babbage)'
+                       then 1
+                     else 0
+                   end,
+                   random()
+          limit 1
+        ) probe_model on true
+        where providers.id = $1
+          and providers.enabled = true
       `,
       [providerId],
     );
@@ -219,11 +243,15 @@ async function readProvider(
     if (!row.base_url) {
       throw new Error("Provider base URL is required for connectivity check.");
     }
+    if (!row.model_id) {
+      throw new Error("Provider has no available models for connectivity check.");
+    }
 
     return {
       baseUrl: row.base_url,
       displayName: row.display_name,
       id: row.id,
+      modelId: row.model_id,
       providerKey: row.provider_key,
     };
   });

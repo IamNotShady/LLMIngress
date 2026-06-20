@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   formatAgentVirtualModelAccess,
+  normalizeAgentVirtualModelAccessFormInput,
   normalizeAgentVirtualModelAccessInput,
 } from "../../apps/console/src/server/agents";
 
@@ -20,6 +21,23 @@ describe("feat-030 allowed and default virtual models", () => {
     ).toEqual({
       allowedVirtualModelIds: [fastVirtualModelId, strongVirtualModelId],
       defaultVirtualModelId: fastVirtualModelId,
+      id: keyId,
+    });
+  });
+
+  it("includes the submitted default virtual model when normalizing form input", () => {
+    const keyId = randomUUID();
+    const defaultVirtualModelId = randomUUID();
+
+    expect(
+      normalizeAgentVirtualModelAccessFormInput({
+        allowedVirtualModelIds: [],
+        defaultVirtualModelId,
+        id: keyId,
+      }),
+    ).toEqual({
+      allowedVirtualModelIds: [defaultVirtualModelId],
+      defaultVirtualModelId,
       id: keyId,
     });
   });

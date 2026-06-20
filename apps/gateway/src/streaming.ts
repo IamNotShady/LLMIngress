@@ -198,6 +198,15 @@ export async function executeGatewayStreamingRequest(input: {
     });
 
     if (!response.ok || !response.body) {
+      const providerErrorBody = await readProviderErrorBody(response);
+      console.error("gateway provider streaming request failed", {
+        body: providerErrorBody,
+        modelId: selected.modelId,
+        providerKey: selected.providerKey,
+        requestId: input.requestId,
+        statusCode: response.status,
+        url: buildProviderUrl(selected.baseUrl, normalized.pathSuffix),
+      });
       await releaseGatewayBudgetReservation({
         databaseUrl: input.databaseUrl,
         reservation: budgetReservation,
@@ -581,6 +590,15 @@ function buildStreamingProviderHeaders(input: {
     };
   }
   return headers;
+}
+
+async function readProviderErrorBody(response: Response): Promise<string | null> {
+  try {
+    const text = await response.text();
+    return text ? text.slice(0, 2000) : null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Unable to read provider error body.";
+  }
 }
 
 function requireRoutePolicy(

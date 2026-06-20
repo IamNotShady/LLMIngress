@@ -35,17 +35,12 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "New provider");
-          await page.getByLabel("Provider key").fill("OpenAI");
+          await page.getByLabel("Provider type").selectOption({ label: "OpenAI" });
           await page.getByLabel("Provider display name").fill("OpenAI");
-          await page.getByLabel("Provider base URL").fill("https://api.openai.com/v1");
           await page.getByRole("button", { name: "Create provider" }).click();
-          await expect(
-            page.locator("#provider-management").getByRole("heading", { name: "OpenAI" }),
-          ).toBeVisible();
+          await expect(page.getByRole("row", { name: /OpenAI/ })).toBeVisible();
 
-          await openRow(page, "OpenAI");
-          await page.getByLabel("Provider API key").fill(firstSecret);
-          await page.getByRole("button", { name: "Store provider API key" }).click();
+          await saveProviderApiKey(page, "OpenAI", firstSecret);
 
           await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
           await expect(page.getByText(firstSecret)).toBeVisible();
@@ -64,15 +59,14 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
           await openRow(page, "OpenAI");
-          await expect(page.getByText("Provider API key prefix: sk-live-")).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "sk-live-" })).toBeVisible();
 
           await page.reload();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
           await openRow(page, "OpenAI");
-          await expect(page.getByText("Provider API key prefix: sk-live-")).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "sk-live-" })).toBeVisible();
 
-          await page.getByLabel("Provider API key").fill(rotatedSecret);
-          await page.getByRole("button", { name: "Rotate provider API key" }).click();
+          await saveProviderApiKey(page, "OpenAI", rotatedSecret);
 
           await expect(
             page.getByRole("heading", { name: "Provider API key rotated" }),
@@ -94,7 +88,7 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           await expect(page.getByText(firstSecret)).toHaveCount(0);
           await expect(page.getByText(rotatedSecret)).toHaveCount(0);
           await openRow(page, "OpenAI");
-          await expect(page.getByText("Provider API key prefix: sk-rotat")).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "sk-rotat" })).toBeVisible();
         } finally {
           await context.close();
         }
@@ -122,6 +116,20 @@ type ProviderKeyStorageRow = {
   key_prefix: string;
   provider_key: string;
 };
+
+async function saveProviderApiKey(
+  page: Page,
+  providerName: string,
+  plaintext: string,
+): Promise<void> {
+  await openRow(page, providerName);
+  await page.getByRole("link", { name: "Add API key" }).click();
+  await page
+    .getByRole("dialog", { name: /API key/ })
+    .getByRole("textbox", { name: "Provider API key" })
+    .fill(plaintext);
+  await page.getByRole("button", { name: "Save API key" }).click();
+}
 
 async function readProviderKeyRows(
   fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,

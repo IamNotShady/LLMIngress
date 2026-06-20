@@ -280,7 +280,7 @@ async function seedErrorTraceGateway(
   });
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'trace-success', 'Trace Success', true),
              ($2, 'trace-provider-error', 'Trace Provider Error', true),
              ($3, 'trace-routing-missing', 'Trace Routing Missing', true),

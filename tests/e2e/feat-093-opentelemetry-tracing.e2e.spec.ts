@@ -188,7 +188,7 @@ async function seedTracingGatewayRoute(
     [providerModelId, providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'trace-coding', 'Trace Coding', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'trace-coding', 'Trace Coding', true)",
     [virtualModelId],
   );
   await fixture.query(

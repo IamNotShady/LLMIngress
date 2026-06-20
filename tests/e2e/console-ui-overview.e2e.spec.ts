@@ -77,7 +77,7 @@ async function seedOverviewData(databaseUrl: string): Promise<void> {
       [modelId, providerId],
     );
     await client.query(
-      "insert into virtual_models (id, name, display_name, enabled) values ($1, 'smart', 'Smart', true)",
+      "insert into virtual_models (id, name, description, enabled) values ($1, 'smart', 'Smart', true)",
       [virtualModelId],
     );
     await client.query(

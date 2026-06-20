@@ -290,8 +290,8 @@ async function getCostReportUsageSummary(input: {
     `
       select coalesce(request_activity.virtual_model_id::text, 'unknown-virtual-model') as id,
              case
-               when virtual_models.display_name is not null and virtual_models.name is not null
-                 then concat(virtual_models.display_name, ' (', virtual_models.name, ')')
+               when virtual_models.description is not null and virtual_models.name is not null
+                 then concat(virtual_models.description, ' (', virtual_models.name, ')')
                when virtual_models.name is not null then virtual_models.name
                else 'Unknown virtual model'
              end as label,
@@ -310,7 +310,7 @@ async function getCostReportUsageSummary(input: {
       left join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.started_at >= $1
       group by request_activity.virtual_model_id,
-               virtual_models.display_name,
+               virtual_models.description,
                virtual_models.name
       order by min(request_activity.created_at),
                label

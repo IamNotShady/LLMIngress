@@ -188,7 +188,7 @@ async function seedPromptCachingRoute(
     [randomUUID(), randomUUID()],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'prompt-cache-coding', 'Prompt Cache Coding', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'prompt-cache-coding', 'Prompt Cache Coding', true)",
     [virtualModelId],
   );
   await fixture.query(

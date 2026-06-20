@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
+import { openDisclosure } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 const gatewayBaseUrl = "http://127.0.0.1:4100";
@@ -18,6 +18,7 @@ test("agent integration templates show codex claude code cursor openclaw gateway
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const virtualModel = await seedIntegrationVirtualModel(fixture);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const consoleApp = startConsoleProcess({
@@ -34,17 +35,16 @@ test("agent integration templates show codex claude code cursor openclaw gateway
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
-          await page.goto(`${baseUrl}/models`);
-
-          await createVirtualModel(page, {
-            displayName: "Integration VM",
-            name: "integration-vm",
-          });
 
           await page.goto(`${baseUrl}/agents`);
           await openDisclosure(page, "New agent");
+          const virtualModelLabel = `${virtualModel.description} (${virtualModel.name})`;
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
+          await page
+            .getByLabel("Allowed virtual models")
+            .selectOption({ label: virtualModelLabel });
+          await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           const plaintextKey = await page.locator("code").innerText();
@@ -66,21 +66,14 @@ test("agent integration templates show codex claude code cursor openclaw gateway
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(plaintextKey)).toHaveCount(0);
 
-          await openRow(page, "Codex");
-          await page
-            .getByLabel("Allowed virtual models")
-            .selectOption({ label: "Integration VM (integration-vm)" });
-          await page
-            .getByLabel("Default virtual model")
-            .selectOption({ label: "Integration VM (integration-vm)" });
-          await page.getByRole("button", { name: "Save Agent virtual models" }).click();
-
           const dashboardPlaceholder = `paste one-time Agent API key for prefix ${plaintextKey.slice(
             0,
             12,
           )}`;
-          await openRow(page, "Codex");
-          await openDisclosure(page, "Integration snippets");
+          await expect(
+            page.getByLabel("Selected agent details").getByRole("heading", { name: "Codex" }),
+          ).toBeVisible();
+          await expect(page.getByLabel("Selected agent details")).toContainText(virtualModel.name);
           for (const templateName of integrationTemplateNames) {
             const snippet = page.getByLabel(`${templateName} setup snippet`);
             await expect(snippet).toBeVisible();
@@ -90,7 +83,7 @@ test("agent integration templates show codex claude code cursor openclaw gateway
             await expect(snippet).toHaveValue(
               new RegExp(`API key: ${escapeRegExp(dashboardPlaceholder)}`),
             );
-            await expect(snippet).toHaveValue(/Model: integration-vm/);
+            await expect(snippet).toHaveValue(new RegExp(`Model: ${virtualModel.name}`));
             expect(
               await snippet.evaluate((element) => (element as HTMLTextAreaElement).readOnly),
             ).toBe(true);
@@ -115,17 +108,19 @@ type ConsoleProcess = {
   stdout: string[];
 };
 
-async function createVirtualModel(
-  page: Page,
-  input: { displayName: string; name: string },
-): Promise<void> {
-  await openDisclosure(page, "New virtual model");
-  await page.getByRole("textbox", { exact: true, name: "Virtual model name" }).fill(input.name);
-  await page
-    .getByRole("textbox", { exact: true, name: "Virtual model display name" })
-    .fill(input.displayName);
-  await page.getByRole("button", { name: "Create virtual model" }).click();
-  await expect(page.getByRole("heading", { name: input.displayName })).toBeVisible();
+async function seedIntegrationVirtualModel(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+): Promise<{ description: string; id: string; name: string }> {
+  const virtualModel = {
+    description: "Integration VM",
+    id: randomUUID(),
+    name: "integration-vm",
+  };
+  await fixture.query(
+    "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
+    [virtualModel.id, virtualModel.name, virtualModel.description],
+  );
+  return virtualModel;
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

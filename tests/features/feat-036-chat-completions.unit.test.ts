@@ -43,6 +43,24 @@ describe("feat-036 OpenAI chat completions endpoint", () => {
     });
   });
 
+  it("caps oversized max_tokens from OpenAI-compatible clients", () => {
+    expect(
+      normalizeOpenAIChatCompletionRequest(
+        {
+          max_tokens: 65_536,
+          messages: [{ content: "hello", role: "user" }],
+          model: "mix",
+        },
+        "req_oversized_tokens",
+      ),
+    ).toMatchObject({
+      ok: true,
+      request: {
+        maxOutputTokens: 16_384,
+      },
+    });
+  });
+
   it("reads the Gateway master key source from process-style env", () => {
     expect(readGatewayMasterKeySource({ MASTER_KEY: "inline-master-key" })).toEqual({
       kind: "inline",

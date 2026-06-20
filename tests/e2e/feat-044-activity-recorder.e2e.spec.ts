@@ -272,7 +272,7 @@ async function seedActivityRoutes(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'activity-fallback', 'Activity Fallback', true),
              ($2, 'activity-failure', 'Activity Failure', true)
     `,

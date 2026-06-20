@@ -159,6 +159,21 @@ async function insertProvider(fixture: Fixture, input: ProviderInput): Promise<v
     `,
     [input.id, input.providerKey, input.providerKey, input.baseUrl],
   );
+  await fixture.query(
+    `
+      insert into provider_models (
+        id,
+        provider_id,
+        model_id,
+        display_name,
+        availability,
+        supports_streaming,
+        supports_tools
+      )
+      values ($1, $2, 'fake-model', 'fake-model', 'available', true, true)
+    `,
+    [randomUUID(), input.id],
+  );
 }
 
 async function storeProviderApiKey(

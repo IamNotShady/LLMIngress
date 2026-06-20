@@ -10,9 +10,13 @@ export default async function VirtualModelsPage({
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Routing"
-        title="Virtual Models"
-        description="Public model names agents request, mapped to provider models by route policies."
+        title="Virtual Models / Routes"
+        description="以 Virtual Model Name 暴露简单路由策略：strategy + candidates"
+        actions={
+          <a className="btn" href="/models?virtualModelDialog=new">
+            + 创建 Virtual Model
+          </a>
+        }
       />
       <VirtualModelsSection searchParams={resolved} />
     </div>

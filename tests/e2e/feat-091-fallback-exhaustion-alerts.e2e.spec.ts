@@ -181,7 +181,7 @@ async function seedFallbackExhaustionData(fixture: Fixture): Promise<FallbackExh
     ],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'fallback-alerts-fast', 'Fallback Alerts Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'fallback-alerts-fast', 'Fallback Alerts Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(

@@ -248,7 +248,7 @@ function evaluateCandidate(input: {
       );
     }
   }
-  if ((rules.requireTools || input.input.usesTools) && input.candidate.supportsTools !== true) {
+  if (rules.requireTools && input.candidate.supportsTools !== true) {
     reasons.push("request uses tools but model does not support tools");
   }
 

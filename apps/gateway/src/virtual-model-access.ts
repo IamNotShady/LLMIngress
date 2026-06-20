@@ -108,7 +108,7 @@ export async function listAllowedGatewayVirtualModels(input: {
       `
         select virtual_models.id::text,
                virtual_models.name,
-               virtual_models.display_name
+               virtual_models.description as display_name
         from agent_virtual_models
         join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
         where agent_virtual_models.agent_id = $1

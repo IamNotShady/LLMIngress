@@ -267,7 +267,7 @@ async function readAccessibleRouteCandidatePrices(
       with accessible_virtual_models as (
         select distinct virtual_models.id,
                virtual_models.name,
-               virtual_models.display_name
+               virtual_models.description as display_name
         from agents
         join virtual_models
           on virtual_models.enabled = true

@@ -4,6 +4,7 @@ import {
   sessionCookieName,
   verifyConsoleSession,
 } from "../../../server/auth";
+import { enqueueProviderConnectivityCheckJob } from "../../../server/provider-connectivity-jobs";
 import { readConsoleMasterKeySource, saveProviderApiKey } from "../../../server/provider-keys";
 
 export const runtime = "nodejs";
@@ -23,6 +24,11 @@ export async function POST(request: NextRequest) {
       databaseUrl,
       masterKeySource: readConsoleMasterKeySource(),
       plaintext,
+      providerId,
+    });
+    await enqueueProviderConnectivityCheckJob({
+      databaseUrl,
+      providerApiKeyId: result.metadata.id,
       providerId,
     });
 

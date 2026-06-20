@@ -361,7 +361,7 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                route_policies.strategy,
                virtual_models.id::text as virtual_model_id,
                virtual_models.name as virtual_model_name,
-               virtual_models.display_name as virtual_model_display_name
+               virtual_models.description as virtual_model_display_name
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
         order by virtual_models.name
@@ -464,7 +464,7 @@ export async function createRoutePolicy(input: {
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_name,
                     (
-                      select display_name
+                      select description
                       from virtual_models
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_display_name
@@ -521,7 +521,7 @@ export async function updateRoutePolicy(input: {
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_name,
                     (
-                      select display_name
+                      select description
                       from virtual_models
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_display_name
@@ -634,7 +634,7 @@ async function readBudgetedVirtualModelUsage(
   const result = await client.query<BudgetedVirtualModelUsageRow>(
     `
       select virtual_models.name,
-             virtual_models.display_name,
+             virtual_models.description as display_name,
              count(distinct agents.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_count
       from virtual_models
       left join agents
@@ -654,7 +654,7 @@ async function readBudgetedVirtualModelUsage(
        and agent_limits.limit_type = 'budget'
        and agent_limits.unit = 'usd'
       where virtual_models.id = $1
-      group by virtual_models.id, virtual_models.name, virtual_models.display_name
+      group by virtual_models.id, virtual_models.name, virtual_models.description
     `,
     [virtualModelId],
   );
@@ -690,7 +690,7 @@ async function readRoutePolicyForUpdate(
              route_policies.strategy,
              route_policies.virtual_model_id::text,
              virtual_models.name as virtual_model_name,
-             virtual_models.display_name as virtual_model_display_name
+             virtual_models.description as virtual_model_display_name
       from route_policies
       join virtual_models on virtual_models.id = route_policies.virtual_model_id
       where route_policies.id = $1

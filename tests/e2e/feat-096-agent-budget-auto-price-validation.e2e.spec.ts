@@ -53,18 +53,6 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await expect(page.getByLabel("Allowed virtual models")).toHaveValues([
             seededIds.virtualModelId,
           ]);
-          await page.goto(`${baseUrl}/routing`);
-          await openRow(page, "Auto Budget VM");
-          await expect(
-            page.getByText(
-              "Primary: OpenAI Auto Budget Provider - Unknown Primary Model (unknown-primary-model)",
-            ),
-          ).toBeVisible();
-          await expect(
-            page.getByText(
-              "Fallback: OpenAI Auto Budget Provider - Unknown Fallback Model (unknown-fallback-model)",
-            ),
-          ).toBeVisible();
 
           await page.goto(`${baseUrl}/agents`);
           await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
@@ -108,7 +96,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await page.getByLabel("RPM limit").fill("120");
           await page.getByLabel("TPM limit").fill("640000");
           await page.getByLabel("Token limit").fill("32000");
-          await page.getByRole("button", { name: "Save Agent limits" }).click();
+          await page.getByRole("button", { name: "Save" }).click();
 
           await openRow(page, "Auto Budget Agent");
           await expect(page.getByLabel("Budget USD limit")).toHaveValue("25");
@@ -168,7 +156,7 @@ async function seedAgentBudgetRouteGraph(fixture: Fixture, ids: SeededIds): Prom
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'auto-budget-vm', 'Auto Budget VM', true)
     `,
     [ids.virtualModelId],

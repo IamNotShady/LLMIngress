@@ -219,7 +219,7 @@ async function seedBackupData(fixture: Fixture): Promise<void> {
     [ids.providerApiKeyId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'backup-fast', 'Backup Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'backup-fast', 'Backup Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(

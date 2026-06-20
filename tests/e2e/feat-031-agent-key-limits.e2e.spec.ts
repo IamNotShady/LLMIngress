@@ -46,12 +46,14 @@ test("agent limit form saves budget rpm tpm token rules without manual price fie
           await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
           await expect(page.getByLabel("Budget price model id")).toHaveCount(0);
 
+          const configChangeBaseline = await countAgentLimitConfigChanges(fixture);
+
           await page.getByLabel("Budget USD limit").fill("10");
           await page.getByLabel("Budget period").selectOption("month");
           await page.getByLabel("RPM limit").fill("60");
           await page.getByLabel("TPM limit").fill("120000");
           await page.getByLabel("Token limit").fill("8000");
-          await page.getByRole("button", { name: "Save Agent limits" }).click();
+          await page.getByRole("button", { exact: true, name: "Save" }).click();
 
           await openRow(page, "Codex");
           await expect(page.getByLabel("Budget USD limit")).toHaveValue("10");
@@ -67,7 +69,9 @@ test("agent limit form saves budget rpm tpm token rules without manual price fie
               { limitType: "token", limitValue: "8000.000000", period: "request", unit: "tokens" },
               { limitType: "tpm", limitValue: "120000.000000", period: "minute", unit: "tokens" },
             ]);
-          await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(1);
+          await expect
+            .poll(() => countAgentLimitConfigChanges(fixture))
+            .toBe(configChangeBaseline + 1);
         } finally {
           await context.close();
         }

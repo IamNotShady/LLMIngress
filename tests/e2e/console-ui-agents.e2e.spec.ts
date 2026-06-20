@@ -42,19 +42,21 @@ test("agents page matches the designed list and detail layout", async ({ browser
 
       const details = page.getByLabel("Selected agent details");
       await expect(details.getByRole("heading", { name: "Claude Code" })).toBeVisible();
-      await expect(details.getByRole("heading", { name: "API Key" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Allowed Virtual Models" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Budget / Limit" })).toBeVisible();
+      await expect(details.getByRole("heading", { name: "Integration snippets" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Integration guide" })).toHaveCount(0);
 
-      await expect(page.getByText("Manage agents", { exact: true })).toBeVisible();
+      await expect(page.locator(".agent-management-row")).toHaveCount(0);
       await page
         .getByRole("row", { name: /Claude Code/ })
         .getByRole("link", { name: "Edit" })
         .click();
       const editDialog = page.getByRole("dialog", { name: "Edit Claude Code" });
       await expect(editDialog.getByRole("heading", { name: "Edit Claude Code" })).toBeVisible();
-      await expect(editDialog.getByRole("heading", { name: "Integration snippets" })).toBeVisible();
+      await expect(editDialog.getByRole("heading", { name: "Integration snippets" })).toHaveCount(
+        0,
+      );
 
       for (const hiddenText of [
         /^Integration platform:/,
@@ -100,7 +102,7 @@ async function seedAgentsData(databaseUrl: string): Promise<void> {
 
     for (const virtualModel of virtualModels) {
       await client.query(
-        "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+        "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
         [virtualModel.id, virtualModel.name, virtualModel.displayName],
       );
     }

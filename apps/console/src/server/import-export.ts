@@ -352,7 +352,7 @@ async function readVirtualModels(client: QueryClient): Promise<ExportedVirtualMo
     `
       select id::text,
              name,
-             display_name,
+             description as display_name,
              enabled
       from virtual_models
       order by name
@@ -560,11 +560,11 @@ async function writeVirtualModels(
   for (const virtualModel of virtualModels) {
     await client.query(
       `
-        insert into virtual_models (id, name, display_name, enabled)
+        insert into virtual_models (id, name, description, enabled)
         values ($1, $2, $3, $4)
         on conflict (id) do update
         set name = excluded.name,
-            display_name = excluded.display_name,
+            description = excluded.description,
             enabled = excluded.enabled,
             updated_at = now()
       `,

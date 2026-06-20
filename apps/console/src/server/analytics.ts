@@ -338,8 +338,8 @@ function buildScopedActivityCte(
                  else 'Unknown model'
                end as model_label,
                case
-                 when virtual_models.display_name is not null and virtual_models.name is not null
-                   then concat(virtual_models.display_name, ' (', virtual_models.name, ')')
+                 when virtual_models.description is not null and virtual_models.name is not null
+                   then concat(virtual_models.description, ' (', virtual_models.name, ')')
                  when virtual_models.name is not null then virtual_models.name
                  else 'Unknown virtual model'
                end as virtual_model_label,
@@ -347,8 +347,8 @@ function buildScopedActivityCte(
                  when route_policies.id is not null
                    then concat(
                      case
-                       when virtual_models.display_name is not null and virtual_models.name is not null
-                         then concat(virtual_models.display_name, ' (', virtual_models.name, ')')
+                       when virtual_models.description is not null and virtual_models.name is not null
+                         then concat(virtual_models.description, ' (', virtual_models.name, ')')
                        when virtual_models.name is not null then virtual_models.name
                        else 'Unknown virtual model'
                      end,

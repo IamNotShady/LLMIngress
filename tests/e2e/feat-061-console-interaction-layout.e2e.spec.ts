@@ -45,7 +45,7 @@ test("dashboard form labels stay paired with their controls on desktop", async (
           await page.goto(`${baseUrl}/providers`);
           await openDisclosure(page, "New provider");
           const providerFields = await readFieldLayout(page, [
-            "provider-key",
+            "provider-choice",
             "provider-display-name",
             "provider-base-url",
           ]);

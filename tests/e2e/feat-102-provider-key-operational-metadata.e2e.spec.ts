@@ -212,7 +212,7 @@ async function seedProviderKeyOperationalGateway(
     [providerModelId, providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'provider-key-ops', 'Provider Key Ops', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'provider-key-ops', 'Provider Key Ops', true)",
     [virtualModelId],
   );
   await fixture.query(

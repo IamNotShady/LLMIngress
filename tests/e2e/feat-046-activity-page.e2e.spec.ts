@@ -120,7 +120,7 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'activity-console', 'Activity Console', true)
     `,
     [virtualModelId],

@@ -180,7 +180,7 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
     [ids.providerApiKeyId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'config-fast', 'Config Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'config-fast', 'Config Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(

@@ -160,7 +160,7 @@ async function seedEmbeddingsRoute(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'embedding-coding', 'Embedding Coding', true),
              ($2, 'blocked-embeddings', 'Blocked Embeddings', true)
     `,

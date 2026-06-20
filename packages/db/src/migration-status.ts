@@ -210,6 +210,21 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0032",
     name: "agent_owned_api_key",
   },
+  {
+    checksum: "d888af9f3c75fe615aed2525dc3518a7fd02d93906bb3f8b704c34ae1875f2fe",
+    id: "0033",
+    name: "allow_duplicate_provider_keys",
+  },
+  {
+    checksum: "f57e8961e6dfca28a843dcfdac6d4e3920e1e67d175af16d06a5a707a2270136",
+    id: "0034",
+    name: "virtual_model_description",
+  },
+  {
+    checksum: "fd0bf9211e00dc92ad691346ca63f0e7efe526ec48948a07addaa343d8c87e38",
+    id: "0035",
+    name: "virtual_model_description_schema_version",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

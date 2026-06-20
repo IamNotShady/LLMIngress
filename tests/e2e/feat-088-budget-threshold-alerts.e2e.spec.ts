@@ -187,7 +187,7 @@ async function seedBudgetAlertData(fixture: Fixture): Promise<BudgetAlertSeedIds
   };
 
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'budget-alerts-fast', 'Budget Alerts Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'budget-alerts-fast', 'Budget Alerts Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(

@@ -237,7 +237,7 @@ async function seedLocalDeployment(
     ],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
     [
       virtualModelId,
       localDeploymentSmokeNames.virtualModelName,
@@ -350,7 +350,7 @@ async function seedRealDeployment(fixture: Fixture): Promise<RealDeploymentSeed>
 
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, $2, $2, true), ($3, $4, $4, true)
     `,
     [

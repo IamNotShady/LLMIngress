@@ -188,7 +188,7 @@ async function seedRealAgentOpenAICompatibleGateway(
     [randomUUID(), realAgentOpenAICompatibleSmokeNames.providerModel],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, 'Real Agent OpenAI Compatible Smoke', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, $2, 'Real Agent OpenAI Compatible Smoke', true)",
     [virtualModelId, realAgentOpenAICompatibleSmokeNames.virtualModel],
   );
   await fixture.query(

@@ -95,7 +95,7 @@ async function seedBudgetedVirtualModelWithUnknownCandidate(fixture: Fixture): P
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'budget-safe-vm', 'Budget Safe VM', true)
     `,
     [virtualModelId],

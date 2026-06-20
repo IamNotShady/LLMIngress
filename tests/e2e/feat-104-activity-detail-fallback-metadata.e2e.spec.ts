@@ -307,7 +307,7 @@ async function seedActivityDetailGateway(
       ],
     );
     await fixture.query(
-      "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+      "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
       [virtualModelId, scenario.virtualModelName, `${name} Activity 104`],
     );
     await fixture.query(

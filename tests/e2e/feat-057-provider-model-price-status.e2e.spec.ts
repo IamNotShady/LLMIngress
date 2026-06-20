@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
+import { openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -52,51 +52,45 @@ test("refresh provider models shows priced and unknown price status in provider 
           await page.goto(`${consoleBaseUrl}/providers`);
 
           await storeProviderApiKey(page, providerApiKey);
-          await page.goto(`${consoleBaseUrl}/models`);
-          await createVirtualModel(page);
           await page.goto(`${consoleBaseUrl}/providers`);
           await openRow(page, "OpenAI Price Status Provider");
-          await page.getByRole("button", { name: "Refresh provider models" }).click();
-          await expect(
-            page.getByText("Model refresh queued for OpenAI Price Status Provider."),
-          ).toBeVisible();
+          await page.getByRole("button", { name: "Refresh models" }).click();
 
           await expect
             .poll(() => readLatestModelRefreshJob(fixture, providerId))
             .toMatchObject({ status: "succeeded" });
           await writeDeterministicPriceStatusRows(fixture, providerId);
+          const providerModels = await readProviderModels(fixture, providerId);
+          expect(providerModels.map((model) => model.model_id).sort()).toEqual([
+            "gpt-4.1-mini",
+            "manual-priced-model",
+            "unknown-refresh-model",
+          ]);
 
           await page.goto(`${consoleBaseUrl}/providers`);
           await openRow(page, "OpenAI Price Status Provider");
-          const providerModelMetadata = page.locator(".provider-model-metadata");
+          const library = page.locator("table.model-library-table");
+          await expect(library.getByText("GPT-4.1 Mini")).toBeVisible();
+          await expect(library.getByText("$0.4000")).toBeVisible();
+          await expect(library.getByText("$1.60")).toBeVisible();
+          await expect(library.getByText("Manual Priced Model")).toBeVisible();
+          await expect(library.getByText("$2.50")).toBeVisible();
+          await expect(library.getByText("$7.50")).toBeVisible();
+          await expect(library.getByText("Unknown Refresh Model")).toBeVisible();
           await expect(
-            providerModelMetadata.getByText("GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)"),
-          ).toBeVisible();
-          await expect(
-            providerModelMetadata.getByText(
-              "Manual Priced Model (manual-priced-model) - Priced (manual override)",
-            ),
-          ).toBeVisible();
-          await expect(
-            providerModelMetadata.getByText(
-              "Unknown Refresh Model (unknown-refresh-model) - Unknown price",
-            ),
+            library
+              .getByRole("row", { name: /Unknown Refresh Model/ })
+              .getByText("未知")
+              .first(),
           ).toBeVisible();
 
-          await page.goto(`${consoleBaseUrl}/routing`);
-          await openDisclosure(page, "New route policy");
-          await page.getByLabel("Route policy virtual model").selectOption({
-            label: "Price Status VM (price-status-vm)",
+          await postVirtualModelWithRoute(page, {
+            description: "Price Status VM",
+            name: "price-status-vm",
+            primaryProviderModelIds: providerModels.map((model) => model.id),
+            strategy: "balanced",
           });
-          await expect(page.getByLabel("Primary provider models")).toContainText(
-            "OpenAI Price Status Provider - GPT-4.1 Mini (gpt-4.1-mini) - Priced (price sync)",
-          );
-          await expect(page.getByLabel("Primary provider models")).toContainText(
-            "OpenAI Price Status Provider - Manual Priced Model (manual-priced-model) - Priced (manual override)",
-          );
-          await expect(page.getByLabel("Primary provider models")).toContainText(
-            "OpenAI Price Status Provider - Unknown Refresh Model (unknown-refresh-model) - Unknown price",
-          );
+          await expect.poll(() => countRoutePolicyCandidates(fixture)).toBe(3);
         } finally {
           await context.close();
         }
@@ -180,20 +174,62 @@ async function writeDeterministicPriceStatusRows(
 
 async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<void> {
   await openRow(page, "OpenAI Price Status Provider");
-  await page.getByLabel("Provider API key").fill(providerApiKey);
-  await page.getByRole("button", { name: "Store provider API key" }).click();
+  await page.getByRole("link", { name: "Add API key" }).click();
+  await page
+    .getByRole("dialog", { name: /API key/ })
+    .getByRole("textbox", { name: "Provider API key" })
+    .fill(providerApiKey);
+  await page.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
   await openRow(page, "OpenAI Price Status Provider");
-  await expect(page.getByText("Provider API key prefix: sk-price")).toBeVisible();
+  await expect(page.locator("table.provider-key-table td.mono")).toHaveText("sk-price");
 }
 
-async function createVirtualModel(page: Page): Promise<void> {
-  await openDisclosure(page, "New virtual model");
-  await page.getByRole("textbox", { name: "Virtual model name" }).fill("price-status-vm");
-  await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Price Status VM");
-  await page.getByRole("button", { name: "Create virtual model" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "Price Status VM" })).toBeVisible();
+async function readProviderModels(
+  fixture: Fixture,
+  providerId: string,
+): Promise<Array<{ id: string; model_id: string }>> {
+  const result = await fixture.query<{ id: string; model_id: string }>(
+    `
+      select id::text, model_id
+      from provider_models
+      where provider_id = $1
+    `,
+    [providerId],
+  );
+  return result.rows;
+}
+
+async function countRoutePolicyCandidates(fixture: Fixture): Promise<number> {
+  const result = await fixture.query<{ count: number }>(
+    "select count(*)::integer as count from route_policy_candidates",
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+async function postVirtualModelWithRoute(
+  page: Page,
+  input: {
+    description: string;
+    name: string;
+    primaryProviderModelIds: string[];
+    strategy: string;
+  },
+): Promise<void> {
+  const result = await page.evaluate(async (payload) => {
+    const body = new FormData();
+    body.set("action", "createWithRoute");
+    body.set("name", payload.name);
+    body.set("description", payload.description);
+    body.set("strategy", payload.strategy);
+    for (const providerModelId of payload.primaryProviderModelIds) {
+      body.append("primaryProviderModelIds", providerModelId);
+    }
+    const response = await fetch("/api/virtual-models", { body, method: "POST" });
+    return { status: response.status, text: await response.text() };
+  }, input);
+  expect(result.status, result.text).toBe(200);
 }
 
 async function readLatestModelRefreshJob(

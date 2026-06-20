@@ -21,6 +21,7 @@ test("migration status reports schema pending migrations and migrate check healt
 
   try {
     await applyMigrationsThrough(fixture, currentMigration.id);
+    const appliedSchemaVersion = await readSchemaVersion(fixture);
 
     const cliResult = spawnSync(
       "pnpm",
@@ -33,7 +34,7 @@ test("migration status reports schema pending migrations and migrate check healt
       },
     );
     expect(cliResult.status, cliResult.stderr || cliResult.stdout).toBe(0);
-    expect(cliResult.stdout).toContain(`Current schema: ${currentMigration.id}`);
+    expect(cliResult.stdout).toContain(`Current schema: ${appliedSchemaVersion}`);
     expect(cliResult.stdout).toContain(
       `Pending migrations: ${latestMigration.id}_${latestMigration.name}`,
     );
@@ -58,7 +59,7 @@ test("migration status reports schema pending migrations and migrate check healt
           const runtimeSection = page.getByLabel("Gateway Runtime");
           // Migration status is a labelled field list on the Gateway Runtime page.
           await expect(
-            runtimeSection.getByText(currentMigration.id, { exact: true }),
+            runtimeSection.getByText(appliedSchemaVersion, { exact: true }),
           ).toBeVisible();
           await expect(
             runtimeSection.getByText(`${latestMigration.id}_${latestMigration.name}`),
@@ -101,6 +102,13 @@ async function applyMigrationsThrough(fixture: Fixture, targetId: string): Promi
       [migration.id, migration.name, migration.checksum],
     );
   }
+}
+
+async function readSchemaVersion(fixture: Fixture): Promise<string> {
+  const result = await fixture.query<{ version: string }>(
+    "select version from schema_version where id = 1",
+  );
+  return result.rows[0]?.version ?? "none";
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

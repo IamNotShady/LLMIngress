@@ -54,44 +54,40 @@ test("default virtual model must be in allowed list", async ({ browser }) => {
           await expect(page.getByLabel("Allowed virtual models")).toBeVisible({ timeout: 3_000 });
           await page
             .getByLabel("Allowed virtual models")
-            .selectOption([
-              { label: "Coding Fast (coding-fast)" },
-              { label: "Coding Strong (coding-strong)" },
-            ]);
+            .selectOption([{ label: "Coding Fast (coding-fast)" }]);
           await page
             .getByLabel("Default virtual model")
             .selectOption({ label: "Coding Fast (coding-fast)" });
-          await page.getByRole("button", { name: "Save Agent virtual models" }).click();
+          await page.getByRole("button", { exact: true, name: "Save" }).click();
 
           await openRow(page, "Codex");
           await expect(page.getByLabel("Allowed virtual models")).toHaveValues([
             virtualModels.fast.id,
-            virtualModels.strong.id,
           ]);
           await expect(page.getByLabel("Default virtual model")).toHaveValue(virtualModels.fast.id);
           await expect
             .poll(() => readAgentApiKeyVirtualModelAccess(fixture))
             .toEqual({
-              allowedVirtualModelNames: ["coding-fast", "coding-strong"],
+              allowedVirtualModelNames: ["coding-fast"],
               configChangeTables: ["agents", "agent_virtual_models"],
               defaultVirtualModelName: "coding-fast",
             });
 
-          const invalidResult = await postInvalidDefaultVirtualModel(page, {
+          const defaultCoercionResult = await postDefaultVirtualModelForm(page, {
             allowedVirtualModelId: virtualModels.fast.id,
             apiKeyId,
             defaultVirtualModelId: virtualModels.strong.id,
           });
-          expect(invalidResult).toEqual({
-            body: { error: expect.stringMatching(/default virtual model.*allowed/i) },
-            status: 400,
+          expect(defaultCoercionResult).toEqual({
+            redirected: true,
+            status: 200,
           });
           await expect
             .poll(() => readAgentApiKeyVirtualModelAccess(fixture))
             .toEqual({
               allowedVirtualModelNames: ["coding-fast", "coding-strong"],
               configChangeTables: ["agents", "agent_virtual_models"],
-              defaultVirtualModelName: "coding-fast",
+              defaultVirtualModelName: "coding-strong",
             });
         } finally {
           await context.close();
@@ -124,12 +120,10 @@ async function createVirtualModel(
   input: { displayName: string; name: string },
 ): Promise<void> {
   await openDisclosure(page, "New virtual model");
-  await page.getByRole("textbox", { exact: true, name: "Virtual model name" }).fill(input.name);
-  await page
-    .getByRole("textbox", { exact: true, name: "Virtual model display name" })
-    .fill(input.displayName);
-  await page.getByRole("button", { name: "Create virtual model" }).click();
-  await expect(page.getByRole("heading", { name: input.displayName })).toBeVisible();
+  await page.getByRole("textbox", { exact: true, name: "Virtual Model 名称" }).fill(input.name);
+  await page.getByRole("textbox", { exact: true, name: "描述" }).fill(input.displayName);
+  await page.getByRole("button", { name: "保存" }).click();
+  await expect(page.getByRole("link", { name: input.name })).toBeVisible();
 }
 
 async function readVirtualModels(fixture: Fixture): Promise<VirtualModelIds> {
@@ -199,7 +193,7 @@ async function readAgentApiKeyVirtualModelAccess(fixture: Fixture) {
   };
 }
 
-async function postInvalidDefaultVirtualModel(
+async function postDefaultVirtualModelForm(
   page: Page,
   input: {
     allowedVirtualModelId: string;
@@ -216,7 +210,7 @@ async function postInvalidDefaultVirtualModel(
 
     const response = await fetch("/api/agents", { body, method: "POST" });
     return {
-      body: await response.json(),
+      redirected: response.redirected,
       status: response.status,
     };
   }, input);

@@ -139,7 +139,7 @@ async function seedChatCompletionRoute(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'chat-coding', 'Chat Coding', true),
              ($2, 'blocked-coding', 'Blocked Coding', true)
     `,

@@ -8,11 +8,11 @@ describe("feat-028 virtual model CRUD", () => {
   it("normalizes virtual model form input for persistence", () => {
     expect(
       normalizeVirtualModelFormInput({
-        displayName: " Coding Fast ",
+        description: " Coding Fast ",
         name: " Coding Fast ",
       }),
     ).toEqual({
-      displayName: "Coding Fast",
+      description: "Coding Fast",
       name: "coding-fast",
     });
   });
@@ -20,14 +20,14 @@ describe("feat-028 virtual model CRUD", () => {
   it("rejects empty names and invalid virtual model names", () => {
     expect(() =>
       normalizeVirtualModelFormInput({
-        displayName: "Coding Fast",
+        description: "Coding Fast",
         name: "",
       }),
     ).toThrow(/virtual model name/i);
 
     expect(() =>
       normalizeVirtualModelFormInput({
-        displayName: "Coding Fast",
+        description: "Coding Fast",
         name: "bad/name",
       }),
     ).toThrow(/lowercase letters/i);

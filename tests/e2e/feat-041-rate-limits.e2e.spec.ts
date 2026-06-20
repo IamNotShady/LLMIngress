@@ -167,7 +167,7 @@ async function seedRateLimitedGateway(
     [providerModelId, providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'rate-limited-coding', 'Rate Limited Coding', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'rate-limited-coding', 'Rate Limited Coding', true)",
     [virtualModelId],
   );
   await fixture.query(

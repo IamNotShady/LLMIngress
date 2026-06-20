@@ -364,6 +364,22 @@ export function normalizeAgentVirtualModelAccessInput(
   };
 }
 
+export function normalizeAgentVirtualModelAccessFormInput(
+  input: AgentVirtualModelAccessInput,
+): NormalizedAgentVirtualModelAccessInput {
+  const defaultVirtualModelId = normalizeOptionalText(input.defaultVirtualModelId);
+  const allowedVirtualModelIds = normalizeTextList(input.allowedVirtualModelIds);
+
+  return normalizeAgentVirtualModelAccessInput({
+    ...input,
+    allowedVirtualModelIds:
+      defaultVirtualModelId && !allowedVirtualModelIds.includes(defaultVirtualModelId)
+        ? [...allowedVirtualModelIds, defaultVirtualModelId]
+        : allowedVirtualModelIds,
+    defaultVirtualModelId,
+  });
+}
+
 export function formatAgentVirtualModelAccess(input: {
   allowedVirtualModels: AgentVirtualModel[];
   defaultVirtualModel: AgentVirtualModel | null;
@@ -663,7 +679,7 @@ async function readAgentVirtualModelAccess(
       select agents.id::text as agent_id,
              default_virtual_models.id::text as default_virtual_model_id,
              default_virtual_models.name as default_virtual_model_name,
-             default_virtual_models.display_name as default_virtual_model_display_name
+             default_virtual_models.description as default_virtual_model_display_name
       from agents
       left join virtual_models default_virtual_models
         on default_virtual_models.id = agents.default_virtual_model_id
@@ -677,7 +693,7 @@ async function readAgentVirtualModelAccess(
       select agent_virtual_models.agent_id::text as agent_id,
              virtual_models.id::text,
              virtual_models.name,
-             virtual_models.display_name
+             virtual_models.description as display_name
       from agent_virtual_models
       join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
       where ($1::uuid is null or agent_virtual_models.agent_id = $1::uuid)

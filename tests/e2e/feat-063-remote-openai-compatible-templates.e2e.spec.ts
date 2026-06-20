@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
 import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
+import { openDisclosure } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -81,34 +81,21 @@ test("all nine remote templates expose fixed urls capabilities auth behavior and
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "Add from template");
-          const remoteTemplates = page.getByRole("group", {
-            name: "Remote API-key templates",
-          });
+          const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+          const providerType = dialog.getByLabel("Provider type");
+          const displayNameInput = dialog.getByLabel("Provider display name");
+          const baseUrlInput = dialog.getByLabel("Provider base URL");
           for (const [id, displayName, fixedBaseUrl] of remoteTemplateExpectations) {
-            const templateCard = remoteTemplates.locator(".provider-template-card").filter({
-              has: page.getByRole("heading", { name: displayName }),
-            });
-            await expect(templateCard.getByRole("heading", { name: displayName })).toBeVisible();
-            await expect(templateCard.getByText(`Fixed base URL: ${fixedBaseUrl}`)).toBeVisible();
-            await expect(
-              templateCard.getByText("Capabilities: Chat completions, Streaming, Tools"),
-            ).toBeVisible();
-            await expect(
-              templateCard.getByText("Auth: Authorization Bearer API key"),
-            ).toBeVisible();
-            await expect(page.getByLabel("Provider template")).toContainText(displayName);
-            await page.getByLabel("Provider template").selectOption(id);
+            await expect(providerType).toContainText(displayName);
+            await providerType.selectOption(id);
+            await expect(displayNameInput).toHaveValue(displayName);
+            await expect(baseUrlInput).toHaveValue(fixedBaseUrl);
           }
 
-          await page.getByLabel("Provider template").selectOption("groq");
-          await page.getByRole("button", { name: "Add template provider" }).click();
+          await providerType.selectOption("groq");
+          await dialog.getByRole("button", { name: "Create provider" }).click();
 
-          const providerList = page.locator(".row-list");
-          await expect(providerList.getByRole("heading", { name: "Groq" })).toBeVisible();
-          await openRow(page, "Groq");
-          await expect(
-            providerList.getByText("Template provider base URL: https://api.groq.com/openai/v1"),
-          ).toBeVisible();
+          await expect(page.locator("table.providers-table")).toContainText("Groq");
 
           const providers = await readTemplateProviders(fixture);
           expect(providers).toEqual([

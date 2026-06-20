@@ -10,7 +10,6 @@ const expectedRoutes = [
   "/",
   "/agents",
   "/providers",
-  "/pricing",
   "/models",
   "/activity",
   "/usage",

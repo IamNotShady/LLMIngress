@@ -26,9 +26,14 @@ describe("feat-100 provider model price source", () => {
 
   it("normalizes models.dev primary prices and LiteLLM auxiliary prices with primary precedence", async () => {
     const {
+      mergeProviderModelRegistryEntries,
       mergeProviderModelPrices,
+      normalizeLiteLlmProviderModelRegistryEntries,
       normalizeLiteLlmProviderModelPrices,
+      normalizeModelsDevProviderModelRegistryEntries,
       normalizeModelsDevProviderModelPrices,
+      normalizeOpenRouterProviderModelRegistryEntries,
+      normalizeVercelAiGatewayProviderModelRegistryEntries,
     } = await import("../../apps/worker/src/price-source");
     const syncedAt = new Date("2026-06-17T00:00:00.000Z");
 
@@ -160,6 +165,99 @@ describe("feat-100 provider model price source", () => {
           modelId: "gpt-secondary",
           providerKey: "openai",
           source: "litellm",
+        }),
+      ]),
+    );
+
+    const registry = mergeProviderModelRegistryEntries(
+      normalizeModelsDevProviderModelRegistryEntries(
+        {
+          openai: {
+            models: {
+              "gpt-shared": {
+                cost: { input: 1, output: 3 },
+                id: "gpt-shared",
+                limit: { context: 128_000, output: 16_384 },
+                modalities: { output: ["text"] },
+                reasoning: true,
+                reasoning_options: ["low", "medium", "high"],
+                tool_call: true,
+              },
+            },
+          },
+        },
+        { sourceUrl: "https://models.dev/api.json", syncedAt },
+      ),
+      normalizeOpenRouterProviderModelRegistryEntries(
+        {
+          data: [
+            {
+              context_length: 64_000,
+              id: "openai/gpt-shared",
+              reasoning: { default_effort: "high", supported_efforts: ["high"] },
+              supported_parameters: ["tools", "reasoning"],
+              top_provider: { max_completion_tokens: 4096 },
+            },
+          ],
+        },
+        { sourceUrl: "https://openrouter.ai/api/v1/models", syncedAt },
+      ),
+      normalizeLiteLlmProviderModelRegistryEntries(
+        {
+          "openai/gpt-shared": {
+            litellm_provider: "openai",
+            max_input_tokens: 32_000,
+            max_output_tokens: 8192,
+            mode: "chat",
+            supports_function_calling: true,
+            supports_low_reasoning_effort: true,
+            supports_native_streaming: true,
+            supports_reasoning: true,
+          },
+        },
+        {
+          sourceUrl:
+            "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+          syncedAt,
+        },
+      ),
+      normalizeVercelAiGatewayProviderModelRegistryEntries(
+        {
+          data: [
+            {
+              context_window: 16_000,
+              id: "openai/gpt-secondary",
+              max_tokens: 1024,
+              tags: ["tool-use", "reasoning"],
+              type: "language",
+            },
+          ],
+        },
+        { sourceUrl: "https://ai-gateway.vercel.sh/v1/models", syncedAt },
+      ),
+    );
+
+    expect(registry).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          contextWindow: 128_000,
+          modelId: "gpt-shared",
+          outputTokenLimit: 16_384,
+          providerKey: "openai",
+          reasoningDefaultLevel: "high",
+          reasoningLevels: ["low", "medium", "high"],
+          supportsStreaming: true,
+          supportsTools: true,
+        }),
+        expect.objectContaining({
+          contextWindow: 16_000,
+          modelId: "gpt-secondary",
+          outputTokenLimit: 1024,
+          providerKey: "openai",
+          reasoningSupport: true,
+          streamingInferred: true,
+          supportsStreaming: true,
+          supportsTools: true,
         }),
       ]),
     );

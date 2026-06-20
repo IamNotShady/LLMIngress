@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { buildAgentIntegrationTemplates } from "../../../server/agent-integrations";
+import { normalizeAgentLimitFormInput, saveAgentLimitRules } from "../../../server/agent-limits";
 import {
   createAgent,
   deleteAgent,
   normalizeAgentFormInput,
-  normalizeAgentVirtualModelAccessInput,
+  normalizeAgentVirtualModelAccessFormInput,
   updateAgent,
   updateAgentVirtualModelAccess,
 } from "../../../server/agents";
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
         }),
         databaseUrl,
       });
+      await saveAgentRelatedSettings({ databaseUrl, form, id: result.id });
       return renderOneTimeAgentResponse(result);
     } else if (action === "update") {
       await updateAgent({
@@ -49,6 +51,19 @@ export async function POST(request: NextRequest) {
         databaseUrl,
         id: readRequiredText(form, "id"),
       });
+    } else if (action === "saveAll") {
+      const id = readRequiredText(form, "id");
+      await updateAgent({
+        agent: normalizeAgentFormInput({
+          agentType: readText(form, "agentType"),
+          integrationPlatform: readText(form, "integrationPlatform"),
+          name: readText(form, "name"),
+          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
+        }),
+        databaseUrl,
+        id,
+      });
+      await saveAgentRelatedSettings({ databaseUrl, form, id });
     } else if (action === "delete") {
       await deleteAgent({
         databaseUrl,
@@ -56,7 +71,7 @@ export async function POST(request: NextRequest) {
       });
     } else if (action === "updateVirtualModelAccess") {
       await updateAgentVirtualModelAccess({
-        access: normalizeAgentVirtualModelAccessInput({
+        access: normalizeAgentVirtualModelAccessFormInput({
           allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
           defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
           id: readRequiredText(form, "id"),
@@ -74,6 +89,32 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
+}
+
+async function saveAgentRelatedSettings(input: {
+  databaseUrl: string;
+  form: FormData;
+  id: string;
+}): Promise<void> {
+  await updateAgentVirtualModelAccess({
+    access: normalizeAgentVirtualModelAccessFormInput({
+      allowedVirtualModelIds: readTextValues(input.form, "allowedVirtualModelIds"),
+      defaultVirtualModelId: readText(input.form, "defaultVirtualModelId") ?? null,
+      id: input.id,
+    }),
+    databaseUrl: input.databaseUrl,
+  });
+  await saveAgentLimitRules({
+    databaseUrl: input.databaseUrl,
+    limits: normalizeAgentLimitFormInput({
+      agentId: input.id,
+      budgetPeriod: readRequiredText(input.form, "budgetPeriod"),
+      budgetUsd: readRequiredText(input.form, "budgetUsd"),
+      rpm: readRequiredText(input.form, "rpm"),
+      tokenLimit: readRequiredText(input.form, "tokenLimit"),
+      tpm: readRequiredText(input.form, "tpm"),
+    }),
+  });
 }
 
 function readText(form: FormData, name: string): string | undefined {

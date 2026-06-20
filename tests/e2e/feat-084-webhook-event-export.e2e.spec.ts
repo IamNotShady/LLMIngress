@@ -199,7 +199,7 @@ async function seedWebhookExportRequestData(fixture: Fixture): Promise<string> {
     [ids.providerModelId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'webhook-fast', 'Webhook Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'webhook-fast', 'Webhook Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(

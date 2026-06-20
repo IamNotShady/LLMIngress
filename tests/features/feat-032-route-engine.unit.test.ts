@@ -96,6 +96,30 @@ describe("feat-032 deterministic route engine", () => {
     });
     expect(decision.routeReason.message).toContain("cheapest eligible candidate");
   });
+
+  it("does not reject a route just because the client sends tools", () => {
+    const snapshot = createSnapshot({
+      strategy: "balanced",
+      candidates: [
+        createCandidate({
+          candidateOrder: 1,
+          modelId: "gpt-4o-mini",
+          providerModelId: "openai-mini",
+          price: pricedModel("gpt-4o-mini", 0.15, 0.6),
+        }),
+      ],
+    });
+
+    const decision = selectRouteCandidate({
+      estimatedInputTokens: 100,
+      estimatedOutputTokens: 100,
+      snapshot,
+      usesTools: true,
+      virtualModelName: "coding",
+    });
+
+    expect(decision.providerModelId).toBe("openai-mini");
+  });
 });
 
 type RoutePolicyInput = GatewayConfigSnapshot["routePolicies"][number];

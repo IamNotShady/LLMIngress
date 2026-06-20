@@ -299,7 +299,7 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
     [providerModelId, providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'risk-platform-status', 'Risk Platform Status', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'risk-platform-status', 'Risk Platform Status', true)",
     [virtualModelId],
   );
   await fixture.query(
@@ -445,7 +445,7 @@ async function seedGatewayLoggingScenario(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'logging-platform', 'Logging Platform', true)
     `,
     [virtualModelId],

@@ -3,12 +3,12 @@ import { createConfigPublisher } from "@llmingress/config/config-publisher";
 import { Client, type QueryResultRow } from "pg";
 
 export type VirtualModelFormInput = {
-  displayName?: string | null;
+  description?: string | null;
   name?: string | null;
 };
 
 export type NormalizedVirtualModelFormInput = {
-  displayName: string;
+  description: string;
   name: string;
 };
 
@@ -52,7 +52,7 @@ type QueryClient = {
 export function normalizeVirtualModelFormInput(
   input: VirtualModelFormInput,
 ): NormalizedVirtualModelFormInput {
-  const displayName = input.displayName?.trim();
+  const description = input.description?.trim();
   const name = input.name?.trim().toLowerCase().replaceAll(/\s+/g, "-");
 
   if (!name) {
@@ -63,11 +63,11 @@ export function normalizeVirtualModelFormInput(
       "Virtual model name must use lowercase letters, numbers, dashes, or underscores.",
     );
   }
-  if (!displayName) {
-    throw new Error("Virtual model display name is required.");
+  if (!description) {
+    throw new Error("Virtual model description is required.");
   }
 
-  return { displayName, name };
+  return { description, name };
 }
 
 export function getVirtualModelDeleteDependencyError(
@@ -108,17 +108,17 @@ export async function createVirtualModel(input: {
       await assertVirtualModelNameAvailable(client, input.virtualModel.name);
       const result = await client.query<VirtualModelRow>(
         `
-          insert into virtual_models (id, name, display_name, enabled)
+          insert into virtual_models (id, name, description, enabled)
           values ($1, $2, $3, true)
           returning id::text,
                     name,
-                    display_name,
+                    description as display_name,
                     enabled,
                     0::integer as route_policy_count,
                     0::integer as default_agent_count,
                     0::integer as allowed_agent_count
         `,
-        [virtualModelId, input.virtualModel.name, input.virtualModel.displayName],
+        [virtualModelId, input.virtualModel.name, input.virtualModel.description],
       );
       virtualModel = rowToConsoleVirtualModel(requireRow(result.rows[0]));
     },
@@ -146,12 +146,12 @@ export async function updateVirtualModel(input: {
         `
           update virtual_models
           set name = $2,
-              display_name = $3,
+              description = $3,
               updated_at = now()
           where id = $1
           returning id::text,
                     name,
-                    display_name,
+                    description as display_name,
                     enabled,
                     (
                       select count(*)::integer
@@ -169,7 +169,7 @@ export async function updateVirtualModel(input: {
                       where agent_virtual_models.virtual_model_id = virtual_models.id
                     ) as allowed_agent_count
         `,
-        [input.id, input.virtualModel.name, input.virtualModel.displayName],
+        [input.id, input.virtualModel.name, input.virtualModel.description],
       );
       virtualModel = rowToConsoleVirtualModel(requireRow(result.rows[0]));
     },
@@ -270,7 +270,7 @@ function buildVirtualModelListSql(): string {
   return `
     select virtual_models.id::text,
            virtual_models.name,
-           virtual_models.display_name,
+           virtual_models.description as display_name,
            virtual_models.enabled,
            (
              select count(*)::integer
@@ -296,7 +296,7 @@ function rowToConsoleVirtualModel(row: VirtualModelRow): ConsoleVirtualModel {
   return {
     allowedAgentCount: row.allowed_agent_count,
     defaultAgentCount: row.default_agent_count,
-    displayName: row.display_name,
+    description: row.display_name,
     enabled: row.enabled,
     id: row.id,
     name: row.name,

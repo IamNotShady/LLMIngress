@@ -37,37 +37,26 @@ test("agent crud works and delete with request attribution is blocked", async ({
           await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
-          await expect(
-            page.locator(".agent-management-row").getByRole("heading", { name: "Codex" }),
-          ).toBeVisible();
-          await expect(page.getByText("Type: coding")).toBeVisible();
+          await expect(page.getByRole("row", { name: /Codex CLI/ })).toBeVisible();
 
           await openRow(page, "Codex");
           await page.getByLabel("Edit agent name").fill("Codex CLI");
           await page.getByLabel("Edit agent type").selectOption("terminal");
-          await page.getByRole("button", { exact: true, name: "Save agent" }).click();
+          await page.getByRole("button", { exact: true, name: "Save" }).click();
 
-          await expect(
-            page.locator(".agent-management-row").getByRole("heading", { name: "Codex CLI" }),
-          ).toBeVisible();
-          await expect(page.getByText("Type: terminal")).toBeVisible();
+          await expect(page.getByRole("row", { name: /Codex CLI Terminal/ })).toBeVisible();
 
-          await openRow(page, "Codex CLI");
-          await page.getByRole("button", { name: "Delete agent" }).click();
-          await expect(page.getByText("No agents configured.")).toBeVisible();
+          await page
+            .getByRole("row", { name: /Codex CLI Terminal/ })
+            .getByRole("link", { name: "Delete" })
+            .click();
+          await page.getByRole("button", { name: "Delete" }).click();
+          await expect(page.getByText("No agents yet")).toBeVisible();
 
           const protectedAgents = await insertProtectedAgents(fixture);
           await page.reload();
-          await expect(
-            page.locator(".agent-management-row").getByRole("heading", {
-              name: "Active Key Agent",
-            }),
-          ).toBeVisible();
-          await expect(
-            page.locator(".agent-management-row").getByRole("heading", {
-              name: "Attributed Agent",
-            }),
-          ).toBeVisible();
+          await expect(page.getByRole("row", { name: /Active Key Agent/ })).toBeVisible();
+          await expect(page.getByRole("row", { name: /Attributed Agent/ })).toBeVisible();
 
           await expectAgentActionError(
             page,

@@ -93,6 +93,8 @@ type ProviderCredentials = {
   keys: FallbackProviderApiKey[];
 };
 
+const maxChatCompletionOutputTokens = 16_384;
+
 export function normalizeOpenAIChatCompletionRequest(
   body: unknown,
   requestId: string,
@@ -411,7 +413,7 @@ function readOptionalPositiveInteger(value: unknown): number | null | undefined 
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return null;
   }
-  return value;
+  return Math.min(value, maxChatCompletionOutputTokens);
 }
 
 function readOptionalFiniteNumber(value: unknown): number | null | undefined {

@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
+import { openDisclosure } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -40,8 +40,18 @@ test("agent creation returns one api key and gateway uses agent owned auth", asy
           await page.goto(`${consoleBaseUrl}/agents`);
 
           await openDisclosure(page, "New agent");
+          const virtualModelLabel = `${seeded.virtualModelDisplayName} (${seeded.virtualModelName})`;
           await page.getByLabel("Agent name").fill("Agent Owned Codex");
           await page.getByLabel("Agent type").selectOption("coding");
+          await page
+            .getByLabel("Allowed virtual models")
+            .selectOption({ label: virtualModelLabel });
+          await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
+          await page.getByLabel("RPM limit").fill("1");
+          await page.getByLabel("Budget USD limit").fill("100");
+          await page.getByLabel("Budget period").selectOption("month");
+          await page.getByLabel("TPM limit").fill("120000");
+          await page.getByLabel("Token limit").fill("12000");
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           const agentApiKey = await page.locator("code").innerText();
@@ -57,29 +67,14 @@ test("agent creation returns one api key and gateway uses agent owned auth", asy
 
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(agentApiKey)).toHaveCount(0);
-          await openRow(page, "Agent Owned Codex");
           await expect(page.getByText(/^Agent API key prefix:/)).toHaveCount(0);
-
-          const virtualModelLabel = `${seeded.virtualModelDisplayName} (${seeded.virtualModelName})`;
-          await page
-            .getByLabel("Allowed virtual models")
-            .selectOption({ label: virtualModelLabel });
-          await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
-          await page.getByRole("button", { name: "Save Agent virtual models" }).click();
-          await openRow(page, "Agent Owned Codex");
-          await expect(page.getByLabel("Default virtual model")).toHaveValue(seeded.virtualModelId);
-          await expect(page.getByLabel("Allowed virtual models")).toHaveValues([
-            seeded.virtualModelId,
-          ]);
-
-          await page.getByLabel("RPM limit").fill("1");
-          await page.getByLabel("Budget USD limit").fill("100");
-          await page.getByLabel("Budget period").selectOption("month");
-          await page.getByLabel("TPM limit").fill("120000");
-          await page.getByLabel("Token limit").fill("12000");
-          await page.getByRole("button", { name: "Save Agent limits" }).click();
-          await openRow(page, "Agent Owned Codex");
-          await expect(page.getByLabel("RPM limit")).toHaveValue("1");
+          await expect(page.getByLabel("Selected agent details")).toContainText(
+            "Agent Owned Codex",
+          );
+          await expect(page.getByLabel("Selected agent details")).toContainText(
+            seeded.virtualModelName,
+          );
+          await expect.poll(() => readAgentLimitValue(fixture, agentApiKey, "rpm")).toBe(1);
 
           const gateway = startGatewayProcess({
             databaseUrl: fixture.databaseUrl,
@@ -183,7 +178,7 @@ async function seedProviderRoute(fixture: Fixture, providerBaseUrl: string): Pro
     [providerModelId, providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'agent-owned-model-108', 'Agent Owned Model 108', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'agent-owned-model-108', 'Agent Owned Model 108', true)",
     [virtualModelId],
   );
   await fixture.query(
@@ -244,6 +239,25 @@ async function readAgentCredentialRows(
     [`%${plaintext}%`],
   );
   return result.rows;
+}
+
+async function readAgentLimitValue(
+  fixture: Fixture,
+  plaintext: string,
+  limitType: string,
+): Promise<number | null> {
+  const result = await fixture.query<{ limit_value: string }>(
+    `
+      select agent_limits.limit_value
+      from agent_limits
+      join agents on agents.id = agent_limits.agent_id
+      where agents.key_prefix = $1
+        and agent_limits.limit_type = $2
+    `,
+    [plaintext.slice(0, 12), limitType],
+  );
+  const value = result.rows[0]?.limit_value;
+  return value === undefined ? null : Number(value);
 }
 
 async function expectAllowedModels(

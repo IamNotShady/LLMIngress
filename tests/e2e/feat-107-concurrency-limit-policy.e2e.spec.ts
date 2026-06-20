@@ -210,7 +210,7 @@ async function seedConcurrencyGateway(
   for (const virtualModel of Object.values(virtualModels)) {
     const routePolicyId = randomUUID();
     await fixture.query(
-      "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $2, true)",
+      "insert into virtual_models (id, name, description, enabled) values ($1, $2, $2, true)",
       [virtualModel.id, virtualModel.name],
     );
     await fixture.query(

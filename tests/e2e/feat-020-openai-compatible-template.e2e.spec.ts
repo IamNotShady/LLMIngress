@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("whitelisted template accepted arbitrary custom endpoint rejected", async ({ browser }) => {
@@ -30,16 +29,11 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/providers`);
 
-          await openDisclosure(page, "Add from template");
-          await page.getByLabel("Provider template").selectOption("deepseek");
-          await page.getByRole("button", { name: "Add template provider" }).click();
-
-          const providerList = page.locator(".row-list");
-          await expect(providerList.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
-          await openRow(page, "DeepSeek");
-          await expect(
-            providerList.getByText("Template provider base URL: https://api.deepseek.com"),
-          ).toBeVisible();
+          const createResult = await postProviderForm(page, {
+            action: "createFromTemplate",
+            templateId: "deepseek",
+          });
+          expect(createResult).toMatchObject({ error: null, status: 200 });
 
           const providers = await readTemplateProviders(fixture);
           expect(providers).toEqual([
@@ -56,9 +50,9 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
             baseUrl: "https://arbitrary.example/v1",
             templateId: "deepseek",
           });
-          expect(customCreate.status).toBe(400);
-          expect(customCreate.body).toMatchObject({
+          expect(customCreate).toMatchObject({
             error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
+            status: 200,
           });
 
           const legacyCustomCreate = await postProviderForm(page, {
@@ -68,9 +62,9 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
             providerKey: "custom",
             providerType: "api_key",
           });
-          expect(legacyCustomCreate.status).toBe(400);
-          expect(legacyCustomCreate.body).toMatchObject({
+          expect(legacyCustomCreate).toMatchObject({
             error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
+            status: 200,
           });
 
           const customUpdate = await postProviderForm(page, {
@@ -79,9 +73,9 @@ test("whitelisted template accepted arbitrary custom endpoint rejected", async (
             displayName: "DeepSeek",
             id: await readDeepSeekProviderId(fixture),
           });
-          expect(customUpdate.status).toBe(400);
-          expect(customUpdate.body).toMatchObject({
+          expect(customUpdate).toMatchObject({
             error: expect.stringMatching(/template provider base URL cannot be changed/i),
+            status: 200,
           });
         } finally {
           await context.close();
@@ -139,16 +133,18 @@ async function readDeepSeekProviderId(
 async function postProviderForm(
   page: Page,
   form: Record<string, string>,
-): Promise<{ body: unknown; status: number }> {
+): Promise<{ error: string | null; status: number; url: string }> {
   return page.evaluate(async (formInput) => {
     const response = await fetch("/api/providers", {
       body: new URLSearchParams(formInput),
       headers: { "content-type": "application/x-www-form-urlencoded" },
       method: "POST",
     });
+    const url = new URL(response.url);
     return {
-      body: await response.json(),
+      error: url.searchParams.get("providerError"),
       status: response.status,
+      url: response.url,
     };
   }, form);
 }

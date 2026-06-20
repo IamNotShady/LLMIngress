@@ -205,7 +205,7 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'auto-budget-default', 'Auto Budget Default', true),
              ($2, 'auto-budget-allowed', 'Auto Budget Allowed', true),
              ($3, 'auto-budget-unrelated', 'Auto Budget Unrelated', true)

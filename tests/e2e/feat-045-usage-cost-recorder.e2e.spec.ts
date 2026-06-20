@@ -213,7 +213,7 @@ async function seedUsageRoutes(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'usage-cost-known', 'Usage Cost Known', true),
              ($2, 'usage-cost-unknown', 'Usage Cost Unknown', true)
     `,

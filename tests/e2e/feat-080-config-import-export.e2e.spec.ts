@@ -68,12 +68,10 @@ test("config import export redacts secrets validates publishes config version an
 
           await expect(page.getByText(/Config import published version v\d+/)).toBeVisible();
           await page.goto(`${baseUrl}/agents`);
-          await expect(
-            page.getByRole("heading", { exact: true, name: "Imported Config Agent" }),
-          ).toBeVisible();
+          await expect(page.locator("table.agents-table")).toContainText("Imported Config Agent");
           await page.goto(`${baseUrl}/providers`);
           await openRow(page, "Config Export DeepSeek");
-          await expect(page.getByText("Provider API key prefix: sk-cfg80")).toBeVisible();
+          await expect(page.locator("table.provider-key-table td.mono")).toContainText("sk-cfg80");
         } finally {
           await context.close();
         }
@@ -138,7 +136,7 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
     [ids.providerApiKeyId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'config-e2e', 'Config E2E', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'config-e2e', 'Config E2E', true)",
     [ids.virtualModelId],
   );
   await fixture.query(

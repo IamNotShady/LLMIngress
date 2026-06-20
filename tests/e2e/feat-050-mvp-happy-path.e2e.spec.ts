@@ -53,8 +53,7 @@ test("clean setup request activity usage and hot reload after route change", asy
           await storeProviderApiKey(page);
           await page.goto(`${consoleBaseUrl}/models`);
           await createVirtualModelAndRoutePolicy(page, {
-            optionLabel: modelOptions.initial.optionLabel,
-            selectorLabel: modelOptions.initial.selectorLabel,
+            id: modelOptions.initial.id,
           });
           await page.goto(`${consoleBaseUrl}/agents`);
           const agentApiKey = await createAgentApiKeyWithAccessAndLimits(page);
@@ -99,16 +98,18 @@ test("clean setup request activity usage and hot reload after route change", asy
               }),
             ).toBeVisible();
 
-            await page.goto(`${consoleBaseUrl}/routing`);
-            await openRow(page, mvpHappyPathNames.virtualModelDisplayName);
-            await page
-              .getByLabel("Edit primary provider models")
-              .selectOption({ label: modelOptions.reloaded.selectorLabel });
-            await page.getByRole("button", { name: "Save route policy" }).click();
-            await openRow(page, mvpHappyPathNames.virtualModelDisplayName);
-            await expect(
-              page.getByText(`Primary: ${modelOptions.reloaded.optionLabel}`),
-            ).toBeVisible();
+            const virtualModelId = await readVirtualModelId(fixture);
+            const routePolicyId = await readRoutePolicyId(fixture);
+            await postRoutePolicyAction(page, {
+              action: "update",
+              id: routePolicyId,
+              primaryProviderModelIds: [modelOptions.reloaded.id],
+              strategy: "fixed",
+              virtualModelId,
+            });
+            await expect
+              .poll(() => readPrimaryProviderModelId(fixture))
+              .toBe(modelOptions.reloaded.id);
             const targetConfigVersion = await readLatestConfigVersion(fixture);
             await waitForGatewayConfigVersion(gatewayBaseUrl, targetConfigVersion);
             expect(gateway.child.pid).toBe(gatewayPid);
@@ -220,45 +221,31 @@ async function saveManualPriceOverride(
 
 async function storeProviderApiKey(page: Page): Promise<void> {
   await openRow(page, mvpHappyPathNames.providerDisplayName);
-  await page.getByLabel("Provider API key").fill(providerApiKey);
-  await page.getByRole("button", { name: "Store provider API key" }).click();
+  await page.getByRole("link", { name: "Add API key" }).click();
+  await page
+    .getByRole("dialog", { name: /API key/ })
+    .getByRole("textbox", { name: "Provider API key" })
+    .fill(providerApiKey);
+  await page.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await expect(page.locator("code")).toHaveText(providerApiKey);
   await page.getByRole("link", { name: "Back to dashboard" }).click();
   await openRow(page, mvpHappyPathNames.providerDisplayName);
-  await expect(
-    page.getByText(`Provider API key prefix: ${providerApiKey.slice(0, 8)}`),
-  ).toBeVisible();
+  await expect(page.locator("table.provider-key-table td.mono")).toHaveText(
+    providerApiKey.slice(0, 8),
+  );
 }
 
 async function createVirtualModelAndRoutePolicy(
   page: Page,
-  initialModelOption: { optionLabel: string; selectorLabel: string },
+  initialModelOption: { id: string },
 ): Promise<void> {
-  await openDisclosure(page, "New virtual model");
-  await page
-    .getByRole("textbox", { name: "Virtual model name" })
-    .fill(mvpHappyPathNames.virtualModelDisplayName);
-  await page
-    .getByRole("textbox", { name: "Virtual model display name" })
-    .fill(mvpHappyPathNames.virtualModelDisplayName);
-  await page.getByRole("button", { name: "Create virtual model" }).click();
-  await expect(
-    page.getByRole("heading", { exact: true, name: mvpHappyPathNames.virtualModelDisplayName }),
-  ).toBeVisible();
-
-  await page.goto(new URL("/routing", page.url()).href);
-  await openDisclosure(page, "New route policy");
-  await page.getByLabel("Route policy virtual model").selectOption({
-    label: `${mvpHappyPathNames.virtualModelDisplayName} (${mvpHappyPathNames.virtualModelName})`,
+  await postVirtualModelWithRoute(page, {
+    description: mvpHappyPathNames.virtualModelDisplayName,
+    name: mvpHappyPathNames.virtualModelName,
+    primaryProviderModelIds: [initialModelOption.id],
+    strategy: "fixed",
   });
-  await page.getByLabel("Route policy strategy").selectOption("fixed");
-  await page
-    .getByLabel("Primary provider models")
-    .selectOption({ label: initialModelOption.selectorLabel });
-  await page.getByRole("button", { name: "Create route policy" }).click();
-  await openRow(page, mvpHappyPathNames.virtualModelDisplayName);
-  await expect(page.getByText(`Primary: ${initialModelOption.optionLabel}`)).toBeVisible();
 }
 
 async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string> {
@@ -274,7 +261,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await openRow(page, "MVP Codex");
   await page.getByLabel("Allowed virtual models").selectOption({ label: virtualModelLabel });
   await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
-  await page.getByRole("button", { name: "Save Agent virtual models" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await openRow(page, "MVP Codex");
   await expect(page.getByLabel("Default virtual model").locator("option:checked")).toHaveText(
     virtualModelLabel,
@@ -285,7 +272,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   await page.getByLabel("RPM limit").fill("120");
   await page.getByLabel("TPM limit").fill("120000");
   await page.getByLabel("Token limit").fill("12000");
-  await page.getByRole("button", { name: "Save Agent limits" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await openRow(page, "MVP Codex");
   await expect(page.getByLabel("Budget USD limit")).toHaveValue("100");
 
@@ -405,6 +392,89 @@ async function readLatestConfigVersion(fixture: Fixture): Promise<number> {
     "select coalesce(max(version), 0)::integer as version from config_versions",
   );
   return result.rows[0]?.version ?? 0;
+}
+
+async function readVirtualModelId(fixture: Fixture): Promise<string> {
+  const result = await fixture.query<{ id: string }>(
+    "select id::text from virtual_models where name = $1",
+    [mvpHappyPathNames.virtualModelName],
+  );
+  const id = result.rows[0]?.id;
+  if (!id) {
+    throw new Error("MVP virtual model was not found.");
+  }
+  return id;
+}
+
+async function readRoutePolicyId(fixture: Fixture): Promise<string> {
+  const result = await fixture.query<{ id: string }>("select id::text from route_policies");
+  const id = result.rows[0]?.id;
+  if (!id) {
+    throw new Error("MVP route policy was not found.");
+  }
+  return id;
+}
+
+async function readPrimaryProviderModelId(fixture: Fixture): Promise<string | null> {
+  const result = await fixture.query<{ provider_model_id: string }>(
+    `
+      select provider_model_id::text
+      from route_policy_candidates
+      where is_fallback = false
+      order by candidate_order
+      limit 1
+    `,
+  );
+  return result.rows[0]?.provider_model_id ?? null;
+}
+
+async function postVirtualModelWithRoute(
+  page: Page,
+  input: {
+    description: string;
+    name: string;
+    primaryProviderModelIds: string[];
+    strategy: string;
+  },
+): Promise<void> {
+  const result = await page.evaluate(async (payload) => {
+    const body = new FormData();
+    body.set("action", "createWithRoute");
+    body.set("name", payload.name);
+    body.set("description", payload.description);
+    body.set("strategy", payload.strategy);
+    for (const providerModelId of payload.primaryProviderModelIds) {
+      body.append("primaryProviderModelIds", providerModelId);
+    }
+    const response = await fetch("/api/virtual-models", { body, method: "POST" });
+    return { status: response.status, text: await response.text() };
+  }, input);
+  expect(result.status, result.text).toBe(200);
+}
+
+async function postRoutePolicyAction(
+  page: Page,
+  input: {
+    action: string;
+    id: string;
+    primaryProviderModelIds: string[];
+    strategy: string;
+    virtualModelId: string;
+  },
+): Promise<void> {
+  const result = await page.evaluate(async (payload) => {
+    const body = new FormData();
+    body.set("action", payload.action);
+    body.set("id", payload.id);
+    body.set("virtualModelId", payload.virtualModelId);
+    body.set("strategy", payload.strategy);
+    for (const providerModelId of payload.primaryProviderModelIds) {
+      body.append("primaryProviderModelIds", providerModelId);
+    }
+    const response = await fetch("/api/route-policies", { body, method: "POST" });
+    return { status: response.status, text: await response.text() };
+  }, input);
+  expect(result.status, result.text).toBe(200);
 }
 
 async function waitForGatewayConfigVersion(baseUrl: string, version: number): Promise<void> {

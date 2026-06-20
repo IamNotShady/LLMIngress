@@ -364,6 +364,8 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                virtual_models.description as virtual_model_display_name
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
+        where route_policies.deleted_at is null
+          and virtual_models.deleted_at is null
         order by virtual_models.name
       `,
     );
@@ -399,6 +401,8 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
                 where route_policy_candidates.route_policy_id = any($1::uuid[])
+                  and providers.deleted_at is null
+                  and provider_models.deleted_at is null
                 order by route_policy_candidates.candidate_order
               `,
               [policyIds],
@@ -529,7 +533,14 @@ export async function deleteRoutePolicy(input: { databaseUrl: string; id: string
     write: async (client) => {
       await readRoutePolicyForUpdate(client, input.id);
       const result = await client.query<{ id: string }>(
-        "delete from route_policies where id = $1 returning id::text",
+        `
+          update route_policies
+          set deleted_at = now(),
+              updated_at = now()
+          where id = $1
+            and deleted_at is null
+          returning id::text
+        `,
         [input.id],
       );
       if (!result.rows[0]) {
@@ -543,9 +554,10 @@ async function assertVirtualModelExists(
   client: QueryClient,
   virtualModelId: string,
 ): Promise<void> {
-  const result = await client.query("select 1 from virtual_models where id = $1 for update", [
-    virtualModelId,
-  ]);
+  const result = await client.query(
+    "select 1 from virtual_models where id = $1 and deleted_at is null for update",
+    [virtualModelId],
+  );
   if (!result.rows[0]) {
     throw new Error("Virtual Model was not found.");
   }
@@ -556,7 +568,7 @@ async function assertVirtualModelHasNoRoutePolicy(
   virtualModelId: string,
 ): Promise<void> {
   const result = await client.query(
-    "select 1 from route_policies where virtual_model_id = $1 limit 1",
+    "select 1 from route_policies where virtual_model_id = $1 and deleted_at is null limit 1",
     [virtualModelId],
   );
   if (result.rows[0]) {
@@ -569,7 +581,14 @@ async function assertProviderModelsExist(
   providerModelIds: readonly string[],
 ): Promise<void> {
   const result = await client.query<{ id: string }>(
-    "select id::text from provider_models where id = any($1::uuid[])",
+    `
+      select provider_models.id::text
+      from provider_models
+      join providers on providers.id = provider_models.provider_id
+      where provider_models.id = any($1::uuid[])
+        and provider_models.deleted_at is null
+        and providers.deleted_at is null
+    `,
     [providerModelIds],
   );
   const foundIds = new Set(result.rows.map((row) => row.id));
@@ -620,6 +639,7 @@ async function readBudgetedVirtualModelUsage(
       from virtual_models
       left join agents
         on agents.enabled = true
+       and agents.deleted_at is null
        and (
             agents.default_virtual_model_id = virtual_models.id
             or exists (
@@ -635,6 +655,7 @@ async function readBudgetedVirtualModelUsage(
        and agent_limits.limit_type = 'budget'
        and agent_limits.unit = 'usd'
       where virtual_models.id = $1
+        and virtual_models.deleted_at is null
       group by virtual_models.id, virtual_models.name, virtual_models.description
     `,
     [virtualModelId],
@@ -654,6 +675,8 @@ async function readProviderModelOptionsById(
     `
       ${providerModelOptionsSelectSql()}
       where provider_models.id = any($1::uuid[])
+        and provider_models.deleted_at is null
+        and providers.deleted_at is null
       order by providers.display_name, provider_models.display_name
     `,
     [providerModelIds],
@@ -675,6 +698,8 @@ async function readRoutePolicyForUpdate(
       from route_policies
       join virtual_models on virtual_models.id = route_policies.virtual_model_id
       where route_policies.id = $1
+        and route_policies.deleted_at is null
+        and virtual_models.deleted_at is null
       for update of route_policies
     `,
     [routePolicyId],
@@ -746,6 +771,8 @@ async function writeRoutePolicyCandidates(
         from inserted
         join provider_models on provider_models.id = inserted.provider_model_id
         join providers on providers.id = provider_models.provider_id
+        where provider_models.deleted_at is null
+          and providers.deleted_at is null
       `,
       [randomUUID(), routePolicyId, candidate.providerModelId, index + 1, candidate.isFallback],
     );
@@ -791,6 +818,8 @@ function isUuid(value: string): boolean {
 function providerModelOptionsSql(): string {
   return `
     ${providerModelOptionsSelectSql()}
+    where provider_models.deleted_at is null
+      and providers.deleted_at is null
     order by providers.display_name, provider_models.display_name
   `;
 }

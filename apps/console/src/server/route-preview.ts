@@ -151,7 +151,11 @@ async function loadRoutePreviewPolicies(databaseUrl: string): Promise<RoutePolic
         join provider_models on provider_models.id = route_policy_candidates.provider_model_id
         join providers on providers.id = provider_models.provider_id
         where virtual_models.enabled = true
+          and virtual_models.deleted_at is null
+          and route_policies.deleted_at is null
           and providers.enabled = true
+          and providers.deleted_at is null
+          and provider_models.deleted_at is null
           and provider_models.availability = 'available'
         order by virtual_models.name,
                  route_policies.id,

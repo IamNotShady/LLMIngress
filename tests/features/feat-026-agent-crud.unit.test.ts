@@ -35,7 +35,7 @@ describe("feat-026 agent CRUD", () => {
     ).toThrow(/agent type/i);
   });
 
-  it("reports dependency errors before deleting agents", () => {
+  it("allows deleting agents with historical request attribution", () => {
     expect(
       getAgentDeleteDependencyError({
         requestAttributionCount: 0,
@@ -46,7 +46,7 @@ describe("feat-026 agent CRUD", () => {
       getAgentDeleteDependencyError({
         requestAttributionCount: 1,
       }),
-    ).toMatch(/request attribution/i);
+    ).toBeNull();
 
     expect(
       getAgentDeleteDependencyError({

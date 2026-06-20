@@ -240,7 +240,7 @@ async function readRoutePolicyState(fixture: Fixture): Promise<RoutePolicyState>
 
 async function countRoutePolicies(fixture: Fixture): Promise<number> {
   const result = await fixture.query<{ count: number }>(
-    "select count(*)::integer as count from route_policies",
+    "select count(*)::integer as count from route_policies where deleted_at is null",
   );
   return result.rows[0]?.count ?? 0;
 }

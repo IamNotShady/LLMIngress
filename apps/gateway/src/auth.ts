@@ -140,6 +140,7 @@ async function readAgentApiKeyByHash(
                agents.request_logging_enabled
         from agents
         where agents.key_hash = $1
+          and agents.deleted_at is null
       `,
       [keyHash],
     );

@@ -6,7 +6,7 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
-test("agent crud works and delete with request attribution is blocked", async ({ browser }) => {
+test("agent crud works and delete with request attribution soft-deletes", async ({ browser }) => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_agent_crud_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -58,11 +58,9 @@ test("agent crud works and delete with request attribution is blocked", async ({
           await expect(page.getByRole("row", { name: /Active Key Agent/ })).toBeVisible();
           await expect(page.getByRole("row", { name: /Attributed Agent/ })).toBeVisible();
 
-          await expectAgentActionError(
-            page,
-            protectedAgents.attributedAgentId,
-            /request attribution/i,
-          );
+          await deleteAgentByApi(page, protectedAgents.attributedAgentId);
+          await page.reload();
+          await expect(page.getByRole("row", { name: /Attributed Agent/ })).toHaveCount(0);
         } finally {
           await context.close();
         }
@@ -118,27 +116,25 @@ async function insertProtectedAgents(fixture: Fixture): Promise<ProtectedAgents>
   return { attributedAgentId };
 }
 
-async function expectAgentActionError(
-  page: Page,
-  agentId: string,
-  errorPattern: RegExp,
-): Promise<void> {
+async function deleteAgentByApi(page: Page, agentId: string): Promise<void> {
   const result = await page.evaluate(
     async ({ id }) => {
       const body = new FormData();
       body.set("action", "delete");
       body.set("id", id);
-      const response = await fetch("/api/agents", { body, method: "POST" });
+      const response = await fetch("/api/agents", {
+        body,
+        method: "POST",
+        redirect: "manual",
+      });
       return {
-        body: await response.json(),
         status: response.status,
       };
     },
     { id: agentId },
   );
 
-  expect(result.status).toBe(400);
-  expect(result.body).toEqual({ error: expect.stringMatching(errorPattern) });
+  expect([0, 303]).toContain(result.status);
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

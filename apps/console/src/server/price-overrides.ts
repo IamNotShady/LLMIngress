@@ -32,6 +32,8 @@ export async function getManualPriceOverride(input: {
         join providers on providers.id = provider_models.provider_id
         where lower(providers.provider_key) = lower($1)
           and provider_models.model_id = $2
+          and providers.deleted_at is null
+          and provider_models.deleted_at is null
           and provider_models.manual_input_usd_per_million_tokens is not null
           and provider_models.manual_output_usd_per_million_tokens is not null
           and provider_models.manual_price_updated_at is not null
@@ -75,6 +77,8 @@ export async function saveManualPriceOverride(input: {
           where providers.id = provider_models.provider_id
             and lower(providers.provider_key) = lower($1)
             and provider_models.model_id = $2
+            and providers.deleted_at is null
+            and provider_models.deleted_at is null
           returning provider_models.id::text as id,
                     providers.provider_key,
                     provider_models.model_id,

@@ -273,6 +273,7 @@ async function readProviders(client: QueryClient): Promise<Omit<ExportedProvider
              base_url,
              enabled
       from providers
+      where deleted_at is null
       order by provider_key
     `,
   );
@@ -303,6 +304,7 @@ async function readProviderModels(
              capability_metadata,
              availability
       from provider_models
+      where deleted_at is null
       order by provider_id, model_id
     `,
   );
@@ -329,10 +331,14 @@ async function readProviderApiKeys(
 ): Promise<Map<string, ExportedProviderApiKey[]>> {
   const result = await client.query<ProviderApiKeyRow>(
     `
-      select provider_id::text,
-             key_prefix
+      select provider_api_keys.provider_id::text,
+             provider_api_keys.key_prefix
       from provider_api_keys
-      order by provider_id, created_at, id
+      join providers on providers.id = provider_api_keys.provider_id
+      where providers.deleted_at is null
+      order by provider_api_keys.provider_id,
+               provider_api_keys.created_at,
+               provider_api_keys.id
     `,
   );
   const grouped = new Map<string, ExportedProviderApiKey[]>();
@@ -355,6 +361,7 @@ async function readVirtualModels(client: QueryClient): Promise<ExportedVirtualMo
              description as display_name,
              enabled
       from virtual_models
+      where deleted_at is null
       order by name
     `,
   );
@@ -369,11 +376,14 @@ async function readVirtualModels(client: QueryClient): Promise<ExportedVirtualMo
 async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePolicy[]> {
   const policies = await client.query<RoutePolicyRow>(
     `
-      select id::text,
-             virtual_model_id::text,
-             rules,
-             strategy
+      select route_policies.id::text,
+             route_policies.virtual_model_id::text,
+             route_policies.rules,
+             route_policies.strategy
       from route_policies
+      join virtual_models on virtual_models.id = route_policies.virtual_model_id
+      where route_policies.deleted_at is null
+        and virtual_models.deleted_at is null
       order by id
     `,
   );
@@ -384,6 +394,12 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
              candidate_order,
              is_fallback
       from route_policy_candidates
+      join route_policies on route_policies.id = route_policy_candidates.route_policy_id
+      join provider_models on provider_models.id = route_policy_candidates.provider_model_id
+      join providers on providers.id = provider_models.provider_id
+      where route_policies.deleted_at is null
+        and provider_models.deleted_at is null
+        and providers.deleted_at is null
       order by route_policy_id, candidate_order
     `,
   );
@@ -414,37 +430,47 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
 async function readAgents(client: QueryClient): Promise<ExportedAgent[]> {
   const agents = await client.query<AgentRow>(
     `
-        select id::text,
-               name,
-               agent_type,
-               key_prefix,
-               default_virtual_model_id::text,
-               enabled
+        select agents.id::text,
+               agents.name,
+               agents.agent_type,
+               agents.key_prefix,
+               agents.default_virtual_model_id::text,
+               agents.enabled
         from agents
+        where deleted_at is null
         order by name
       `,
   );
   const access = await client.query<AgentVirtualModelRow>(
     `
-        select agent_id::text as agent_id,
-               virtual_model_id::text
+        select agent_virtual_models.agent_id::text as agent_id,
+               agent_virtual_models.virtual_model_id::text
         from agent_virtual_models
-        order by agent_id, virtual_model_id
+        join agents on agents.id = agent_virtual_models.agent_id
+        join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
+        where agents.deleted_at is null
+          and virtual_models.deleted_at is null
+        order by agent_virtual_models.agent_id,
+                 agent_virtual_models.virtual_model_id
       `,
   );
   const limits = await client.query<AgentLimitRow>(
     `
-        select agent_id::text as agent_id,
-               limit_type,
-               period,
-               limit_value::text,
-               unit,
-               enabled,
-               alert_threshold::text,
-               enforcement_policy,
-               manual_bypass
+        select agent_limits.agent_id::text as agent_id,
+               agent_limits.limit_type,
+               agent_limits.period,
+               agent_limits.limit_value::text,
+               agent_limits.unit,
+               agent_limits.enabled,
+               agent_limits.alert_threshold::text,
+               agent_limits.enforcement_policy,
+               agent_limits.manual_bypass
         from agent_limits
-        order by agent_id, limit_type, period
+        join agents on agents.id = agent_limits.agent_id
+        where agents.deleted_at is null
+        order by agent_limits.agent_id,
+                 agent_limits.limit_type,
+                 agent_limits.period
       `,
   );
   const accessByAgentId = groupRows(access.rows, (row) => row.agent_id);
@@ -488,9 +514,10 @@ async function writeProviders(
     await client.query(
       `
         insert into providers (
-          id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled
+          id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled,
+          deleted_at
         )
-        values ($1, $2, $3, $4, $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6, $7, null)
         on conflict (id) do update
         set provider_type = excluded.provider_type,
             provider_key = excluded.provider_key,
@@ -498,6 +525,7 @@ async function writeProviders(
             display_name = excluded.display_name,
             base_url = excluded.base_url,
             enabled = excluded.enabled,
+            deleted_at = null,
             updated_at = now()
       `,
       [
@@ -523,9 +551,9 @@ async function writeProviderModels(
         `
           insert into provider_models (
             id, provider_id, model_id, display_name, context_window, supports_streaming,
-            supports_tools, availability, capability_metadata
+            supports_tools, availability, capability_metadata, deleted_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, null)
           on conflict (id) do update
           set provider_id = excluded.provider_id,
               model_id = excluded.model_id,
@@ -535,6 +563,7 @@ async function writeProviderModels(
               supports_tools = excluded.supports_tools,
               availability = excluded.availability,
               capability_metadata = excluded.capability_metadata,
+              deleted_at = null,
               updated_at = now()
         `,
         [
@@ -560,12 +589,13 @@ async function writeVirtualModels(
   for (const virtualModel of virtualModels) {
     await client.query(
       `
-        insert into virtual_models (id, name, description, enabled)
-        values ($1, $2, $3, $4)
+        insert into virtual_models (id, name, description, enabled, deleted_at)
+        values ($1, $2, $3, $4, null)
         on conflict (id) do update
         set name = excluded.name,
             description = excluded.description,
             enabled = excluded.enabled,
+            deleted_at = null,
             updated_at = now()
       `,
       [virtualModel.id, virtualModel.name, virtualModel.displayName, virtualModel.enabled],
@@ -577,8 +607,10 @@ async function writeAgents(client: QueryClient, agents: readonly ExportedAgent[]
   for (const agent of agents) {
     await client.query(
       `
-        insert into agents (id, name, agent_type, key_prefix, key_hash, default_virtual_model_id, enabled)
-        values ($1, $2, $3, $4, $5, $6, $7)
+        insert into agents (
+          id, name, agent_type, key_prefix, key_hash, default_virtual_model_id, enabled, deleted_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, null)
         on conflict (id) do update
         set name = excluded.name,
             agent_type = excluded.agent_type,
@@ -586,6 +618,7 @@ async function writeAgents(client: QueryClient, agents: readonly ExportedAgent[]
             key_hash = coalesce(agents.key_hash, excluded.key_hash),
             default_virtual_model_id = excluded.default_virtual_model_id,
             enabled = excluded.enabled,
+            deleted_at = null,
             updated_at = now()
       `,
       [
@@ -670,12 +703,13 @@ async function writeRoutePolicies(
   for (const routePolicy of routePolicies) {
     await client.query(
       `
-        insert into route_policies (id, virtual_model_id, strategy, rules)
-        values ($1, $2, $3, $4::jsonb)
+        insert into route_policies (id, virtual_model_id, strategy, rules, deleted_at)
+        values ($1, $2, $3, $4::jsonb, null)
         on conflict (id) do update
         set virtual_model_id = excluded.virtual_model_id,
             strategy = excluded.strategy,
             rules = excluded.rules,
+            deleted_at = null,
             updated_at = now()
       `,
       [

@@ -466,6 +466,7 @@ async function readProvider(databaseUrl: string, providerId: string): Promise<Pr
         from providers
         where id = $1
           and enabled = true
+          and deleted_at is null
       `,
       [providerId],
     );
@@ -502,6 +503,7 @@ async function readExistingProviderModels(
                ) as referenced
         from provider_models
         where provider_models.provider_id = $1
+          and provider_models.deleted_at is null
         order by provider_models.model_id
       `,
       [providerId],
@@ -688,6 +690,7 @@ async function applyProviderModelRefreshPlan(
             ) || $6::jsonb,
             updated_at = now()
         where id = $1
+          and deleted_at is null
       `,
       [
         model.id,
@@ -707,6 +710,7 @@ async function applyProviderModelRefreshPlan(
         set availability = 'unavailable',
             updated_at = now()
         where id = $1
+          and deleted_at is null
       `,
       [model.id],
     );
@@ -719,6 +723,7 @@ async function applyProviderModelRefreshPlan(
         set availability = 'not_listed',
             updated_at = now()
         where id = $1
+          and deleted_at is null
       `,
       [model.id],
     );

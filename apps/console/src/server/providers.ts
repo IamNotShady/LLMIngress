@@ -101,6 +101,7 @@ export async function listProviders(databaseUrl: string): Promise<ConsoleProvide
                default_priority,
                enabled
         from providers
+        where deleted_at is null
         order by provider_key
       `,
     );
@@ -247,6 +248,7 @@ export async function updateProvider(input: {
                      enabled
               from providers
               where id = $1
+                and deleted_at is null
               for update
             `,
             [input.id],
@@ -262,6 +264,7 @@ export async function updateProvider(input: {
               default_priority = $4,
               updated_at = now()
           where id = $1
+            and deleted_at is null
           returning id::text,
                     provider_type,
                     provider_key,
@@ -298,6 +301,7 @@ export async function setProviderEnabled(input: {
           set enabled = $2,
               updated_at = now()
           where id = $1
+            and deleted_at is null
           returning id::text,
                     provider_type,
                     provider_key,

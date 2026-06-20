@@ -108,10 +108,6 @@ type AgentQueryClient = {
   ) => Promise<{ rows: T[] }>;
 };
 
-type AgentDependencyRow = QueryResultRow & {
-  request_attribution_count: number;
-};
-
 type AgentVirtualModelAccessBaseRow = QueryResultRow & {
   agent_id: string;
   default_virtual_model_display_name: string | null;
@@ -210,10 +206,7 @@ export function deriveAgentStatus(input: {
   return now.getTime() - latestRequestAt.getTime() <= onlineWindowMs ? "online" : "offline";
 }
 
-export function getAgentDeleteDependencyError(input: AgentDependencyCounts): string | null {
-  if (input.requestAttributionCount > 0) {
-    return "Cannot delete agent with request attribution.";
-  }
+export function getAgentDeleteDependencyError(_input: AgentDependencyCounts): string | null {
   return null;
 }
 
@@ -264,6 +257,8 @@ export async function listAgents(databaseUrl: string): Promise<ConsoleAgent[]> {
                    on route_policy_candidates.route_policy_id = route_policies.id
                  join provider_models
                    on provider_models.id = route_policy_candidates.provider_model_id
+                 join providers
+                   on providers.id = provider_models.provider_id
                  join provider_health_summary
                    on provider_health_summary.provider_id = provider_models.provider_id
                   and (
@@ -271,6 +266,9 @@ export async function listAgents(databaseUrl: string): Promise<ConsoleAgent[]> {
                     or provider_health_summary.provider_model_id = provider_models.id
                   )
                  where agent_virtual_models.agent_id = agents.id
+                   and route_policies.deleted_at is null
+                   and providers.deleted_at is null
+                   and provider_models.deleted_at is null
                    and provider_health_summary.status = 'unhealthy'
                ) as unhealthy_reachable_provider_count,
                greatest(
@@ -339,6 +337,7 @@ export async function listAgents(databaseUrl: string): Promise<ConsoleAgent[]> {
                  )
                ) as limit_usage_ratio
         from agents
+        where agents.deleted_at is null
         order by agents.name
       `,
     );
@@ -535,6 +534,7 @@ export async function updateAgent(input: {
               request_logging_enabled = $5,
               updated_at = now()
           where id = $1
+            and deleted_at is null
           returning id::text,
                     name,
                     agent_type,
@@ -594,15 +594,17 @@ export async function deleteAgent(input: { databaseUrl: string; id: string }): P
     changes: [{ table: "agents", recordId: input.id }],
     write: async (client) => {
       await assertAgentExists(client, input.id);
-      const dependencyError = getAgentDeleteDependencyError(
-        await readAgentDependencyCounts(client, input.id),
-      );
-      if (dependencyError) {
-        throw new Error(dependencyError);
-      }
 
       const result = await client.query<{ id: string }>(
-        "delete from agents where id = $1 returning id::text",
+        `
+          update agents
+          set deleted_at = now(),
+              enabled = false,
+              updated_at = now()
+          where id = $1
+            and deleted_at is null
+          returning id::text
+        `,
         [input.id],
       );
       if (!result.rows[0]) {
@@ -613,30 +615,13 @@ export async function deleteAgent(input: { databaseUrl: string; id: string }): P
 }
 
 async function assertAgentExists(client: AgentQueryClient, agentId: string): Promise<void> {
-  const result = await client.query("select 1 from agents where id = $1 for update", [agentId]);
+  const result = await client.query(
+    "select 1 from agents where id = $1 and deleted_at is null for update",
+    [agentId],
+  );
   if (!result.rows[0]) {
     throw new Error("Agent was not found.");
   }
-}
-
-async function readAgentDependencyCounts(
-  client: AgentQueryClient,
-  agentId: string,
-): Promise<AgentDependencyCounts> {
-  const result = await client.query<AgentDependencyRow>(
-    `
-      select (
-               select count(*)::integer
-               from request_activity
-               where request_activity.agent_id = $1
-             ) as request_attribution_count
-    `,
-    [agentId],
-  );
-  const row = requireRow(result.rows[0]);
-  return {
-    requestAttributionCount: row.request_attribution_count,
-  };
 }
 
 async function assertVirtualModelsAvailable(
@@ -652,6 +637,7 @@ async function assertVirtualModelsAvailable(
       select id::text
       from virtual_models
       where enabled = true
+        and deleted_at is null
         and id = any($1::uuid[])
     `,
     [virtualModelIds],
@@ -683,7 +669,9 @@ async function readAgentVirtualModelAccess(
       from agents
       left join virtual_models default_virtual_models
         on default_virtual_models.id = agents.default_virtual_model_id
-      where ($1::uuid is null or agents.id = $1::uuid)
+       and default_virtual_models.deleted_at is null
+      where agents.deleted_at is null
+        and ($1::uuid is null or agents.id = $1::uuid)
       order by agents.created_at
     `,
     [agentId ?? null],
@@ -696,7 +684,10 @@ async function readAgentVirtualModelAccess(
              virtual_models.description as display_name
       from agent_virtual_models
       join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
-      where ($1::uuid is null or agent_virtual_models.agent_id = $1::uuid)
+      join agents on agents.id = agent_virtual_models.agent_id
+      where agents.deleted_at is null
+        and virtual_models.deleted_at is null
+        and ($1::uuid is null or agent_virtual_models.agent_id = $1::uuid)
       order by virtual_models.name
     `,
     [agentId ?? null],

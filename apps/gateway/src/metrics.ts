@@ -86,8 +86,10 @@ async function collectPrometheusMetricsSnapshot(databaseUrl: string): Promise<{
     const gatewayRequests = await client.query<GatewayRequestMetricRow>(
       `
         select request_activity.protocol,
-               coalesce(providers.provider_key, 'unknown') as provider,
-               coalesce(provider_models.model_id, 'unknown') as model,
+               coalesce(request_activity.provider_key_snapshot, providers.provider_key, 'unknown')
+                 as provider,
+               coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id, 'unknown')
+                 as model,
                request_activity.status,
                count(*)::integer as count
         from request_activity
@@ -95,12 +97,20 @@ async function collectPrometheusMetricsSnapshot(databaseUrl: string): Promise<{
         left join provider_models on provider_models.id = request_activity.provider_model_id
         where request_activity.status in ('succeeded', 'failed', 'canceled')
         group by request_activity.protocol,
-                 coalesce(providers.provider_key, 'unknown'),
-                 coalesce(provider_models.model_id, 'unknown'),
+                 coalesce(request_activity.provider_key_snapshot, providers.provider_key, 'unknown'),
+                 coalesce(
+                   request_activity.provider_model_name_snapshot,
+                   provider_models.model_id,
+                   'unknown'
+                 ),
                  request_activity.status
         order by request_activity.protocol,
-                 coalesce(providers.provider_key, 'unknown'),
-                 coalesce(provider_models.model_id, 'unknown'),
+                 coalesce(request_activity.provider_key_snapshot, providers.provider_key, 'unknown'),
+                 coalesce(
+                   request_activity.provider_model_name_snapshot,
+                   provider_models.model_id,
+                   'unknown'
+                 ),
                  request_activity.status
       `,
     );
@@ -118,17 +128,28 @@ async function collectPrometheusMetricsSnapshot(databaseUrl: string): Promise<{
     );
     const gatewayCosts = await client.query<GatewayCostMetricRow>(
       `
-        select coalesce(providers.provider_key, 'unknown') as provider,
-               coalesce(provider_models.model_id, 'unknown') as model,
+        select coalesce(request_activity.provider_key_snapshot, providers.provider_key, 'unknown')
+                 as provider,
+               coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id, 'unknown')
+                 as model,
                coalesce(sum(request_costs.total_cost_usd), 0)::text as total_cost_usd
         from request_costs
+        join request_activity on request_activity.id = request_costs.request_activity_id
         left join provider_models on provider_models.id = request_costs.provider_model_id
         left join providers on providers.id = provider_models.provider_id
         where request_costs.total_cost_usd is not null
-        group by coalesce(providers.provider_key, 'unknown'),
-                 coalesce(provider_models.model_id, 'unknown')
-        order by coalesce(providers.provider_key, 'unknown'),
-                 coalesce(provider_models.model_id, 'unknown')
+        group by coalesce(request_activity.provider_key_snapshot, providers.provider_key, 'unknown'),
+                 coalesce(
+                   request_activity.provider_model_name_snapshot,
+                   provider_models.model_id,
+                   'unknown'
+                 )
+        order by coalesce(request_activity.provider_key_snapshot, providers.provider_key, 'unknown'),
+                 coalesce(
+                   request_activity.provider_model_name_snapshot,
+                   provider_models.model_id,
+                   'unknown'
+                 )
       `,
     );
     const fallbackEvents = await client.query<GatewayFallbackMetricRow>(
@@ -160,6 +181,11 @@ async function collectPrometheusMetricsSnapshot(databaseUrl: string): Promise<{
         from provider_health_summary
         join providers on providers.id = provider_health_summary.provider_id
         left join provider_models on provider_models.id = provider_health_summary.provider_model_id
+        where providers.deleted_at is null
+          and (
+            provider_health_summary.provider_model_id is null
+            or provider_models.deleted_at is null
+          )
         order by providers.provider_key,
                  coalesce(provider_models.model_id, 'provider'),
                  provider_health_summary.status

@@ -1378,3 +1378,12 @@
   - Gateway writes cost and savings fields into one `request_costs` row. Console usage/analytics and Worker cost report/billing reconciliation now aggregate and update savings from `request_costs`.
   - Migration status now derives `currentSchemaVersion` from the latest applied `migration_history` id; backup coverage and architecture docs no longer list `request_savings` or `schema_version`.
   - Verification passed: feat-111 unit, feat-111 real PostgreSQL/Gateway E2E, related feat-007/009/045/071/074/079/082/085/087/095/101 regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 111 passing features re-verified.
+
+- [x] 2026-06-20 feat-112 Config Soft Delete For Runtime History:
+  - Red phase: `pnpm exec vitest run tests/features/feat-112-config-soft-delete.unit.test.ts` failed because migration `0038`, soft-delete filters, and request snapshots were missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-112-config-soft-delete.e2e.spec.ts --grep 'config deletes are soft and runtime history remains intact'` failed because historical labels followed renamed config instead of request snapshots.
+  - Added migration `0038_config_soft_delete`: `deleted_at` now exists on Agents, Providers, Provider Models, Virtual Models, and Route Policies; `request_activity` stores minimal Agent / Virtual Model / Route Policy / Provider / Provider Model label snapshots.
+  - Console Agent, Virtual Model, and Route Policy deletes now soft-delete rows while preserving runtime FK history. Active Console/Gateway/Worker config reads filter deleted rows; history/report/export readers prefer request snapshots and fall back to joined config.
+  - Kept runtime FKs restrictive and did not reintroduce active Provider key uniqueness, because migration `0033_allow_duplicate_provider_keys` and feat-100 rely on duplicate active `provider_key` rows.
+  - Regression repair: feat-026 now verifies Agent delete with request attribution soft-deletes; feat-029 active route count filters `deleted_at`; feat-087 Runtime page remains loadable when the database is pending `0038`.
+  - Verification passed: feat-112 unit and real PostgreSQL E2E, related feat-012/016/025/026/028/029/080/087 unit and E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 112 passing features re-verified. The optimized E2E batch fell back after a transient feat-084 retry scenario, and the per-feature fallback passed all features.

@@ -197,7 +197,15 @@ export async function deleteVirtualModel(input: {
       }
 
       const result = await client.query<{ id: string }>(
-        "delete from virtual_models where id = $1 returning id::text",
+        `
+          update virtual_models
+          set deleted_at = now(),
+              enabled = false,
+              updated_at = now()
+          where id = $1
+            and deleted_at is null
+          returning id::text
+        `,
         [input.id],
       );
       if (!result.rows[0]) {
@@ -208,7 +216,10 @@ export async function deleteVirtualModel(input: {
 }
 
 async function assertVirtualModelExists(client: QueryClient, id: string): Promise<void> {
-  const result = await client.query("select 1 from virtual_models where id = $1 for update", [id]);
+  const result = await client.query(
+    "select 1 from virtual_models where id = $1 and deleted_at is null for update",
+    [id],
+  );
   if (!result.rows[0]) {
     throw new Error("Virtual Model was not found.");
   }
@@ -224,6 +235,7 @@ async function assertVirtualModelNameAvailable(
       select 1
       from virtual_models
       where name = $1
+        and deleted_at is null
         and ($2::uuid is null or id <> $2::uuid)
       limit 1
     `,
@@ -244,16 +256,20 @@ async function readVirtualModelDependencyCounts(
                select count(*)::integer
                from route_policies
                where route_policies.virtual_model_id = $1
+                 and route_policies.deleted_at is null
              ) as route_policy_count,
              (
                select count(*)::integer
                from agents
                where agents.default_virtual_model_id = $1
+                 and agents.deleted_at is null
              ) as default_agent_count,
              (
                select count(*)::integer
                from agent_virtual_models
+               join agents on agents.id = agent_virtual_models.agent_id
                where agent_virtual_models.virtual_model_id = $1
+                 and agents.deleted_at is null
              ) as allowed_agent_count
     `,
     [id],
@@ -276,18 +292,23 @@ function buildVirtualModelListSql(): string {
              select count(*)::integer
              from route_policies
              where route_policies.virtual_model_id = virtual_models.id
+               and route_policies.deleted_at is null
            ) as route_policy_count,
            (
              select count(*)::integer
              from agents
              where agents.default_virtual_model_id = virtual_models.id
+               and agents.deleted_at is null
            ) as default_agent_count,
            (
              select count(*)::integer
              from agent_virtual_models
+             join agents on agents.id = agent_virtual_models.agent_id
              where agent_virtual_models.virtual_model_id = virtual_models.id
+               and agents.deleted_at is null
            ) as allowed_agent_count
     from virtual_models
+    where virtual_models.deleted_at is null
     order by virtual_models.name
   `;
 }

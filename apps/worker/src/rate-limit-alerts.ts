@@ -277,6 +277,7 @@ async function readRateLimitAlertCandidates(input: {
         join agents on agents.id = blocked.agent_id
         where blocked.limit_type is not null
           and agents.enabled = true
+          and agents.deleted_at is null
         group by blocked.agent_id,
                  blocked.agent_key_prefix,
                  agents.id,

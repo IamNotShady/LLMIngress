@@ -191,6 +191,7 @@ async function countProviderFailureSummaries(databaseUrl: string): Promise<numbe
         where provider_health_summary.status in ('degraded', 'unhealthy')
           and provider_health_summary.consecutive_failures > 0
           and providers.enabled = true
+          and providers.deleted_at is null
       `,
     );
     return Number(result.rows[0]?.count ?? 0);
@@ -226,6 +227,11 @@ async function readProviderFailureAlertCandidates(input: {
         where provider_health_summary.status in ('degraded', 'unhealthy')
           and provider_health_summary.consecutive_failures >= $1
           and providers.enabled = true
+          and providers.deleted_at is null
+          and (
+            provider_health_summary.provider_model_id is null
+            or provider_models.deleted_at is null
+          )
         order by providers.provider_key,
                  provider_models.model_id nulls first,
                  provider_health_summary.id

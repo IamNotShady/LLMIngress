@@ -63,6 +63,11 @@ export async function listConsoleProviderHealthSummaries(
   await client.connect();
 
   try {
+    const hasSoftDeleteColumns = await providerHealthSoftDeleteColumnsAvailable(client);
+    const providerDeletedFilter = hasSoftDeleteColumns ? "where providers.deleted_at is null" : "";
+    const providerModelDeletedFilter = hasSoftDeleteColumns
+      ? "where providers.deleted_at is null and provider_models.deleted_at is null"
+      : "";
     const [providerResult, modelResult] = await Promise.all([
       client.query<ProviderHealthSummaryRow>(
         `
@@ -79,6 +84,7 @@ export async function listConsoleProviderHealthSummaries(
            and provider_health_summary.provider_model_id is null
           left join provider_health_events
             on provider_health_events.id = provider_health_summary.last_event_id
+          ${providerDeletedFilter}
           order by providers.provider_key
         `,
       ),
@@ -99,6 +105,7 @@ export async function listConsoleProviderHealthSummaries(
            and provider_health_summary.provider_model_id = provider_models.id
           left join provider_health_events
             on provider_health_events.id = provider_health_summary.last_event_id
+          ${providerModelDeletedFilter}
           order by providers.provider_key,
                    provider_models.display_name
         `,
@@ -125,6 +132,19 @@ export async function listConsoleProviderHealthSummaries(
   } finally {
     await client.end();
   }
+}
+
+async function providerHealthSoftDeleteColumnsAvailable(client: Client): Promise<boolean> {
+  const result = await client.query<{ available: boolean }>(
+    `
+      select count(*) = 2 as available
+      from information_schema.columns
+      where table_schema = 'public'
+        and column_name = 'deleted_at'
+        and table_name in ('providers', 'provider_models')
+    `,
+  );
+  return result.rows[0]?.available ?? false;
 }
 
 export function formatProviderHealthStatus(

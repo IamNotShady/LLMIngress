@@ -228,11 +228,11 @@
     {
       "id": "feat-026",
       "name": "Agent CRUD",
-      "description": "Console can create, edit, list, and delete Agents, and deleting an Agent with request attribution is blocked with a dependency error.",
-      "verification": "pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with request attribution is blocked'",
+      "description": "Console can create, edit, list, and delete Agents, and deleting an Agent with request attribution soft-deletes and hides the Agent without removing runtime history.",
+      "verification": "pnpm exec vitest run tests/features/feat-026-agent-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with request attribution soft-deletes'",
       "dependencies": ["feat-008", "feat-013"],
       "status": "passing",
-      "evidence": "2026-06-14: TDD red observed for feat-026 unit/E2E because the Agent CRUD server module and /api/agents route were missing. Added Agent create/edit/list/delete helpers, authenticated Console API, Dashboard Agent management UI, dependency checks blocking deletes with active API keys or request attribution, and config publisher integration for Agent changes. P2+ review found and fixed delete checks using ConfigPublisher rowCount assumptions plus added row locking before dependency validation. Verification passed — feat-026 unit tests 3 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 24 prior passing features before marking feat-026 passing, and final verify:features passed all 25 passing features after marking."
+      "evidence": "2026-06-14: TDD red observed for feat-026 unit/E2E because the Agent CRUD server module and /api/agents route were missing. Added Agent create/edit/list/delete helpers, authenticated Console API, Dashboard Agent management UI, dependency checks blocking deletes with active API keys or request attribution, and config publisher integration for Agent changes. P2+ review found and fixed delete checks using ConfigPublisher rowCount assumptions plus added row locking before dependency validation. Verification passed — feat-026 unit tests 3 passed, real Chromium/PostgreSQL E2E 1 passed, pnpm run verify passed, verify:features passed all 24 prior passing features before marking feat-026 passing, and final verify:features passed all 25 passing features after marking. 2026-06-20 feat-112 update: Agent delete with runtime request attribution now soft-deletes and hides the Agent instead of blocking, and the feat-026 verification title was updated to the current soft-delete contract."
     },
     {
       "id": "feat-027",
@@ -1185,6 +1185,23 @@
       "dependencies": ["feat-007", "feat-045", "feat-074", "feat-087"],
       "status": "passing",
       "evidence": "2026-06-20: TDD red observed first: feat-111 unit failed because migration 0037 was missing, runtime code still referenced request_savings, and migration status still queried schema_version; feat-111 E2E failed because request_savings still existed after migrations. Added migration 0037_merge_request_savings_and_schema_version with request_costs baseline/savings fields, backfilled request_savings rows, dropped request_savings, and dropped schema_version. Gateway now writes cost and savings fields to request_costs in one row; Console usage/analytics and Worker cost report/billing reconciliation read request_costs.savings fields; migration status derives currentSchemaVersion from latest migration_history id. Verification passed: feat-111 unit, feat-111 real PostgreSQL/Gateway E2E, related feat-007/009/045/071/074/079/082/085/087/095/101 regressions, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features re-verified all 111 passing features."
+    },
+    {
+      "id": "feat-112",
+      "name": "Config Soft Delete For Runtime History",
+      "description": "Console config deletes soft-delete Agents, Providers, Provider Models, Virtual Models, and Route Policies with deleted_at while runtime history keeps restrictive foreign keys. Active routing/config reads ignore deleted config, request_activity stores minimal config label snapshots for historical display, and hard delete remains a maintenance-only operation requiring no active dependencies or runtime history.",
+      "verification": "pnpm exec vitest run tests/features/feat-112-config-soft-delete.unit.test.ts && pnpm test:e2e tests/e2e/feat-112-config-soft-delete.e2e.spec.ts --grep 'config deletes are soft and runtime history remains intact'",
+      "dependencies": [
+        "feat-008",
+        "feat-009",
+        "feat-012",
+        "feat-026",
+        "feat-028",
+        "feat-029",
+        "feat-111"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-20: TDD red observed first: feat-112 unit failed because migration 0038 and soft-delete filters/snapshots were missing; feat-112 E2E initially failed because request history labels followed renamed config instead of request snapshots. Added migration 0038_config_soft_delete with deleted_at on Agents, Providers, Provider Models, Virtual Models, and Route Policies plus request_activity label snapshot columns; Virtual Model name and Route Policy per-Virtual-Model uniqueness are now active-row partial indexes. Provider key active uniqueness was intentionally not reintroduced because migration 0033 and feat-100 require duplicate active provider_key rows. Console Agent, Virtual Model, and Route Policy deletes now soft-delete rows while preserving runtime FK history; active Console/Gateway/Worker config reads filter deleted rows; Gateway request activity writes Agent/Virtual Model/Route/Provider/Model snapshots; history/report/export readers prefer snapshots. Verification passed: feat-112 unit, feat-112 real PostgreSQL E2E, related feat-012/016/025/026/028/029/080/087 unit and E2E regressions, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features re-verified all 112 passing features."
     }
   ]
 }

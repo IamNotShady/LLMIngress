@@ -223,6 +223,7 @@ async function readProvider(
           from provider_models
           where provider_models.provider_id = providers.id
             and provider_models.availability = 'available'
+            and provider_models.deleted_at is null
           order by case
                      when provider_models.model_id ~* '(embedding|image|moderation|tts|whisper|sora|dall|davinci|babbage)'
                        then 1
@@ -233,6 +234,7 @@ async function readProvider(
         ) probe_model on true
         where providers.id = $1
           and providers.enabled = true
+          and providers.deleted_at is null
       `,
       [providerId],
     );

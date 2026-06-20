@@ -408,9 +408,12 @@ async function readWebhookEventExportActivities(
              request_activity.latency_ms,
              request_activity.started_at,
              request_activity.completed_at,
-             virtual_models.name as virtual_model_name,
-             providers.provider_key,
-             provider_models.model_id as provider_model_model_id
+             coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
+               as virtual_model_name,
+             coalesce(request_activity.provider_key_snapshot, providers.provider_key)
+               as provider_key,
+             coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
+               as provider_model_model_id
       from request_activity
       left join virtual_models on virtual_models.id = request_activity.virtual_model_id
       left join providers on providers.id = request_activity.provider_id

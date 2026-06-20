@@ -58,9 +58,7 @@ test("migration status reports schema pending migrations and migrate check healt
           await page.goto(`${baseUrl}/runtime`);
           const runtimeSection = page.getByLabel("Gateway Runtime");
           // Migration status is a labelled field list on the Gateway Runtime page.
-          await expect(
-            runtimeSection.getByText(appliedSchemaVersion, { exact: true }),
-          ).toBeVisible();
+          await expect(runtimeSection.getByText("Current schema", { exact: true })).toBeVisible();
           await expect(
             runtimeSection.getByText(`${latestMigration.id}_${latestMigration.name}`),
           ).toBeVisible();

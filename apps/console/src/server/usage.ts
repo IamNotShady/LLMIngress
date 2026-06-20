@@ -112,8 +112,14 @@ export async function getConsoleUsageSummary(input: {
       `
           select request_activity.provider_id::text as provider_id,
                  request_activity.provider_model_id::text as model_id,
-                 providers.display_name as provider_label,
-                 provider_models.display_name as model_label,
+                 coalesce(
+                   request_activity.provider_display_name_snapshot,
+                   providers.display_name
+                 ) as provider_label,
+                 coalesce(
+                   request_activity.provider_model_display_name_snapshot,
+                   provider_models.display_name
+                 ) as model_label,
                  count(request_activity.id)::integer as request_count,
                  count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                    as failure_count,
@@ -130,7 +136,9 @@ export async function getConsoleUsageSummary(input: {
           where request_activity.started_at >= $1
           group by request_activity.provider_id,
                    request_activity.provider_model_id,
+                   request_activity.provider_display_name_snapshot,
                    providers.display_name,
+                   request_activity.provider_model_display_name_snapshot,
                    provider_models.display_name
           order by coalesce(sum(request_costs.total_cost_usd), 0) desc,
                    count(request_activity.id) desc,
@@ -142,7 +150,8 @@ export async function getConsoleUsageSummary(input: {
     const agentBreakdownResult = await client.query<UsageDimensionBreakdownRow>(
       `
           select coalesce(agents.id::text, 'unknown-agent') as id,
-                 coalesce(agents.name, 'Unknown agent') as label,
+                 coalesce(request_activity.agent_name_snapshot, agents.name, 'Unknown agent')
+                   as label,
                  count(request_activity.id)::integer as request_count,
                  count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                    as failure_count,
@@ -157,7 +166,8 @@ export async function getConsoleUsageSummary(input: {
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
           group by agents.id,
-                   agents.name
+                 request_activity.agent_name_snapshot,
+                 agents.name
           order by min(request_activity.created_at),
                    label
         `,
@@ -167,6 +177,8 @@ export async function getConsoleUsageSummary(input: {
       `
           select coalesce(request_activity.virtual_model_id::text, 'unknown-virtual-model') as id,
                  case
+                   when request_activity.virtual_model_name_snapshot is not null
+                     then request_activity.virtual_model_name_snapshot
                    when virtual_models.description is not null and virtual_models.name is not null
                      then concat(virtual_models.description, ' (', virtual_models.name, ')')
                    when virtual_models.name is not null then virtual_models.name
@@ -187,7 +199,8 @@ export async function getConsoleUsageSummary(input: {
           where request_activity.started_at >= $1
           group by request_activity.virtual_model_id,
                    virtual_models.description,
-                   virtual_models.name
+                   virtual_models.name,
+                   request_activity.virtual_model_name_snapshot
           order by min(request_activity.created_at),
                    label
         `,
@@ -196,7 +209,11 @@ export async function getConsoleUsageSummary(input: {
     const providerBreakdownResult = await client.query<UsageDimensionBreakdownRow>(
       `
           select coalesce(request_activity.provider_id::text, 'unknown-provider') as id,
-                 coalesce(providers.display_name, 'Unknown provider') as label,
+                 coalesce(
+                   request_activity.provider_display_name_snapshot,
+                   providers.display_name,
+                   'Unknown provider'
+                 ) as label,
                  count(request_activity.id)::integer as request_count,
                  count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                    as failure_count,
@@ -211,6 +228,7 @@ export async function getConsoleUsageSummary(input: {
           left join request_costs on request_costs.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
           group by request_activity.provider_id,
+                   request_activity.provider_display_name_snapshot,
                    providers.display_name
           order by min(request_activity.created_at),
                    label
@@ -221,6 +239,16 @@ export async function getConsoleUsageSummary(input: {
       `
           select coalesce(request_activity.provider_model_id::text, 'unknown-model') as id,
                  case
+                   when request_activity.provider_model_display_name_snapshot is not null
+                     and request_activity.provider_model_name_snapshot is not null
+                     then concat(
+                       request_activity.provider_model_display_name_snapshot,
+                       ' (',
+                       request_activity.provider_model_name_snapshot,
+                       ')'
+                     )
+                   when request_activity.provider_model_name_snapshot is not null
+                     then request_activity.provider_model_name_snapshot
                    when provider_models.display_name is not null and provider_models.model_id is not null
                      then concat(provider_models.display_name, ' (', provider_models.model_id, ')')
                    when provider_models.model_id is not null then provider_models.model_id
@@ -241,7 +269,9 @@ export async function getConsoleUsageSummary(input: {
           where request_activity.started_at >= $1
           group by request_activity.provider_model_id,
                    provider_models.display_name,
-                   provider_models.model_id
+                   provider_models.model_id,
+                   request_activity.provider_model_display_name_snapshot,
+                   request_activity.provider_model_name_snapshot
           order by min(request_activity.created_at),
                    label
         `,

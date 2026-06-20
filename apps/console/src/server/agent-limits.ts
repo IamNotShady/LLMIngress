@@ -271,6 +271,7 @@ async function readAccessibleRouteCandidatePrices(
         from agents
         join virtual_models
           on virtual_models.enabled = true
+         and virtual_models.deleted_at is null
          and (
               agents.default_virtual_model_id = virtual_models.id
               or exists (
@@ -281,6 +282,7 @@ async function readAccessibleRouteCandidatePrices(
               )
          )
         where agents.id = $1
+          and agents.deleted_at is null
       )
       select accessible_virtual_models.name as virtual_model_name,
              accessible_virtual_models.display_name as virtual_model_display_name,
@@ -306,6 +308,9 @@ async function readAccessibleRouteCandidatePrices(
       join provider_models on provider_models.id = route_policy_candidates.provider_model_id
       join providers on providers.id = provider_models.provider_id
       where providers.enabled = true
+        and providers.deleted_at is null
+        and provider_models.deleted_at is null
+        and route_policies.deleted_at is null
         and provider_models.availability = 'available'
       order by accessible_virtual_models.name,
                route_policy_candidates.is_fallback,

@@ -488,6 +488,7 @@ async function readProviderCredentials(input: {
         join provider_api_keys on provider_api_keys.provider_id = providers.id
         where providers.id = any($1::uuid[])
           and providers.enabled = true
+          and providers.deleted_at is null
           and provider_api_keys.enabled = true
         order by providers.default_priority asc,
                  providers.id,

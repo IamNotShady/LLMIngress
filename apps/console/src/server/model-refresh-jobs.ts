@@ -54,7 +54,7 @@ export async function enqueueProviderModelRefreshJob(input: {
 
     try {
       const provider = await client.query<ProviderRow>(
-        "select id::text, enabled from providers where id = $1 for update",
+        "select id::text, enabled from providers where id = $1 and deleted_at is null for update",
         [providerId],
       );
       const row = provider.rows[0];

@@ -210,6 +210,7 @@ async function readBudgetThresholdCandidates(
           and agent_limits.unit = 'usd'
           and agent_limits.period = budget_periods.period_type
           and agents.enabled = true
+          and agents.deleted_at is null
           and budget_periods.period_start <= $1::timestamptz
           and budget_periods.period_end > $1::timestamptz
         order by agents.name, agents.key_prefix, budget_periods.period_start

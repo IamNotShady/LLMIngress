@@ -325,15 +325,32 @@ function buildScopedActivityCte(
     sql: `
       scoped_activity as (
         select request_activity.*,
-               coalesce(agents.name, 'Unknown agent') as agent_label,
-               coalesce(providers.display_name, 'Unknown provider') as provider_label,
+               coalesce(request_activity.agent_name_snapshot, agents.name, 'Unknown agent')
+                 as agent_label,
+               coalesce(
+                 request_activity.provider_display_name_snapshot,
+                 providers.display_name,
+                 'Unknown provider'
+               ) as provider_label,
                case
+                 when request_activity.provider_model_display_name_snapshot is not null
+                   and request_activity.provider_model_name_snapshot is not null
+                   then concat(
+                     request_activity.provider_model_display_name_snapshot,
+                     ' (',
+                     request_activity.provider_model_name_snapshot,
+                     ')'
+                   )
+                 when request_activity.provider_model_name_snapshot is not null
+                   then request_activity.provider_model_name_snapshot
                  when provider_models.display_name is not null and provider_models.model_id is not null
                    then concat(provider_models.display_name, ' (', provider_models.model_id, ')')
                  when provider_models.model_id is not null then provider_models.model_id
                  else 'Unknown model'
                end as model_label,
                case
+                 when request_activity.virtual_model_name_snapshot is not null
+                   then request_activity.virtual_model_name_snapshot
                  when virtual_models.description is not null and virtual_models.name is not null
                    then concat(virtual_models.description, ' (', virtual_models.name, ')')
                  when virtual_models.name is not null then virtual_models.name
@@ -343,20 +360,36 @@ function buildScopedActivityCte(
                  when route_policies.id is not null
                    then concat(
                      case
+                       when request_activity.virtual_model_name_snapshot is not null
+                         then request_activity.virtual_model_name_snapshot
                        when virtual_models.description is not null and virtual_models.name is not null
                          then concat(virtual_models.description, ' (', virtual_models.name, ')')
                        when virtual_models.name is not null then virtual_models.name
                        else 'Unknown virtual model'
                      end,
                      ' / ',
-                     route_policies.strategy
+                     coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
                    )
                  else 'Unknown route'
                end as route_label,
                concat(
-                 coalesce(providers.display_name, 'Unknown provider'),
+                 coalesce(
+                   request_activity.provider_display_name_snapshot,
+                   providers.display_name,
+                   'Unknown provider'
+                 ),
                  ' / ',
                  case
+                   when request_activity.provider_model_display_name_snapshot is not null
+                     and request_activity.provider_model_name_snapshot is not null
+                     then concat(
+                       request_activity.provider_model_display_name_snapshot,
+                       ' (',
+                       request_activity.provider_model_name_snapshot,
+                       ')'
+                     )
+                   when request_activity.provider_model_name_snapshot is not null
+                     then request_activity.provider_model_name_snapshot
                    when provider_models.display_name is not null and provider_models.model_id is not null
                      then concat(provider_models.display_name, ' (', provider_models.model_id, ')')
                    when provider_models.model_id is not null then provider_models.model_id

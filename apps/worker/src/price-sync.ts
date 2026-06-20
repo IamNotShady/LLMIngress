@@ -165,6 +165,8 @@ async function writeProviderModelPrices(
         where providers.id = provider_models.provider_id
           and lower(providers.provider_key) = lower($1)
           and provider_models.model_id = $2
+          and providers.deleted_at is null
+          and provider_models.deleted_at is null
         returning provider_models.id::text
       `,
       [

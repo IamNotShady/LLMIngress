@@ -691,7 +691,7 @@ PostgreSQL database
 │   └── budget_reservations
 │
 ├── Runtime records
-│   ├── request_activity
+│   ├── request_activity (including request-level config label snapshots)
 │   ├── request_usage
 │   ├── request_costs (including baseline and savings fields)
 │   ├── fallback_events
@@ -719,6 +719,15 @@ PostgreSQL database
     ├── request_prompts
     └── response_outputs
 ```
+
+Config tables use `deleted_at` for Console delete semantics: Agents, Providers,
+Provider Models, Virtual Models, and Route Policies are hidden and disabled when
+deleted instead of being physically removed from the database. Runtime history
+tables keep restrictive foreign keys to those config rows, so request audit data
+remains referentially intact. Request activity also stores minimal label
+snapshots for Agent, Virtual Model, Route Policy strategy, Provider, and Provider
+Model labels; historical reports prefer those snapshots and fall back to the
+joined config rows for older records.
 
 Postgres notification channels：
 
@@ -1075,7 +1084,9 @@ Agent 协议、Provider 协议、Route Policy、配置发布、配置校验、Po
 - Gateway 使用 immutable config snapshot，新请求即时使用新配置，进行中的请求不受影响。
 - `/v1/responses` V1 支持无状态子集，不默认实现跨 Provider response state。
 - Console 不进入 Agent 请求路径，Gateway 在 Console 暂时不可用时仍应能继续处理请求。
-- Provider 派生模型数据采用 soft-delete / availability marker；硬删除必须经 Console 依赖检查。
+- Console 删除配置默认写入 `deleted_at` 软删除；Agents、Providers、Provider Models、Virtual Models 和 Route Policies 的 active 查询都过滤 deleted rows。
+- Runtime history 表继续使用 restrictive foreign keys，不 cascade、不 set null；硬删除只作为维护操作，并且必须确认没有 active 配置依赖和没有 runtime history 引用。
+- Provider 派生模型数据仍使用 availability marker 表达 refresh 结果；Provider Model 被软删除后不会参与 active routing、price sync 或 health checks。
 - Route Policy 的主候选和 fallback chain 当前统一存放在 `route_policy_candidates`，用 `candidate_order` 和 `is_fallback` 表达顺序与 fallback 语义；不单独维护 `fallback_chain_items` 表。
 - OpenAI-compatible 长尾 Provider 通过内置白名单 template 复用通用 adapter，不开放任意自定义 endpoint。
 - Playground 使用 Gateway Public API 测试；用户手动输入 Agent API key 并选择 Virtual Model Name，Console 后端不代理请求也不保存该 key。

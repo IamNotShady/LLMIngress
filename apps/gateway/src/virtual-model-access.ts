@@ -113,6 +113,7 @@ export async function listAllowedGatewayVirtualModels(input: {
         join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
         where agent_virtual_models.agent_id = $1
           and virtual_models.enabled = true
+          and virtual_models.deleted_at is null
         order by virtual_models.name
       `,
       [input.agentApiKeyId],

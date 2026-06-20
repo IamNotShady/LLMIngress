@@ -316,17 +316,26 @@ async function readRequestLogRows(
         request_activity.completed_at,
         request_activity.created_at,
         agents.id::text as agent_id,
-        agents.name as agent_name,
+        coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
         agents.agent_type,
         virtual_models.id::text as virtual_model_id,
-        virtual_models.name as virtual_model_name,
+        coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
+          as virtual_model_name,
         route_policies.id::text as route_policy_id,
         providers.id::text as provider_id,
-        providers.provider_key,
-        providers.display_name as provider_display_name,
+        coalesce(request_activity.provider_key_snapshot, providers.provider_key)
+          as provider_key,
+        coalesce(
+          request_activity.provider_display_name_snapshot,
+          providers.display_name
+        ) as provider_display_name,
         provider_models.id::text as provider_model_id,
-        provider_models.model_id as provider_model_model_id,
-        provider_models.display_name as provider_model_display_name,
+        coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
+          as provider_model_model_id,
+        coalesce(
+          request_activity.provider_model_display_name_snapshot,
+          provider_models.display_name
+        ) as provider_model_display_name,
         request_usage.input_tokens,
         request_usage.output_tokens,
         request_usage.total_tokens,

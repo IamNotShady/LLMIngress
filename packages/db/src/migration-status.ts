@@ -45,10 +45,6 @@ type AppliedMigrationRow = QueryResultRow & {
   name: string;
 };
 
-type SchemaVersionRow = QueryResultRow & {
-  version: string;
-};
-
 export const shippedSqlMigrations: MigrationStatusMigration[] = [
   {
     checksum: "793a079d4d978a49bbd50fce36e868dfa2a110c3e47d3cf554a8397c90070606",
@@ -230,6 +226,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0036",
     name: "merge_provider_model_prices",
   },
+  {
+    checksum: "b7f753937c590a875d085a334a609cbd72bafd26e8d7e52c9dc096152faef573",
+    id: "0037",
+    name: "merge_request_savings_and_schema_version",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {
@@ -240,12 +241,9 @@ export async function getMigrationStatusFromDatabase(input: {
   await client.connect();
 
   try {
-    const [hasMigrationHistory, hasSchemaVersion] = await Promise.all([
-      tableExists(client, "migration_history"),
-      tableExists(client, "schema_version"),
-    ]);
+    const hasMigrationHistory = await tableExists(client, "migration_history");
     const appliedMigrations = hasMigrationHistory ? await readAppliedMigrations(client) : [];
-    const currentSchemaVersion = hasSchemaVersion ? await readCurrentSchemaVersion(client) : null;
+    const currentSchemaVersion = appliedMigrations.at(-1)?.id ?? null;
 
     return summarizeMigrationStatus({
       appliedMigrations,
@@ -401,15 +399,4 @@ async function readAppliedMigrations(client: Client): Promise<AppliedMigrationSt
     id: row.id,
     name: row.name,
   }));
-}
-
-async function readCurrentSchemaVersion(client: Client): Promise<string | null> {
-  const result = await client.query<SchemaVersionRow>(
-    `
-      select version
-      from schema_version
-      where id = 1
-    `,
-  );
-  return result.rows[0]?.version ?? null;
 }

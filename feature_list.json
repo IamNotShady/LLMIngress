@@ -57,8 +57,8 @@
     {
       "id": "feat-007",
       "name": "PostgreSQL Connection and Migration Runner",
-      "description": "Running the migration command against an empty PostgreSQL database creates the expected schema version row, and running it again is idempotent.",
-      "verification": "bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm exec vitest run tests/features/feat-007-migration-runner.unit.test.ts && pnpm test:e2e tests/e2e/feat-007-migration-runner.e2e.spec.ts --grep 'migration runner creates schema version and rerun is idempotent'",
+      "description": "Running the migration command against an empty PostgreSQL database records every applied migration in migration_history, and running it again is idempotent.",
+      "verification": "bash -lc 'test -n \"$TEST_DATABASE_URL\"' && pnpm exec vitest run tests/features/feat-007-migration-runner.unit.test.ts && pnpm test:e2e tests/e2e/feat-007-migration-runner.e2e.spec.ts --grep 'migration runner records migration history and rerun is idempotent'",
       "dependencies": ["feat-003", "feat-006"],
       "status": "passing",
       "evidence": "2026-06-12: TDD red observed for feat-007 unit tests because loadSqlMigrations was missing and E2E because pnpm run db:migrate was missing. Verification passed with TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' — feat-007 unit test 3 passed, feat-007 Playwright E2E 1 passed, and pnpm run verify passed. 2026-06-12 regression during feat-008 verify:features: feat-007 E2E still expected only one migration and schema_version 0001 after 0002 was added; repaired by asserting loadSqlMigrations() current IDs/count and latest schema_version, then feat-007 verification passed again."
@@ -1176,6 +1176,15 @@
       "dependencies": ["feat-073", "feat-100"],
       "status": "passing",
       "evidence": "2026-06-20: TDD red observed first: feat-110 unit failed because migration 0036 was missing and runtime code still referenced provider_models_price; feat-110 E2E failed because provider_models_price still existed after migrations. Added migration 0036_merge_provider_model_prices with synced current-price fields on provider_models and dropped provider_models_price without historical backfill. Updated Worker price_sync to update matching provider_models rows and publish provider_models config changes. Updated Gateway, Console route policy/preview/budget validation, and Worker billing reconciliation effective-price reads to use provider_models synced fields directly. Removed provider_models_price from backup coverage and architecture docs, updated regression seeds/tests to use provider_models synced fields, and kept effective price precedence as provider_models manual price > provider_models synced price > unknown. Verification passed: feat-110 unit, feat-110 real PostgreSQL E2E, related feat-057/073/096/100 unit checks, related feat-057/073/096/100 E2Es, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features re-verified all 110 passing features."
+    },
+    {
+      "id": "feat-111",
+      "name": "Request Costs Savings And Migration History Cleanup",
+      "description": "Request-level actual, baseline, and savings fields live directly on request_costs, request_savings is removed from the current schema, migration_history replaces schema_version as the current migration status source, and Gateway/Console/Worker reads and writes use the merged request_costs fields.",
+      "verification": "pnpm exec vitest run tests/features/feat-111-request-costs-savings-schema-cleanup.unit.test.ts && pnpm test:e2e tests/e2e/feat-111-request-costs-savings-schema-cleanup.e2e.spec.ts --grep 'request savings live on request_costs and migration_history replaces schema_version'",
+      "dependencies": ["feat-007", "feat-045", "feat-074", "feat-087"],
+      "status": "passing",
+      "evidence": "2026-06-20: TDD red observed first: feat-111 unit failed because migration 0037 was missing, runtime code still referenced request_savings, and migration status still queried schema_version; feat-111 E2E failed because request_savings still existed after migrations. Added migration 0037_merge_request_savings_and_schema_version with request_costs baseline/savings fields, backfilled request_savings rows, dropped request_savings, and dropped schema_version. Gateway now writes cost and savings fields to request_costs in one row; Console usage/analytics and Worker cost report/billing reconciliation read request_costs.savings fields; migration status derives currentSchemaVersion from latest migration_history id. Verification passed: feat-111 unit, feat-111 real PostgreSQL/Gateway E2E, related feat-007/009/045/071/074/079/082/085/087/095/101 regressions, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features re-verified all 111 passing features."
     }
   ]
 }

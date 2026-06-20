@@ -1370,3 +1370,11 @@
   - Updated Gateway config reload, Console route policy/preview/budget validation, and Worker billing reconciliation to read synced prices directly from `provider_models`.
   - Removed `provider_models_price` from backup coverage and architecture docs; updated old regression test seeds to write `provider_models.synced_*`.
   - Verification passed: feat-110 unit, feat-110 real PostgreSQL E2E, related feat-057/073/096/100 unit checks, related feat-057/073/096/100 E2Es, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 110 passing features re-verified.
+
+- [x] 2026-06-20 feat-111 Request Costs Savings And Migration History Cleanup:
+  - Red phase: `pnpm exec vitest run tests/features/feat-111-request-costs-savings-schema-cleanup.unit.test.ts` failed because migration `0037` was missing, production code still referenced `request_savings`, and migration status still queried `schema_version`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-111-request-costs-savings-schema-cleanup.e2e.spec.ts` failed because `request_savings` still existed after migrations.
+  - Added migration `0037_merge_request_savings_and_schema_version`: `request_costs` now stores baseline provider model, actual cost, baseline cost, savings amount/percent, and savings price source/version; existing `request_savings` rows are backfilled before `request_savings` and `schema_version` are dropped.
+  - Gateway writes cost and savings fields into one `request_costs` row. Console usage/analytics and Worker cost report/billing reconciliation now aggregate and update savings from `request_costs`.
+  - Migration status now derives `currentSchemaVersion` from the latest applied `migration_history` id; backup coverage and architecture docs no longer list `request_savings` or `schema_version`.
+  - Verification passed: feat-111 unit, feat-111 real PostgreSQL/Gateway E2E, related feat-007/009/045/071/074/079/082/085/087/095/101 regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 111 passing features re-verified.

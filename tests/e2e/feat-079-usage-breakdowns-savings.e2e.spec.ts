@@ -231,20 +231,19 @@ async function insertUsageBreakdownRequest(
   await fixture.query(
     `
       insert into request_costs (
-        id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source
+        id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source,
+        actual_cost_usd, baseline_cost_usd, savings_usd
       )
-      values ($1, $2, $3, $4, $5::numeric, 'estimated')
+      values ($1, $2, $3, $4, $5::numeric, 'estimated', $5::numeric, ($5::numeric + $6::numeric), $6::numeric)
     `,
-    [randomUUID(), activityId, input.agentApiKeyId, input.providerModelId, input.costUsd],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id, request_activity_id, actual_cost_usd, baseline_cost_usd, savings_usd
-      )
-      values ($1, $2, $3::numeric, ($3::numeric + $4::numeric), $4::numeric)
-    `,
-    [randomUUID(), activityId, input.costUsd, input.savingsUsd],
+    [
+      randomUUID(),
+      activityId,
+      input.agentApiKeyId,
+      input.providerModelId,
+      input.costUsd,
+      input.savingsUsd,
+    ],
   );
 }
 

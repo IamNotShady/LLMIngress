@@ -259,22 +259,36 @@ async function insertAnalyticsRequest(
     await fixture.query(
       `
         insert into request_costs (
-          id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source
+          id,
+          request_activity_id,
+          agent_id,
+          provider_model_id,
+          total_cost_usd,
+          cost_source,
+          actual_cost_usd,
+          baseline_cost_usd,
+          savings_usd
         )
-        values ($5, $1, $2, $3, $4::numeric, 'estimated')
-      `,
-      [input.activityId, agentApiKeyId, providerModelId, input.costUsd, randomUUID()],
-    );
-  }
-  if (input.costUsd !== null && input.savingsUsd !== null) {
-    await fixture.query(
-      `
-        insert into request_savings (
-          id, request_activity_id, actual_cost_usd, baseline_cost_usd, savings_usd
+        values (
+          $5,
+          $1,
+          $2,
+          $3,
+          $4::numeric,
+          'estimated',
+          $4::numeric,
+          case when $6::text is null then null else ($4::numeric + $6::numeric) end,
+          $6::numeric
         )
-        values ($4, $1, $2::numeric, ($2::numeric + $3::numeric), $3::numeric)
       `,
-      [input.activityId, input.costUsd, input.savingsUsd, randomUUID()],
+      [
+        input.activityId,
+        agentApiKeyId,
+        providerModelId,
+        input.costUsd,
+        randomUUID(),
+        input.savingsUsd,
+      ],
     );
   }
 }

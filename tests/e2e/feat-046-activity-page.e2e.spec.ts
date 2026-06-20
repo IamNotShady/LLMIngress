@@ -281,7 +281,14 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         total_cost_usd,
         cost_source,
         price_source,
-        price_version
+        price_version,
+        baseline_provider_model_id,
+        actual_cost_usd,
+        baseline_cost_usd,
+        savings_usd,
+        savings_percent,
+        savings_price_source,
+        savings_price_version
       )
       values (
         $1,
@@ -293,28 +300,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         0.00004050,
         'estimated',
         'built_in_static_snapshot',
-        'mvp-static-2026-06-13'
-      )
-    `,
-    [randomUUID(), successActivityId, agentApiKeyId, selectedProviderModelId],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id,
-        request_activity_id,
-        baseline_provider_model_id,
-        actual_cost_usd,
-        baseline_cost_usd,
-        savings_usd,
-        savings_percent,
-        price_source,
-        price_version
-      )
-      values (
-        $1,
-        $2,
-        $3,
+        'mvp-static-2026-06-13',
+        $5,
         0.00004050,
         0.00081000,
         0.00076950,
@@ -323,7 +310,13 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'mvp-static-2026-06-13'
       )
     `,
-    [randomUUID(), successActivityId, primaryProviderModelId],
+    [
+      randomUUID(),
+      successActivityId,
+      agentApiKeyId,
+      selectedProviderModelId,
+      primaryProviderModelId,
+    ],
   );
 
   return { primaryProviderModelId };

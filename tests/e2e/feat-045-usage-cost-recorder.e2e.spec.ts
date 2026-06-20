@@ -322,13 +322,12 @@ async function readUsageCostRows(fixture: Fixture): Promise<UsageCostRow[]> {
              request_costs.total_cost_usd::text,
              request_costs.cost_source,
              request_costs.price_source,
-             request_savings.baseline_provider_model_id::text,
-             request_savings.baseline_cost_usd::text,
-             request_savings.savings_usd::text
+             request_costs.baseline_provider_model_id::text,
+             request_costs.baseline_cost_usd::text,
+             request_costs.savings_usd::text
       from request_activity
       join request_usage on request_usage.request_activity_id = request_activity.id
       join request_costs on request_costs.request_activity_id = request_activity.id
-      join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.request_id in ('req_usage_known_045', 'req_usage_unknown_045')
       order by request_activity.request_id
     `,

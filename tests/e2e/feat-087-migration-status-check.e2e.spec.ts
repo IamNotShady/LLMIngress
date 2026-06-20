@@ -21,7 +21,7 @@ test("migration status reports schema pending migrations and migrate check healt
 
   try {
     await applyMigrationsThrough(fixture, currentMigration.id);
-    const appliedSchemaVersion = await readSchemaVersion(fixture);
+    const appliedSchemaVersion = currentMigration.id;
 
     const cliResult = spawnSync(
       "pnpm",
@@ -102,13 +102,6 @@ async function applyMigrationsThrough(fixture: Fixture, targetId: string): Promi
       [migration.id, migration.name, migration.checksum],
     );
   }
-}
-
-async function readSchemaVersion(fixture: Fixture): Promise<string> {
-  const result = await fixture.query<{ version: string }>(
-    "select version from schema_version where id = 1",
-  );
-  return result.rows[0]?.version ?? "none";
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

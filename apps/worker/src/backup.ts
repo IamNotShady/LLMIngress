@@ -81,7 +81,6 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "request_activity",
     "request_usage",
     "request_costs",
-    "request_savings",
     "fallback_events",
     "budget_reservations",
     "jobs",
@@ -95,7 +94,7 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "notification_deliveries",
     "webhook_deliveries",
   ],
-  system: ["migration_history", "schema_version", "console_admins", "console_sessions"],
+  system: ["migration_history", "console_admins", "console_sessions"],
 };
 
 export function createBackupJobHandler(options: CreateBackupJobHandlerOptions): JobHandler {

@@ -22,7 +22,6 @@ describe("feat-009 runtime records and jobs schema migration", () => {
       "request_activity",
       "request_usage",
       "request_costs",
-      "request_savings",
       "fallback_events",
       "jobs",
       "job_attempts",

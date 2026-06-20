@@ -1,27 +1,45 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
-import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createTestPostgresFixture, loadSqlMigrations, runMigrations } from "../../packages/db/src";
 import { createFakeProviderServer } from "../support/fake-provider";
 
 const masterKey = "test-master-key";
-const providerApiKey = "sk-fake-provider-cache-071";
-const agentApiKey = "llmi_prompt_cache_gateway_key_071";
+const providerApiKey = "sk-fake-provider-savings-111";
+const agentApiKey = "llmi_request_costs_savings_key_111";
 
-test("prompt caching tokens use cached input pricing fallback and affect usage cost savings records", async () => {
+test("request savings live on request_costs and migration_history replaces schema_version", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_prompt_cache_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_request_costs_savings_${randomUUID().replaceAll("-", "_")}`,
   });
   const provider = await createFakeProviderServer();
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    const seeded = await seedPromptCachingRoute(fixture, {
-      providerBaseUrl: `${provider.url}/v1?mode=cached-usage`,
+    const seeded = await seedSavingsRoute(fixture, {
+      providerBaseUrl: `${provider.url}/v1`,
     });
+
+    await expect(readRegclass(fixture, "request_savings")).resolves.toBe(null);
+    await expect(readRegclass(fixture, "schema_version")).resolves.toBe(null);
+
+    const status = spawnSync(
+      "pnpm",
+      ["run", "db:migrate:status", "--", "--database-url", fixture.databaseUrl],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: process.env,
+        timeout: 30_000,
+      },
+    );
+    const latestMigrationId = loadSqlMigrations().at(-1)?.id;
+    expect(status.status, status.stderr || status.stdout).toBe(0);
+    expect(status.stdout).toContain(`Current schema: ${latestMigrationId}`);
+
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
       port: await getFreePort(),
@@ -33,45 +51,42 @@ test("prompt caching tokens use cached input pricing fallback and affect usage c
 
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
-          max_tokens: 200,
-          messages: [{ content: "use provider cached token accounting", role: "user" }],
-          model: "prompt-cache-coding",
+          max_tokens: 100,
+          messages: [{ content: "hello from feat 111", role: "user" }],
+          model: "request-costs-savings",
           stream: false,
         }),
         headers: {
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
-          "x-request-id": "req_prompt_cache_071",
+          "x-request-id": "req_request_costs_savings_111",
         },
         method: "POST",
       });
 
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toMatchObject({
-        id: "fake-provider-cached-usage",
+        id: "fake-provider-response",
         object: "chat.completion",
       });
 
       await expect
-        .poll(() => readPromptCachingCostRow(fixture))
+        .poll(() => readRequestCostsSavingsRow(fixture))
         .toEqual({
-          actual_cost_usd: "0.00015000",
-          baseline_cost_usd: "0.00300000",
+          actual_cost_usd: "0.00004050",
+          baseline_cost_usd: "0.00081000",
           baseline_provider_model_id: seeded.baselineProviderModelId,
-          cached_input_tokens: 400,
           cost_source: "estimated",
-          input_cost_usd: "0.00007000",
-          input_tokens: 1000,
-          output_cost_usd: "0.00008000",
-          output_tokens: 200,
+          input_cost_usd: "0.00000050",
+          output_cost_usd: "0.00004000",
           price_source: "price_sync",
           provider_model_id: seeded.actualProviderModelId,
-          reasoning_tokens: 25,
-          request_id: "req_prompt_cache_071",
-          savings_usd: "0.00285000",
-          token_source: "provider",
-          total_cost_usd: "0.00015000",
-          total_tokens: 1200,
+          request_id: "req_request_costs_savings_111",
+          savings_percent: "95.000000",
+          savings_price_source: "price_sync",
+          savings_price_version: "test:feat-111",
+          savings_usd: "0.00076950",
+          total_cost_usd: "0.00004050",
         });
     } finally {
       await stopGatewayProcess(gateway);
@@ -91,35 +106,32 @@ type GatewayProcess = {
   stdout: string[];
 };
 
-type SeededPromptCachingRoute = {
+type SeededSavingsRoute = {
   actualProviderModelId: string;
   baselineProviderModelId: string;
 };
 
-type PromptCachingCostRow = {
+type RequestCostsSavingsRow = {
   actual_cost_usd: string;
   baseline_cost_usd: string;
   baseline_provider_model_id: string;
-  cached_input_tokens: number;
   cost_source: string;
   input_cost_usd: string;
-  input_tokens: number;
   output_cost_usd: string;
-  output_tokens: number;
   price_source: string | null;
   provider_model_id: string;
-  reasoning_tokens: number;
   request_id: string;
+  savings_percent: string;
+  savings_price_source: string | null;
+  savings_price_version: string | null;
   savings_usd: string;
-  token_source: string;
   total_cost_usd: string;
-  total_tokens: number;
 };
 
-async function seedPromptCachingRoute(
+async function seedSavingsRoute(
   fixture: Fixture,
   input: { providerBaseUrl: string },
-): Promise<SeededPromptCachingRoute> {
+): Promise<SeededSavingsRoute> {
   const providerId = randomUUID();
   const baselineProviderModelId = randomUUID();
   const actualProviderModelId = randomUUID();
@@ -175,20 +187,20 @@ async function seedPromptCachingRoute(
           synced_cached_input_usd_per_million_tokens = prices.cached_input_price,
           synced_output_usd_per_million_tokens = prices.output_price,
           synced_price_source = 'models.dev',
-          synced_price_source_url = 'test://prices/feat-071',
-          synced_price_version = 'test:feat-071',
-          synced_price_synced_at = '2026-06-17T00:00:00.000Z',
-          synced_price_updated_at = '2026-06-17T00:00:00.000Z'
+          synced_price_source_url = 'test://prices/feat-111',
+          synced_price_version = 'test:feat-111',
+          synced_price_synced_at = '2026-06-20T00:00:00.000Z',
+          synced_price_updated_at = '2026-06-20T00:00:00.000Z'
       from (
         values
-          ('gpt-4.1', 2::numeric, 0.5::numeric, 8::numeric),
-          ('gpt-4.1-nano', 0.1::numeric, 0.025::numeric, 0.4::numeric)
+          ('gpt-4.1', 2::numeric, null::numeric, 8::numeric),
+          ('gpt-4.1-nano', 0.1::numeric, null::numeric, 0.4::numeric)
       ) as prices(model_id, input_price, cached_input_price, output_price)
       where provider_models.model_id = prices.model_id
     `,
   );
   await fixture.query(
-    "insert into virtual_models (id, name, description, enabled) values ($1, 'prompt-cache-coding', 'Prompt Cache Coding', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'request-costs-savings', 'Request Costs Savings', true)",
     [virtualModelId],
   );
   await fixture.query(
@@ -210,12 +222,19 @@ async function seedPromptCachingRoute(
     [randomUUID(), routePolicyId, baselineProviderModelId, randomUUID(), actualProviderModelId],
   );
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'Prompt Cache Agent', 'coding', true)",
+    "insert into agents (id, name, agent_type, enabled) values ($1, 'Savings Agent', 'coding', true)",
     [agentId],
   );
   await fixture.query(
     `
-      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
+      update agents
+      set id = $1,
+          key_prefix = $3,
+          key_hash = $4,
+          default_virtual_model_id = $5,
+          enabled = true,
+          updated_at = now()
+      where id = $2
     `,
     [
       agentApiKeyId,
@@ -226,30 +245,31 @@ async function seedPromptCachingRoute(
     ],
   );
   await fixture.query(
-    `
-      insert into agent_virtual_models (agent_id, virtual_model_id)
-      values ($1, $2)
-    `,
+    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
     [agentApiKeyId, virtualModelId],
   );
   await fixture.query(
-    "insert into config_versions (version, source, description) values (1, 'console', 'Prompt caching config')",
+    "insert into config_versions (version, source, description) values (1, 'console', 'Request costs savings config')",
   );
 
   return { actualProviderModelId, baselineProviderModelId };
 }
 
-async function readPromptCachingCostRow(fixture: Fixture): Promise<PromptCachingCostRow | null> {
-  const result = await fixture.query<PromptCachingCostRow>(
+async function readRegclass(fixture: Fixture, tableName: string): Promise<string | null> {
+  const result = await fixture.query<{ table_name: string | null }>(
+    "select to_regclass($1)::text as table_name",
+    [`public.${tableName}`],
+  );
+  return result.rows[0]?.table_name ?? null;
+}
+
+async function readRequestCostsSavingsRow(
+  fixture: Fixture,
+): Promise<RequestCostsSavingsRow | null> {
+  const result = await fixture.query<RequestCostsSavingsRow>(
     `
       select request_activity.request_id,
-             request_usage.provider_model_id::text,
-             request_usage.input_tokens,
-             request_usage.output_tokens,
-             request_usage.total_tokens,
-             request_usage.cached_input_tokens,
-             request_usage.reasoning_tokens,
-             request_usage.token_source,
+             request_costs.provider_model_id::text,
              request_costs.input_cost_usd::text,
              request_costs.output_cost_usd::text,
              request_costs.total_cost_usd::text,
@@ -258,11 +278,13 @@ async function readPromptCachingCostRow(fixture: Fixture): Promise<PromptCaching
              request_costs.baseline_provider_model_id::text,
              request_costs.actual_cost_usd::text,
              request_costs.baseline_cost_usd::text,
-             request_costs.savings_usd::text
+             request_costs.savings_usd::text,
+             request_costs.savings_percent::text,
+             request_costs.savings_price_source,
+             request_costs.savings_price_version
       from request_activity
-      join request_usage on request_usage.request_activity_id = request_activity.id
       join request_costs on request_costs.request_activity_id = request_activity.id
-      where request_activity.request_id = 'req_prompt_cache_071'
+      where request_activity.request_id = 'req_request_costs_savings_111'
     `,
   );
   return result.rows[0] ?? null;
@@ -314,11 +336,11 @@ function startGatewayProcess(options: { databaseUrl: string; port: number }): Ga
       ...process.env,
       DATABASE_URL: options.databaseUrl,
       GATEWAY_CONFIG_NOTIFICATIONS: "false",
-      GATEWAY_HOST: "127.0.0.1",
+      GATEWAY_CONFIG_RECONCILE_INTERVAL_MS: "0",
       GATEWAY_PORT: String(options.port),
       MASTER_KEY: masterKey,
-      NODE_ENV: "test",
     },
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const gateway: GatewayProcess = {
     child,
@@ -326,12 +348,8 @@ function startGatewayProcess(options: { databaseUrl: string; port: number }): Ga
     stderr: [],
     stdout: [],
   };
-  child.stdout.on("data", (chunk) => {
-    gateway.stdout.push(String(chunk));
-  });
-  child.stderr.on("data", (chunk) => {
-    gateway.stderr.push(String(chunk));
-  });
+  child.stderr.on("data", (chunk) => gateway.stderr.push(String(chunk)));
+  child.stdout.on("data", (chunk) => gateway.stdout.push(String(chunk)));
   return gateway;
 }
 
@@ -340,15 +358,12 @@ async function stopGatewayProcess(gateway: GatewayProcess): Promise<void> {
     return;
   }
 
+  gateway.child.kill("SIGTERM");
   await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => {
-      gateway.child.kill("SIGKILL");
-      resolve();
-    }, 5_000);
+    const timer = setTimeout(resolve, 5_000);
     gateway.child.once("exit", () => {
       clearTimeout(timer);
       resolve();
     });
-    gateway.child.kill("SIGTERM");
   });
 }

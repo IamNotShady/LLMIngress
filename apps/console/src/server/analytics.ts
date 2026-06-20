@@ -194,7 +194,6 @@ async function queryKpis(
       from scoped_activity
       left join request_usage on request_usage.request_activity_id = scoped_activity.id
       left join request_costs on request_costs.request_activity_id = scoped_activity.id
-      left join request_savings on request_savings.request_activity_id = scoped_activity.id
       left join fallback_counts on fallback_counts.request_activity_id = scoped_activity.id
     `,
     scoped.values,
@@ -218,7 +217,6 @@ async function queryTimeseries(
       from scoped_activity
       left join request_usage on request_usage.request_activity_id = scoped_activity.id
       left join request_costs on request_costs.request_activity_id = scoped_activity.id
-      left join request_savings on request_savings.request_activity_id = scoped_activity.id
       left join fallback_counts on fallback_counts.request_activity_id = scoped_activity.id
       group by bucket_start
       order by bucket_start asc
@@ -249,7 +247,6 @@ async function queryTopItems(
       from scoped_activity
       left join request_usage on request_usage.request_activity_id = scoped_activity.id
       left join request_costs on request_costs.request_activity_id = scoped_activity.id
-      left join request_savings on request_savings.request_activity_id = scoped_activity.id
       left join fallback_counts on fallback_counts.request_activity_id = scoped_activity.id
       group by ${dimension.id}, ${dimension.label}
       order by count(scoped_activity.id) desc,
@@ -283,7 +280,6 @@ async function queryRouteMetrics(
       from scoped_activity
       left join request_usage on request_usage.request_activity_id = scoped_activity.id
       left join request_costs on request_costs.request_activity_id = scoped_activity.id
-      left join request_savings on request_savings.request_activity_id = scoped_activity.id
       left join fallback_counts on fallback_counts.request_activity_id = scoped_activity.id
       group by ${topRouteSql.id}, ${topRouteSql.label}
       order by count(scoped_activity.id) desc,
@@ -406,7 +402,7 @@ const analyticsMetricSelectSql = `
   coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
   coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
   coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text as total_cost_usd,
-  coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text as total_savings_usd,
+  coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text as total_savings_usd,
   (
     percentile_cont(0.95) within group (order by scoped_activity.latency_ms)
       filter (where scoped_activity.latency_ms is not null)

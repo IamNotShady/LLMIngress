@@ -330,7 +330,14 @@ async function seedCompletedRequest(
         total_cost_usd,
         cost_source,
         price_source,
-        price_version
+        price_version,
+        baseline_provider_model_id,
+        actual_cost_usd,
+        baseline_cost_usd,
+        savings_usd,
+        savings_percent,
+        savings_price_source,
+        savings_price_version
       )
       values (
         $1,
@@ -342,31 +349,11 @@ async function seedCompletedRequest(
         0.00030000,
         'estimated',
         'built_in_static_snapshot',
-        'stale-price-version'
-      )
-    `,
-    [randomUUID(), requestActivityId, input.agentApiKeyId, input.providerModelId],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id,
-        request_activity_id,
-        baseline_provider_model_id,
-        actual_cost_usd,
-        baseline_cost_usd,
-        savings_usd,
-        savings_percent,
-        price_source,
-        price_version
-      )
-      values (
-        $1,
-        $2,
-        $3,
-        0.00030000,
-        $4,
+        'stale-price-version',
         $5,
+        0.00030000,
+        $6,
+        $7,
         97.000000,
         'built_in_static_snapshot',
         'stale-price-version'
@@ -375,6 +362,8 @@ async function seedCompletedRequest(
     [
       randomUUID(),
       requestActivityId,
+      input.agentApiKeyId,
+      input.providerModelId,
       input.providerModelId,
       input.baselineCostUsd,
       input.baselineCostUsd - 0.0003,
@@ -441,11 +430,10 @@ async function readCostsAndSavings(fixture: Fixture): Promise<CostAndSavingsRow[
              request_costs.cost_source,
              request_costs.price_source,
              request_costs.price_version,
-             request_savings.actual_cost_usd::text,
-             request_savings.savings_usd::text
+             request_costs.actual_cost_usd::text,
+             request_costs.savings_usd::text
       from request_activity
       join request_costs on request_costs.request_activity_id = request_activity.id
-      join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.request_id in (
         'req_price_reconcile_074',
         'req_provider_reconcile_074'

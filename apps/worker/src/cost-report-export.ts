@@ -219,12 +219,11 @@ async function getCostReportUsageSummary(input: {
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
-             coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+             coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                as total_savings_usd
       from request_activity
       left join request_usage on request_usage.request_activity_id = request_activity.id
       left join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.started_at >= $1
     `,
     [input.windowStart.toISOString()],
@@ -241,14 +240,13 @@ async function getCostReportUsageSummary(input: {
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
-             coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+             coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                as total_savings_usd
       from request_activity
       left join providers on providers.id = request_activity.provider_id
       left join provider_models on provider_models.id = request_activity.provider_model_id
       left join request_usage on request_usage.request_activity_id = request_activity.id
       left join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.started_at >= $1
       group by request_activity.provider_id,
                request_activity.provider_model_id,
@@ -271,13 +269,12 @@ async function getCostReportUsageSummary(input: {
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
-             coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+             coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                as total_savings_usd
       from request_activity
       left join agents on agents.id = request_activity.agent_id
       left join request_usage on request_usage.request_activity_id = request_activity.id
       left join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.started_at >= $1
       group by agents.id,
                agents.name
@@ -301,13 +298,12 @@ async function getCostReportUsageSummary(input: {
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
-             coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+             coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                as total_savings_usd
       from request_activity
       left join virtual_models on virtual_models.id = request_activity.virtual_model_id
       left join request_usage on request_usage.request_activity_id = request_activity.id
       left join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.started_at >= $1
       group by request_activity.virtual_model_id,
                virtual_models.description,
@@ -327,13 +323,12 @@ async function getCostReportUsageSummary(input: {
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
-             coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+             coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                as total_savings_usd
       from request_activity
       left join providers on providers.id = request_activity.provider_id
       left join request_usage on request_usage.request_activity_id = request_activity.id
       left join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.started_at >= $1
       group by request_activity.provider_id,
                providers.display_name
@@ -357,13 +352,12 @@ async function getCostReportUsageSummary(input: {
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
-             coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+             coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                as total_savings_usd
       from request_activity
       left join provider_models on provider_models.id = request_activity.provider_model_id
       left join request_usage on request_usage.request_activity_id = request_activity.id
       left join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.started_at >= $1
       group by request_activity.provider_model_id,
                provider_models.display_name,

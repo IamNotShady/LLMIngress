@@ -108,9 +108,16 @@ export async function recordGatewayUsageCostAndSavings(
           total_cost_usd,
           cost_source,
           price_source,
-          price_version
+          price_version,
+          baseline_provider_model_id,
+          actual_cost_usd,
+          baseline_cost_usd,
+          savings_usd,
+          savings_percent,
+          savings_price_source,
+          savings_price_version
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       `,
       [
         randomUUID(),
@@ -123,26 +130,6 @@ export async function recordGatewayUsageCostAndSavings(
         records.requestCost.costSource,
         records.requestCost.priceSource,
         records.requestCost.priceVersion,
-      ],
-    );
-    await client.query(
-      `
-        insert into request_savings (
-          id,
-          request_activity_id,
-          baseline_provider_model_id,
-          actual_cost_usd,
-          baseline_cost_usd,
-          savings_usd,
-          savings_percent,
-          price_source,
-          price_version
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      `,
-      [
-        randomUUID(),
-        input.activityId,
         records.requestSavings.baselineProviderModelId,
         records.requestSavings.actualCostUsd,
         records.requestSavings.baselineCostUsd,

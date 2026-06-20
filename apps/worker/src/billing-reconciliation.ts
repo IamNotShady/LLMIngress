@@ -79,7 +79,6 @@ type BillingReconciliationCandidateRow = QueryResultRow & {
   provider_key: string;
   request_cost_id: string;
   request_id: string;
-  request_savings_id: string | null;
   savings_usd: string | null;
   synced_at: Date | null;
   synced_cached_input_usd_per_million_tokens: string | null;
@@ -335,9 +334,8 @@ async function readReconciliationCandidates(
              request_costs.cost_source,
              request_costs.price_source,
              request_costs.price_version,
-             request_savings.id::text as request_savings_id,
-             request_savings.baseline_cost_usd::text,
-             request_savings.savings_usd::text,
+             request_costs.baseline_cost_usd::text,
+             request_costs.savings_usd::text,
              provider_models.manual_input_usd_per_million_tokens::text
                as manual_input_usd_per_million_tokens,
              provider_models.manual_cached_input_usd_per_million_tokens::text
@@ -360,7 +358,6 @@ async function readReconciliationCandidates(
       from request_activity
       join request_usage on request_usage.request_activity_id = request_activity.id
       join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       join provider_models on provider_models.id = request_usage.provider_model_id
       join providers on providers.id = provider_models.provider_id
       where request_activity.status = 'succeeded'
@@ -390,7 +387,12 @@ async function updateReconciledCostAndSavings(
           cost_source = $5,
           price_source = $6,
           price_version = $7,
-          reconciled_at = $8::timestamptz
+          reconciled_at = $8::timestamptz,
+          actual_cost_usd = $9,
+          savings_usd = $10,
+          savings_percent = $11,
+          savings_price_source = $12,
+          savings_price_version = $13
       where id = $1
     `,
     [
@@ -402,25 +404,6 @@ async function updateReconciledCostAndSavings(
       input.update.newCost.priceSource,
       input.update.newCost.priceVersion,
       input.observedAt.toISOString(),
-    ],
-  );
-
-  if (!input.candidate.request_savings_id) {
-    return;
-  }
-
-  await client.query(
-    `
-      update request_savings
-      set actual_cost_usd = $2,
-          savings_usd = $3,
-          savings_percent = $4,
-          price_source = $5,
-          price_version = $6
-      where id = $1
-    `,
-    [
-      input.candidate.request_savings_id,
       input.update.newSavings.actualCostUsd,
       input.update.newSavings.savingsUsd,
       input.update.newSavings.savingsPercent,

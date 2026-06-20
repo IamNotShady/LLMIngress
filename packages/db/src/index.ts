@@ -76,10 +76,6 @@ type AppliedMigrationRow = QueryResultRow & {
   name: string;
 };
 
-type SchemaVersionRow = QueryResultRow & {
-  version: string;
-};
-
 const migrationFilePattern = /^(\d{4,})_([a-z0-9][a-z0-9_]*)\.sql$/;
 const migrationAdvisoryLockId = 7_790_077;
 
@@ -187,12 +183,9 @@ export async function getMigrationStatus(
   });
 
   return withClient(options.databaseUrl, async (client) => {
-    const [hasMigrationHistory, hasSchemaVersion] = await Promise.all([
-      tableExists(client, "migration_history"),
-      tableExists(client, "schema_version"),
-    ]);
+    const hasMigrationHistory = await tableExists(client, "migration_history");
     const appliedMigrations = hasMigrationHistory ? await readAppliedMigrations(client) : [];
-    const currentSchemaVersion = hasSchemaVersion ? await readCurrentSchemaVersion(client) : null;
+    const currentSchemaVersion = appliedMigrations.at(-1)?.id ?? null;
 
     return summarizeMigrationStatus({
       appliedMigrations,
@@ -389,17 +382,6 @@ async function readAppliedMigrations(client: Client): Promise<AppliedMigrationSt
     id: row.id,
     name: row.name,
   }));
-}
-
-async function readCurrentSchemaVersion(client: Client): Promise<string | null> {
-  const result = await client.query<SchemaVersionRow>(
-    `
-      select version
-      from schema_version
-      where id = 1
-    `,
-  );
-  return result.rows[0]?.version ?? null;
 }
 
 const createMigrationHistoryTableSql = `

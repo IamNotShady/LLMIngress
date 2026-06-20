@@ -616,29 +616,15 @@ async function insertUsageCostSavings(
     `
       insert into request_costs (
         id, request_activity_id, agent_id, provider_model_id,
-        total_cost_usd, cost_source
+        total_cost_usd, cost_source, baseline_provider_model_id,
+        actual_cost_usd, baseline_cost_usd, savings_usd, savings_percent
       )
-      values ($1, $2, $3, $4, $5, 'estimated')
+      values ($1, $2, $3, $4, $5, 'estimated', $4, $5, $6, $7, 61.162790)
     `,
     [
       randomUUID(),
       input.activityId,
       input.agentApiKeyId,
-      input.providerModelId,
-      input.totalCostUsd,
-    ],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id, request_activity_id, baseline_provider_model_id,
-        actual_cost_usd, baseline_cost_usd, savings_usd, savings_percent
-      )
-      values ($1, $2, $3, $4, $5, $6, 61.162790)
-    `,
-    [
-      randomUUID(),
-      input.activityId,
       input.providerModelId,
       input.totalCostUsd,
       String(Number(input.totalCostUsd) + Number(input.savingsUsd)),

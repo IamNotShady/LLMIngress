@@ -263,7 +263,7 @@ Gateway 在完成路由决策并拿到实际 usage 后，同步写入：
 - savings amount / percent：`baseline hypothetical cost - actual cost` 及百分比。
 - price source / price version：记录本次计算使用的价格来源，避免后续价格同步后历史 savings 被重算漂移。
 
-这样 Overview 和 Usage 页面可以直接聚合 `request_savings` 或 `request_costs` 中的 baseline 字段，不需要在查询时重新跑一遍历史路由逻辑。Worker 的 billing reconciliation 可以更新 actual cost，但不改变原始 route decision；如果 actual cost 被对账修正，Worker 可以按同一 baseline 重新计算 savings 并标记 reconciled。
+这样 Overview 和 Usage 页面可以直接聚合 `request_costs` 中的 baseline / savings 字段，不需要在查询时重新跑一遍历史路由逻辑。Worker 的 billing reconciliation 可以更新 actual cost，但不改变原始 route decision；如果 actual cost 被对账修正，Worker 可以按同一 baseline 重新计算 savings 并标记 reconciled。
 
 ### 4.6 Provider Adapter Strategy
 
@@ -387,7 +387,7 @@ Background Worker / Scheduler
 配置写入 owner 规则：
 
 - Console 是用户配置的 owner，写入 Agents、Agent Virtual Model grants、Providers、Virtual Models、Route Policies、Limits、Settings 等用户显式配置。
-- Worker 是 Provider 派生数据和异步运行数据的 owner：provider model list、price registry snapshot 等会进入配置版本；provider health summary、billing reconciliation 对 `request_costs` / `request_savings` 的修正等是运行数据，不进入 config snapshot。
+- Worker 是 Provider 派生数据和异步运行数据的 owner：provider model list、price registry snapshot 等会进入配置版本；provider health summary、billing reconciliation 对 `request_costs` 的修正等是运行数据，不进入 config snapshot。
 - Console 和 Worker 都必须通过同一个 config publisher 发布 routing-visible config version；任何一方发布 config version 后，都通过 Postgres `config_changed` channel 唤醒 Gateway reload。Worker 的健康探测结果不发布 config version，而是通过 health summary 表和 `health_summary_changed` channel 进入 Gateway health view 的刷新链路。
 
 Worker 的运行边界：
@@ -693,8 +693,7 @@ PostgreSQL database
 ├── Runtime records
 │   ├── request_activity
 │   ├── request_usage
-│   ├── request_costs
-│   ├── request_savings
+│   ├── request_costs (including baseline and savings fields)
 │   ├── fallback_events
 │   ├── provider_health_events
 │   ├── provider_health_summary

@@ -69,13 +69,11 @@ test("scheduled retention cleanup uses configurable window deletes expired data 
       newFallbackEvents: 1,
       newRequestActivities: 1,
       newRequestCosts: 1,
-      newRequestSavings: 1,
       newRequestUsages: 1,
       oldExportTasks: 0,
       oldFallbackEvents: 0,
       oldRequestActivities: 0,
       oldRequestCosts: 0,
-      oldRequestSavings: 0,
       oldRequestUsages: 0,
     });
     await expect(readRetentionJob(fixture)).resolves.toMatchObject({
@@ -340,24 +338,14 @@ async function insertRequestData(
         agent_id,
         provider_model_id,
         total_cost_usd,
-        cost_source
-      )
-      values ($1, $2, $3, $4, 0.00100000, 'estimated')
-    `,
-    [randomUUID(), input.activityId, input.agentApiKeyId, input.providerModelId],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id,
-        request_activity_id,
+        cost_source,
         actual_cost_usd,
         baseline_cost_usd,
         savings_usd
       )
-      values ($1, $2, 0.00100000, 0.00300000, 0.00200000)
+      values ($1, $2, $3, $4, 0.00100000, 'estimated', 0.00100000, 0.00300000, 0.00200000)
     `,
-    [randomUUID(), input.activityId],
+    [randomUUID(), input.activityId, input.agentApiKeyId, input.providerModelId],
   );
   await fixture.query(
     `
@@ -423,13 +411,11 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
     new_fallback_events: number;
     new_request_activities: number;
     new_request_costs: number;
-    new_request_savings: number;
     new_request_usages: number;
     old_export_tasks: number;
     old_fallback_events: number;
     old_request_activities: number;
     old_request_costs: number;
-    old_request_savings: number;
     old_request_usages: number;
   }>(
     `
@@ -437,13 +423,11 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
         (select count(*)::integer from request_activity where id = $1) as old_request_activities,
         (select count(*)::integer from request_usage where request_activity_id = $1) as old_request_usages,
         (select count(*)::integer from request_costs where request_activity_id = $1) as old_request_costs,
-        (select count(*)::integer from request_savings where request_activity_id = $1) as old_request_savings,
         (select count(*)::integer from fallback_events where request_activity_id = $1) as old_fallback_events,
         (select count(*)::integer from export_tasks where id = $2) as old_export_tasks,
         (select count(*)::integer from request_activity where id = $3) as new_request_activities,
         (select count(*)::integer from request_usage where request_activity_id = $3) as new_request_usages,
         (select count(*)::integer from request_costs where request_activity_id = $3) as new_request_costs,
-        (select count(*)::integer from request_savings where request_activity_id = $3) as new_request_savings,
         (select count(*)::integer from fallback_events where request_activity_id = $3) as new_fallback_events,
         (select count(*)::integer from export_tasks where id = $4) as new_export_tasks,
         (select count(*)::integer from budget_periods where id = $5) as aggregate_budget_periods,
@@ -467,13 +451,11 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
     newFallbackEvents: row.new_fallback_events,
     newRequestActivities: row.new_request_activities,
     newRequestCosts: row.new_request_costs,
-    newRequestSavings: row.new_request_savings,
     newRequestUsages: row.new_request_usages,
     oldExportTasks: row.old_export_tasks,
     oldFallbackEvents: row.old_fallback_events,
     oldRequestActivities: row.old_request_activities,
     oldRequestCosts: row.old_request_costs,
-    oldRequestSavings: row.old_request_savings,
     oldRequestUsages: row.old_request_usages,
   };
 }

@@ -18,9 +18,9 @@ test("refresh provider models shows priced and unknown price status in provider 
   const providerApiKey = "sk-price-status-secret";
   const provider = await createFakeProviderServer({
     models: [
-      { id: "gpt-4.1-mini", name: "GPT-4.1 Mini" },
-      { id: "manual-priced-model", name: "Manual Priced Model" },
-      { id: "unknown-refresh-model", name: "Unknown Refresh Model" },
+      { contextWindow: 128_000, id: "gpt-4.1-mini", name: "GPT-4.1 Mini" },
+      { contextWindow: 8192, id: "manual-priced-model", name: "Manual Priced Model" },
+      { contextWindow: 8192, id: "unknown-refresh-model", name: "Unknown Refresh Model" },
     ],
     requiredModelListAuthorization: `Bearer ${providerApiKey}`,
   });

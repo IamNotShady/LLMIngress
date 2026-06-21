@@ -1,6 +1,7 @@
 "use client";
 
 import { type DragEvent, useMemo, useState } from "react";
+import { FlatIcon } from "../_components/flat-icon";
 
 type Strategy = "fixed" | "cost_first" | "balanced" | "quality_first";
 
@@ -136,7 +137,8 @@ export function VirtualModelRouteDialogClient({
             {mode === "create" ? "创建 Virtual Model" : `编辑 Virtual Model：${virtualModel?.name}`}
           </h2>
           <a className="secondary-button" href={closeHref}>
-            Close
+            <FlatIcon name="cancel" />
+            <span>Close</span>
           </a>
         </div>
         <div className="vm-editor-grid">
@@ -262,7 +264,8 @@ export function VirtualModelRouteDialogClient({
                               type="button"
                               onClick={() => removeCandidate(index)}
                             >
-                              Remove
+                              <FlatIcon name="delete" />
+                              <span>Remove</span>
                             </button>
                           </td>
                         </tr>
@@ -279,14 +282,19 @@ export function VirtualModelRouteDialogClient({
                 type="button"
                 onClick={() => setPickerOpen(true)}
               >
-                Add Model
+                <FlatIcon name="add" />
+                <span>Add Model</span>
               </button>
             </section>
             <div className="vm-dialog-actions">
               <a className="secondary-button" href={closeHref}>
-                取消
+                <FlatIcon name="cancel" />
+                <span>取消</span>
               </a>
-              <button type="submit">保存</button>
+              <button type="submit">
+                <FlatIcon name="save" />
+                <span>保存</span>
+              </button>
             </div>
           </form>
           <aside className="chart-card vm-policy-note">
@@ -339,7 +347,8 @@ export function VirtualModelRouteDialogClient({
                 type="button"
                 onClick={() => setPickerOpen(false)}
               >
-                Close
+                <FlatIcon name="cancel" />
+                <span>Close</span>
               </button>
             </div>
             <div className="vm-model-filter-bar">

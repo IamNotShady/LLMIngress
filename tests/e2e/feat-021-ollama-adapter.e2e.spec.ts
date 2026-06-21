@@ -2,8 +2,8 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
-import { createOllamaProviderAdapter } from "../../apps/gateway/src/provider-adapters/ollama";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createOllamaProviderAdapter } from "../../packages/provider/src/adapters/ollama";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 

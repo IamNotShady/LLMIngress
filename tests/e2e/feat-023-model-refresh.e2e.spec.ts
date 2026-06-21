@@ -13,7 +13,11 @@ test("model refresh writes derived rows marks missing referenced models unavaila
     databaseNamePrefix: `llmingress_model_refresh_${randomUUID().replaceAll("-", "_")}`,
   });
   const server = await createFakeProviderServer({
-    models: [{ id: "stable" }, { id: "stable" }, { id: "old-referenced" }],
+    models: [
+      { contextWindow: 8192, id: "stable" },
+      { contextWindow: 8192, id: "stable" },
+      { contextWindow: 8192, id: "old-referenced" },
+    ],
   });
   const providerId = randomUUID();
 
@@ -37,7 +41,10 @@ test("model refresh writes derived rows marks missing referenced models unavaila
     const referencedModelId = await readProviderModelId(fixture, providerId, "old-referenced");
     await insertRouteReference(fixture, referencedModelId);
 
-    server.setModels([{ id: "stable" }, { id: "new-derived" }]);
+    server.setModels([
+      { contextWindow: 8192, id: "stable" },
+      { contextWindow: 8192, id: "new-derived" },
+    ]);
     await runModelRefreshJob(fixture, providerId);
 
     await expectModelRows(fixture, [
@@ -62,7 +69,7 @@ test("anthropic model refresh authenticates model list with Anthropic API key he
     databaseNamePrefix: `llmingress_anthropic_model_refresh_${randomUUID().replaceAll("-", "_")}`,
   });
   const server = await createFakeProviderServer({
-    models: [{ id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }],
+    models: [{ contextWindow: 200_000, id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }],
   });
   const providerId = randomUUID();
 

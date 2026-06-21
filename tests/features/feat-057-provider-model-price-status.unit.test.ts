@@ -69,11 +69,12 @@ async function seedProviderModels(fixture: Fixture): Promise<void> {
     `
       insert into provider_models (id, provider_id, model_id, display_name, availability)
       values
-        ($1, $4, 'gpt-4.1-mini', 'GPT-4.1 Mini', 'available'),
-        ($2, $4, 'manual-priced-model', 'Manual Priced Model', 'available'),
-        ($3, $4, 'unknown-refresh-model', 'Unknown Refresh Model', 'available')
+        ($1, $5, 'gpt-4.1-mini', 'GPT-4.1 Mini', 'available'),
+        ($2, $5, 'manual-priced-model', 'Manual Priced Model', 'available'),
+        ($3, $5, 'not-listed-model', 'Not Listed Model', 'not_listed'),
+        ($4, $5, 'unknown-refresh-model', 'Unknown Refresh Model', 'available')
     `,
-    [randomUUID(), randomUUID(), randomUUID(), providerId],
+    [randomUUID(), randomUUID(), randomUUID(), randomUUID(), providerId],
   );
   await fixture.query(
     `

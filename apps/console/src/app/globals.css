@@ -833,6 +833,30 @@ button:active,
   transform: translateY(1px);
 }
 
+.flat-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  object-fit: contain;
+  vertical-align: -0.2em;
+}
+button .flat-icon,
+.btn .flat-icon,
+.secondary-button .flat-icon,
+.table-action-link .flat-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.icon-only .flat-icon,
+.provider-action-button .flat-icon,
+.provider-key-add-button .flat-icon,
+.provider-key-delete-button .flat-icon,
+.provider-refresh-button .flat-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 .secondary-button,
 .btn-ghost {
   color: var(--text);
@@ -1907,6 +1931,9 @@ details.disclosure[open] > .disclosure-summary {
   gap: var(--space-2xs);
 }
 .table-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
   color: var(--accent-strong);
   font-weight: 700;
   text-decoration: none;
@@ -2175,6 +2202,52 @@ details.disclosure[open] > .disclosure-summary {
 .agent-table-actions .agent-action-delete:hover {
   background: #b91c1c !important;
   border-color: #b91c1c !important;
+}
+
+:where(button, a):has(.flat-icon) {
+  min-width: 2.25rem !important;
+  width: 2.25rem !important;
+  min-height: 2.25rem !important;
+  height: 2.25rem !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+:where(button, a):has(.flat-icon):hover,
+:where(button, a):has(.flat-icon):active {
+  color: inherit !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  transform: none !important;
+  text-decoration: none !important;
+}
+:where(button, a):has(.flat-icon) > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+:where(button, a):has(.flat-icon) .flat-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+.agent-table-actions .link-button:has(.flat-icon),
+.agent-table-actions .agent-action-edit:has(.flat-icon),
+.agent-table-actions .agent-action-delete:has(.flat-icon),
+.agent-table-actions .link-button:has(.flat-icon):hover,
+.agent-table-actions .agent-action-edit:has(.flat-icon):hover,
+.agent-table-actions .agent-action-delete:has(.flat-icon):hover {
+  color: inherit !important;
+  background: transparent !important;
+  border-color: transparent !important;
 }
 .agent-delete-dialog {
   width: min(28rem, calc(100vw - 2rem));

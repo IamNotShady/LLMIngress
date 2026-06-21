@@ -1,3 +1,12 @@
+import {
+  type AnthropicAdapterSuccess,
+  type AnthropicContentBlock,
+  type AnthropicMessageContent,
+  type AnthropicProviderAdapter,
+  createAnthropicProviderAdapter,
+  type NormalizedAnthropicMessage,
+  type NormalizedAnthropicMessagesRequest,
+} from "@llmingress/provider/anthropic";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
@@ -25,15 +34,6 @@ import {
   recordFailedAttemptInDatabase,
   recordSucceededAttemptInDatabase,
 } from "./fallback-chain.js";
-import {
-  type AnthropicAdapterSuccess,
-  type AnthropicContentBlock,
-  type AnthropicMessageContent,
-  type AnthropicProviderAdapter,
-  createAnthropicProviderAdapter,
-  type NormalizedAnthropicMessage,
-  type NormalizedAnthropicMessagesRequest,
-} from "./provider-adapters/anthropic.js";
 import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,

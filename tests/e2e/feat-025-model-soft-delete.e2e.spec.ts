@@ -21,7 +21,10 @@ test("missing referenced model marked unavailable excluded from routing and warn
     databaseNamePrefix: `llmingress_model_soft_delete_${randomUUID().replaceAll("-", "_")}`,
   });
   const server = await createFakeProviderServer({
-    models: [{ id: "old-referenced" }, { id: "stable" }],
+    models: [
+      { contextWindow: 8192, id: "old-referenced" },
+      { contextWindow: 8192, id: "stable" },
+    ],
   });
   const providerId = randomUUID();
 
@@ -42,7 +45,7 @@ test("missing referenced model marked unavailable excluded from routing and warn
       stableModelId,
     });
 
-    server.setModels([{ id: "stable" }]);
+    server.setModels([{ contextWindow: 8192, id: "stable" }]);
     await runModelRefreshJob(fixture, providerId);
 
     await expectModelRows(fixture, [

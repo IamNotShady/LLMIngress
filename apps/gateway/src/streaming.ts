@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
+import { openRouterAttributionHeaders } from "@llmingress/provider/openrouter";
 import { Client } from "pg";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
@@ -21,7 +22,6 @@ import type {
 } from "./config-reload.js";
 import { mapGatewayErrorStatus } from "./error-mapping.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
-import { openRouterAttributionHeaders } from "./provider-adapters/openrouter.js";
 import {
   enforceGatewayRateLimits,
   type GatewayConcurrencyLease,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FlatIcon } from "./_components/flat-icon";
 import {
   buildPlaygroundChatRequest,
   formatPlaygroundFetchError,
@@ -135,7 +136,8 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
             </div>
             <div className="console-actions">
               <button type="button" onClick={() => void loadAllowedModels()}>
-                Load allowed models
+                <FlatIcon name="refresh" />
+                <span>Load allowed models</span>
               </button>
             </div>
             <div className="console-field">
@@ -168,7 +170,8 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 disabled={!agentApiKey || !selectedModel}
                 onClick={() => void sendLiveRequest()}
               >
-                Send live request
+                <FlatIcon name="confirm" />
+                <span>Send live request</span>
               </button>
             </div>
           </div>

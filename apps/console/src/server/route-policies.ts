@@ -819,6 +819,7 @@ function providerModelOptionsSql(): string {
   return `
     ${providerModelOptionsSelectSql()}
     where provider_models.deleted_at is null
+      and provider_models.availability = 'available'
       and providers.deleted_at is null
     order by providers.display_name, provider_models.display_name
   `;

@@ -1,3 +1,10 @@
+import {
+  createOpenAIProviderAdapter,
+  type NormalizedOpenAIEmbeddingsRequest,
+  type OpenAIAdapterSuccess,
+  type OpenAIProviderAdapter,
+} from "@llmingress/provider/openai";
+import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
@@ -20,13 +27,6 @@ import {
   recordFailedAttemptInDatabase,
   recordSucceededAttemptInDatabase,
 } from "./fallback-chain.js";
-import {
-  createOpenAIProviderAdapter,
-  type NormalizedOpenAIEmbeddingsRequest,
-  type OpenAIAdapterSuccess,
-  type OpenAIProviderAdapter,
-} from "./provider-adapters/openai.js";
-import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
 import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 import { selectRouteCandidate } from "./route-engine.js";

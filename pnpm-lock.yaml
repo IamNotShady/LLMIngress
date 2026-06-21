@@ -50,6 +50,9 @@ importers:
       '@llmingress/security':
         specifier: workspace:*
         version: link:../../packages/security
+      flat-color-icons:
+        specifier: ^1.1.0
+        version: 1.1.0
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -90,6 +93,9 @@ importers:
       '@llmingress/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@llmingress/provider':
+        specifier: workspace:*
+        version: link:../../packages/provider
       '@llmingress/security':
         specifier: workspace:*
         version: link:../../packages/security
@@ -114,6 +120,9 @@ importers:
       '@llmingress/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@llmingress/provider':
+        specifier: workspace:*
+        version: link:../../packages/provider
       '@llmingress/security':
         specifier: workspace:*
         version: link:../../packages/security
@@ -142,6 +151,8 @@ importers:
         version: link:../billing
 
   packages/observability: {}
+
+  packages/provider: {}
 
   packages/security: {}
 
@@ -1011,6 +1022,9 @@ packages:
   find-my-way@9.6.0:
     resolution: {integrity: sha512-Zf4Xve4RymLl7NgaavNebZ01joJ8MfVerOG43wy7SHLO+r+K0C6d/SE0BiR7AV5V1VOCFlOP7ecdo+I4qmiHrQ==}
     engines: {node: '>=20'}
+
+  flat-color-icons@1.1.0:
+    resolution: {integrity: sha512-duN0PycToLxktav7Asyw0hYCSxH8dvoCbeZHw0zSTw+KXg4rAH4CcLViDrGjg//nLfoZjiDV34kw8xmJJfSfqA==}
 
   fsevents@2.3.2:
     resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
@@ -2184,6 +2198,8 @@ snapshots:
       fast-deep-equal: 3.1.3
       fast-querystring: 1.1.2
       safe-regex2: 5.1.1
+
+  flat-color-icons@1.1.0: {}
 
   fsevents@2.3.2:
     optional: true

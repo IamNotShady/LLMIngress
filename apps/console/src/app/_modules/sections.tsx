@@ -68,6 +68,7 @@ import { type ConsoleVirtualModel, listVirtualModels } from "../../server/virtua
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
+import { FlatIcon } from "../_components/flat-icon";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref, paginate, readPageParam } from "../_lib/pagination";
@@ -679,7 +680,10 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           </select>
         </div>
         <div className="console-actions">
-          <button type="submit">Apply</button>
+          <button type="submit">
+            <FlatIcon name="filter" />
+            <span>Apply</span>
+          </button>
         </div>
       </form>
 
@@ -862,7 +866,10 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
           <input id="activity-q" name="q" defaultValue={requestQuery} placeholder="req_..." />
         </div>
         <div className="console-actions">
-          <button type="submit">Apply</button>
+          <button type="submit">
+            <FlatIcon name="filter" />
+            <span>Apply</span>
+          </button>
         </div>
       </form>
 
@@ -1089,7 +1096,10 @@ export async function VirtualModelsSection({
           placeholder="搜索 Virtual Model Name"
           defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}
         />
-        <button type="submit">筛选</button>
+        <button type="submit">
+          <FlatIcon name="filter" />
+          <span>筛选</span>
+        </button>
       </form>
       <div className="vm-shell">
         <div className="agents-main-column">
@@ -1171,7 +1181,8 @@ export async function VirtualModelsSection({
                                 virtualModelDialog: virtualModel.id,
                               })}
                             >
-                              编辑
+                              <FlatIcon name="edit" />
+                              <span>编辑</span>
                             </a>
                           </td>
                         </tr>
@@ -1387,7 +1398,10 @@ export async function RoutePoliciesSection({
             name="routeModelFilter"
             defaultValue={routePolicyEditorFilters.modelQuery ?? ""}
           />
-          <button type="submit">Apply route policy filters</button>
+          <button type="submit">
+            <FlatIcon name="filter" />
+            <span>Apply route policy filters</span>
+          </button>
           <a href="/routing">Clear route policy filters</a>
         </form>
       )}
@@ -1447,7 +1461,10 @@ export async function RoutePoliciesSection({
                 </option>
               ))}
             </select>
-            <button type="submit">Create route policy</button>
+            <button type="submit">
+              <FlatIcon name="add" />
+              <span>Create route policy</span>
+            </button>
           </form>
         </Disclosure>
       )}
@@ -1550,14 +1567,18 @@ export async function RoutePoliciesSection({
                       </option>
                     ))}
                   </select>
-                  <button type="submit">Save route policy</button>
+                  <button type="submit">
+                    <FlatIcon name="save" />
+                    <span>Save route policy</span>
+                  </button>
                 </form>
                 <div className="row-actions">
                   <form action="/api/route-policies" method="post">
                     <input type="hidden" name="action" value="delete" />
                     <input type="hidden" name="id" value={routePolicy.id} />
                     <button className="secondary-button" type="submit">
-                      Delete route policy
+                      <FlatIcon name="delete" />
+                      <span>Delete route policy</span>
                     </button>
                   </form>
                 </div>
@@ -1811,7 +1832,8 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                                 className="link-button agent-action-edit"
                                 href={buildQueryHref(searchParams, { agentDialog: agent.id })}
                               >
-                                Edit
+                                <FlatIcon name="edit" />
+                                <span>Edit</span>
                               </a>
                               <a
                                 className="link-button agent-action-delete"
@@ -1820,7 +1842,8 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                                   deleteAgent: agent.id,
                                 })}
                               >
-                                Delete
+                                <FlatIcon name="delete" />
+                                <span>Delete</span>
                               </a>
                             </span>
                           </td>
@@ -1960,7 +1983,8 @@ function AgentCreateDialog({
         <div className="console-dialog-head">
           <h2 id="new-agent-dialog-title">New agent</h2>
           <a className="secondary-button" href={closeHref}>
-            Close
+            <FlatIcon name="cancel" />
+            <span>Close</span>
           </a>
         </div>
         <form className="provider-create-form" action="/api/agents" id="new-agent" method="post">
@@ -2071,7 +2095,10 @@ function AgentCreateDialog({
             defaultValue={defaultAgentLimitFormValues.tokenLimit}
             required
           />
-          <button type="submit">Create agent</button>
+          <button type="submit">
+            <FlatIcon name="add" />
+            <span>Create agent</span>
+          </button>
         </form>
       </section>
     </>
@@ -2108,7 +2135,8 @@ function AgentEditDialog({
         <div className="console-dialog-head">
           <h2 id={`agent-dialog-title-${agent.id}`}>Edit {agent.name}</h2>
           <a className="secondary-button" href={closeHref}>
-            Close
+            <FlatIcon name="cancel" />
+            <span>Close</span>
           </a>
         </div>
         <form className="provider-edit-form" action="/api/agents" method="post">
@@ -2232,7 +2260,10 @@ function AgentEditDialog({
             defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
             required
           />
-          <button type="submit">Save</button>
+          <button type="submit">
+            <FlatIcon name="save" />
+            <span>Save</span>
+          </button>
         </form>
       </section>
     </>
@@ -2255,13 +2286,15 @@ function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHre
         <p>This removes the Agent and its API key.</p>
         <div className="agent-delete-actions">
           <a className="agent-delete-cancel" href={closeHref}>
-            Cancel
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
           </a>
           <form action="/api/agents" method="post">
             <input type="hidden" name="action" value="delete" />
             <input type="hidden" name="id" value={agent.id} />
             <button className="agent-delete-confirm" type="submit">
-              Delete
+              <FlatIcon name="delete" />
+              <span>Delete</span>
             </button>
           </form>
         </div>
@@ -2562,7 +2595,10 @@ function LimitsConfigPanel({
             )}
           </div>
         </div>
-        <button type="submit">Save rule</button>
+        <button type="submit">
+          <FlatIcon name="save" />
+          <span>Save rule</span>
+        </button>
       </form>
     </div>
   );
@@ -2712,7 +2748,10 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
           defaultValue={output ?? ""}
           required
         />
-        <button type="submit">Save price override</button>
+        <button type="submit">
+          <FlatIcon name="save" />
+          <span>Save price override</span>
+        </button>
       </form>
     </div>
   );
@@ -2912,7 +2951,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                                     aria-label={`Edit ${provider.displayName}`}
                                     title="Edit"
                                   >
-                                    ✎
+                                    <FlatIcon name="edit" />
                                   </a>
                                   <form action="/api/providers" method="post">
                                     <input type="hidden" name="action" value="disable" />
@@ -2923,7 +2962,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                                       title="Disable"
                                       type="submit"
                                     >
-                                      ‖
+                                      <FlatIcon name="disable" />
                                     </button>
                                   </form>
                                 </>
@@ -2937,7 +2976,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                                     title="Enable"
                                     type="submit"
                                   >
-                                    ▶
+                                    <FlatIcon name="enable" />
                                   </button>
                                 </form>
                               )}
@@ -2973,7 +3012,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                     title="Refresh models"
                     type="submit"
                   >
-                    ↻
+                    <FlatIcon name="refresh" />
                   </button>
                   {selectedProviderKeys.length === 0 ? (
                     <p className="field-error is-visible">请先添加 API KEY</p>
@@ -3017,7 +3056,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                     aria-label="Add API key"
                     title="Add API key"
                   >
-                    +
+                    <FlatIcon name="key" />
                   </a>
                 </div>
                 <div className="data-table-wrap">
@@ -3052,7 +3091,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                                 aria-label="Delete API key"
                                 title="Delete API key"
                               >
-                                🗑
+                                <FlatIcon name="delete" />
                               </a>
                             </td>
                           </tr>
@@ -3088,7 +3127,6 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   <th>Tools</th>
                   <th>Streaming</th>
                   <th>状态</th>
-                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -3108,11 +3146,6 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                     <td>{formatBooleanFeature(model.supportsStreaming)}</td>
                     <td>
                       <ModelAvailabilityPill value={model.availability} />
-                    </td>
-                    <td>
-                      <a className="table-action-link" href={`/models?providerModelId=${model.id}`}>
-                        查看
-                      </a>
                     </td>
                   </tr>
                 ))}
@@ -3189,7 +3222,8 @@ function ProviderCreateDialog({
         <div className="console-dialog-head">
           <h2 id="new-provider-dialog-title">添加 Provider</h2>
           <a className="secondary-button" href={closeHref}>
-            Close
+            <FlatIcon name="cancel" />
+            <span>Close</span>
           </a>
         </div>
         <ProviderCreateForm
@@ -3236,7 +3270,8 @@ function ProviderEditDialog({
         <div className="console-dialog-head">
           <h2 id="edit-provider-dialog-title">编辑 {provider.displayName}</h2>
           <a className="secondary-button" href={closeHref}>
-            Close
+            <FlatIcon name="cancel" />
+            <span>Close</span>
           </a>
         </div>
         <form className="provider-create-form" action="/api/providers" method="post">
@@ -3280,7 +3315,10 @@ function ProviderEditDialog({
           >
             {baseUrlError}
           </p>
-          <button type="submit">Save provider</button>
+          <button type="submit">
+            <FlatIcon name="save" />
+            <span>Save provider</span>
+          </button>
         </form>
       </section>
     </>
@@ -3306,7 +3344,8 @@ function ProviderKeyCreateDialog({
         <div className="console-dialog-head">
           <h2 id="provider-key-create-title">新增 {provider.displayName} API key</h2>
           <a className="secondary-button" href={closeHref}>
-            Close
+            <FlatIcon name="cancel" />
+            <span>Close</span>
           </a>
         </div>
         <form className="provider-create-form" action="/api/provider-keys" method="post">
@@ -3319,7 +3358,10 @@ function ProviderKeyCreateDialog({
             required
             type="password"
           />
-          <button type="submit">Save API key</button>
+          <button type="submit">
+            <FlatIcon name="key" />
+            <span>Save API key</span>
+          </button>
         </form>
       </section>
     </>
@@ -3350,10 +3392,12 @@ function ProviderKeyDeleteDialog({
         </p>
         <div className="agent-delete-actions">
           <a className="agent-delete-cancel" href={closeHref}>
-            Cancel
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
           </a>
           <button className="agent-delete-confirm" type="button">
-            Delete
+            <FlatIcon name="delete" />
+            <span>Delete</span>
           </button>
         </div>
       </section>
@@ -3449,28 +3493,34 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                 <h4>Export config</h4>
                 <p>Providers, Models, Virtual Models, Agents, Limits.</p>
                 <a className="secondary-button" download href="/api/config-export">
-                  Export redacted config
+                  <FlatIcon name="export" />
+                  <span>Export redacted config</span>
                 </a>
               </article>
               <article className="card">
                 <h4>Export request metadata</h4>
                 <p>Metadata only — no prompt / response content.</p>
                 <button className="secondary-button" type="button" disabled>
-                  Export CSV
+                  <FlatIcon name="export" />
+                  <span>Export CSV</span>
                 </button>
               </article>
               <article className="card">
                 <h4>Export cost report</h4>
                 <p>Aggregated by Agent, Provider, Model.</p>
                 <button className="secondary-button" type="button" disabled>
-                  Export report
+                  <FlatIcon name="export" />
+                  <span>Export report</span>
                 </button>
               </article>
             </div>
             <form className="provider-create-form" action="/api/config-import" method="post">
               <label htmlFor="config-import-json">Config import JSON</label>
               <textarea id="config-import-json" name="configJson" required rows={8} />
-              <button type="submit">Import redacted config</button>
+              <button type="submit">
+                <FlatIcon name="import" />
+                <span>Import redacted config</span>
+              </button>
             </form>
           </section>
 
@@ -3514,7 +3564,10 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                 <input id="notification-email-to" name="emailTo" type="email" required />
                 <label htmlFor="notification-email-from">Email from</label>
                 <input id="notification-email-from" name="emailFrom" type="email" required />
-                <button type="submit">Create email notification channel</button>
+                <button type="submit">
+                  <FlatIcon name="add" />
+                  <span>Create email notification channel</span>
+                </button>
               </form>
               <form
                 className="provider-create-form"
@@ -3527,7 +3580,10 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                 <input id="notification-webhook-name" name="displayName" required />
                 <label htmlFor="notification-webhook-url">Webhook URL</label>
                 <input id="notification-webhook-url" name="webhookUrl" type="url" required />
-                <button type="submit">Create webhook notification channel</button>
+                <button type="submit">
+                  <FlatIcon name="add" />
+                  <span>Create webhook notification channel</span>
+                </button>
               </form>
             </div>
           </section>
@@ -3545,7 +3601,8 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                   <p>Irreversible.</p>
                 </div>
                 <button className="secondary-button" type="button" disabled>
-                  Delete
+                  <FlatIcon name="delete" />
+                  <span>Delete</span>
                 </button>
               </li>
               <li>
@@ -3554,7 +3611,8 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                   <p>Removes related API keys.</p>
                 </div>
                 <button className="secondary-button" type="button" disabled>
-                  Delete
+                  <FlatIcon name="delete" />
+                  <span>Delete</span>
                 </button>
               </li>
               <li>
@@ -3563,7 +3621,8 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                   <p>Keeps configuration data.</p>
                 </div>
                 <button className="secondary-button" type="button" disabled>
-                  Delete
+                  <FlatIcon name="delete" />
+                  <span>Delete</span>
                 </button>
               </li>
             </ul>

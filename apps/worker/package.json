@@ -14,6 +14,7 @@
     "@llmingress/config": "workspace:*",
     "@llmingress/db": "workspace:*",
     "@llmingress/observability": "workspace:*",
+    "@llmingress/provider": "workspace:*",
     "@llmingress/security": "workspace:*",
     "pg": "^8.21.0"
   }

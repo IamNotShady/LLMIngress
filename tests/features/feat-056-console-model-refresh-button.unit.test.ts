@@ -3,7 +3,7 @@ import {
   buildJobCreatedNotificationPayload,
   buildModelRefreshJobPayload,
   normalizeProviderModelRefreshInput,
-} from "../../apps/console/src/server/model-refresh-jobs";
+} from "../../packages/db/src/provider-jobs";
 
 describe("feat-056 Console provider model refresh button", () => {
   it("normalizes provider refresh form input for a model_refresh job", () => {

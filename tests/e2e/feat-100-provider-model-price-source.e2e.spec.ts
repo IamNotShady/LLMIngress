@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { enqueueProviderModelRefreshJob } from "../../apps/console/src/server/model-refresh-jobs";
 import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
 import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { enqueueProviderModelRefreshJob } from "../../packages/db/src/provider-jobs";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 import { createFakeProviderServer } from "../support/fake-provider";
 
@@ -25,6 +25,53 @@ test("refresh models syncs provider model prices with manual override precedence
     ],
   });
   const providerId = randomUUID();
+  const priceSource = async () => [
+    {
+      cachedInputUsdPerMillionTokens: 0.4,
+      inputUsdPerMillionTokens: 1,
+      modelId: "manual-priced-model",
+      outputUsdPerMillionTokens: 3,
+      priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+      providerKey: "openai",
+      source: "models.dev" as const,
+      sourceUrl: "https://models.dev/api.json",
+      syncedAt,
+    },
+    {
+      cachedInputUsdPerMillionTokens: 0.5,
+      inputUsdPerMillionTokens: 1.25,
+      modelId: "sync-priced-model",
+      outputUsdPerMillionTokens: 4,
+      priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+      providerKey: "openai",
+      source: "models.dev" as const,
+      sourceUrl: "https://models.dev/api.json",
+      syncedAt,
+    },
+    {
+      cachedInputUsdPerMillionTokens: null,
+      inputUsdPerMillionTokens: 0.75,
+      modelId: "litellm-priced-model",
+      outputUsdPerMillionTokens: 1.5,
+      priceVersion: "litellm:2026-06-17T00:00:00.000Z",
+      providerKey: "openai",
+      source: "litellm" as const,
+      sourceUrl:
+        "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      syncedAt,
+    },
+    {
+      cachedInputUsdPerMillionTokens: null,
+      inputUsdPerMillionTokens: 2,
+      modelId: "claude-side-model",
+      outputUsdPerMillionTokens: 10,
+      priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+      providerKey: "anthropic",
+      source: "models.dev" as const,
+      sourceUrl: "https://models.dev/api.json",
+      syncedAt,
+    },
+  ];
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
@@ -41,6 +88,8 @@ test("refresh models syncs provider model prices with manual override precedence
         model_refresh: createModelRefreshJobHandler({
           databaseUrl: fixture.databaseUrl,
           masterKeySource,
+          modelPriceSource: priceSource,
+          modelRegistrySource: async () => [],
         }),
       },
       workerId: `worker-model-refresh-price-source-${randomUUID()}`,
@@ -52,6 +101,11 @@ test("refresh models syncs provider model prices with manual override precedence
 
     await expect(modelRefreshRunner.runOnce()).resolves.toBe(true);
     const chainedPriceSyncJobId = await readChainedPriceSyncJobId(fixture, queuedRefresh.id);
+    await expect(readProviderModelIds(fixture)).resolves.toEqual([
+      "litellm-priced-model",
+      "manual-priced-model",
+      "sync-priced-model",
+    ]);
 
     await setManualProviderModelPrice(fixture, {
       cachedInputUsdPerMillionTokens: 9,
@@ -64,7 +118,6 @@ test("refresh models syncs provider model prices with manual override precedence
       "manual-priced-model",
       "sync-priced-model",
       "litellm-priced-model",
-      "unknown-price-model",
     ]);
 
     const priceSyncRunner = createPostgresJobRunner({
@@ -73,53 +126,7 @@ test("refresh models syncs provider model prices with manual override precedence
         price_sync: createPriceSyncJobHandler({
           databaseUrl: fixture.databaseUrl,
           now: () => syncedAt,
-          priceSource: async () => [
-            {
-              cachedInputUsdPerMillionTokens: 0.4,
-              inputUsdPerMillionTokens: 1,
-              modelId: "manual-priced-model",
-              outputUsdPerMillionTokens: 3,
-              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
-              providerKey: "openai",
-              source: "models.dev",
-              sourceUrl: "https://models.dev/api.json",
-              syncedAt,
-            },
-            {
-              cachedInputUsdPerMillionTokens: 0.5,
-              inputUsdPerMillionTokens: 1.25,
-              modelId: "sync-priced-model",
-              outputUsdPerMillionTokens: 4,
-              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
-              providerKey: "openai",
-              source: "models.dev",
-              sourceUrl: "https://models.dev/api.json",
-              syncedAt,
-            },
-            {
-              cachedInputUsdPerMillionTokens: null,
-              inputUsdPerMillionTokens: 0.75,
-              modelId: "litellm-priced-model",
-              outputUsdPerMillionTokens: 1.5,
-              priceVersion: "litellm:2026-06-17T00:00:00.000Z",
-              providerKey: "openai",
-              source: "litellm",
-              sourceUrl:
-                "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
-              syncedAt,
-            },
-            {
-              cachedInputUsdPerMillionTokens: null,
-              inputUsdPerMillionTokens: 2,
-              modelId: "claude-side-model",
-              outputUsdPerMillionTokens: 10,
-              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
-              providerKey: "anthropic",
-              source: "models.dev",
-              sourceUrl: "https://models.dev/api.json",
-              syncedAt,
-            },
-          ],
+          priceSource,
         } satisfies PriceSyncOptions),
       },
       workerId: `worker-price-source-sync-${randomUUID()}`,
@@ -191,11 +198,6 @@ test("refresh models syncs provider model prices with manual override precedence
         source: "price_sync",
         status: "priced",
       },
-      {
-        modelId: "unknown-price-model",
-        reason: "no_current_price",
-        status: "unknown_price",
-      },
     ]);
     await expect(readConfigPublication(fixture)).resolves.toEqual({
       providerModelsPriceChangeCount: "1",
@@ -234,6 +236,7 @@ test("refresh models writes synced provider model capabilities", async () => {
         model_refresh: createModelRefreshJobHandler({
           databaseUrl: fixture.databaseUrl,
           masterKeySource,
+          modelPriceSource: async () => [],
           modelRegistrySource: async () => [
             {
               contextWindow: 128_000,
@@ -287,13 +290,6 @@ test("refresh models writes synced provider model capabilities", async () => {
         model_id: "gpt-capable",
         supports_streaming: true,
         supports_tools: true,
-      },
-      {
-        capability_metadata: {},
-        context_window: null,
-        model_id: "unknown-capability",
-        supports_streaming: false,
-        supports_tools: false,
       },
     ]);
 
@@ -513,6 +509,17 @@ async function readProviderModelPriceRows(fixture: Fixture): Promise<ProviderMod
     `,
   );
   return result.rows;
+}
+
+async function readProviderModelIds(fixture: Fixture): Promise<string[]> {
+  const result = await fixture.query<{ model_id: string }>(
+    `
+      select model_id
+      from provider_models
+      order by model_id
+    `,
+  );
+  return result.rows.map((row) => row.model_id);
 }
 
 async function readProviderModelCapabilityRows(

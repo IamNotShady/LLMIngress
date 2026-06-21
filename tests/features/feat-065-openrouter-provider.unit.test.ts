@@ -4,9 +4,9 @@ import {
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
-import { createOpenRouterProviderAdapter } from "../../apps/gateway/src/provider-adapters/openrouter";
-import { buildProviderModelListRequest } from "../../apps/worker/src/model-refresh";
 import { loadSqlMigrations } from "../../packages/db/src/index";
+import { createOpenRouterProviderAdapter } from "../../packages/provider/src/adapters/openrouter";
+import { buildProviderModelListRequest } from "../../packages/provider/src/model-list";
 
 const openRouterBaseUrl = "https://openrouter.ai/api/v1";
 

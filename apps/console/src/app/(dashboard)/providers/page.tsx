@@ -1,3 +1,4 @@
+import { FlatIcon } from "../../_components/flat-icon";
 import { PageHeader } from "../../_components/page-header";
 import { type ConsoleSearchParams, ProvidersSection } from "../../_modules/sections";
 
@@ -14,7 +15,8 @@ export default async function ProvidersPage({
         description="配置 Provider Key，刷新模型列表并管理模型价格。"
         actions={
           <a className="btn" href="?providerDialog=new">
-            + 添加 Provider
+            <FlatIcon name="add" />
+            <span>添加 Provider</span>
           </a>
         }
       />

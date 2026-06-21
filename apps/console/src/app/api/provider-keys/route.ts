@@ -1,10 +1,10 @@
+import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
 import {
   getConsoleDatabaseUrl,
   sessionCookieName,
   verifyConsoleSession,
 } from "../../../server/auth";
-import { enqueueProviderConnectivityCheckJob } from "../../../server/provider-connectivity-jobs";
 import { readConsoleMasterKeySource, saveProviderApiKey } from "../../../server/provider-keys";
 
 export const runtime = "nodejs";

@@ -41,7 +41,7 @@ describe("feat-100 provider model price source", () => {
       normalizeModelsDevProviderModelPrices,
       normalizeOpenRouterProviderModelRegistryEntries,
       normalizeVercelAiGatewayProviderModelRegistryEntries,
-    } = await import("../../apps/worker/src/price-source");
+    } = await import("../../packages/provider/src/price-source");
     const syncedAt = new Date("2026-06-17T00:00:00.000Z");
 
     const primaryPrices = normalizeModelsDevProviderModelPrices(

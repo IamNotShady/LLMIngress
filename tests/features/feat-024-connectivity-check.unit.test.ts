@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkProviderConnectivity } from "../../apps/worker/src/provider-connectivity-check";
+import { checkProviderConnectivity } from "../../packages/provider/src/connectivity";
 
 describe("feat-024 provider connectivity check", () => {
   it("returns a healthy result for a reachable OpenAI-compatible provider", async () => {

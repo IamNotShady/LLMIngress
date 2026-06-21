@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
-import { Client } from "pg";
-import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
-import { createGeminiProviderAdapter } from "./provider-adapters/gemini.js";
+import { createGeminiProviderAdapter } from "@llmingress/provider/gemini";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIChatRequest,
   type OpenAIAdapterError,
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
-} from "./provider-adapters/openai.js";
-import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
+} from "@llmingress/provider/openai";
+import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
+import { Client } from "pg";
+import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
 import { recordGatewayProviderTrace } from "./tracing.js";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {

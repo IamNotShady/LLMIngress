@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { consoleNavItems, findActiveNavItem } from "../_lib/nav";
+import { FlatIcon } from "./flat-icon";
 import { ThemeToggle } from "./theme-toggle";
 
 export function Sidebar() {
@@ -63,7 +64,8 @@ export function Sidebar() {
           <ThemeToggle />
           <form action="/api/auth/logout" method="post">
             <button className="secondary-button" type="submit">
-              Sign out
+              <FlatIcon name="lock" />
+              <span>Sign out</span>
             </button>
           </form>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FlatIcon } from "../_components/flat-icon";
 
 export type ProviderCreateChoice = {
   action: string;
@@ -129,7 +130,10 @@ export function ProviderCreateForm({
           Accept public network risk
         </label>
       ) : null}
-      <button type="submit">Create provider</button>
+      <button type="submit">
+        <FlatIcon name="add" />
+        <span>Create provider</span>
+      </button>
     </form>
   );
 }

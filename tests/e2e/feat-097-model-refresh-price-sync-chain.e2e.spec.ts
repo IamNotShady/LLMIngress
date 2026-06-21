@@ -35,6 +35,21 @@ test("model refresh enqueues asynchronous price sync job for refreshed provider 
         model_refresh: createModelRefreshJobHandler({
           databaseUrl: fixture.databaseUrl,
           masterKeySource,
+          modelPriceSource: async () => [],
+          modelRegistrySource: async () => [
+            {
+              contextWindow: 16_000,
+              modelId: "chain-alpha",
+              providerKey: "openai",
+              syncedAt: new Date("2026-06-16T00:00:00.000Z"),
+            },
+            {
+              contextWindow: 16_000,
+              modelId: "chain-beta",
+              providerKey: "openai",
+              syncedAt: new Date("2026-06-16T00:00:00.000Z"),
+            },
+          ],
         }),
       },
       workerId: `worker-model-refresh-chain-${randomUUID()}`,

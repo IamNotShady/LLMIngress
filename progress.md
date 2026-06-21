@@ -1403,3 +1403,16 @@
   - Config publisher now writes `changes` directly into `config_versions` in the same transaction as the config write, while keeping `ConfigPublishResult` and `NOTIFY config_changed` payload unchanged.
   - Removed `config_change_events` from backup coverage and architecture docs; updated legacy feat-008/011/015/016/023/030/031/058/073/096/100/110 regressions to read `config_versions.changes`.
   - Verification passed: feat-114 unit, feat-114 real PostgreSQL E2E, related feat-008/011/096 unit checks, related feat-008/011/015/016/023/030/031/058/073/096/100/110 E2Es, `pnpm run db:migrate:check`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 114 passing features re-verified.
+
+- [x] 2026-06-21 Provider model metadata filtering and flat-color icon UI polish:
+  - Model refresh now filters all-listed Provider models that have no context window and no synced token price before writing available rows; stale existing rows become `not_listed` through the existing refresh plan, and Console provider-model option reads hide non-available rows.
+  - Provider model-list parsing now accepts provider-supplied context metadata (`context_window`, `contextWindow`, `context_length`, `contextLength`) so real/fake provider metadata can keep otherwise unpriced models refreshable.
+  - Console action buttons now use `icons8/flat-color-icons` assets for add, edit, enable, disable, refresh, delete, save, view, import, export, login, logout, and filter actions while preserving existing form/action behavior. A follow-up pass made icon actions pure transparent icon buttons with visually hidden text for accessibility.
+  - Verification run: targeted feat-023/057/097/100 unit tests, targeted feat-023/025/056/057/097/100 real E2Es, `pnpm run lint`, `pnpm run typecheck`, and `pnpm --filter @llmingress/console run build` passed. Full `pnpm run verify:features` was intentionally stopped per user request; user will do page-level validation.
+
+- [x] 2026-06-21 Provider package boundary extraction:
+  - Added `@llmingress/provider` and moved Gateway provider adapters, provider model-list request parsing, provider connectivity probe logic, and external model price/registry source fetchers out of app directories into the package.
+  - Gateway now imports OpenAI, Anthropic, Gemini, OpenRouter, and Ollama provider request adapters from `@llmingress/provider/*`; Worker model refresh and price sync import model-list and price-source logic from the same package.
+  - Added `@llmingress/db/client` and `@llmingress/db/provider-jobs`; Console provider refresh/connectivity job enqueue paths and Worker provider model refresh / connectivity check flows now use shared DB package entry points instead of local `pg.Client` helpers. Existing broader Console/Gateway/Worker SQL modules still need a separate repository-layer migration if all DB queries must physically leave app directories.
+  - Verification run: `pnpm run typecheck`, `pnpm run lint`, and `pnpm test` (114 files / 345 tests) passed. Full E2E was not run per user request.
+  - UI follow-up: removed the Provider page model-library `操作` column and verified `/providers` renders without that table header or model detail action links.

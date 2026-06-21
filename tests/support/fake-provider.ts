@@ -28,6 +28,7 @@ export type CapturedFakeProviderRequest = {
 };
 
 export type FakeProviderModel = {
+  contextWindow?: number;
   id: string;
   name?: string;
 };
@@ -142,6 +143,7 @@ async function handleRequest(
       writeJson(response, 200, {
         object: "list",
         data: options.getModels().map((model) => ({
+          ...(model.contextWindow === undefined ? {} : { context_window: model.contextWindow }),
           id: model.id,
           name: model.name ?? model.id,
           object: "model",

@@ -17,7 +17,7 @@ test("console refresh models button enqueues job worker refreshes models and rou
   });
   const providerApiKey = "sk-refresh-button-secret";
   const provider = await createFakeProviderServer({
-    models: [{ id: "refresh-button-model", name: "Refresh Button Model" }],
+    models: [{ contextWindow: 8192, id: "refresh-button-model", name: "Refresh Button Model" }],
     requiredModelListAuthorization: `Bearer ${providerApiKey}`,
   });
   const providerId = randomUUID();

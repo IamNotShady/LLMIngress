@@ -4,8 +4,8 @@ import {
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
-import { createOllamaProviderAdapter } from "../../apps/gateway/src/provider-adapters/ollama";
 import { loadSqlMigrations } from "../../packages/db/src/index";
+import { createOllamaProviderAdapter } from "../../packages/provider/src/adapters/ollama";
 
 describe("feat-021 Ollama local provider adapter", () => {
   it("accepts loopback and private Ollama base URLs while public URLs need risk confirmation", () => {

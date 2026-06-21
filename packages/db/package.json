@@ -8,9 +8,17 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
     "./provider-health": {
       "types": "./src/provider-health.ts",
       "default": "./src/provider-health.ts"
+    },
+    "./provider-jobs": {
+      "types": "./src/provider-jobs.ts",
+      "default": "./src/provider-jobs.ts"
     },
     "./migration-status": {
       "types": "./src/migration-status.ts",

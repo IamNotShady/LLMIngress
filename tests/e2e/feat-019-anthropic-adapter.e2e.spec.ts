@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createAnthropicProviderAdapter } from "../../apps/gateway/src/provider-adapters/anthropic";
+import { createAnthropicProviderAdapter } from "../../packages/provider/src/adapters/anthropic";
 import { createFakeProviderServer } from "../support/fake-provider";
 
 test("anthropic adapter sends messages payload auth headers and maps response error", async () => {

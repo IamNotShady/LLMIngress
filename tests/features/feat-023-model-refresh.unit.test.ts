@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildProviderModelListRequest,
+  filterRefreshableListedProviderModels,
   planProviderModelRefresh,
 } from "../../apps/worker/src/model-refresh";
+import { buildProviderModelListRequest } from "../../packages/provider/src/model-list";
 
 describe("feat-023 provider model refresh job", () => {
   it("plans derived model inserts and only treats referenced availability changes as routing-visible", () => {
@@ -106,6 +107,37 @@ describe("feat-023 provider model refresh job", () => {
     });
 
     expect(plan.insertModels).toEqual([{ displayName: "New Model", modelId: "new-model" }]);
+  });
+
+  it("filters models with no context or token prices before planning refresh writes", () => {
+    const syncedAt = new Date("2026-06-21T00:00:00.000Z");
+
+    expect(
+      filterRefreshableListedProviderModels({
+        listedModels: [
+          { displayName: "No Metadata", modelId: "no-metadata" },
+          { contextWindow: 128_000, displayName: "Has Context", modelId: "has-context" },
+          { displayName: "Has Price", modelId: "has-price" },
+        ],
+        providerKey: "OpenAI",
+        syncedPrices: [
+          {
+            cachedInputUsdPerMillionTokens: null,
+            inputUsdPerMillionTokens: 0.4,
+            modelId: "has-price",
+            outputUsdPerMillionTokens: 1.6,
+            priceVersion: "models.dev:test",
+            providerKey: "openai",
+            source: "models.dev",
+            sourceUrl: "https://models.dev/api.json",
+            syncedAt,
+          },
+        ],
+      }),
+    ).toEqual([
+      { contextWindow: 128_000, displayName: "Has Context", modelId: "has-context" },
+      { displayName: "Has Price", modelId: "has-price" },
+    ]);
   });
 
   it("builds an authenticated provider model list request", () => {

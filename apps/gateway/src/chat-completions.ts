@@ -1,3 +1,8 @@
+import type {
+  NormalizedOpenAIChatMessage,
+  NormalizedOpenAIChatRequest,
+  OpenAIProviderAdapter,
+} from "@llmingress/provider/openai";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
@@ -24,11 +29,6 @@ import {
   type FallbackFailedAttempt,
   type FallbackProviderApiKey,
 } from "./fallback-chain.js";
-import type {
-  NormalizedOpenAIChatMessage,
-  NormalizedOpenAIChatRequest,
-  OpenAIProviderAdapter,
-} from "./provider-adapters/openai.js";
 import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildOpenAIChatCompletionRequestMetadata,

@@ -1,8 +1,8 @@
-import type { NormalizedAnthropicMessagesRequest } from "./provider-adapters/anthropic.js";
+import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import type {
   NormalizedOpenAIChatRequest,
   NormalizedOpenAIResponsesRequest,
-} from "./provider-adapters/openai.js";
+} from "@llmingress/provider/openai";
 
 export type GatewayRequestProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 

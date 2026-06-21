@@ -8,6 +8,8 @@ import {
   summarizeMigrationStatus,
 } from "./migration-status.js";
 
+export type { PostgresQueryClient, PostgresQueryResult } from "./client.js";
+export { withPostgresClient } from "./client.js";
 export type {
   AppliedMigrationStatus,
   MigrationChecksumMismatch,
@@ -21,6 +23,18 @@ export {
   shippedSqlMigrations,
   summarizeMigrationStatus,
 } from "./migration-status.js";
+export type {
+  NormalizedProviderModelRefreshInput,
+  ProviderModelRefreshInput,
+  QueuedProviderModelRefreshJob,
+} from "./provider-jobs.js";
+export {
+  buildJobCreatedNotificationPayload,
+  buildModelRefreshJobPayload,
+  enqueueProviderConnectivityCheckJob,
+  enqueueProviderModelRefreshJob,
+  normalizeProviderModelRefreshInput,
+} from "./provider-jobs.js";
 
 type TestPostgresEnvironment = Record<string, string | undefined>;
 

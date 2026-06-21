@@ -2,12 +2,12 @@ import {
   type ConfigPublishClient,
   createConfigPublisher,
 } from "@llmingress/config/config-publisher";
-import { type JobHandler, JobHandlerError } from "./job-runner.js";
 import {
   fetchProviderModelPrices,
   type ProviderModelPriceSource,
   type ProviderModelSyncedPrice,
-} from "./price-source.js";
+} from "@llmingress/provider/price-source";
+import { type JobHandler, JobHandlerError } from "./job-runner.js";
 
 export type PriceSyncJobHandlerOptions = {
   databaseUrl: string;

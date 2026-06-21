@@ -1,3 +1,4 @@
+import { FlatIcon } from "../../_components/flat-icon";
 import { PageHeader } from "../../_components/page-header";
 import { AgentsSection, type ConsoleSearchParams } from "../../_modules/sections";
 
@@ -14,7 +15,8 @@ export default async function AgentsPage({
         description="Agents, their API key, virtual model access, and limits."
         actions={
           <a className="btn" href="?agentDialog=new">
-            + Create Agent
+            <FlatIcon name="add" />
+            <span>Create Agent</span>
           </a>
         }
       />

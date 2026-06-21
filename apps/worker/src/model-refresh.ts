@@ -1,28 +1,27 @@
 import { randomUUID } from "node:crypto";
 import { type ConfigChange, createConfigPublisher } from "@llmingress/config";
+import { type PostgresQueryClient, withPostgresClient } from "@llmingress/db/client";
+import {
+  fetchListedProviderModels as fetchProviderModelList,
+  type ListedProviderModel,
+} from "@llmingress/provider/model-list";
+import {
+  fetchProviderModelPrices,
+  fetchProviderModelRegistryEntries,
+  findProviderModelRegistryEntry,
+  type ProviderModelRegistryEntry,
+  type ProviderModelSyncedPrice,
+} from "@llmingress/provider/price-source";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
-import { Client, type QueryResultRow } from "pg";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./job-runner.js";
-import {
-  fetchProviderModelRegistryEntries,
-  findProviderModelRegistryEntry,
-  type ProviderModelRegistryEntry,
-} from "./price-source.js";
 
 export type ProviderModelAvailability = "available" | "unavailable" | "not_listed" | "deprecated";
-
-export type ListedProviderModel = {
-  capabilityMetadata?: Record<string, unknown>;
-  contextWindow?: number | null;
-  displayName: string;
-  modelId: string;
-  supportsStreaming?: boolean | null;
-  supportsTools?: boolean | null;
-};
+export type { ListedProviderModel } from "@llmingress/provider/model-list";
+export { buildProviderModelListRequest } from "@llmingress/provider/model-list";
 
 export type ExistingProviderModel = {
   availability: ProviderModelAvailability;
@@ -67,6 +66,7 @@ type CreateModelRefreshJobHandlerOptions = {
   databaseUrl: string;
   fetch?: typeof globalThis.fetch;
   masterKeySource?: MasterKeySource;
+  modelPriceSource?: () => Promise<ProviderModelSyncedPrice[]>;
   modelRegistrySource?: () => Promise<ProviderModelRegistryEntry[]>;
 };
 
@@ -79,7 +79,7 @@ type PlanProviderModelRefreshInput = {
   listedModels: ListedProviderModel[];
 };
 
-type ProviderRow = QueryResultRow & {
+type ProviderRow = {
   base_url: string | null;
   display_name: string;
   id: string;
@@ -87,7 +87,7 @@ type ProviderRow = QueryResultRow & {
   provider_type: "api_key" | "local";
 };
 
-type ProviderModelRow = QueryResultRow & {
+type ProviderModelRow = {
   availability: ProviderModelAvailability;
   capability_metadata: unknown;
   context_window: number | null;
@@ -233,6 +233,46 @@ export function enrichListedProviderModels(input: {
   });
 }
 
+export function filterRefreshableListedProviderModels(input: {
+  listedModels: ListedProviderModel[];
+  providerKey: string;
+  syncedPrices: ProviderModelSyncedPrice[];
+}): ListedProviderModel[] {
+  return input.listedModels.filter(
+    (model) =>
+      (model.contextWindow !== undefined && model.contextWindow !== null) ||
+      findSyncedProviderModelPrice(input.syncedPrices, {
+        displayName: model.displayName,
+        modelId: model.modelId,
+        providerKey: input.providerKey,
+      }) !== null,
+  );
+}
+
+function findSyncedProviderModelPrice(
+  prices: ProviderModelSyncedPrice[],
+  input: {
+    displayName?: string | null;
+    modelId: string;
+    providerKey: string;
+  },
+): ProviderModelSyncedPrice | null {
+  const providerKey = input.providerKey.trim().toLowerCase();
+  const candidates = new Set(
+    [input.modelId, input.displayName ?? ""]
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  return (
+    prices.find(
+      (price) =>
+        price.providerKey.trim().toLowerCase() === providerKey &&
+        candidates.has(price.modelId.trim().toLowerCase()),
+    ) ?? null
+  );
+}
+
 function buildProviderModelCapabilityMetadata(
   entry: ProviderModelRegistryEntry,
 ): Record<string, unknown> {
@@ -314,6 +354,19 @@ async function readProviderModelRegistryEntries(input: {
   }
 }
 
+async function readProviderModelPrices(input: {
+  fetch: typeof globalThis.fetch;
+  modelPriceSource?: () => Promise<ProviderModelSyncedPrice[]>;
+}): Promise<ProviderModelSyncedPrice[]> {
+  try {
+    return input.modelPriceSource
+      ? await input.modelPriceSource()
+      : await fetchProviderModelPrices({ fetch: input.fetch });
+  } catch {
+    return [];
+  }
+}
+
 export async function refreshProviderModels(
   options: RefreshProviderModelsOptions,
 ): Promise<ProviderModelRefreshResult> {
@@ -327,15 +380,31 @@ export async function refreshProviderModels(
           providerId: provider.id,
         })
       : null;
-  const rawListedModels = await fetchListedProviderModels(fetchImpl, provider, apiKey);
-  const registryEntries = await readProviderModelRegistryEntries({
+  const rawListedModels = await fetchProviderModelList({
+    apiKey,
+    baseUrl: provider.base_url as string,
     fetch: fetchImpl,
-    modelRegistrySource: options.modelRegistrySource,
+    providerKey: provider.provider_key,
   });
-  const listedModels = enrichListedProviderModels({
+  const [registryEntries, syncedPrices] = await Promise.all([
+    readProviderModelRegistryEntries({
+      fetch: fetchImpl,
+      modelRegistrySource: options.modelRegistrySource,
+    }),
+    readProviderModelPrices({
+      fetch: fetchImpl,
+      modelPriceSource: options.modelPriceSource,
+    }),
+  ]);
+  const enrichedListedModels = enrichListedProviderModels({
     listedModels: rawListedModels,
     providerKey: provider.provider_key,
     registryEntries,
+  });
+  const listedModels = filterRefreshableListedProviderModels({
+    listedModels: enrichedListedModels,
+    providerKey: provider.provider_key,
+    syncedPrices,
   });
   const existingModels = await readExistingProviderModels(options.databaseUrl, provider.id);
   const plan = planProviderModelRefresh({ existingModels, listedModels });
@@ -360,7 +429,7 @@ export async function refreshProviderModels(
     });
     publishedConfigVersion = result.version;
   } else {
-    await withClient(options.databaseUrl, async (client) => {
+    await withPostgresClient(options.databaseUrl, async (client) => {
       await client.query("begin");
       try {
         await writePlan(client);
@@ -374,7 +443,7 @@ export async function refreshProviderModels(
 
   return {
     chainedPriceSyncJobId,
-    fetchedModelCount: listedModels.length,
+    fetchedModelCount: rawListedModels.length,
     insertedModelCount: plan.insertModels.length,
     markedAvailableCount: plan.markAvailable.length,
     markedNotListedCount: plan.markNotListed.length,
@@ -451,15 +520,10 @@ async function notifyJobCreated(client: QueryClient, jobId: string): Promise<voi
   await client.query("select pg_notify($1, $2)", [JOB_CREATED_CHANNEL, JSON.stringify({ jobId })]);
 }
 
-type QueryClient = {
-  query: <T = Record<string, unknown>>(
-    text: string,
-    values?: readonly unknown[],
-  ) => Promise<{ rows: T[]; rowCount?: number | null }>;
-};
+type QueryClient = PostgresQueryClient;
 
 async function readProvider(databaseUrl: string, providerId: string): Promise<ProviderRow> {
-  return withClient(databaseUrl, async (client) => {
+  return withPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
         select id::text, provider_type, provider_key, display_name, base_url
@@ -485,7 +549,7 @@ async function readExistingProviderModels(
   databaseUrl: string,
   providerId: string,
 ): Promise<ExistingProviderModel[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderModelRow>(
       `
         select provider_models.id::text,
@@ -521,99 +585,6 @@ async function readExistingProviderModels(
       supportsTools: row.supports_tools,
     }));
   });
-}
-
-async function fetchListedProviderModels(
-  fetchImpl: typeof globalThis.fetch,
-  provider: ProviderRow,
-  apiKey: string | null,
-): Promise<ListedProviderModel[]> {
-  const request = buildProviderModelListRequest({
-    apiKey,
-    baseUrl: provider.base_url as string,
-    providerKey: provider.provider_key,
-  });
-  const response = await fetchImpl(request.url, request.init);
-  const body = await readResponseBody(response);
-
-  if (!response.ok) {
-    throw new Error(`Provider model list request failed with status ${response.status}.`);
-  }
-
-  return parseProviderModelList(body);
-}
-
-export function buildProviderModelListRequest(input: {
-  apiKey?: string | null;
-  baseUrl: string;
-  providerKey?: string | null;
-}): {
-  init: RequestInit;
-  url: string;
-} {
-  const init: RequestInit = { method: "GET" };
-  const providerKey = input.providerKey?.toLowerCase();
-
-  if (providerKey === "anthropic") {
-    init.headers = input.apiKey
-      ? {
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-          "x-api-key": input.apiKey,
-        }
-      : {
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        };
-  } else if (providerKey === "openrouter" && input.apiKey) {
-    init.headers = {
-      "HTTP-Referer": "https://llmingress.local",
-      "X-OpenRouter-Title": "LLMIngress",
-      authorization: `Bearer ${input.apiKey}`,
-    };
-  } else if (input.apiKey) {
-    init.headers = {
-      authorization: `Bearer ${input.apiKey}`,
-    };
-  }
-
-  return {
-    init,
-    url: buildModelsUrl(input.baseUrl),
-  };
-}
-
-function parseProviderModelList(body: unknown): ListedProviderModel[] {
-  if (isRecord(body) && Array.isArray(body.data)) {
-    return body.data
-      .map((entry): ListedProviderModel | null => {
-        if (isRecord(entry) && typeof entry.id === "string" && entry.id.trim()) {
-          return {
-            displayName:
-              typeof entry.name === "string" && entry.name.trim() ? entry.name : entry.id,
-            modelId: entry.id,
-          };
-        }
-        return null;
-      })
-      .filter((entry): entry is ListedProviderModel => entry !== null);
-  }
-
-  if (isRecord(body) && Array.isArray(body.models)) {
-    return body.models
-      .map((entry): ListedProviderModel | null => {
-        if (isRecord(entry) && typeof entry.name === "string" && entry.name.trim()) {
-          return {
-            displayName: entry.name,
-            modelId: entry.name,
-          };
-        }
-        return null;
-      })
-      .filter((entry): entry is ListedProviderModel => entry !== null);
-  }
-
-  throw new Error("Provider model list response was not recognized.");
 }
 
 async function applyProviderModelRefreshPlan(
@@ -742,7 +713,7 @@ async function readProviderApiKey(input: {
   masterKeySource: MasterKeySource;
   providerId: string;
 }): Promise<string> {
-  const encrypted = await withClient(input.databaseUrl, async (client) => {
+  const encrypted = await withPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<{ encrypted_key: unknown }>(
       `
         select encrypted_key
@@ -793,44 +764,10 @@ function readEncryptedSecret(value: unknown): EncryptedSecret {
   throw new Error("Stored provider API key is not a valid encrypted secret.");
 }
 
-function buildModelsUrl(baseUrl: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/models`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
-}
-
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readJsonRecord(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
-}
-
-async function withClient<T>(
-  databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
-): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

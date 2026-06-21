@@ -4,8 +4,8 @@ import {
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { loadSqlMigrations } from "../../packages/db/src/index";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 
 const localOpenAICompatibleTemplates = [
   ["lmstudio", "LM Studio", "http://127.0.0.1:1234/v1"],

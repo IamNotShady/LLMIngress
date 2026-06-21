@@ -4,8 +4,8 @@ import {
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
-import { createGeminiProviderAdapter } from "../../apps/gateway/src/provider-adapters/gemini";
 import { loadSqlMigrations } from "../../packages/db/src/index";
+import { createGeminiProviderAdapter } from "../../packages/provider/src/adapters/gemini";
 
 const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta";
 

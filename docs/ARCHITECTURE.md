@@ -520,7 +520,7 @@ Gateway writes applied config version to runtime status table
 
 - Fast path：Console 或 Worker 通过 config publisher 写入 routing-visible config version 后，在同一事务中执行 Postgres `NOTIFY config_changed`；Gateway 的 dedicated listener connection 收到通知后加载指定 config version。
 - Safety path：Gateway 启动时加载最新配置，并周期性检查 Postgres 中的 latest config version；如果 Gateway 重连期间错过 `NOTIFY`，也能通过 reconcile 发现配置变化。
-- Multi-gateway future：多个 Gateway 实例可以同时 `LISTEN config_changed`；Postgres 会把通知广播给所有活跃 listener。`config_change_events` 和 `config_versions` 仍是持久化 source of truth。
+- Multi-gateway future：多个 Gateway 实例可以同时 `LISTEN config_changed`；Postgres 会把通知广播给所有活跃 listener。`config_versions`（含 `changes` JSON）仍是持久化 source of truth。
 - 通知语义：Postgres `NOTIFY` 是 wake-up signal，不是 durable queue；payload 只放 config version、change id 和 change type，完整配置始终从数据库读取。
 - 控制反馈语义：Console 对 Gateway 的控制是异步、最终一致的。用户保存配置后，Console 只能先展示目标 config version 为 pending；是否已应用、是否失败，以 Gateway 写入 `gateway_runtime_status.applied_config_version` 和 reload failure event 为准，而不是以某个同步 HTTP 调用成功为准。
 
@@ -704,15 +704,13 @@ PostgreSQL database
 │   ├── jobs
 │   ├── job_attempts
 │   ├── notification_events
-│   ├── webhook_deliveries
-│   └── export_tasks
+│   └── webhook_deliveries
 │
 ├── Billing / pricing
 │   └── provider_models manual and synced current price fields
 │
 ├── Config lifecycle
 │   ├── config_versions
-│   ├── config_change_events
 │   └── migration_history
 │
 └── Optional content records
@@ -781,7 +779,7 @@ Migration 是部署期 / 启动期的共享关注点，不属于 Console 独有�
 Postgres 同时承担持久化和进程间协调，但需要明确语义边界：
 
 - `NOTIFY` 不是 durable queue；如果进程断线，可能错过通知。因此每个消费者都必须在启动和重连后从表中 reconcile 最新状态。
-- `config_change_events`、`config_versions`、`jobs`、`provider_health_summary`、`gateway_runtime_status` 等表是 source of truth。
+- `config_versions`、`jobs`、`provider_health_summary`、`gateway_runtime_status` 等表是 source of truth。
 - Gateway、Console、Worker 应为 `LISTEN/NOTIFY` 使用独立连接，避免长事务阻塞通知接收。
 - Worker 多实例消费 job 时使用 Postgres 行锁、advisory lock 或 lease 字段去重；不能只依赖 `job_created` 通知。
 - Gateway 的高频请求路径不能每次都同步查询配置；仍必须使用 immutable config snapshot 和 in-memory runtime view。

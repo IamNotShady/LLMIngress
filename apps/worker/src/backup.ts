@@ -72,7 +72,6 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "agent_virtual_models",
     "agent_limits",
     "config_versions",
-    "config_change_events",
     "notification_channels",
   ],
   operational: [
@@ -89,7 +88,6 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "provider_health_summary",
     "gateway_runtime_status",
     "runtime_errors",
-    "export_tasks",
     "notification_events",
     "notification_deliveries",
     "webhook_deliveries",

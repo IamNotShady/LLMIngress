@@ -39,15 +39,12 @@ test("core config schema accepts valid graph and rejects broken references", asy
       select 'agent_limits', count(*)::text from agent_limits
       union all
       select 'config_versions', count(*)::text from config_versions
-      union all
-      select 'config_change_events', count(*)::text from config_change_events
       order by table_name
     `);
     expect(counts.rows).toEqual([
       { table_name: "agent_limits", row_count: "1" },
       { table_name: "agents", row_count: "1" },
       { table_name: "agent_virtual_models", row_count: "1" },
-      { table_name: "config_change_events", row_count: "1" },
       { table_name: "config_versions", row_count: "1" },
       { table_name: "provider_models", row_count: "1" },
       { table_name: "providers", row_count: "1" },
@@ -86,10 +83,10 @@ test("core config schema accepts valid graph and rejects broken references", asy
         [randomUUID(), randomUUID(), "rpm", "minute", 60, "requests"],
       ),
     );
-    await expectBrokenReference(
+    await expectConstraintViolation(
       fixture.query(
-        "insert into config_change_events (id, config_version_id, source, changed_table, changed_record_id) values ($1, $2, $3, $4, $5)",
-        [randomUUID(), 99_999, "console", "providers", randomUUID()],
+        "insert into config_versions (version, source, changes) values ($1, $2, $3::jsonb)",
+        [99_999, "console", JSON.stringify({ table: "providers" })],
       ),
     );
 
@@ -137,7 +134,6 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
   const routePolicyId = randomUUID();
   const routePolicyCandidateId = randomUUID();
   const agentLimitId = randomUUID();
-  const configChangeEventId = randomUUID();
 
   await query(
     "insert into providers (id, provider_type, provider_key, display_name, enabled) values ($1, $2, $3, $4, $5)",
@@ -184,13 +180,23 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
     [agentLimitId, agentId, "rpm", "minute", 60, "requests", true],
   );
   const configVersion = await query<{ id: string }>(
-    "insert into config_versions (version, source, description) values ($1, $2, $3) returning id::text",
-    [1, "console", "Initial config"],
+    "insert into config_versions (version, source, description, changes) values ($1, $2, $3, $4::jsonb) returning id::text",
+    [
+      1,
+      "console",
+      "Initial config",
+      JSON.stringify([
+        {
+          createdAt: new Date().toISOString(),
+          id: randomUUID(),
+          recordId: providerId,
+          source: "console",
+          table: "providers",
+        },
+      ]),
+    ],
   );
-  await query(
-    "insert into config_change_events (id, config_version_id, source, changed_table, changed_record_id) values ($1, $2, $3, $4, $5)",
-    [configChangeEventId, configVersion.rows[0]?.id, "console", "providers", providerId],
-  );
+  expect(configVersion.rows[0]?.id).toBeTruthy();
 
   return {
     agentId,
@@ -206,7 +212,7 @@ async function expectBrokenReference(promise: Promise<unknown>): Promise<void> {
 
 async function expectConstraintViolation(promise: Promise<unknown>): Promise<void> {
   await expect(promise).rejects.toMatchObject({
-    code: expect.stringMatching(/^2350[235]$/),
+    code: expect.stringMatching(/^235(0[235]|14)$/),
   });
 }
 

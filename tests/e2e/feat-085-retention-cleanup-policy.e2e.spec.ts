@@ -65,12 +65,13 @@ test("scheduled retention cleanup uses configurable window deletes expired data 
     await expect(readRetentionState(fixture, ids)).resolves.toEqual({
       aggregateBudgetPeriods: 1,
       aggregateRateLimitWindows: 1,
-      newExportTasks: 1,
+      newExportJobs: 1,
       newFallbackEvents: 1,
       newRequestActivities: 1,
       newRequestCosts: 1,
       newRequestUsages: 1,
-      oldExportTasks: 0,
+      oldExportFileDeletedMarkers: 1,
+      oldExportJobs: 1,
       oldFallbackEvents: 0,
       oldRequestActivities: 0,
       oldRequestCosts: 0,
@@ -103,9 +104,9 @@ type RetentionSeedIds = {
   agentApiKeyId: string;
   budgetPeriodId: string;
   newActivityId: string;
-  newExportTaskId: string;
+  newExportJobId: string;
   oldActivityId: string;
-  oldExportTaskId: string;
+  oldExportJobId: string;
   rateLimitWindowId: string;
 };
 
@@ -121,9 +122,9 @@ async function seedRetentionCleanupData(
     agentId: randomUUID(),
     budgetPeriodId: randomUUID(),
     newActivityId: randomUUID(),
-    newExportTaskId: randomUUID(),
+    newExportJobId: randomUUID(),
     oldActivityId: randomUUID(),
-    oldExportTaskId: randomUUID(),
+    oldExportJobId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
     rateLimitWindowId: randomUUID(),
@@ -180,14 +181,14 @@ async function seedRetentionCleanupData(
     requestId: "req_retention_new_085",
     virtualModelId: ids.virtualModelId,
   });
-  await insertExportTask(fixture, {
+  await insertCompletedExportJob(fixture, {
     completedAt: "2026-05-01T00:00:00.000Z",
-    exportTaskId: ids.oldExportTaskId,
+    exportJobId: ids.oldExportJobId,
     outputPath: input.oldExportPath,
   });
-  await insertExportTask(fixture, {
+  await insertCompletedExportJob(fixture, {
     completedAt: "2026-06-01T00:00:00.000Z",
-    exportTaskId: ids.newExportTaskId,
+    exportJobId: ids.newExportJobId,
     outputPath: input.newExportPath,
   });
   await fixture.query(
@@ -366,40 +367,48 @@ async function insertRequestData(
   );
 }
 
-async function insertExportTask(
+async function insertCompletedExportJob(
   fixture: Fixture,
   input: {
     completedAt: string;
-    exportTaskId: string;
+    exportJobId: string;
     outputPath: string;
   },
 ): Promise<void> {
   await fixture.query(
     `
-      insert into export_tasks (
+      insert into jobs (
         id,
-        export_type,
+        job_type,
         status,
-        output_path,
-        line_count,
-        started_at,
+        trigger,
+        payload,
+        result,
         completed_at,
         created_at,
         updated_at
       )
       values (
         $1,
-        'jsonl_request_logs',
+        'jsonl_export',
         'succeeded',
-        $2,
-        1,
-        $3::timestamptz,
+        'manual',
+        '{}'::jsonb,
+        $2::jsonb,
         $3::timestamptz,
         $3::timestamptz,
         $3::timestamptz
       )
     `,
-    [input.exportTaskId, input.outputPath, input.completedAt],
+    [
+      input.exportJobId,
+      JSON.stringify({
+        exportType: "jsonl_request_logs",
+        lineCount: 1,
+        outputPath: input.outputPath,
+      }),
+      input.completedAt,
+    ],
   );
 }
 
@@ -407,12 +416,13 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
   const result = await fixture.query<{
     aggregate_budget_periods: number;
     aggregate_rate_limit_windows: number;
-    new_export_tasks: number;
+    new_export_jobs: number;
     new_fallback_events: number;
     new_request_activities: number;
     new_request_costs: number;
     new_request_usages: number;
-    old_export_tasks: number;
+    old_export_file_deleted_markers: number;
+    old_export_jobs: number;
     old_fallback_events: number;
     old_request_activities: number;
     old_request_costs: number;
@@ -424,20 +434,22 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
         (select count(*)::integer from request_usage where request_activity_id = $1) as old_request_usages,
         (select count(*)::integer from request_costs where request_activity_id = $1) as old_request_costs,
         (select count(*)::integer from fallback_events where request_activity_id = $1) as old_fallback_events,
-        (select count(*)::integer from export_tasks where id = $2) as old_export_tasks,
+        (select count(*)::integer from jobs where id = $2) as old_export_jobs,
+        (select count(*)::integer from jobs where id = $2 and result ? 'exportFileDeletedAt')
+          as old_export_file_deleted_markers,
         (select count(*)::integer from request_activity where id = $3) as new_request_activities,
         (select count(*)::integer from request_usage where request_activity_id = $3) as new_request_usages,
         (select count(*)::integer from request_costs where request_activity_id = $3) as new_request_costs,
         (select count(*)::integer from fallback_events where request_activity_id = $3) as new_fallback_events,
-        (select count(*)::integer from export_tasks where id = $4) as new_export_tasks,
+        (select count(*)::integer from jobs where id = $4) as new_export_jobs,
         (select count(*)::integer from budget_periods where id = $5) as aggregate_budget_periods,
         (select count(*)::integer from rate_limit_windows where id = $6) as aggregate_rate_limit_windows
     `,
     [
       ids.oldActivityId,
-      ids.oldExportTaskId,
+      ids.oldExportJobId,
       ids.newActivityId,
-      ids.newExportTaskId,
+      ids.newExportJobId,
       ids.budgetPeriodId,
       ids.rateLimitWindowId,
     ],
@@ -447,12 +459,13 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
   return {
     aggregateBudgetPeriods: row.aggregate_budget_periods,
     aggregateRateLimitWindows: row.aggregate_rate_limit_windows,
-    newExportTasks: row.new_export_tasks,
+    newExportJobs: row.new_export_jobs,
     newFallbackEvents: row.new_fallback_events,
     newRequestActivities: row.new_request_activities,
     newRequestCosts: row.new_request_costs,
     newRequestUsages: row.new_request_usages,
-    oldExportTasks: row.old_export_tasks,
+    oldExportFileDeletedMarkers: row.old_export_file_deleted_markers,
+    oldExportJobs: row.old_export_jobs,
     oldFallbackEvents: row.old_fallback_events,
     oldRequestActivities: row.old_request_activities,
     oldRequestCosts: row.old_request_costs,

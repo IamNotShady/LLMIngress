@@ -572,9 +572,10 @@ async function readConfigPublication(fixture: Fixture): Promise<{
     `
       select (
                select count(*)::text
-               from config_change_events
-               where source = 'worker'
-                 and changed_table = 'provider_models'
+               from config_versions
+               cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+               where change.value->>'source' = 'worker'
+                 and change.value->>'table' = 'provider_models'
              ) as provider_models_price_change_count,
              (
                select count(*)::text

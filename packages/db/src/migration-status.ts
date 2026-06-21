@@ -236,6 +236,16 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0038",
     name: "config_soft_delete",
   },
+  {
+    checksum: "7ea8e078e801b5dd0e628a05988d39f470e02c08da839181067dd966b30a2966",
+    id: "0039",
+    name: "merge_export_tasks_into_jobs",
+  },
+  {
+    checksum: "d83b3e68defc31c996c3d843acb5949ace5f5a7e5871f14300a83894c6414a29",
+    id: "0040",
+    name: "merge_config_changes_into_versions",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

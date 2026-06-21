@@ -272,9 +272,10 @@ async function countAgentLimitConfigChanges(fixture: Fixture): Promise<number> {
   const result = await fixture.query<{ count: number }>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where source = 'console'
-        and changed_table = 'agent_limits'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'source' = 'console'
+        and change.value->>'table' = 'agent_limits'
     `,
   );
   return result.rows[0]?.count ?? 0;

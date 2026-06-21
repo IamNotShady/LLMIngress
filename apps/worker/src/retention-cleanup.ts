@@ -65,9 +65,14 @@ export async function cleanupExpiredOperationalData(
     await client.query("begin");
     const expiredExportTasks = await client.query<ExpiredExportTaskRow>(
       `
-        select id::text, output_path
-        from export_tasks
-        where completed_at < $1::timestamptz
+        select id::text,
+               result->>'outputPath' as output_path
+        from jobs
+        where job_type in ('jsonl_export', 'cost_report_export')
+          and status = 'succeeded'
+          and completed_at < $1::timestamptz
+          and result ? 'outputPath'
+          and not result ? 'exportFileDeletedAt'
         for update
       `,
       [parsedPayload.cutoff.toISOString()],
@@ -77,8 +82,15 @@ export async function cleanupExpiredOperationalData(
     );
     const result = await client.query<RetentionCleanupRow>(
       `
-        with deleted_export_tasks as (
-          delete from export_tasks
+        with marked_export_jobs as (
+          update jobs
+          set result = jsonb_set(
+                result,
+                '{exportFileDeletedAt}',
+                to_jsonb($3::text),
+                true
+              ),
+              updated_at = now()
           where id = any($2::uuid[])
           returning id
         ),
@@ -88,13 +100,17 @@ export async function cleanupExpiredOperationalData(
           returning id
         )
         select
-          (select count(*)::integer from deleted_export_tasks) as deleted_export_task_count,
+          (select count(*)::integer from marked_export_jobs) as deleted_export_task_count,
           (select count(*)::integer from deleted_request_activity)
             as deleted_request_activity_count,
           (select count(*)::integer from budget_periods) as preserved_budget_period_count,
           (select count(*)::integer from rate_limit_windows) as preserved_rate_limit_window_count
       `,
-      [parsedPayload.cutoff.toISOString(), expiredExportTasks.rows.map((row) => row.id)],
+      [
+        parsedPayload.cutoff.toISOString(),
+        expiredExportTasks.rows.map((row) => row.id),
+        (options.now?.() ?? new Date()).toISOString(),
+      ],
     );
     await client.query("commit");
 

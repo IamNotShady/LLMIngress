@@ -1202,6 +1202,37 @@
       ],
       "status": "passing",
       "evidence": "2026-06-20: TDD red observed first: feat-112 unit failed because migration 0038 and soft-delete filters/snapshots were missing; feat-112 E2E initially failed because request history labels followed renamed config instead of request snapshots. Added migration 0038_config_soft_delete with deleted_at on Agents, Providers, Provider Models, Virtual Models, and Route Policies plus request_activity label snapshot columns; Virtual Model name and Route Policy per-Virtual-Model uniqueness are now active-row partial indexes. Provider key active uniqueness was intentionally not reintroduced because migration 0033 and feat-100 require duplicate active provider_key rows. Console Agent, Virtual Model, and Route Policy deletes now soft-delete rows while preserving runtime FK history; active Console/Gateway/Worker config reads filter deleted rows; Gateway request activity writes Agent/Virtual Model/Route/Provider/Model snapshots; history/report/export readers prefer snapshots. Verification passed: feat-112 unit, feat-112 real PostgreSQL E2E, related feat-012/016/025/026/028/029/080/087 unit and E2E regressions, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features re-verified all 112 passing features."
+    },
+    {
+      "id": "feat-113",
+      "name": "Export Tasks Merged Into Jobs Result",
+      "description": "Export task metadata lives in jobs.result for jsonl_export and cost_report_export jobs, export_tasks is removed from the current schema, retention cleanup deletes expired export files by scanning completed export jobs and marks jobs.result.exportFileDeletedAt idempotently, and backup coverage no longer includes export_tasks.",
+      "verification": "pnpm exec vitest run tests/features/feat-113-export-tasks-cleanup.unit.test.ts && pnpm test:e2e tests/e2e/feat-113-export-tasks-cleanup.e2e.spec.ts --grep 'export metadata lives in jobs result and retention cleanup is idempotent without export_tasks'",
+      "dependencies": ["feat-081", "feat-082", "feat-085", "feat-086", "feat-095"],
+      "status": "passing",
+      "evidence": "2026-06-21: TDD red observed first: feat-113 unit failed because migration 0039 was missing and export handlers still wrote export_tasks; feat-113 E2E failed because export_tasks still existed after migrations. Added migration 0039_merge_export_tasks_into_jobs that fails on export_tasks rows with null job_id, backfills export metadata into jobs.result, and drops export_tasks. JSONL and cost report export handlers now return job result metadata directly. Retention cleanup now scans completed export jobs with result.outputPath, deletes expired files, and writes jobs.result.exportFileDeletedAt so repeat runs do not reprocess the same file. Removed export_tasks from backup coverage and architecture docs; updated legacy feat-081/082/085/095 regressions. Verification passed: feat-113 unit, feat-113 real PostgreSQL E2E, related feat-081/082/085/086 unit checks, related feat-081/082/085/095 E2Es, pnpm run db:migrate:check, pnpm run typecheck, pnpm run verify, and pnpm run verify:features re-verified all 114 passing features."
+    },
+    {
+      "id": "feat-114",
+      "name": "Config Change Events Merged Into Config Versions",
+      "description": "Config change details live as a JSON array in config_versions.changes, config_change_events is removed from the current schema, config publisher writes config_versions.changes in the same transaction as the config write and NOTIFY payload remains unchanged, and backup coverage no longer includes config_change_events.",
+      "verification": "pnpm exec vitest run tests/features/feat-114-config-changes-cleanup.unit.test.ts && pnpm test:e2e tests/e2e/feat-114-config-changes-cleanup.e2e.spec.ts --grep 'config changes live on config_versions changes and notify stays transactional'",
+      "dependencies": [
+        "feat-008",
+        "feat-011",
+        "feat-015",
+        "feat-016",
+        "feat-023",
+        "feat-030",
+        "feat-031",
+        "feat-058",
+        "feat-073",
+        "feat-096",
+        "feat-100",
+        "feat-110"
+      ],
+      "status": "passing",
+      "evidence": "2026-06-21: TDD red observed first: feat-114 unit failed because migration 0040 was missing and publisher still wrote config_change_events; feat-114 E2E failed because config_change_events still existed after migrations. Added migration 0040_merge_config_changes_into_versions with config_versions.changes JSON array, backfilled old change events into changes, enforced array shape, and dropped config_change_events. Config publisher now writes changes JSON directly into config_versions while preserving ConfigPublishResult and NOTIFY payload shape. Removed config_change_events from backup coverage and architecture docs; updated legacy feat-008/011/015/016/023/030/031/058/073/096/100/110 regressions to read config_versions.changes. Verification passed: feat-114 unit, feat-114 real PostgreSQL E2E, related feat-008/011/096 unit checks, related feat-008/011/015/016/023/030/031/058/073/096/100/110 E2Es, pnpm run db:migrate:check, pnpm run typecheck, pnpm run verify, and pnpm run verify:features re-verified all 114 passing features."
     }
   ]
 }

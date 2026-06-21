@@ -250,8 +250,9 @@ async function countRoutePolicyConfigChanges(fixture: Fixture): Promise<number> 
   const result = await fixture.query<{ count: number }>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where changed_table = 'route_policies'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'table' = 'route_policies'
     `,
   );
   return result.rows[0]?.count ?? 0;

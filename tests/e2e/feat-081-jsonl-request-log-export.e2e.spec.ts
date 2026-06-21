@@ -104,12 +104,6 @@ test("jsonl request log export writes metadata fallback errors without secrets",
       },
       status: "succeeded",
     });
-    await expect(readExportTask(fixture, jobId)).resolves.toMatchObject({
-      export_type: "jsonl_request_logs",
-      line_count: 2,
-      output_path: outputPath,
-      status: "succeeded",
-    });
   } finally {
     await fixture.dispose();
     await rm(outputDir, { force: true, recursive: true });
@@ -360,23 +354,6 @@ async function insertJsonlExportJob(fixture: Fixture, input: JsonlExportJobInput
 async function readJobResult(fixture: Fixture, jobId: string) {
   const result = await fixture.query<{ result: unknown; status: string }>(
     "select status, result from jobs where id = $1",
-    [jobId],
-  );
-  return result.rows[0];
-}
-
-async function readExportTask(fixture: Fixture, jobId: string) {
-  const result = await fixture.query<{
-    export_type: string;
-    line_count: number;
-    output_path: string;
-    status: string;
-  }>(
-    `
-      select export_type, status, output_path, line_count
-      from export_tasks
-      where job_id = $1
-    `,
     [jobId],
   );
   return result.rows[0];

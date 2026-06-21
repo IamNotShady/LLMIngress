@@ -116,9 +116,10 @@ async function countPriceOverrideConfigChanges(
   const result = await fixture.query<PriceOverrideConfigChangeCount>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where source = 'console'
-        and changed_table = 'provider_models'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'source' = 'console'
+        and change.value->>'table' = 'provider_models'
     `,
   );
   return result.rows[0]?.count ?? 0;

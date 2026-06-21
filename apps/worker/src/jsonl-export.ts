@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { Client, type QueryResultRow } from "pg";
@@ -114,19 +113,13 @@ export function createJsonlRequestLogExportJobHandler(
       await writeJsonlFile(payload.outputPath, records);
 
       const completedAt = now();
-      const exportTaskId = await insertSucceededExportTask(client, {
-        completedAt,
-        jobId: job.id,
-        lineCount: records.length,
-        outputPath: payload.outputPath,
-        startedAt,
-      });
 
       return {
-        exportTaskId,
+        completedAt: completedAt.toISOString(),
         exportType,
         lineCount: records.length,
         outputPath: payload.outputPath,
+        startedAt: startedAt.toISOString(),
         trigger: job.trigger,
       };
     } finally {
@@ -436,57 +429,6 @@ async function writeJsonlFile(outputPath: string, records: unknown[]): Promise<v
   await mkdir(dirname(outputPath), { recursive: true });
   const jsonl = records.map((record) => JSON.stringify(record)).join("\n");
   await writeFile(outputPath, jsonl ? `${jsonl}\n` : "", "utf8");
-}
-
-async function insertSucceededExportTask(
-  client: Client,
-  input: {
-    completedAt: Date;
-    jobId: string;
-    lineCount: number;
-    outputPath: string;
-    startedAt: Date;
-  },
-): Promise<string> {
-  const exportTaskId = randomUUID();
-  const result = await client.query<{ id: string }>(
-    `
-      insert into export_tasks (
-        id,
-        job_id,
-        export_type,
-        status,
-        output_path,
-        line_count,
-        started_at,
-        completed_at,
-        metadata,
-        updated_at
-      )
-      values ($1, $2, $3, 'succeeded', $4, $5, $6::timestamptz, $7::timestamptz, '{}'::jsonb, $7::timestamptz)
-      on conflict (job_id)
-      do update set
-        status = excluded.status,
-        output_path = excluded.output_path,
-        line_count = excluded.line_count,
-        error_code = null,
-        error_message = null,
-        completed_at = excluded.completed_at,
-        updated_at = excluded.updated_at
-      returning id::text
-    `,
-    [
-      exportTaskId,
-      input.jobId,
-      exportType,
-      input.outputPath,
-      input.lineCount,
-      input.startedAt.toISOString(),
-      input.completedAt.toISOString(),
-    ],
-  );
-
-  return result.rows[0]?.id ?? exportTaskId;
 }
 
 function readObject(value: unknown): Record<string, unknown> {

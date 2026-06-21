@@ -221,10 +221,11 @@ async function expectProviderModelConfigChanges(
 ): Promise<void> {
   const result = await fixture.query<{ changed_record_id: string }>(
     `
-      select changed_record_id::text
-      from config_change_events
-      where changed_table = 'provider_models'
-      order by changed_record_id
+      select change.value->>'recordId' as changed_record_id
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'table' = 'provider_models'
+      order by change.value->>'recordId'
     `,
   );
   expect(result.rows.map((row) => row.changed_record_id)).toEqual([...expectedRecordIds].sort());

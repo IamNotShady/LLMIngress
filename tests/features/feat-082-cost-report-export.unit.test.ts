@@ -10,14 +10,17 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 const root = resolve(__dirname, "../..");
 
 describe("feat-082 cost report export", () => {
-  it("declares cost_report_export jobs and cost report export task tracking", () => {
+  it("declares cost_report_export jobs and current job-result export tracking", () => {
     const migration = loadSqlMigrations().find(
       (candidate) => candidate.id === "0017" && candidate.name === "cost_report_export",
+    );
+    const cleanupMigration = loadSqlMigrations().find(
+      (candidate) => candidate.id === "0039" && candidate.name === "merge_export_tasks_into_jobs",
     );
 
     expect(migration?.sql).toContain("'cost_report_export'");
     expect(migration?.sql).toContain("'cost_report'");
-    expect(migration?.sql).toContain("export_tasks");
+    expect(cleanupMigration?.sql).toContain("drop table if exists export_tasks");
   });
 
   it("registers cost_report_export in the default Worker job handlers", () => {

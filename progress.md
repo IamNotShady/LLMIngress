@@ -1387,3 +1387,19 @@
   - Kept runtime FKs restrictive and did not reintroduce active Provider key uniqueness, because migration `0033_allow_duplicate_provider_keys` and feat-100 rely on duplicate active `provider_key` rows.
   - Regression repair: feat-026 now verifies Agent delete with request attribution soft-deletes; feat-029 active route count filters `deleted_at`; feat-087 Runtime page remains loadable when the database is pending `0038`.
   - Verification passed: feat-112 unit and real PostgreSQL E2E, related feat-012/016/025/026/028/029/080/087 unit and E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 112 passing features re-verified. The optimized E2E batch fell back after a transient feat-084 retry scenario, and the per-feature fallback passed all features.
+
+- [x] 2026-06-21 feat-113 Export Tasks Merged Into Jobs Result:
+  - Red phase: `pnpm exec vitest run tests/features/feat-113-export-tasks-cleanup.unit.test.ts` failed because migration `0039` was missing and export handlers still wrote `export_tasks`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-113-export-tasks-cleanup.e2e.spec.ts --grep 'export metadata lives in jobs result and retention cleanup is idempotent without export_tasks'` failed because `export_tasks` still existed after migrations.
+  - Added migration `0039_merge_export_tasks_into_jobs`: export rows with null `job_id` fail migration, rows with jobs are backfilled into `jobs.result`, and `export_tasks` is dropped.
+  - JSONL and cost report export handlers now return export metadata directly as job result; retention cleanup scans completed export jobs, deletes expired files, and marks `jobs.result.exportFileDeletedAt` so repeat cleanup is idempotent.
+  - Removed `export_tasks` from backup coverage and architecture docs; updated legacy feat-081/082/085/095 regressions.
+  - Verification passed: feat-113 unit, feat-113 real PostgreSQL E2E, related feat-081/082/085/086 unit checks, related feat-081/082/085/095 E2Es, `pnpm run db:migrate:check`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 114 passing features re-verified.
+
+- [x] 2026-06-21 feat-114 Config Change Events Merged Into Config Versions:
+  - Red phase: `pnpm exec vitest run tests/features/feat-114-config-changes-cleanup.unit.test.ts` failed because migration `0040` was missing and publisher still wrote `config_change_events`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-114-config-changes-cleanup.e2e.spec.ts` failed because `config_change_events` still existed after migrations.
+  - Added migration `0040_merge_config_changes_into_versions`: `config_versions.changes` is a checked JSON array, old change events are backfilled into it, and `config_change_events` is dropped.
+  - Config publisher now writes `changes` directly into `config_versions` in the same transaction as the config write, while keeping `ConfigPublishResult` and `NOTIFY config_changed` payload unchanged.
+  - Removed `config_change_events` from backup coverage and architecture docs; updated legacy feat-008/011/015/016/023/030/031/058/073/096/100/110 regressions to read `config_versions.changes`.
+  - Verification passed: feat-114 unit, feat-114 real PostgreSQL E2E, related feat-008/011/096 unit checks, related feat-008/011/015/016/023/030/031/058/073/096/100/110 E2Es, `pnpm run db:migrate:check`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 114 passing features re-verified.

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { Client, type QueryResultRow } from "pg";
@@ -139,21 +138,12 @@ export function createCostReportExportJobHandler(
       });
       await writeCostReportFile(payload.outputPath, report);
 
-      const exportTaskId = await insertSucceededExportTask(client, {
-        completedAt: generatedAt,
-        jobId: job.id,
-        outputPath: payload.outputPath,
-        requestCount: report.summary.requestCount,
-        startedAt: generatedAt,
-        totalCostUsd: report.summary.totalCostUsd,
-        window: payload.window,
-      });
-
       return {
-        exportTaskId,
+        completedAt: generatedAt.toISOString(),
         exportType,
         outputPath: payload.outputPath,
         requestCount: report.summary.requestCount,
+        startedAt: generatedAt.toISOString(),
         totalCostUsd: report.summary.totalCostUsd,
         trigger: job.trigger,
         window: payload.window,
@@ -423,64 +413,6 @@ async function writeCostReportFile(
 ): Promise<void> {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-}
-
-async function insertSucceededExportTask(
-  client: Client,
-  input: {
-    completedAt: Date;
-    jobId: string;
-    outputPath: string;
-    requestCount: number;
-    startedAt: Date;
-    totalCostUsd: string | null;
-    window: CostReportWindow;
-  },
-): Promise<string> {
-  const exportTaskId = randomUUID();
-  const result = await client.query<{ id: string }>(
-    `
-      insert into export_tasks (
-        id,
-        job_id,
-        export_type,
-        status,
-        output_path,
-        line_count,
-        started_at,
-        completed_at,
-        metadata,
-        updated_at
-      )
-      values ($1, $2, $3, 'succeeded', $4, 1, $5::timestamptz, $6::timestamptz, $7::jsonb, $6::timestamptz)
-      on conflict (job_id)
-      do update set
-        status = excluded.status,
-        output_path = excluded.output_path,
-        line_count = excluded.line_count,
-        error_code = null,
-        error_message = null,
-        metadata = excluded.metadata,
-        completed_at = excluded.completed_at,
-        updated_at = excluded.updated_at
-      returning id::text
-    `,
-    [
-      exportTaskId,
-      input.jobId,
-      exportType,
-      input.outputPath,
-      input.startedAt.toISOString(),
-      input.completedAt.toISOString(),
-      JSON.stringify({
-        requestCount: input.requestCount,
-        totalCostUsd: input.totalCostUsd,
-        window: input.window,
-      }),
-    ],
-  );
-
-  return result.rows[0]?.id ?? exportTaskId;
 }
 
 function rowToCostReportUsageBreakdown(row: UsageBreakdownRow): CostReportUsageBreakdown {

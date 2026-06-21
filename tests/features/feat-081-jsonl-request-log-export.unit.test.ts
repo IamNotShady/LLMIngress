@@ -10,16 +10,17 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 const root = resolve(__dirname, "../..");
 
 describe("feat-081 JSONL request log export", () => {
-  it("declares jsonl_export jobs and export task tracking", () => {
+  it("declares jsonl_export jobs and current job-result export tracking", () => {
     const migration = loadSqlMigrations().find(
       (candidate) => candidate.id === "0016" && candidate.name === "jsonl_request_log_export",
     );
+    const cleanupMigration = loadSqlMigrations().find(
+      (candidate) => candidate.id === "0039" && candidate.name === "merge_export_tasks_into_jobs",
+    );
 
     expect(migration?.sql).toContain("'jsonl_export'");
-    expect(migration?.sql).toContain("create table if not exists export_tasks");
-    expect(migration?.sql).toContain("export_type text not null");
     expect(migration?.sql).toContain("'jsonl_request_logs'");
-    expect(migration?.sql).toContain("line_count integer not null default 0");
+    expect(cleanupMigration?.sql).toContain("drop table if exists export_tasks");
   });
 
   it("registers jsonl_export in the default Worker job handlers", () => {

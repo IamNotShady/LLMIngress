@@ -175,10 +175,11 @@ async function readAgentApiKeyVirtualModelAccess(fixture: Fixture) {
   );
   const configEvents = await fixture.query<{ changed_table: string }>(
     `
-      select distinct changed_table
-      from config_change_events
-      where changed_table in ('agents', 'agent_virtual_models')
-      order by changed_table
+      select distinct change.value->>'table' as changed_table
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'table' in ('agents', 'agent_virtual_models')
+      order by change.value->>'table'
     `,
   );
   const row = access.rows[0];

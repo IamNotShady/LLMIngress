@@ -7,13 +7,20 @@ import {
 } from "../../packages/config/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-test("config publisher commits data and version in one transaction and sends one notify", async () => {
+test("config changes live on config_versions changes and notify stays transactional", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_config_pub_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_config_changes_cleanup_${randomUUID().replaceAll("-", "_")}`,
   });
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await expect(readRegclass(fixture, "config_change_events")).resolves.toBe(null);
+
+    await expect(
+      fixture.query(
+        "insert into config_versions (version, source, changes) values (999, 'system', '{}'::jsonb)",
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
 
     const notifications: unknown[] = [];
     const listener = await createConfigChangedListener({
@@ -25,10 +32,7 @@ test("config publisher commits data and version in one transaction and sends one
 
     try {
       const providerId = randomUUID();
-      const publisher = createConfigPublisher({
-        databaseUrl: fixture.databaseUrl,
-      });
-
+      const publisher = createConfigPublisher({ databaseUrl: fixture.databaseUrl });
       const result = await publisher.publish({
         source: "console",
         description: "Create routing-visible provider",
@@ -96,11 +100,14 @@ test("config publisher commits data and version in one transaction and sends one
 
       await new Promise((resolve) => setTimeout(resolve, 100));
       expect(notifications).toHaveLength(1);
-      const rolledBack = await fixture.query<{ provider_count: string; version_count: string }>(`
-        select
-          (select count(*)::text from providers where provider_key = 'bad-provider') as provider_count,
-          (select count(*)::text from config_versions where version = 2) as version_count
-      `);
+      const rolledBack = await fixture.query<{ provider_count: string; version_count: string }>(
+        `
+          select
+            (select count(*)::text from providers where provider_key = 'bad-provider') as provider_count,
+            (select count(*)::text from config_versions where version = $1) as version_count
+        `,
+        [result.version + 1],
+      );
       expect(rolledBack.rows).toEqual([{ provider_count: "0", version_count: "0" }]);
     } finally {
       await listener.close();
@@ -109,3 +116,14 @@ test("config publisher commits data and version in one transaction and sends one
     await fixture.dispose();
   }
 });
+
+async function readRegclass(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+  tableName: string,
+): Promise<string | null> {
+  const result = await fixture.query<{ table_name: string | null }>(
+    "select to_regclass($1) as table_name",
+    [`public.${tableName}`],
+  );
+  return result.rows[0]?.table_name ?? null;
+}

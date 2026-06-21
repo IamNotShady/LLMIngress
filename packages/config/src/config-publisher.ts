@@ -64,6 +64,16 @@ type ConfigVersionRow = {
   version: number;
 };
 
+type StoredConfigChange = PublishedConfigChange & {
+  createdAt: string;
+  source: ConfigChangeSource;
+};
+
+type PreparedConfigChange = {
+  published: PublishedConfigChange;
+  stored: StoredConfigChange;
+};
+
 type ConfigChangedListenerOptions = {
   databaseUrl: string;
   onNotification: (notification: ConfigChangedNotification) => void;
@@ -121,8 +131,13 @@ async function publishConfigChange(
     await connection.query("select pg_advisory_xact_lock($1)", [11_000_011]);
     await input.write(connection);
 
-    const version = await insertConfigVersion(connection, input);
-    const changes = await insertConfigChanges(connection, input, version.configVersionId);
+    const preparedChanges = prepareConfigChanges(input);
+    const version = await insertConfigVersion(
+      connection,
+      input,
+      preparedChanges.map((change) => change.stored),
+    );
+    const changes = preparedChanges.map((change) => change.published);
     const result: ConfigPublishResult = {
       version: version.version,
       configVersionId: version.configVersionId,
@@ -179,10 +194,11 @@ async function connect(options: CreateConfigPublisherOptions): Promise<ConfigPub
 async function insertConfigVersion(
   client: ConfigPublishClient,
   input: PublishConfigChangeInput,
+  changes: StoredConfigChange[],
 ): Promise<{ configVersionId: string; version: number }> {
   const result = await client.query<ConfigVersionRow>(
-    "insert into config_versions (version, source, description) select coalesce(max(version), 0) + 1, $1, $2 from config_versions returning id::text, version",
-    [input.source, input.description ?? null],
+    "insert into config_versions (version, source, description, changes) select coalesce(max(version), 0) + 1, $1, $2, $3::jsonb from config_versions returning id::text, version",
+    [input.source, input.description ?? null, JSON.stringify(changes)],
   );
   const row = result.rows[0];
   if (!row) {
@@ -195,21 +211,22 @@ async function insertConfigVersion(
   };
 }
 
-async function insertConfigChanges(
-  client: ConfigPublishClient,
-  input: PublishConfigChangeInput,
-  configVersionId: string,
-): Promise<PublishedConfigChange[]> {
-  const changes: PublishedConfigChange[] = [];
-
-  for (const change of input.changes) {
+function prepareConfigChanges(input: PublishConfigChangeInput): PreparedConfigChange[] {
+  return input.changes.map((change) => {
     const id = randomUUID();
-    await client.query(
-      "insert into config_change_events (id, config_version_id, source, changed_table, changed_record_id) values ($1, $2, $3, $4, $5)",
-      [id, configVersionId, input.source, change.table, change.recordId ?? null],
-    );
-    changes.push({ ...change, id });
-  }
+    const published =
+      change.recordId === undefined
+        ? { id, table: change.table }
+        : { id, recordId: change.recordId, table: change.table };
 
-  return changes;
+    return {
+      published,
+      stored: {
+        ...published,
+        createdAt: new Date().toISOString(),
+        recordId: change.recordId ?? null,
+        source: input.source,
+      },
+    };
+  });
 }

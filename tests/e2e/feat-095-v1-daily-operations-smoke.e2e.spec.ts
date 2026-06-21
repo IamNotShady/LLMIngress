@@ -203,7 +203,8 @@ test("v1 daily operations smoke verifies breakdowns exports alerts metrics trace
     await expect(runJobRunnerUntilIdle(runner, 3)).resolves.toBeGreaterThanOrEqual(1);
     await expect(readRetentionState(fixture, seeded)).resolves.toEqual({
       currentRequestCount: 5,
-      oldExportTaskCount: 0,
+      oldExportFileDeletedMarkers: 1,
+      oldExportJobCount: 1,
       oldRequestCount: 0,
       preservedBudgetPeriodCount: 1,
       preservedRateLimitWindowCount: 1,
@@ -224,7 +225,7 @@ type DailyOperationsSeed = {
   failedActivityId: string;
   failedRequestId: string;
   oldActivityId: string;
-  oldExportTaskId: string;
+  oldExportJobId: string;
   providerId: string;
   providerModelId: string;
   rateLimitWindowId: string;
@@ -258,7 +259,7 @@ async function seedDailyOperationsData(
     healthEventId: randomUUID(),
     healthSummaryId: randomUUID(),
     oldActivityId: randomUUID(),
-    oldExportTaskId: randomUUID(),
+    oldExportJobId: randomUUID(),
     providerApiKeyId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
@@ -491,19 +492,28 @@ async function seedDailyOperationsData(
   );
   await fixture.query(
     `
-      insert into export_tasks (
-        id, export_type, status, output_path, line_count, started_at, completed_at
+      insert into jobs (
+        id, job_type, status, trigger, payload, result, completed_at, created_at, updated_at
       )
       values (
-        $1, 'jsonl_request_logs', 'succeeded', $2, 1,
+        $1,
+        'jsonl_export',
+        'succeeded',
+        'manual',
+        '{}'::jsonb,
+        $2::jsonb,
         $3::timestamptz,
-        $4::timestamptz
+        $3::timestamptz,
+        $3::timestamptz
       )
     `,
     [
-      ids.oldExportTaskId,
-      plan.paths.oldExport,
-      isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000),
+      ids.oldExportJobId,
+      JSON.stringify({
+        exportType: "jsonl_request_logs",
+        lineCount: 1,
+        outputPath: plan.paths.oldExport,
+      }),
       isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000 + 1000),
     ],
   );
@@ -517,7 +527,7 @@ async function seedDailyOperationsData(
     failedActivityId: ids.failedActivityId,
     failedRequestId: "req_daily_fallback_exhausted_095",
     oldActivityId: ids.oldActivityId,
-    oldExportTaskId: ids.oldExportTaskId,
+    oldExportJobId: ids.oldExportJobId,
     providerId: ids.providerId,
     providerModelId: ids.providerModelId,
     rateLimitWindowId: ids.rateLimitWindowId,
@@ -774,14 +784,16 @@ async function readRetentionState(
   seeded: DailyOperationsSeed,
 ): Promise<{
   currentRequestCount: number;
-  oldExportTaskCount: number;
+  oldExportFileDeletedMarkers: number;
+  oldExportJobCount: number;
   oldRequestCount: number;
   preservedBudgetPeriodCount: number;
   preservedRateLimitWindowCount: number;
 }> {
   const result = await fixture.query<{
     current_request_count: string;
-    old_export_task_count: string;
+    old_export_file_deleted_markers: string;
+    old_export_job_count: string;
     old_request_count: string;
     preserved_budget_period_count: string;
     preserved_rate_limit_window_count: string;
@@ -792,19 +804,22 @@ async function readRetentionState(
           as current_request_count,
         (select count(*)::text from request_activity where id = $1)
           as old_request_count,
-        (select count(*)::text from export_tasks where id = $2)
-          as old_export_task_count,
+        (select count(*)::text from jobs where id = $2)
+          as old_export_job_count,
+        (select count(*)::text from jobs where id = $2 and result ? 'exportFileDeletedAt')
+          as old_export_file_deleted_markers,
         (select count(*)::text from budget_periods where id = $3)
           as preserved_budget_period_count,
         (select count(*)::text from rate_limit_windows where id = $4)
           as preserved_rate_limit_window_count
     `,
-    [seeded.oldActivityId, seeded.oldExportTaskId, seeded.budgetPeriodId, seeded.rateLimitWindowId],
+    [seeded.oldActivityId, seeded.oldExportJobId, seeded.budgetPeriodId, seeded.rateLimitWindowId],
   );
   const row = result.rows[0];
   return {
     currentRequestCount: Number(row?.current_request_count ?? 0),
-    oldExportTaskCount: Number(row?.old_export_task_count ?? 0),
+    oldExportFileDeletedMarkers: Number(row?.old_export_file_deleted_markers ?? 0),
+    oldExportJobCount: Number(row?.old_export_job_count ?? 0),
     oldRequestCount: Number(row?.old_request_count ?? 0),
     preservedBudgetPeriodCount: Number(row?.preserved_budget_period_count ?? 0),
     preservedRateLimitWindowCount: Number(row?.preserved_rate_limit_window_count ?? 0),

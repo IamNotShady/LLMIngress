@@ -109,6 +109,7 @@ type RoutePolicyRow = PostgresQueryResultRow & {
 type CandidateRow = PostgresQueryResultRow & {
   availability: string;
   candidate_order: number;
+  context_window?: number | null;
   id: string;
   is_fallback: boolean;
   model_display_name: string;
@@ -128,6 +129,8 @@ type CandidateRow = PostgresQueryResultRow & {
   provider_id: string;
   provider_key: string;
   route_policy_id: string;
+  supports_streaming?: boolean | null;
+  supports_tools?: boolean | null;
 };
 
 type ProviderModelOptionRow = PostgresQueryResultRow & {
@@ -387,6 +390,9 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                        providers.enabled as provider_enabled,
                        provider_models.model_id,
                        provider_models.display_name as model_display_name,
+                       provider_models.context_window,
+                       provider_models.supports_streaming,
+                       provider_models.supports_tools,
                        provider_models.availability,
                        provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
                        provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
@@ -754,6 +760,9 @@ async function writeRoutePolicyCandidates(
                providers.enabled as provider_enabled,
                provider_models.model_id,
                provider_models.display_name as model_display_name,
+               provider_models.context_window,
+               provider_models.supports_streaming,
+               provider_models.supports_tools,
                provider_models.availability,
                provider_models.manual_input_usd_per_million_tokens::text
                  as price_override_input_usd_per_million_tokens,

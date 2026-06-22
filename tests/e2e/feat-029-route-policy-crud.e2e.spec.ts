@@ -37,6 +37,15 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
           });
           const virtualModelId = await readVirtualModelId(fixture, "coding-fast");
 
+          await page.goto(`${baseUrl}/models?virtualModelDialog=${virtualModelId}`);
+          await page.locator(".vm-add-model-button").click();
+          const modelPickerRow = page
+            .locator(".vm-model-picker-table tbody tr")
+            .filter({ hasText: "GPT 4.1 Mini" });
+          await expect(modelPickerRow).toContainText("128K");
+          await expect(modelPickerRow.locator("td").nth(5)).toHaveText("支持");
+          await expect(modelPickerRow.locator("td").nth(6)).toHaveText("支持");
+
           await postRoutePolicyAction(page, {
             action: "create",
             fallbackProviderModelIds: [seededModels.anthropic.id],
@@ -44,6 +53,11 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
             strategy: "balanced",
             virtualModelId,
           });
+          await page.goto(`${baseUrl}/models?virtualModelDialog=${virtualModelId}`);
+          const candidateTable = page.locator(".vm-candidate-table");
+          await expect(candidateTable).toContainText("GPT 4.1 Mini");
+          await expect(candidateTable).toContainText("128K");
+          await expect(candidateTable).toContainText("支持");
 
           await expect
             .poll(() => readRoutePolicyState(fixture))

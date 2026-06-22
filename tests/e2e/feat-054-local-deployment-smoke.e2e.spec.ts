@@ -340,9 +340,11 @@ async function seedRealDeployment(fixture: Fixture): Promise<RealDeploymentSeed>
       `
         insert into provider_models (
           id, provider_id, model_id, display_name, context_window,
-          supports_streaming, supports_tools, availability
+          supports_streaming, supports_tools, availability,
+          manual_input_usd_per_million_tokens, manual_output_usd_per_million_tokens,
+          manual_price_updated_at
         )
-        values ($1, $2, $3, $3, 128000, true, true, 'available')
+        values ($1, $2, $3, $3, 128000, true, true, 'available', 1, 5, now())
       `,
       [entry.providerModelId, entry.providerId, entry.modelId],
     );

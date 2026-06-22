@@ -2976,20 +2976,17 @@ details.disclosure[open] > .disclosure-summary {
   top: 0;
 }
 .vm-dialog-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  justify-content: flex-end;
   gap: var(--space-sm);
 }
 .vm-dialog-actions > * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 5.5rem;
   min-height: 2.75rem;
-}
-.vm-dialog-actions .secondary-button {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
+  text-decoration: none;
 }
 .vm-model-picker-scrim {
   position: fixed;

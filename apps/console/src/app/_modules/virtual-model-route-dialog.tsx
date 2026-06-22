@@ -16,6 +16,7 @@ type ProviderModelOption = {
   outputUsdPerMillionTokens: number | null;
   providerDisplayName: string;
   providerKey: string;
+  supportsStreaming: boolean;
   supportsTools: boolean;
 };
 
@@ -288,11 +289,9 @@ export function VirtualModelRouteDialogClient({
             </section>
             <div className="vm-dialog-actions">
               <a className="secondary-button" href={closeHref}>
-                <FlatIcon name="cancel" />
                 <span>取消</span>
               </a>
               <button type="submit">
-                <FlatIcon name="save" />
                 <span>保存</span>
               </button>
             </div>
@@ -415,7 +414,7 @@ export function VirtualModelRouteDialogClient({
                         <td>{formatModelPrice(option.inputUsdPerMillionTokens)}</td>
                         <td>{formatModelPrice(option.outputUsdPerMillionTokens)}</td>
                         <td>{formatBooleanFeature(option.supportsTools)}</td>
-                        <td>不支持</td>
+                        <td>{formatBooleanFeature(option.supportsStreaming)}</td>
                       </tr>
                     ))
                   )}

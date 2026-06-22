@@ -44,16 +44,24 @@ export function ProviderCreateForm({
   const groups = buildChoiceGroups(choices);
   const [choiceId, setChoiceId] = useState(initialChoice.id);
   const [activeGroupId, setActiveGroupId] = useState(initialChoice.groupId);
+  const [displayNameValue, setDisplayNameValue] = useState(() =>
+    readChoiceDisplayName(initialChoice, { initialDisplayName, initialProviderKey }),
+  );
+  const [baseUrlValue, setBaseUrlValue] = useState(() =>
+    readChoiceBaseUrl(initialChoice, initialBaseUrl),
+  );
   const choice = choices.find((item) => item.id === choiceId) ?? initialChoice;
   const visibleChoices = choices.filter((item) => item.groupId === activeGroupId);
   const isLocal = choice.baseUrlMode === "user_local_private";
   const isSubscription = choice.providerType === "subscription";
   const isDirectCreate = choice.baseUrlMode === "fixed_create";
-  const baseUrlValue = isLocal ? initialBaseUrl : (choice.fixedBaseUrl ?? "");
-  const displayNameValue =
-    choice.providerKey === initialProviderKey && initialDisplayName
-      ? initialDisplayName
-      : choice.displayName;
+  const selectChoice = (nextChoice: ProviderCreateChoice) => {
+    setChoiceId(nextChoice.id);
+    setDisplayNameValue(
+      readChoiceDisplayName(nextChoice, { initialDisplayName, initialProviderKey }),
+    );
+    setBaseUrlValue(readChoiceBaseUrl(nextChoice, initialBaseUrl));
+  };
 
   return (
     <form className="provider-create-form" action="/api/providers" method="post">
@@ -76,7 +84,7 @@ export function ProviderCreateForm({
               const nextChoice =
                 choices.find((item) => item.groupId === group.id) ?? fallbackChoice;
               setActiveGroupId(group.id);
-              setChoiceId(nextChoice.id);
+              selectChoice(nextChoice);
             }}
             role="tab"
             type="button"
@@ -93,7 +101,9 @@ export function ProviderCreateForm({
         className={providerKeyError ? "is-invalid" : undefined}
         id="provider-choice"
         name="providerChoice"
-        onChange={(event) => setChoiceId(event.target.value)}
+        onChange={(event) => {
+          selectChoice(choices.find((item) => item.id === event.target.value) ?? fallbackChoice);
+        }}
         required
         value={choice.id}
       >
@@ -114,11 +124,11 @@ export function ProviderCreateForm({
         aria-describedby="provider-display-name-error"
         aria-invalid={displayNameError ? true : undefined}
         className={displayNameError ? "is-invalid" : undefined}
-        defaultValue={displayNameValue}
         id="provider-display-name"
-        key={`display-${choice.id}`}
         name="displayName"
+        onChange={(event) => setDisplayNameValue(event.target.value)}
         required
+        value={displayNameValue}
       />
       <p
         className={displayNameError ? "field-error is-visible" : "field-error"}
@@ -136,12 +146,12 @@ export function ProviderCreateForm({
             aria-invalid={baseUrlError ? true : undefined}
             className={baseUrlError ? "is-invalid" : undefined}
             id="provider-base-url"
-            key={`${choice.id}-${baseUrlValue}`}
             name={isDirectCreate || isLocal ? "baseUrl" : undefined}
+            onChange={(event) => setBaseUrlValue(event.target.value)}
             placeholder={choice.baseUrlPlaceholder ?? choice.fixedBaseUrl ?? ""}
             required={isDirectCreate || isLocal}
             type="url"
-            defaultValue={baseUrlValue}
+            value={baseUrlValue}
           />
           <p
             className={baseUrlError ? "field-error is-visible" : "field-error"}
@@ -157,6 +167,19 @@ export function ProviderCreateForm({
       </button>
     </form>
   );
+}
+
+function readChoiceDisplayName(
+  choice: ProviderCreateChoice,
+  input: { initialDisplayName: string; initialProviderKey: string },
+): string {
+  return choice.providerKey === input.initialProviderKey && input.initialDisplayName
+    ? input.initialDisplayName
+    : choice.displayName;
+}
+
+function readChoiceBaseUrl(choice: ProviderCreateChoice, initialBaseUrl: string): string {
+  return choice.baseUrlMode === "user_local_private" ? initialBaseUrl : (choice.fixedBaseUrl ?? "");
 }
 
 function buildChoiceGroups(choices: ProviderCreateChoice[]): Array<{ id: string; label: string }> {

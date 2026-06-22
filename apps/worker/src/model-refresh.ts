@@ -122,6 +122,8 @@ const workerManagedCapabilityMetadataKeys = [
   "registrySources",
   "streamingInferred",
 ] as const;
+const localProviderKeys = new Set(["ollama", "lmstudio", "llama_cpp"]);
+const defaultLocalProviderContextWindow = 4096;
 
 export function createModelRefreshJobHandler(
   options: CreateModelRefreshJobHandlerOptions,
@@ -221,29 +223,35 @@ export function enrichListedProviderModels(input: {
   providerKey: string;
   registryEntries: ProviderModelRegistryEntry[];
 }): ListedProviderModel[] {
+  const metadataProviderKey = providerMetadataKey(input.providerKey);
+
   return input.listedModels.map((model) => {
     const registryEntry = findProviderModelRegistryEntry(input.registryEntries, {
       displayName: model.displayName,
       modelId: model.modelId,
-      providerKey: input.providerKey,
+      providerKey: metadataProviderKey,
     });
     if (!registryEntry) {
-      return model;
+      return withLocalProviderDefaults(model, input.providerKey);
     }
 
-    return {
-      ...model,
-      capabilityMetadata: buildProviderModelCapabilityMetadata(registryEntry),
-      ...(registryEntry.contextWindow === undefined || registryEntry.contextWindow === null
-        ? {}
-        : { contextWindow: registryEntry.contextWindow }),
-      ...(registryEntry.supportsStreaming === undefined || registryEntry.supportsStreaming === null
-        ? {}
-        : { supportsStreaming: registryEntry.supportsStreaming }),
-      ...(registryEntry.supportsTools === undefined || registryEntry.supportsTools === null
-        ? {}
-        : { supportsTools: registryEntry.supportsTools }),
-    };
+    return withLocalProviderDefaults(
+      {
+        ...model,
+        capabilityMetadata: buildProviderModelCapabilityMetadata(registryEntry),
+        ...(registryEntry.contextWindow === undefined || registryEntry.contextWindow === null
+          ? {}
+          : { contextWindow: registryEntry.contextWindow }),
+        ...(registryEntry.supportsStreaming === undefined ||
+        registryEntry.supportsStreaming === null
+          ? {}
+          : { supportsStreaming: registryEntry.supportsStreaming }),
+        ...(registryEntry.supportsTools === undefined || registryEntry.supportsTools === null
+          ? {}
+          : { supportsTools: registryEntry.supportsTools }),
+      },
+      input.providerKey,
+    );
   });
 }
 
@@ -271,7 +279,7 @@ function findSyncedProviderModelPrice(
     providerKey: string;
   },
 ): ProviderModelSyncedPrice | null {
-  const providerKey = input.providerKey.trim().toLowerCase();
+  const providerKey = providerMetadataKey(input.providerKey);
   const candidates = new Set(
     [input.modelId, input.displayName ?? ""]
       .map((value) => value.trim().toLowerCase())
@@ -285,6 +293,28 @@ function findSyncedProviderModelPrice(
         candidates.has(price.modelId.trim().toLowerCase()),
     ) ?? null
   );
+}
+
+function providerMetadataKey(providerKey: string): string {
+  const normalized = providerKey.trim().toLowerCase();
+
+  if (normalized === "claude_code") {
+    return "anthropic";
+  }
+  if (normalized === "openai_codex") {
+    return "openai";
+  }
+  return normalized;
+}
+
+function withLocalProviderDefaults(
+  model: ListedProviderModel,
+  providerKey: string,
+): ListedProviderModel {
+  if (!localProviderKeys.has(providerKey.trim().toLowerCase()) || model.contextWindow != null) {
+    return model;
+  }
+  return { ...model, contextWindow: defaultLocalProviderContextWindow };
 }
 
 function buildProviderModelCapabilityMetadata(

@@ -160,7 +160,13 @@ async function writeProviderModelPrices(
             updated_at = $11::timestamptz
         from providers
         where providers.id = provider_models.provider_id
-          and lower(providers.provider_key) = lower($1)
+          and lower(
+            case providers.provider_key
+              when 'openai_codex' then 'openai'
+              when 'claude_code' then 'anthropic'
+              else providers.provider_key
+            end
+          ) = lower($1)
           and provider_models.model_id = $2
           and providers.deleted_at is null
           and provider_models.deleted_at is null

@@ -110,14 +110,18 @@ export async function exchangeProviderOAuthCode(
   input: ExchangeProviderOAuthCodeInput,
 ): Promise<ProviderOAuthTokenBlob> {
   const config = readOAuthConfig(input.providerKey);
+  const body: Record<string, string> = {
+    client_id: config.clientId,
+    code: input.code,
+    code_verifier: input.codeVerifier,
+    grant_type: "authorization_code",
+    redirect_uri: config.redirectUri,
+  };
+  if (input.providerKey === "claude_code") {
+    body.state = input.codeVerifier;
+  }
   return requestOAuthToken({
-    body: {
-      client_id: config.clientId,
-      code: input.code,
-      code_verifier: input.codeVerifier,
-      grant_type: "authorization_code",
-      redirect_uri: config.redirectUri,
-    },
+    body,
     headers: config.tokenHeaders,
     fetch: input.fetch,
     nowMs: input.nowMs,

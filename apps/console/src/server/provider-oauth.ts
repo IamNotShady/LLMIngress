@@ -37,7 +37,9 @@ type StartProviderOAuthConnectionResult = {
 type CompleteProviderOAuthConnectionInput = {
   callbackInput: string;
   databaseUrl: string;
+  label?: string | null;
   masterKeySource: MasterKeySource;
+  priority?: number;
   providerOAuthId: string;
 };
 
@@ -64,13 +66,15 @@ export async function startProviderOAuthConnection(
   }
 
   const pkce = createPkcePair();
+  // Claude Code's Anthropic OAuth flow expects state to match the PKCE verifier.
+  const pendingState = provider.providerKey === "claude_code" ? pkce.codeVerifier : pkce.state;
   const connection = await createProviderOAuthPendingConnection({
     databaseUrl: input.databaseUrl,
     label: input.label,
     pendingCodeChallenge: pkce.codeChallenge,
     pendingCodeVerifier: pkce.codeVerifier,
     pendingExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-    pendingState: pkce.state,
+    pendingState,
     priority: input.priority,
     providerId: provider.id,
   });
@@ -79,7 +83,7 @@ export async function startProviderOAuthConnection(
     authorizeUrl: buildProviderOAuthAuthorizeUrl({
       codeChallenge: pkce.codeChallenge,
       providerKey: provider.providerKey,
-      state: pkce.state,
+      state: pendingState,
     }),
     connection,
   };
@@ -117,12 +121,20 @@ export async function completeProviderOAuthAuthorization(
     token,
   });
 
-  return completeProviderOAuthConnection({
+  const completeInput: Parameters<typeof completeProviderOAuthConnection>[0] = {
     databaseUrl: input.databaseUrl,
     encryptedToken,
     providerOAuthId: pending.id,
     tokenExpiresAt: token.expiresAt === null ? null : new Date(token.expiresAt),
-  });
+  };
+  if (Object.hasOwn(input, "label")) {
+    completeInput.label = input.label;
+  }
+  if (input.priority !== undefined) {
+    completeInput.priority = input.priority;
+  }
+
+  return completeProviderOAuthConnection(completeInput);
 }
 
 export { deleteProviderOAuthConnection, setProviderOAuthConnectionEnabled };

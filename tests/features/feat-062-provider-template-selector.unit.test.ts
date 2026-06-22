@@ -89,6 +89,16 @@ describe("feat-062 provider template selector", () => {
       providerKey: "openai_codex",
       providerType: "subscription",
     });
+    expect(
+      normalizeProviderTemplateFormInput({
+        baseUrl: "https://chatgpt.com/backend-api",
+        templateId: "openai_codex",
+      }),
+    ).toMatchObject({
+      baseUrl: "https://chatgpt.com/backend-api",
+      providerKey: "openai_codex",
+      providerType: "subscription",
+    });
 
     expect(
       normalizeProviderTemplateFormInput({
@@ -108,6 +118,12 @@ describe("feat-062 provider template selector", () => {
         templateId: "deepseek",
       }),
     ).toThrow(/custom OpenAI-compatible endpoints are not allowed/i);
+    expect(() =>
+      normalizeProviderTemplateFormInput({
+        baseUrl: "https://arbitrary.example/subscription",
+        templateId: "openai_codex",
+      }),
+    ).toThrow(/custom subscription endpoints are not allowed/i);
 
     expect(() =>
       normalizeProviderFormInput({

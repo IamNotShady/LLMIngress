@@ -103,6 +103,8 @@ export async function listProviderOAuthMetadata(
                updated_at,
                completed_at
         from provider_oauth
+        where completed_at is not null
+          and encrypted_token is not null
         order by provider_id,
                  priority asc,
                  created_at asc,
@@ -206,15 +208,22 @@ export async function readProviderOAuthPendingConnection(input: {
 export async function completeProviderOAuthConnection(input: {
   databaseUrl: string;
   encryptedToken: Record<string, unknown>;
+  label?: string | null;
+  priority?: number;
   providerOAuthId: string;
   tokenExpiresAt?: Date | null;
 }): Promise<ProviderOAuthMetadata> {
+  const shouldUpdateLabel = Object.hasOwn(input, "label");
+  const shouldUpdatePriority = input.priority !== undefined;
+
   return withPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         update provider_oauth
         set encrypted_token = $2,
             token_expires_at = $3,
+            label = case when $4::boolean then $5::text else label end,
+            priority = case when $6::boolean then $7::integer else priority end,
             pending_state = null,
             pending_code_verifier = null,
             pending_code_challenge = null,
@@ -236,7 +245,15 @@ export async function completeProviderOAuthConnection(input: {
                   updated_at,
                   completed_at
       `,
-      [input.providerOAuthId, JSON.stringify(input.encryptedToken), input.tokenExpiresAt ?? null],
+      [
+        input.providerOAuthId,
+        JSON.stringify(input.encryptedToken),
+        input.tokenExpiresAt ?? null,
+        shouldUpdateLabel,
+        shouldUpdateLabel ? normalizeProviderOAuthLabel(input.label) : null,
+        shouldUpdatePriority,
+        shouldUpdatePriority ? normalizeProviderOAuthPriority(input.priority) : null,
+      ],
     );
     return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
   });

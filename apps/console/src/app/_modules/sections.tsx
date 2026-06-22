@@ -2841,9 +2841,19 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   };
   const providerKeyDialog = readSingleSearchParam(searchParams.providerKeyDialog);
   const providerKeyDelete = readSingleSearchParam(searchParams.providerKeyDelete);
+  const providerOAuthError = readSingleSearchParam(searchParams.providerOAuthError);
+  const providerOAuthId = readSingleSearchParam(searchParams.providerOAuthId);
+  const providerOAuthLabelValue = readSingleSearchParam(searchParams.providerOAuthLabelValue);
+  const providerOAuthPriorityValue = readSingleSearchParam(searchParams.providerOAuthPriorityValue);
+  const providerAuthorizeUrl = readSingleSearchParam(searchParams.providerAuthorizeUrl);
   const providerKeyDialogCloseHref = buildQueryHref(searchParams, {
     providerKeyDelete: undefined,
     providerKeyDialog: undefined,
+    providerAuthorizeUrl: undefined,
+    providerOAuthError: undefined,
+    providerOAuthId: undefined,
+    providerOAuthLabelValue: undefined,
+    providerOAuthPriorityValue: undefined,
   });
   const editDialogProvider =
     providerDialog && providerDialog !== "new"
@@ -2866,9 +2876,11 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     ? (providerOAuthByProviderId.get(selectedProvider.id) ?? [])
     : [];
   const selectedProviderCredentialCount =
-    selectedProvider?.providerType === "subscription"
-      ? selectedProviderOAuthConnections.length
-      : selectedProviderKeys.length;
+    selectedProvider?.providerType === "local"
+      ? 1
+      : selectedProvider?.providerType === "subscription"
+        ? selectedProviderOAuthConnections.length
+        : selectedProviderKeys.length;
   const deleteProviderKey = selectedProviderKeys.find(
     (providerKey) => providerKey.id === providerKeyDelete,
   );
@@ -3144,135 +3156,157 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
               <section className="provider-detail-section">
                 <div className="provider-detail-section-head">
                   <h3>
-                    {selectedProvider.providerType === "subscription" ? "OAuth 管理" : "Key 管理"}
+                    {selectedProvider.providerType === "subscription"
+                      ? "OAuth 管理"
+                      : selectedProvider.providerType === "local"
+                        ? "Local 连接"
+                        : "Key 管理"}
                   </h3>
-                  <a
-                    className="provider-key-add-button"
-                    href={buildQueryHref(searchParams, {
-                      providerKeyDialog: selectedProvider.id,
-                    })}
-                    aria-label={
-                      selectedProvider.providerType === "subscription"
-                        ? "Add OAuth connection"
-                        : "Add API key"
-                    }
-                    title={
-                      selectedProvider.providerType === "subscription"
-                        ? "Add OAuth connection"
-                        : "Add API key"
-                    }
-                  >
-                    <FlatIcon name="key" />
-                  </a>
+                  {selectedProvider.providerType === "subscription" ? (
+                    <form
+                      action="/api/provider-oauth"
+                      className="provider-oauth-add-form"
+                      method="post"
+                    >
+                      <input type="hidden" name="action" value="start" />
+                      <input type="hidden" name="providerId" value={selectedProvider.id} />
+                      <input type="hidden" name="priority" value="100" />
+                      <button
+                        aria-label="Add OAuth connection"
+                        className="provider-key-add-button"
+                        title="Add OAuth connection"
+                        type="submit"
+                      >
+                        <FlatIcon name="key" />
+                      </button>
+                    </form>
+                  ) : selectedProvider.providerType === "local" ? null : (
+                    <a
+                      className="provider-key-add-button"
+                      href={buildQueryHref(searchParams, {
+                        providerKeyDialog: selectedProvider.id,
+                      })}
+                      aria-label="Add API key"
+                      title="Add API key"
+                    >
+                      <FlatIcon name="key" />
+                    </a>
+                  )}
                 </div>
-                <div className="data-table-wrap">
-                  <table className="data-table provider-key-table">
-                    <thead>
-                      <tr>
-                        <th>Label</th>
-                        <th>Priority</th>
-                        <th>状态</th>
-                        <th>最近测试</th>
-                        <th>操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedProvider.providerType === "subscription" ? (
-                        selectedProviderOAuthConnections.length === 0 ? (
+                {selectedProvider.providerType === "local" ? (
+                  <p>Local providers do not require API keys.</p>
+                ) : (
+                  <div className="data-table-wrap">
+                    <table className="data-table provider-key-table">
+                      <thead>
+                        <tr>
+                          <th>Label</th>
+                          <th>Priority</th>
+                          <th>状态</th>
+                          <th>最近测试</th>
+                          <th>操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedProvider.providerType === "subscription" ? (
+                          selectedProviderOAuthConnections.length === 0 ? (
+                            <tr>
+                              <td colSpan={5}>No OAuth connection stored.</td>
+                            </tr>
+                          ) : (
+                            selectedProviderOAuthConnections.map((connection) => (
+                              <tr key={connection.id}>
+                                <td>{connection.label ?? "-"}</td>
+                                <td>{connection.priority}</td>
+                                <td>
+                                  <ProviderOAuthTestStatusPill status={connection.lastTestStatus} />
+                                </td>
+                                <td>{formatProviderOAuthLastTest(connection)}</td>
+                                <td>
+                                  <span className="provider-table-actions">
+                                    <form action="/api/provider-oauth" method="post">
+                                      <input
+                                        type="hidden"
+                                        name="action"
+                                        value={connection.enabled ? "disable" : "enable"}
+                                      />
+                                      <input
+                                        type="hidden"
+                                        name="providerOAuthId"
+                                        value={connection.id}
+                                      />
+                                      <button
+                                        className={
+                                          connection.enabled
+                                            ? "provider-key-delete-button"
+                                            : "provider-action-button provider-action-enable"
+                                        }
+                                        aria-label={
+                                          connection.enabled
+                                            ? "Disable OAuth connection"
+                                            : "Enable OAuth connection"
+                                        }
+                                        title={connection.enabled ? "Disable" : "Enable"}
+                                        type="submit"
+                                      >
+                                        <FlatIcon
+                                          name={connection.enabled ? "disable" : "enable"}
+                                        />
+                                      </button>
+                                    </form>
+                                    <form action="/api/provider-oauth" method="post">
+                                      <input type="hidden" name="action" value="delete" />
+                                      <input
+                                        type="hidden"
+                                        name="providerOAuthId"
+                                        value={connection.id}
+                                      />
+                                      <button
+                                        className="provider-key-delete-button"
+                                        aria-label="Delete OAuth connection"
+                                        title="Delete OAuth connection"
+                                        type="submit"
+                                      >
+                                        <FlatIcon name="delete" />
+                                      </button>
+                                    </form>
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )
+                        ) : selectedProviderKeys.length === 0 ? (
                           <tr>
-                            <td colSpan={5}>No OAuth connection stored.</td>
+                            <td colSpan={5}>No provider key stored.</td>
                           </tr>
                         ) : (
-                          selectedProviderOAuthConnections.map((connection) => (
-                            <tr key={connection.id}>
-                              <td>{connection.label ?? "-"}</td>
-                              <td>{connection.priority}</td>
+                          selectedProviderKeys.map((providerKey) => (
+                            <tr key={providerKey.id}>
+                              <td>{providerKey.label ?? "-"}</td>
+                              <td>{providerKey.priority}</td>
                               <td>
-                                <ProviderOAuthTestStatusPill status={connection.lastTestStatus} />
+                                <ProviderApiKeyTestStatusPill status={providerKey.lastTestStatus} />
                               </td>
-                              <td>{formatProviderOAuthLastTest(connection)}</td>
+                              <td>{formatProviderApiKeyLastTest(providerKey)}</td>
                               <td>
-                                <span className="provider-table-actions">
-                                  <form action="/api/provider-oauth" method="post">
-                                    <input
-                                      type="hidden"
-                                      name="action"
-                                      value={connection.enabled ? "disable" : "enable"}
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="providerOAuthId"
-                                      value={connection.id}
-                                    />
-                                    <button
-                                      className={
-                                        connection.enabled
-                                          ? "provider-key-delete-button"
-                                          : "provider-action-button provider-action-enable"
-                                      }
-                                      aria-label={
-                                        connection.enabled
-                                          ? "Disable OAuth connection"
-                                          : "Enable OAuth connection"
-                                      }
-                                      title={connection.enabled ? "Disable" : "Enable"}
-                                      type="submit"
-                                    >
-                                      <FlatIcon name={connection.enabled ? "disable" : "enable"} />
-                                    </button>
-                                  </form>
-                                  <form action="/api/provider-oauth" method="post">
-                                    <input type="hidden" name="action" value="delete" />
-                                    <input
-                                      type="hidden"
-                                      name="providerOAuthId"
-                                      value={connection.id}
-                                    />
-                                    <button
-                                      className="provider-key-delete-button"
-                                      aria-label="Delete OAuth connection"
-                                      title="Delete OAuth connection"
-                                      type="submit"
-                                    >
-                                      <FlatIcon name="delete" />
-                                    </button>
-                                  </form>
-                                </span>
+                                <a
+                                  className="provider-key-delete-button"
+                                  href={buildQueryHref(searchParams, {
+                                    providerKeyDelete: providerKey.id,
+                                  })}
+                                  aria-label="Delete API key"
+                                  title="Delete API key"
+                                >
+                                  <FlatIcon name="delete" />
+                                </a>
                               </td>
                             </tr>
                           ))
-                        )
-                      ) : selectedProviderKeys.length === 0 ? (
-                        <tr>
-                          <td colSpan={5}>No provider key stored.</td>
-                        </tr>
-                      ) : (
-                        selectedProviderKeys.map((providerKey) => (
-                          <tr key={providerKey.id}>
-                            <td>{providerKey.label ?? "-"}</td>
-                            <td>{providerKey.priority}</td>
-                            <td>
-                              <ProviderApiKeyTestStatusPill status={providerKey.lastTestStatus} />
-                            </td>
-                            <td>{formatProviderApiKeyLastTest(providerKey)}</td>
-                            <td>
-                              <a
-                                className="provider-key-delete-button"
-                                href={buildQueryHref(searchParams, {
-                                  providerKeyDelete: providerKey.id,
-                                })}
-                                aria-label="Delete API key"
-                                title="Delete API key"
-                              >
-                                <FlatIcon name="delete" />
-                              </a>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </section>
             </>
           ) : (
@@ -3338,8 +3372,13 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       {providerKeyDialog && selectedProvider ? (
         selectedProvider.providerType === "subscription" ? (
           <ProviderOAuthCreateDialog
+            authorizeUrl={providerAuthorizeUrl}
             closeHref={providerKeyDialogCloseHref}
+            error={providerOAuthError}
+            labelValue={providerOAuthLabelValue}
             provider={selectedProvider}
+            providerOAuthId={providerOAuthId}
+            priorityValue={providerOAuthPriorityValue}
           />
         ) : (
           <ProviderKeyCreateDialog
@@ -3565,12 +3604,25 @@ function ProviderKeyCreateDialog({
 }
 
 function ProviderOAuthCreateDialog({
+  authorizeUrl,
   closeHref,
+  error,
+  labelValue,
   provider,
+  providerOAuthId,
+  priorityValue,
 }: {
+  authorizeUrl?: string;
   closeHref: string;
+  error?: string;
+  labelValue?: string;
   provider: ConsoleProvider;
+  providerOAuthId?: string;
+  priorityValue?: string;
 }) {
+  const hasPendingAuthorization = Boolean(authorizeUrl && providerOAuthId);
+  const priorityDefaultValue = priorityValue ?? "100";
+
   return (
     <>
       <div className="console-dialog-scrim" aria-hidden="true" />
@@ -3587,26 +3639,61 @@ function ProviderOAuthCreateDialog({
             <span>Close</span>
           </a>
         </div>
-        <form className="provider-create-form" action="/api/provider-oauth" method="post">
-          <input type="hidden" name="action" value="start" />
-          <input type="hidden" name="providerId" value={provider.id} />
-          <label htmlFor="provider-oauth-create-label">Label</label>
-          <input id="provider-oauth-create-label" maxLength={100} name="label" type="text" />
-          <label htmlFor="provider-oauth-create-priority">Priority</label>
-          <input
-            defaultValue={100}
-            id="provider-oauth-create-priority"
-            max={100}
-            min={0}
-            name="priority"
-            step={1}
-            type="number"
-          />
-          <button type="submit">
-            <FlatIcon name="unlock" />
-            <span>Start OAuth</span>
-          </button>
-        </form>
+        {error ? <p className="form-error">{error}</p> : null}
+        {hasPendingAuthorization ? (
+          <>
+            <div className="provider-create-form">
+              <label htmlFor="provider-oauth-authorize-url">Authorization URL</label>
+              <textarea
+                id="provider-oauth-authorize-url"
+                readOnly
+                rows={4}
+                defaultValue={authorizeUrl}
+              />
+              <a
+                className="oauth-open-link secondary-button"
+                href={authorizeUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <FlatIcon name="view" />
+                <span>Open authorization URL</span>
+              </a>
+            </div>
+            <form className="provider-create-form" action="/api/provider-oauth" method="post">
+              <input type="hidden" name="action" value="complete" />
+              <input type="hidden" name="providerId" value={provider.id} />
+              <input type="hidden" name="providerOAuthId" value={providerOAuthId} />
+              <input type="hidden" name="providerAuthorizeUrl" value={authorizeUrl} />
+              <label htmlFor="provider-oauth-complete-label">Label</label>
+              <input
+                id="provider-oauth-complete-label"
+                maxLength={100}
+                name="label"
+                type="text"
+                defaultValue={labelValue ?? ""}
+              />
+              <label htmlFor="provider-oauth-complete-priority">Priority</label>
+              <input
+                defaultValue={priorityDefaultValue}
+                id="provider-oauth-complete-priority"
+                max={100}
+                min={0}
+                name="priority"
+                step={1}
+                type="number"
+              />
+              <label htmlFor="provider-oauth-callback-input">
+                Callback URL or authorization code
+              </label>
+              <textarea id="provider-oauth-callback-input" name="callbackInput" required rows={4} />
+              <button className="oauth-action-button" type="submit">
+                <FlatIcon name="confirm" />
+                <span>Connect OAuth</span>
+              </button>
+            </form>
+          </>
+        ) : null}
       </section>
     </>
   );

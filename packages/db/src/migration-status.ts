@@ -271,6 +271,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0045",
     name: "provider_subscription_oauth",
   },
+  {
+    checksum: "88c92c6cab886c608176dd784ac4f8497d1c365ad49d40b6539016dcc7fa6a8a",
+    id: "0046",
+    name: "allow_subscription_provider_templates",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

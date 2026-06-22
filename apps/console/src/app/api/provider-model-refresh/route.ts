@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     await enqueueProviderModelRefreshJob({ databaseUrl, providerId: input.providerId });
     return NextResponse.redirect(
       new URL(
-        `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}`,
+        `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}&selected=${encodeURIComponent(input.providerId)}`,
         request.url,
       ),
       { status: 303 },

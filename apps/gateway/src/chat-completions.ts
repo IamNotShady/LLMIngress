@@ -517,7 +517,7 @@ async function readProviderCredentials(input: {
       }
       credentials.set(row.provider_id, {
         baseUrl: row.base_url,
-        keys: [],
+        keys: row.provider_type === "local" ? [{ apiKey: "" }] : [],
       });
     }
 
@@ -533,7 +533,7 @@ async function readProviderCredentials(input: {
         where providers.id = any($1::uuid[])
           and providers.enabled = true
           and providers.deleted_at is null
-          and providers.provider_type <> 'subscription'
+          and providers.provider_type = 'api_key'
           and provider_api_keys.enabled = true
         order by providers.default_priority asc,
                  providers.id,

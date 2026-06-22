@@ -8,7 +8,7 @@ import { openDisclosure } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
-test("local provider templates enforce local private urls template paths and public risk confirmation", async ({
+test("local provider templates accept configured urls and use template paths", async ({
   browser,
 }) => {
   const server = await createFakeProviderServer();
@@ -77,17 +77,8 @@ test("local provider templates enforce local private urls template paths and pub
             await providerType.selectOption(id);
             await expect(displayNameInput).toHaveValue(displayName);
             await expect(baseUrlInput).toHaveAttribute("placeholder", placeholder);
-            await expect(dialog.getByLabel("Accept public network risk")).toBeVisible();
+            await expect(dialog.getByRole("checkbox")).toHaveCount(0);
           }
-
-          const publicCreate = await postProviderForm(page, {
-            action: "createFromTemplate",
-            baseUrl: "https://lmstudio.example.com/v1",
-            templateId: "lmstudio",
-          });
-          expect(publicCreate.status).toBe(200);
-          expect(publicCreate.url).toContain("providerError=");
-          expect(publicCreate.url).toContain("public+network+URL+requires");
 
           const loopbackCreate = await postProviderForm(page, {
             action: "createFromTemplate",

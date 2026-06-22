@@ -48,8 +48,8 @@ type ProviderApiKeyRow = {
 };
 
 type ProviderApiKeyConnectivityResult = ProviderConnectivityCheckResult & {
-  providerApiKeyId: string;
-  providerApiKeyPrefix: string;
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
 };
 
 type ProviderOAuthConnectivityResult = ProviderConnectivityCheckResult & {
@@ -131,6 +131,15 @@ export function createProviderConnectivityCheckJobHandler(
           testedAt: oauthResult.checkedAt,
         });
       }
+    } else if (provider.provider_type === "local") {
+      apiKeyResults.push(
+        await checkProviderConnectivity({
+          apiKey: null,
+          fetch: options.fetch,
+          provider,
+          timeoutMs: payload.timeoutMs ?? options.timeoutMs,
+        }),
+      );
     } else {
       const providerApiKeys = await readEnabledProviderApiKeys({
         databaseUrl: options.databaseUrl,

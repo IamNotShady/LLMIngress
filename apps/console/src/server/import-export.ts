@@ -1126,9 +1126,6 @@ function validateTemplateProvider(
   ) {
     throw new Error("Imported provider template base URL does not match the fixed template URL.");
   }
-  if (template.baseUrlMode === "user_local_private" && !isLocalOrPrivateUrl(provider.baseUrl)) {
-    throw new Error("Imported local provider base URL must be local or private.");
-  }
 }
 
 function validateUntemplatedProvider(provider: ExportedProvider): void {
@@ -1305,24 +1302,4 @@ function normalizeUrl(value: string | null): string | null {
       ? url.pathname.slice(0, -1)
       : url.pathname;
   return `${url.origin}${pathname}`;
-}
-
-function isLocalOrPrivateUrl(value: string | null): boolean {
-  if (!value) {
-    return false;
-  }
-  const url = new URL(value);
-  const hostname = url.hostname.toLowerCase();
-  if (hostname === "localhost" || hostname === "::1" || hostname.endsWith(".local")) {
-    return true;
-  }
-  if (
-    hostname.startsWith("127.") ||
-    hostname.startsWith("10.") ||
-    hostname.startsWith("192.168.")
-  ) {
-    return true;
-  }
-  const match = /^172\.(\d{1,2})\./.exec(hostname);
-  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
 }

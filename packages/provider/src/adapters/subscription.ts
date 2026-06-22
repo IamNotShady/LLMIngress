@@ -41,7 +41,7 @@ export function createCodexSubscriptionAdapter(
       try {
         const response = await fetchImpl(buildCodexResponsesUrl(target.baseUrl), {
           body: JSON.stringify(buildCodexResponsesPayload(request.input, target.modelId)),
-          headers: buildCodexSubscriptionHeaders(target.apiKey),
+          headers: buildCodexSubscriptionHeaders(target.apiKey ?? ""),
           method: "POST",
         });
         const body = await readResponseBody(response);
@@ -71,7 +71,7 @@ export function createClaudeCodeProviderAdapter(
       try {
         const response = await fetchImpl(buildClaudeCodeMessagesUrl(target.baseUrl), {
           body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
-          headers: buildClaudeCodeSubscriptionHeaders(target.apiKey),
+          headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? ""),
           method: "POST",
         });
         const body = await readResponseBody(response);

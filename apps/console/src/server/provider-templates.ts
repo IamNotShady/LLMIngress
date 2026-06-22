@@ -69,7 +69,6 @@ export type SubscriptionProviderTemplate = ProviderTemplateCreateInput & {
 
 export type ProviderTemplateFormInput = {
   baseUrl?: string | null;
-  publicNetworkRiskAccepted?: boolean | string | null;
   templateId?: string | null;
 };
 
@@ -346,10 +345,12 @@ export function normalizeProviderTemplateFormInput(
   input: ProviderTemplateFormInput,
 ): ProviderTemplateCreateInput {
   if (isSubscriptionProviderTemplateId(input.templateId)) {
-    if (input.baseUrl?.trim()) {
+    const template = getSubscriptionProviderTemplate(input.templateId);
+    const baseUrl = input.baseUrl?.trim();
+    if (baseUrl && normalizeUrl(baseUrl) !== normalizeUrl(template.baseUrl)) {
       throw new Error("Custom subscription endpoints are not allowed.");
     }
-    return getSubscriptionProviderTemplate(input.templateId);
+    return template;
   }
 
   if (isLocalProviderTemplateId(input.templateId)) {
@@ -397,12 +398,7 @@ function normalizeLocalTemplateFormInput(
     throw new Error(`${template.displayName} base URL is required.`);
   }
 
-  const url = readHttpUrl(baseUrl);
-  if (requiresPublicNetworkRiskConfirmation(url) && !readRiskAccepted(input)) {
-    throw new Error(
-      `${template.displayName} public network URL requires explicit risk confirmation.`,
-    );
-  }
+  readHttpUrl(baseUrl);
 
   return {
     baseUrl: normalizeUrl(baseUrl),
@@ -530,54 +526,6 @@ function readHttpUrl(value: string): URL {
   }
 
   return url;
-}
-
-function requiresPublicNetworkRiskConfirmation(url: URL): boolean {
-  const hostname = url.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
-
-  if (hostname === "localhost" || isPrivateIpv4(hostname) || isPrivateIpv6(hostname)) {
-    return false;
-  }
-
-  return true;
-}
-
-function isPrivateIpv4(hostname: string): boolean {
-  const parts = hostname.split(".");
-  if (parts.length !== 4) {
-    return false;
-  }
-
-  const octets = parts.map((part) => Number(part));
-  if (octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
-    return false;
-  }
-
-  const [first = -1, second = -1] = octets;
-  return (
-    first === 10 ||
-    first === 127 ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 169 && second === 254) ||
-    (first === 192 && second === 168)
-  );
-}
-
-function isPrivateIpv6(hostname: string): boolean {
-  if (!hostname.includes(":")) {
-    return false;
-  }
-
-  return (
-    hostname === "::1" ||
-    hostname.startsWith("fc") ||
-    hostname.startsWith("fd") ||
-    hostname.startsWith("fe80:")
-  );
-}
-
-function readRiskAccepted(input: ProviderTemplateFormInput): boolean {
-  return input.publicNetworkRiskAccepted === true || input.publicNetworkRiskAccepted === "true";
 }
 
 function normalizeUrl(value: string): string {

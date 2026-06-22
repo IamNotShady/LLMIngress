@@ -44,7 +44,7 @@ export type ProviderConnectivityFailureStatus =
 export type ProviderConnectivityStatus = "healthy" | ProviderConnectivityFailureStatus;
 
 type CheckProviderConnectivityOptions = {
-  apiKey: string;
+  apiKey?: string | null;
   fetch?: typeof globalThis.fetch;
   nowMs?: () => number;
   provider: ConnectivityCheckProvider;
@@ -152,7 +152,7 @@ export async function checkProviderConnectivity(
 }
 
 function buildProviderConnectivityRequest(input: {
-  apiKey: string;
+  apiKey?: string | null;
   provider: ConnectivityCheckProvider;
 }): { init: RequestInit; url: string } {
   const providerKey = input.provider.providerKey.toLowerCase();
@@ -167,7 +167,7 @@ function buildProviderConnectivityRequest(input: {
           store: false,
           stream: true,
         }),
-        headers: buildCodexSubscriptionHeaders(input.apiKey),
+        headers: buildCodexSubscriptionHeaders(input.apiKey ?? ""),
         method: "POST",
       },
       url: buildCodexResponsesUrl(input.provider.baseUrl),
@@ -183,7 +183,7 @@ function buildProviderConnectivityRequest(input: {
           model: input.provider.modelId,
           stream: false,
         }),
-        headers: buildClaudeCodeSubscriptionHeaders(input.apiKey),
+        headers: buildClaudeCodeSubscriptionHeaders(input.apiKey ?? ""),
         method: "POST",
       },
       url: buildClaudeCodeMessagesUrl(input.provider.baseUrl),
@@ -199,8 +199,8 @@ function buildProviderConnectivityRequest(input: {
         stream: false,
       }),
       headers: {
-        authorization: `Bearer ${input.apiKey}`,
         "content-type": "application/json",
+        ...(input.apiKey ? { authorization: `Bearer ${input.apiKey}` } : {}),
       },
       method: "POST",
     },

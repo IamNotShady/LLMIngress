@@ -38,7 +38,7 @@ describe("feat-064 local provider templates", () => {
     );
   });
 
-  it("accepts local and private URLs while public URLs require risk confirmation", () => {
+  it("accepts local, private, and public URLs", () => {
     for (const [id] of localOpenAICompatibleTemplates) {
       expect(
         normalizeProviderTemplateFormInput({
@@ -64,17 +64,9 @@ describe("feat-064 local provider templates", () => {
         providerType: "local",
       });
 
-      expect(() =>
-        normalizeProviderTemplateFormInput({
-          baseUrl: `https://${id}.example.com/v1`,
-          templateId: id,
-        }),
-      ).toThrow(/public network.*risk confirmation/i);
-
       expect(
         normalizeProviderTemplateFormInput({
           baseUrl: `https://${id}.example.com/v1`,
-          publicNetworkRiskAccepted: "true",
           templateId: id,
         }),
       ).toMatchObject({
@@ -149,6 +141,39 @@ describe("feat-064 local provider templates", () => {
       providerRequestId: "local-openai-compatible-response",
       statusCode: 200,
     });
+  });
+
+  it("does not send Authorization for local OpenAI-compatible requests without a key", async () => {
+    const calls: Array<{ headers: Headers }> = [];
+    const adapter = createOpenAIProviderAdapter({
+      fetch: async (_url, init) => {
+        calls.push({ headers: new Headers(init?.headers) });
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "local response", role: "assistant" } }],
+            id: "local-openai-compatible-response",
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      },
+    });
+
+    await adapter.chatCompletion({
+      request: {
+        messages: [{ role: "user", content: "hello local" }],
+        stream: false,
+      },
+      target: {
+        apiKey: null,
+        baseUrl: "http://127.0.0.1:1234/v1",
+        modelId: "local-model",
+      },
+    });
+
+    expect(calls[0]?.headers.get("authorization")).toBeNull();
   });
 
   it("declares LM Studio and llama.cpp template ids in a follow-up migration", () => {

@@ -714,21 +714,33 @@ pre,
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2xs);
   padding: var(--space-2xs);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
 }
 .provider-create-tabs button {
-  min-height: 42px;
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
   justify-content: center;
-  gap: var(--space-2xs);
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
+  font-size: var(--text-base);
 }
 .provider-create-tabs button.is-active {
-  background: var(--surface);
+  background: var(--surface-sunken);
   color: var(--text);
   box-shadow: var(--shadow-sm);
+}
+.provider-create-tabs button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .checkbox-label[hidden] {
   display: none;
@@ -1229,6 +1241,9 @@ details.disclosure[open] > .disclosure-summary {
   letter-spacing: 0;
 }
 .console-dialog form + form {
+  margin-top: var(--space-md);
+}
+.console-dialog .provider-create-form + .provider-create-form {
   margin-top: var(--space-md);
 }
 /* ---- pager ---- */
@@ -2259,6 +2274,86 @@ details.disclosure[open] > .disclosure-summary {
 :where(button, a):has(.flat-icon) .flat-icon {
   width: 1.35rem;
   height: 1.35rem;
+}
+.provider-create-tabs button:has(.flat-icon) {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 3rem !important;
+  height: auto !important;
+  padding: 0 var(--space-sm) !important;
+  gap: var(--space-xs) !important;
+  color: var(--text-muted) !important;
+  background: transparent !important;
+}
+.provider-create-tabs button.is-active:has(.flat-icon) {
+  color: var(--text) !important;
+  background: var(--surface-sunken) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.provider-create-tabs button:has(.flat-icon) > span {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip: auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oauth-open-link:has(.flat-icon),
+.oauth-open-link:has(.flat-icon):hover,
+.oauth-open-link:has(.flat-icon):active {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 2.75rem !important;
+  justify-self: start;
+  padding: 0 var(--space-md) !important;
+  gap: var(--space-xs) !important;
+  color: var(--text) !important;
+  background: var(--surface) !important;
+  border-color: var(--border-strong) !important;
+}
+.oauth-open-link:has(.flat-icon):hover {
+  background: var(--surface-inset) !important;
+}
+.oauth-open-link:has(.flat-icon) > span {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
+}
+.oauth-action-button:has(.flat-icon),
+.oauth-action-button:has(.flat-icon):hover,
+.oauth-action-button:has(.flat-icon):active {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 2.75rem !important;
+  justify-self: start;
+  padding: 0 var(--space-md) !important;
+  gap: var(--space-xs) !important;
+  color: var(--accent-fg) !important;
+  background: var(--accent) !important;
+  border-color: transparent !important;
+}
+.oauth-action-button:has(.flat-icon):hover {
+  background: var(--accent-strong) !important;
+}
+.oauth-action-button:has(.flat-icon) > span {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
 }
 .agent-table-actions .link-button:has(.flat-icon),
 .agent-table-actions .agent-action-edit:has(.flat-icon),

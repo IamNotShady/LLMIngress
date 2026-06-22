@@ -29,7 +29,15 @@ export async function fetchListedProviderModels(input: {
     throw new Error(`Provider model list request failed with status ${response.status}.`);
   }
 
-  return normalizeProviderModelList(parseProviderModelList(body), input.providerKey);
+  const models = normalizeProviderModelList(parseProviderModelList(body), input.providerKey);
+  if (input.providerKey?.trim().toLowerCase() === "llama_cpp") {
+    return enrichLlamaCppProviderModels({
+      baseUrl: input.baseUrl,
+      fetch: fetchImpl,
+      models,
+    });
+  }
+  return models;
 }
 
 export function buildProviderModelListRequest(input: {
@@ -56,6 +64,13 @@ export function buildProviderModelListRequest(input: {
     return {
       init,
       url: buildClaudeCodeModelListUrl(input.baseUrl),
+    };
+  }
+
+  if (providerKey === "lmstudio") {
+    return {
+      init,
+      url: buildLmStudioModelListUrl(input.baseUrl),
     };
   }
 
@@ -89,25 +104,9 @@ export function buildProviderModelListRequest(input: {
 }
 
 export function parseProviderModelList(body: unknown): ListedProviderModel[] {
-  if (isRecord(body) && Array.isArray(body.data)) {
-    return body.data
-      .map((entry): ListedProviderModel | null => {
-        if (isRecord(entry) && typeof entry.id === "string" && entry.id.trim()) {
-          const contextWindow = readProviderResponseContextWindow(entry);
-          return {
-            ...(contextWindow === null ? {} : { contextWindow }),
-            displayName:
-              typeof entry.name === "string" && entry.name.trim() ? entry.name : entry.id,
-            modelId: entry.id,
-          };
-        }
-        return null;
-      })
-      .filter((entry): entry is ListedProviderModel => entry !== null);
-  }
-
   if (isRecord(body) && Array.isArray(body.models)) {
-    return body.models
+    const dataById = buildProviderModelDataIndex(body.data);
+    const models = body.models
       .map((entry): ListedProviderModel | null => {
         if (isRecord(entry) && typeof entry.slug === "string" && entry.slug.trim()) {
           if (typeof entry.visibility === "string" && entry.visibility !== "list") {
@@ -126,9 +125,38 @@ export function parseProviderModelList(body: unknown): ListedProviderModel[] {
           };
         }
         if (isRecord(entry) && typeof entry.name === "string" && entry.name.trim()) {
+          const dataEntry = dataById.get(entry.name);
+          const contextWindow =
+            readProviderResponseContextWindow(entry) ??
+            (dataEntry ? readProviderResponseContextWindow(dataEntry) : null);
+          const supportsTools = readSupportsTools(entry);
           return {
+            ...(contextWindow === null ? {} : { contextWindow }),
             displayName: entry.name,
             modelId: entry.name,
+            ...(supportsTools === null ? {} : { supportsTools }),
+          };
+        }
+        return null;
+      })
+      .filter((entry): entry is ListedProviderModel => entry !== null);
+    if (models.length > 0) {
+      return models;
+    }
+  }
+
+  if (isRecord(body) && Array.isArray(body.data)) {
+    return body.data
+      .map((entry): ListedProviderModel | null => {
+        if (isRecord(entry) && typeof entry.id === "string" && entry.id.trim()) {
+          const contextWindow = readProviderResponseContextWindow(entry);
+          const supportsTools = readSupportsTools(entry);
+          return {
+            ...(supportsTools === null ? {} : { supportsTools }),
+            ...(contextWindow === null ? {} : { contextWindow }),
+            displayName:
+              typeof entry.name === "string" && entry.name.trim() ? entry.name : entry.id,
+            modelId: entry.id,
           };
         }
         return null;
@@ -139,14 +167,51 @@ export function parseProviderModelList(body: unknown): ListedProviderModel[] {
   throw new Error("Provider model list response was not recognized.");
 }
 
+function buildProviderModelDataIndex(data: unknown): Map<string, Record<string, unknown>> {
+  const index = new Map<string, Record<string, unknown>>();
+  if (!Array.isArray(data)) {
+    return index;
+  }
+  for (const entry of data) {
+    if (isRecord(entry) && typeof entry.id === "string" && entry.id.trim()) {
+      index.set(entry.id, entry);
+    }
+  }
+  return index;
+}
+
 function readProviderResponseContextWindow(entry: Record<string, unknown>): number | null {
-  for (const key of ["context_window", "contextWindow", "context_length", "contextLength"]) {
+  for (const key of [
+    "context_window",
+    "contextWindow",
+    "context_length",
+    "contextLength",
+    "max_context_length",
+    "loaded_context_length",
+    "n_ctx",
+  ]) {
     const value = entry[key];
     if (typeof value === "number" && Number.isFinite(value) && value > 0) {
       return Math.floor(value);
     }
   }
+  const meta = entry.meta;
+  if (isRecord(meta)) {
+    return readProviderResponseContextWindow(meta);
+  }
+  const params = entry.params;
+  if (isRecord(params)) {
+    return readProviderResponseContextWindow(params);
+  }
   return null;
+}
+
+function readSupportsTools(entry: Record<string, unknown>): boolean | null {
+  const capabilities = entry.capabilities;
+  if (!Array.isArray(capabilities)) {
+    return null;
+  }
+  return capabilities.includes("tool_use") || capabilities.includes("tools");
 }
 
 function buildModelsUrl(baseUrl: string): string {
@@ -154,6 +219,55 @@ function buildModelsUrl(baseUrl: string): string {
   const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
   url.pathname = `${path}/models`.replaceAll(/\/{2,}/g, "/");
   return url.toString();
+}
+
+function buildLmStudioModelListUrl(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  const path = url.pathname.replace(/\/+$/, "").replace(/\/v1$/, "");
+  url.pathname = `${path}/api/v0/models`.replaceAll(/\/{2,}/g, "/");
+  return url.toString();
+}
+
+async function enrichLlamaCppProviderModels(input: {
+  baseUrl: string;
+  fetch: typeof globalThis.fetch;
+  models: ListedProviderModel[];
+}): Promise<ListedProviderModel[]> {
+  try {
+    const response = await input.fetch(buildLlamaCppPropsUrl(input.baseUrl), { method: "GET" });
+    if (!response.ok) {
+      return input.models;
+    }
+    const props = await readResponseBody(response);
+    const supportsTools = readLlamaCppSupportsTools(props);
+    const contextWindow =
+      isRecord(props) && isRecord(props.default_generation_settings)
+        ? readProviderResponseContextWindow(props.default_generation_settings)
+        : null;
+    return input.models.map((model) => ({
+      ...model,
+      ...(contextWindow === null ? {} : { contextWindow: model.contextWindow ?? contextWindow }),
+      ...(supportsTools === null ? {} : { supportsTools }),
+    }));
+  } catch {
+    return input.models;
+  }
+}
+
+function buildLlamaCppPropsUrl(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  const path = url.pathname.replace(/\/+$/, "").replace(/\/v1$/, "");
+  url.pathname = `${path}/props`.replaceAll(/\/{2,}/g, "/");
+  return url.toString();
+}
+
+function readLlamaCppSupportsTools(props: unknown): boolean | null {
+  if (!isRecord(props) || !isRecord(props.chat_template_caps)) {
+    return null;
+  }
+  const value =
+    props.chat_template_caps.supports_tools ?? props.chat_template_caps.supports_tool_calls;
+  return typeof value === "boolean" ? value : null;
 }
 
 function normalizeProviderModelList(

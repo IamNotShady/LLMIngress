@@ -151,17 +151,6 @@ export function ProviderCreateForm({
           </p>
         </>
       )}
-      {isLocal ? (
-        <label className="checkbox-label" htmlFor="provider-public-risk">
-          <input
-            id="provider-public-risk"
-            name="publicNetworkRiskAccepted"
-            type="checkbox"
-            value="true"
-          />
-          Accept public network risk
-        </label>
-      ) : null}
       <button type="submit">
         <FlatIcon name="add" />
         <span>Create provider</span>
@@ -171,13 +160,20 @@ export function ProviderCreateForm({
 }
 
 function buildChoiceGroups(choices: ProviderCreateChoice[]): Array<{ id: string; label: string }> {
+  const groupOrder = new Map([
+    ["subscription", 0],
+    ["remote_api_key", 1],
+    ["local", 2],
+  ]);
   const groups = new Map<string, string>();
   for (const choice of choices) {
     if (!groups.has(choice.groupId)) {
       groups.set(choice.groupId, choice.groupLabel);
     }
   }
-  return Array.from(groups, ([id, label]) => ({ id, label }));
+  return Array.from(groups, ([id, label]) => ({ id, label })).sort(
+    (left, right) => (groupOrder.get(left.id) ?? 99) - (groupOrder.get(right.id) ?? 99),
+  );
 }
 
 function readProviderCreateGroupIcon(groupId: string): FlatIconName {

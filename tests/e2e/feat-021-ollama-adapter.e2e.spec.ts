@@ -7,9 +7,7 @@ import { createOllamaProviderAdapter } from "../../packages/provider/src/adapter
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
-test("ollama loopback private network url accepted template paths used public url requires confirmation", async ({
-  browser,
-}) => {
+test("ollama loopback url accepted and template paths used", async ({ browser }) => {
   const server = await createFakeProviderServer();
   const adapter = createOllamaProviderAdapter();
   const fixture = await createTestPostgresFixture({
@@ -74,16 +72,6 @@ test("ollama loopback private network url accepted template paths used public ur
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/providers`);
-
-          const publicCreate = await postProviderForm(page, {
-            action: "createFromTemplate",
-            baseUrl: "https://ollama.example.com",
-            templateId: "ollama",
-          });
-          expect(publicCreate).toMatchObject({
-            error: expect.stringMatching(/public network.*risk confirmation/i),
-            status: 200,
-          });
 
           const legacyOllamaCreate = await postProviderForm(page, {
             action: "create",

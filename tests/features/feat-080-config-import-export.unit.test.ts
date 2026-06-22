@@ -127,6 +127,60 @@ describe("feat-080 config import export", () => {
     );
     expect(configVersions.rows[0]?.count).toBe("0");
   });
+
+  it("imports local template providers without public network gating", async () => {
+    const source = await createFixture("local_public_source");
+    const target = await createFixture("local_public_target");
+    fixtures.push(source, target);
+
+    await seedConfigExportData(source);
+    const exported = await exportConsoleConfig({
+      databaseUrl: source.databaseUrl,
+      now: new Date("2026-06-16T12:00:00.000Z"),
+    });
+    const publicLocalExport: LlmIngressConfigExport = {
+      ...exported,
+      providers: exported.providers.map((provider) => ({
+        ...provider,
+        baseUrl: "https://lmstudio.example.com/v1",
+        displayName: "LM Studio Public",
+        providerKey: "lmstudio",
+        providerTemplateId: "lmstudio",
+        providerType: "local",
+      })),
+    };
+
+    await expect(
+      importConsoleConfig({
+        databaseUrl: target.databaseUrl,
+        document: publicLocalExport,
+      }),
+    ).resolves.toMatchObject({
+      importedProviderCount: 1,
+      importedProviderModelCount: 1,
+    });
+
+    const providers = await target.query<{
+      base_url: string;
+      provider_key: string;
+      provider_template_id: string;
+      provider_type: string;
+    }>(
+      `
+        select provider_type, provider_key, base_url, provider_template_id
+        from providers
+        where provider_key = 'lmstudio'
+      `,
+    );
+    expect(providers.rows).toEqual([
+      {
+        base_url: "https://lmstudio.example.com/v1",
+        provider_key: "lmstudio",
+        provider_template_id: "lmstudio",
+        provider_type: "local",
+      },
+    ]);
+  });
 });
 
 async function createFixture(suffix: string): Promise<Fixture> {

@@ -8,7 +8,7 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 import { createOllamaProviderAdapter } from "../../packages/provider/src/adapters/ollama";
 
 describe("feat-021 Ollama local provider adapter", () => {
-  it("accepts loopback and private Ollama base URLs while public URLs need risk confirmation", () => {
+  it("accepts loopback, private, and public Ollama base URLs", () => {
     const template = getOllamaProviderTemplate("ollama");
 
     expect(template).toEqual({
@@ -70,28 +70,25 @@ describe("feat-021 Ollama local provider adapter", () => {
       providerType: "local",
     });
 
-    expect(() =>
-      normalizeProviderTemplateFormInput({
-        baseUrl: "https://ollama.example.com/v1",
-        templateId: "ollama",
-      }),
-    ).toThrow(/public network.*risk confirmation/i);
-
-    expect(() =>
-      normalizeProviderTemplateFormInput({
-        baseUrl: "https://fd.example.com",
-        templateId: "ollama",
-      }),
-    ).toThrow(/public network.*risk confirmation/i);
-
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "https://ollama.example.com/v1",
-        publicNetworkRiskAccepted: "true",
         templateId: "ollama",
       }),
     ).toMatchObject({
       baseUrl: "https://ollama.example.com/v1",
+      providerKey: "ollama",
+      providerTemplateId: "ollama",
+      providerType: "local",
+    });
+
+    expect(
+      normalizeProviderTemplateFormInput({
+        baseUrl: "https://fd.example.com",
+        templateId: "ollama",
+      }),
+    ).toMatchObject({
+      baseUrl: "https://fd.example.com",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",

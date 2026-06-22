@@ -278,9 +278,12 @@ function expectCapturedProviderRequest(
     });
   }
 
-  expect(readHeader(request, scenario.expectedAuthHeader), scenario.id).toBe(
-    scenario.expectedAuthValue,
-  );
+  const authHeader = readHeader(request, scenario.expectedAuthHeader);
+  if (scenario.providerType === "local") {
+    expect(authHeader, scenario.id).toBeUndefined();
+  } else {
+    expect(authHeader, scenario.id).toBe(scenario.expectedAuthValue);
+  }
   if (scenario.id === "openrouter") {
     expect(readHeader(request, "http-referer"), scenario.id).toBe("https://llmingress.local");
     expect(readHeader(request, "x-openrouter-title"), scenario.id).toBe("LLMIngress");

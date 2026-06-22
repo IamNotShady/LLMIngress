@@ -33,6 +33,18 @@ describe("feat-115 provider subscription OAuth", () => {
     expect(sql).not.toMatch(/^\s*oauth_provider\s+text\b/m);
   });
 
+  it("allows subscription provider templates in the provider whitelist constraint", () => {
+    const migration = loadSqlMigrations().find(
+      (candidate) =>
+        candidate.id === "0046" && candidate.name === "allow_subscription_provider_templates",
+    );
+    const sql = migration?.sql ?? "";
+
+    expect(sql).toContain("providers_template_id_whitelisted");
+    expect(sql).toContain("'openai_codex'");
+    expect(sql).toContain("'claude_code'");
+  });
+
   it("adds provider_oauth to scheduled backup coverage", () => {
     const backupSource = readFileSync(resolve(root, "apps/worker/src/backup.ts"), "utf8");
 
@@ -70,6 +82,42 @@ describe("feat-115 provider subscription OAuth", () => {
     });
   });
 
+  it("keeps subscription OAuth authorization and callback entry inside the Console dialog", () => {
+    const sectionsSource = readFileSync(
+      resolve(root, "apps/console/src/app/_modules/sections.tsx"),
+      "utf8",
+    );
+    const routeSource = readFileSync(
+      resolve(root, "apps/console/src/app/api/provider-oauth/route.ts"),
+      "utf8",
+    );
+    const oauthServerSource = readFileSync(
+      resolve(root, "apps/console/src/server/provider-oauth.ts"),
+      "utf8",
+    );
+    const dbProviderSource = readFileSync(resolve(root, "packages/db/src/providers.ts"), "utf8");
+
+    expect(sectionsSource).toContain("providerAuthorizeUrl");
+    expect(sectionsSource).toContain("providerOAuthLabelValue");
+    expect(sectionsSource).toContain("provider-oauth-complete-label");
+    expect(sectionsSource).toContain("provider-oauth-complete-priority");
+    expect(sectionsSource).toContain("Authorization URL");
+    expect(sectionsSource).toContain("Callback URL or authorization code");
+    expect(sectionsSource).toContain("provider-oauth-add-form");
+    expect(sectionsSource).not.toContain("Start OAuth");
+    expect(routeSource).toContain("providerAuthorizeUrl");
+    expect(routeSource).toContain("providerOAuthLabelValue");
+    expect(routeSource).toContain('readNullableText(form, "label")');
+    expect(routeSource).not.toContain("renderProviderOAuthAuthorizePage");
+    expect(oauthServerSource).toContain('provider.providerKey === "claude_code"');
+    expect(oauthServerSource).toContain("pkce.codeVerifier : pkce.state");
+    expect(dbProviderSource).toContain(
+      "from provider_oauth\n        where completed_at is not null\n          and encrypted_token is not null",
+    );
+    expect(dbProviderSource).toContain("label = case when");
+    expect(dbProviderSource).toContain("priority = case when");
+  });
+
   it("exchanges and refreshes OAuth token blobs", async () => {
     const requests: Array<{
       body: Record<string, string>;
@@ -101,6 +149,13 @@ describe("feat-115 provider subscription OAuth", () => {
       nowMs: () => 1_000,
       providerKey: "openai_codex",
     });
+    const claudeExchanged = await exchangeProviderOAuthCode({
+      code: "claude-code",
+      codeVerifier: "claude-state",
+      fetch,
+      nowMs: () => 1_500,
+      providerKey: "claude_code",
+    });
     const refreshed = await refreshProviderOAuthToken({
       fetch,
       nowMs: () => 2_000,
@@ -114,12 +169,14 @@ describe("feat-115 provider subscription OAuth", () => {
       refreshToken: "refresh-token",
       scopes: ["openid", "profile"],
     });
+    expect(claudeExchanged).toMatchObject({ accessToken: "access-token", expiresAt: 3_601_500 });
     expect(refreshed).toMatchObject({ accessToken: "access-token", expiresAt: 3_602_000 });
     expect(requests.map((request) => request.url)).toEqual([
       "https://auth.openai.com/oauth/token",
       "https://api.anthropic.com/v1/oauth/token",
+      "https://api.anthropic.com/v1/oauth/token",
     ]);
-    expect(requests.map((request) => request.bodyType)).toEqual(["form", "json"]);
+    expect(requests.map((request) => request.bodyType)).toEqual(["form", "json", "json"]);
     expect(requests[0]?.body).toMatchObject({
       client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
       code: "code-1",
@@ -127,6 +184,13 @@ describe("feat-115 provider subscription OAuth", () => {
       grant_type: "authorization_code",
     });
     expect(requests[1]?.body).toMatchObject({
+      client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+      code: "claude-code",
+      code_verifier: "claude-state",
+      grant_type: "authorization_code",
+      state: "claude-state",
+    });
+    expect(requests[2]?.body).toMatchObject({
       client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
       grant_type: "refresh_token",
       refresh_token: "refresh-token",

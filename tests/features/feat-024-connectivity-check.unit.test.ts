@@ -140,6 +140,38 @@ describe("feat-024 provider connectivity check", () => {
     ]);
   });
 
+  it("probes local OpenAI-compatible providers without an API key", async () => {
+    const requests: Array<{ headers: HeadersInit | undefined; url: string }> = [];
+    const result = await checkProviderConnectivity({
+      apiKey: null,
+      fetch: async (url, init) => {
+        requests.push({ headers: init?.headers, url: String(url) });
+        return jsonResponse(200, {
+          choices: [{ message: { content: "ok" } }],
+          id: "local-provider-response",
+        });
+      },
+      provider: {
+        baseUrl: "http://127.0.0.1:11434/v1",
+        displayName: "Ollama",
+        id: "local-provider",
+        modelId: "llama3.2:3b",
+        providerKey: "ollama",
+      },
+      timeoutMs: 1_000,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(requests).toEqual([
+      {
+        headers: {
+          "content-type": "application/json",
+        },
+        url: "http://127.0.0.1:11434/v1/chat/completions",
+      },
+    ]);
+  });
+
   it("uses max_completion_tokens only for OpenAI reasoning-style probe requests", async () => {
     const requests: Array<{ body: unknown }> = [];
     await checkProviderConnectivity({

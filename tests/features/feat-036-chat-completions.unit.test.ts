@@ -1,11 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  attachGatewayProviderCredentials,
   createGatewayChatCompletionErrorBody,
   normalizeOpenAIChatCompletionRequest,
   readGatewayMasterKeySource,
 } from "../../apps/gateway/src/chat-completions";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 describe("feat-036 OpenAI chat completions endpoint", () => {
+  const fixtures: Array<Awaited<ReturnType<typeof createTestPostgresFixture>>> = [];
+
+  afterEach(async () => {
+    await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
+  });
+
   it("normalizes OpenAI chat completion payloads for provider adapters", () => {
     expect(
       normalizeOpenAIChatCompletionRequest(
@@ -70,5 +79,48 @@ describe("feat-036 OpenAI chat completions endpoint", () => {
       kind: "file",
       path: "/tmp/master-key",
     });
+  });
+
+  it("attaches local provider credentials without a stored API key", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_chat_local_${randomUUID().replaceAll("-", "_")}`,
+    });
+    fixtures.push(fixture);
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+
+    const providerId = randomUUID();
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'local', 'ollama', 'Ollama', 'http://127.0.0.1:11434/v1', true)
+      `,
+      [providerId],
+    );
+
+    await expect(
+      attachGatewayProviderCredentials({
+        candidates: [
+          {
+            candidateOrder: 1,
+            displayName: "llama3.2:3b",
+            isFallback: false,
+            modelId: "llama3.2:3b",
+            price: { inputUsdPerMillionTokens: null, outputUsdPerMillionTokens: null },
+            providerId,
+            providerKey: "ollama",
+            providerModelId: randomUUID(),
+          },
+        ],
+        databaseUrl: fixture.databaseUrl,
+        masterKeySource: { kind: "inline", value: "chat-local-master-key" },
+      }),
+    ).resolves.toMatchObject([
+      {
+        apiKey: "",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        providerApiKeyId: undefined,
+        providerApiKeyPrefix: undefined,
+      },
+    ]);
   });
 });

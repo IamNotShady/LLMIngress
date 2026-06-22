@@ -31,7 +31,7 @@ export type NormalizedOpenAIEmbeddingsRequest = {
 };
 
 export type OpenAIProviderTarget = {
-  apiKey: string;
+  apiKey?: string | null;
   baseUrl: string;
   modelId: string;
 };
@@ -202,13 +202,13 @@ export function createOpenAIProviderAdapter(
 }
 
 function buildProviderHeaders(
-  apiKey: string,
+  apiKey: string | null | undefined,
   extraHeaders: Record<string, string> | undefined,
 ): Record<string, string> {
   return {
     ...extraHeaders,
-    authorization: `Bearer ${apiKey}`,
     "content-type": "application/json",
+    ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
   };
 }
 

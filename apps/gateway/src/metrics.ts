@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/health";
 
 export const prometheusMetricsContentType = "text/plain; version=0.0.4; charset=utf-8";
 
@@ -11,7 +11,7 @@ type GetPrometheusMetricsDocumentInput = {
   databaseUrl: string;
 };
 
-type GatewayRequestMetricRow = QueryResultRow & {
+type GatewayRequestMetricRow = PostgresQueryResultRow & {
   count: number;
   model: string;
   protocol: string;
@@ -19,20 +19,20 @@ type GatewayRequestMetricRow = QueryResultRow & {
   status: string;
 };
 
-type GatewayLatencyMetricRow = QueryResultRow & {
+type GatewayLatencyMetricRow = PostgresQueryResultRow & {
   count: number;
   protocol: string;
   status: string;
   sum_ms: number;
 };
 
-type GatewayCostMetricRow = QueryResultRow & {
+type GatewayCostMetricRow = PostgresQueryResultRow & {
   model: string;
   provider: string;
   total_cost_usd: string | null;
 };
 
-type GatewayFallbackMetricRow = QueryResultRow & {
+type GatewayFallbackMetricRow = PostgresQueryResultRow & {
   count: number;
   error_code: string;
   model: string;
@@ -40,21 +40,21 @@ type GatewayFallbackMetricRow = QueryResultRow & {
   status: string;
 };
 
-type ProviderHealthMetricRow = QueryResultRow & {
+type ProviderHealthMetricRow = PostgresQueryResultRow & {
   consecutive_failures: number;
   model: string;
   provider: string;
   status: string;
 };
 
-type WorkerJobMetricRow = QueryResultRow & {
+type WorkerJobMetricRow = PostgresQueryResultRow & {
   count: number;
   job_type: string;
   status: string;
   trigger: string;
 };
 
-type WorkerJobAttemptMetricRow = QueryResultRow & {
+type WorkerJobAttemptMetricRow = PostgresQueryResultRow & {
   count: number;
   job_type: string;
   status: string;
@@ -79,7 +79,7 @@ async function collectPrometheusMetricsSnapshot(databaseUrl: string): Promise<{
   workerJobAttempts: WorkerJobAttemptMetricRow[];
   workerJobs: WorkerJobMetricRow[];
 }> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

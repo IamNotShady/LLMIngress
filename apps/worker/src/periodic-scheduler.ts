@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/jobs";
 import { readBackupSettings } from "./backup.js";
 import { readBudgetThresholdAlertSettings } from "./budget-threshold-alerts.js";
 import { readFallbackExhaustionAlertSettings } from "./fallback-exhaustion-alerts.js";
@@ -275,7 +275,7 @@ class PostgresPeriodicSchedulerStore implements PeriodicSchedulerStore {
   constructor(private readonly databaseUrl: string) {}
 
   async enqueueScheduledJob(input: EnqueueScheduledJobInput): Promise<EnqueueScheduledJobResult> {
-    const client = new Client({ connectionString: this.databaseUrl });
+    const client = new PostgresClient({ connectionString: this.databaseUrl });
     await client.connect();
     const payload = JSON.stringify(input.payload);
     const signature = `${input.jobType}:${payload}`;

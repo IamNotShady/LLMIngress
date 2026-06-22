@@ -469,7 +469,7 @@ async function seedDailyOperationsData(
         id, provider_id, provider_model_id, trigger, status,
         error_code, error_message, latency_ms, observed_at
       )
-      values ($1, $2, $3, 'worker_probe', 'failed', 'provider_timeout',
+      values ($1, $2, $3, 'worker_probe', 'unhealthy', 'provider_timeout',
               'provider timeout with sk-secret-095', 5000, $4::timestamptz)
     `,
     [ids.healthEventId, ids.providerId, ids.providerModelId, plan.now.toISOString()],

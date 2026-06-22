@@ -9,6 +9,7 @@ import { normalizeProviderTemplateFormInput } from "../../../server/provider-tem
 import {
   createProvider,
   createProviderFromTemplate,
+  deleteProvider,
   normalizeProviderFormInput,
   setProviderEnabled,
   updateProvider,
@@ -69,6 +70,11 @@ export async function POST(request: NextRequest) {
           providerId,
         });
       }
+    } else if (action === "delete") {
+      await deleteProvider({
+        databaseUrl,
+        id: readRequiredText(form, "id"),
+      });
     } else {
       return NextResponse.json({ error: "Unknown provider action." }, { status: 400 });
     }

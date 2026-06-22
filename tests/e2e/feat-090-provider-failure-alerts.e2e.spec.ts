@@ -219,7 +219,7 @@ async function seedProviderFailureAlertData(
     consecutiveFailures: 2,
     providerId: ids.belowThresholdProviderId,
     providerModelId: null,
-    status: "degraded",
+    status: "auth_failed",
     summaryId: randomUUID(),
   });
 

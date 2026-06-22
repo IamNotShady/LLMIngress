@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
-import { createGeminiProviderAdapter } from "@llmingress/provider/gemini";
+import { PostgresClient } from "@llmingress/db/providers";
+import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIChatRequest,
@@ -9,7 +10,6 @@ import {
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
-import { Client } from "pg";
 import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
 import { recordGatewayProviderTrace } from "./tracing.js";
 
@@ -23,8 +23,10 @@ export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
 
 export type FallbackProviderApiKey = {
   apiKey: string;
+  credentialKind?: "api_key" | "oauth";
   keyPrefix?: string;
   providerApiKeyId?: string;
+  providerOAuthId?: string;
 };
 
 export type FallbackFailedAttempt = {
@@ -92,19 +94,13 @@ export async function executeFallbackChain(
   }
 
   const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
-  const geminiAdapter = input.adapter ?? createGeminiProviderAdapter();
   const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
   const failedAttempts: FallbackFailedAttempt[] = [];
   let lastError: OpenAIAdapterError | undefined;
 
   let attemptOrder = 0;
   for (const candidate of input.candidates) {
-    const adapter =
-      candidate.providerKey === "gemini"
-        ? geminiAdapter
-        : candidate.providerKey === "openrouter"
-          ? openRouterAdapter
-          : genericAdapter;
+    const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
     const providerApiKeys = readFallbackProviderApiKeys(candidate);
     const candidateFailedAttempts: FallbackFailedAttempt[] = [];
 
@@ -217,7 +213,7 @@ export async function recordSucceededAttemptInDatabase(
     return;
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(
@@ -256,7 +252,7 @@ export async function recordFailedAttemptInDatabase(
     return;
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(
@@ -315,7 +311,11 @@ async function recordCandidateHealthFailure(
       failedBeforeFirstByte: latestAttempt.failedBeforeFirstByte,
       providerApiKeyPrefix: latestAttempt.providerApiKeyPrefix ?? null,
     },
-    status: "failed" as const,
+    status: classifyProviderFailureStatus({
+      errorCode: latestAttempt.errorCode,
+      errorMessage: latestAttempt.errorMessage,
+      statusCode: latestAttempt.failedBeforeFirstByte ? null : undefined,
+    }),
     trigger: "request_path" as const,
   };
 

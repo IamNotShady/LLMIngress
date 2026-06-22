@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
+import { PostgresClient } from "@llmingress/db/providers";
 import { openRouterAttributionHeaders } from "@llmingress/provider/openrouter";
-import { Client } from "pg";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
@@ -541,7 +541,7 @@ async function recordGatewayRuntimeError(input: {
   error: GatewayRuntimeStreamError;
   metadata: Record<string, unknown>;
 }): Promise<void> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(

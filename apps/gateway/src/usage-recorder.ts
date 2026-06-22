@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/activity";
 import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
 
 export type GatewayUsageCostDetails = {
@@ -60,7 +60,7 @@ export async function recordGatewayUsageCostAndSavings(
   input: RecordGatewayUsageCostInput,
 ): Promise<void> {
   const records = buildGatewayUsageCostRecords(input.usageCost);
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {

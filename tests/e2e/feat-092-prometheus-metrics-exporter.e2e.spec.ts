@@ -42,7 +42,7 @@ test("prometheus metrics exposes gateway worker request latency cost fallback he
         'llmingress_gateway_fallback_events_total{provider="openai",model="gpt-4.1-mini",status="failed",error_code="upstream_timeout"} 1',
       );
       expect(body).toContain(
-        'llmingress_provider_health_status{provider="openai",model="gpt-4.1-mini",status="degraded"} 1',
+        'llmingress_provider_health_status{provider="openai",model="gpt-4.1-mini",status="quota_limited"} 1',
       );
       expect(body).toContain(
         'llmingress_worker_jobs_total{job_type="price_sync",status="succeeded",trigger="scheduled"} 1',
@@ -174,7 +174,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         id, provider_id, provider_model_id, trigger, status, error_code, error_message,
         latency_ms, observed_at
       )
-      values ($1, $2, $3, 'worker_probe', 'failed', 'upstream_timeout', 'sensitive upstream failure', 42, now())
+      values ($1, $2, $3, 'worker_probe', 'quota_limited', 'upstream_timeout', 'sensitive upstream failure', 42, now())
     `,
     [ids.healthEventId, ids.providerId, ids.providerModelId],
   );
@@ -184,7 +184,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         id, provider_id, provider_model_id, last_event_id, status, consecutive_failures,
         last_failure_at, updated_at
       )
-      values ($1, $2, $3, $4, 'degraded', 2, now(), now())
+      values ($1, $2, $3, $4, 'quota_limited', 2, now(), now())
     `,
     [ids.healthSummaryId, ids.providerId, ids.providerModelId, ids.healthEventId],
   );

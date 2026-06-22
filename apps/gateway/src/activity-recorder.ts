@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/activity";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 import { readGatewayProviderTokenUsage } from "./usage-recorder.js";
 
@@ -75,7 +75,7 @@ export async function createGatewayRequestActivity(
 ): Promise<GatewayStartedRequestActivity> {
   const startedAt = input.startedAt ?? new Date();
   const id = randomUUID();
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -150,7 +150,7 @@ export async function completeGatewayRequestActivity(
     }),
     route: input.route,
   });
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {

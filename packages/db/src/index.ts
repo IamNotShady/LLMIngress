@@ -8,8 +8,26 @@ import {
   summarizeMigrationStatus,
 } from "./migration-status.js";
 
-export type { PostgresQueryClient, PostgresQueryResult } from "./client.js";
-export { withPostgresClient } from "./client.js";
+export type {
+  PostgresQueryClient,
+  PostgresQueryResult,
+  PostgresQueryResultRow,
+} from "./client.js";
+export { PostgresClient, withPostgresClient } from "./client.js";
+export type {
+  ConfigChange,
+  ConfigChangedNotification,
+  ConfigChangedPayload,
+  ConfigChangeSource,
+  ConfigPublishClient,
+  ConfigPublishResult,
+  PublishedConfigChange,
+} from "./config-versions.js";
+export {
+  CONFIG_CHANGED_CHANNEL,
+  createConfigChangedListener,
+  createConfigPublisher,
+} from "./config-versions.js";
 export type {
   AppliedMigrationStatus,
   MigrationChecksumMismatch,

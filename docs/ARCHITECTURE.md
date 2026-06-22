@@ -270,12 +270,12 @@ Gateway 在完成路由决策并拿到实际 usage 后，同步写入：
 Provider adapter 不按每个长尾 Provider 都实现一套独立 adapter。V1 采用两层策略：
 
 - Native adapter：用于 OpenAI、Anthropic、Google Gemini、OpenRouter、Ollama 等协议或行为差异明显的 Provider。
-- Generic OpenAI-compatible adapter：用于 DeepSeek、xAI、Mistral、Qwen、Moonshot / Kimi、MiniMax、Groq、Fireworks AI、Z.ai、LM Studio、llama.cpp 等兼容 OpenAI API 形态的 Provider。
+- Generic OpenAI-compatible adapter：用于 DeepSeek、xAI、Qwen、Moonshot / Kimi、MiniMax、Z.ai、LM Studio、llama.cpp 等兼容 OpenAI API 形态的 Provider。
 
 通用 OpenAI-compatible adapter 不能变成任意自定义 endpoint。它只能通过内置白名单 Provider template 启用，template 分为两类：
 
 - Provider id、display name 和类别。
-- 远程 Provider template 固定 base URL 和 endpoint path，例如 DeepSeek、Groq、Fireworks AI。
+- 远程 Provider template 固定 base URL 和 endpoint path，例如 DeepSeek、xAI、Qwen。
 - Local Provider template 固定 endpoint path、协议形态和能力声明，但 base URL 由用户在 Provider 配置中填写，例如 LM Studio、llama.cpp；这仍然受该 local provider template 约束，不等同于任意自定义 endpoint。
 - auth header / key placement。
 - 支持的 endpoint 子集，例如 chat completions、responses stateless subset、embeddings。

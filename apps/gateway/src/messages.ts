@@ -7,6 +7,8 @@ import {
   type NormalizedAnthropicMessage,
   type NormalizedAnthropicMessagesRequest,
 } from "@llmingress/provider/anthropic";
+import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
+import { createClaudeCodeProviderAdapter } from "@llmingress/provider/subscription-adapters";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
@@ -335,11 +337,22 @@ async function executeMessagesFallback(input: {
   | undefined
 > {
   let attemptOrder = 0;
+  const claudeCodeAdapter = input.adapter ? null : createClaudeCodeProviderAdapter();
   for (const candidate of input.candidates) {
+    if (
+      isSubscriptionProviderKey(candidate.providerKey) &&
+      candidate.providerKey !== "claude_code"
+    ) {
+      continue;
+    }
+    const adapter =
+      candidate.providerKey === "claude_code" && claudeCodeAdapter
+        ? claudeCodeAdapter
+        : input.adapter;
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
       const providerStartedAt = new Date();
-      const result = await input.adapter.messages({
+      const result = await adapter.messages({
         request: input.request,
         target: {
           apiKey: providerApiKey.apiKey,

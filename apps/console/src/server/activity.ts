@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/activity";
 
 export type ConsoleActivity = {
   agentName: string | null;
@@ -84,7 +84,7 @@ export type ConsoleActivityDetail = {
 type ConsoleActivityProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 type ConsoleActivityStatus = "canceled" | "failed" | "started" | "succeeded";
 
-type ActivityRow = QueryResultRow & {
+type ActivityRow = PostgresQueryResultRow & {
   agent_name: string | null;
   completed_at: Date | null;
   error_code: string | null;
@@ -115,7 +115,7 @@ type ActivityRow = QueryResultRow & {
   virtual_model_name: string | null;
 };
 
-type FallbackEventRow = QueryResultRow & {
+type FallbackEventRow = PostgresQueryResultRow & {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -157,7 +157,7 @@ export async function listConsoleActivities(
     typeof input === "string"
       ? normalizeActivityListInput({ databaseUrl: input, limit })
       : normalizeActivityListInput(input);
-  const client = new Client({ connectionString: listInput.databaseUrl });
+  const client = new PostgresClient({ connectionString: listInput.databaseUrl });
   await client.connect();
 
   try {
@@ -231,7 +231,7 @@ export async function getConsoleActivityDetail(input: {
     throw new Error("Activity detail requires activityId or requestId.");
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {

@@ -33,12 +33,16 @@ test("provider template selector lists categories fixed capabilities and rejects
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "Add from template");
-          const providerType = page.getByLabel("Provider type");
+          const providerType = page.getByLabel("Provider type", { exact: true });
           await expect(providerType).toContainText("OpenAI");
           await expect(providerType).toContainText("Anthropic");
           await expect(providerType).toContainText("OpenRouter");
           await expect(providerType).toContainText("DeepSeek");
+          await expect(providerType).not.toContainText("Ollama");
+
+          await page.getByRole("tab", { name: "Local" }).click();
           await expect(providerType).toContainText("Ollama");
+          await page.getByRole("tab", { name: "API Keys" }).click();
 
           await providerType.selectOption({ label: "DeepSeek" });
           await expect(page.getByLabel("Provider display name")).toHaveValue("DeepSeek");

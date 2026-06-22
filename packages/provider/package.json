@@ -16,13 +16,13 @@
       "types": "./src/connectivity.ts",
       "default": "./src/connectivity.ts"
     },
-    "./gemini": {
-      "types": "./src/adapters/gemini.ts",
-      "default": "./src/adapters/gemini.ts"
-    },
     "./model-list": {
       "types": "./src/model-list.ts",
       "default": "./src/model-list.ts"
+    },
+    "./oauth": {
+      "types": "./src/oauth.ts",
+      "default": "./src/oauth.ts"
     },
     "./ollama": {
       "types": "./src/adapters/ollama.ts",
@@ -36,9 +36,17 @@
       "types": "./src/adapters/openrouter.ts",
       "default": "./src/adapters/openrouter.ts"
     },
+    "./subscription-adapters": {
+      "types": "./src/adapters/subscription.ts",
+      "default": "./src/adapters/subscription.ts"
+    },
     "./price-source": {
       "types": "./src/price-source.ts",
       "default": "./src/price-source.ts"
+    },
+    "./subscription": {
+      "types": "./src/subscription.ts",
+      "default": "./src/subscription.ts"
     }
   },
   "scripts": {

@@ -71,7 +71,7 @@ test("config import export redacts secrets validates publishes config version an
           await expect(page.locator("table.agents-table")).toContainText("Imported Config Agent");
           await page.goto(`${baseUrl}/providers`);
           await openRow(page, "Config Export DeepSeek");
-          await expect(page.locator("table.provider-key-table td.mono")).toContainText("sk-cfg80");
+          await expect(page.getByRole("row", { name: /- 100 未知/ })).toBeVisible();
         } finally {
           await context.close();
         }

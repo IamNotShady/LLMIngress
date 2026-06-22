@@ -7,7 +7,9 @@ import {
 import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
-} from "@llmingress/config";
+} from "@llmingress/db/config-versions";
+import { isRemovedProviderKey } from "@llmingress/db/providers";
+import { PostgresClient } from "@llmingress/db/routes";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
@@ -15,7 +17,6 @@ import {
   type RoutePolicyRules,
   type RoutePolicyStrategy,
 } from "@llmingress/domain";
-import { Client } from "pg";
 import {
   createGatewayRuntimeStatusRecorder,
   type GatewayRuntimeStatusEvent,
@@ -258,7 +259,7 @@ export function createGatewayConfigRuntime(
 export async function loadGatewayConfigSnapshot(
   databaseUrl: string,
 ): Promise<GatewayConfigSnapshot> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -334,8 +335,12 @@ export async function loadGatewayConfigSnapshot(
 
     return {
       loadedAt: new Date(),
-      providers: providers.rows,
-      routePolicies: rowToRoutePolicySnapshots(routePolicyCandidates.rows),
+      providers: providers.rows.filter((provider) => !isRemovedProviderKey(provider.providerKey)),
+      routePolicies: rowToRoutePolicySnapshots(
+        routePolicyCandidates.rows.filter(
+          (candidate) => !isRemovedProviderKey(candidate.providerKey),
+        ),
+      ),
       version: version.rows[0]?.version ?? 0,
     };
   } finally {

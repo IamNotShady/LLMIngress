@@ -65,7 +65,8 @@ test("local provider templates enforce local private urls template paths and pub
 
           await openDisclosure(page, "Add from template");
           const dialog = page.getByRole("dialog", { name: "添加 Provider" });
-          const providerType = dialog.getByLabel("Provider type");
+          await dialog.getByRole("tab", { name: "Local" }).click();
+          const providerType = dialog.getByLabel("Provider type", { exact: true });
           const displayNameInput = dialog.getByLabel("Provider display name");
           const baseUrlInput = dialog.getByLabel("Provider base URL");
           for (const [displayName, id, placeholder] of [

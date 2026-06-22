@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
 
 export type AgentType = "coding" | "desktop" | "terminal" | "ide" | "other";
 export type AgentIntegrationPlatform =
@@ -78,7 +78,7 @@ export type NormalizedAgentVirtualModelAccessInput = {
   id: string;
 };
 
-type AgentRow = QueryResultRow & {
+type AgentRow = PostgresQueryResultRow & {
   agent_type: AgentType;
   created_at: Date;
   enabled: boolean;
@@ -108,14 +108,14 @@ type AgentQueryClient = {
   ) => Promise<{ rows: T[] }>;
 };
 
-type AgentVirtualModelAccessBaseRow = QueryResultRow & {
+type AgentVirtualModelAccessBaseRow = PostgresQueryResultRow & {
   agent_id: string;
   default_virtual_model_display_name: string | null;
   default_virtual_model_id: string | null;
   default_virtual_model_name: string | null;
 };
 
-type AgentAllowedVirtualModelRow = QueryResultRow & {
+type AgentAllowedVirtualModelRow = PostgresQueryResultRow & {
   agent_id: string;
   display_name: string;
   id: string;
@@ -269,7 +269,12 @@ export async function listAgents(databaseUrl: string): Promise<ConsoleAgent[]> {
                    and route_policies.deleted_at is null
                    and providers.deleted_at is null
                    and provider_models.deleted_at is null
-                   and provider_health_summary.status = 'unhealthy'
+                   and provider_health_summary.status in (
+                     'unhealthy',
+                     'auth_failed',
+                     'quota_limited',
+                     'network_error'
+                   )
                ) as unhealthy_reachable_provider_count,
                greatest(
                  coalesce(
@@ -862,9 +867,9 @@ function requireAgentVirtualModelAccess(
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

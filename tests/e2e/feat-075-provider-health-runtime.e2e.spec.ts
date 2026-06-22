@@ -102,12 +102,12 @@ test("provider health summary updates notifications and scheduled checks without
     await runPendingConnectivityJob(fixture, masterKeySource);
     await expect(readProviderSummary(fixture, seeded.scheduledProviderId, null)).resolves.toEqual({
       consecutive_failures: 1,
-      status: "degraded",
+      status: "unhealthy",
     });
     await expect(readHealthEvents(fixture, seeded.scheduledProviderId)).resolves.toEqual([
       expect.objectContaining({
         error_code: "fake_provider_error",
-        status: "failed",
+        status: "unhealthy",
         trigger: "worker_probe",
       }),
     ]);
@@ -149,13 +149,13 @@ test("provider health summary updates notifications and scheduled checks without
         readProviderSummary(fixture, seeded.requestPrimaryProviderId, null),
       ).resolves.toEqual({
         consecutive_failures: 3,
-        status: "unhealthy",
+        status: "network_error",
       });
       await expect(
         readProviderSummary(fixture, seeded.requestPrimaryProviderId, seeded.requestPrimaryModelId),
       ).resolves.toEqual({
         consecutive_failures: 3,
-        status: "unhealthy",
+        status: "network_error",
       });
       await expect(readRequestActivity(fixture, "req_provider_health_075")).resolves.toEqual({
         provider_model_id: seeded.requestFallbackModelId,
@@ -168,25 +168,25 @@ test("provider health summary updates notifications and scheduled checks without
           expect.objectContaining({
             error_code: "seeded_unhealthy",
             provider_model_id: null,
-            status: "failed",
+            status: "unhealthy",
             trigger: "request_path",
           }),
           expect.objectContaining({
             error_code: "seeded_unhealthy",
             provider_model_id: seeded.requestPrimaryModelId,
-            status: "failed",
+            status: "unhealthy",
             trigger: "request_path",
           }),
           expect.objectContaining({
             error_code: "provider_request_failed",
             provider_model_id: null,
-            status: "failed",
+            status: "network_error",
             trigger: "request_path",
           }),
           expect.objectContaining({
             error_code: "provider_request_failed",
             provider_model_id: seeded.requestPrimaryModelId,
-            status: "failed",
+            status: "network_error",
             trigger: "request_path",
           }),
         ]),
@@ -201,16 +201,16 @@ test("provider health summary updates notifications and scheduled checks without
     expect(notifications.payloads).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ providerId: seeded.manualProviderId, status: "healthy" }),
-        expect.objectContaining({ providerId: seeded.scheduledProviderId, status: "degraded" }),
+        expect.objectContaining({ providerId: seeded.scheduledProviderId, status: "unhealthy" }),
         expect.objectContaining({
           providerId: seeded.requestPrimaryProviderId,
           providerModelId: null,
-          status: "unhealthy",
+          status: "network_error",
         }),
         expect.objectContaining({
           providerId: seeded.requestPrimaryProviderId,
           providerModelId: seeded.requestPrimaryModelId,
-          status: "unhealthy",
+          status: "network_error",
         }),
       ]),
     );
@@ -444,7 +444,7 @@ async function seedUnhealthyRequestSummary(
         error_message,
         observed_at
       )
-      values ($1, $2, $3, 'request_path', 'failed', 'seeded_unhealthy', 'Seeded unhealthy state', '2026-06-16T04:59:00.000Z')
+      values ($1, $2, $3, 'request_path', 'unhealthy', 'seeded_unhealthy', 'Seeded unhealthy state', '2026-06-16T04:59:00.000Z')
     `,
     [eventId, input.providerId, input.providerModelId],
   );

@@ -1,5 +1,9 @@
 import { Client } from "pg";
 
+export { Client as PostgresClient };
+
+export type PostgresQueryResultRow = Record<string, unknown>;
+
 export type PostgresQueryResult<T = Record<string, unknown>> = {
   rowCount?: number | null;
   rows: T[];

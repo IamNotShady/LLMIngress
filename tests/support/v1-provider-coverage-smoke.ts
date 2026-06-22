@@ -2,15 +2,16 @@ import { listOpenAICompatibleProviderTemplates } from "../../apps/console/src/se
 
 export type V1ProviderCoverageScenarioId =
   | "anthropic"
-  | "gemini"
+  | "google"
   | "lmstudio"
   | "llama_cpp"
+  | "ollama"
   | "openai"
   | "openrouter";
 
 export type V1ProviderCoverageEndpoint = "chat_completions" | "messages";
 export type V1ProviderCoverageProviderType = "api_key" | "local";
-export type V1ProviderCoverageAuthHeader = "authorization" | "x-api-key" | "x-goog-api-key";
+export type V1ProviderCoverageAuthHeader = "authorization" | "x-api-key";
 
 export type V1ProviderCoverageScenario = {
   baseUrl: string;
@@ -91,18 +92,18 @@ export function buildV1ProviderCoverageSmokePlan(
         virtualModelName: "v1-smoke-anthropic",
       },
       {
-        baseUrl: `${baseUrl}/gemini/v1beta?mode=gemini`,
+        baseUrl: `${baseUrl}/google/v1beta/openai`,
         displayName: "Google Gemini",
         endpoint: "chat_completions",
-        expectedAuthHeader: "x-goog-api-key",
-        expectedAuthValue: "gemini-v1-smoke-094",
-        expectedProviderPath: "/gemini/v1beta/models/gemini-3.5-flash:generateContent",
-        id: "gemini",
+        expectedAuthHeader: "authorization",
+        expectedAuthValue: "Bearer gemini-v1-smoke-094",
+        expectedProviderPath: "/google/v1beta/openai/chat/completions",
+        id: "google",
         modelDisplayName: "Gemini 3.5 Flash",
         modelId: "gemini-3.5-flash",
         providerApiKey: "gemini-v1-smoke-094",
-        providerKey: "gemini",
-        providerTemplateId: "gemini",
+        providerKey: "google",
+        providerTemplateId: "google",
         providerType: "api_key",
         requestId: "req_v1_provider_gemini_094",
         virtualModelDisplayName: "V1 Smoke Gemini",
@@ -125,6 +126,24 @@ export function buildV1ProviderCoverageSmokePlan(
         requestId: "req_v1_provider_openrouter_094",
         virtualModelDisplayName: "V1 Smoke OpenRouter",
         virtualModelName: "v1-smoke-openrouter",
+      },
+      {
+        baseUrl: `${baseUrl}/ollama/v1`,
+        displayName: "Ollama",
+        endpoint: "chat_completions",
+        expectedAuthHeader: "authorization",
+        expectedAuthValue: "Bearer local-v1-ollama-smoke-094",
+        expectedProviderPath: "/ollama/v1/chat/completions",
+        id: "ollama",
+        modelDisplayName: "Ollama Local Model",
+        modelId: "ollama-local-model",
+        providerApiKey: "local-v1-ollama-smoke-094",
+        providerKey: "ollama",
+        providerTemplateId: "ollama",
+        providerType: "local",
+        requestId: "req_v1_provider_ollama_094",
+        virtualModelDisplayName: "V1 Smoke Ollama",
+        virtualModelName: "v1-smoke-ollama",
       },
       {
         baseUrl: `${baseUrl}/lmstudio/v1`,

@@ -32,9 +32,9 @@ test("provider crud enable disable and disabled provider leaves routing snapshot
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/providers`);
 
-          await page.getByRole("link", { name: "+ 添加 Provider" }).click();
+          await page.getByRole("link", { name: "添加 Provider" }).click();
           await expect(page.getByRole("dialog", { name: "添加 Provider" })).toBeVisible();
-          await page.getByLabel("Provider type").selectOption("openai");
+          await page.getByLabel("Provider type", { exact: true }).selectOption("openai");
           await page.getByLabel("Provider display name").fill("OpenAI");
           await page.getByLabel("Provider base URL").fill("https://api.openai.com/v1");
           await page.getByRole("button", { name: "Create provider" }).click();

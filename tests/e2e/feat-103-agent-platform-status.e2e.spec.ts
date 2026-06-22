@@ -334,7 +334,7 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
         error_code,
         error_message
       )
-      values ($1, $2, $3, 'request_path', 'failed', 'seeded_unhealthy', 'Seeded unhealthy status')
+      values ($1, $2, $3, 'request_path', 'unhealthy', 'seeded_unhealthy', 'Seeded unhealthy status')
     `,
     [healthEventId, providerId, providerModelId],
   );

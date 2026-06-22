@@ -5,6 +5,8 @@ import {
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
+import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
+import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
@@ -308,11 +310,23 @@ async function executeResponsesFallback(input: {
   }
 
   let attemptOrder = 0;
+  const codexAdapter = input.adapter ? null : createCodexSubscriptionAdapter();
   for (const candidate of input.candidates) {
+    if (
+      isSubscriptionProviderKey(candidate.providerKey) &&
+      candidate.providerKey !== "openai_codex"
+    ) {
+      continue;
+    }
+    const adapter =
+      candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : input.adapter;
+    if (!adapter.response) {
+      throw new Error("OpenAI responses provider adapter is not configured.");
+    }
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
       const providerStartedAt = new Date();
-      const result = await input.adapter.response({
+      const result = await adapter.response({
         request: input.request,
         target: {
           apiKey: providerApiKey.apiKey,

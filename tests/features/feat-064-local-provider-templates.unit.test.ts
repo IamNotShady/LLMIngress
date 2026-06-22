@@ -8,17 +8,18 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 
 const localOpenAICompatibleTemplates = [
+  ["ollama", "Ollama", "http://127.0.0.1:11434/v1"],
   ["lmstudio", "LM Studio", "http://127.0.0.1:1234/v1"],
   ["llama_cpp", "llama.cpp", "http://127.0.0.1:8080/v1"],
 ] as const;
 
 describe("feat-064 local provider templates", () => {
-  it("lists LM Studio and llama.cpp local templates with fixed OpenAI-compatible paths", () => {
+  it("lists local templates with fixed OpenAI-compatible paths", () => {
     const localGroup = listProviderTemplateSelectorGroups().find((group) => group.id === "local");
 
     expect(localGroup).toMatchObject({
       id: "local",
-      label: "Local templates",
+      label: "Local",
     });
     expect(localGroup?.templates).toEqual(
       expect.arrayContaining(

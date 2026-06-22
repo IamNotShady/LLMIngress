@@ -5,6 +5,7 @@ import {
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
+import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
@@ -205,8 +206,14 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       routeDecision,
     });
 
+    const embeddingsCandidates = attemptCandidates.filter(
+      (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
+    );
+    if (embeddingsCandidates.length === 0) {
+      throw new Error("Provider credentials are missing for embeddings route.");
+    }
     const candidates = await attachGatewayProviderCredentials({
-      candidates: attemptCandidates,
+      candidates: embeddingsCandidates,
       databaseUrl: input.databaseUrl,
       masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
     });

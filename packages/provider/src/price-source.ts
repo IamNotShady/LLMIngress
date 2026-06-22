@@ -61,13 +61,10 @@ type FetchProviderModelRegistryOptions = FetchProviderModelPricesOptions;
 const supportedProviderKeys = new Set([
   "anthropic",
   "deepseek",
-  "fireworks",
-  "gemini",
-  "groq",
+  "google",
   "llama_cpp",
   "lmstudio",
   "minimax",
-  "mistral",
   "moonshot",
   "ollama",
   "openai",
@@ -80,11 +77,8 @@ const supportedProviderKeys = new Set([
 const providerKeyAliases = new Map<string, string>([
   ["alibaba", "qwen"],
   ["dashscope", "qwen"],
-  ["fireworks-ai", "fireworks"],
-  ["fireworks_ai", "fireworks"],
-  ["google", "gemini"],
-  ["google-ai-studio", "gemini"],
-  ["google_ai_studio", "gemini"],
+  ["google-ai-studio", "google"],
+  ["google_ai_studio", "google"],
   ["moonshotai", "moonshot"],
   ["moonshotai-cn", "moonshot"],
   ["x-ai", "xai"],
@@ -485,7 +479,10 @@ export function normalizeModelsDevProviderModelPrices(
     }
 
     for (const model of readModelCollection(readRecord(providerPayload).models)) {
-      const modelId = readString(model.id);
+      const rawModelId = readString(model.id);
+      const modelId = rawModelId
+        ? stripProviderModelPrefix(rawModelId, { providerKey, sourceProviderKey })
+        : null;
       const cost = readRecord(model.cost);
       const inputUsdPerMillionTokens = readNonNegativeNumber(cost.input);
       const outputUsdPerMillionTokens = readNonNegativeNumber(cost.output);
@@ -718,8 +715,6 @@ function normalizeLiteLlmModelId(
   const prefixes = [
     input.sourceProviderKey,
     input.providerKey,
-    "fireworks-ai",
-    "fireworks_ai",
     "google",
     "moonshotai",
     "openrouter",

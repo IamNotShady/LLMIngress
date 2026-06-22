@@ -11,16 +11,13 @@ import { withProcessLock } from "../support/process-lock";
 const remoteTemplateExpectations = [
   ["deepseek", "DeepSeek", "https://api.deepseek.com"],
   ["xai", "xAI", "https://api.x.ai/v1"],
-  ["mistral", "Mistral", "https://api.mistral.ai/v1"],
   ["qwen", "Qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"],
   ["moonshot", "Moonshot/Kimi", "https://api.moonshot.ai/v1"],
   ["minimax", "MiniMax", "https://api.minimax.io/v1"],
-  ["groq", "Groq", "https://api.groq.com/openai/v1"],
-  ["fireworks", "Fireworks AI", "https://api.fireworks.ai/inference/v1"],
   ["zai", "Z.ai", "https://api.z.ai/api/paas/v4"],
 ] as const;
 
-test("all nine remote templates expose fixed urls capabilities auth behavior and representative generic adapter request works", async ({
+test("supported remote templates expose fixed urls capabilities auth behavior and representative generic adapter request works", async ({
   browser,
 }) => {
   const provider = await createFakeProviderServer();
@@ -82,7 +79,7 @@ test("all nine remote templates expose fixed urls capabilities auth behavior and
 
           await openDisclosure(page, "Add from template");
           const dialog = page.getByRole("dialog", { name: "添加 Provider" });
-          const providerType = dialog.getByLabel("Provider type");
+          const providerType = dialog.getByLabel("Provider type", { exact: true });
           const displayNameInput = dialog.getByLabel("Provider display name");
           const baseUrlInput = dialog.getByLabel("Provider base URL");
           for (const [id, displayName, fixedBaseUrl] of remoteTemplateExpectations) {
@@ -92,18 +89,18 @@ test("all nine remote templates expose fixed urls capabilities auth behavior and
             await expect(baseUrlInput).toHaveValue(fixedBaseUrl);
           }
 
-          await providerType.selectOption("groq");
+          await providerType.selectOption("qwen");
           await dialog.getByRole("button", { name: "Create provider" }).click();
 
-          await expect(page.locator("table.providers-table")).toContainText("Groq");
+          await expect(page.locator("table.providers-table")).toContainText("Qwen");
 
           const providers = await readTemplateProviders(fixture);
           expect(providers).toEqual([
             {
-              base_url: "https://api.groq.com/openai/v1",
-              display_name: "Groq",
-              provider_key: "groq",
-              provider_template_id: "groq",
+              base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+              display_name: "Qwen",
+              provider_key: "qwen",
+              provider_template_id: "qwen",
             },
           ]);
         } finally {

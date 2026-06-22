@@ -1,13 +1,18 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   listProviderTemplateSelectorGroups,
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
+import {
+  executeFallbackChain,
+  type FallbackChainCandidate,
+} from "../../apps/gateway/src/fallback-chain";
 import { loadSqlMigrations } from "../../packages/db/src/index";
-import { createGeminiProviderAdapter } from "../../packages/provider/src/adapters/gemini";
+import { fetchListedProviderModels } from "../../packages/provider/src/model-list";
 
-const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta";
+const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
 
 describe("feat-066 Google Gemini API key provider", () => {
   it("exposes Gemini as a fixed remote API-key template", () => {
@@ -19,180 +24,45 @@ describe("feat-066 Google Gemini API key provider", () => {
       expect.arrayContaining([
         {
           auth: {
-            header: "x-goog-api-key",
-            scheme: "API key",
+            header: "Authorization",
+            scheme: "Bearer",
           },
           baseUrlMode: "fixed_remote",
-          capabilities: ["chat_completions"],
+          capabilities: ["chat_completions", "streaming", "tools"],
           displayName: "Google Gemini",
           fixedBaseUrl: geminiBaseUrl,
-          id: "gemini",
-          providerKey: "gemini",
+          id: "google",
+          providerKey: "google",
           providerType: "api_key",
         },
       ]),
     );
-    expect(normalizeProviderTemplateFormInput({ templateId: "gemini" })).toMatchObject({
+    expect(normalizeProviderTemplateFormInput({ templateId: "google" })).toMatchObject({
       baseUrl: geminiBaseUrl,
       displayName: "Google Gemini",
-      providerKey: "gemini",
+      id: "google",
+      providerKey: "google",
       providerType: "api_key",
     });
     expect(() =>
       normalizeProviderFormInput({
         baseUrl: geminiBaseUrl,
         displayName: "Google Gemini",
-        providerKey: "gemini",
+        providerKey: "google",
         providerType: "api_key",
       }),
     ).toThrow(/template/i);
   });
 
-  it("maps OpenAI chat requests to Gemini generateContent and returns OpenAI-compatible chat", async () => {
-    const calls: Array<{ body: unknown; headers: Headers; url: string }> = [];
-    const adapter = createGeminiProviderAdapter({
-      fetch: async (url, init) => {
-        calls.push({
-          body: init?.body ? JSON.parse(String(init.body)) : undefined,
-          headers: new Headers(init?.headers),
-          url: String(url),
-        });
+  it("does not expose a native Gemini provider adapter", () => {
+    const providerPackage = JSON.parse(
+      readFileSync(new URL("../../packages/provider/package.json", import.meta.url), "utf8"),
+    ) as { exports: Record<string, unknown> };
 
-        return new Response(
-          JSON.stringify({
-            candidates: [
-              {
-                content: {
-                  role: "model",
-                  parts: [{ text: "gemini response" }],
-                },
-                finishReason: "STOP",
-                index: 0,
-              },
-            ],
-            responseId: "gemini-response-id",
-            usageMetadata: {
-              candidatesTokenCount: 3,
-              promptTokenCount: 7,
-              totalTokenCount: 10,
-            },
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        );
-      },
-    });
-
-    const result = await adapter.chatCompletion({
-      request: {
-        maxOutputTokens: 128,
-        messages: [
-          { role: "system", content: "Be concise." },
-          { role: "user", content: "hello" },
-          { role: "assistant", content: "hi" },
-          { role: "user", content: "continue" },
-        ],
-        temperature: 0.2,
-      },
-      target: {
-        apiKey: "gemini-unit-secret",
-        baseUrl: geminiBaseUrl,
-        modelId: "gemini-3.5-flash",
-      },
-    });
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      body: {
-        contents: [
-          { parts: [{ text: "hello" }], role: "user" },
-          { parts: [{ text: "hi" }], role: "model" },
-          { parts: [{ text: "continue" }], role: "user" },
-        ],
-        generationConfig: {
-          maxOutputTokens: 128,
-          temperature: 0.2,
-        },
-        systemInstruction: {
-          parts: [{ text: "Be concise." }],
-        },
-      },
-      url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
-    });
-    expect(calls[0]?.headers.get("content-type")).toBe("application/json");
-    expect(calls[0]?.headers.get("x-goog-api-key")).toBe("gemini-unit-secret");
-    expect(result).toEqual({
-      body: {
-        choices: [
-          {
-            finish_reason: "stop",
-            index: 0,
-            message: { content: "gemini response", role: "assistant" },
-          },
-        ],
-        id: "gemini-response-id",
-        model: "gemini-3.5-flash",
-        object: "chat.completion",
-        usage: {
-          completion_tokens: 3,
-          prompt_tokens: 7,
-          total_tokens: 10,
-        },
-      },
-      ok: true,
-      providerRequestId: "gemini-response-id",
-      statusCode: 200,
-    });
+    expect(providerPackage.exports).not.toHaveProperty("./gemini");
   });
 
-  it("maps Gemini errors to provider error codes", async () => {
-    const adapter = createGeminiProviderAdapter({
-      fetch: async () =>
-        new Response(
-          JSON.stringify({
-            error: {
-              code: 403,
-              message: "API key does not have permission",
-              status: "PERMISSION_DENIED",
-            },
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 403,
-          },
-        ),
-    });
-
-    await expect(
-      adapter.chatCompletion({
-        request: {
-          messages: [{ role: "user", content: "hello" }],
-        },
-        target: {
-          apiKey: "gemini-unit-secret",
-          baseUrl: geminiBaseUrl,
-          modelId: "gemini-3.5-flash",
-        },
-      }),
-    ).resolves.toEqual({
-      body: {
-        error: {
-          code: 403,
-          message: "API key does not have permission",
-          status: "PERMISSION_DENIED",
-        },
-      },
-      errorCode: "gemini_PERMISSION_DENIED",
-      errorMessage: "API key does not have permission",
-      ok: false,
-      retryable: false,
-      statusCode: 403,
-    });
-  });
-
-  it("declares the Gemini provider template id in a follow-up migration", () => {
+  it("declares the legacy Gemini provider template id in a follow-up migration", () => {
     const migration = loadSqlMigrations().find((candidate) => candidate.id === "0012");
 
     expect(migration).toMatchObject({
@@ -202,4 +72,108 @@ describe("feat-066 Google Gemini API key provider", () => {
     expect(migration?.sql).toContain("'gemini'");
     expect(migration?.sql).toContain("'openrouter'");
   });
+
+  it("routes Gemini through the OpenAI-compatible chat completions adapter", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ body: unknown; headers: Headers; url: string }> = [];
+    globalThis.fetch = async (url, init) => {
+      calls.push({
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        headers: new Headers(init?.headers),
+        url: String(url),
+      });
+      return new Response(JSON.stringify({ choices: [], id: "gemini-openai-compatible" }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    };
+
+    try {
+      await executeFallbackChain({
+        candidates: [buildGeminiCandidate()],
+        request: {
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+          toolChoice: "auto",
+          tools: [{ type: "function", function: { name: "lookup" } }],
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(calls).toEqual([
+      {
+        body: {
+          messages: [{ role: "user", content: "hello" }],
+          model: "gemini-3.5-flash",
+          stream: true,
+          tool_choice: "auto",
+          tools: [{ type: "function", function: { name: "lookup" } }],
+        },
+        headers: expect.any(Headers),
+        url: `${geminiBaseUrl}/chat/completions`,
+      },
+    ]);
+    expect(calls[0]?.headers.get("authorization")).toBe("Bearer gemini-unit-secret");
+    expect(calls[0]?.headers.get("x-goog-api-key")).toBeNull();
+  });
+
+  it("normalizes Google model list ids before matching external model metadata", async () => {
+    await expect(
+      fetchListedProviderModels({
+        apiKey: "gemini-unit-secret",
+        baseUrl: geminiBaseUrl,
+        fetch: async () =>
+          new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: "models/gemini-2.5-pro",
+                  name: "models/gemini-2.5-pro",
+                },
+              ],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          ),
+        providerKey: "google",
+      }),
+    ).resolves.toEqual([
+      {
+        displayName: "gemini-2.5-pro",
+        modelId: "gemini-2.5-pro",
+      },
+    ]);
+  });
+
+  it("declares a migration that upgrades existing Gemini and Ollama base URLs", () => {
+    const migration = loadSqlMigrations().find(
+      (candidate) =>
+        candidate.id === "0041" && candidate.name === "provider_openai_compatible_urls",
+    );
+    const sql = migration?.sql ?? "";
+
+    expect(sql).toContain("provider_key = 'google'");
+    expect(sql).toContain("provider_template_id = 'google'");
+    expect(sql).toContain("https://generativelanguage.googleapis.com/v1beta/openai");
+    expect(sql).toContain("provider_key = 'gemini'");
+    expect(sql).toContain("provider_key = 'ollama'");
+    expect(sql).toContain("'/v1'");
+    expect(sql).not.toContain("schema_version");
+  });
 });
+
+function buildGeminiCandidate(): FallbackChainCandidate {
+  return {
+    apiKey: "gemini-unit-secret",
+    baseUrl: geminiBaseUrl,
+    candidateOrder: 1,
+    isFallback: false,
+    modelId: "gemini-3.5-flash",
+    providerKey: "google",
+    providerModelId: "gemini-provider-model-id",
+  };
+}

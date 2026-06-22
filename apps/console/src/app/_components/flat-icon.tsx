@@ -15,6 +15,7 @@ export type FlatIconName =
   | "lock"
   | "refresh"
   | "save"
+  | "settings"
   | "unlock"
   | "view";
 
@@ -33,6 +34,7 @@ const flatIconFiles: Record<FlatIconName, string> = {
   lock: "lock.svg",
   refresh: "refresh.svg",
   save: "checkmark.svg",
+  settings: "settings.svg",
   unlock: "unlock.svg",
   view: "view_details.svg",
 };

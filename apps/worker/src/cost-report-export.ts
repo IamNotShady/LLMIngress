@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 
 export type CostReportWindow = "24h" | "7d" | "30d";
@@ -79,7 +79,7 @@ type NormalizedCostReportPayload = {
   window: CostReportWindow;
 };
 
-type UsageSummaryRow = QueryResultRow & {
+type UsageSummaryRow = PostgresQueryResultRow & {
   failure_count: number;
   input_tokens: string | null;
   output_tokens: string | null;
@@ -89,7 +89,7 @@ type UsageSummaryRow = QueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageBreakdownRow = QueryResultRow & {
+type UsageBreakdownRow = PostgresQueryResultRow & {
   failure_count: number;
   model_id: string | null;
   model_label: string | null;
@@ -101,7 +101,7 @@ type UsageBreakdownRow = QueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageDimensionBreakdownRow = QueryResultRow & {
+type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
   failure_count: number;
   id: string | null;
   label: string | null;
@@ -122,7 +122,7 @@ export function createCostReportExportJobHandler(
     const generatedAt = now();
     const payload = normalizeCostReportPayload(job.payload);
     const windowStart = getUsageWindowStart(generatedAt, payload.window);
-    const client = new Client({ connectionString: options.databaseUrl });
+    const client = new PostgresClient({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
@@ -195,7 +195,7 @@ function normalizeCostReportPayload(rawPayload: unknown): NormalizedCostReportPa
 }
 
 async function getCostReportUsageSummary(input: {
-  client: Client;
+  client: PostgresClient;
   window: CostReportWindow;
   windowStart: Date;
 }): Promise<CostReportUsageSummary> {

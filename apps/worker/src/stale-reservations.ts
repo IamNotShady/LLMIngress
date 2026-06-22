@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import type { JobHandler } from "./job-runner.js";
 
 export type ExpiredBudgetReservationRelease = {
@@ -20,7 +20,7 @@ type CreateStaleReservationCleanupJobHandlerOptions = {
 
 type CleanupStaleBudgetReservationsOptions = CreateStaleReservationCleanupJobHandlerOptions;
 
-type CleanupResultRow = QueryResultRow & {
+type CleanupResultRow = PostgresQueryResultRow & {
   released_reservation_count: number;
   released_reserved_cost_usd: string;
   released_reserved_tokens: string;
@@ -35,7 +35,7 @@ export function createStaleReservationCleanupJobHandler(
 export async function cleanupStaleBudgetReservations(
   options: CleanupStaleBudgetReservationsOptions,
 ): Promise<StaleReservationCleanupResult> {
-  const client = new Client({ connectionString: options.databaseUrl });
+  const client = new PostgresClient({ connectionString: options.databaseUrl });
   await client.connect();
 
   try {

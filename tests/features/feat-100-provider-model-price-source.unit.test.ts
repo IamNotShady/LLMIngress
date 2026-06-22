@@ -46,14 +46,6 @@ describe("feat-100 provider model price source", () => {
 
     const primaryPrices = normalizeModelsDevProviderModelPrices(
       {
-        "fireworks-ai": {
-          models: {
-            "accounts/fireworks/models/llama-v3": {
-              cost: { cache_read: 0.08, input: 0.2, output: 0.6 },
-              id: "accounts/fireworks/models/llama-v3",
-            },
-          },
-        },
         google: {
           models: {
             "gemini-2.5-pro": {
@@ -123,15 +115,11 @@ describe("feat-100 provider model price source", () => {
         }),
         expect.objectContaining({
           modelId: "gemini-2.5-pro",
-          providerKey: "gemini",
+          providerKey: "google",
         }),
         expect.objectContaining({
           modelId: "kimi-k2",
           providerKey: "moonshot",
-        }),
-        expect.objectContaining({
-          modelId: "accounts/fireworks/models/llama-v3",
-          providerKey: "fireworks",
         }),
       ]),
     );
@@ -268,6 +256,170 @@ describe("feat-100 provider model price source", () => {
         }),
       ]),
     );
+  });
+
+  it("does not treat gemini as a provider key alias for Google", async () => {
+    const { normalizeModelsDevProviderModelPrices } = await import(
+      "../../packages/provider/src/price-source"
+    );
+    const syncedAt = new Date("2026-06-17T00:00:00.000Z");
+
+    expect(
+      normalizeModelsDevProviderModelPrices(
+        {
+          gemini: {
+            models: {
+              "gemini-2.5-pro": {
+                cost: { input: 1.25, output: 10 },
+                id: "gemini-2.5-pro",
+              },
+            },
+          },
+        },
+        { sourceUrl: "https://models.dev/api.json", syncedAt },
+      ),
+    ).toEqual([]);
+  });
+
+  it("ignores removed provider price sources", async () => {
+    const { normalizeLiteLlmProviderModelPrices, normalizeModelsDevProviderModelPrices } =
+      await import("../../packages/provider/src/price-source");
+    const syncedAt = new Date("2026-06-17T00:00:00.000Z");
+
+    expect(
+      normalizeModelsDevProviderModelPrices(
+        {
+          "fireworks-ai": {
+            models: {
+              "accounts/fireworks/models/llama-v3": {
+                cost: { input: 0.2, output: 0.6 },
+                id: "accounts/fireworks/models/llama-v3",
+              },
+            },
+          },
+          groq: {
+            models: {
+              "llama-3.1": {
+                cost: { input: 0.1, output: 0.2 },
+                id: "llama-3.1",
+              },
+            },
+          },
+          mistral: {
+            models: {
+              "mistral-small": {
+                cost: { input: 0.1, output: 0.2 },
+                id: "mistral-small",
+              },
+            },
+          },
+        },
+        { sourceUrl: "https://models.dev/api.json", syncedAt },
+      ),
+    ).toEqual([]);
+    expect(
+      normalizeLiteLlmProviderModelPrices(
+        {
+          "accounts/fireworks/models/llama-v3": {
+            input_cost_per_token: 0.0000002,
+            litellm_provider: "fireworks-ai",
+            output_cost_per_token: 0.0000006,
+          },
+          "groq/llama-3.1": {
+            input_cost_per_token: 0.0000001,
+            litellm_provider: "groq",
+            output_cost_per_token: 0.0000002,
+          },
+          "mistral/mistral-small": {
+            input_cost_per_token: 0.0000001,
+            litellm_provider: "mistral",
+            output_cost_per_token: 0.0000002,
+          },
+        },
+        {
+          sourceUrl:
+            "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+          syncedAt,
+        },
+      ),
+    ).toEqual([]);
+  });
+
+  it("normalizes xAI provider key variants before matching price metadata", async () => {
+    const { normalizeLiteLlmProviderModelPrices, normalizeModelsDevProviderModelPrices } =
+      await import("../../packages/provider/src/price-source");
+    const syncedAt = new Date("2026-06-17T00:00:00.000Z");
+
+    const primaryPrices = normalizeModelsDevProviderModelPrices(
+      {
+        "X-Ai": {
+          models: {
+            "X-Ai/grok-4.3": {
+              cost: { input: 1.25, output: 2.5 },
+              id: "X-Ai/grok-4.3",
+            },
+          },
+        },
+        "x-ai": {
+          models: {
+            "x-ai/grok-build-0.1": {
+              cost: { input: 1, output: 2 },
+              id: "x-ai/grok-build-0.1",
+            },
+          },
+        },
+        xai: {
+          models: {
+            "grok-4.20-0309-reasoning": {
+              cost: { input: 1.25, output: 2.5 },
+              id: "grok-4.20-0309-reasoning",
+            },
+          },
+        },
+      },
+      { sourceUrl: "https://models.dev/api.json", syncedAt },
+    );
+    const auxiliaryPrices = normalizeLiteLlmProviderModelPrices(
+      {
+        "X-Ai/grok-lite": {
+          input_cost_per_token: 0.000001,
+          litellm_provider: "X-Ai",
+          output_cost_per_token: 0.000002,
+        },
+      },
+      {
+        sourceUrl:
+          "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+        syncedAt,
+      },
+    );
+
+    expect(primaryPrices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          inputUsdPerMillionTokens: 1.25,
+          modelId: "grok-4.3",
+          outputUsdPerMillionTokens: 2.5,
+          providerKey: "xai",
+        }),
+        expect.objectContaining({
+          modelId: "grok-build-0.1",
+          providerKey: "xai",
+        }),
+        expect.objectContaining({
+          modelId: "grok-4.20-0309-reasoning",
+          providerKey: "xai",
+        }),
+      ]),
+    );
+    expect(auxiliaryPrices).toEqual([
+      expect.objectContaining({
+        inputUsdPerMillionTokens: 1,
+        modelId: "grok-lite",
+        outputUsdPerMillionTokens: 2,
+        providerKey: "xai",
+      }),
+    ]);
   });
 
   it("resolves current prices from provider_models manual fields, then provider_models synced fields, then unknown", () => {

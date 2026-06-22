@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
 
 export type VirtualModelFormInput = {
   description?: string | null;
@@ -26,7 +26,7 @@ type VirtualModelDependencyCounts = {
   routePolicyCount: number;
 };
 
-type VirtualModelRow = QueryResultRow & {
+type VirtualModelRow = PostgresQueryResultRow & {
   allowed_agent_count: number;
   default_agent_count: number;
   display_name: string;
@@ -36,7 +36,7 @@ type VirtualModelRow = QueryResultRow & {
   route_policy_count: number;
 };
 
-type VirtualModelDependencyRow = QueryResultRow & {
+type VirtualModelDependencyRow = PostgresQueryResultRow & {
   allowed_agent_count: number;
   default_agent_count: number;
   route_policy_count: number;
@@ -343,9 +343,9 @@ function requireSavedVirtualModel(
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

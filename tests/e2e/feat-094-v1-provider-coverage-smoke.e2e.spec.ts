@@ -246,7 +246,7 @@ async function expectScenarioResponse(
     choices: [
       {
         message: {
-          content: scenario.id === "gemini" ? "fake gemini response" : "fake provider response",
+          content: "fake provider response",
           role: "assistant",
         },
       },
@@ -269,10 +269,6 @@ function expectCapturedProviderRequest(
       messages: [{ content: `hello through ${scenario.id}`, role: "user" }],
       model: scenario.modelId,
       stream: false,
-    });
-  } else if (scenario.id === "gemini") {
-    expect(request?.bodyJson, scenario.id).toMatchObject({
-      contents: [{ parts: [{ text: `hello through ${scenario.id}` }], role: "user" }],
     });
   } else {
     expect(request?.bodyJson, scenario.id).toMatchObject({

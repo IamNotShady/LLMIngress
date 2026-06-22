@@ -5,7 +5,11 @@ import {
   sessionCookieName,
   verifyConsoleSession,
 } from "../../../server/auth";
-import { readConsoleMasterKeySource, saveProviderApiKey } from "../../../server/provider-keys";
+import {
+  deleteProviderApiKey,
+  readConsoleMasterKeySource,
+  saveProviderApiKey,
+} from "../../../server/provider-keys";
 
 export const runtime = "nodejs";
 
@@ -18,12 +22,25 @@ export async function POST(request: NextRequest) {
 
   try {
     const form = await request.formData();
+    const action = readOptionalText(form, "action") ?? "save";
+
+    if (action === "delete") {
+      const providerApiKeyId = readRequiredText(form, "providerApiKeyId");
+      const result = await deleteProviderApiKey({ databaseUrl, providerApiKeyId });
+      return NextResponse.redirect(
+        new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
+        303,
+      );
+    }
+
     const providerId = readRequiredText(form, "providerId");
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
       databaseUrl,
+      label: readOptionalText(form, "label"),
       masterKeySource: readConsoleMasterKeySource(),
       plaintext,
+      priority: readOptionalNumber(form, "priority"),
       providerId,
     });
     await enqueueProviderConnectivityCheckJob({
@@ -48,10 +65,18 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Provider API key save failed." },
+      { error: error instanceof Error ? error.message : "Provider API key operation failed." },
       { status: 400 },
     );
   }
+}
+
+function readOptionalText(form: FormData, name: string): string | undefined {
+  const value = form.get(name);
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+  return value.trim();
 }
 
 function readRequiredText(form: FormData, name: string): string {
@@ -60,6 +85,11 @@ function readRequiredText(form: FormData, name: string): string {
     throw new Error(`${name} is required.`);
   }
   return value.trim();
+}
+
+function readOptionalNumber(form: FormData, name: string): number | undefined {
+  const value = readOptionalText(form, name);
+  return value === undefined ? undefined : Number(value);
 }
 
 function renderOneTimeProviderKeyPage(input: {

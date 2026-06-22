@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/activity";
 
 export type ConsoleAnalyticsBucket = "day" | "hour";
 
@@ -81,7 +81,7 @@ type AnalyticsRange = {
   start: Date;
 };
 
-type AnalyticsKpiRow = QueryResultRow & {
+type AnalyticsKpiRow = PostgresQueryResultRow & {
   failure_count: number;
   failure_rate: number | string | null;
   fallback_event_count: number | string | null;
@@ -145,7 +145,7 @@ export async function getConsoleAnalyticsSnapshot(
 ): Promise<ConsoleAnalyticsSnapshot> {
   const normalized = normalizeConsoleAnalyticsInput(input);
   const queryInput = { ...normalized, databaseUrl: input.databaseUrl };
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -181,7 +181,7 @@ export async function getConsoleAnalyticsSnapshot(
 }
 
 async function queryKpis(
-  client: Client,
+  client: PostgresClient,
   input: AnalyticsQueryInput,
   range: AnalyticsRange,
 ): Promise<ConsoleAnalyticsKpis> {
@@ -203,7 +203,7 @@ async function queryKpis(
 }
 
 async function queryTimeseries(
-  client: Client,
+  client: PostgresClient,
   input: AnalyticsQueryInput,
 ): Promise<ConsoleAnalyticsTimeseriesPoint[]> {
   const scoped = buildScopedActivityCte(input, { end: input.end, start: input.start });
@@ -231,7 +231,7 @@ async function queryTimeseries(
 }
 
 async function queryTopItems(
-  client: Client,
+  client: PostgresClient,
   input: AnalyticsQueryInput,
   dimension: { id: string; label: string },
 ): Promise<ConsoleAnalyticsTopItem[]> {
@@ -261,7 +261,7 @@ async function queryTopItems(
 }
 
 async function queryRouteMetrics(
-  client: Client,
+  client: PostgresClient,
   input: AnalyticsQueryInput,
 ): Promise<ConsoleAnalyticsRouteMetric[]> {
   const scoped = buildScopedActivityCte(input, { end: input.end, start: input.start });

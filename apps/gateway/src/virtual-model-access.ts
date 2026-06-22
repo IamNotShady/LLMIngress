@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
 
 export type GatewayVirtualModel = {
   displayName: string;
@@ -32,7 +32,7 @@ export type GatewayVirtualModelAccessResult =
   | GatewayVirtualModelAccessFailure
   | GatewayVirtualModelAccessSuccess;
 
-type VirtualModelRow = QueryResultRow & {
+type VirtualModelRow = PostgresQueryResultRow & {
   display_name: string;
   id: string;
   name: string;
@@ -101,7 +101,7 @@ export async function listAllowedGatewayVirtualModels(input: {
   agentApiKeyId: string;
   databaseUrl: string;
 }): Promise<GatewayVirtualModel[]> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     const result = await client.query<VirtualModelRow>(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FlatIcon } from "../_components/flat-icon";
+import { FlatIcon, type FlatIconName } from "../_components/flat-icon";
 
 export type ProviderCreateChoice = {
   action: string;
@@ -9,6 +9,8 @@ export type ProviderCreateChoice = {
   baseUrlPlaceholder?: string;
   displayName: string;
   fixedBaseUrl?: string;
+  groupId: string;
+  groupLabel: string;
   id: string;
   providerKey: string;
   providerType: string;
@@ -39,9 +41,13 @@ export function ProviderCreateForm({
   }
   const initialChoice =
     choices.find((choice) => choice.providerKey === initialProviderKey) ?? fallbackChoice;
+  const groups = buildChoiceGroups(choices);
   const [choiceId, setChoiceId] = useState(initialChoice.id);
+  const [activeGroupId, setActiveGroupId] = useState(initialChoice.groupId);
   const choice = choices.find((item) => item.id === choiceId) ?? initialChoice;
+  const visibleChoices = choices.filter((item) => item.groupId === activeGroupId);
   const isLocal = choice.baseUrlMode === "user_local_private";
+  const isSubscription = choice.providerType === "subscription";
   const isDirectCreate = choice.baseUrlMode === "fixed_create";
   const baseUrlValue = isLocal ? initialBaseUrl : (choice.fixedBaseUrl ?? "");
   const displayNameValue =
@@ -60,6 +66,26 @@ export function ProviderCreateForm({
           {formError}
         </p>
       ) : null}
+      <div className="provider-create-tabs" role="tablist" aria-label="Provider type group">
+        {groups.map((group) => (
+          <button
+            aria-selected={group.id === activeGroupId}
+            className={group.id === activeGroupId ? "is-active" : undefined}
+            key={group.id}
+            onClick={() => {
+              const nextChoice =
+                choices.find((item) => item.groupId === group.id) ?? fallbackChoice;
+              setActiveGroupId(group.id);
+              setChoiceId(nextChoice.id);
+            }}
+            role="tab"
+            type="button"
+          >
+            <FlatIcon name={readProviderCreateGroupIcon(group.id)} />
+            <span>{group.label}</span>
+          </button>
+        ))}
+      </div>
       <label htmlFor="provider-choice">Provider type</label>
       <select
         aria-describedby="provider-key-error"
@@ -71,7 +97,7 @@ export function ProviderCreateForm({
         required
         value={choice.id}
       >
-        {choices.map((item) => (
+        {visibleChoices.map((item) => (
           <option key={item.id} value={item.id}>
             {item.displayName}
           </option>
@@ -100,25 +126,31 @@ export function ProviderCreateForm({
       >
         {displayNameError}
       </p>
-      <label htmlFor="provider-base-url">Provider base URL</label>
-      <input
-        aria-describedby="provider-base-url-error"
-        aria-invalid={baseUrlError ? true : undefined}
-        className={baseUrlError ? "is-invalid" : undefined}
-        id="provider-base-url"
-        key={`${choice.id}-${baseUrlValue}`}
-        name={isDirectCreate || isLocal ? "baseUrl" : undefined}
-        placeholder={choice.baseUrlPlaceholder ?? choice.fixedBaseUrl ?? ""}
-        required={isDirectCreate || isLocal}
-        type="url"
-        defaultValue={baseUrlValue}
-      />
-      <p
-        className={baseUrlError ? "field-error is-visible" : "field-error"}
-        id="provider-base-url-error"
-      >
-        {baseUrlError}
-      </p>
+      {isSubscription ? (
+        <input type="hidden" name="baseUrl" value={choice.fixedBaseUrl ?? ""} />
+      ) : (
+        <>
+          <label htmlFor="provider-base-url">Provider base URL</label>
+          <input
+            aria-describedby="provider-base-url-error"
+            aria-invalid={baseUrlError ? true : undefined}
+            className={baseUrlError ? "is-invalid" : undefined}
+            id="provider-base-url"
+            key={`${choice.id}-${baseUrlValue}`}
+            name={isDirectCreate || isLocal ? "baseUrl" : undefined}
+            placeholder={choice.baseUrlPlaceholder ?? choice.fixedBaseUrl ?? ""}
+            required={isDirectCreate || isLocal}
+            type="url"
+            defaultValue={baseUrlValue}
+          />
+          <p
+            className={baseUrlError ? "field-error is-visible" : "field-error"}
+            id="provider-base-url-error"
+          >
+            {baseUrlError}
+          </p>
+        </>
+      )}
       {isLocal ? (
         <label className="checkbox-label" htmlFor="provider-public-risk">
           <input
@@ -136,4 +168,24 @@ export function ProviderCreateForm({
       </button>
     </form>
   );
+}
+
+function buildChoiceGroups(choices: ProviderCreateChoice[]): Array<{ id: string; label: string }> {
+  const groups = new Map<string, string>();
+  for (const choice of choices) {
+    if (!groups.has(choice.groupId)) {
+      groups.set(choice.groupId, choice.groupLabel);
+    }
+  }
+  return Array.from(groups, ([id, label]) => ({ id, label }));
+}
+
+function readProviderCreateGroupIcon(groupId: string): FlatIconName {
+  if (groupId === "subscription") {
+    return "unlock";
+  }
+  if (groupId === "local") {
+    return "settings";
+  }
+  return "key";
 }

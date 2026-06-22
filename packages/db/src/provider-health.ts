@@ -3,9 +3,14 @@ import { Client, type QueryResultRow } from "pg";
 
 export const HEALTH_SUMMARY_CHANGED_CHANNEL = "health_summary_changed";
 
-export type ProviderHealthEventStatus = "degraded" | "failed" | "healthy" | "unhealthy";
+export type ProviderHealthFailureStatus =
+  | "auth_failed"
+  | "network_error"
+  | "quota_limited"
+  | "unhealthy";
+export type ProviderHealthEventStatus = "healthy" | ProviderHealthFailureStatus;
 export type ProviderHealthEventTrigger = "manual" | "request_path" | "worker_probe";
-export type ProviderHealthSummaryStatus = "degraded" | "healthy" | "unhealthy" | "unknown";
+export type ProviderHealthSummaryStatus = "healthy" | "unknown" | ProviderHealthFailureStatus;
 
 export type ProviderHealthSummaryState = {
   consecutiveFailures: number;
@@ -65,15 +70,11 @@ export function buildProviderHealthSummaryUpdate(input: {
     };
   }
 
-  const consecutiveFailures = (input.previous?.consecutiveFailures ?? 0) + 1;
-  const status =
-    input.eventStatus === "unhealthy" || consecutiveFailures >= 3 ? "unhealthy" : "degraded";
-
   return {
-    consecutiveFailures,
+    consecutiveFailures: (input.previous?.consecutiveFailures ?? 0) + 1,
     lastFailureAt: input.observedAt,
     lastSuccessAt: input.previous?.lastSuccessAt ?? null,
-    status,
+    status: input.eventStatus,
   };
 }
 

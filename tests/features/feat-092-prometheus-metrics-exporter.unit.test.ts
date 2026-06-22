@@ -41,7 +41,7 @@ describe("feat-092 prometheus metrics exporter", () => {
       'llmingress_gateway_fallback_events_total{provider="openai",model="gpt-4.1-mini",status="failed",error_code="upstream_timeout"} 1',
     );
     expect(document.body).toContain(
-      'llmingress_provider_health_status{provider="openai",model="gpt-4.1-mini",status="degraded"} 1',
+      'llmingress_provider_health_status{provider="openai",model="gpt-4.1-mini",status="quota_limited"} 1',
     );
     expect(document.body).toContain(
       'llmingress_provider_health_consecutive_failures{provider="openai",model="gpt-4.1-mini"} 2',
@@ -207,7 +207,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         latency_ms,
         observed_at
       )
-      values ($1, $2, $3, 'worker_probe', 'failed', 'upstream_timeout', 'sensitive upstream failure', 42, now())
+      values ($1, $2, $3, 'worker_probe', 'quota_limited', 'upstream_timeout', 'sensitive upstream failure', 42, now())
     `,
     [ids.healthEventId, ids.providerId, ids.providerModelId],
   );
@@ -223,7 +223,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         last_failure_at,
         updated_at
       )
-      values ($1, $2, $3, $4, 'degraded', 2, now(), now())
+      values ($1, $2, $3, $4, 'quota_limited', 2, now(), now())
     `,
     [ids.healthSummaryId, ids.providerId, ids.providerModelId, ids.healthEventId],
   );

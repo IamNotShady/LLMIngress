@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 import { queueNotificationEvent } from "./notification-dispatcher.js";
 
@@ -29,7 +29,7 @@ type EvaluateBudgetThresholdAlertsOptions = CreateBudgetThresholdAlertsJobHandle
   payload: unknown;
 };
 
-type BudgetThresholdCandidateRow = QueryResultRow & {
+type BudgetThresholdCandidateRow = PostgresQueryResultRow & {
   agent_key_prefix: string;
   agent_id: string;
   agent_name: string;
@@ -186,7 +186,7 @@ async function readBudgetThresholdCandidates(
   databaseUrl: string,
   now: Date,
 ): Promise<BudgetThresholdCandidate[]> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -239,7 +239,7 @@ function rowToBudgetThresholdCandidate(row: BudgetThresholdCandidateRow): Budget
 }
 
 async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -256,7 +256,7 @@ async function budgetThresholdAlertAlreadyQueued(
   databaseUrl: string,
   alertKey: string,
 ): Promise<boolean> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

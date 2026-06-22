@@ -246,6 +246,31 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0040",
     name: "merge_config_changes_into_versions",
   },
+  {
+    checksum: "463e8fdf39b18da5da19d7a0f6e927fc57dcfd604bbcf98d348c6c533401412f",
+    id: "0041",
+    name: "provider_openai_compatible_urls",
+  },
+  {
+    checksum: "b6c2598d758b3b77a49e3457319f2aa19fc102369346d3cc43e0567049d35c0b",
+    id: "0042",
+    name: "remove_unsupported_remote_provider_templates",
+  },
+  {
+    checksum: "9a88ee5ad2a2347bfe4a6d58169d4a93e40fd24053205beddd9e69526110b78e",
+    id: "0043",
+    name: "provider_health_status_taxonomy",
+  },
+  {
+    checksum: "3053a00657302e0ee7e17547e39e4044c9b1b187a0f406acca841a63fd6c1595",
+    id: "0044",
+    name: "provider_api_key_test_status_taxonomy",
+  },
+  {
+    checksum: "db1a1a440cfc7985deb7b03ebe1bdcd41fe47b7f6d01c5f820e9249aacb764a9",
+    id: "0045",
+    name: "provider_subscription_oauth",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

@@ -94,12 +94,29 @@ test("provider key management records label status priority usage and per key co
         workerId: "worker-102",
       }),
     ).resolves.toMatchObject({
+      apiKeyResults: [
+        {
+          errorCode: "invalid_api_key",
+          ok: false,
+          providerApiKeyId: seeded.goodProviderApiKeyId,
+          status: "auth_failed",
+        },
+        {
+          errorCode: "invalid_api_key",
+          ok: false,
+          providerApiKeyId: seeded.laterProviderApiKeyId,
+          status: "auth_failed",
+        },
+      ],
       errorCode: "invalid_api_key",
       ok: false,
-      providerApiKeyId: seeded.laterProviderApiKeyId,
-      status: "failed",
+      requestedProviderApiKeyId: seeded.laterProviderApiKeyId,
+      status: "unhealthy",
     });
-    expect(probeAuthorizations).toEqual([`Bearer ${laterProviderApiKey}`]);
+    expect(probeAuthorizations).toEqual([
+      `Bearer ${goodProviderApiKey}`,
+      `Bearer ${laterProviderApiKey}`,
+    ]);
     await expectProviderKeyTestResult(fixture, {
       goodProviderApiKeyId: seeded.goodProviderApiKeyId,
       laterProviderApiKeyId: seeded.laterProviderApiKeyId,
@@ -328,15 +345,15 @@ async function expectProviderKeyTestResult(
   const rows = new Map(result.rows.map((row) => [row.id, row]));
 
   expect(rows.get(input.goodProviderApiKeyId)).toMatchObject({
-    last_test_error_code: null,
-    last_test_error_message: null,
-    last_test_status: "untested",
-    last_tested_at: null,
+    last_test_error_code: "invalid_api_key",
+    last_test_error_message: "Invalid API key",
+    last_test_status: "auth_failed",
   });
+  expect(rows.get(input.goodProviderApiKeyId)?.last_tested_at).toBeInstanceOf(Date);
   expect(rows.get(input.laterProviderApiKeyId)).toMatchObject({
     last_test_error_code: "invalid_api_key",
     last_test_error_message: "Invalid API key",
-    last_test_status: "failed",
+    last_test_status: "auth_failed",
   });
   expect(rows.get(input.laterProviderApiKeyId)?.last_tested_at).toBeInstanceOf(Date);
 }

@@ -709,6 +709,27 @@ pre,
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
 }
+.provider-create-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+.provider-create-tabs button {
+  min-height: 42px;
+  justify-content: center;
+  gap: var(--space-2xs);
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+}
+.provider-create-tabs button.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
 .checkbox-label[hidden] {
   display: none;
 }
@@ -2278,21 +2299,44 @@ details.disclosure[open] > .disclosure-summary {
   line-height: 1;
   text-decoration: none;
 }
+.agent-delete-actions :where(button, a):has(.flat-icon) {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  padding: 0 var(--space-md) !important;
+  gap: var(--space-xs) !important;
+}
+.agent-delete-actions :where(button, a):has(.flat-icon) > span {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  border: 0;
+}
 .agent-delete-cancel {
-  color: var(--accent-fg);
-  background: var(--accent);
+  color: var(--accent-fg) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
 }
 .agent-delete-cancel:hover {
-  background: var(--accent-strong);
+  color: var(--accent-fg) !important;
+  background: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
 }
 .agent-delete-confirm {
-  color: #fff;
-  background: #dc2626;
-  border-color: #dc2626;
+  color: #fff !important;
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
 }
 .agent-delete-confirm:hover {
-  background: #b91c1c;
-  border-color: #b91c1c;
+  color: #fff !important;
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
 }
 
 /* ---- Charts ---- */

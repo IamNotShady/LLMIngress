@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
   type ProviderModelCapabilities,
   type RoutePolicyRules,
 } from "@llmingress/domain";
-import { Client, type QueryResultRow } from "pg";
 import { listProviderTemplateSelectorGroups } from "./provider-templates";
 
 export type LlmIngressConfigExport = {
@@ -28,7 +28,7 @@ export type ExportedProvider = {
   providerApiKeys: ExportedProviderApiKey[];
   providerKey: string;
   providerTemplateId: string | null;
-  providerType: "api_key" | "local";
+  providerType: "api_key" | "local" | "subscription";
 };
 
 export type ExportedProviderModel = {
@@ -109,7 +109,7 @@ type QueryClient = {
   ) => Promise<{ rows: T[] }>;
 };
 
-type ProviderRow = QueryResultRow & {
+type ProviderRow = PostgresQueryResultRow & {
   base_url: string | null;
   display_name: string;
   enabled: boolean;
@@ -119,7 +119,7 @@ type ProviderRow = QueryResultRow & {
   provider_type: "api_key" | "local";
 };
 
-type ProviderModelRow = QueryResultRow & {
+type ProviderModelRow = PostgresQueryResultRow & {
   availability: ExportedProviderModel["availability"];
   capability_metadata: unknown;
   context_window: number | null;
@@ -131,33 +131,33 @@ type ProviderModelRow = QueryResultRow & {
   supports_tools: boolean;
 };
 
-type ProviderApiKeyRow = QueryResultRow & {
+type ProviderApiKeyRow = PostgresQueryResultRow & {
   key_prefix: string;
   provider_id: string;
 };
 
-type VirtualModelRow = QueryResultRow & {
+type VirtualModelRow = PostgresQueryResultRow & {
   display_name: string;
   enabled: boolean;
   id: string;
   name: string;
 };
 
-type RoutePolicyRow = QueryResultRow & {
+type RoutePolicyRow = PostgresQueryResultRow & {
   id: string;
   rules: unknown;
   strategy: ExportedRoutePolicy["strategy"];
   virtual_model_id: string;
 };
 
-type RoutePolicyCandidateRow = QueryResultRow & {
+type RoutePolicyCandidateRow = PostgresQueryResultRow & {
   candidate_order: number;
   is_fallback: boolean;
   provider_model_id: string;
   route_policy_id: string;
 };
 
-type AgentRow = QueryResultRow & {
+type AgentRow = PostgresQueryResultRow & {
   agent_type: ExportedAgent["agentType"];
   default_virtual_model_id: string | null;
   enabled: boolean;
@@ -166,12 +166,12 @@ type AgentRow = QueryResultRow & {
   name: string;
 };
 
-type AgentVirtualModelRow = QueryResultRow & {
+type AgentVirtualModelRow = PostgresQueryResultRow & {
   agent_id: string;
   virtual_model_id: string;
 };
 
-type AgentLimitRow = QueryResultRow & {
+type AgentLimitRow = PostgresQueryResultRow & {
   alert_threshold: string | null;
   agent_id: string;
   enabled: boolean;
@@ -1182,7 +1182,7 @@ async function withClient<T>(
   databaseUrl: string,
   operation: (client: QueryClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
   try {
     return await operation(client);

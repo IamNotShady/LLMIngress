@@ -138,7 +138,7 @@ async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
   await openRow(page, "Refresh Button Provider");
-  await expect(page.locator("table.provider-key-table td.mono")).toHaveText("sk-refre");
+  await expect(page.getByRole("row", { name: /- 100 未知/ })).toBeVisible();
 }
 
 async function countProviderModels(fixture: Fixture, providerId: string): Promise<number> {

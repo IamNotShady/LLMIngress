@@ -10,7 +10,7 @@ import { createFakeProviderServer } from "../support/fake-provider";
 
 const masterKeySource = { kind: "inline" as const, value: "test-master-key" };
 
-test("model refresh enqueues asynchronous price sync job for refreshed provider models", async () => {
+test("model refresh enqueues asynchronous price sync and connectivity jobs for refreshed provider models", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_model_refresh_price_sync_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -68,10 +68,25 @@ test("model refresh enqueues asynchronous price sync job for refreshed provider 
       },
     });
     expect(firstRefresh.result).toMatchObject({
+      chainedConnectivityCheckJobId: expect.any(String),
       chainedPriceSyncJobId: expect.any(String),
     });
 
+    const chainedConnectivityCheckJobId = readResultString(
+      firstRefresh.result,
+      "chainedConnectivityCheckJobId",
+    );
     const chainedPriceSyncJobId = readResultString(firstRefresh.result, "chainedPriceSyncJobId");
+    await expect(
+      readConnectivityCheckJob(fixture, chainedConnectivityCheckJobId),
+    ).resolves.toMatchObject({
+      payload: {
+        providerId,
+        source: "model_refresh",
+      },
+      status: "pending",
+      trigger: "system",
+    });
     await expect(readPriceSyncJob(fixture, chainedPriceSyncJobId)).resolves.toMatchObject({
       payload: {
         modelIds: ["chain-alpha", "chain-beta"],
@@ -84,6 +99,9 @@ test("model refresh enqueues asynchronous price sync job for refreshed provider 
     });
     await expect
       .poll(() => notifications.messages.map((message) => message.jobId))
+      .toContain(chainedConnectivityCheckJobId);
+    await expect
+      .poll(() => notifications.messages.map((message) => message.jobId))
       .toContain(chainedPriceSyncJobId);
 
     const secondModelRefreshJobId = await insertModelRefreshJob(fixture, providerId);
@@ -91,10 +109,12 @@ test("model refresh enqueues asynchronous price sync job for refreshed provider 
     await expect(modelRefreshRunner.runOnce()).resolves.toBe(true);
     await expect(readJobResult(fixture, secondModelRefreshJobId)).resolves.toMatchObject({
       result: {
+        chainedConnectivityCheckJobId,
         chainedPriceSyncJobId,
       },
       status: "succeeded",
     });
+    await expect(countUnfinishedChainedConnectivityCheckJobs(fixture, providerId)).resolves.toBe(1);
     await expect(countUnfinishedChainedPriceSyncJobs(fixture, providerId)).resolves.toBe(1);
 
     const priceSyncRunner = createPostgresJobRunner({
@@ -137,6 +157,12 @@ type JobResult = {
 };
 
 type PriceSyncJobRow = {
+  payload: unknown;
+  status: string;
+  trigger: string;
+};
+
+type ConnectivityCheckJobRow = {
   payload: unknown;
   status: string;
   trigger: string;
@@ -192,6 +218,36 @@ async function readPriceSyncJob(fixture: Fixture, jobId: string): Promise<PriceS
     [jobId],
   );
   return result.rows[0] ?? null;
+}
+
+async function readConnectivityCheckJob(
+  fixture: Fixture,
+  jobId: string,
+): Promise<ConnectivityCheckJobRow | null> {
+  const result = await fixture.query<ConnectivityCheckJobRow>(
+    "select status, trigger, payload from jobs where id = $1 and job_type = 'provider_connectivity_check'",
+    [jobId],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function countUnfinishedChainedConnectivityCheckJobs(
+  fixture: Fixture,
+  providerId: string,
+): Promise<number> {
+  const result = await fixture.query<{ count: string }>(
+    `
+      select count(*)::text as count
+      from jobs
+      where job_type = 'provider_connectivity_check'
+        and trigger = 'system'
+        and status in ('pending', 'running')
+        and payload->>'source' = 'model_refresh'
+        and payload->>'providerId' = $1
+    `,
+    [providerId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 async function countUnfinishedChainedPriceSyncJobs(

@@ -59,13 +59,13 @@ describe("feat-078 route policy editor enhancements", () => {
         },
         {
           availability: "unavailable",
-          optionLabel: "Fireworks - Mixtral (mixtral-8x7b)",
+          optionLabel: "BackupAI - Mixtral (mixtral-8x7b)",
           priceStatus: "priced",
         },
       ]),
     ).toEqual([
       "Price warning: Anthropic - Claude Sonnet 4 (claude-sonnet-4) has unknown price; save a manual price override before using budgeted routes.",
-      "Route warning: Fireworks - Mixtral (mixtral-8x7b) is unavailable and excluded from Gateway routing.",
+      "Route warning: BackupAI - Mixtral (mixtral-8x7b) is unavailable and excluded from Gateway routing.",
     ]);
 
     expect(
@@ -75,11 +75,11 @@ describe("feat-078 route policy editor enhancements", () => {
           modelHealthStatus: "unhealthy",
           optionLabel: "Anthropic - Claude Sonnet 4 (claude-sonnet-4)",
           providerHealthIsStale: false,
-          providerHealthStatus: "degraded",
+          providerHealthStatus: "quota_limited",
         },
       ]),
     ).toEqual([
-      "Health warning: Anthropic - Claude Sonnet 4 (claude-sonnet-4) provider health is Degraded.",
+      "Health warning: Anthropic - Claude Sonnet 4 (claude-sonnet-4) provider health is Quota limited.",
       "Health warning: Anthropic - Claude Sonnet 4 (claude-sonnet-4) model health is Unhealthy.",
       "Health warning: Anthropic - Claude Sonnet 4 (claude-sonnet-4) model health is stale.",
     ]);

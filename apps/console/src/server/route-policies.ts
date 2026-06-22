@@ -5,8 +5,9 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { isRemovedProviderKey } from "@llmingress/db/providers";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
 
 export const routePolicyStrategies = ["fixed", "cost_first", "balanced", "quality_first"] as const;
 
@@ -97,7 +98,7 @@ export type RouteReasonMetadataInput = {
   virtualModelName: string;
 };
 
-type RoutePolicyRow = QueryResultRow & {
+type RoutePolicyRow = PostgresQueryResultRow & {
   id: string;
   strategy: RoutePolicyStrategy;
   virtual_model_display_name: string;
@@ -105,7 +106,7 @@ type RoutePolicyRow = QueryResultRow & {
   virtual_model_name: string;
 };
 
-type CandidateRow = QueryResultRow & {
+type CandidateRow = PostgresQueryResultRow & {
   availability: string;
   candidate_order: number;
   id: string;
@@ -129,7 +130,7 @@ type CandidateRow = QueryResultRow & {
   route_policy_id: string;
 };
 
-type ProviderModelOptionRow = QueryResultRow & {
+type ProviderModelOptionRow = PostgresQueryResultRow & {
   availability: string;
   context_window?: number | null;
   id: string;
@@ -153,7 +154,7 @@ type ProviderModelOptionRow = QueryResultRow & {
   supports_tools?: boolean | null;
 };
 
-type BudgetedVirtualModelUsageRow = QueryResultRow & {
+type BudgetedVirtualModelUsageRow = PostgresQueryResultRow & {
   budgeted_agent_count: number;
   display_name: string;
   name: string;
@@ -349,7 +350,9 @@ export async function listProviderModelOptions(
 ): Promise<ConsoleProviderModelOption[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderModelOptionRow>(providerModelOptionsSql());
-    return result.rows.map(rowToProviderModelOption);
+    return result.rows
+      .filter((row) => !isRemovedProviderKey(row.provider_key))
+      .map(rowToProviderModelOption);
   });
 }
 
@@ -408,7 +411,9 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
               [policyIds],
             )
           ).rows;
-    const candidatesByPolicyId = groupCandidatesByPolicyId(candidateRows);
+    const candidatesByPolicyId = groupCandidatesByPolicyId(
+      candidateRows.filter((row) => !isRemovedProviderKey(row.provider_key)),
+    );
     return policies.rows.map((policy) =>
       rowToConsoleRoutePolicy(policy, candidatesByPolicyId.get(policy.id) ?? []),
     );
@@ -799,11 +804,23 @@ function isRoutePolicyStrategy(value: string | null | undefined): value is Route
 }
 
 function isWarningHealthStatus(value: string | null | undefined): value is string {
-  return value === "degraded" || value === "unhealthy";
+  return (
+    value === "auth_failed" ||
+    value === "network_error" ||
+    value === "quota_limited" ||
+    value === "unhealthy"
+  );
 }
 
 function formatRoutePolicyHealthStatus(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  return (
+    {
+      auth_failed: "Auth failed",
+      network_error: "Network error",
+      quota_limited: "Quota limited",
+      unhealthy: "Unhealthy",
+    }[value] ?? `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+  );
 }
 
 function normalizeOptionalFilter(value: string | null | undefined): string | null {
@@ -1006,9 +1023,9 @@ function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): C
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import type { JobHandler } from "./job-runner.js";
 
 export type BackupMode = "manual" | "pre_migration" | "scheduled";
@@ -46,11 +46,11 @@ type CreateBackupArtifactOptions = {
   outputPath: string;
 };
 
-type TableRow = QueryResultRow & {
+type TableRow = PostgresQueryResultRow & {
   table_name: string;
 };
 
-type ColumnRow = QueryResultRow & {
+type ColumnRow = PostgresQueryResultRow & {
   column_name: string;
 };
 
@@ -65,6 +65,7 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "providers",
     "provider_models",
     "provider_api_keys",
+    "provider_oauth",
     "agents",
     "virtual_models",
     "route_policies",
@@ -112,7 +113,7 @@ export async function createBackupArtifact(
   options: CreateBackupArtifactOptions,
 ): Promise<BackupArtifactResult> {
   const now = options.now ?? new Date();
-  const client = new Client({ connectionString: options.databaseUrl });
+  const client = new PostgresClient({ connectionString: options.databaseUrl });
   await client.connect();
 
   try {
@@ -216,7 +217,7 @@ function formatBackupTimestamp(now: Date): string {
   return now.toISOString().replace(/[:.]/g, "-");
 }
 
-async function readExistingTables(client: Client): Promise<Set<string>> {
+async function readExistingTables(client: PostgresClient): Promise<Set<string>> {
   const result = await client.query<TableRow>(
     `
       select table_name
@@ -229,7 +230,7 @@ async function readExistingTables(client: Client): Promise<Set<string>> {
 }
 
 async function readTableRows(
-  client: Client,
+  client: PostgresClient,
   tableName: string,
 ): Promise<Record<string, unknown>[]> {
   const columns = await readTableColumns(client, tableName);
@@ -241,7 +242,7 @@ async function readTableRows(
   return result.rows;
 }
 
-async function readTableColumns(client: Client, tableName: string): Promise<string[]> {
+async function readTableColumns(client: PostgresClient, tableName: string): Promise<string[]> {
   const result = await client.query<ColumnRow>(
     `
       select column_name

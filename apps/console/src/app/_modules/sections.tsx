@@ -36,9 +36,14 @@ import {
   listConsoleProviderHealthSummaries,
 } from "../../server/provider-health";
 import {
+  formatProviderApiKeyTestStatusZhLabel,
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
 } from "../../server/provider-keys";
+import {
+  type ConsoleProviderOAuthConnection,
+  listConsoleProviderOAuthConnections,
+} from "../../server/provider-oauth";
 import { listProviderTemplateSelectorGroups } from "../../server/provider-templates";
 import { type ConsoleProvider, listProviders } from "../../server/providers";
 import {
@@ -84,6 +89,8 @@ const directProviderCreateChoices = [
     baseUrlMode: "fixed_create",
     displayName: "OpenAI",
     fixedBaseUrl: "https://api.openai.com/v1",
+    groupId: "remote_api_key",
+    groupLabel: "API Keys",
     id: "openai",
     providerKey: "openai",
     providerType: "api_key",
@@ -93,6 +100,8 @@ const directProviderCreateChoices = [
     baseUrlMode: "fixed_create",
     displayName: "Anthropic",
     fixedBaseUrl: "https://api.anthropic.com/v1",
+    groupId: "remote_api_key",
+    groupLabel: "API Keys",
     id: "anthropic",
     providerKey: "anthropic",
     providerType: "api_key",
@@ -108,6 +117,8 @@ const providerCreateChoices = [
       baseUrlPlaceholder: template.baseUrlPlaceholder,
       displayName: template.displayName,
       fixedBaseUrl: template.fixedBaseUrl,
+      groupId: group.id,
+      groupLabel: group.label,
       id: template.id,
       providerKey: template.providerKey,
       providerType: template.providerType,
@@ -357,7 +368,11 @@ function formatUptime(startedAt: Date): string {
 function formatProviderStatusSummary(summaries: ConsoleProviderHealthSummary[]): string {
   const healthy = summaries.filter((summary) => summary.status === "healthy").length;
   const unhealthy = summaries.filter(
-    (summary) => summary.status === "degraded" || summary.status === "unhealthy",
+    (summary) =>
+      summary.status === "auth_failed" ||
+      summary.status === "network_error" ||
+      summary.status === "quota_limited" ||
+      summary.status === "unhealthy",
   ).length;
   return `${healthy} healthy / ${unhealthy} unhealthy`;
 }
@@ -610,6 +625,26 @@ function ProviderHealthPillZh({ status }: { status: string }) {
   return <ProviderStatusPill label={formatProviderHealthStatusZhLabel(status)} status={status} />;
 }
 
+function ProviderApiKeyTestStatusPill({
+  status,
+}: {
+  status: ProviderApiKeyMetadata["lastTestStatus"];
+}) {
+  return (
+    <ProviderStatusPill label={formatProviderApiKeyTestStatusZhLabel(status)} status={status} />
+  );
+}
+
+function ProviderOAuthTestStatusPill({
+  status,
+}: {
+  status: ConsoleProviderOAuthConnection["lastTestStatus"];
+}) {
+  return (
+    <ProviderStatusPill label={formatProviderApiKeyTestStatusZhLabel(status)} status={status} />
+  );
+}
+
 function ModelAvailabilityPill({ value }: { value: string }) {
   const normalized = value.toLowerCase();
   if (normalized === "available") {
@@ -629,7 +664,7 @@ function ProviderStatusPill({ label, status }: { label: string; status: string }
   if (normalized === "unknown") {
     return <span className="pill">{label}</span>;
   }
-  if (normalized === "degraded") {
+  if (normalized === "checking" || normalized === "quota_limited") {
     return <span className="pill--warn pill">{label}</span>;
   }
   return <span className="pill--danger pill">{label}</span>;
@@ -638,13 +673,25 @@ function ProviderStatusPill({ label, status }: { label: string; status: string }
 function formatProviderHealthStatusZhLabel(status: string): string {
   const normalized = status.toLowerCase();
   if (normalized === "healthy") {
-    return "健康";
+    return "可用";
   }
   if (normalized === "disabled") {
     return "禁用";
   }
-  if (normalized === "degraded" || normalized === "unhealthy") {
-    return "异常";
+  if (normalized === "checking") {
+    return "正在检查";
+  }
+  if (normalized === "unhealthy") {
+    return "当前不可用";
+  }
+  if (normalized === "auth_failed") {
+    return "鉴权失败";
+  }
+  if (normalized === "quota_limited") {
+    return "额度受限";
+  }
+  if (normalized === "network_error") {
+    return "网络错误";
   }
   return "未知";
 }
@@ -2762,15 +2809,18 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const providers = orderProvidersForConsole(await listProviders(databaseUrl));
   const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
+  const providerOAuthConnections = await listConsoleProviderOAuthConnections(databaseUrl);
   const providerModelOptions = orderProviderModelsForConsole(
     await listProviderModelOptions(databaseUrl),
   );
   const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
+  const providerOAuthByProviderId = groupProviderOAuthByProviderId(providerOAuthConnections);
   const providerHealthByProviderId = new Map(
     providerHealthSummaries.map((summary) => [summary.id, summary]),
   );
   const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
   const providerDialog = readSingleSearchParam(searchParams.providerDialog);
+  const providerDelete = readSingleSearchParam(searchParams.providerDelete);
   const providerError = readSingleSearchParam(searchParams.providerError);
   const providerErrorField = readSingleSearchParam(searchParams.providerErrorField);
   const providerDialogCloseHref = buildQueryHref(searchParams, {
@@ -2780,6 +2830,9 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     providerError: undefined,
     providerErrorField: undefined,
     providerKeyValue: undefined,
+  });
+  const providerDeleteCloseHref = buildQueryHref(searchParams, {
+    providerDelete: undefined,
   });
   const providerFormValues = {
     baseUrl: readSingleSearchParam(searchParams.providerBaseUrlValue) ?? "",
@@ -2796,6 +2849,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     providerDialog && providerDialog !== "new"
       ? (providers.find((provider) => provider.id === providerDialog) ?? null)
       : null;
+  const deleteDialogProvider = providers.find((provider) => provider.id === providerDelete) ?? null;
   const selectedProviderId = readSingleSearchParam(searchParams.selected);
   const selectedProvider =
     providers.find((provider) => provider.id === selectedProviderId) ??
@@ -2808,6 +2862,13 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const selectedProviderKeys = selectedProvider
     ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
     : [];
+  const selectedProviderOAuthConnections = selectedProvider
+    ? (providerOAuthByProviderId.get(selectedProvider.id) ?? [])
+    : [];
+  const selectedProviderCredentialCount =
+    selectedProvider?.providerType === "subscription"
+      ? selectedProviderOAuthConnections.length
+      : selectedProviderKeys.length;
   const deleteProviderKey = selectedProviderKeys.find(
     (providerKey) => providerKey.id === providerKeyDelete,
   );
@@ -2834,7 +2895,11 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
           providers.map((provider) => {
             const providerHealth = providerHealthByProviderId.get(provider.id);
             const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-            const providerKeyCount = providerKeysByProviderId.get(provider.id)?.length ?? 0;
+            const providerKeyCount = readProviderCredentialCount(
+              provider,
+              providerKeysByProviderId,
+              providerOAuthByProviderId,
+            );
 
             return (
               <article className="provider-summary-card" key={provider.id}>
@@ -2889,8 +2954,11 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                     {providers.map((provider) => {
                       const providerHealth = providerHealthByProviderId.get(provider.id);
                       const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-                      const providerKeyCount =
-                        providerKeysByProviderId.get(provider.id)?.length ?? 0;
+                      const providerKeyCount = readProviderCredentialCount(
+                        provider,
+                        providerKeysByProviderId,
+                        providerOAuthByProviderId,
+                      );
                       const providerHref = buildQueryHref(searchParams, {
                         providerDialog: undefined,
                         selected: provider.id,
@@ -2965,20 +3033,44 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                                       <FlatIcon name="disable" />
                                     </button>
                                   </form>
+                                  <a
+                                    className="provider-action-button provider-action-delete"
+                                    href={buildQueryHref(searchParams, {
+                                      providerDelete: provider.id,
+                                      selected: provider.id,
+                                    })}
+                                    aria-label={`Delete ${provider.displayName}`}
+                                    title="Delete"
+                                  >
+                                    <FlatIcon name="delete" />
+                                  </a>
                                 </>
                               ) : (
-                                <form action="/api/providers" method="post">
-                                  <input type="hidden" name="action" value="enable" />
-                                  <input type="hidden" name="id" value={provider.id} />
-                                  <button
-                                    className="provider-action-button provider-action-enable"
-                                    aria-label={`Enable ${provider.displayName}`}
-                                    title="Enable"
-                                    type="submit"
+                                <>
+                                  <form action="/api/providers" method="post">
+                                    <input type="hidden" name="action" value="enable" />
+                                    <input type="hidden" name="id" value={provider.id} />
+                                    <button
+                                      className="provider-action-button provider-action-enable"
+                                      aria-label={`Enable ${provider.displayName}`}
+                                      title="Enable"
+                                      type="submit"
+                                    >
+                                      <FlatIcon name="enable" />
+                                    </button>
+                                  </form>
+                                  <a
+                                    className="provider-action-button provider-action-delete"
+                                    href={buildQueryHref(searchParams, {
+                                      providerDelete: provider.id,
+                                      selected: provider.id,
+                                    })}
+                                    aria-label={`Delete ${provider.displayName}`}
+                                    title="Delete"
                                   >
-                                    <FlatIcon name="enable" />
-                                  </button>
-                                </form>
+                                    <FlatIcon name="delete" />
+                                  </a>
+                                </>
                               )}
                             </span>
                           </td>
@@ -3007,15 +3099,19 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   <input type="hidden" name="providerId" value={selectedProvider.id} />
                   <button
                     className="provider-refresh-button"
-                    disabled={selectedProviderKeys.length === 0}
+                    disabled={selectedProviderCredentialCount === 0}
                     aria-label="Refresh models"
                     title="Refresh models"
                     type="submit"
                   >
                     <FlatIcon name="refresh" />
                   </button>
-                  {selectedProviderKeys.length === 0 ? (
-                    <p className="field-error is-visible">请先添加 API KEY</p>
+                  {selectedProviderCredentialCount === 0 ? (
+                    <p className="field-error is-visible">
+                      {selectedProvider.providerType === "subscription"
+                        ? "请先添加 OAuth connection"
+                        : "请先添加 API KEY"}
+                    </p>
                   ) : null}
                 </form>
               </header>
@@ -3047,14 +3143,24 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
 
               <section className="provider-detail-section">
                 <div className="provider-detail-section-head">
-                  <h3>Key 管理</h3>
+                  <h3>
+                    {selectedProvider.providerType === "subscription" ? "OAuth 管理" : "Key 管理"}
+                  </h3>
                   <a
                     className="provider-key-add-button"
                     href={buildQueryHref(searchParams, {
                       providerKeyDialog: selectedProvider.id,
                     })}
-                    aria-label="Add API key"
-                    title="Add API key"
+                    aria-label={
+                      selectedProvider.providerType === "subscription"
+                        ? "Add OAuth connection"
+                        : "Add API key"
+                    }
+                    title={
+                      selectedProvider.providerType === "subscription"
+                        ? "Add OAuth connection"
+                        : "Add API key"
+                    }
                   >
                     <FlatIcon name="key" />
                   </a>
@@ -3063,25 +3169,92 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   <table className="data-table provider-key-table">
                     <thead>
                       <tr>
-                        <th>Prefix</th>
+                        <th>Label</th>
+                        <th>Priority</th>
                         <th>状态</th>
                         <th>最近测试</th>
                         <th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedProviderKeys.length === 0 ? (
+                      {selectedProvider.providerType === "subscription" ? (
+                        selectedProviderOAuthConnections.length === 0 ? (
+                          <tr>
+                            <td colSpan={5}>No OAuth connection stored.</td>
+                          </tr>
+                        ) : (
+                          selectedProviderOAuthConnections.map((connection) => (
+                            <tr key={connection.id}>
+                              <td>{connection.label ?? "-"}</td>
+                              <td>{connection.priority}</td>
+                              <td>
+                                <ProviderOAuthTestStatusPill status={connection.lastTestStatus} />
+                              </td>
+                              <td>{formatProviderOAuthLastTest(connection)}</td>
+                              <td>
+                                <span className="provider-table-actions">
+                                  <form action="/api/provider-oauth" method="post">
+                                    <input
+                                      type="hidden"
+                                      name="action"
+                                      value={connection.enabled ? "disable" : "enable"}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="providerOAuthId"
+                                      value={connection.id}
+                                    />
+                                    <button
+                                      className={
+                                        connection.enabled
+                                          ? "provider-key-delete-button"
+                                          : "provider-action-button provider-action-enable"
+                                      }
+                                      aria-label={
+                                        connection.enabled
+                                          ? "Disable OAuth connection"
+                                          : "Enable OAuth connection"
+                                      }
+                                      title={connection.enabled ? "Disable" : "Enable"}
+                                      type="submit"
+                                    >
+                                      <FlatIcon name={connection.enabled ? "disable" : "enable"} />
+                                    </button>
+                                  </form>
+                                  <form action="/api/provider-oauth" method="post">
+                                    <input type="hidden" name="action" value="delete" />
+                                    <input
+                                      type="hidden"
+                                      name="providerOAuthId"
+                                      value={connection.id}
+                                    />
+                                    <button
+                                      className="provider-key-delete-button"
+                                      aria-label="Delete OAuth connection"
+                                      title="Delete OAuth connection"
+                                      type="submit"
+                                    >
+                                      <FlatIcon name="delete" />
+                                    </button>
+                                  </form>
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )
+                      ) : selectedProviderKeys.length === 0 ? (
                         <tr>
-                          <td colSpan={4}>No provider key stored.</td>
+                          <td colSpan={5}>No provider key stored.</td>
                         </tr>
                       ) : (
                         selectedProviderKeys.map((providerKey) => (
                           <tr key={providerKey.id}>
-                            <td className="mono">{providerKey.keyPrefix}</td>
+                            <td>{providerKey.label ?? "-"}</td>
+                            <td>{providerKey.priority}</td>
                             <td>
-                              <span className="pill--ok pill">启用</span>
+                              <ProviderApiKeyTestStatusPill status={providerKey.lastTestStatus} />
                             </td>
-                            <td>{formatProviderLastConnection(selectedProviderHealth)}</td>
+                            <td>{formatProviderApiKeyLastTest(providerKey)}</td>
                             <td>
                               <a
                                 className="provider-key-delete-button"
@@ -3163,17 +3336,28 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
         />
       ) : null}
       {providerKeyDialog && selectedProvider ? (
-        <ProviderKeyCreateDialog
-          closeHref={providerKeyDialogCloseHref}
-          provider={selectedProvider}
-        />
+        selectedProvider.providerType === "subscription" ? (
+          <ProviderOAuthCreateDialog
+            closeHref={providerKeyDialogCloseHref}
+            provider={selectedProvider}
+          />
+        ) : (
+          <ProviderKeyCreateDialog
+            closeHref={providerKeyDialogCloseHref}
+            provider={selectedProvider}
+          />
+        )
       ) : null}
       {deleteProviderKey && selectedProvider ? (
         <ProviderKeyDeleteDialog
           closeHref={providerKeyDialogCloseHref}
           keyPrefix={deleteProviderKey.keyPrefix}
+          providerApiKeyId={deleteProviderKey.id}
           provider={selectedProvider}
         />
+      ) : null}
+      {deleteDialogProvider ? (
+        <ProviderDeleteDialog closeHref={providerDeleteCloseHref} provider={deleteDialogProvider} />
       ) : null}
       {editDialogProvider ? (
         <ProviderEditDialog
@@ -3358,6 +3542,18 @@ function ProviderKeyCreateDialog({
             required
             type="password"
           />
+          <label htmlFor="provider-key-create-label">Label</label>
+          <input id="provider-key-create-label" maxLength={100} name="label" type="text" />
+          <label htmlFor="provider-key-create-priority">Priority</label>
+          <input
+            defaultValue={100}
+            id="provider-key-create-priority"
+            max={100}
+            min={0}
+            name="priority"
+            step={1}
+            type="number"
+          />
           <button type="submit">
             <FlatIcon name="key" />
             <span>Save API key</span>
@@ -3368,13 +3564,100 @@ function ProviderKeyCreateDialog({
   );
 }
 
+function ProviderOAuthCreateDialog({
+  closeHref,
+  provider,
+}: {
+  closeHref: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-oauth-create-title"
+        aria-modal="true"
+        className="console-dialog provider-key-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="provider-oauth-create-title">新增 {provider.displayName} OAuth connection</h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <form className="provider-create-form" action="/api/provider-oauth" method="post">
+          <input type="hidden" name="action" value="start" />
+          <input type="hidden" name="providerId" value={provider.id} />
+          <label htmlFor="provider-oauth-create-label">Label</label>
+          <input id="provider-oauth-create-label" maxLength={100} name="label" type="text" />
+          <label htmlFor="provider-oauth-create-priority">Priority</label>
+          <input
+            defaultValue={100}
+            id="provider-oauth-create-priority"
+            max={100}
+            min={0}
+            name="priority"
+            step={1}
+            type="number"
+          />
+          <button type="submit">
+            <FlatIcon name="unlock" />
+            <span>Start OAuth</span>
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function ProviderDeleteDialog({
+  closeHref,
+  provider,
+}: {
+  closeHref: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-delete-title"
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <h2 id="provider-delete-title">Delete provider?</h2>
+        <p>This removes {provider.displayName} from the provider list.</p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
+          </a>
+          <form action="/api/providers" method="post">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="id" value={provider.id} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete provider</span>
+            </button>
+          </form>
+        </div>
+      </section>
+    </>
+  );
+}
+
 function ProviderKeyDeleteDialog({
   closeHref,
   keyPrefix,
+  providerApiKeyId,
   provider,
 }: {
   closeHref: string;
   keyPrefix: string;
+  providerApiKeyId: string;
   provider: ConsoleProvider;
 }) {
   return (
@@ -3395,10 +3678,14 @@ function ProviderKeyDeleteDialog({
             <FlatIcon name="cancel" />
             <span>Cancel</span>
           </a>
-          <button className="agent-delete-confirm" type="button">
-            <FlatIcon name="delete" />
-            <span>Delete</span>
-          </button>
+          <form action="/api/provider-keys" method="post">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete key</span>
+            </button>
+          </form>
         </div>
       </section>
     </>
@@ -3791,6 +4078,31 @@ function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
   return grouped;
 }
 
+function groupProviderOAuthByProviderId(
+  providerOAuthConnections: ConsoleProviderOAuthConnection[],
+) {
+  const grouped = new Map<string, ConsoleProviderOAuthConnection[]>();
+
+  for (const connection of providerOAuthConnections) {
+    const connections = grouped.get(connection.providerId) ?? [];
+    connections.push(connection);
+    grouped.set(connection.providerId, connections);
+  }
+
+  return grouped;
+}
+
+function readProviderCredentialCount(
+  provider: ConsoleProvider,
+  providerKeysByProviderId: Map<string, ProviderApiKeyMetadata[]>,
+  providerOAuthByProviderId: Map<string, ConsoleProviderOAuthConnection[]>,
+): number {
+  if (provider.providerType === "subscription") {
+    return providerOAuthByProviderId.get(provider.id)?.length ?? 0;
+  }
+  return providerKeysByProviderId.get(provider.id)?.length ?? 0;
+}
+
 function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider[] {
   return [...providers].sort((left, right) => {
     const leftOrder = getConsoleProviderOrder(left.providerKey);
@@ -3842,6 +4154,9 @@ function formatProviderType(provider: ConsoleProvider): string {
   if (provider.providerType === "local") {
     return "Local";
   }
+  if (provider.providerType === "subscription") {
+    return "Subscription";
+  }
   return provider.providerTemplateId ? "Template" : "API Key";
 }
 
@@ -3868,6 +4183,14 @@ function formatProviderLastConnection(
   }
 
   return formatRelativeDateTime(providerHealth.latestProbeAt);
+}
+
+function formatProviderApiKeyLastTest(providerKey: ProviderApiKeyMetadata): string {
+  return providerKey.lastTestedAt ? formatRelativeDateTime(providerKey.lastTestedAt) : "-";
+}
+
+function formatProviderOAuthLastTest(connection: ConsoleProviderOAuthConnection): string {
+  return connection.lastTestedAt ? formatRelativeDateTime(connection.lastTestedAt) : "-";
 }
 
 function formatRelativeDateTime(value: Date): string {

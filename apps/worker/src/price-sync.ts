@@ -1,7 +1,4 @@
-import {
-  type ConfigPublishClient,
-  createConfigPublisher,
-} from "@llmingress/config/config-publisher";
+import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   fetchProviderModelPrices,
   type ProviderModelPriceSource,

@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 
 export type JsonlRequestLogExportJobHandlerOptions = {
@@ -8,7 +8,7 @@ export type JsonlRequestLogExportJobHandlerOptions = {
   now?: () => Date;
 };
 
-export type JsonlRequestLogActivityRow = QueryResultRow & {
+export type JsonlRequestLogActivityRow = PostgresQueryResultRow & {
   agent_id: string;
   agent_key_prefix: string;
   agent_name: string;
@@ -39,7 +39,7 @@ export type JsonlRequestLogActivityRow = QueryResultRow & {
   virtual_model_name: string | null;
 };
 
-export type JsonlRequestLogUsageRow = QueryResultRow & {
+export type JsonlRequestLogUsageRow = PostgresQueryResultRow & {
   cached_input_tokens: number;
   input_tokens: number;
   output_tokens: number;
@@ -48,7 +48,7 @@ export type JsonlRequestLogUsageRow = QueryResultRow & {
   total_tokens: number;
 };
 
-export type JsonlRequestLogCostRow = QueryResultRow & {
+export type JsonlRequestLogCostRow = PostgresQueryResultRow & {
   cost_source: string;
   input_cost_usd: string | null;
   output_cost_usd: string | null;
@@ -57,7 +57,7 @@ export type JsonlRequestLogCostRow = QueryResultRow & {
   total_cost_usd: string | null;
 };
 
-export type JsonlRequestLogFallbackEventRow = QueryResultRow & {
+export type JsonlRequestLogFallbackEventRow = PostgresQueryResultRow & {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -97,7 +97,7 @@ export function createJsonlRequestLogExportJobHandler(
   return async (job) => {
     const startedAt = now();
     const payload = normalizeJsonlExportPayload(job.payload);
-    const client = new Client({ connectionString: options.databaseUrl });
+    const client = new PostgresClient({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
@@ -260,7 +260,7 @@ function normalizeJsonlExportPayload(rawPayload: unknown): NormalizedJsonlExport
 }
 
 async function readRequestLogRows(
-  client: Client,
+  client: PostgresClient,
   payload: NormalizedJsonlExportPayload,
 ): Promise<
   Array<{
@@ -384,7 +384,7 @@ async function readRequestLogRows(
 }
 
 async function readFallbackEventsByActivityId(
-  client: Client,
+  client: PostgresClient,
   activityIds: string[],
 ): Promise<Map<string, JsonlRequestLogFallbackEventRow[]>> {
   const eventsByActivityId = new Map<string, JsonlRequestLogFallbackEventRow[]>();

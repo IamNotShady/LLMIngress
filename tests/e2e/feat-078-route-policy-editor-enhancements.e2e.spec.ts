@@ -46,7 +46,7 @@ test("route policy editor supports strategy filters fallback warnings validation
           await expect.poll(() => countRoutePolicies(fixture)).toBe(0);
 
           const createResult = await postRoutePolicy(page, {
-            fallbackProviderModelIds: [seeded.anthropicClaude.id, seeded.fireworksMixtral.id],
+            fallbackProviderModelIds: [seeded.anthropicClaude.id, seeded.backupMixtral.id],
             primaryProviderModelIds: [seeded.openaiGpt.id],
             strategy: "cost_first",
             virtualModelId: seeded.virtualModelId,
@@ -71,14 +71,14 @@ test("route policy editor supports strategy filters fallback warnings validation
                 {
                   candidateOrder: 3,
                   isFallback: true,
-                  providerModelId: seeded.fireworksMixtral.id,
+                  providerModelId: seeded.backupMixtral.id,
                 },
               ],
               strategy: "cost_first",
             });
 
           await postRoutePolicyUpdate(page, {
-            fallbackProviderModelIds: [seeded.openaiGpt.id, seeded.fireworksMixtral.id],
+            fallbackProviderModelIds: [seeded.openaiGpt.id, seeded.backupMixtral.id],
             id: await readOnlyRoutePolicyId(fixture),
             primaryProviderModelIds: [seeded.anthropicClaude.id],
             strategy: "quality_first",
@@ -102,7 +102,7 @@ test("route policy editor supports strategy filters fallback warnings validation
                 {
                   candidateOrder: 3,
                   isFallback: true,
-                  providerModelId: seeded.fireworksMixtral.id,
+                  providerModelId: seeded.backupMixtral.id,
                 },
               ],
               strategy: "quality_first",
@@ -145,17 +145,17 @@ type RoutePolicyState = {
 
 async function seedRouteEditorData(fixture: Fixture): Promise<{
   anthropicClaude: SeededModel;
-  fireworksMixtral: SeededModel;
+  backupMixtral: SeededModel;
   openaiGpt: SeededModel;
   virtualModelId: string;
 }> {
   const virtualModelId = randomUUID();
   const openaiProviderId = randomUUID();
   const anthropicProviderId = randomUUID();
-  const fireworksProviderId = randomUUID();
+  const backupProviderId = randomUUID();
   const openaiGptId = randomUUID();
   const anthropicClaudeId = randomUUID();
-  const fireworksMixtralId = randomUUID();
+  const backupMixtralId = randomUUID();
 
   await fixture.query(
     `
@@ -169,9 +169,9 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
       insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
       values ($1, 'api_key', 'openai', 'OpenAI', 'https://api.openai.com/v1', true),
              ($2, 'api_key', 'anthropic', 'Anthropic', 'https://api.anthropic.com/v1', true),
-             ($3, 'api_key', 'fireworks', 'Fireworks', 'https://api.fireworks.ai/inference/v1', true)
+             ($3, 'api_key', 'backupai', 'BackupAI', 'https://backup.example.test/v1', true)
     `,
-    [openaiProviderId, anthropicProviderId, fireworksProviderId],
+    [openaiProviderId, anthropicProviderId, backupProviderId],
   );
   await fixture.query(
     `
@@ -185,8 +185,8 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
       openaiProviderId,
       anthropicClaudeId,
       anthropicProviderId,
-      fireworksMixtralId,
-      fireworksProviderId,
+      backupMixtralId,
+      backupProviderId,
     ],
   );
   await fixture.query(
@@ -208,10 +208,10 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
       optionLabel: "Anthropic - Claude Sonnet 4 (claude-sonnet-4)",
       selectorLabel: "Anthropic - Claude Sonnet 4 (claude-sonnet-4) - Unknown price",
     },
-    fireworksMixtral: {
-      id: fireworksMixtralId,
-      optionLabel: "Fireworks - Mixtral 8x7B (mixtral-8x7b)",
-      selectorLabel: "Fireworks - Mixtral 8x7B (mixtral-8x7b) - Unknown price",
+    backupMixtral: {
+      id: backupMixtralId,
+      optionLabel: "BackupAI - Mixtral 8x7B (mixtral-8x7b)",
+      selectorLabel: "BackupAI - Mixtral 8x7B (mixtral-8x7b) - Unknown price",
     },
     openaiGpt: {
       id: openaiGptId,

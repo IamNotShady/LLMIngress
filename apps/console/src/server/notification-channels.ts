@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 
 export type NotificationChannelType = "email" | "webhook";
 
@@ -38,7 +38,7 @@ export type ConsoleNotificationChannel = NormalizedNotificationChannelFormInput 
   updatedAt: Date;
 };
 
-type NotificationChannelRow = QueryResultRow & {
+type NotificationChannelRow = PostgresQueryResultRow & {
   channel_type: NotificationChannelType;
   config: unknown;
   created_at: Date;
@@ -210,9 +210,9 @@ function requireRow<T>(row: T | undefined): T {
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

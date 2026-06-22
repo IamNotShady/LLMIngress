@@ -1,6 +1,6 @@
 import { unlink } from "node:fs/promises";
 import { isAbsolute } from "node:path";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 
 export type RetentionCleanupPayload = {
@@ -32,14 +32,14 @@ type CleanupExpiredDataOptions = CreateRetentionCleanupJobHandlerOptions & {
   payload: unknown;
 };
 
-type RetentionCleanupRow = QueryResultRow & {
+type RetentionCleanupRow = PostgresQueryResultRow & {
   deleted_export_task_count: number;
   deleted_request_activity_count: number;
   preserved_budget_period_count: number;
   preserved_rate_limit_window_count: number;
 };
 
-type ExpiredExportTaskRow = QueryResultRow & {
+type ExpiredExportTaskRow = PostgresQueryResultRow & {
   id: string;
   output_path: string;
 };
@@ -58,7 +58,7 @@ export async function cleanupExpiredOperationalData(
   options: CleanupExpiredDataOptions,
 ): Promise<RetentionCleanupResult> {
   const parsedPayload = readRetentionCleanupPayload(options.payload, options.now?.() ?? new Date());
-  const client = new Client({ connectionString: options.databaseUrl });
+  const client = new PostgresClient({ connectionString: options.databaseUrl });
   await client.connect();
 
   try {

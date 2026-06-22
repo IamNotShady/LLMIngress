@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { ManualPriceOverride, SyncedPriceSnapshot } from "@llmingress/billing/price-registry";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
 
 export type AgentLimitType = "budget" | "concurrency" | "rpm" | "token" | "tpm";
 export type AgentLimitEnforcementPolicy = "block" | "warn_only";
@@ -39,7 +39,7 @@ export type ConsoleAgentLimit = AgentLimitRuleInput & {
   id: string;
 };
 
-type AgentLimitRow = QueryResultRow & {
+type AgentLimitRow = PostgresQueryResultRow & {
   alert_threshold: string | null;
   agent_id: string;
   enabled: boolean;
@@ -52,7 +52,7 @@ type AgentLimitRow = QueryResultRow & {
   unit: AgentLimitUnit;
 };
 
-type AccessibleRouteCandidatePriceRow = QueryResultRow & {
+type AccessibleRouteCandidatePriceRow = PostgresQueryResultRow & {
   candidate_order: number;
   is_fallback: boolean;
   model_display_name: string;
@@ -450,9 +450,9 @@ function formatNumber(value: number): string {
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

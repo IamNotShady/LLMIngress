@@ -1,13 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
-import { Client, type QueryResultRow } from "pg";
 
-export type ProviderApiKeyTestStatus = "failed" | "healthy" | "untested";
+export type ProviderApiKeyTestStatus =
+  | "auth_failed"
+  | "healthy"
+  | "network_error"
+  | "quota_limited"
+  | "unknown"
+  | "unhealthy";
 
 export type ProviderApiKeyMetadata = {
   createdAt: Date;
@@ -33,7 +39,7 @@ export type StoredProviderApiKey = {
   keyPrefix: string;
 };
 
-export type ProviderApiKeyStorageRow = QueryResultRow & {
+export type ProviderApiKeyStorageRow = PostgresQueryResultRow & {
   created_at: Date;
   enabled: boolean;
   id: string;
@@ -57,6 +63,8 @@ type ProviderApiKeySaveResult = {
 };
 
 const providerKeyPrefixLength = 8;
+const providerApiKeyLabelMaxLength = 100;
+const providerApiKeyPriorityMax = 100;
 
 export function prepareProviderApiKeyForStorage(input: {
   masterKeySource: MasterKeySource;
@@ -90,6 +98,17 @@ export function toProviderApiKeyMetadata(row: ProviderApiKeyStorageRow): Provide
     rotatedAt: row.rotated_at ? new Date(row.rotated_at) : null,
     updatedAt: new Date(row.updated_at),
   };
+}
+
+export function formatProviderApiKeyTestStatusZhLabel(status: ProviderApiKeyTestStatus): string {
+  return {
+    auth_failed: "鉴权失败",
+    healthy: "可用",
+    network_error: "网络错误",
+    quota_limited: "额度受限",
+    unhealthy: "当前不可用",
+    unknown: "未知",
+  }[status];
 }
 
 export function readConsoleMasterKeySource(
@@ -154,65 +173,14 @@ export async function saveProviderApiKey(input: {
     plaintext: input.plaintext,
   });
   const rowId = randomUUID();
-  let action: ProviderApiKeySaveResult["action"] | undefined;
   let metadata: ProviderApiKeyMetadata | undefined;
 
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
     description: `Save provider API key ${input.providerId}`,
-    changes: [{ table: "provider_api_keys", recordId: input.providerId }],
+    changes: [{ table: "provider_api_keys", recordId: rowId }],
     write: async (client) => {
-      const existing = await client.query<{ id: string }>(
-        "select id::text from provider_api_keys where provider_id = $1 for update",
-        [input.providerId],
-      );
-      const existingId = existing.rows[0]?.id;
-
-      if (existingId) {
-        const result = await client.query<ProviderApiKeyStorageRow>(
-          `
-            update provider_api_keys
-            set key_prefix = $2,
-                encrypted_key = $3,
-                key_id = $4,
-                label = $5,
-                enabled = $6,
-                priority = $7,
-                rotated_at = now(),
-                updated_at = now()
-            where id = $1
-            returning id::text,
-                      provider_id::text,
-                      key_prefix,
-                      key_id,
-                      label,
-                      enabled,
-                      priority,
-                      last_used_at,
-                      last_tested_at,
-                      last_test_status,
-                      last_test_error_code,
-                      last_test_error_message,
-                      created_at,
-                      rotated_at,
-                      updated_at
-          `,
-          [
-            existingId,
-            stored.keyPrefix,
-            JSON.stringify(stored.encryptedKey),
-            stored.keyId,
-            normalizeOptionalLabel(input.label),
-            input.enabled ?? true,
-            normalizePriority(input.priority),
-          ],
-        );
-        action = "rotated";
-        metadata = toProviderApiKeyMetadata(requireProviderApiKeyRow(result.rows[0]));
-        return;
-      }
-
       const result = await client.query<ProviderApiKeyStorageRow>(
         `
           insert into provider_api_keys (
@@ -253,16 +221,15 @@ export async function saveProviderApiKey(input: {
           normalizePriority(input.priority),
         ],
       );
-      action = "created";
       metadata = toProviderApiKeyMetadata(requireProviderApiKeyRow(result.rows[0]));
     },
   });
 
-  if (!action || !metadata) {
+  if (!metadata) {
     throw new Error("Provider API key was not saved.");
   }
 
-  return { action, metadata };
+  return { action: "created", metadata };
 }
 
 export async function updateProviderApiKeyMetadata(input: {
@@ -320,6 +287,35 @@ export async function updateProviderApiKeyMetadata(input: {
   return metadata;
 }
 
+export async function deleteProviderApiKey(input: {
+  databaseUrl: string;
+  providerApiKeyId: string;
+}): Promise<{ providerId: string }> {
+  let providerId: string | undefined;
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `Delete provider API key ${input.providerApiKeyId}`,
+    changes: [{ table: "provider_api_keys", recordId: input.providerApiKeyId }],
+    write: async (client) => {
+      const result = await client.query<{ provider_id: string }>(
+        `
+          delete from provider_api_keys
+          where id = $1
+          returning provider_id::text
+        `,
+        [input.providerApiKeyId],
+      );
+      providerId = result.rows[0]?.provider_id;
+    },
+  });
+
+  if (!providerId) {
+    throw new Error("Provider API key was not found.");
+  }
+  return { providerId };
+}
+
 function normalizeProviderApiKeyPlaintext(value: string): string {
   const plaintext = value.trim();
   if (!plaintext) {
@@ -337,6 +333,9 @@ function buildProviderKeyPrefix(plaintext: string): string {
 
 function normalizeOptionalLabel(value: string | null | undefined): string | null {
   const label = value?.trim();
+  if (label && label.length > providerApiKeyLabelMaxLength) {
+    throw new Error("Provider API key label must be at most 100 characters.");
+  }
   return label || null;
 }
 
@@ -344,8 +343,8 @@ function normalizePriority(value: number | undefined): number {
   if (value === undefined) {
     return 100;
   }
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error("Provider API key priority must be a non-negative integer.");
+  if (!Number.isInteger(value) || value < 0 || value > providerApiKeyPriorityMax) {
+    throw new Error("Provider API key priority must be between 0 and 100.");
   }
   return value;
 }
@@ -361,9 +360,9 @@ function requireProviderApiKeyRow(
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

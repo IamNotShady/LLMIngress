@@ -148,7 +148,7 @@
       "id": "feat-017",
       "name": "Provider Key Secure Storage",
       "description": "When a Provider API key is created or rotated, plaintext is shown once, only ciphertext is stored, and later reads expose prefix and metadata without plaintext.",
-      "verification": "pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts && pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once on create and rotate ciphertext stored metadata only after reload'",
+      "verification": "pnpm exec vitest run tests/features/feat-017-provider-key-storage.unit.test.ts && pnpm test:e2e tests/e2e/feat-017-provider-key-storage.e2e.spec.ts --grep 'provider key plaintext once and repeated saves add multiple stored keys'",
       "dependencies": ["feat-010", "feat-016"],
       "status": "passing",
       "evidence": "2026-06-13: TDD red observed for feat-017 unit tests because provider key storage helpers and 0006 migration were missing, and E2E because Console had no Provider API key storage UI. Added provider_api_keys ciphertext storage migration, provider key encryption/metadata helpers, authenticated Console provider-key save/rotate route with one-time plaintext response page, dashboard prefix/created/rotated metadata, Console master key propagation, and Next-compatible security package subpath exports. Review fix for P2+ only: rejected provider API keys shorter than the stored prefix so later metadata cannot expose the full plaintext. Verification passed — feat-017 unit tests 3 passed, real Chromium Console E2E 1 passed for create and rotate, pnpm run verify passed, full pnpm test:e2e passed 17/17, and verify:features passed all 16 prior passing features before marking feat-017 passing."
@@ -1233,6 +1233,15 @@
       ],
       "status": "passing",
       "evidence": "2026-06-21: TDD red observed first: feat-114 unit failed because migration 0040 was missing and publisher still wrote config_change_events; feat-114 E2E failed because config_change_events still existed after migrations. Added migration 0040_merge_config_changes_into_versions with config_versions.changes JSON array, backfilled old change events into changes, enforced array shape, and dropped config_change_events. Config publisher now writes changes JSON directly into config_versions while preserving ConfigPublishResult and NOTIFY payload shape. Removed config_change_events from backup coverage and architecture docs; updated legacy feat-008/011/015/016/023/030/031/058/073/096/100/110 regressions to read config_versions.changes. Verification passed: feat-114 unit, feat-114 real PostgreSQL E2E, related feat-008/011/096 unit checks, related feat-008/011/015/016/023/030/031/058/073/096/100/110 E2Es, pnpm run db:migrate:check, pnpm run typecheck, pnpm run verify, and pnpm run verify:features re-verified all 114 passing features."
+    },
+    {
+      "id": "feat-115",
+      "name": "Provider Subscription OAuth",
+      "description": "Providers support provider_type subscription with multiple OAuth connections in provider_oauth. OpenAI Codex and Claude Code subscription providers can be created from Console, connected through PKCE OAuth, refreshed for model discovery, checked per connection by Worker, and routed only through their supported Responses or Messages protocols.",
+      "verification": "pnpm exec vitest run tests/features/feat-115-provider-subscription-oauth.unit.test.ts tests/features/feat-024-connectivity-check.unit.test.ts tests/features/feat-062-provider-template-selector.unit.test.ts tests/features/feat-016-provider-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-024-connectivity-check.e2e.spec.ts --grep 'provider connectivity'",
+      "dependencies": ["feat-016", "feat-024", "feat-062", "feat-086"],
+      "status": "passing",
+      "evidence": "2026-06-22: Implemented subscription OAuth schema, provider templates, Console segmented create tabs and OAuth connection flow, Worker model refresh/connectivity aggregation for provider_oauth, and Gateway Responses/Messages subscription routing. Fresh feature verification passed: pnpm exec vitest run tests/features/feat-115-provider-subscription-oauth.unit.test.ts tests/features/feat-024-connectivity-check.unit.test.ts tests/features/feat-062-provider-template-selector.unit.test.ts tests/features/feat-016-provider-crud.unit.test.ts && pnpm test:e2e tests/e2e/feat-024-connectivity-check.e2e.spec.ts --grep 'provider connectivity'. Follow-up repaired legacy E2E drift for current Console UI and provider health taxonomy. Full verification passed: pnpm run verify:features re-verified all 115 passing features, and pnpm run verify passed."
     }
   ]
 }

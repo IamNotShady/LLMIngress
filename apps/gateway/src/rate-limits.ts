@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 
 export type GatewayRateLimitType = "concurrency" | "rpm" | "tpm";
@@ -33,14 +33,14 @@ export type GatewayConcurrencyLease = {
   window: WindowBoundary;
 };
 
-type AgentLimitRow = QueryResultRow & {
+type AgentLimitRow = PostgresQueryResultRow & {
   enforcement_policy: GatewayRateLimitEnforcementPolicy;
   limit_type: GatewayRateLimitType;
   limit_value: string;
   manual_bypass: boolean;
 };
 
-type RateLimitWindowRow = QueryResultRow & {
+type RateLimitWindowRow = PostgresQueryResultRow & {
   active_count: number;
   request_count: number;
   token_count: number;
@@ -57,7 +57,7 @@ export async function enforceGatewayRateLimits(input: {
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayRateLimitDecision> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -150,7 +150,7 @@ export async function releaseGatewayConcurrency(input: {
     return;
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -235,7 +235,7 @@ export function createGatewayRateLimitErrorBody(input: {
 }
 
 async function readEnabledGatewayRateLimits(
-  client: Client,
+  client: PostgresClient,
   agentApiKeyId: string,
 ): Promise<
   Array<{
@@ -273,7 +273,7 @@ async function readEnabledGatewayRateLimits(
 }
 
 async function lockRateLimitWindow(
-  client: Client,
+  client: PostgresClient,
   input: {
     agentApiKeyId: string;
     limitType: GatewayRateLimitType;
@@ -327,7 +327,7 @@ async function lockRateLimitWindow(
 }
 
 async function incrementRateLimitWindow(
-  client: Client,
+  client: PostgresClient,
   input: {
     agentApiKeyId: string;
     increment: number;

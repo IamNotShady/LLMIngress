@@ -39,7 +39,7 @@ test("console shows provider model health latest probe failures and stale status
           await expect(
             providerCard.getByRole("heading", { name: "Health Console Provider" }),
           ).toBeVisible();
-          await expect(providerCard.getByText("健康")).toBeVisible();
+          await expect(providerCard.getByText("可用")).toBeVisible();
 
           await openRow(page, "Health Console Provider");
           const selectedProviderDetails = page.getByLabel("Selected provider details");
@@ -48,7 +48,7 @@ test("console shows provider model health latest probe failures and stale status
               name: "Provider 详情 - Health Console Provider",
             }),
           ).toBeVisible();
-          await expect(selectedProviderDetails).toContainText("健康");
+          await expect(selectedProviderDetails).toContainText("可用");
           await expect(
             selectedProviderDetails.locator(".provider-detail-stats div", { hasText: "最近连接" }),
           ).not.toContainText("-");
@@ -136,7 +136,7 @@ async function seedProviderHealthConsoleData(fixture: Fixture): Promise<void> {
         observed_at
       )
       values ($1, $2, null, 'manual', 'healthy', now() - interval '2 minutes'),
-             ($3, $2, $4, 'request_path', 'failed', now() - interval '30 minutes')
+             ($3, $2, $4, 'request_path', 'network_error', now() - interval '30 minutes')
     `,
     [providerEventId, providerId, modelEventId, providerModelId],
   );

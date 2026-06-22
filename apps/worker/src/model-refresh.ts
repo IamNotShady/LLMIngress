@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { type ConfigChange, createConfigPublisher } from "@llmingress/config";
-import { type PostgresQueryClient, withPostgresClient } from "@llmingress/db/client";
+import { type ConfigChange, createConfigPublisher } from "@llmingress/db/config-versions";
+import {
+  completeProviderOAuthConnection,
+  isRemovedProviderKey,
+  type PostgresQueryClient,
+  readEnabledCompletedProviderOAuthConnections,
+  withPostgresClient,
+} from "@llmingress/db/providers";
 import {
   fetchListedProviderModels as fetchProviderModelList,
   type ListedProviderModel,
 } from "@llmingress/provider/model-list";
+import { type ProviderOAuthTokenBlob, refreshProviderOAuthToken } from "@llmingress/provider/oauth";
 import {
   fetchProviderModelPrices,
   fetchProviderModelRegistryEntries,
@@ -12,6 +19,7 @@ import {
   type ProviderModelRegistryEntry,
   type ProviderModelSyncedPrice,
 } from "@llmingress/provider/price-source";
+import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
@@ -44,6 +52,7 @@ export type ProviderModelRefreshPlan = {
 };
 
 export type ProviderModelRefreshResult = {
+  chainedConnectivityCheckJobId: string | null;
   chainedPriceSyncJobId: string | null;
   fetchedModelCount: number;
   insertedModelCount: number;
@@ -59,6 +68,11 @@ export type ChainedPriceSyncJobPayload = {
   modelIds: string[];
   providerId: string;
   providerKey: string;
+  source: "model_refresh";
+};
+
+export type ChainedConnectivityCheckJobPayload = {
+  providerId: string;
   source: "model_refresh";
 };
 
@@ -84,7 +98,7 @@ type ProviderRow = {
   display_name: string;
   id: string;
   provider_key: string;
-  provider_type: "api_key" | "local";
+  provider_type: "api_key" | "local" | "subscription";
 };
 
 type ProviderModelRow = {
@@ -379,7 +393,15 @@ export async function refreshProviderModels(
           masterKeySource: options.masterKeySource ?? readWorkerMasterKeySource(),
           providerId: provider.id,
         })
-      : null;
+      : provider.provider_type === "subscription"
+        ? await readProviderOAuthAccessToken({
+            databaseUrl: options.databaseUrl,
+            fetch: fetchImpl,
+            masterKeySource: options.masterKeySource ?? readWorkerMasterKeySource(),
+            providerId: provider.id,
+            providerKey: provider.provider_key,
+          })
+        : null;
   const rawListedModels = await fetchProviderModelList({
     apiKey,
     baseUrl: provider.base_url as string,
@@ -408,9 +430,15 @@ export async function refreshProviderModels(
   });
   const existingModels = await readExistingProviderModels(options.databaseUrl, provider.id);
   const plan = planProviderModelRefresh({ existingModels, listedModels });
+  let chainedConnectivityCheckJobId: string | null = null;
   let chainedPriceSyncJobId: string | null = null;
   const writePlan = async (client: QueryClient) => {
     await applyProviderModelRefreshPlan(client, provider.id, plan);
+    if (listedModels.length > 0) {
+      chainedConnectivityCheckJobId = await enqueueChainedConnectivityCheckJob(client, {
+        providerId: provider.id,
+      });
+    }
     chainedPriceSyncJobId = await enqueueChainedPriceSyncJob(client, {
       listedModels,
       providerId: provider.id,
@@ -442,6 +470,7 @@ export async function refreshProviderModels(
   }
 
   return {
+    chainedConnectivityCheckJobId,
     chainedPriceSyncJobId,
     fetchedModelCount: rawListedModels.length,
     insertedModelCount: plan.insertModels.length,
@@ -469,6 +498,64 @@ export function buildChainedPriceSyncJobPayload(input: {
 
 export function isUnfinishedChainedPriceSyncStatus(status: string): boolean {
   return status === "pending" || status === "running";
+}
+
+export function buildChainedConnectivityCheckJobPayload(input: {
+  providerId: string;
+}): ChainedConnectivityCheckJobPayload {
+  return {
+    providerId: input.providerId,
+    source: "model_refresh",
+  };
+}
+
+export function isUnfinishedChainedConnectivityCheckStatus(status: string): boolean {
+  return status === "pending" || status === "running";
+}
+
+async function enqueueChainedConnectivityCheckJob(
+  client: QueryClient,
+  input: {
+    providerId: string;
+  },
+): Promise<string> {
+  await client.query("select pg_advisory_xact_lock(hashtext($1))", [
+    `model_refresh_connectivity_check:${input.providerId}`,
+  ]);
+
+  const existing = await client.query<{ id: string; status: string }>(
+    `
+      select id::text, status
+      from jobs
+      where job_type = 'provider_connectivity_check'
+        and trigger = 'system'
+        and payload->>'source' = 'model_refresh'
+        and payload->>'providerId' = $1
+        and status in ('pending', 'running')
+      order by created_at
+      limit 1
+      for update
+    `,
+    [input.providerId],
+  );
+  const existingJob = existing.rows.find((row) =>
+    isUnfinishedChainedConnectivityCheckStatus(row.status),
+  );
+  if (existingJob) {
+    await notifyJobCreated(client, existingJob.id);
+    return existingJob.id;
+  }
+
+  const jobId = randomUUID();
+  await client.query(
+    `
+      insert into jobs (id, job_type, status, trigger, payload, max_attempts)
+      values ($1, 'provider_connectivity_check', 'pending', 'system', $2::jsonb, 1)
+    `,
+    [jobId, JSON.stringify(buildChainedConnectivityCheckJobPayload(input))],
+  );
+  await notifyJobCreated(client, jobId);
+  return jobId;
 }
 
 async function enqueueChainedPriceSyncJob(
@@ -537,6 +624,9 @@ async function readProvider(databaseUrl: string, providerId: string): Promise<Pr
     const provider = result.rows[0];
     if (!provider) {
       throw new Error("Provider was not found.");
+    }
+    if (isRemovedProviderKey(provider.provider_key)) {
+      throw new Error("Provider is no longer supported.");
     }
     if (!provider.base_url) {
       throw new Error("Provider base URL is required for model refresh.");
@@ -732,6 +822,50 @@ async function readProviderApiKey(input: {
   return createSecretEncryption(input.masterKeySource).decrypt(encrypted);
 }
 
+async function readProviderOAuthAccessToken(input: {
+  databaseUrl: string;
+  fetch: typeof globalThis.fetch;
+  masterKeySource: MasterKeySource;
+  providerId: string;
+  providerKey: string;
+}): Promise<string> {
+  if (!isSubscriptionProviderKey(input.providerKey)) {
+    throw new Error("Provider does not support OAuth model refresh.");
+  }
+  const connections = await readEnabledCompletedProviderOAuthConnections({
+    databaseUrl: input.databaseUrl,
+    providerId: input.providerId,
+  });
+  const connection = connections[0];
+  if (!connection) {
+    throw new Error("Provider OAuth connection was not found.");
+  }
+
+  const encryption = createSecretEncryption(input.masterKeySource);
+  const token = readProviderOAuthTokenBlob(
+    encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
+  );
+  if (!isProviderOAuthTokenExpired(token)) {
+    return token.accessToken;
+  }
+  if (!token.refreshToken) {
+    throw new Error("Provider OAuth token expired and has no refresh token.");
+  }
+
+  const refreshed = await refreshProviderOAuthToken({
+    fetch: input.fetch,
+    providerKey: input.providerKey,
+    refreshToken: token.refreshToken,
+  });
+  await completeProviderOAuthConnection({
+    databaseUrl: input.databaseUrl,
+    encryptedToken: encryption.encrypt(JSON.stringify(refreshed)),
+    providerOAuthId: connection.id,
+    tokenExpiresAt: refreshed.expiresAt === null ? null : new Date(refreshed.expiresAt),
+  });
+  return refreshed.accessToken;
+}
+
 function readWorkerMasterKeySource(
   env: Record<string, string | undefined> = process.env,
 ): MasterKeySource {
@@ -761,7 +895,40 @@ function readEncryptedSecret(value: unknown): EncryptedSecret {
     return value as EncryptedSecret;
   }
 
-  throw new Error("Stored provider API key is not a valid encrypted secret.");
+  throw new Error("Stored provider credential is not a valid encrypted secret.");
+}
+
+function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
+  try {
+    const parsed = JSON.parse(value);
+    if (isRecord(parsed) && typeof parsed.accessToken === "string" && parsed.accessToken.trim()) {
+      return {
+        accessToken: parsed.accessToken,
+        expiresAt:
+          typeof parsed.expiresAt === "number" && Number.isFinite(parsed.expiresAt)
+            ? parsed.expiresAt
+            : null,
+        refreshToken:
+          typeof parsed.refreshToken === "string" && parsed.refreshToken.trim()
+            ? parsed.refreshToken
+            : null,
+        scopes: Array.isArray(parsed.scopes)
+          ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
+          : [],
+        tokenType:
+          typeof parsed.tokenType === "string" && parsed.tokenType.trim()
+            ? parsed.tokenType
+            : "Bearer",
+      };
+    }
+  } catch {
+    // handled by final throw
+  }
+  throw new Error("Stored provider OAuth token was not recognized.");
+}
+
+function isProviderOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
+  return token.expiresAt !== null && token.expiresAt <= Date.now() + 60_000;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

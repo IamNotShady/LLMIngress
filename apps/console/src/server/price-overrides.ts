@@ -1,8 +1,8 @@
 import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
 
-type PriceOverrideRow = QueryResultRow & {
+type PriceOverrideRow = PostgresQueryResultRow & {
   id: string;
   cached_input_usd_per_million_tokens: string | null;
   input_usd_per_million_tokens: string;
@@ -132,9 +132,9 @@ function normalizeProviderKey(providerKey: string): string {
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

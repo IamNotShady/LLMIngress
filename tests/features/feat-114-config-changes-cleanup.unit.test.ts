@@ -23,7 +23,7 @@ describe("feat-114 config change cleanup", () => {
 
   it("removes config_change_events publisher writes and backup coverage", () => {
     const publisherSource = readFileSync(
-      resolve(root, "packages/config/src/config-publisher.ts"),
+      resolve(root, "packages/db/src/config-versions.ts"),
       "utf8",
     );
     const backupSource = readFileSync(resolve(root, "apps/worker/src/backup.ts"), "utf8");

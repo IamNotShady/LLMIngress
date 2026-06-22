@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 import { queueNotificationEvent } from "./notification-dispatcher.js";
 
@@ -32,7 +32,7 @@ type EvaluateRateLimitAlertsOptions = CreateRateLimitAlertsJobHandlerOptions & {
   payload: unknown;
 };
 
-type RateLimitAlertCandidateRow = QueryResultRow & {
+type RateLimitAlertCandidateRow = PostgresQueryResultRow & {
   agent_key_prefix: string;
   agent_id: string;
   agent_name: string;
@@ -200,7 +200,7 @@ async function countRateLimitBlocks(input: {
   windowEnd: Date;
   windowStart: Date;
 }): Promise<number> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -231,7 +231,7 @@ async function readRateLimitAlertCandidates(input: {
   windowEnd: Date;
   windowStart: Date;
 }): Promise<RateLimitAlertCandidate[]> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -308,7 +308,7 @@ function rowToRateLimitAlertCandidate(row: RateLimitAlertCandidateRow): RateLimi
 }
 
 async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -325,7 +325,7 @@ async function rateLimitAlertAlreadyQueued(
   databaseUrl: string,
   alertKey: string,
 ): Promise<boolean> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

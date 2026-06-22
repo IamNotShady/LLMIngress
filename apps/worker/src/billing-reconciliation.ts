@@ -5,7 +5,7 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 
 export type BillingReconciliationJobHandlerOptions = {
@@ -60,7 +60,7 @@ type NormalizedBillingReconciliationPayload = {
   requestIds: string[];
 };
 
-type BillingReconciliationCandidateRow = QueryResultRow & {
+type BillingReconciliationCandidateRow = PostgresQueryResultRow & {
   activity_id: string;
   baseline_cost_usd: string | null;
   cached_input_tokens: number;
@@ -103,7 +103,7 @@ export function createBillingReconciliationJobHandler(
   return async (job) => {
     const observedAt = now();
     const payload = normalizeBillingReconciliationPayload(job.payload);
-    const client = new Client({ connectionString: options.databaseUrl });
+    const client = new PostgresClient({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
@@ -261,7 +261,7 @@ function normalizeProviderCost(rawValue: unknown): {
 }
 
 async function reconcileCandidateRequests(
-  client: Client,
+  client: PostgresClient,
   input: {
     observedAt: Date;
     payload: NormalizedBillingReconciliationPayload;
@@ -315,7 +315,7 @@ async function reconcileCandidateRequests(
 }
 
 async function readReconciliationCandidates(
-  client: Client,
+  client: PostgresClient,
   requestIds: string[],
 ): Promise<BillingReconciliationCandidateRow[]> {
   const result = await client.query<BillingReconciliationCandidateRow>(
@@ -371,7 +371,7 @@ async function readReconciliationCandidates(
 }
 
 async function updateReconciledCostAndSavings(
-  client: Client,
+  client: PostgresClient,
   input: {
     candidate: BillingReconciliationCandidateRow;
     observedAt: Date;

@@ -7,6 +7,13 @@ export type ListedProviderModel = {
   supportsTools?: boolean | null;
 };
 
+import {
+  buildClaudeCodeModelListUrl,
+  buildClaudeCodeSubscriptionHeaders,
+  buildCodexModelListUrl,
+  buildCodexSubscriptionHeaders,
+} from "./subscription.js";
+
 export async function fetchListedProviderModels(input: {
   apiKey?: string | null;
   baseUrl: string;
@@ -22,7 +29,7 @@ export async function fetchListedProviderModels(input: {
     throw new Error(`Provider model list request failed with status ${response.status}.`);
   }
 
-  return parseProviderModelList(body);
+  return normalizeProviderModelList(parseProviderModelList(body), input.providerKey);
 }
 
 export function buildProviderModelListRequest(input: {
@@ -35,6 +42,22 @@ export function buildProviderModelListRequest(input: {
 } {
   const init: RequestInit = { method: "GET" };
   const providerKey = input.providerKey?.toLowerCase();
+
+  if (providerKey === "openai_codex" && input.apiKey) {
+    init.headers = buildCodexSubscriptionHeaders(input.apiKey);
+    return {
+      init,
+      url: buildCodexModelListUrl(input.baseUrl),
+    };
+  }
+
+  if (providerKey === "claude_code" && input.apiKey) {
+    init.headers = buildClaudeCodeSubscriptionHeaders(input.apiKey);
+    return {
+      init,
+      url: buildClaudeCodeModelListUrl(input.baseUrl),
+    };
+  }
 
   if (providerKey === "anthropic") {
     init.headers = input.apiKey
@@ -86,6 +109,22 @@ export function parseProviderModelList(body: unknown): ListedProviderModel[] {
   if (isRecord(body) && Array.isArray(body.models)) {
     return body.models
       .map((entry): ListedProviderModel | null => {
+        if (isRecord(entry) && typeof entry.slug === "string" && entry.slug.trim()) {
+          if (typeof entry.visibility === "string" && entry.visibility !== "list") {
+            return null;
+          }
+          return {
+            capabilityMetadata: { code: true },
+            contextWindow: readProviderResponseContextWindow(entry) ?? 200000,
+            displayName:
+              typeof entry.display_name === "string" && entry.display_name.trim()
+                ? entry.display_name
+                : entry.slug,
+            modelId: entry.slug,
+            supportsStreaming: true,
+            supportsTools: true,
+          };
+        }
         if (isRecord(entry) && typeof entry.name === "string" && entry.name.trim()) {
           return {
             displayName: entry.name,
@@ -115,6 +154,25 @@ function buildModelsUrl(baseUrl: string): string {
   const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
   url.pathname = `${path}/models`.replaceAll(/\/{2,}/g, "/");
   return url.toString();
+}
+
+function normalizeProviderModelList(
+  models: ListedProviderModel[],
+  providerKey?: string | null,
+): ListedProviderModel[] {
+  if (providerKey?.trim().toLowerCase() !== "google") {
+    return models;
+  }
+
+  return models.map((model) => ({
+    ...model,
+    displayName: stripGoogleModelPrefix(model.displayName),
+    modelId: stripGoogleModelPrefix(model.modelId),
+  }));
+}
+
+function stripGoogleModelPrefix(value: string): string {
+  return value.startsWith("models/") ? value.slice("models/".length) : value;
 }
 
 async function readResponseBody(response: Response): Promise<unknown> {

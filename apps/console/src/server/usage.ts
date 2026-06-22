@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/activity";
 
 export type ConsoleUsageWindow = "24h" | "7d" | "30d";
 
@@ -40,7 +40,7 @@ export type ConsoleUsageSummary = {
   window: ConsoleUsageWindow;
 };
 
-type UsageSummaryRow = QueryResultRow & {
+type UsageSummaryRow = PostgresQueryResultRow & {
   failure_count: number;
   input_tokens: string | null;
   output_tokens: string | null;
@@ -50,7 +50,7 @@ type UsageSummaryRow = QueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageBreakdownRow = QueryResultRow & {
+type UsageBreakdownRow = PostgresQueryResultRow & {
   failure_count: number;
   model_id: string | null;
   model_label: string | null;
@@ -62,7 +62,7 @@ type UsageBreakdownRow = QueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageDimensionBreakdownRow = QueryResultRow & {
+type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
   failure_count: number;
   id: string | null;
   label: string | null;
@@ -85,7 +85,7 @@ export async function getConsoleUsageSummary(input: {
   window: ConsoleUsageWindow;
 }): Promise<ConsoleUsageSummary> {
   const windowStart = getUsageWindowStart(input.now ?? new Date(), input.window);
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {

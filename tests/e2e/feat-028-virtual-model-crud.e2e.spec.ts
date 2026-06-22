@@ -31,7 +31,7 @@ test("virtual model crud rejects duplicate name and blocks referenced delete", a
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/models`);
 
-          await page.getByRole("link", { name: "+ 创建 Virtual Model" }).click();
+          await page.getByRole("link", { name: "创建 Virtual Model" }).click();
           await expect(page.getByRole("dialog", { name: "创建 Virtual Model" })).toBeVisible();
           await page.getByRole("textbox", { name: "Virtual Model 名称" }).fill("Coding Fast");
           await page.getByRole("textbox", { name: "描述" }).fill("Coding Fast");

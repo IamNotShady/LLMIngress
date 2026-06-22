@@ -2,20 +2,23 @@ import type { ProviderType } from "./providers";
 
 export type OpenAICompatibleProviderTemplateId =
   | "deepseek"
-  | "fireworks"
-  | "groq"
   | "minimax"
-  | "mistral"
   | "moonshot"
   | "qwen"
   | "xai"
   | "zai";
 export type OpenRouterProviderTemplateId = "openrouter";
-export type GeminiProviderTemplateId = "gemini";
+export type GoogleProviderTemplateId = "google";
 export type OllamaProviderTemplateId = "ollama";
 export type LocalProviderTemplateId = OllamaProviderTemplateId | "lmstudio" | "llama_cpp";
-export type ProviderTemplateSelectorGroupId = "remote_api_key" | "local";
-export type ProviderTemplateSelectorCapability = "chat_completions" | "streaming" | "tools";
+export type SubscriptionProviderTemplateId = "claude_code" | "openai_codex";
+export type ProviderTemplateSelectorGroupId = "local" | "remote_api_key" | "subscription";
+export type ProviderTemplateSelectorCapability =
+  | "chat_completions"
+  | "messages"
+  | "responses"
+  | "streaming"
+  | "tools";
 export type ProviderTemplateAuthBehavior = {
   header: string;
   scheme: string;
@@ -42,8 +45,8 @@ export type OpenAICompatibleProviderTemplate = ProviderTemplateCreateInput & {
 export type OpenRouterProviderTemplate = Omit<OpenAICompatibleProviderTemplate, "id"> & {
   id: OpenRouterProviderTemplateId;
 };
-export type GeminiProviderTemplate = Omit<OpenAICompatibleProviderTemplate, "id"> & {
-  id: GeminiProviderTemplateId;
+export type GoogleProviderTemplate = Omit<OpenAICompatibleProviderTemplate, "id"> & {
+  id: GoogleProviderTemplateId;
 };
 
 export type LocalProviderTemplate = {
@@ -58,6 +61,10 @@ export type LocalProviderTemplate = {
 };
 export type OllamaProviderTemplate = LocalProviderTemplate & {
   id: OllamaProviderTemplateId;
+};
+export type SubscriptionProviderTemplate = ProviderTemplateCreateInput & {
+  capabilities: ProviderTemplateSelectorCapability[];
+  id: SubscriptionProviderTemplateId;
 };
 
 export type ProviderTemplateFormInput = {
@@ -77,7 +84,8 @@ export type ProviderTemplateSelectorItem = {
   id:
     | OpenAICompatibleProviderTemplateId
     | OpenRouterProviderTemplateId
-    | GeminiProviderTemplateId
+    | GoogleProviderTemplateId
+    | SubscriptionProviderTemplateId
     | LocalProviderTemplateId;
   modelListPath?: string;
   providerKey: string;
@@ -112,11 +120,6 @@ const templates: Record<OpenAICompatibleProviderTemplateId, OpenAICompatibleProv
     displayName: "xAI",
     id: "xai",
   }),
-  mistral: createOpenAICompatibleProviderTemplate({
-    baseUrl: "https://api.mistral.ai/v1",
-    displayName: "Mistral",
-    id: "mistral",
-  }),
   qwen: createOpenAICompatibleProviderTemplate({
     baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     displayName: "Qwen",
@@ -131,16 +134,6 @@ const templates: Record<OpenAICompatibleProviderTemplateId, OpenAICompatibleProv
     baseUrl: "https://api.minimax.io/v1",
     displayName: "MiniMax",
     id: "minimax",
-  }),
-  groq: createOpenAICompatibleProviderTemplate({
-    baseUrl: "https://api.groq.com/openai/v1",
-    displayName: "Groq",
-    id: "groq",
-  }),
-  fireworks: createOpenAICompatibleProviderTemplate({
-    baseUrl: "https://api.fireworks.ai/inference/v1",
-    displayName: "Fireworks AI",
-    id: "fireworks",
   }),
   zai: createOpenAICompatibleProviderTemplate({
     baseUrl: "https://api.z.ai/api/paas/v4",
@@ -159,28 +152,24 @@ const openRouterTemplate: OpenRouterProviderTemplate = {
   providerType: "api_key",
 };
 
-const geminiTemplate: GeminiProviderTemplate = {
-  auth: { header: "x-goog-api-key", scheme: "API key" },
-  baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-  capabilities: {
-    chatCompletions: true,
-    streaming: false,
-    tools: false,
-  },
+const googleTemplate: GoogleProviderTemplate = {
+  auth: { ...remoteTemplateAuth },
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+  capabilities: { ...defaultOpenAICompatibleCapabilities },
   displayName: "Google Gemini",
-  id: "gemini",
-  providerKey: "gemini",
+  id: "google",
+  providerKey: "google",
   providerType: "api_key",
 };
 
 const localTemplates: Record<LocalProviderTemplateId, LocalProviderTemplate> = {
   ollama: {
-    baseUrlPlaceholder: "http://127.0.0.1:11434",
-    capabilities: ["chat_completions"],
-    chatPath: "/api/chat",
+    baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
+    capabilities: ["chat_completions", "streaming", "tools"],
+    chatPath: "/chat/completions",
     displayName: "Ollama",
     id: "ollama",
-    modelListPath: "/api/tags",
+    modelListPath: "/models",
     providerKey: "ollama",
     providerType: "local",
   },
@@ -206,6 +195,26 @@ const localTemplates: Record<LocalProviderTemplateId, LocalProviderTemplate> = {
   },
 };
 
+const subscriptionTemplates: Record<SubscriptionProviderTemplateId, SubscriptionProviderTemplate> =
+  {
+    openai_codex: {
+      baseUrl: "https://chatgpt.com/backend-api",
+      capabilities: ["responses"],
+      displayName: "OpenAI Codex",
+      id: "openai_codex",
+      providerKey: "openai_codex",
+      providerType: "subscription",
+    },
+    claude_code: {
+      baseUrl: "https://api.anthropic.com",
+      capabilities: ["messages"],
+      displayName: "Claude Code",
+      id: "claude_code",
+      providerKey: "claude_code",
+      providerType: "subscription",
+    },
+  };
+
 export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProviderTemplate[] {
   return Object.values(templates).map(copyTemplate);
 }
@@ -218,13 +227,30 @@ export function listLocalProviderTemplates(): LocalProviderTemplate[] {
   return Object.values(localTemplates).map(copyLocalTemplate);
 }
 
+export function listSubscriptionProviderTemplates(): SubscriptionProviderTemplate[] {
+  return Object.values(subscriptionTemplates).map(copySubscriptionTemplate);
+}
+
 export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGroup[] {
   return [
     {
+      id: "subscription",
+      label: "Subscription",
+      templates: listSubscriptionProviderTemplates().map((template) => ({
+        baseUrlMode: "fixed_remote",
+        capabilities: [...template.capabilities],
+        displayName: template.displayName,
+        fixedBaseUrl: template.baseUrl,
+        id: template.id,
+        providerKey: template.providerKey,
+        providerType: template.providerType,
+      })),
+    },
+    {
       id: "remote_api_key",
-      label: "Remote API-key templates",
+      label: "API Keys",
       templates: [
-        copyGeminiTemplate(geminiTemplate),
+        copyGoogleTemplate(googleTemplate),
         copyOpenRouterTemplate(openRouterTemplate),
         ...listOpenAICompatibleProviderTemplates(),
       ].map((template) => ({
@@ -240,7 +266,7 @@ export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGr
     },
     {
       id: "local",
-      label: "Local templates",
+      label: "Local",
       templates: listLocalProviderTemplates().map((template) => ({
         baseUrlMode: "user_local_private",
         baseUrlPlaceholder: template.baseUrlPlaceholder,
@@ -286,14 +312,14 @@ export function getOpenRouterProviderTemplate(
   return copyOpenRouterTemplate(openRouterTemplate);
 }
 
-export function getGeminiProviderTemplate(
+export function getGoogleProviderTemplate(
   templateId: string | null | undefined,
-): GeminiProviderTemplate {
-  if (templateId !== "gemini") {
+): GoogleProviderTemplate {
+  if (templateId !== "google") {
     throw new Error("Provider must use a whitelisted provider template.");
   }
 
-  return copyGeminiTemplate(geminiTemplate);
+  return copyGoogleTemplate(googleTemplate);
 }
 
 export function getLocalProviderTemplate(
@@ -306,9 +332,26 @@ export function getLocalProviderTemplate(
   return copyLocalTemplate(localTemplates[templateId]);
 }
 
+export function getSubscriptionProviderTemplate(
+  templateId: string | null | undefined,
+): SubscriptionProviderTemplate {
+  if (!isSubscriptionProviderTemplateId(templateId)) {
+    throw new Error("Provider must use a whitelisted provider template.");
+  }
+
+  return copySubscriptionTemplate(subscriptionTemplates[templateId]);
+}
+
 export function normalizeProviderTemplateFormInput(
   input: ProviderTemplateFormInput,
 ): ProviderTemplateCreateInput {
+  if (isSubscriptionProviderTemplateId(input.templateId)) {
+    if (input.baseUrl?.trim()) {
+      throw new Error("Custom subscription endpoints are not allowed.");
+    }
+    return getSubscriptionProviderTemplate(input.templateId);
+  }
+
   if (isLocalProviderTemplateId(input.templateId)) {
     return normalizeLocalTemplateFormInput(input);
   }
@@ -320,11 +363,11 @@ export function normalizeProviderTemplateFormInput(
     return getOpenRouterProviderTemplate(input.templateId);
   }
 
-  if (input.templateId === "gemini") {
+  if (input.templateId === "google") {
     if (input.baseUrl?.trim()) {
       throw new Error("Custom Gemini endpoints are not allowed.");
     }
-    return getGeminiProviderTemplate(input.templateId);
+    return getGoogleProviderTemplate(input.templateId);
   }
 
   if (input.baseUrl?.trim()) {
@@ -338,7 +381,8 @@ export function isKnownProviderTemplateKey(providerKey: string): boolean {
   return (
     isOpenAICompatibleProviderTemplateId(providerKey) ||
     providerKey === "openrouter" ||
-    providerKey === "gemini" ||
+    providerKey === "google" ||
+    isSubscriptionProviderTemplateId(providerKey) ||
     isLocalProviderTemplateId(providerKey)
   );
 }
@@ -382,6 +426,12 @@ function isLocalProviderTemplateId(
   return typeof value === "string" && Object.hasOwn(localTemplates, value);
 }
 
+function isSubscriptionProviderTemplateId(
+  value: string | null | undefined,
+): value is SubscriptionProviderTemplateId {
+  return typeof value === "string" && Object.hasOwn(subscriptionTemplates, value);
+}
+
 function copyTemplate(
   template: OpenAICompatibleProviderTemplate,
 ): OpenAICompatibleProviderTemplate {
@@ -400,7 +450,7 @@ function copyOpenRouterTemplate(template: OpenRouterProviderTemplate): OpenRoute
   };
 }
 
-function copyGeminiTemplate(template: GeminiProviderTemplate): GeminiProviderTemplate {
+function copyGoogleTemplate(template: GoogleProviderTemplate): GoogleProviderTemplate {
   return {
     ...template,
     auth: { ...template.auth },
@@ -422,8 +472,17 @@ function copyLocalTemplate(template: LocalProviderTemplate): LocalProviderTempla
   };
 }
 
+function copySubscriptionTemplate(
+  template: SubscriptionProviderTemplate,
+): SubscriptionProviderTemplate {
+  return {
+    ...template,
+    capabilities: [...template.capabilities],
+  };
+}
+
 function readOpenAICompatibleCapabilities(
-  template: OpenAICompatibleProviderTemplate | OpenRouterProviderTemplate | GeminiProviderTemplate,
+  template: OpenAICompatibleProviderTemplate | OpenRouterProviderTemplate | GoogleProviderTemplate,
 ): ProviderTemplateSelectorCapability[] {
   const capabilities: ProviderTemplateSelectorCapability[] = [];
 

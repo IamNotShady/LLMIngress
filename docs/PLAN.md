@@ -148,7 +148,7 @@ V1 的目标是把 MVP 从“可跑通”提升到“个人日常可用”，覆
 
 - Google Gemini API Key Provider。
 - OpenRouter API Key Provider。
-- 长尾 OpenAI-compatible Provider template：DeepSeek、xAI、Mistral、Qwen、Moonshot / Kimi、MiniMax、Groq、Fireworks AI、Z.ai。
+- 长尾 OpenAI-compatible Provider template：DeepSeek、xAI、Qwen、Moonshot / Kimi、MiniMax、Z.ai。
 - Local Provider 增强：LM Studio、llama.cpp。
 - 模型价格同步。
 - Provider / Model health summary 展示。

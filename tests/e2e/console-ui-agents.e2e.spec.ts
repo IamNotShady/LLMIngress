@@ -10,7 +10,7 @@ test("agents page matches the designed list and detail layout", async ({ browser
       await page.goto(`${baseUrl}/agents`);
 
       await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeVisible();
-      await page.getByRole("link", { name: "+ Create Agent" }).click();
+      await page.getByRole("link", { name: "Create Agent" }).click();
       const createDialog = page.getByRole("dialog", { name: "New agent" });
       await expect(createDialog.getByRole("heading", { name: "New agent" })).toBeVisible();
       await expect(createDialog.getByLabel("Agent name")).toBeVisible();

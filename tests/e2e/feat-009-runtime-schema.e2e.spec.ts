@@ -143,13 +143,13 @@ test("runtime schema persists activity usage reservations jobs health and gatewa
     await expectConstraintViolation(
       fixture.query(
         "insert into provider_health_summary (id, provider_id, provider_model_id, status) values ($1, $2, $3, $4)",
-        [randomUUID(), graph.providerId, null, "degraded"],
+        [randomUUID(), graph.providerId, null, "unhealthy"],
       ),
     );
     await expectBrokenReference(
       fixture.query(
         "insert into provider_health_summary (id, provider_id, provider_model_id, status) values ($1, $2, $3, $4)",
-        [randomUUID(), wrongProviderId, graph.providerModelId, "degraded"],
+        [randomUUID(), wrongProviderId, graph.providerModelId, "unhealthy"],
       ),
     );
 

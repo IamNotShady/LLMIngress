@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 
 export type GatewayBudgetErrorCode =
@@ -38,14 +38,14 @@ export type GatewayBudgetDecision =
       statusCode: 402;
     };
 
-type AgentBudgetLimitRow = QueryResultRow & {
+type AgentBudgetLimitRow = PostgresQueryResultRow & {
   limit_type: "budget" | "token";
   limit_value: string;
   period: string;
   unit: string;
 };
 
-type BudgetPeriodRow = QueryResultRow & {
+type BudgetPeriodRow = PostgresQueryResultRow & {
   cost_used_usd: string;
   id: string;
   reserved_cost_usd: string;
@@ -63,7 +63,7 @@ export async function reserveGatewayBudget(input: {
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayBudgetDecision> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -287,7 +287,7 @@ function budgetFailure(code: GatewayBudgetErrorCode, requestId: string): Gateway
 }
 
 async function readEnabledBudgetLimits(
-  client: Client,
+  client: PostgresClient,
   agentApiKeyId: string,
 ): Promise<
   Array<{
@@ -327,7 +327,7 @@ async function readEnabledBudgetLimits(
 }
 
 async function lockBudgetPeriod(
-  client: Client,
+  client: PostgresClient,
   input: {
     agentApiKeyId: string;
     period: PeriodWindow;
@@ -380,7 +380,7 @@ async function updateGatewayBudgetReservation(
   reservation: GatewayBudgetReservation,
   status: "finalized" | "released",
 ): Promise<void> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

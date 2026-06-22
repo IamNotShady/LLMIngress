@@ -3,6 +3,7 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
@@ -13,7 +14,6 @@ import {
   routeTaskTypes,
   selectRouteCandidate,
 } from "@llmingress/domain";
-import { Client, type QueryResultRow } from "pg";
 
 export type RoutePreviewInput = {
   estimatedInputTokens: number;
@@ -30,7 +30,7 @@ export type RoutePreviewResult = {
   input: RoutePreviewInput;
 };
 
-type RoutePreviewRow = QueryResultRow & {
+type RoutePreviewRow = PostgresQueryResultRow & {
   cachedInputUsdPerMillionTokens: string | null;
   candidateOrder: number;
   capabilityMetadata: unknown;
@@ -104,7 +104,7 @@ export function normalizeRoutePreviewInput(input: unknown): RoutePreviewInput {
 }
 
 async function loadRoutePreviewPolicies(databaseUrl: string): Promise<RoutePolicy[]> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

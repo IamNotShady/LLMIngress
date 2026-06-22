@@ -344,15 +344,12 @@ Agent API key 用于识别请求来自哪个 Agent；该 Agent 承载权限、Bu
 - OpenRouter。
 - DeepSeek。
 - xAI。
-- Mistral。
 - Qwen。
 - Moonshot / Kimi。
 - MiniMax。
-- Groq。
-- Fireworks AI。
 - Z.ai。
 
-DeepSeek、xAI、Mistral、Qwen、Moonshot、MiniMax、Groq、Fireworks AI、Z.ai 等 OpenAI-compatible Provider 可以通过系统内置的白名单 Provider template 复用通用 OpenAI-compatible adapter；V1 不开放用户任意填写自定义 endpoint。
+DeepSeek、xAI、Qwen、Moonshot、MiniMax、Z.ai 等 OpenAI-compatible Provider 可以通过系统内置的白名单 Provider template 复用通用 OpenAI-compatible adapter；V1 不开放用户任意填写自定义 endpoint。
 
 ### 8.3 Subscription Provider
 

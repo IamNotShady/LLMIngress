@@ -1,23 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { withConsoleDevServer } from "../support/console-dev-server";
 
-test("models page renders KPI cards and the provider model directory table", async ({
-  browser,
-}) => {
+test("pricing route renders the providers model library surface", async ({ browser }) => {
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
     await page.goto(`${baseUrl}/pricing`);
 
-    await expect(page.getByRole("heading", { level: 1, name: "Models" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Providers & Models" })).toBeVisible();
 
-    // KPI tiles.
-    for (const label of ["Models", "Providers", "Priced models"]) {
-      await expect(
-        page.locator(".stat-card-label", { hasText: new RegExp(`^${label}$`) }),
-      ).toBeVisible();
-    }
-
-    // Directory panel (empty-state on a fresh install — no providers seeded).
-    await expect(page.getByRole("heading", { name: "Model directory" })).toBeVisible();
+    // /pricing is now an alias for the Providers model library surface.
+    await expect(page.getByRole("heading", { name: "模型库" })).toBeVisible();
     await expect(page.getByText(/No provider models discovered yet/)).toBeVisible();
   });
 });

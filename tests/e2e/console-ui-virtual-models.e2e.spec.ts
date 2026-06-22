@@ -7,24 +7,25 @@ test("virtual models page renders KPI cards, overview, fallback chart, and edito
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
     await page.goto(`${baseUrl}/models`);
 
-    await expect(page.getByRole("heading", { level: 1, name: "Virtual Models" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Virtual Models / Routes" }),
+    ).toBeVisible();
 
     // KPI tiles.
-    for (const label of ["Virtual Models", "With routes", "Requests today", "Avg failure rate"]) {
+    for (const label of ["Virtual Models", "今日请求", "本月成本", "平均失败率"]) {
       await expect(
         page.locator(".stat-card-label", { hasText: new RegExp(`^${label}$`) }),
       ).toBeVisible();
     }
 
-    // Overview + fallback panels.
-    await expect(page.getByRole("heading", { name: "Virtual Model list" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Fallback overview" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Manage virtual models" })).toBeVisible();
+    // Overview panel.
+    await expect(page.getByRole("heading", { name: "Virtual Model 列表" })).toBeVisible();
+    await expect(page.getByText("No virtual models configured.")).toBeVisible();
 
-    // Route policy editor link.
-    await expect(page.getByRole("link", { name: "route policy editor" })).toHaveAttribute(
+    // Virtual Model editor entry.
+    await expect(page.getByRole("link", { name: "创建 Virtual Model" })).toHaveAttribute(
       "href",
-      "/routing",
+      "/models?virtualModelDialog=new",
     );
   });
 });

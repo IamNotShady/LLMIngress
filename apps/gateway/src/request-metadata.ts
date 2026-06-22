@@ -67,7 +67,7 @@ export function buildAnthropicMessagesRequestMetadata(input: {
   request: NormalizedAnthropicMessagesRequest;
 }): GatewayRequestMetadata {
   const messageTextParts = [
-    input.request.system ?? "",
+    ...(input.request.system ? readAnthropicMessageContentTextParts(input.request.system) : []),
     ...input.request.messages.flatMap((message) =>
       readAnthropicMessageContentTextParts(message.content),
     ),

@@ -5,6 +5,18 @@ export type PlaygroundChatRequest = {
   stream: false;
 };
 
+export type PlaygroundMessagesRequest = PlaygroundChatRequest;
+
+export type PlaygroundProtocol = "chat_completions" | "messages" | "responses";
+
+export type PlaygroundResponsesRequest = {
+  input: string;
+  max_output_tokens: number;
+  model: string;
+  store: false;
+  stream: false;
+};
+
 export function normalizePlaygroundGatewayBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }
@@ -26,6 +38,26 @@ export function buildPlaygroundChatRequest(input: {
     max_tokens: 100,
     messages: [{ content: input.prompt.trim(), role: "user" }],
     model: input.model.trim(),
+    stream: false,
+  };
+}
+
+export function buildPlaygroundMessagesRequest(input: {
+  model: string;
+  prompt: string;
+}): PlaygroundMessagesRequest {
+  return buildPlaygroundChatRequest(input);
+}
+
+export function buildPlaygroundResponsesRequest(input: {
+  model: string;
+  prompt: string;
+}): PlaygroundResponsesRequest {
+  return {
+    input: input.prompt.trim(),
+    max_output_tokens: 100,
+    model: input.model.trim(),
+    store: false,
     stream: false,
   };
 }

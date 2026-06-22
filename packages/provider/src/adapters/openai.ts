@@ -13,12 +13,13 @@ export type NormalizedOpenAIChatRequest = {
 };
 
 export type NormalizedOpenAIResponsesInputMessage = {
-  role: "system" | "user" | "assistant";
+  role: "developer" | "system" | "user" | "assistant";
   content: string;
 };
 
 export type NormalizedOpenAIResponsesRequest = {
   input: string | NormalizedOpenAIResponsesInputMessage[];
+  instructions?: string;
   maxOutputTokens?: number;
   stream?: boolean;
   temperature?: number;
@@ -87,6 +88,7 @@ type OpenAIChatCompletionsPayload = {
 
 type OpenAIResponsesPayload = {
   input: string | NormalizedOpenAIResponsesInputMessage[];
+  instructions?: string;
   max_output_tokens?: number;
   model: string;
   store: false;
@@ -237,6 +239,7 @@ function buildResponsesPayload(
 ): OpenAIResponsesPayload {
   return omitUndefined({
     input: request.input,
+    instructions: request.instructions,
     max_output_tokens: request.maxOutputTokens,
     model: target.modelId,
     store: false,

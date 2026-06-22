@@ -9,6 +9,7 @@ describe("feat-037 OpenAI responses stateless endpoint", () => {
     expect(
       normalizeOpenAIResponsesRequest(
         {
+          instructions: "Answer as a concise coding agent.",
           input: "Explain the change.",
           max_output_tokens: 128,
           model: "responses-coding",
@@ -22,9 +23,49 @@ describe("feat-037 OpenAI responses stateless endpoint", () => {
       ok: true,
       request: {
         input: "Explain the change.",
+        instructions: "Answer as a concise coding agent.",
         maxOutputTokens: 128,
         stream: false,
         temperature: 0.1,
+      },
+    });
+  });
+
+  it("normalizes Responses message content parts from OpenAI-compatible agents", () => {
+    expect(
+      normalizeOpenAIResponsesRequest(
+        {
+          input: [
+            {
+              content: [{ text: "Follow repository conventions.", type: "input_text" }],
+              role: "developer",
+            },
+            {
+              content: [
+                { text: "Inspect this error.", type: "input_text" },
+                { text: "Keep the fix small.", type: "input_text" },
+              ],
+              role: "user",
+            },
+            {
+              content: [{ text: "Previous answer.", type: "output_text" }],
+              role: "assistant",
+            },
+          ],
+          model: "responses-coding",
+          stream: true,
+        },
+        "req_responses_parts_unit",
+      ),
+    ).toEqual({
+      ok: true,
+      request: {
+        input: [
+          { content: "Follow repository conventions.", role: "developer" },
+          { content: "Inspect this error.\nKeep the fix small.", role: "user" },
+          { content: "Previous answer.", role: "assistant" },
+        ],
+        stream: true,
       },
     });
   });

@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
+import {
+  createClaudeCodeProviderAdapter,
+  createCodexSubscriptionAdapter,
+} from "../../packages/provider/src/adapters/subscription";
 import { checkProviderConnectivity } from "../../packages/provider/src/connectivity";
 import {
   buildProviderModelListRequest,
@@ -12,6 +16,7 @@ import {
   exchangeProviderOAuthCode,
   parseProviderOAuthCallbackInput,
   refreshProviderOAuthToken,
+  revokeProviderOAuthToken,
 } from "../../packages/provider/src/oauth";
 
 const root = resolve(import.meta.dirname, "../..");
@@ -197,6 +202,46 @@ describe("feat-115 provider subscription OAuth", () => {
     });
   });
 
+  it("revokes OpenAI OAuth tokens and treats Claude Code revoke as local-only", async () => {
+    const requests: Array<{
+      body: Record<string, string>;
+      headers: HeadersInit | undefined;
+      url: string;
+    }> = [];
+    const fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const body = init?.body;
+      requests.push({
+        body: body instanceof URLSearchParams ? Object.fromEntries(body.entries()) : {},
+        headers: init?.headers,
+        url: String(url),
+      });
+      return jsonResponse(200, {});
+    };
+
+    await revokeProviderOAuthToken({
+      accessToken: "openai-access",
+      fetch,
+      providerKey: "openai_codex",
+    });
+    await revokeProviderOAuthToken({
+      accessToken: "claude-access",
+      fetch,
+      providerKey: "claude_code",
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      body: {
+        client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
+        token: "openai-access",
+      },
+      headers: {
+        accept: "application/json",
+      },
+      url: "https://auth.openai.com/oauth/revoke",
+    });
+  });
+
   it("builds subscription model list requests and parses Codex models", () => {
     expect(
       buildProviderModelListRequest({
@@ -308,11 +353,135 @@ describe("feat-115 provider subscription OAuth", () => {
       "x-app": "cli",
     });
   });
+
+  it("strips Codex-unsupported Responses parameters before forwarding", async () => {
+    const requests: Array<{ body: Record<string, unknown>; url: string }> = [];
+    const adapter = createCodexSubscriptionAdapter({
+      fetch: async (url, init) => {
+        requests.push({
+          body: JSON.parse(String(init?.body)),
+          url: String(url),
+        });
+        return jsonResponse(200, { id: "resp_1", output: [] });
+      },
+    });
+
+    const result = await adapter.response?.({
+      request: {
+        input: "hello",
+        instructions: undefined,
+        maxOutputTokens: 2048,
+        stream: false,
+        temperature: 0.7,
+      },
+      target: {
+        apiKey: "oauth-token",
+        baseUrl: "https://chatgpt.com/backend-api",
+        modelId: "gpt-5.4",
+      },
+    });
+
+    expect(result?.ok).toBe(true);
+    expect(requests[0]?.url).toBe("https://chatgpt.com/backend-api/codex/responses");
+    expect(requests[0]?.body).toEqual({
+      input: [{ content: [{ text: "hello", type: "input_text" }], role: "user" }],
+      instructions: "You are a helpful assistant.",
+      model: "gpt-5.4",
+      store: false,
+      stream: true,
+    });
+    expect(requests[0]?.body).not.toHaveProperty("temperature");
+    expect(requests[0]?.body).not.toHaveProperty("max_output_tokens");
+  });
+
+  it("normalizes Codex SSE responses into response output text", async () => {
+    const adapter = createCodexSubscriptionAdapter({
+      fetch: async () =>
+        textResponse(
+          200,
+          [
+            'data: {"type":"response.output_text.delta","delta":"hello"}',
+            'data: {"type":"response.output_text.delta","delta":" world"}',
+            "data: [DONE]",
+            "",
+          ].join("\n\n"),
+        ),
+    });
+
+    const result = await adapter.response?.({
+      request: {
+        input: "hello",
+      },
+      target: {
+        apiKey: "oauth-token",
+        baseUrl: "https://chatgpt.com/backend-api",
+        modelId: "gpt-5.4",
+      },
+    });
+
+    expect(result?.ok).toBe(true);
+    expect(result?.body).toMatchObject({
+      output: [
+        {
+          content: [{ text: "hello world", type: "output_text" }],
+          role: "assistant",
+          type: "message",
+        },
+      ],
+    });
+  });
+
+  it("injects the Claude Code system identifier on the OAuth messages path", async () => {
+    const calls: Array<{ body: { system?: unknown }; headers: Headers; url: string }> = [];
+    const adapter = createClaudeCodeProviderAdapter({
+      fetch: async (url, init) => {
+        calls.push({
+          body: JSON.parse(String(init?.body)),
+          headers: new Headers(init?.headers),
+          url: String(url),
+        });
+        return jsonResponse(200, {
+          content: [{ text: "pong", type: "text" }],
+          id: "msg_feat_115",
+          role: "assistant",
+          type: "message",
+        });
+      },
+    });
+
+    const result = await adapter.messages({
+      request: {
+        maxOutputTokens: 16,
+        messages: [{ content: "ping", role: "user" }],
+        system: "You are a helpful assistant.",
+      },
+      target: {
+        apiKey: "oauth-token",
+        baseUrl: "https://api.anthropic.com",
+        modelId: "claude-sonnet-4-5",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe("https://api.anthropic.com/v1/messages");
+    expect(calls[0]?.body.system).toEqual([
+      { text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.", type: "text" },
+      { text: "You are a helpful assistant.", type: "text" },
+    ]);
+    expect(calls[0]?.headers.get("authorization")).toBe("Bearer oauth-token");
+  });
 });
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     headers: { "content-type": "application/json" },
+    status,
+  });
+}
+
+function textResponse(status: number, body: string): Response {
+  return new Response(body, {
+    headers: { "content-type": "text/event-stream" },
     status,
   });
 }

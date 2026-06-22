@@ -10,6 +10,7 @@ export type FakeProviderMode =
   | "json"
   | "stream"
   | "error"
+  | "rate-limit"
   | "timeout"
   | "first-byte-failure"
   | "midstream-error"
@@ -303,6 +304,16 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "rate-limit") {
+      writeJson(response, 429, {
+        error: {
+          code: "rate_limit_error",
+          message: "Fake provider rate limit",
+        },
+      });
+      return;
+    }
+
     if (mode === "openrouter-error") {
       writeJson(response, 402, {
         error: {
@@ -344,6 +355,7 @@ function readMode(url: URL): FakeProviderMode {
     mode === "json" ||
     mode === "stream" ||
     mode === "error" ||
+    mode === "rate-limit" ||
     mode === "timeout" ||
     mode === "first-byte-failure" ||
     mode === "midstream-error" ||

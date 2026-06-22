@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
-import Fastify, { type FastifyReply } from "fastify";
+import Fastify, { type FastifyBaseLogger, type FastifyReply } from "fastify";
 import {
   completeGatewayRequestActivity,
   createGatewayRequestActivity,
@@ -107,6 +107,17 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         virtualModelAccess.body,
       );
     }
+    logGatewayAgentRequest(request.log, {
+      agentId: auth.agentApiKey.agentId,
+      agentKeyPrefix: auth.agentApiKey.keyPrefix,
+      method: request.method,
+      protocol: "chat_completions",
+      requestBody: request.body,
+      requestId: auth.requestId,
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+      url: request.url,
+      virtualModelName: virtualModelAccess.virtualModel.name,
+    });
 
     if (readGatewayStreamingFlag(request.body)) {
       return sendGatewayStreamingResponse(
@@ -212,6 +223,17 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         virtualModelAccess.body,
       );
     }
+    logGatewayAgentRequest(request.log, {
+      agentId: auth.agentApiKey.agentId,
+      agentKeyPrefix: auth.agentApiKey.keyPrefix,
+      method: request.method,
+      protocol: "embeddings",
+      requestBody: request.body,
+      requestId: auth.requestId,
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+      url: request.url,
+      virtualModelName: virtualModelAccess.virtualModel.name,
+    });
 
     const embeddings = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
@@ -264,6 +286,17 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         virtualModelAccess.body,
       );
     }
+    logGatewayAgentRequest(request.log, {
+      agentId: auth.agentApiKey.agentId,
+      agentKeyPrefix: auth.agentApiKey.keyPrefix,
+      method: request.method,
+      protocol: "responses",
+      requestBody: request.body,
+      requestId: auth.requestId,
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+      url: request.url,
+      virtualModelName: virtualModelAccess.virtualModel.name,
+    });
 
     if (readGatewayStreamingFlag(request.body)) {
       return sendGatewayStreamingResponse(
@@ -343,6 +376,17 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         virtualModelAccess.body,
       );
     }
+    logGatewayAgentRequest(request.log, {
+      agentId: auth.agentApiKey.agentId,
+      agentKeyPrefix: auth.agentApiKey.keyPrefix,
+      method: request.method,
+      protocol: "messages",
+      requestBody: request.body,
+      requestId: auth.requestId,
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+      url: request.url,
+      virtualModelName: virtualModelAccess.virtualModel.name,
+    });
 
     if (readGatewayStreamingFlag(request.body)) {
       return sendGatewayStreamingResponse(
@@ -527,6 +571,43 @@ function writeGatewayRequestMetadataDebugHeader(
   }
 
   reply.header(gatewayRequestMetadataHeader, serializeGatewayRequestMetadata(metadata));
+}
+
+type GatewayAgentRequestLogInput = {
+  agentId: string;
+  agentKeyPrefix: string;
+  method: string;
+  protocol: GatewayRequestActivityProtocol;
+  requestBody: unknown;
+  requestId: string;
+  requestLoggingEnabled: boolean;
+  url: string;
+  virtualModelName: string;
+};
+
+export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) {
+  if (!input.requestLoggingEnabled) {
+    return null;
+  }
+
+  return {
+    agentId: input.agentId,
+    agentKeyPrefix: input.agentKeyPrefix,
+    method: input.method,
+    protocol: input.protocol,
+    requestBody: input.requestBody,
+    requestId: input.requestId,
+    url: input.url,
+    virtualModel: input.virtualModelName,
+  };
+}
+
+function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRequestLogInput) {
+  const payload = buildGatewayAgentRequestLog(input);
+  if (!payload) {
+    return;
+  }
+  logger.info(payload, "gateway agent request");
 }
 
 async function executeRecordedGatewayJsonRequest(input: {

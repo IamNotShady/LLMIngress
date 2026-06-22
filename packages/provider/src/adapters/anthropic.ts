@@ -16,7 +16,7 @@ export type NormalizedAnthropicMessagesRequest = {
   serviceTier?: string;
   stream?: boolean;
   stopSequences?: string[];
-  system?: string;
+  system?: AnthropicMessageContent;
   temperature?: number;
   thinking?: Record<string, unknown>;
   toolChoice?: unknown;
@@ -68,7 +68,7 @@ export type AnthropicMessagesPayload = {
   service_tier?: string;
   stream?: boolean;
   stop_sequences?: string[];
-  system?: string;
+  system?: AnthropicMessageContent;
   temperature?: number;
   thinking?: Record<string, unknown>;
   tool_choice?: unknown;

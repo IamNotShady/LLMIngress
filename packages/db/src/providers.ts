@@ -312,6 +312,41 @@ export async function deleteProviderOAuthConnection(input: {
   });
 }
 
+export async function readProviderOAuthRuntimeConnection(input: {
+  databaseUrl: string;
+  providerOAuthId: string;
+}): Promise<ProviderOAuthRuntimeConnection> {
+  return withPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<ProviderOAuthRuntimeRow>(
+      `
+        select provider_oauth.id::text,
+               provider_oauth.provider_id::text,
+               provider_oauth.label,
+               provider_oauth.priority,
+               provider_oauth.enabled,
+               provider_oauth.encrypted_token,
+               provider_oauth.token_expires_at,
+               provider_oauth.last_test_status,
+               provider_oauth.last_tested_at,
+               provider_oauth.last_test_error_code,
+               provider_oauth.last_test_error_message,
+               provider_oauth.created_at,
+               provider_oauth.updated_at,
+               provider_oauth.completed_at,
+               providers.provider_key
+        from provider_oauth
+        join providers on providers.id = provider_oauth.provider_id
+        where provider_oauth.id = $1
+          and provider_oauth.completed_at is not null
+          and provider_oauth.encrypted_token is not null
+          and providers.deleted_at is null
+      `,
+      [input.providerOAuthId],
+    );
+    return toProviderOAuthRuntimeConnection(requireProviderOAuthRow(result.rows[0]));
+  });
+}
+
 export async function readEnabledCompletedProviderOAuthConnections(input: {
   databaseUrl: string;
   providerId: string;

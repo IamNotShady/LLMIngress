@@ -18,6 +18,7 @@ type ProviderOAuthConfig = {
   clientId: string;
   defaultParams?: Record<string, string>;
   redirectUri: string;
+  revokeUrl?: string;
   scope: string;
   tokenEncoding: "form" | "json";
   tokenHeaders?: Record<string, string>;
@@ -43,6 +44,12 @@ type RefreshProviderOAuthTokenInput = {
   nowMs?: () => number;
   providerKey: SubscriptionProviderKey;
   refreshToken: string;
+};
+
+type RevokeProviderOAuthTokenInput = {
+  accessToken: string;
+  fetch?: typeof globalThis.fetch;
+  providerKey: SubscriptionProviderKey;
 };
 
 const providerOAuthConfigs: Record<SubscriptionProviderKey, ProviderOAuthConfig> = {
@@ -71,6 +78,7 @@ const providerOAuthConfigs: Record<SubscriptionProviderKey, ProviderOAuthConfig>
     },
     redirectUri: "http://localhost:1455/auth/callback",
     scope: "openid profile email offline_access",
+    revokeUrl: "https://auth.openai.com/oauth/revoke",
     tokenEncoding: "form",
     tokenHeaders: { accept: "application/json" },
     tokenUrl: "https://auth.openai.com/oauth/token",
@@ -146,6 +154,26 @@ export async function refreshProviderOAuthToken(
     tokenEncoding: config.tokenEncoding,
     tokenUrl: config.tokenUrl,
   });
+}
+
+export async function revokeProviderOAuthToken(
+  input: RevokeProviderOAuthTokenInput,
+): Promise<void> {
+  const config = readOAuthConfig(input.providerKey);
+  if (!config.revokeUrl) {
+    return;
+  }
+  const response = await (input.fetch ?? globalThis.fetch)(config.revokeUrl, {
+    body: new URLSearchParams({
+      client_id: config.clientId,
+      token: input.accessToken,
+    }),
+    headers: config.tokenHeaders,
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`OAuth token revoke failed with status ${response.status}.`);
+  }
 }
 
 function parseCallbackUrl(input: string): ProviderOAuthCallbackInput | null {

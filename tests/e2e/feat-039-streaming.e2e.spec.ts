@@ -10,6 +10,7 @@ import { createFakeProviderServer } from "../support/fake-provider";
 const masterKey = "test-master-key";
 const streamProviderApiKey = "sk-fake-provider-streaming-039";
 const midstreamProviderApiKey = "sk-fake-provider-midstream-039";
+const rateLimitProviderApiKey = "sk-fake-provider-rate-limit-039";
 const expectedStreamBody =
   'data: {"delta":"fake"}\n\ndata: {"delta":" stream"}\n\ndata: [DONE]\n\n';
 
@@ -25,6 +26,7 @@ test("streaming chat responses and messages forward first chunk before provider 
     await seedStreamingRoutes(fixture, {
       agentApiKey,
       midstreamBaseUrl: `${provider.url}/v1?mode=midstream-error`,
+      rateLimitBaseUrl: `${provider.url}/v1?mode=rate-limit`,
       streamBaseUrl: `${provider.url}/v1?mode=stream`,
     });
 
@@ -73,6 +75,10 @@ test("streaming chat responses and messages forward first chunk before provider 
         apiKey: agentApiKey,
         requestId: "req_midstream_039",
       });
+      await expectProviderRateLimit(baseUrl, fixture, {
+        apiKey: agentApiKey,
+        requestId: "req_provider_rate_limit_039",
+      });
       expect(
         provider.requests.filter((request) => request.mode === "midstream-error"),
       ).toHaveLength(1);
@@ -103,19 +109,31 @@ type StreamingEndpointExpectation = {
 
 async function seedStreamingRoutes(
   fixture: Fixture,
-  input: { agentApiKey: string; midstreamBaseUrl: string; streamBaseUrl: string },
+  input: {
+    agentApiKey: string;
+    midstreamBaseUrl: string;
+    rateLimitBaseUrl: string;
+    streamBaseUrl: string;
+  },
 ): Promise<void> {
   const agentId = randomUUID();
   const agentApiKeyId = randomUUID();
   const streamProviderId = randomUUID();
   const midstreamProviderId = randomUUID();
+  const rateLimitProviderId = randomUUID();
   const streamProviderModelId = randomUUID();
   const midstreamProviderModelId = randomUUID();
+  const rateLimitProviderModelId = randomUUID();
   const virtualModels = [
     { id: randomUUID(), modelId: streamProviderModelId, name: "stream-chat" },
     { id: randomUUID(), modelId: streamProviderModelId, name: "stream-responses" },
     { id: randomUUID(), modelId: streamProviderModelId, name: "stream-messages" },
     { id: randomUUID(), modelId: midstreamProviderModelId, name: "stream-mid-error" },
+    {
+      id: randomUUID(),
+      modelId: rateLimitProviderModelId,
+      name: "stream-provider-rate-limit",
+    },
   ];
   const streamEncrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
     streamProviderApiKey,
@@ -123,20 +141,32 @@ async function seedStreamingRoutes(
   const midstreamEncrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
     midstreamProviderApiKey,
   );
+  const rateLimitEncrypted = createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(
+    rateLimitProviderApiKey,
+  );
 
   await fixture.query(
     `
       insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
       values ($1, 'api_key', 'fake-streaming', 'Fake Streaming', $2, true),
-             ($3, 'api_key', 'fake-midstream', 'Fake Midstream', $4, true)
+             ($3, 'api_key', 'fake-midstream', 'Fake Midstream', $4, true),
+             ($5, 'api_key', 'fake-rate-limit', 'Fake Rate Limit', $6, true)
     `,
-    [streamProviderId, input.streamBaseUrl, midstreamProviderId, input.midstreamBaseUrl],
+    [
+      streamProviderId,
+      input.streamBaseUrl,
+      midstreamProviderId,
+      input.midstreamBaseUrl,
+      rateLimitProviderId,
+      input.rateLimitBaseUrl,
+    ],
   );
   await fixture.query(
     `
       insert into provider_api_keys (id, provider_id, key_prefix, encrypted_key, key_id)
       values ($1, $2, $3, $4, $5),
-             ($6, $7, $8, $9, $10)
+             ($6, $7, $8, $9, $10),
+             ($11, $12, $13, $14, $15)
     `,
     [
       randomUUID(),
@@ -149,6 +179,11 @@ async function seedStreamingRoutes(
       midstreamProviderApiKey.slice(0, 8),
       JSON.stringify(midstreamEncrypted),
       midstreamEncrypted.keyId,
+      randomUUID(),
+      rateLimitProviderId,
+      rateLimitProviderApiKey.slice(0, 8),
+      JSON.stringify(rateLimitEncrypted),
+      rateLimitEncrypted.keyId,
     ],
   );
   await fixture.query(
@@ -164,9 +199,17 @@ async function seedStreamingRoutes(
         availability
       )
       values ($1, $2, 'stream-model', 'Stream Model', 128000, true, true, 'available'),
-             ($3, $4, 'midstream-model', 'Midstream Model', 128000, true, true, 'available')
+             ($3, $4, 'midstream-model', 'Midstream Model', 128000, true, true, 'available'),
+             ($5, $6, 'rate-limit-model', 'Rate Limit Model', 128000, true, true, 'available')
     `,
-    [streamProviderModelId, streamProviderId, midstreamProviderModelId, midstreamProviderId],
+    [
+      streamProviderModelId,
+      streamProviderId,
+      midstreamProviderModelId,
+      midstreamProviderId,
+      rateLimitProviderModelId,
+      rateLimitProviderId,
+    ],
   );
 
   for (const virtualModel of virtualModels) {
@@ -216,7 +259,8 @@ async function seedStreamingRoutes(
       values ($1, $2),
              ($1, $3),
              ($1, $4),
-             ($1, $5)
+             ($1, $5),
+             ($1, $6)
     `,
     [
       agentApiKeyId,
@@ -224,6 +268,7 @@ async function seedStreamingRoutes(
       virtualModels[1]?.id,
       virtualModels[2]?.id,
       virtualModels[3]?.id,
+      virtualModels[4]?.id,
     ],
   );
   await fixture.query(
@@ -278,6 +323,48 @@ async function expectMidstreamError(
   await expect(readRemainingText(reader)).rejects.toThrow();
 
   await expect.poll(async () => countRuntimeErrors(fixture), { timeout: 5_000 }).toBe(1);
+}
+
+async function expectProviderRateLimit(
+  baseUrl: string,
+  fixture: Fixture,
+  input: { apiKey: string; requestId: string },
+): Promise<void> {
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    body: JSON.stringify({
+      messages: [{ content: "trigger provider rate limit", role: "user" }],
+      model: "stream-provider-rate-limit",
+      stream: true,
+    }),
+    headers: {
+      authorization: `Bearer ${input.apiKey}`,
+      "content-type": "application/json",
+      "x-request-id": input.requestId,
+    },
+    method: "POST",
+  });
+  expect(response.status).toBe(429);
+  await expect(response.json()).resolves.toMatchObject({
+    error: { code: "provider_rate_limited" },
+  });
+  await expect
+    .poll(async () => readRequestActivityError(fixture, input.requestId))
+    .toEqual({
+      error_code: "provider_rate_limited",
+      http_status: 429,
+    });
+}
+
+async function readRequestActivityError(fixture: Fixture, requestId: string) {
+  const result = await fixture.query<{ error_code: string; http_status: number }>(
+    `
+      select error_code, http_status
+      from request_activity
+      where request_id = $1
+    `,
+    [requestId],
+  );
+  return result.rows[0] ?? null;
 }
 
 async function countRuntimeErrors(fixture: Fixture): Promise<number> {

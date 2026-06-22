@@ -110,6 +110,11 @@ export function normalizeOpenAIResponsesRequest(
     return invalidResponsesRequest(requestId);
   }
 
+  const instructions = readOptionalNonEmptyString(body.instructions);
+  if (instructions === null) {
+    return invalidResponsesRequest(requestId);
+  }
+
   const maxOutputTokens = readOptionalPositiveInteger(body.max_output_tokens);
   if (maxOutputTokens === null) {
     return invalidResponsesRequest(requestId);
@@ -128,6 +133,7 @@ export function normalizeOpenAIResponsesRequest(
     ok: true,
     request: omitUndefined({
       input,
+      instructions,
       maxOutputTokens,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       temperature,
@@ -220,12 +226,8 @@ export async function executeGatewayOpenAIResponse(input: {
       databaseUrl: input.databaseUrl,
       masterKeySource: readGatewayMasterKeySource(),
     });
-    const adapter = input.adapter ?? createOpenAIProviderAdapter();
-    if (!adapter.response) {
-      throw new Error("OpenAI responses provider adapter is not configured.");
-    }
     const success = await executeResponsesFallback({
-      adapter,
+      adapter: input.adapter,
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
@@ -288,7 +290,7 @@ export async function executeGatewayOpenAIResponse(input: {
 }
 
 async function executeResponsesFallback(input: {
-  adapter: OpenAIProviderAdapter;
+  adapter?: OpenAIProviderAdapter;
   candidates: readonly FallbackChainCandidate[];
   databaseUrl: string;
   fallbackAttempts: FallbackFailedAttempt[];
@@ -305,7 +307,8 @@ async function executeResponsesFallback(input: {
     }
   | undefined
 > {
-  if (!input.adapter.response) {
+  const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
+  if (!genericAdapter.response) {
     throw new Error("OpenAI responses provider adapter is not configured.");
   }
 
@@ -319,7 +322,7 @@ async function executeResponsesFallback(input: {
       continue;
     }
     const adapter =
-      candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : input.adapter;
+      candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : genericAdapter;
     if (!adapter.response) {
       throw new Error("OpenAI responses provider adapter is not configured.");
     }
@@ -410,17 +413,52 @@ function readResponsesInput(
 }
 
 function readResponsesInputMessage(value: unknown): NormalizedOpenAIResponsesInputMessage | null {
-  if (!isRecord(value) || typeof value.content !== "string" || !value.content.trim()) {
+  if (!isRecord(value)) {
     return null;
   }
-  if (value.role !== "system" && value.role !== "user" && value.role !== "assistant") {
+  const content = readResponsesMessageContent(value.content);
+  if (!content) {
+    return null;
+  }
+  if (
+    value.role !== "developer" &&
+    value.role !== "system" &&
+    value.role !== "user" &&
+    value.role !== "assistant"
+  ) {
     return null;
   }
 
   return {
-    content: value.content,
+    content,
     role: value.role,
   };
+}
+
+function readResponsesMessageContent(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+
+  const textParts = value.map(readResponsesTextContentPart);
+  if (textParts.some((part) => part === null)) {
+    return null;
+  }
+  const text = textParts.join("\n").trim();
+  return text || null;
+}
+
+function readResponsesTextContentPart(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.text !== "string") {
+    return null;
+  }
+  if (value.type !== "input_text" && value.type !== "output_text") {
+    return null;
+  }
+  return value.text;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {
@@ -441,6 +479,13 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
+}
+
+function readOptionalNonEmptyString(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function requireRoutePolicy(

@@ -4,9 +4,12 @@ import { useState } from "react";
 import { FlatIcon } from "./_components/flat-icon";
 import {
   buildPlaygroundChatRequest,
+  buildPlaygroundMessagesRequest,
+  buildPlaygroundResponsesRequest,
   formatPlaygroundFetchError,
   isValidPlaygroundGatewayBaseUrl,
   normalizePlaygroundGatewayBaseUrl,
+  type PlaygroundProtocol,
   readPlaygroundResponseText,
 } from "./playground-helpers";
 
@@ -28,6 +31,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   const [gatewayBaseUrl, setGatewayBaseUrl] = useState(defaultGatewayBaseUrl);
   const [models, setModels] = useState<PlaygroundModel[]>([]);
   const [prompt, setPrompt] = useState("hello from LLMIngress Playground");
+  const [protocol, setProtocol] = useState<PlaygroundProtocol>("responses");
   const [result, setResult] = useState<PlaygroundResult | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
   const [status, setStatus] = useState("Paste an Agent API key to load models.");
@@ -74,15 +78,17 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
     }
 
     const requestId = createPlaygroundRequestId();
+    const endpointPath = readPlaygroundEndpointPath(protocol);
+    const requestBody =
+      protocol === "responses"
+        ? buildPlaygroundResponsesRequest({ model: selectedModel, prompt })
+        : protocol === "messages"
+          ? buildPlaygroundMessagesRequest({ model: selectedModel, prompt })
+          : buildPlaygroundChatRequest({ model: selectedModel, prompt });
     let response: Response;
     try {
-      response = await fetch(`${normalizedGatewayBaseUrl}/v1/chat/completions`, {
-        body: JSON.stringify(
-          buildPlaygroundChatRequest({
-            model: selectedModel,
-            prompt,
-          }),
-        ),
+      response = await fetch(`${normalizedGatewayBaseUrl}${endpointPath}`, {
+        body: JSON.stringify(requestBody),
         headers: {
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
@@ -156,6 +162,18 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
               </select>
             </div>
             <div className="console-field">
+              <label htmlFor="playground-protocol">Request protocol</label>
+              <select
+                id="playground-protocol"
+                value={protocol}
+                onChange={(event) => setProtocol(event.target.value as PlaygroundProtocol)}
+              >
+                <option value="responses">Responses</option>
+                <option value="messages">Anthropic Messages</option>
+                <option value="chat_completions">Chat Completions</option>
+              </select>
+            </div>
+            <div className="console-field">
               <label htmlFor="playground-prompt">Playground prompt</label>
               <textarea
                 id="playground-prompt"
@@ -214,6 +232,16 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
 
 function createPlaygroundRequestId(): string {
   return `playground_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function readPlaygroundEndpointPath(protocol: PlaygroundProtocol): string {
+  if (protocol === "responses") {
+    return "/v1/responses";
+  }
+  if (protocol === "messages") {
+    return "/v1/messages";
+  }
+  return "/v1/chat/completions";
 }
 
 function readSafeGatewayBaseUrl(value: string): string | null {

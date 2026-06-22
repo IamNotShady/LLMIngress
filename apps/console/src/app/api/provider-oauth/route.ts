@@ -11,7 +11,7 @@ import {
 import { readConsoleMasterKeySource } from "../../../server/provider-keys";
 import {
   completeProviderOAuthAuthorization,
-  deleteProviderOAuthConnection,
+  revokeProviderOAuthConnection,
   setProviderOAuthConnectionEnabled,
   startProviderOAuthConnection,
 } from "../../../server/provider-oauth";
@@ -44,8 +44,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "delete") {
-      const result = await deleteProviderOAuthConnection({
+      const result = await revokeProviderOAuthConnection({
         databaseUrl,
+        masterKeySource: readConsoleMasterKeySource(),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
       return redirectToProvider(request, result.providerId);

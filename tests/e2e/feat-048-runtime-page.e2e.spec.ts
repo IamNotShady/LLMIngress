@@ -14,9 +14,10 @@ test("runtime page shows heartbeat config version reload result and recent error
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedRuntimePageData(fixture);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
+      await seedRuntimePageData(fixture);
+
       const consoleApp = startConsoleProcess({
         databaseUrl: fixture.databaseUrl,
         port: await getFreePort(),

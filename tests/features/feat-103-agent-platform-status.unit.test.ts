@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveAgentStatus, normalizeAgentFormInput } from "../../apps/console/src/server/agents";
 import { applyGatewayRequestLoggingPolicy } from "../../apps/gateway/src/activity-recorder";
+import { buildGatewayAgentRequestLog } from "../../apps/gateway/src/main";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-103 agent platform status and request logging", () => {
@@ -146,5 +147,44 @@ describe("feat-103 agent platform status and request logging", () => {
         routeReason: {},
       },
     });
+  });
+
+  it("builds detailed gateway agent request logs only when request logging is enabled", () => {
+    const input = {
+      agentId: "agent-103",
+      agentKeyPrefix: "llmi103",
+      method: "POST",
+      protocol: "responses" as const,
+      requestBody: {
+        input: "debug this request",
+        model: "gpt55",
+        stream: true,
+      },
+      requestId: "req_agent_log_103",
+      requestLoggingEnabled: true,
+      url: "/v1/responses",
+      virtualModelName: "gpt55",
+    };
+
+    expect(buildGatewayAgentRequestLog(input)).toEqual({
+      agentId: "agent-103",
+      agentKeyPrefix: "llmi103",
+      method: "POST",
+      protocol: "responses",
+      requestBody: {
+        input: "debug this request",
+        model: "gpt55",
+        stream: true,
+      },
+      requestId: "req_agent_log_103",
+      url: "/v1/responses",
+      virtualModel: "gpt55",
+    });
+    expect(
+      buildGatewayAgentRequestLog({
+        ...input,
+        requestLoggingEnabled: false,
+      }),
+    ).toBeNull();
   });
 });

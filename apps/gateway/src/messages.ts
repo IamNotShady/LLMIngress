@@ -88,6 +88,8 @@ export type GatewayAnthropicMessagesRequestResult =
   | GatewayAnthropicMessagesRequestFailure
   | GatewayAnthropicMessagesRequestSuccess;
 
+const maxMessagesOutputTokens = 16_384;
+
 export function normalizeAnthropicMessagesRequest(
   body: unknown,
   requestId: string,
@@ -138,7 +140,8 @@ export function normalizeAnthropicMessagesRequest(
   if (body.stream !== undefined && typeof body.stream !== "boolean") {
     return invalidMessagesRequest(requestId);
   }
-  if (body.system !== undefined && typeof body.system !== "string") {
+  const system = readOptionalSystemPrompt(body.system);
+  if (system === null) {
     return invalidMessagesRequest(requestId);
   }
   const tools = readOptionalObjectArray(body.tools);
@@ -159,7 +162,7 @@ export function normalizeAnthropicMessagesRequest(
       serviceTier,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       stopSequences,
-      system: typeof body.system === "string" && body.system.trim() ? body.system : undefined,
+      system,
       temperature,
       thinking,
       toolChoice,
@@ -256,7 +259,7 @@ export async function executeGatewayAnthropicMessages(input: {
       masterKeySource: readGatewayMasterKeySource(),
     });
     const success = await executeMessagesFallback({
-      adapter: input.adapter ?? createAnthropicProviderAdapter(),
+      adapter: input.adapter,
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
@@ -319,7 +322,7 @@ export async function executeGatewayAnthropicMessages(input: {
 }
 
 async function executeMessagesFallback(input: {
-  adapter: AnthropicProviderAdapter;
+  adapter?: AnthropicProviderAdapter;
   candidates: readonly FallbackChainCandidate[];
   databaseUrl: string;
   fallbackAttempts: FallbackFailedAttempt[];
@@ -337,6 +340,7 @@ async function executeMessagesFallback(input: {
   | undefined
 > {
   let attemptOrder = 0;
+  const genericAdapter = input.adapter ?? createAnthropicProviderAdapter();
   const claudeCodeAdapter = input.adapter ? null : createClaudeCodeProviderAdapter();
   for (const candidate of input.candidates) {
     if (
@@ -348,7 +352,7 @@ async function executeMessagesFallback(input: {
     const adapter =
       candidate.providerKey === "claude_code" && claudeCodeAdapter
         ? claudeCodeAdapter
-        : input.adapter;
+        : genericAdapter;
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
       const providerStartedAt = new Date();
@@ -462,7 +466,7 @@ function readRequiredPositiveInteger(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return null;
   }
-  return value;
+  return Math.min(value, maxMessagesOutputTokens);
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {
@@ -480,6 +484,25 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
+}
+
+function readOptionalSystemPrompt(value: unknown): AnthropicMessageContent | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    return value.trim() ? value : undefined;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return undefined;
+    }
+    if (value.some((block) => !isRecord(block) || typeof block.type !== "string")) {
+      return null;
+    }
+    return value as AnthropicContentBlock[];
+  }
+  return null;
 }
 
 function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | null | undefined {

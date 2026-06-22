@@ -30,6 +30,31 @@ describe("feat-038 Anthropic messages endpoint", () => {
     });
   });
 
+  it("accepts an array system prompt and passes it through", () => {
+    const system = [
+      { text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.", type: "text" },
+      { text: "You are concise.", type: "text" },
+    ];
+    expect(
+      normalizeAnthropicMessagesRequest(
+        {
+          max_tokens: 512,
+          messages: [{ content: "Say hi.", role: "user" }],
+          model: "messages-coding",
+          system,
+        },
+        "req_array_system_unit",
+      ),
+    ).toEqual({
+      ok: true,
+      request: {
+        maxOutputTokens: 512,
+        messages: [{ content: "Say hi.", role: "user" }],
+        system,
+      },
+    });
+  });
+
   it("returns stable 400 errors for invalid Anthropic messages payloads", () => {
     expect(
       normalizeAnthropicMessagesRequest(
@@ -47,6 +72,24 @@ describe("feat-038 Anthropic messages endpoint", () => {
       ),
       ok: false,
       statusCode: 400,
+    });
+  });
+
+  it("caps oversized max_tokens from Anthropic-compatible clients", () => {
+    expect(
+      normalizeAnthropicMessagesRequest(
+        {
+          max_tokens: 128_000,
+          messages: [{ content: "Say hi.", role: "user" }],
+          model: "messages-coding",
+        },
+        "req_oversized_messages_tokens",
+      ),
+    ).toMatchObject({
+      ok: true,
+      request: {
+        maxOutputTokens: 16_384,
+      },
     });
   });
 });

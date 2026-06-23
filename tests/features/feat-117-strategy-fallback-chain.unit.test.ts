@@ -8,6 +8,10 @@ import {
   type RoutePolicy,
 } from "../../packages/domain/src/index";
 import type { ModelTokenPrice } from "@llmingress/billing/price-registry";
+import {
+  rowToRoutePolicySnapshots,
+  type RoutePolicyCandidateRow,
+} from "../../apps/gateway/src/config-reload.js";
 
 describe("feat-117 strategy fallback chain", () => {
   describe("route attempt chain", () => {
@@ -229,7 +233,62 @@ describe("feat-117 strategy fallback chain", () => {
   });
 });
 
+describe("gateway snapshot health", () => {
+  // The SQL-level health JOIN (provider_health_summary left join) is covered by the feat-075 / feat-117 e2e.
+  // This block tests the pure row→snapshot mapper in isolation.
+
+  it("rowToRoutePolicySnapshots maps healthStatus: 'unhealthy' and omits isFallback", () => {
+    const row = makeCandidateRow({ healthStatus: "unhealthy" });
+    const snapshots = rowToRoutePolicySnapshots([row]);
+    expect(snapshots).toHaveLength(1);
+    const candidate = snapshots[0]?.candidates[0];
+    expect(candidate?.healthStatus).toBe("unhealthy");
+    expect(Object.prototype.hasOwnProperty.call(candidate, "isFallback")).toBe(false);
+  });
+
+  it("rowToRoutePolicySnapshots passes through healthStatus: 'healthy'", () => {
+    const row = makeCandidateRow({ healthStatus: "healthy" });
+    const snapshots = rowToRoutePolicySnapshots([row]);
+    const candidate = snapshots[0]?.candidates[0];
+    expect(candidate?.healthStatus).toBe("healthy");
+    expect(Object.prototype.hasOwnProperty.call(candidate, "isFallback")).toBe(false);
+  });
+});
+
 // ---- helpers ----
+
+function makeCandidateRow(
+  overrides: Partial<RoutePolicyCandidateRow> = {},
+): RoutePolicyCandidateRow {
+  return {
+    candidateOrder: 1,
+    capabilityMetadata: null,
+    cachedInputUsdPerMillionTokens: null,
+    contextWindow: null,
+    displayName: "test-model",
+    healthStatus: "unknown",
+    id: "policy-1",
+    inputUsdPerMillionTokens: "1",
+    modelId: "gpt-4",
+    outputUsdPerMillionTokens: "4",
+    providerId: "provider-1",
+    providerKey: "openai",
+    providerModelId: "model-1",
+    rules: null,
+    strategy: "fixed",
+    supportsTools: false,
+    syncedAt: null,
+    syncedCachedInputUsdPerMillionTokens: null,
+    syncedInputUsdPerMillionTokens: null,
+    syncedOutputUsdPerMillionTokens: null,
+    syncedPriceVersion: null,
+    syncedSourceUrl: null,
+    updatedAt: null,
+    virtualModelId: "vm-1",
+    virtualModelName: "test-virtual-model",
+    ...overrides,
+  };
+}
 
 function makePolicy(
   strategy: RoutePolicy["strategy"],

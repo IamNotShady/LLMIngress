@@ -14,6 +14,7 @@ import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
   type ProviderModelCapabilities,
+  type RouteCandidateHealthStatus,
   type RoutePolicyRules,
   type RoutePolicyStrategy,
 } from "@llmingress/domain";
@@ -37,7 +38,7 @@ export type GatewayRouteCandidateSnapshot = {
   capabilities?: ProviderModelCapabilities;
   contextWindow?: number | null;
   displayName: string;
-  isFallback: boolean;
+  healthStatus: RouteCandidateHealthStatus;
   modelId: string;
   price: ModelTokenPrice;
   providerId: string;
@@ -94,7 +95,7 @@ type ProviderRow = {
   providerKey: string;
 };
 
-type RoutePolicyCandidateRow = {
+export type RoutePolicyCandidateRow = {
   candidateOrder: number;
   capabilityMetadata: unknown;
   displayName: string;
@@ -102,7 +103,7 @@ type RoutePolicyCandidateRow = {
   cachedInputUsdPerMillionTokens: string | null;
   contextWindow: number | null;
   inputUsdPerMillionTokens: string | null;
-  isFallback: boolean;
+  healthStatus: RouteCandidateHealthStatus;
   modelId: string;
   outputUsdPerMillionTokens: string | null;
   providerId: string;
@@ -286,7 +287,6 @@ export async function loadGatewayConfigSnapshot(
                virtual_models.name as "virtualModelName",
                route_policy_candidates.provider_model_id::text as "providerModelId",
                route_policy_candidates.candidate_order as "candidateOrder",
-               route_policy_candidates.is_fallback as "isFallback",
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
                provider_models.context_window as "contextWindow",
@@ -312,13 +312,17 @@ export async function loadGatewayConfigSnapshot(
                provider_models.synced_price_source_url
                  as "syncedSourceUrl",
                provider_models.synced_price_synced_at
-                 as "syncedAt"
+                 as "syncedAt",
+               coalesce(provider_health_summary.status, 'unknown') as "healthStatus"
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
         join route_policy_candidates
           on route_policy_candidates.route_policy_id = route_policies.id
         join provider_models on provider_models.id = route_policy_candidates.provider_model_id
         join providers on providers.id = provider_models.provider_id
+        left join provider_health_summary
+          on provider_health_summary.provider_id = providers.id
+         and provider_health_summary.provider_model_id = provider_models.id
         where virtual_models.enabled = true
           and virtual_models.deleted_at is null
           and route_policies.deleted_at is null
@@ -328,7 +332,6 @@ export async function loadGatewayConfigSnapshot(
           and provider_models.availability = 'available'
         order by virtual_models.name,
                  route_policies.id,
-                 route_policy_candidates.is_fallback,
                  route_policy_candidates.candidate_order
       `,
     );
@@ -348,7 +351,7 @@ export async function loadGatewayConfigSnapshot(
   }
 }
 
-function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRoutePolicySnapshot[] {
+export function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRoutePolicySnapshot[] {
   const routePolicies = new Map<string, GatewayRoutePolicySnapshot>();
 
   for (const row of rows) {
@@ -370,7 +373,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
       capabilities: normalizeProviderModelCapabilities(row.capabilityMetadata),
       contextWindow: row.contextWindow,
       displayName: row.displayName,
-      isFallback: row.isFallback,
+      healthStatus: row.healthStatus,
       modelId: row.modelId,
       price: resolveEffectiveModelTokenPrice({
         manualOverride: rowToManualPriceOverride(row),

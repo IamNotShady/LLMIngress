@@ -50,7 +50,7 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
             action: "create",
             fallbackProviderModelIds: [seededModels.anthropic.id],
             primaryProviderModelIds: [seededModels.openai.id],
-            strategy: "balanced",
+            strategy: "random",
             virtualModelId,
           });
           await page.goto(`${baseUrl}/models?virtualModelDialog=${virtualModelId}`);
@@ -74,7 +74,7 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
                   providerModelId: seededModels.anthropic.id,
                 },
               ],
-              strategy: "balanced",
+              strategy: "random",
               virtualModelName: "coding-fast",
             });
 

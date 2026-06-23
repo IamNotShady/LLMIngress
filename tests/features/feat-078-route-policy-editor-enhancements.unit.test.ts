@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRoutePolicyHealthWarnings,
   buildRoutePolicyWarnings,
+  filterRoutePolicyEditorHealthyProviderModelOptions,
   filterRoutePolicyEditorProviderModelOptions,
   mergeRoutePolicyEditorProviderModelOptions,
   normalizeRoutePolicyEditorFilters,
@@ -47,6 +48,33 @@ describe("feat-078 route policy editor enhancements", () => {
         (option) => option.id,
       ),
     ).toEqual(["openai-gpt", "anthropic-claude"]);
+  });
+
+  it("filters unhealthy providers out of route policy editor options", () => {
+    const healthy = providerModelOption({
+      id: "openai-gpt",
+      modelDisplayName: "GPT 4.1 Mini",
+      modelId: "gpt-4.1-mini",
+      providerDisplayName: "OpenAI",
+      providerKey: "openai",
+    });
+    const unhealthy = providerModelOption({
+      id: "anthropic-claude",
+      modelDisplayName: "Claude Sonnet 4",
+      modelId: "claude-sonnet-4",
+      providerDisplayName: "Anthropic",
+      providerKey: "anthropic",
+    });
+
+    expect(
+      filterRoutePolicyEditorHealthyProviderModelOptions(
+        [healthy, unhealthy],
+        [
+          { id: healthy.providerId, status: "healthy" },
+          { id: unhealthy.providerId, status: "unhealthy" },
+        ],
+      ).map((option) => option.id),
+    ).toEqual(["openai-gpt"]);
   });
 
   it("builds availability price and health warnings for route policy candidates", () => {

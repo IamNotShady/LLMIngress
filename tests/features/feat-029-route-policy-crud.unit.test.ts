@@ -15,13 +15,13 @@ describe("feat-029 route policy CRUD", () => {
       normalizeRoutePolicyFormInput({
         fallbackProviderModelIds: ["", fallbackModelId],
         primaryProviderModelIds: [primaryModelId],
-        strategy: " balanced ",
+        strategy: " random ",
         virtualModelId,
       }),
     ).toEqual({
       fallbackProviderModelIds: [fallbackModelId],
       primaryProviderModelIds: [primaryModelId],
-      strategy: "balanced",
+      strategy: "random",
       virtualModelId,
     });
   });
@@ -34,7 +34,7 @@ describe("feat-029 route policy CRUD", () => {
       normalizeRoutePolicyFormInput({
         fallbackProviderModelIds: [],
         primaryProviderModelIds: [],
-        strategy: "balanced",
+        strategy: "random",
         virtualModelId,
       }),
     ).toThrow(/primary/i);
@@ -52,10 +52,19 @@ describe("feat-029 route policy CRUD", () => {
       normalizeRoutePolicyFormInput({
         fallbackProviderModelIds: [providerModelId],
         primaryProviderModelIds: [providerModelId],
-        strategy: "balanced",
+        strategy: "random",
         virtualModelId,
       }),
     ).toThrow(/duplicate/i);
+
+    expect(() =>
+      normalizeRoutePolicyFormInput({
+        fallbackProviderModelIds: [],
+        primaryProviderModelIds: [providerModelId],
+        strategy: "balanced",
+        virtualModelId,
+      }),
+    ).toThrow(/strategy/i);
   });
 
   it("builds route reason metadata from strategy and fallback configuration", () => {

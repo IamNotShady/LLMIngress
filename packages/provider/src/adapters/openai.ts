@@ -1,6 +1,9 @@
 export type NormalizedOpenAIChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  content?: string | null;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIChatRequest = {

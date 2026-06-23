@@ -155,7 +155,7 @@ async function seedConfig(fixture: Fixture): Promise<SeedConfig> {
   await fixture.query(
     `
       insert into route_policies (id, virtual_model_id, strategy)
-      values ($1, $2, 'balanced')
+      values ($1, $2, 'random')
     `,
     [routePolicyId, virtualModelId],
   );

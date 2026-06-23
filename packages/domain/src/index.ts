@@ -16,7 +16,7 @@ export const routeCapabilities = ["coding", "reasoning", "tools"] as const;
 
 export type RouteTaskType = (typeof routeTaskTypes)[number];
 export type RouteCapability = (typeof routeCapabilities)[number];
-export type RoutePolicyStrategy = "fixed" | "cost_first" | "balanced" | "quality_first";
+export type RoutePolicyStrategy = "fixed" | "cost_first" | "quality_first" | "random";
 
 export type RoutePolicyRules = {
   taskTypes?: RouteTaskType[];
@@ -187,11 +187,23 @@ export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecisio
     });
   }
 
-  const defaultCandidate = requireFirstCandidate(eligibleCandidates, routePolicy.id);
+  if (routePolicy.strategy === "quality_first") {
+    const mostExpensive = selectMostExpensiveCandidate(routePolicy, eligibleCandidates, input);
+    return createDecision({
+      candidate: mostExpensive.candidate,
+      estimatedCostUsd: mostExpensive.estimatedCostUsd,
+      evaluated,
+      message: `quality_first route for ${routePolicy.virtualModelName} selected highest-priced eligible candidate ${mostExpensive.candidate.candidateOrder}.`,
+      priceSource: mostExpensive.priceSource,
+      routePolicy,
+    });
+  }
+
+  const defaultCandidate = selectRandomCandidate(eligibleCandidates);
   return createDecision({
     candidate: defaultCandidate,
     evaluated,
-    message: `${routePolicy.strategy} route for ${routePolicy.virtualModelName} selected first eligible candidate ${defaultCandidate.candidateOrder}.`,
+    message: `random route for ${routePolicy.virtualModelName} selected eligible candidate ${defaultCandidate.candidateOrder}.`,
     routePolicy,
   });
 }
@@ -326,6 +338,48 @@ function selectCheapestCandidate(
   return cheapest;
 }
 
+function selectMostExpensiveCandidate(
+  routePolicy: RoutePolicy,
+  candidates: RouteCandidate[],
+  input: RouteSelectionRequest,
+): CostCandidate {
+  let mostExpensive: CostCandidate | undefined;
+
+  for (const candidate of candidates) {
+    if (candidate.price.status === "unknown_price") {
+      continue;
+    }
+
+    const cost = calculateTokenCostUsd(candidate.price, {
+      inputTokens: input.estimatedInputTokens,
+      outputTokens: input.estimatedOutputTokens,
+    });
+    if (cost.status !== "estimated") {
+      continue;
+    }
+
+    const pricedCandidate: CostCandidate = {
+      candidate,
+      estimatedCostUsd: cost.totalCostUsd,
+      priceSource: candidate.price.source,
+    };
+    if (
+      !mostExpensive ||
+      pricedCandidate.estimatedCostUsd > mostExpensive.estimatedCostUsd ||
+      (pricedCandidate.estimatedCostUsd === mostExpensive.estimatedCostUsd &&
+        pricedCandidate.candidate.candidateOrder < mostExpensive.candidate.candidateOrder)
+    ) {
+      mostExpensive = pricedCandidate;
+    }
+  }
+
+  if (!mostExpensive) {
+    throw new Error(`Route policy ${routePolicy.id} has no priced primary candidates.`);
+  }
+
+  return mostExpensive;
+}
+
 function requireFirstCandidate(
   candidates: RouteCandidate[],
   routePolicyId: string,
@@ -342,6 +396,14 @@ function compareCostCandidate(left: CostCandidate, right: CostCandidate): number
     return left.estimatedCostUsd - right.estimatedCostUsd;
   }
   return left.candidate.candidateOrder - right.candidate.candidateOrder;
+}
+
+function selectRandomCandidate(candidates: RouteCandidate[]): RouteCandidate {
+  const candidate = candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
+  if (!candidate) {
+    throw new Error("Route policy has no eligible primary candidates.");
+  }
+  return candidate;
 }
 
 function createDecision(input: {

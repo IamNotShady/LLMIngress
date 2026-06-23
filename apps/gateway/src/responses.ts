@@ -51,6 +51,7 @@ import type { GatewayVirtualModel } from "./virtual-model-access.js";
 export type GatewayResponsesErrorCode =
   | "invalid_responses_request"
   | "provider_credentials_missing"
+  | "provider_protocol_unsupported"
   | "provider_request_failed"
   | "route_not_found"
   | "unsupported_stateful_responses";
@@ -277,7 +278,13 @@ export async function executeGatewayOpenAIResponse(input: {
     const code = classifyResponsesError(message);
     return {
       activity,
-      body: createGatewayResponsesErrorBody(code, input.requestId),
+      body: createGatewayResponsesErrorBody(
+        code,
+        input.requestId,
+        code === "provider_protocol_unsupported" || code === "provider_request_failed"
+          ? message
+          : undefined,
+      ),
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
@@ -314,11 +321,13 @@ async function executeResponsesFallback(input: {
 
   let attemptOrder = 0;
   const codexAdapter = input.adapter ? null : createCodexSubscriptionAdapter();
+  const unsupportedProviders = new Set<string>();
   for (const candidate of input.candidates) {
     if (
       isSubscriptionProviderKey(candidate.providerKey) &&
       candidate.providerKey !== "openai_codex"
     ) {
+      unsupportedProviders.add(candidate.providerKey);
       continue;
     }
     const adapter =
@@ -379,17 +388,23 @@ async function executeResponsesFallback(input: {
       }
     }
   }
+  if (attemptOrder === 0 && unsupportedProviders.size > 0) {
+    throw new Error(
+      `Responses API cannot use provider ${Array.from(unsupportedProviders).join(", ")}.`,
+    );
+  }
   return undefined;
 }
 
 export function createGatewayResponsesErrorBody(
   code: GatewayResponsesErrorCode,
   requestId: string,
+  message?: string,
 ): GatewayResponsesErrorBody {
   return {
     error: {
       code,
-      message: responsesErrorMessage(code),
+      message: message ?? responsesErrorMessage(code),
     },
     requestId,
   };
@@ -553,6 +568,9 @@ function classifyResponsesError(message: string): GatewayResponsesErrorCode {
   if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
     return "provider_credentials_missing";
   }
+  if (message.includes("Responses API cannot use provider")) {
+    return "provider_protocol_unsupported";
+  }
   return "provider_request_failed";
 }
 
@@ -568,6 +586,9 @@ function responsesErrorMessage(code: GatewayResponsesErrorCode): string {
   }
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
+  }
+  if (code === "provider_protocol_unsupported") {
+    return "The selected provider cannot serve Responses API requests.";
   }
   return "Provider request failed.";
 }

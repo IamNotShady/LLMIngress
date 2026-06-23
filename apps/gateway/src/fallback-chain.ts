@@ -81,9 +81,28 @@ export function buildFallbackAttemptCandidates(input: {
 
   const fallbackCandidates = input.routePolicy.candidates
     .filter((candidate) => candidate.isFallback)
-    .sort((left, right) => left.candidateOrder - right.candidateOrder);
+    .sort((left, right) =>
+      input.routePolicy.strategy === "quality_first"
+        ? compareFallbackPriceDescending(left, right)
+        : left.candidateOrder - right.candidateOrder,
+    );
 
   return [selectedCandidate, ...fallbackCandidates];
+}
+
+function compareFallbackPriceDescending(
+  left: GatewayRouteCandidateSnapshot,
+  right: GatewayRouteCandidateSnapshot,
+): number {
+  const priceDiff = readCandidatePriceScore(right) - readCandidatePriceScore(left);
+  return priceDiff === 0 ? left.candidateOrder - right.candidateOrder : priceDiff;
+}
+
+function readCandidatePriceScore(candidate: GatewayRouteCandidateSnapshot): number {
+  if (candidate.price.status === "unknown_price") {
+    return Number.NEGATIVE_INFINITY;
+  }
+  return candidate.price.inputUsdPerMillionTokens + candidate.price.outputUsdPerMillionTokens;
 }
 
 export async function executeFallbackChain(

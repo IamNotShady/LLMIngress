@@ -52,7 +52,7 @@ export async function seedAnalyticsBackendData(fixture: TestPostgresFixture): Pr
   await fixture.query(
     `
       insert into route_policies (id, virtual_model_id, strategy)
-      values ($1, $2, 'balanced'),
+      values ($1, $2, 'random'),
              ($3, $4, 'fixed')
     `,
     [

@@ -59,7 +59,7 @@ export type ExportedRoutePolicy = {
   id: string;
   primaryProviderModelIds: string[];
   rules: RoutePolicyRules;
-  strategy: "balanced" | "cost_first" | "fixed" | "quality_first";
+  strategy: "cost_first" | "fixed" | "quality_first" | "random";
   virtualModelId: string;
 };
 
@@ -907,7 +907,7 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
       rules: normalizeRoutePolicyRules(input.rules ?? {}),
       strategy: normalizeEnum(
         input.strategy,
-        ["balanced", "cost_first", "fixed", "quality_first"],
+        ["cost_first", "fixed", "quality_first", "random"],
         `routePolicies[${index}].strategy`,
       ),
       virtualModelId: normalizeUuid(input.virtualModelId, `routePolicies[${index}].virtualModelId`),

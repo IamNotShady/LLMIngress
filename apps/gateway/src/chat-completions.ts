@@ -408,22 +408,68 @@ function invalidChatRequest(requestId: string): GatewayChatCompletionRequestFail
 }
 
 function readOpenAIChatMessage(value: unknown): NormalizedOpenAIChatMessage | null {
-  if (!isRecord(value) || typeof value.content !== "string" || !value.content.trim()) {
+  if (!isRecord(value)) {
     return null;
   }
-  if (
-    value.role !== "system" &&
-    value.role !== "user" &&
-    value.role !== "assistant" &&
-    value.role !== "tool"
-  ) {
+  const role = value.role;
+  if (role !== "system" && role !== "user" && role !== "assistant" && role !== "tool") {
     return null;
   }
 
-  return {
-    content: value.content,
-    role: value.role,
-  };
+  const content = readOpenAIChatMessageContent(value.content);
+  const toolCalls = readOptionalObjectArray(value.tool_calls);
+  if (toolCalls === null) {
+    return null;
+  }
+  if (role === "assistant" && !content && (!toolCalls || toolCalls.length === 0)) {
+    return null;
+  }
+  if (role !== "assistant" && !content) {
+    return null;
+  }
+  if (role === "tool" && typeof value.tool_call_id !== "string") {
+    return null;
+  }
+  if (value.name !== undefined && typeof value.name !== "string") {
+    return null;
+  }
+
+  return omitUndefined({
+    content: content ?? null,
+    name: value.name,
+    role,
+    tool_call_id: role === "tool" ? value.tool_call_id : undefined,
+    tool_calls: toolCalls,
+  }) as NormalizedOpenAIChatMessage;
+}
+
+function readOpenAIChatMessageContent(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+
+  const textParts = value.map(readOpenAIChatTextContentPart);
+  if (textParts.some((part) => part === null)) {
+    return null;
+  }
+  const text = textParts.join("\n").trim();
+  return text || null;
+}
+
+function readOpenAIChatTextContentPart(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.text !== "string") {
+    return null;
+  }
+  if (value.type !== "text" && value.type !== "input_text" && value.type !== "output_text") {
+    return null;
+  }
+  return value.text;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {

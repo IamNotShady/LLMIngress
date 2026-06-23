@@ -55,6 +55,7 @@ import {
   buildRoutePolicyHealthWarnings,
   type ConsoleProviderModelOption,
   type ConsoleRoutePolicy,
+  filterRoutePolicyEditorHealthyProviderModelOptions,
   filterRoutePolicyEditorProviderModelOptions,
   listProviderModelOptions,
   listRoutePolicies,
@@ -1177,8 +1178,12 @@ export async function VirtualModelsSection({
   const databaseUrl = getConsoleDatabaseUrl();
   const virtualModels = await listVirtualModels(databaseUrl);
   const routePolicies = await listRoutePolicies(databaseUrl);
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const providerModelOptions = orderProviderModelsForConsole(
-    await listProviderModelOptions(databaseUrl),
+    filterRoutePolicyEditorHealthyProviderModelOptions(
+      await listProviderModelOptions(databaseUrl),
+      providerHealthSummaries,
+    ),
   );
   const routePolicyByVmId = new Map(routePolicies.map((policy) => [policy.virtualModelId, policy]));
   const statusFilter = readSingleSearchParam(searchParams.vmStatus) ?? "";
@@ -1222,6 +1227,22 @@ export async function VirtualModelsSection({
     ? (routePolicyByVmId.get(dialogVirtualModel.id) ?? null)
     : null;
   const dialogCloseHref = buildQueryHref(searchParams, { virtualModelDialog: undefined });
+  const totalVirtualModelRequests24h = virtualModels.reduce(
+    (total, virtualModel) => total + virtualModel.requestCount24h,
+    0,
+  );
+  const totalVirtualModelCost24h = virtualModels.reduce(
+    (total, virtualModel) => total + parseUsd(virtualModel.cost24hUsd),
+    0,
+  );
+  const totalVirtualModelFailures = virtualModels.reduce(
+    (total, virtualModel) => total + virtualModel.failureCountTotal,
+    0,
+  );
+  const totalVirtualModelRequests = virtualModels.reduce(
+    (total, virtualModel) => total + virtualModel.requestCountTotal,
+    0,
+  );
   const fallbackOverview = [
     { name: "No fallback triggered", value: 82 },
     { name: "gpt-4o-mini", value: 12 },
@@ -1233,21 +1254,22 @@ export async function VirtualModelsSection({
         <StatCard icon="VM" label="Virtual Models" value={String(virtualModels.length)} />
         <StatCard
           icon="Q"
-          label="Requests today"
-          value={formatCompactNumber(placeholderInt("vm-requests", 4000, 20000))}
-          delta="vs yesterday +12.5%"
+          label="Requests 24h"
+          value={formatCompactNumber(totalVirtualModelRequests24h)}
         />
         <StatCard
           icon="$"
-          label="Cost this month"
-          value={formatVirtualModelCost(placeholderFloat("vm-cost", 80, 260, 2))}
-          delta="vs last month -8.3%"
+          label="Cost 24h"
+          value={formatVirtualModelCost(totalVirtualModelCost24h)}
         />
         <StatCard
           icon="!"
           label="Avg failure rate"
-          value={`${placeholderFloat("vm-failure", 0.8, 2.2, 2).toFixed(2)}%`}
-          delta="vs yesterday -0.4pp"
+          value={formatVirtualModelFailureRate(
+            totalVirtualModelRequests,
+            totalVirtualModelFailures,
+            2,
+          )}
         />
       </div>
       <form className="vm-filter-bar" action="/models" method="get">
@@ -1296,8 +1318,8 @@ export async function VirtualModelsSection({
                       <th>Strategy</th>
                       <th className="num">Candidates</th>
                       <th>Default hit model</th>
-                      <th className="num">Requests today</th>
-                      <th className="num">Cost today</th>
+                      <th className="num">Requests 24h</th>
+                      <th className="num">Cost 24h</th>
                       <th className="num">Failure rate</th>
                       <th>Status</th>
                       <th>Actions</th>
@@ -1335,17 +1357,14 @@ export async function VirtualModelsSection({
                           <td className="num">{policy?.candidates.length ?? 0}</td>
                           <td>{formatDefaultCandidate(policy)}</td>
                           <td className="num">
-                            {formatCompactNumber(
-                              placeholderInt(`${virtualModel.id}-requests`, 900, 9800),
-                            )}
+                            {formatCompactNumber(virtualModel.requestCount24h)}
                           </td>
+                          <td className="num">{formatVirtualModelCost(virtualModel.cost24hUsd)}</td>
                           <td className="num">
-                            {formatVirtualModelCost(
-                              placeholderFloat(`${virtualModel.id}-cost`, 5, 90, 2),
+                            {formatVirtualModelFailureRate(
+                              virtualModel.requestCountTotal,
+                              virtualModel.failureCountTotal,
                             )}
-                          </td>
-                          <td className="num">
-                            {placeholderFloat(`${virtualModel.id}-fail`, 0.5, 2.6, 1).toFixed(1)}%
                           </td>
                           <td>
                             {virtualModel.enabled ? (
@@ -1405,31 +1424,20 @@ export async function VirtualModelsSection({
                   <dd>{formatDefaultCandidate(selectedRoutePolicy)}</dd>
                 </div>
                 <div>
-                  <dt>Requests today</dt>
-                  <dd>
-                    {formatCompactNumber(
-                      placeholderInt(`${selectedVirtualModel.id}-detail-requests`, 900, 9800),
-                    )}
-                  </dd>
+                  <dt>Requests 24h</dt>
+                  <dd>{formatCompactNumber(selectedVirtualModel.requestCount24h)}</dd>
                 </div>
                 <div>
-                  <dt>Cost today</dt>
-                  <dd>
-                    {formatVirtualModelCost(
-                      placeholderFloat(`${selectedVirtualModel.id}-detail-cost`, 5, 90, 2),
-                    )}
-                  </dd>
+                  <dt>Cost 24h</dt>
+                  <dd>{formatVirtualModelCost(selectedVirtualModel.cost24hUsd)}</dd>
                 </div>
                 <div>
                   <dt>Failure rate</dt>
                   <dd>
-                    {placeholderFloat(
-                      `${selectedVirtualModel.id}-detail-fail`,
-                      0.5,
-                      2.6,
-                      1,
-                    ).toFixed(1)}
-                    %
+                    {formatVirtualModelFailureRate(
+                      selectedVirtualModel.requestCountTotal,
+                      selectedVirtualModel.failureCountTotal,
+                    )}
                   </dd>
                 </div>
               </dl>
@@ -1489,10 +1497,7 @@ export async function VirtualModelsSection({
         <VirtualModelRouteDialog
           closeHref={dialogCloseHref}
           mode="edit"
-          providerModelOptions={mergeRoutePolicyEditorProviderModelOptions(
-            providerModelOptions,
-            dialogRoutePolicy?.candidates ?? [],
-          )}
+          providerModelOptions={providerModelOptions}
           routePolicy={dialogRoutePolicy}
           virtualModel={dialogVirtualModel}
         />
@@ -1607,7 +1612,7 @@ export async function RoutePoliciesSection({
               ))}
             </select>
             <label htmlFor="route-policy-strategy">Route policy strategy</label>
-            <select id="route-policy-strategy" name="strategy" required defaultValue="balanced">
+            <select id="route-policy-strategy" name="strategy" required defaultValue="random">
               {routePolicyStrategies.map((strategy) => (
                 <option key={strategy} value={strategy}>
                   {strategy}
@@ -4301,8 +4306,24 @@ function formatDefaultCandidate(routePolicy: ConsoleRoutePolicy | null | undefin
   return routePolicy?.primaryCandidates[0]?.modelDisplayName ?? "-";
 }
 
-function formatVirtualModelCost(value: number): string {
-  return `$${value.toFixed(2)}`;
+function parseUsd(value: number | string | null): number {
+  const parsed = typeof value === "number" ? value : Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatVirtualModelCost(value: number | string | null): string {
+  return `$${parseUsd(value).toFixed(8)}`;
+}
+
+function formatVirtualModelFailureRate(
+  requestCount: number,
+  failureCount: number,
+  digits = 1,
+): string {
+  if (requestCount <= 0) {
+    return `${(0).toFixed(digits)}%`;
+  }
+  return `${((failureCount / requestCount) * 100).toFixed(digits)}%`;
 }
 
 function formatRouteStrategyLabel(strategy: string): string {
@@ -4311,6 +4332,9 @@ function formatRouteStrategyLabel(strategy: string): string {
   }
   if (strategy === "quality_first") {
     return "Quality First";
+  }
+  if (strategy === "random") {
+    return "Random";
   }
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
 }

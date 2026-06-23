@@ -97,12 +97,53 @@ describe("feat-033 fallback chain execution", () => {
       }).map((attempt) => attempt.providerModelId),
     ).toEqual(["selected", "fallback-one", "fallback-two"]);
   });
+
+  it("orders quality_first fallback attempts from most expensive to least expensive", () => {
+    const selected = candidate({
+      candidateOrder: 1,
+      inputPrice: 10,
+      outputPrice: 20,
+      providerModelId: "selected",
+    });
+    const routePolicy: GatewayRoutePolicySnapshot = {
+      candidates: [
+        selected,
+        candidate({
+          candidateOrder: 2,
+          inputPrice: 2,
+          isFallback: true,
+          outputPrice: 4,
+          providerModelId: "fallback-cheap",
+        }),
+        candidate({
+          candidateOrder: 3,
+          inputPrice: 6,
+          isFallback: true,
+          outputPrice: 12,
+          providerModelId: "fallback-expensive",
+        }),
+      ],
+      id: "route-policy",
+      strategy: "quality_first",
+      virtualModelId: "virtual-model",
+      virtualModelName: "coding",
+    };
+
+    expect(
+      buildFallbackAttemptCandidates({
+        routePolicy,
+        selectedProviderModelId: "selected",
+      }).map((attempt) => attempt.providerModelId),
+    ).toEqual(["selected", "fallback-expensive", "fallback-cheap"]);
+  });
 });
 
 function candidate(input: {
   candidateOrder: number;
+  inputPrice?: number;
   isFallback?: boolean;
   modelId?: string;
+  outputPrice?: number;
   providerModelId: string;
 }): FallbackChainCandidate {
   return {
@@ -113,11 +154,16 @@ function candidate(input: {
     isFallback: input.isFallback ?? false,
     modelId: input.modelId ?? "primary",
     price: {
+      currency: "USD",
+      inputUsdPerMillionTokens: input.inputPrice ?? 1,
       modelId: input.modelId ?? "primary",
+      outputUsdPerMillionTokens: input.outputPrice ?? 1,
       priceVersion: "mvp-static-2026-06-13",
       providerKey: "openai",
-      reason: "model_not_in_builtin_registry",
-      status: "unknown_price",
+      snapshotDate: "2026-06-13",
+      source: "built_in_static_snapshot",
+      status: "priced",
+      unit: "per_1m_tokens",
     },
     providerId: "provider",
     providerKey: "openai",

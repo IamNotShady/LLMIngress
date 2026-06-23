@@ -101,4 +101,20 @@ describe("feat-037 OpenAI responses stateless endpoint", () => {
       statusCode: 400,
     });
   });
+
+  it("keeps detailed runtime failure reasons in Responses error bodies", () => {
+    expect(
+      createGatewayResponsesErrorBody(
+        "provider_protocol_unsupported",
+        "req_protocol_unit",
+        "Responses API cannot use provider claude_code.",
+      ),
+    ).toEqual({
+      error: {
+        code: "provider_protocol_unsupported",
+        message: "Responses API cannot use provider claude_code.",
+      },
+      requestId: "req_protocol_unit",
+    });
+  });
 });

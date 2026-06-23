@@ -9,7 +9,7 @@ import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { isRemovedProviderKey } from "@llmingress/db/providers";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
 
-export const routePolicyStrategies = ["fixed", "cost_first", "balanced", "quality_first"] as const;
+export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
@@ -81,6 +81,11 @@ export type RoutePolicyEditorFilterInput = {
 export type RoutePolicyEditorFilters = {
   modelQuery: string | null;
   providerKey: string | null;
+};
+
+export type RoutePolicyEditorProviderHealth = {
+  id: string;
+  status: string | null | undefined;
 };
 
 export type RoutePolicyHealthWarningCandidate = {
@@ -182,7 +187,7 @@ export function normalizeRoutePolicyFormInput(
     throw new Error("Route policy virtual model is required.");
   }
   if (!isRoutePolicyStrategy(strategy)) {
-    throw new Error("Route policy strategy must be fixed, cost_first, balanced, or quality_first.");
+    throw new Error("Route policy strategy must be fixed, cost_first, quality_first, or random.");
   }
   if (primaryProviderModelIds.length === 0) {
     throw new Error("Route policy requires at least one primary provider model.");
@@ -298,6 +303,18 @@ export function filterRoutePolicyEditorProviderModelOptions(
     }
     return true;
   });
+}
+
+export function filterRoutePolicyEditorHealthyProviderModelOptions(
+  options: readonly ConsoleProviderModelOption[],
+  providerHealth: readonly RoutePolicyEditorProviderHealth[],
+): ConsoleProviderModelOption[] {
+  const unhealthyProviderIds = new Set(
+    providerHealth
+      .filter((summary) => isWarningHealthStatus(summary.status))
+      .map((summary) => summary.id),
+  );
+  return options.filter((option) => !unhealthyProviderIds.has(option.providerId));
 }
 
 export function mergeRoutePolicyEditorProviderModelOptions(

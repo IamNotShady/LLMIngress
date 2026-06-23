@@ -24,7 +24,9 @@ export function buildOpenAIChatCompletionRequestMetadata(input: {
   request: NormalizedOpenAIChatRequest;
 }): GatewayRequestMetadata {
   const toolTextParts = readToolTextParts(input.rawBody);
-  const messageTextParts = input.request.messages.map((message) => message.content);
+  const messageTextParts = input.request.messages.flatMap((message) =>
+    typeof message.content === "string" ? [message.content] : [],
+  );
 
   return {
     estimatedInputTokens: estimateTextTokens([...messageTextParts, ...toolTextParts]),
@@ -34,7 +36,10 @@ export function buildOpenAIChatCompletionRequestMetadata(input: {
     protocol: "chat_completions",
     stream: input.request.stream ?? false,
     usesTools:
-      toolTextParts.length > 0 || input.request.messages.some((message) => message.role === "tool"),
+      toolTextParts.length > 0 ||
+      input.request.messages.some(
+        (message) => message.role === "tool" || (message.tool_calls?.length ?? 0) > 0,
+      ),
   };
 }
 

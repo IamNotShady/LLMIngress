@@ -44,6 +44,58 @@ describe("feat-036 OpenAI chat completions endpoint", () => {
     });
   });
 
+  it("normalizes chat text parts and tool-call messages from agent context", () => {
+    expect(
+      normalizeOpenAIChatCompletionRequest(
+        {
+          messages: [
+            {
+              content: [{ text: "which model are you?", type: "text" }],
+              role: "user",
+            },
+            {
+              content: null,
+              role: "assistant",
+              tool_calls: [
+                {
+                  function: { arguments: "{}", name: "terminal" },
+                  id: "call_terminal",
+                  type: "function",
+                },
+              ],
+            },
+            {
+              content: [{ text: "model: random", type: "text" }],
+              role: "tool",
+              tool_call_id: "call_terminal",
+            },
+          ],
+          model: "random",
+        },
+        "req_chat_tool_context",
+      ),
+    ).toEqual({
+      ok: true,
+      request: {
+        messages: [
+          { content: "which model are you?", role: "user" },
+          {
+            content: null,
+            role: "assistant",
+            tool_calls: [
+              {
+                function: { arguments: "{}", name: "terminal" },
+                id: "call_terminal",
+                type: "function",
+              },
+            ],
+          },
+          { content: "model: random", role: "tool", tool_call_id: "call_terminal" },
+        ],
+      },
+    });
+  });
+
   it("returns stable 400 errors for invalid chat completion payloads", () => {
     expect(normalizeOpenAIChatCompletionRequest({ messages: [] }, "req_invalid_unit")).toEqual({
       body: createGatewayChatCompletionErrorBody("invalid_chat_request", "req_invalid_unit"),

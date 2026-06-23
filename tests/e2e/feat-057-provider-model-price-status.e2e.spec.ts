@@ -88,7 +88,7 @@ test("refresh provider models shows priced and unknown price status in provider 
             description: "Price Status VM",
             name: "price-status-vm",
             primaryProviderModelIds: providerModels.map((model) => model.id),
-            strategy: "balanced",
+            strategy: "random",
           });
           await expect.poll(() => countRoutePolicyCandidates(fixture)).toBe(3);
         } finally {

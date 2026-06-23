@@ -3,7 +3,7 @@
 import { type DragEvent, useMemo, useState } from "react";
 import { FlatIcon } from "../_components/flat-icon";
 
-type Strategy = "fixed" | "cost_first" | "balanced" | "quality_first";
+type Strategy = "fixed" | "cost_first" | "quality_first" | "random";
 
 type ProviderModelOption = {
   availability: string;
@@ -37,7 +37,7 @@ type VirtualModel = {
   name: string;
 };
 
-const strategies: Strategy[] = ["fixed", "cost_first", "balanced", "quality_first"];
+const strategies: Strategy[] = ["fixed", "cost_first", "quality_first", "random"];
 
 export function VirtualModelRouteDialogClient({
   closeHref,
@@ -52,7 +52,7 @@ export function VirtualModelRouteDialogClient({
   routePolicy: RoutePolicy | null;
   virtualModel: VirtualModel | null;
 }) {
-  const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "balanced");
+  const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "random");
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>(
     routePolicy?.candidates ?? [],
   );
@@ -441,6 +441,9 @@ function formatRouteStrategyLabel(strategy: Strategy): string {
   if (strategy === "quality_first") {
     return "Quality First";
   }
+  if (strategy === "random") {
+    return "Random";
+  }
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
 }
 
@@ -452,9 +455,9 @@ function formatRouteStrategyDescription(strategy: Strategy): string {
     return "Prefer the lowest-cost candidate";
   }
   if (strategy === "quality_first") {
-    return "Prefer the highest-quality candidate";
+    return "Prefer the highest-priced candidate";
   }
-  return "Balances cost, health, and availability";
+  return "Pick a random eligible candidate each request";
 }
 
 function formatModelContext(contextWindow: number | null): string {

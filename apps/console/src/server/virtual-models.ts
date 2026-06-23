@@ -14,9 +14,13 @@ export type NormalizedVirtualModelFormInput = {
 
 export type ConsoleVirtualModel = NormalizedVirtualModelFormInput & {
   allowedAgentCount: number;
+  cost24hUsd: string | null;
   defaultAgentCount: number;
   enabled: boolean;
+  failureCountTotal: number;
   id: string;
+  requestCountTotal: number;
+  requestCount24h: number;
   routePolicyCount: number;
 };
 
@@ -28,11 +32,15 @@ type VirtualModelDependencyCounts = {
 
 type VirtualModelRow = PostgresQueryResultRow & {
   allowed_agent_count: number;
+  cost_24h_usd: string | null;
   default_agent_count: number;
   display_name: string;
   enabled: boolean;
+  failure_count_total: number;
   id: string;
   name: string;
+  request_count_total: number;
+  request_count_24h: number;
   route_policy_count: number;
 };
 
@@ -116,7 +124,11 @@ export async function createVirtualModel(input: {
                     enabled,
                     0::integer as route_policy_count,
                     0::integer as default_agent_count,
-                    0::integer as allowed_agent_count
+                    0::integer as allowed_agent_count,
+                    0::integer as request_count_total,
+                    0::integer as failure_count_total,
+                    0::integer as request_count_24h,
+                    0::numeric(20, 8)::text as cost_24h_usd
         `,
         [virtualModelId, input.virtualModel.name, input.virtualModel.description],
       );
@@ -167,7 +179,32 @@ export async function updateVirtualModel(input: {
                       select count(*)::integer
                       from agent_virtual_models
                       where agent_virtual_models.virtual_model_id = virtual_models.id
-                    ) as allowed_agent_count
+                    ) as allowed_agent_count,
+                    (
+                      select count(*)::integer
+                      from request_activity
+                      where request_activity.virtual_model_id = virtual_models.id
+                    ) as request_count_total,
+                    (
+                      select count(*)::integer
+                      from request_activity
+                      where request_activity.virtual_model_id = virtual_models.id
+                        and request_activity.status = 'failed'
+                    ) as failure_count_total,
+                    (
+                      select count(*)::integer
+                      from request_activity
+                      where request_activity.virtual_model_id = virtual_models.id
+                        and request_activity.started_at >= now() - interval '24 hours'
+                    ) as request_count_24h,
+                    (
+                      select coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
+                      from request_activity
+                      left join request_costs
+                        on request_costs.request_activity_id = request_activity.id
+                      where request_activity.virtual_model_id = virtual_models.id
+                        and request_activity.started_at >= now() - interval '24 hours'
+                    ) as cost_24h_usd
         `,
         [input.id, input.virtualModel.name, input.virtualModel.description],
       );
@@ -306,7 +343,32 @@ function buildVirtualModelListSql(): string {
              join agents on agents.id = agent_virtual_models.agent_id
              where agent_virtual_models.virtual_model_id = virtual_models.id
                and agents.deleted_at is null
-           ) as allowed_agent_count
+           ) as allowed_agent_count,
+           (
+             select count(*)::integer
+             from request_activity
+             where request_activity.virtual_model_id = virtual_models.id
+           ) as request_count_total,
+           (
+             select count(*)::integer
+             from request_activity
+             where request_activity.virtual_model_id = virtual_models.id
+               and request_activity.status = 'failed'
+           ) as failure_count_total,
+           (
+             select count(*)::integer
+             from request_activity
+             where request_activity.virtual_model_id = virtual_models.id
+               and request_activity.started_at >= now() - interval '24 hours'
+           ) as request_count_24h,
+           (
+             select coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
+             from request_activity
+             left join request_costs
+               on request_costs.request_activity_id = request_activity.id
+             where request_activity.virtual_model_id = virtual_models.id
+               and request_activity.started_at >= now() - interval '24 hours'
+           ) as cost_24h_usd
     from virtual_models
     where virtual_models.deleted_at is null
     order by virtual_models.name
@@ -316,11 +378,15 @@ function buildVirtualModelListSql(): string {
 function rowToConsoleVirtualModel(row: VirtualModelRow): ConsoleVirtualModel {
   return {
     allowedAgentCount: row.allowed_agent_count,
+    cost24hUsd: row.cost_24h_usd,
     defaultAgentCount: row.default_agent_count,
     description: row.display_name,
     enabled: row.enabled,
+    failureCountTotal: row.failure_count_total,
     id: row.id,
     name: row.name,
+    requestCountTotal: row.request_count_total,
+    requestCount24h: row.request_count_24h,
     routePolicyCount: row.route_policy_count,
   };
 }

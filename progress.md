@@ -1485,3 +1485,32 @@
   - Implemented SQL-backed Agent/Virtual Model/Provider/Status/time-range/Request ID filters, 8-row request table, selected request detail, ordered fallback timeline, metric cards, conditional error info, safe request metadata, and Activity-only responsive CSS.
   - Visual QA: compared `docs/UI/06_activity.png` with Playwright desktop/mobile screenshots through `view_image`; adjusted table column sizing and compact missing table values to avoid clipped headers or overlapping text; mobile `body` horizontal overflow was false.
   - Verification passed: focused feat-116 unit/E2E, related feat-046/098/104 regressions, console-ui Activity smoke, `pnpm run verify`, and final `pnpm run verify:features` with all 116 passing features re-verified.
+  - Interactive follow-up: aligned the Activity request-detail panel top with the request-list table header, fixed metric-card long number overflow, and changed Responses runtime failures so unsupported provider/protocol routes persist the concrete error message for Activity Error info instead of the generic `Provider request failed.`.
+  - Follow-up verification passed: `pnpm exec vitest run tests/features/feat-037-responses-stateless.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, `git diff --check`, plus live browser checks for Activity alignment and metric overflow. Full E2E was not rerun during the active interactive dev-server session.
+
+- [x] 2026-06-23 Virtual Model metrics interactive fix:
+  - Root cause: `/models` Virtual Model KPI/list/detail metrics used deterministic placeholder values, so newly created unused models such as `mix` showed non-zero requests/cost/failure rates.
+  - Verified live DB state for `mix`: `request_activity` count 0, failed count 0, and no latest request.
+  - Replaced VM metrics with real `request_activity` + `request_costs` aggregates in `listVirtualModels`: Requests/Cost are rolling 24h with 8-decimal cost precision, Failure rate is all-time; removed fake VM metric deltas from the page.
+  - Added unit coverage for unused VM zero metrics and used VM non-zero metrics, plus a Console UI E2E regression spec for row/detail behavior.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-028-virtual-model-crud.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, `git diff --check`, and in-app browser verification on `http://localhost:3000/models` showing `mix` as `0 / $0.00 / 0.0%` with no console warnings/errors.
+  - Note: the focused Console UI E2E was not rerun during live testing because it starts a second Next dev server that conflicts with the intentionally running interactive dev server.
+
+- [x] 2026-06-23 Route strategy interactive fix:
+  - Changed Quality First semantics to pick the highest-priced eligible primary candidate. For Quality First fallbacks, Gateway now tries configured fallback candidates from highest price to lowest price after the selected candidate.
+  - Removed Balanced from current Console route-policy inputs, config import validation, and route-policy normalization; added Random strategy for testing, selecting a random eligible primary candidate per request.
+  - Added migration `0047_route_policy_random_strategy` to convert existing `balanced` rows to `random` and replace the `route_policies.strategy` check constraint. Applied the migration to the local dev database; `mix` now stores `strategy=random`, while `gpt55=cost_first` and `opus48=fixed` were unchanged.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-032-route-engine.unit.test.ts tests/features/feat-033-fallback-chain.unit.test.ts tests/features/feat-029-route-policy-crud.unit.test.ts`, `pnpm exec vitest run tests/features/feat-087-migration-status-check.unit.test.ts`, `pnpm run db:migrate:check`, `pnpm run typecheck`, and `pnpm run lint`.
+  - Lightweight HTTP check on `/models?selected=beb7a335-014b-479c-bd9a-2bab4ffcdbaf&virtualModelDialog=beb7a335-014b-479c-bd9a-2bab4ffcdbaf` showed `Random`, `Quality First`, `Cost First`, and `Fixed` text with no `Balanced` text; it did not reuse the signed-in in-app browser session.
+
+- [x] 2026-06-23 Hermes chat-completions tool-context fix:
+  - Root cause: Hermes' second turn included OpenAI Chat tool-call context, but Gateway only accepted messages with `content: string`, so valid assistant `tool_calls` / tool result messages were rejected before routing.
+  - Updated `/v1/chat/completions` normalization to accept text content parts, assistant `tool_calls` with null content, and tool result messages while preserving tool metadata in the provider payload. Request metadata now treats `tool_calls` as tool usage without assuming every message has string content.
+  - TDD red observed first: the new feat-036 unit test reproduced the `invalid_chat_request` response for a Hermes-style tool context.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts`, `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts tests/features/feat-018-openai-adapter.unit.test.ts tests/features/feat-040-request-metadata.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`.
+
+- [x] 2026-06-23 Route policy Add Model health filter:
+  - Add Model provider/model options now filter out provider-level warning health statuses (`auth_failed`, `network_error`, `quota_limited`, `unhealthy`) so unhealthy Providers do not appear in the picker.
+  - Existing selected candidates still render in the route policy display; the filter only affects new selectable options.
+  - TDD red observed first in `tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`. Full E2E was not rerun during the active interactive dev-server session.

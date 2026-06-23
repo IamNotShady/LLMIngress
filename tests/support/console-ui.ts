@@ -18,10 +18,10 @@ async function ensureOpen(summaryOrControl: Locator, details: Locator): Promise<
 /** Open a standalone disclosure (e.g. "New provider", "Add from template"). */
 export async function openDisclosure(page: Page, label: string): Promise<void> {
   const currentDialogLinks: Record<string, string[]> = {
-    "Add from template": ["添加 Provider", "+ 添加 Provider"],
+    "Add from template": ["Add Provider", "+ Add Provider"],
     "New agent": ["Create Agent", "+ Create Agent"],
-    "New provider": ["添加 Provider", "+ 添加 Provider"],
-    "New virtual model": ["创建 Virtual Model", "+ 创建 Virtual Model"],
+    "New provider": ["Add Provider", "+ Add Provider"],
+    "New virtual model": ["Create Virtual Model", "+ Create Virtual Model"],
   };
   for (const currentDialogLink of currentDialogLinks[label] ?? []) {
     const link = page.getByRole("link", { exact: true, name: currentDialogLink });

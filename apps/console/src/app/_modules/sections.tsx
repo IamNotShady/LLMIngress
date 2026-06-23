@@ -36,7 +36,7 @@ import {
   listConsoleProviderHealthSummaries,
 } from "../../server/provider-health";
 import {
-  formatProviderApiKeyTestStatusZhLabel,
+  formatProviderApiKeyTestStatusLabel,
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
 } from "../../server/provider-keys";
@@ -621,8 +621,8 @@ function ProviderHealthPill({ status }: { status: string }) {
   );
 }
 
-function ProviderHealthPillZh({ status }: { status: string }) {
-  return <ProviderStatusPill label={formatProviderHealthStatusZhLabel(status)} status={status} />;
+function ProviderHealthDetailPill({ status }: { status: string }) {
+  return <ProviderStatusPill label={formatProviderHealthStatusLabel(status)} status={status} />;
 }
 
 function ProviderApiKeyTestStatusPill({
@@ -630,9 +630,7 @@ function ProviderApiKeyTestStatusPill({
 }: {
   status: ProviderApiKeyMetadata["lastTestStatus"];
 }) {
-  return (
-    <ProviderStatusPill label={formatProviderApiKeyTestStatusZhLabel(status)} status={status} />
-  );
+  return <ProviderStatusPill label={formatProviderApiKeyTestStatusLabel(status)} status={status} />;
 }
 
 function ProviderOAuthTestStatusPill({
@@ -640,18 +638,16 @@ function ProviderOAuthTestStatusPill({
 }: {
   status: ConsoleProviderOAuthConnection["lastTestStatus"];
 }) {
-  return (
-    <ProviderStatusPill label={formatProviderApiKeyTestStatusZhLabel(status)} status={status} />
-  );
+  return <ProviderStatusPill label={formatProviderApiKeyTestStatusLabel(status)} status={status} />;
 }
 
 function ModelAvailabilityPill({ value }: { value: string }) {
   const normalized = value.toLowerCase();
   if (normalized === "available") {
-    return <span className="pill--ok pill">启用</span>;
+    return <span className="pill--ok pill">Enabled</span>;
   }
   if (normalized === "disabled") {
-    return <span className="pill--danger pill">禁用</span>;
+    return <span className="pill--danger pill">Disabled</span>;
   }
   return <span className="pill">{formatModelAvailability(value)}</span>;
 }
@@ -670,30 +666,30 @@ function ProviderStatusPill({ label, status }: { label: string; status: string }
   return <span className="pill--danger pill">{label}</span>;
 }
 
-function formatProviderHealthStatusZhLabel(status: string): string {
+function formatProviderHealthStatusLabel(status: string): string {
   const normalized = status.toLowerCase();
   if (normalized === "healthy") {
-    return "可用";
+    return "Healthy";
   }
   if (normalized === "disabled") {
-    return "禁用";
+    return "Disabled";
   }
   if (normalized === "checking") {
-    return "正在检查";
+    return "Checking";
   }
   if (normalized === "unhealthy") {
-    return "当前不可用";
+    return "Unhealthy";
   }
   if (normalized === "auth_failed") {
-    return "鉴权失败";
+    return "Auth failed";
   }
   if (normalized === "quota_limited") {
-    return "额度受限";
+    return "Quota limited";
   }
   if (normalized === "network_error") {
-    return "网络错误";
+    return "Network error";
   }
-  return "未知";
+  return "Unknown";
 }
 
 export async function UsageSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
@@ -1090,9 +1086,9 @@ export async function VirtualModelsSection({
     : null;
   const dialogCloseHref = buildQueryHref(searchParams, { virtualModelDialog: undefined });
   const fallbackOverview = [
-    { name: "未触发回退", value: 82 },
+    { name: "No fallback triggered", value: 82 },
     { name: "gpt-4o-mini", value: 12 },
-    { name: "其他", value: 6 },
+    { name: "Other", value: 6 },
   ];
   return (
     <section className="vm-dashboard" aria-label="Virtual models and routes">
@@ -1100,36 +1096,36 @@ export async function VirtualModelsSection({
         <StatCard icon="VM" label="Virtual Models" value={String(virtualModels.length)} />
         <StatCard
           icon="Q"
-          label="今日请求"
+          label="Requests today"
           value={formatCompactNumber(placeholderInt("vm-requests", 4000, 20000))}
-          delta="较昨日 +12.5%"
+          delta="vs yesterday +12.5%"
         />
         <StatCard
           icon="$"
-          label="本月成本"
+          label="Cost this month"
           value={formatVirtualModelCost(placeholderFloat("vm-cost", 80, 260, 2))}
-          delta="较上月 -8.3%"
+          delta="vs last month -8.3%"
         />
         <StatCard
           icon="!"
-          label="平均失败率"
+          label="Avg failure rate"
           value={`${placeholderFloat("vm-failure", 0.8, 2.2, 2).toFixed(2)}%`}
-          delta="较昨日 -0.4pp"
+          delta="vs yesterday -0.4pp"
         />
       </div>
       <form className="vm-filter-bar" action="/models" method="get">
         <div>
-          <label htmlFor="vm-status-filter">状态</label>
+          <label htmlFor="vm-status-filter">Status</label>
           <select id="vm-status-filter" name="vmStatus" defaultValue={statusFilter}>
-            <option value="">全部</option>
-            <option value="enabled">启用</option>
-            <option value="disabled">禁用</option>
+            <option value="">All</option>
+            <option value="enabled">Enabled</option>
+            <option value="disabled">Disabled</option>
           </select>
         </div>
         <div>
           <label htmlFor="vm-strategy-filter">Strategy</label>
           <select id="vm-strategy-filter" name="vmStrategy" defaultValue={strategyFilter}>
-            <option value="">全部</option>
+            <option value="">All</option>
             {routePolicyStrategies.map((strategy) => (
               <option key={strategy} value={strategy}>
                 {formatRouteStrategyLabel(strategy)}
@@ -1140,18 +1136,18 @@ export async function VirtualModelsSection({
         <input
           aria-label="Search Virtual Model Name"
           name="vmQuery"
-          placeholder="搜索 Virtual Model Name"
+          placeholder="Search Virtual Model name"
           defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}
         />
         <button type="submit">
           <FlatIcon name="filter" />
-          <span>筛选</span>
+          <span>Apply</span>
         </button>
       </form>
       <div className="vm-shell">
         <div className="agents-main-column">
           <div className="chart-card">
-            <h2 className="chart-card-title">Virtual Model 列表</h2>
+            <h2 className="chart-card-title">Virtual Model list</h2>
             {visibleVirtualModels.length === 0 ? (
               <p>No virtual models configured.</p>
             ) : (
@@ -1161,13 +1157,13 @@ export async function VirtualModelsSection({
                     <tr>
                       <th>Virtual Model</th>
                       <th>Strategy</th>
-                      <th className="num">候选数</th>
-                      <th>默认命中模型</th>
-                      <th className="num">今日请求</th>
-                      <th className="num">今日成本</th>
-                      <th className="num">失败率</th>
-                      <th>状态</th>
-                      <th>操作</th>
+                      <th className="num">Candidates</th>
+                      <th>Default hit model</th>
+                      <th className="num">Requests today</th>
+                      <th className="num">Cost today</th>
+                      <th className="num">Failure rate</th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1216,9 +1212,9 @@ export async function VirtualModelsSection({
                           </td>
                           <td>
                             {virtualModel.enabled ? (
-                              <span className="pill--ok pill">启用</span>
+                              <span className="pill--ok pill">Enabled</span>
                             ) : (
-                              <span className="pill">禁用</span>
+                              <span className="pill">Disabled</span>
                             )}
                           </td>
                           <td>
@@ -1229,7 +1225,7 @@ export async function VirtualModelsSection({
                               })}
                             >
                               <FlatIcon name="edit" />
-                              <span>编辑</span>
+                              <span>Edit</span>
                             </a>
                           </td>
                         </tr>
@@ -1247,9 +1243,9 @@ export async function VirtualModelsSection({
               <div className="agent-detail-head">
                 <h2>{selectedVirtualModel.name}</h2>
                 {selectedVirtualModel.enabled ? (
-                  <span className="pill--ok pill">启用</span>
+                  <span className="pill--ok pill">Enabled</span>
                 ) : (
-                  <span className="pill">禁用</span>
+                  <span className="pill">Disabled</span>
                 )}
               </div>
               <dl className="agent-detail-fields">
@@ -1264,15 +1260,15 @@ export async function VirtualModelsSection({
                 <div>
                   <dt>Candidates</dt>
                   <dd>
-                    {selectedRoutePolicy ? `${selectedRoutePolicy.candidates.length} 个模型` : "-"}
+                    {selectedRoutePolicy ? `${selectedRoutePolicy.candidates.length} models` : "-"}
                   </dd>
                 </div>
                 <div>
-                  <dt>默认命中</dt>
+                  <dt>Default hit</dt>
                   <dd>{formatDefaultCandidate(selectedRoutePolicy)}</dd>
                 </div>
                 <div>
-                  <dt>今日请求</dt>
+                  <dt>Requests today</dt>
                   <dd>
                     {formatCompactNumber(
                       placeholderInt(`${selectedVirtualModel.id}-detail-requests`, 900, 9800),
@@ -1280,7 +1276,7 @@ export async function VirtualModelsSection({
                   </dd>
                 </div>
                 <div>
-                  <dt>今日成本</dt>
+                  <dt>Cost today</dt>
                   <dd>
                     {formatVirtualModelCost(
                       placeholderFloat(`${selectedVirtualModel.id}-detail-cost`, 5, 90, 2),
@@ -1288,7 +1284,7 @@ export async function VirtualModelsSection({
                   </dd>
                 </div>
                 <div>
-                  <dt>失败率</dt>
+                  <dt>Failure rate</dt>
                   <dd>
                     {placeholderFloat(
                       `${selectedVirtualModel.id}-detail-fail`,
@@ -1319,9 +1315,9 @@ export async function VirtualModelsSection({
                           </span>
                         </div>
                         {candidate.availability === "available" ? (
-                          <span className="pill--ok pill">健康</span>
+                          <span className="pill--ok pill">Healthy</span>
                         ) : (
-                          <span className="pill--danger pill">禁用</span>
+                          <span className="pill--danger pill">Disabled</span>
                         )}
                       </div>
                     ))}
@@ -1331,7 +1327,7 @@ export async function VirtualModelsSection({
                 )}
               </section>
               <section className="agent-detail-section">
-                <h3>Fallback 概览</h3>
+                <h3>Fallback overview</h3>
                 <DonutBreakdown
                   ariaLabel="Fallback overview"
                   data={fallbackOverview}
@@ -2921,7 +2917,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   </span>
                   <div>
                     <h2>{provider.displayName}</h2>
-                    <ProviderHealthPillZh
+                    <ProviderHealthDetailPill
                       status={provider.enabled ? (providerHealth?.status ?? "unknown") : "disabled"}
                     />
                   </div>
@@ -2945,7 +2941,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       <div className="providers-content-grid">
         <div className="providers-main-column">
           <div className="chart-card providers-list-card">
-            <h2 className="chart-card-title">Provider 列表</h2>
+            <h2 className="chart-card-title">Provider list</h2>
             {providers.length === 0 ? (
               <p>No providers configured.</p>
             ) : (
@@ -2954,12 +2950,12 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   <thead>
                     <tr>
                       <th>Provider</th>
-                      <th>状态</th>
-                      <th>类型</th>
-                      <th className="num">Key 数</th>
-                      <th className="num">模型数</th>
-                      <th>最近连接</th>
-                      <th>操作</th>
+                      <th>Status</th>
+                      <th>Type</th>
+                      <th className="num">Keys</th>
+                      <th className="num">Models</th>
+                      <th>Last connected</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2989,7 +2985,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                           </td>
                           <td>
                             <a className="table-row-link" href={providerHref}>
-                              <ProviderHealthPillZh
+                              <ProviderHealthDetailPill
                                 status={
                                   provider.enabled
                                     ? (providerHealth?.status ?? "unknown")
@@ -3101,7 +3097,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
             <>
               <header className="provider-detail-head">
                 <div>
-                  <h2>Provider 详情 - {selectedProvider.displayName}</h2>
+                  <h2>Provider details - {selectedProvider.displayName}</h2>
                 </div>
                 <form
                   className="provider-refresh-form"
@@ -3121,8 +3117,8 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   {selectedProviderCredentialCount === 0 ? (
                     <p className="field-error is-visible">
                       {selectedProvider.providerType === "subscription"
-                        ? "请先添加 OAuth connection"
-                        : "请先添加 API KEY"}
+                        ? "Add an OAuth connection first"
+                        : "Add an API key first"}
                     </p>
                   ) : null}
                 </form>
@@ -3130,9 +3126,9 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
 
               <dl className="provider-detail-stats">
                 <div>
-                  <dt>状态</dt>
+                  <dt>Status</dt>
                   <dd>
-                    {formatProviderHealthStatusZhLabel(
+                    {formatProviderHealthStatusLabel(
                       selectedProvider.enabled
                         ? (selectedProviderHealth?.status ?? "unknown")
                         : "disabled",
@@ -3140,15 +3136,15 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   </dd>
                 </div>
                 <div>
-                  <dt>默认优先级</dt>
+                  <dt>Default priority</dt>
                   <dd>{formatProviderDefaultPriority(providers, selectedProvider)}</dd>
                 </div>
                 <div>
-                  <dt>可用模型</dt>
+                  <dt>Available models</dt>
                   <dd>{selectedProviderModels.length}</dd>
                 </div>
                 <div>
-                  <dt>最近连接</dt>
+                  <dt>Last connected</dt>
                   <dd>{formatProviderLastConnection(selectedProviderHealth)}</dd>
                 </div>
               </dl>
@@ -3157,10 +3153,10 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                 <div className="provider-detail-section-head">
                   <h3>
                     {selectedProvider.providerType === "subscription"
-                      ? "OAuth 管理"
+                      ? "OAuth connections"
                       : selectedProvider.providerType === "local"
-                        ? "Local 连接"
-                        : "Key 管理"}
+                        ? "Local connection"
+                        : "API keys"}
                   </h3>
                   {selectedProvider.providerType === "subscription" ? (
                     <form
@@ -3202,9 +3198,9 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                         <tr>
                           <th>Label</th>
                           <th>Priority</th>
-                          <th>状态</th>
-                          <th>最近测试</th>
-                          <th>操作</th>
+                          <th>Status</th>
+                          <th>Last tested</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3317,7 +3313,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
 
       <div className="chart-card model-library-card">
         <h2 className="chart-card-title">
-          模型库{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
+          Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
         </h2>
         {selectedProviderModels.length === 0 ? (
           <p>No provider models discovered yet.</p>
@@ -3329,11 +3325,11 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   <th>Provider</th>
                   <th>Model ID</th>
                   <th>Context</th>
-                  <th>输入价格</th>
-                  <th>输出价格</th>
+                  <th>Input price</th>
+                  <th>Output price</th>
                   <th>Tools</th>
                   <th>Streaming</th>
-                  <th>状态</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -3443,7 +3439,7 @@ function ProviderCreateDialog({
         role="dialog"
       >
         <div className="console-dialog-head">
-          <h2 id="new-provider-dialog-title">添加 Provider</h2>
+          <h2 id="new-provider-dialog-title">Add Provider</h2>
           <a className="secondary-button" href={closeHref}>
             <FlatIcon name="cancel" />
             <span>Close</span>
@@ -3491,7 +3487,7 @@ function ProviderEditDialog({
         role="dialog"
       >
         <div className="console-dialog-head">
-          <h2 id="edit-provider-dialog-title">编辑 {provider.displayName}</h2>
+          <h2 id="edit-provider-dialog-title">Edit {provider.displayName}</h2>
           <a className="secondary-button" href={closeHref}>
             <FlatIcon name="cancel" />
             <span>Close</span>
@@ -3565,7 +3561,7 @@ function ProviderKeyCreateDialog({
         role="dialog"
       >
         <div className="console-dialog-head">
-          <h2 id="provider-key-create-title">新增 {provider.displayName} API key</h2>
+          <h2 id="provider-key-create-title">New {provider.displayName} API key</h2>
           <a className="secondary-button" href={closeHref}>
             <FlatIcon name="cancel" />
             <span>Close</span>
@@ -3633,7 +3629,7 @@ function ProviderOAuthCreateDialog({
         role="dialog"
       >
         <div className="console-dialog-head">
-          <h2 id="provider-oauth-create-title">新增 {provider.displayName} OAuth connection</h2>
+          <h2 id="provider-oauth-create-title">New {provider.displayName} OAuth connection</h2>
           <a className="secondary-button" href={closeHref}>
             <FlatIcon name="cancel" />
             <span>Close</span>
@@ -3805,7 +3801,7 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                 <label htmlFor="settings-language">Default language</label>
                 <select id="settings-language" defaultValue="en" disabled>
                   <option value="en">English</option>
-                  <option value="zh">中文</option>
+                  <option value="zh">Chinese</option>
                 </select>
               </div>
               <div className="console-field">
@@ -4283,13 +4279,13 @@ function formatProviderOAuthLastTest(connection: ConsoleProviderOAuthConnection)
 function formatRelativeDateTime(value: Date): string {
   const elapsedMs = Date.now() - value.getTime();
   if (elapsedMs < 60_000) {
-    return "刚刚";
+    return "just now";
   }
   if (elapsedMs < 3_600_000) {
-    return `${Math.floor(elapsedMs / 60_000)} 分钟前`;
+    return `${Math.floor(elapsedMs / 60_000)} min ago`;
   }
   if (elapsedMs < 86_400_000) {
-    return `${Math.floor(elapsedMs / 3_600_000)} 小时前`;
+    return `${Math.floor(elapsedMs / 3_600_000)} h ago`;
   }
   return value.toISOString().slice(0, 10);
 }
@@ -4309,7 +4305,7 @@ function formatModelContext(contextWindow: number | null): string {
 
 function formatModelPrice(price: number | null): string {
   if (price === null) {
-    return "未知";
+    return "Unknown";
   }
   const digits = price >= 1 ? 2 : 4;
   return `$${price.toFixed(digits)}`;
@@ -4320,15 +4316,15 @@ function formatDecimal(value: number): string {
 }
 
 function formatBooleanFeature(value: boolean): string {
-  return value ? "支持" : "不支持";
+  return value ? "Yes" : "No";
 }
 
 function formatModelAvailability(value: string): string {
   if (value === "available") {
-    return "启用";
+    return "Enabled";
   }
   if (value === "disabled") {
-    return "禁用";
+    return "Disabled";
   }
   return value.charAt(0).toUpperCase() + value.slice(1);
 }

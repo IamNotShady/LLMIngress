@@ -12,11 +12,11 @@ export default async function VirtualModelsPage({
     <div className="page">
       <PageHeader
         title="Virtual Models / Routes"
-        description="以 Virtual Model Name 暴露简单路由策略：strategy + candidates"
+        description="Expose simple routing policies under a Virtual Model name: strategy + candidates."
         actions={
           <a className="btn" href="/models?virtualModelDialog=new">
             <FlatIcon name="add" />
-            <span>创建 Virtual Model</span>
+            <span>Create Virtual Model</span>
           </a>
         }
       />

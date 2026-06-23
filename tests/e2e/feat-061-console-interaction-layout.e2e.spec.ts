@@ -44,7 +44,7 @@ test("dashboard form labels stay paired with their controls on desktop", async (
 
           await page.goto(`${baseUrl}/providers`);
           await openDisclosure(page, "New provider");
-          const createDialog = page.getByRole("dialog", { name: "添加 Provider" });
+          const createDialog = page.getByRole("dialog", { name: "Add Provider" });
           await expect(createDialog).toBeVisible();
           await expect(page.getByLabel("Provider type", { exact: true })).toBeVisible();
           await page.getByRole("tab", { name: "API Keys" }).click();

@@ -43,8 +43,8 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
             .locator(".vm-model-picker-table tbody tr")
             .filter({ hasText: "GPT 4.1 Mini" });
           await expect(modelPickerRow).toContainText("128K");
-          await expect(modelPickerRow.locator("td").nth(5)).toHaveText("支持");
-          await expect(modelPickerRow.locator("td").nth(6)).toHaveText("支持");
+          await expect(modelPickerRow.locator("td").nth(5)).toHaveText("Yes");
+          await expect(modelPickerRow.locator("td").nth(6)).toHaveText("Yes");
 
           await postRoutePolicyAction(page, {
             action: "create",
@@ -57,7 +57,7 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
           const candidateTable = page.locator(".vm-candidate-table");
           await expect(candidateTable).toContainText("GPT 4.1 Mini");
           await expect(candidateTable).toContainText("128K");
-          await expect(candidateTable).toContainText("支持");
+          await expect(candidateTable).toContainText("Yes");
 
           await expect
             .poll(() => readRoutePolicyState(fixture))

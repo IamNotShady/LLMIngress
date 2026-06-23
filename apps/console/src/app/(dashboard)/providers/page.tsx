@@ -12,11 +12,11 @@ export default async function ProvidersPage({
     <div className="page providers-page">
       <PageHeader
         title="Providers & Models"
-        description="配置 Provider Key，刷新模型列表并管理模型价格。"
+        description="Configure provider keys, refresh model lists, and manage model pricing."
         actions={
           <a className="btn" href="?providerDialog=new">
             <FlatIcon name="add" />
-            <span>添加 Provider</span>
+            <span>Add Provider</span>
           </a>
         }
       />

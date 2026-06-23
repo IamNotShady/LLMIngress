@@ -100,14 +100,14 @@ export function toProviderApiKeyMetadata(row: ProviderApiKeyStorageRow): Provide
   };
 }
 
-export function formatProviderApiKeyTestStatusZhLabel(status: ProviderApiKeyTestStatus): string {
+export function formatProviderApiKeyTestStatusLabel(status: ProviderApiKeyTestStatus): string {
   return {
-    auth_failed: "鉴权失败",
-    healthy: "可用",
-    network_error: "网络错误",
-    quota_limited: "额度受限",
-    unhealthy: "当前不可用",
-    unknown: "未知",
+    auth_failed: "Auth failed",
+    healthy: "Healthy",
+    network_error: "Network error",
+    quota_limited: "Quota limited",
+    unhealthy: "Unhealthy",
+    unknown: "Unknown",
   }[status];
 }
 

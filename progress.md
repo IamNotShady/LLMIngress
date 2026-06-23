@@ -2,13 +2,34 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-18 (feat-106 passing)
-**Active Feature:** none — feat-106 is `passing`; feat-107 is next
-**Branch:** `dev`
+**Last Updated:** 2026-06-23 (console UI refresh + English i18n)
+**Active Feature:** none — console UI style refresh + full English translation complete
+**Branch:** `console-ui-refresh` (worktree off `dev`)
 
 ## Status
 
 ### What's Done
+
+- [x] **Console UI refresh + English i18n (style-only, no behavior change)**:
+  - Replaced the multicolor `flat-color-icons` with an inline monochrome line-icon set
+    by reimplementing `apps/console/src/app/_components/flat-icon.tsx` (same `FlatIcon` /
+    `FlatIconName` API, same `flat-icon` class), so all ~60 call sites and selectors are
+    untouched. Fixed mismatched glyphs (`filter`→funnel, `save`→floppy, `export`→download,
+    `import`→upload). Removed the dead `flat-color-icons` dependency and `public/flat-color-icons/*`.
+  - Reworked the icon-button CSS in `globals.css`: toolbar/dialog/form buttons now show
+    icon **+ label** (the labels were already in the DOM, previously hidden), while compact
+    table-row actions stay icon-only with semantic color (delete=danger, enable=ok, edit=accent).
+  - Added a calm visual-refresh layer (markup-stable): active-nav accent rail, bordered KPI
+    icon chips, primary-CTA depth shadow, topbar blur, pill spacing — light + dark.
+  - Translated all remaining Chinese to English across `apps/console/src` (UI strings +
+    comments), the e2e/unit tests that assert those strings, `feature_list.json`, and this
+    file. Renamed the now-misnamed `formatProvider*ZhLabel` helpers (dropped `Zh`). Large
+    design docs (`docs/PRODUCT/ARCHITECTURE/PLAN.md`) intentionally deferred.
+  - Adjusted `feat-028` e2e to use `exact: true` for the "Virtual Model name" textbox
+    (the now-English search aria-label collided as a substring).
+  - Verification passed: `pnpm run verify` (lint, typecheck, 401 unit tests, build) and
+    `pnpm run verify:features` re-verified all 115 passing features. Visual before/after
+    confirmed via a throwaway Playwright screenshot pass (all 11 pages, light + dark).
 
 - [x] **feat-106 — Advanced Route Policy Rules and Preview (passing)**:
   - Added migration `0030_advanced_route_rules_preview`: `route_policies.rules` and `provider_models.capability_metadata` JSONB object fields, schema version `0030`, and migration checksum registration.
@@ -1415,7 +1436,7 @@
   - Gateway now imports OpenAI, Anthropic, Gemini, OpenRouter, and Ollama provider request adapters from `@llmingress/provider/*`; Worker model refresh and price sync import model-list and price-source logic from the same package.
   - Added `@llmingress/db/client` and `@llmingress/db/provider-jobs`; Console provider refresh/connectivity job enqueue paths and Worker provider model refresh / connectivity check flows now use shared DB package entry points instead of local `pg.Client` helpers. Existing broader Console/Gateway/Worker SQL modules still need a separate repository-layer migration if all DB queries must physically leave app directories.
   - Verification run: `pnpm run typecheck`, `pnpm run lint`, and `pnpm test` (114 files / 345 tests) passed. Full E2E was not run per user request.
-  - UI follow-up: removed the Provider page model-library `操作` column and verified `/providers` renders without that table header or model detail action links.
+  - UI follow-up: removed the Provider page model-library `Actions` column and verified `/providers` renders without that table header or model detail action links.
 
 - [x] 2026-06-21 Shared DB package boundary refactor:
   - Added a boundary regression test that rejects production `pg` imports in Console, Gateway, Worker, `packages/config`, and `packages/provider`, and rejects `pg` package dependencies outside `@llmingress/db`.
@@ -1432,7 +1453,7 @@
   - Added provider package OAuth/subscription helpers for OpenAI Codex and Claude Code. OpenAI Codex model refresh uses `chatgpt.com/backend-api/codex/models?client_version=0.128.0` and requests use `/codex/responses`; Claude Code model refresh uses Anthropic `/v1/models?limit=100` and requests use `/v1/messages` with Claude Code bearer headers.
   - Worker model refresh now selects the first enabled completed OAuth connection by `priority, created_at, id`, refreshes expired tokens, and writes refreshed token blobs back. Worker connectivity checks every enabled completed OAuth connection, writes `provider_oauth.last_test_status`, and aggregates provider health to `healthy` when any connection works.
   - Gateway excludes subscription providers from Chat Completions and Embeddings, routes OpenAI Codex subscription candidates through Responses, and routes Claude Code subscription candidates through Messages.
-  - Follow-up E2E repair aligned legacy Console tests with the current Provider/Agent UI and health status taxonomy: segmented Provider create tabs, icon/text label changes, Key table `Label/Priority/状态` columns, Gemini OpenAI-compatible response shape, and `provider_health_events.status = unhealthy`.
+  - Follow-up E2E repair aligned legacy Console tests with the current Provider/Agent UI and health status taxonomy: segmented Provider create tabs, icon/text label changes, Key table `Label/Priority/Status` columns, Gemini OpenAI-compatible response shape, and `provider_health_events.status = unhealthy`.
   - Verification passed: focused feat-115 unit/E2E checks, repaired focused E2Es for feat-028/050/056/057/062/064/066/080/095/103/109, `pnpm run verify:features` with all 115 passing features re-verified, and `pnpm run verify`.
   - Interactive repair: fixed subscription template creation when the Console form submits the template's fixed base URL, added migration `0046_allow_subscription_provider_templates` so `openai_codex` and `claude_code` pass `providers_template_id_whitelisted`, migrated the local database to schema `0046`, and browser-verified OpenAI Codex creation from `/providers?providerDialog=new`.
   - Repair verification passed: `pnpm exec vitest run tests/features/feat-115-provider-subscription-oauth.unit.test.ts tests/features/feat-062-provider-template-selector.unit.test.ts`, `pnpm exec biome check ...`, `pnpm --filter @llmingress/console typecheck`, `pnpm run db:migrate:check`, and `git diff --check`. Full regression/E2E was not run per interactive testing scope.
@@ -1441,14 +1462,14 @@
   - Claude Code OAuth UI follow-up: OAuth dialog Start/Connect buttons now keep their text visible despite the global icon-only rule, and browser verification confirmed Claude Code shows a `claude.ai` authorization URL plus callback input after Start OAuth. Full regression/E2E was not run per interactive testing scope.
   - Claude Code OAuth 400 repair: new Claude authorization flows use the PKCE verifier as `state`, matching the Claude Code / Anthropic token exchange expectation; browser verification confirmed the new Claude `code_challenge` matches `sha256(state)`. Existing failed pending Claude flows must be restarted.
   - Claude Code token exchange 400 follow-up: Anthropic token POST now includes `state` in the JSON body for authorization-code exchange, matching the Claude Code token endpoint shape. Verification passed: feat-115 unit test, Console typecheck, and Biome check; full regression/E2E was not run per interactive testing scope.
-  - Claude Code model discovery follow-up: Worker model refresh maps subscription metadata lookups from `claude_code` to Anthropic so `/v1/models` rows receive context/capability metadata and survive the refreshable-model filter. Targeted verification passed: feat-023 unit test, Worker typecheck, Biome check, direct local refresh for provider `52043af4-c903-4858-817c-0eeb21e9d4ac` inserted 9 models, connectivity check returned healthy HTTP 200, and browser verification showed Claude Code as `可用` with 9 models. Full regression/E2E was not run per interactive testing scope.
+  - Claude Code model discovery follow-up: Worker model refresh maps subscription metadata lookups from `claude_code` to Anthropic so `/v1/models` rows receive context/capability metadata and survive the refreshable-model filter. Targeted verification passed: feat-023 unit test, Worker typecheck, Biome check, direct local refresh for provider `52043af4-c903-4858-817c-0eeb21e9d4ac` inserted 9 models, connectivity check returned healthy HTTP 200, and browser verification showed Claude Code as `available` with 9 models. Full regression/E2E was not run per interactive testing scope.
   - OAuth add-entry follow-up: the Provider detail add button for subscription providers now posts `action=start` directly, so clicking Add OAuth connection redirects straight to the Authorization URL/callback dialog and no Start OAuth dialog is shown. Verification passed: feat-115 unit test, Console typecheck, Biome check, and browser DOM verification for Claude Code selected provider. Full regression/E2E was not run per interactive testing scope.
   - OAuth pending visibility follow-up: Console OAuth management now lists only completed connections with encrypted tokens, so canceling/closing an authorization flow does not show a pending PKCE row as an added OAuth record. Verification passed: feat-115 unit test, DB and Console typecheck, Biome check, and local DB count check for the Claude Code provider. Full regression/E2E was not run per interactive testing scope.
   - Local Provider public-network risk follow-up: removed the Console risk checkbox/prompt, removed the old risk-acceptance form/API field, removed local template create public/private URL gating, and removed local/private URL gating from config import. Verification passed: targeted feat-021/064/080 unit tests, Console typecheck, Biome check on touched files, and browser verification on `/providers?providerDialog=new` showing Local without a risk prompt/checkbox. Full regression/E2E was not run per interactive testing scope.
   - Local Provider API-key follow-up: Local providers no longer require stored API keys in the Console detail card, Worker connectivity probes local providers directly, Gateway local candidates attach an empty credential instead of requiring `provider_api_keys`, and OpenAI-compatible local requests omit the Authorization header when no key is configured. Verification passed: targeted feat-024/036/064 unit tests, Console/Gateway/Worker/Provider typechecks, Biome check on touched files, and browser verification on the selected Ollama provider showing no API-key prompt and an enabled refresh button. Full regression/E2E was not run per interactive testing scope.
   - Ollama local model refresh follow-up: local Provider model refresh now keeps local models without registry metadata or synced token prices by applying a conservative 4096 context default before filtering, and the refresh redirect preserves the selected Provider. Verification passed: feat-023 unit test, Console and Worker typechecks, Biome check on touched files, and browser refresh verification showing Ollama selected with `llama3.2:3b` in the model library. Full regression/E2E was not run per interactive testing scope.
   - LM Studio model metadata follow-up: LM Studio refresh now reads `/api/v0/models` instead of the OpenAI-compatible `/v1/models` endpoint so local `tool_use` and context metadata are preserved. Verification passed: feat-023 unit test, Provider/Worker typechecks, Biome check on touched files, direct local refresh for provider `c8cbeeee-7dac-4b57-8107-d3bf91cae208`, DB check showing `qwen/qwen3-1.7b` with `supports_tools=true` and `context_window=40960`, and browser verification showing the model row as tools-supported. Full regression/E2E was not run per interactive testing scope.
-  - llama.cpp tools metadata follow-up: llama.cpp refresh now merges `/v1/models` with `/props` chat template capabilities, because the local server exposes `supports_tools` through `/props` even when the model list only says `completion`. Verification passed: feat-023 unit test, Provider/Worker typechecks, Biome check on touched files, direct local refresh for provider `94c88ed4-60b3-42dd-b737-320ad52901eb`, DB check showing `Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` with `supports_tools=true` and `context_window=8192`, and browser verification showing `TOOLS` as `支持`. Full regression/E2E was not run per interactive testing scope.
+  - llama.cpp tools metadata follow-up: llama.cpp refresh now merges `/v1/models` with `/props` chat template capabilities, because the local server exposes `supports_tools` through `/props` even when the model list only says `completion`. Verification passed: feat-023 unit test, Provider/Worker typechecks, Biome check on touched files, direct local refresh for provider `94c88ed4-60b3-42dd-b737-320ad52901eb`, DB check showing `Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` with `supports_tools=true` and `context_window=8192`, and browser verification showing `TOOLS` as `supported`. Full regression/E2E was not run per interactive testing scope.
   - Subscription provider price follow-up: price_sync now maps `openai_codex` to `openai` and `claude_code` to `anthropic` when writing synced prices, so OpenAI Codex and Claude Code rows receive matching base-provider prices from models.dev/LiteLLM. Verification passed: feat-073 unit test, Worker typecheck, direct local price sync (`syncedPriceCount=514`), DB check showing OpenAI Codex and Claude Code synced prices, and browser verification showing OpenAI Codex model rows with prices. Full regression/E2E was not run per interactive testing scope.
   - Full regression repair: added migration `0046` to the shipped migration status manifest, and updated the feat-094 provider coverage E2E to assert local providers omit outbound Authorization headers after local API keys became optional. Verification passed: focused feat-087 unit test, focused feat-094 E2E, and `pnpm run verify:features` with all 115 passing features re-verified.
   - CI E2E follow-up: Provider create form now synchronizes display name and base URL with explicit client state when the selected provider template changes, fixing the CI-only feat-063 failure where DeepSeek selection still showed OpenAI. Verification passed: Biome check for the form and focused feat-063 E2E. Full `pnpm test:e2e` is blocked locally by unrelated in-progress Console UI changes.

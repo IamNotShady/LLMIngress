@@ -8,7 +8,7 @@ test("pricing route renders the providers model library surface", async ({ brows
     await expect(page.getByRole("heading", { level: 1, name: "Providers & Models" })).toBeVisible();
 
     // /pricing is now an alias for the Providers model library surface.
-    await expect(page.getByRole("heading", { name: "模型库" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Model library" })).toBeVisible();
     await expect(page.getByText(/No provider models discovered yet/)).toBeVisible();
   });
 });

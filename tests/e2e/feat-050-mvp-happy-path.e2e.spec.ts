@@ -231,7 +231,7 @@ async function storeProviderApiKey(page: Page): Promise<void> {
   await expect(page.locator("code")).toHaveText(providerApiKey);
   await page.getByRole("link", { name: "Back to dashboard" }).click();
   await openRow(page, mvpHappyPathNames.providerDisplayName);
-  await expect(page.getByRole("row", { name: /- 100 未知/ })).toBeVisible();
+  await expect(page.getByRole("row", { name: /- 100 Unknown/ })).toBeVisible();
 }
 
 async function createVirtualModelAndRoutePolicy(

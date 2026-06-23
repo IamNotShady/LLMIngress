@@ -78,7 +78,7 @@ test("supported remote templates expose fixed urls capabilities auth behavior an
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "Add from template");
-          const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+          const dialog = page.getByRole("dialog", { name: "Add Provider" });
           const providerType = dialog.getByLabel("Provider type", { exact: true });
           const displayNameInput = dialog.getByLabel("Provider display name");
           const baseUrlInput = dialog.getByLabel("Provider base URL");

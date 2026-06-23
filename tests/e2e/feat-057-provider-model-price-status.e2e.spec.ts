@@ -80,7 +80,7 @@ test("refresh provider models shows priced and unknown price status in provider 
           await expect(
             library
               .getByRole("row", { name: /Unknown Refresh Model/ })
-              .getByText("未知")
+              .getByText("Unknown")
               .first(),
           ).toBeVisible();
 
@@ -173,7 +173,7 @@ async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
   await openRow(page, "OpenAI Price Status Provider");
-  await expect(page.getByRole("row", { name: /- 100 未知/ })).toBeVisible();
+  await expect(page.getByRole("row", { name: /- 100 Unknown/ })).toBeVisible();
 }
 
 async function readProviderModels(

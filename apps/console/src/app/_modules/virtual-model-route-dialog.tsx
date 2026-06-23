@@ -135,7 +135,9 @@ export function VirtualModelRouteDialogClient({
       >
         <div className="console-dialog-head">
           <h2 id="virtual-model-dialog-title">
-            {mode === "create" ? "创建 Virtual Model" : `编辑 Virtual Model：${virtualModel?.name}`}
+            {mode === "create"
+              ? "Create Virtual Model"
+              : `Edit Virtual Model: ${virtualModel?.name}`}
           </h2>
           <a className="secondary-button" href={closeHref}>
             <FlatIcon name="cancel" />
@@ -154,10 +156,10 @@ export function VirtualModelRouteDialogClient({
               <input type="hidden" name="routePolicyId" value={routePolicy.id} />
             ) : null}
             <section className="chart-card">
-              <h3 className="chart-card-title">基本信息</h3>
+              <h3 className="chart-card-title">Basic info</h3>
               <div className="vm-editor-fields">
                 <div>
-                  <label htmlFor="virtual-model-dialog-name">Virtual Model 名称</label>
+                  <label htmlFor="virtual-model-dialog-name">Virtual Model name</label>
                   <input
                     id="virtual-model-dialog-name"
                     name="name"
@@ -166,7 +168,7 @@ export function VirtualModelRouteDialogClient({
                   />
                 </div>
                 <div>
-                  <label htmlFor="virtual-model-dialog-description">描述</label>
+                  <label htmlFor="virtual-model-dialog-description">Description</label>
                   <input
                     id="virtual-model-dialog-description"
                     name="description"
@@ -177,7 +179,7 @@ export function VirtualModelRouteDialogClient({
               </div>
             </section>
             <section className="chart-card">
-              <h3 className="chart-card-title">1. 选择路由策略</h3>
+              <h3 className="chart-card-title">1. Choose routing strategy</h3>
               <div className="option-cards">
                 {strategies.map((candidateStrategy) => (
                   <label className="option-card" key={candidateStrategy}>
@@ -199,7 +201,7 @@ export function VirtualModelRouteDialogClient({
               </div>
             </section>
             <section className="chart-card">
-              <h3 className="chart-card-title">2. 已选 Candidates</h3>
+              <h3 className="chart-card-title">2. Selected candidates</h3>
               {selectedCandidates.length === 0 ? (
                 <p>No candidates selected.</p>
               ) : (
@@ -207,15 +209,15 @@ export function VirtualModelRouteDialogClient({
                   <table className="data-table vm-candidate-table">
                     <thead>
                       <tr>
-                        <th>顺序</th>
+                        <th>Order</th>
                         <th>Provider</th>
                         <th>Model</th>
                         <th>Context</th>
-                        <th>输入价</th>
-                        <th>输出价</th>
+                        <th>Input price</th>
+                        <th>Output price</th>
                         <th>Tools</th>
-                        <th>状态</th>
-                        <th>操作</th>
+                        <th>Status</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -254,9 +256,9 @@ export function VirtualModelRouteDialogClient({
                           <td>{formatBooleanFeature(candidate.supportsTools)}</td>
                           <td>
                             {candidate.availability === "available" ? (
-                              <span className="pill--ok pill">可用</span>
+                              <span className="pill--ok pill">Available</span>
                             ) : (
-                              <span className="pill--danger pill">禁用</span>
+                              <span className="pill--danger pill">Disabled</span>
                             )}
                           </td>
                           <td>
@@ -276,7 +278,7 @@ export function VirtualModelRouteDialogClient({
                 </div>
               )}
               <p className="callout">
-                候选模型按顺序参与选择；Fallback 将继续尝试下一个可用候选模型。
+                Candidates are tried in order; fallback continues to the next available candidate.
               </p>
               <button
                 className="secondary-button vm-add-model-button"
@@ -289,15 +291,15 @@ export function VirtualModelRouteDialogClient({
             </section>
             <div className="vm-dialog-actions">
               <a className="secondary-button" href={closeHref}>
-                <span>取消</span>
+                <span>Cancel</span>
               </a>
               <button type="submit">
-                <span>保存</span>
+                <span>Save</span>
               </button>
             </div>
           </form>
           <aside className="chart-card vm-policy-note">
-            <h3 className="chart-card-title">当前策略说明</h3>
+            <h3 className="chart-card-title">Current strategy</h3>
             <dl className="agent-detail-fields">
               <div>
                 <dt>Strategy</dt>
@@ -306,26 +308,30 @@ export function VirtualModelRouteDialogClient({
               <div>
                 <dt>Candidates</dt>
                 <dd>
-                  {selectedCandidates.length ? `${selectedCandidates.length} 个模型` : "未配置"}
+                  {selectedCandidates.length
+                    ? `${selectedCandidates.length} models`
+                    : "Not configured"}
                 </dd>
               </div>
               <div>
-                <dt>生效方式</dt>
-                <dd>保存后对新请求生效</dd>
+                <dt>Takes effect</dt>
+                <dd>Applies to new requests after saving</dd>
               </div>
               <div>
                 <dt>Fallback</dt>
-                <dd>失败时尝试下一个候选</dd>
+                <dd>Tries the next candidate on failure</dd>
               </div>
             </dl>
             <section className="agent-detail-section">
-              <h3>不包含的高级能力</h3>
-              <p>- 任务类型规则</p>
-              <p>- 上下文长度阈值</p>
-              <p>- 工具调用条件</p>
-              <p>- timeout / retry 设置</p>
+              <h3>Advanced capabilities not included</h3>
+              <p>- Task-type rules</p>
+              <p>- Context-length thresholds</p>
+              <p>- Tool-call conditions</p>
+              <p>- timeout / retry settings</p>
             </section>
-            <p className="callout callout--warn">当前版本仅支持 strategy + candidates。</p>
+            <p className="callout callout--warn">
+              This version only supports strategy + candidates.
+            </p>
           </aside>
         </div>
       </section>
@@ -383,8 +389,8 @@ export function VirtualModelRouteDialogClient({
                     <th>Provider</th>
                     <th>Model ID</th>
                     <th>Context</th>
-                    <th>输入价格</th>
-                    <th>输出价格</th>
+                    <th>Input price</th>
+                    <th>Output price</th>
                     <th>Tools</th>
                     <th>Streaming</th>
                   </tr>
@@ -440,15 +446,15 @@ function formatRouteStrategyLabel(strategy: Strategy): string {
 
 function formatRouteStrategyDescription(strategy: Strategy): string {
   if (strategy === "fixed") {
-    return "固定使用第一个候选模型";
+    return "Always use the first candidate";
   }
   if (strategy === "cost_first") {
-    return "优先选择低成本候选模型";
+    return "Prefer the lowest-cost candidate";
   }
   if (strategy === "quality_first") {
-    return "优先选择高质量候选模型";
+    return "Prefer the highest-quality candidate";
   }
-  return "综合成本、健康状态与可用性";
+  return "Balances cost, health, and availability";
 }
 
 function formatModelContext(contextWindow: number | null): string {
@@ -466,7 +472,7 @@ function formatModelContext(contextWindow: number | null): string {
 
 function formatModelPrice(price: number | null): string {
   if (price === null) {
-    return "未知";
+    return "Unknown";
   }
   return `$${price.toFixed(price >= 1 ? 2 : 4)}`;
 }
@@ -476,5 +482,5 @@ function formatDecimal(value: number): string {
 }
 
 function formatBooleanFeature(value: boolean): string {
-  return value ? "支持" : "不支持";
+  return value ? "Yes" : "No";
 }

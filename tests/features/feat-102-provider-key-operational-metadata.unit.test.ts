@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  formatProviderApiKeyTestStatusZhLabel,
+  formatProviderApiKeyTestStatusLabel,
   toProviderApiKeyMetadata,
 } from "../../apps/console/src/server/provider-keys";
 import { loadSqlMigrations } from "../../packages/db/src/index";
@@ -81,11 +81,11 @@ describe("feat-102 provider key operational metadata", () => {
   });
 
   it("formats provider API key status from last_test_status", () => {
-    expect(formatProviderApiKeyTestStatusZhLabel("unknown")).toBe("未知");
-    expect(formatProviderApiKeyTestStatusZhLabel("healthy")).toBe("可用");
-    expect(formatProviderApiKeyTestStatusZhLabel("unhealthy")).toBe("当前不可用");
-    expect(formatProviderApiKeyTestStatusZhLabel("auth_failed")).toBe("鉴权失败");
-    expect(formatProviderApiKeyTestStatusZhLabel("quota_limited")).toBe("额度受限");
-    expect(formatProviderApiKeyTestStatusZhLabel("network_error")).toBe("网络错误");
+    expect(formatProviderApiKeyTestStatusLabel("unknown")).toBe("Unknown");
+    expect(formatProviderApiKeyTestStatusLabel("healthy")).toBe("Healthy");
+    expect(formatProviderApiKeyTestStatusLabel("unhealthy")).toBe("Unhealthy");
+    expect(formatProviderApiKeyTestStatusLabel("auth_failed")).toBe("Auth failed");
+    expect(formatProviderApiKeyTestStatusLabel("quota_limited")).toBe("Quota limited");
+    expect(formatProviderApiKeyTestStatusLabel("network_error")).toBe("Network error");
   });
 });

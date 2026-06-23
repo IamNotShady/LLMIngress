@@ -64,7 +64,7 @@ test("local provider templates accept configured urls and use template paths", a
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "Add from template");
-          const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+          const dialog = page.getByRole("dialog", { name: "Add Provider" });
           await dialog.getByRole("tab", { name: "Local" }).click();
           const providerType = dialog.getByLabel("Provider type", { exact: true });
           const displayNameInput = dialog.getByLabel("Provider display name");

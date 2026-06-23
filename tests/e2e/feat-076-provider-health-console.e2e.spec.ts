@@ -39,42 +39,46 @@ test("console shows provider model health latest probe failures and stale status
           await expect(
             providerCard.getByRole("heading", { name: "Health Console Provider" }),
           ).toBeVisible();
-          await expect(providerCard.getByText("可用")).toBeVisible();
+          await expect(providerCard.getByText("Healthy")).toBeVisible();
 
           await openRow(page, "Health Console Provider");
           const selectedProviderDetails = page.getByLabel("Selected provider details");
           await expect(
             selectedProviderDetails.getByRole("heading", {
-              name: "Provider 详情 - Health Console Provider",
+              name: "Provider details - Health Console Provider",
             }),
           ).toBeVisible();
-          await expect(selectedProviderDetails).toContainText("可用");
+          await expect(selectedProviderDetails).toContainText("Healthy");
           await expect(
-            selectedProviderDetails.locator(".provider-detail-stats div", { hasText: "最近连接" }),
+            selectedProviderDetails.locator(".provider-detail-stats div", {
+              hasText: "Last connected",
+            }),
           ).not.toContainText("-");
 
           const modelLibrary = page.locator(".model-library-card");
           await expect(
-            modelLibrary.getByRole("heading", { name: "模型库 - Health Console Provider" }),
+            modelLibrary.getByRole("heading", { name: "Model library - Health Console Provider" }),
           ).toBeVisible();
           await expect(modelLibrary.locator("table.model-library-table")).toContainText(
             "Health Console Model",
           );
-          await expect(modelLibrary.locator("table.model-library-table")).toContainText("启用");
+          await expect(modelLibrary.locator("table.model-library-table")).toContainText("Enabled");
 
           const noProbeCard = page.locator("article.provider-summary-card", {
             hasText: "No Probe Provider",
           });
-          await expect(noProbeCard.getByText("未知")).toBeVisible();
+          await expect(noProbeCard.getByText("Unknown")).toBeVisible();
           await openRow(page, "No Probe Provider");
           await expect(
             selectedProviderDetails.getByRole("heading", {
-              name: "Provider 详情 - No Probe Provider",
+              name: "Provider details - No Probe Provider",
             }),
           ).toBeVisible();
-          await expect(selectedProviderDetails).toContainText("未知");
+          await expect(selectedProviderDetails).toContainText("Unknown");
           await expect(
-            selectedProviderDetails.locator(".provider-detail-stats div", { hasText: "最近连接" }),
+            selectedProviderDetails.locator(".provider-detail-stats div", {
+              hasText: "Last connected",
+            }),
           ).toContainText("-");
         } finally {
           await context.close();

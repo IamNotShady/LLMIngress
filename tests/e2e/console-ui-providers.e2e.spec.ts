@@ -14,37 +14,49 @@ test("providers page matches the designed provider detail and model library layo
       await expect(
         page.getByRole("heading", { level: 1, name: "Providers & Models" }),
       ).toBeVisible();
-      await expect(page.getByRole("link", { name: "添加 Provider" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Add Provider" })).toBeVisible();
 
       for (const provider of ["OpenAI", "Anthropic", "Google", "OpenRouter", "Ollama local"]) {
         await expect(page.locator(".provider-summary-card", { hasText: provider })).toBeVisible();
       }
 
       const providerList = page.locator(".providers-list-card");
-      await expect(providerList.getByRole("heading", { name: "Provider 列表" })).toBeVisible();
-      for (const header of ["Provider", "状态", "类型", "Key 数", "模型数", "最近连接", "操作"]) {
+      await expect(providerList.getByRole("heading", { name: "Provider list" })).toBeVisible();
+      for (const header of [
+        "Provider",
+        "Status",
+        "Type",
+        "Keys",
+        "Models",
+        "Last connected",
+        "Actions",
+      ]) {
         await expect(providerList.getByRole("columnheader", { name: header })).toBeVisible();
       }
 
       const details = page.getByLabel("Selected provider details");
-      await expect(details.getByRole("heading", { name: "Provider 详情 - OpenAI" })).toBeVisible();
-      await expect(details.getByText("可用模型")).toBeVisible();
-      await expect(details.getByRole("heading", { name: "Key 管理" })).toBeVisible();
-      for (const header of ["Label", "Priority", "状态", "最近测试", "操作"]) {
+      await expect(
+        details.getByRole("heading", { name: "Provider details - OpenAI" }),
+      ).toBeVisible();
+      await expect(details.getByText("Available models")).toBeVisible();
+      await expect(details.getByRole("heading", { name: "API keys" })).toBeVisible();
+      for (const header of ["Label", "Priority", "Status", "Last tested", "Actions"]) {
         await expect(details.getByRole("columnheader", { name: header })).toBeVisible();
       }
 
       const modelLibrary = page.locator(".model-library-card");
-      await expect(modelLibrary.getByRole("heading", { name: "模型库 - OpenAI" })).toBeVisible();
+      await expect(
+        modelLibrary.getByRole("heading", { name: "Model library - OpenAI" }),
+      ).toBeVisible();
       for (const header of [
         "Provider",
         "Model ID",
         "Context",
-        "输入价格",
-        "输出价格",
+        "Input price",
+        "Output price",
         "Tools",
         "Streaming",
-        "状态",
+        "Status",
       ]) {
         await expect(modelLibrary.getByRole("columnheader", { name: header })).toBeVisible();
       }

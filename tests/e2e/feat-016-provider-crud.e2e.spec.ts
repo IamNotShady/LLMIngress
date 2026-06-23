@@ -32,23 +32,25 @@ test("provider crud enable disable and disabled provider leaves routing snapshot
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/providers`);
 
-          await page.getByRole("link", { name: "添加 Provider" }).click();
-          await expect(page.getByRole("dialog", { name: "添加 Provider" })).toBeVisible();
+          await page.getByRole("link", { name: "Add Provider" }).click();
+          await expect(page.getByRole("dialog", { name: "Add Provider" })).toBeVisible();
           await page.getByLabel("Provider type", { exact: true }).selectOption("openai");
           await page.getByLabel("Provider display name").fill("OpenAI");
           await page.getByLabel("Provider base URL").fill("https://api.openai.com/v1");
           await page.getByRole("button", { name: "Create provider" }).click();
 
-          await expect(page.getByRole("heading", { name: "Provider 详情 - OpenAI" })).toBeVisible();
+          await expect(
+            page.getByRole("heading", { name: "Provider details - OpenAI" }),
+          ).toBeVisible();
           await expect.poll(() => routingProviderKeys(fixture.databaseUrl)).toEqual(["openai"]);
 
           await page.getByRole("link", { name: "Edit OpenAI" }).click();
-          await expect(page.getByRole("dialog", { name: "编辑 OpenAI" })).toBeVisible();
+          await expect(page.getByRole("dialog", { name: "Edit OpenAI" })).toBeVisible();
           await page.getByLabel("Provider display name").fill("OpenAI API");
           await page.getByRole("button", { name: "Save provider" }).click();
 
           await expect(
-            page.getByRole("heading", { name: "Provider 详情 - OpenAI API" }),
+            page.getByRole("heading", { name: "Provider details - OpenAI API" }),
           ).toBeVisible();
 
           await page.getByRole("button", { name: "Disable OpenAI API" }).click();

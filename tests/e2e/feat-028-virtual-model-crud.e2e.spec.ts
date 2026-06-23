@@ -31,11 +31,13 @@ test("virtual model crud rejects duplicate name and blocks referenced delete", a
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/models`);
 
-          await page.getByRole("link", { name: "创建 Virtual Model" }).click();
-          await expect(page.getByRole("dialog", { name: "创建 Virtual Model" })).toBeVisible();
-          await page.getByRole("textbox", { name: "Virtual Model 名称" }).fill("Coding Fast");
-          await page.getByRole("textbox", { name: "描述" }).fill("Coding Fast");
-          await page.getByRole("button", { name: "保存" }).click();
+          await page.getByRole("link", { name: "Create Virtual Model" }).click();
+          await expect(page.getByRole("dialog", { name: "Create Virtual Model" })).toBeVisible();
+          await page
+            .getByRole("textbox", { name: "Virtual Model name", exact: true })
+            .fill("Coding Fast");
+          await page.getByRole("textbox", { name: "Description" }).fill("Coding Fast");
+          await page.getByRole("button", { name: "Save" }).click();
 
           await expect(page.getByRole("link", { name: "coding-fast" })).toBeVisible();
 
@@ -48,12 +50,14 @@ test("virtual model crud rejects duplicate name and blocks referenced delete", a
 
           await page
             .getByRole("row", { name: /coding-fast/ })
-            .getByRole("link", { name: "编辑" })
+            .getByRole("link", { name: "Edit" })
             .click();
-          await expect(page.getByRole("dialog", { name: /编辑 Virtual Model/ })).toBeVisible();
-          await page.getByRole("textbox", { name: "Virtual Model 名称" }).fill("coding-balanced");
-          await page.getByRole("textbox", { name: "描述" }).fill("Coding Balanced");
-          await page.getByRole("button", { name: "保存" }).click();
+          await expect(page.getByRole("dialog", { name: /Edit Virtual Model/ })).toBeVisible();
+          await page
+            .getByRole("textbox", { name: "Virtual Model name", exact: true })
+            .fill("coding-balanced");
+          await page.getByRole("textbox", { name: "Description" }).fill("Coding Balanced");
+          await page.getByRole("button", { name: "Save" }).click();
 
           await expect(page.getByRole("link", { name: "coding-balanced" })).toBeVisible();
 

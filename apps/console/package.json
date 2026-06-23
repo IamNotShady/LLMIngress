@@ -16,7 +16,6 @@
     "@llmingress/domain": "workspace:*",
     "@llmingress/provider": "workspace:*",
     "@llmingress/security": "workspace:*",
-    "flat-color-icons": "^1.1.0",
     "next": "^16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

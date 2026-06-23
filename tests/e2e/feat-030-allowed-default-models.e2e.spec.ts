@@ -120,9 +120,9 @@ async function createVirtualModel(
   input: { displayName: string; name: string },
 ): Promise<void> {
   await openDisclosure(page, "New virtual model");
-  await page.getByRole("textbox", { exact: true, name: "Virtual Model 名称" }).fill(input.name);
-  await page.getByRole("textbox", { exact: true, name: "描述" }).fill(input.displayName);
-  await page.getByRole("button", { name: "保存" }).click();
+  await page.getByRole("textbox", { exact: true, name: "Virtual Model name" }).fill(input.name);
+  await page.getByRole("textbox", { exact: true, name: "Description" }).fill(input.displayName);
+  await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("link", { name: input.name })).toBeVisible();
 }
 

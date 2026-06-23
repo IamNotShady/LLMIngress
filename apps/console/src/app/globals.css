@@ -1834,21 +1834,6 @@ details.disclosure[open] > .disclosure-summary {
   justify-items: end;
   gap: var(--space-2xs);
 }
-.provider-refresh-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  min-height: 2.25rem;
-  padding: 0;
-  font-size: 1.45rem;
-  font-weight: 800;
-  line-height: 1;
-}
-.provider-refresh-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
 .provider-detail-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1868,42 +1853,6 @@ details.disclosure[open] > .disclosure-summary {
   justify-content: space-between;
   gap: var(--space-sm);
 }
-.provider-key-add-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  min-height: 2rem;
-  padding: 0;
-  color: var(--accent-fg);
-  background: var(--accent);
-  border-radius: var(--radius-sm);
-  font-size: 1.25rem;
-  font-weight: 800;
-  line-height: 1;
-  text-decoration: none;
-}
-.provider-key-add-button:hover {
-  background: var(--accent-strong);
-}
-.provider-key-delete-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  min-height: 2rem;
-  padding: 0;
-  color: #fff;
-  background: #dc2626;
-  border-radius: var(--radius-sm);
-  font-size: 1rem;
-  font-weight: 800;
-  line-height: 1;
-  text-decoration: none;
-}
-.provider-key-delete-button:hover {
-  background: #b91c1c;
-}
 .provider-table-actions {
   display: flex;
   align-items: center;
@@ -1911,43 +1860,6 @@ details.disclosure[open] > .disclosure-summary {
 }
 .provider-table-actions form {
   margin: 0;
-}
-.provider-action-button {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  min-height: 2rem;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 800;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-}
-.provider-action-edit,
-.provider-action-enable {
-  color: var(--accent-fg);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.provider-action-edit:hover,
-.provider-action-enable:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-.provider-action-delete {
-  color: #fff;
-  background: #dc2626;
-  border-color: #dc2626;
-}
-.provider-action-delete:hover {
-  background: #b91c1c;
-  border-color: #b91c1c;
 }
 .provider-detail-section h3 {
   color: var(--accent-strong);
@@ -2240,130 +2152,85 @@ details.disclosure[open] > .disclosure-summary {
   border-color: #b91c1c !important;
 }
 
-:where(button, a):has(.flat-icon) {
-  min-width: 2.25rem !important;
-  width: 2.25rem !important;
-  min-height: 2.25rem !important;
-  height: 2.25rem !important;
-  padding: 0 !important;
-  gap: 0 !important;
-  color: inherit !important;
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-:where(button, a):has(.flat-icon):hover,
-:where(button, a):has(.flat-icon):active {
-  color: inherit !important;
-  background: transparent !important;
-  border-color: transparent !important;
-  transform: none !important;
-  text-decoration: none !important;
-}
-:where(button, a):has(.flat-icon) > span {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+/* Compact icon-only action buttons (table rows, section heads). Labeled
+   buttons elsewhere keep their icon + text via the normal button styles. */
+.provider-action-button,
+.provider-key-add-button,
+.provider-key-delete-button,
+.provider-refresh-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  min-height: 2.1rem;
   padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
+  font: inherit;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-subtle);
+  transition: background-color 0.15s var(--ease-out), color 0.15s var(--ease-out),
+    border-color 0.15s var(--ease-out), transform 0.05s var(--ease-out);
 }
-:where(button, a):has(.flat-icon) .flat-icon {
-  width: 1.35rem;
-  height: 1.35rem;
+.provider-action-button:hover,
+.provider-key-delete-button:hover,
+.provider-refresh-button:hover {
+  background: var(--surface-inset);
+  color: var(--text);
 }
-.provider-create-tabs button:has(.flat-icon) {
-  width: 100% !important;
-  min-width: 0 !important;
-  min-height: 3rem !important;
-  height: auto !important;
-  padding: 0 var(--space-sm) !important;
-  gap: var(--space-xs) !important;
-  color: var(--text-muted) !important;
-  background: transparent !important;
+.provider-action-button:active,
+.provider-key-add-button:active,
+.provider-key-delete-button:active,
+.provider-refresh-button:active {
+  transform: translateY(1px);
 }
-.provider-create-tabs button.is-active:has(.flat-icon) {
-  color: var(--text) !important;
-  background: var(--surface-sunken) !important;
-  box-shadow: var(--shadow-sm) !important;
+.provider-action-button .flat-icon,
+.provider-key-add-button .flat-icon,
+.provider-key-delete-button .flat-icon,
+.provider-refresh-button .flat-icon {
+  width: 1.15rem;
+  height: 1.15rem;
 }
-.provider-create-tabs button:has(.flat-icon) > span {
-  position: static;
-  width: auto;
-  height: auto;
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-  clip: auto;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.provider-action-edit:hover {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
-.oauth-open-link:has(.flat-icon),
-.oauth-open-link:has(.flat-icon):hover,
-.oauth-open-link:has(.flat-icon):active {
-  width: auto !important;
-  min-width: 0 !important;
-  height: auto !important;
-  min-height: 2.75rem !important;
-  justify-self: start;
-  padding: 0 var(--space-md) !important;
-  gap: var(--space-xs) !important;
-  color: var(--text) !important;
-  background: var(--surface) !important;
-  border-color: var(--border-strong) !important;
+.provider-action-enable {
+  color: var(--ok);
 }
-.oauth-open-link:has(.flat-icon):hover {
-  background: var(--surface-inset) !important;
+.provider-action-enable:hover {
+  color: var(--ok);
+  background: var(--ok-soft);
 }
-.oauth-open-link:has(.flat-icon) > span {
-  position: static;
-  width: auto;
-  height: auto;
-  padding: 0;
-  margin: 0;
-  overflow: visible;
-  clip: auto;
-  white-space: nowrap;
+.provider-action-delete,
+.provider-key-delete-button {
+  color: var(--danger);
 }
-.oauth-action-button:has(.flat-icon),
-.oauth-action-button:has(.flat-icon):hover,
-.oauth-action-button:has(.flat-icon):active {
-  width: auto !important;
-  min-width: 0 !important;
-  height: auto !important;
-  min-height: 2.75rem !important;
-  justify-self: start;
-  padding: 0 var(--space-md) !important;
-  gap: var(--space-xs) !important;
-  color: var(--accent-fg) !important;
-  background: var(--accent) !important;
-  border-color: transparent !important;
+.provider-action-delete:hover,
+.provider-key-delete-button:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
-.oauth-action-button:has(.flat-icon):hover {
-  background: var(--accent-strong) !important;
+/* primary add affordance (API key / OAuth connection) */
+.provider-key-add-button {
+  color: var(--accent-fg);
+  background: var(--accent);
 }
-.oauth-action-button:has(.flat-icon) > span {
-  position: static;
-  width: auto;
-  height: auto;
-  padding: 0;
-  margin: 0;
-  overflow: visible;
-  clip: auto;
-  white-space: nowrap;
+.provider-key-add-button:hover {
+  color: var(--accent-fg);
+  background: var(--accent-strong);
 }
-.agent-table-actions .link-button:has(.flat-icon),
-.agent-table-actions .agent-action-edit:has(.flat-icon),
-.agent-table-actions .agent-action-delete:has(.flat-icon),
-.agent-table-actions .link-button:has(.flat-icon):hover,
-.agent-table-actions .agent-action-edit:has(.flat-icon):hover,
-.agent-table-actions .agent-action-delete:has(.flat-icon):hover {
-  color: inherit !important;
-  background: transparent !important;
-  border-color: transparent !important;
+.provider-refresh-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.provider-refresh-button:disabled:hover {
+  background: transparent;
+  color: var(--text-subtle);
 }
 .agent-delete-dialog {
   width: min(28rem, calc(100vw - 2rem));
@@ -2393,25 +2260,7 @@ details.disclosure[open] > .disclosure-summary {
   font: inherit;
   line-height: 1;
   text-decoration: none;
-}
-.agent-delete-actions :where(button, a):has(.flat-icon) {
-  width: 100% !important;
-  min-width: 0 !important;
-  height: 2.75rem !important;
-  min-height: 2.75rem !important;
-  padding: 0 var(--space-md) !important;
-  gap: var(--space-xs) !important;
-}
-.agent-delete-actions :where(button, a):has(.flat-icon) > span {
-  position: static;
-  width: auto;
-  height: auto;
-  padding: 0;
-  margin: 0;
-  overflow: visible;
-  clip: auto;
-  white-space: normal;
-  border: 0;
+  gap: var(--space-xs);
 }
 .agent-delete-cancel {
   color: var(--accent-fg) !important;
@@ -3102,4 +2951,61 @@ details.disclosure[open] > .disclosure-summary {
   .provider-detail-stats {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================================
+   Visual refresh — calmer depth, clearer hierarchy, and subtle interaction
+   feedback layered on the existing token system. Style-only; markup-stable,
+   so every E2E selector and interaction is unchanged.
+   ========================================================================== */
+
+/* KPI icon chips read as a clearly bounded accent token. */
+.stat-card-icon {
+  border: 1px solid var(--accent-soft-border);
+}
+
+/* Sidebar: a crisper active state with an accent rail beside the chip. */
+.sidebar-nav .nav-item {
+  position: relative;
+}
+.sidebar-nav .nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 1.15rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+/* Clickable table rows feel responsive without shouting. */
+.data-table tbody tr.is-clickable {
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease-out);
+}
+
+/* Topbar: a touch more presence over scrolled content. */
+.topbar {
+  backdrop-filter: blur(10px) saturate(1.15);
+}
+
+/* Pills/badges: a hair more vertical breathing room for legibility. */
+.pill,
+.badge,
+.status-enabled,
+.status-disabled,
+.price-source {
+  padding-block: 3px;
+}
+
+/* Primary CTAs carry a subtle accent shadow for depth (kept flat otherwise). */
+a.btn,
+.page-actions .btn {
+  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--accent) 55%, transparent);
+}
+a.btn:hover,
+.page-actions .btn:hover {
+  box-shadow: 0 3px 10px -3px color-mix(in oklch, var(--accent) 60%, transparent);
 }

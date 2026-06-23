@@ -35,9 +35,9 @@ test("console shows unknown current price and manual price override changes subs
             page.getByRole("heading", { level: 1, name: "Providers & Models" }),
           ).toBeVisible();
           await expect(
-            page.getByRole("heading", { name: "模型库 - OpenAI Pricing Provider" }),
+            page.getByRole("heading", { name: "Model library - OpenAI Pricing Provider" }),
           ).toBeVisible();
-          await expect(page.getByRole("cell", { name: "未知" }).first()).toBeVisible();
+          await expect(page.getByRole("cell", { name: "Unknown" }).first()).toBeVisible();
 
           const response = await context.request.post(`${baseUrl}/api/prices/override`, {
             form: {

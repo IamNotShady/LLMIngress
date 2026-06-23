@@ -12,18 +12,23 @@ test("virtual models page renders KPI cards, overview, fallback chart, and edito
     ).toBeVisible();
 
     // KPI tiles.
-    for (const label of ["Virtual Models", "今日请求", "本月成本", "平均失败率"]) {
+    for (const label of [
+      "Virtual Models",
+      "Requests today",
+      "Cost this month",
+      "Avg failure rate",
+    ]) {
       await expect(
         page.locator(".stat-card-label", { hasText: new RegExp(`^${label}$`) }),
       ).toBeVisible();
     }
 
     // Overview panel.
-    await expect(page.getByRole("heading", { name: "Virtual Model 列表" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Virtual Model list" })).toBeVisible();
     await expect(page.getByText("No virtual models configured.")).toBeVisible();
 
     // Virtual Model editor entry.
-    await expect(page.getByRole("link", { name: "创建 Virtual Model" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "Create Virtual Model" })).toHaveAttribute(
       "href",
       "/models?virtualModelDialog=new",
     );

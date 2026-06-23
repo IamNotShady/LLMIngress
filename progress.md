@@ -1514,3 +1514,8 @@
   - Existing selected candidates still render in the route policy display; the filter only affects new selectable options.
   - TDD red observed first in `tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`.
   - Verification passed: `pnpm exec vitest run tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`. Full E2E was not rerun during the active interactive dev-server session.
+
+- [ ] 2026-06-23 feat-117 Strategy-Ordered Fallback Chains (started):
+  - Scope: replace primary/fallback split with one ordered candidate pool derived from strategy; add health-aware exclusion of unhealthy candidates; distinguish retryable (network/timeout/429/5xx) failures that advance the chain from hard failures (401/403) that persist health; apply same fallback logic to streaming (before first byte) and non-streaming requests; reserve and finalize budget per attempted candidate.
+  - Registered as `status: failing` in `feature_list.json`; pending TDD implementation and verification.
+  - Dependencies: `feat-032` (route engine strategy selection), `feat-033` (fallback chain execution), `feat-075` (provider health summary runtime), `feat-080` (config import export), `feat-087` (migration status check).

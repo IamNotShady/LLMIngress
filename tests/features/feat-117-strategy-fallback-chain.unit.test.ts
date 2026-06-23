@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
 import {
@@ -9,9 +9,12 @@ import {
 } from "../../packages/domain/src/index";
 import type { ModelTokenPrice } from "@llmingress/billing/price-registry";
 import {
+  createGatewayConfigRuntime,
   rowToRoutePolicySnapshots,
+  type GatewayConfigSnapshot,
   type RoutePolicyCandidateRow,
 } from "../../apps/gateway/src/config-reload.js";
+import type { HealthSummaryChangedPayload } from "../../packages/db/src/provider-health.js";
 
 describe("feat-117 strategy fallback chain", () => {
   describe("route attempt chain", () => {
@@ -252,6 +255,90 @@ describe("gateway snapshot health", () => {
     const candidate = snapshots[0]?.candidates[0];
     expect(candidate?.healthStatus).toBe("healthy");
     expect(Object.prototype.hasOwnProperty.call(candidate, "isFallback")).toBe(false);
+  });
+});
+
+describe("health force reload", () => {
+  it("force-refreshes snapshot when health changes even though config version stays the same", async () => {
+    const FIXED_VERSION = 5;
+
+    // First call returns "healthy", subsequent calls return "unhealthy"
+    let callCount = 0;
+    const loadLatestSnapshot = vi.fn(async (): Promise<GatewayConfigSnapshot> => {
+      callCount++;
+      const healthStatus = callCount === 1 ? "healthy" : "unhealthy";
+      return {
+        loadedAt: new Date("2026-01-01T00:00:00.000Z"),
+        version: FIXED_VERSION,
+        providers: [],
+        routePolicies: [
+          {
+            id: "policy-1",
+            strategy: "fixed",
+            virtualModelId: "vm-1",
+            virtualModelName: "test-model",
+            candidates: [
+              {
+                candidateOrder: 1,
+                displayName: "test",
+                healthStatus,
+                modelId: "gpt-4",
+                price: { modelId: "gpt-4", priceVersion: "v1", providerKey: "openai", reason: "model_not_in_builtin_registry", status: "unknown_price" },
+                providerId: "provider-1",
+                providerKey: "openai",
+                providerModelId: "model-1",
+              },
+            ],
+          },
+        ],
+      };
+    });
+
+    let capturedHealthNotify:
+      | ((payload: HealthSummaryChangedPayload) => void)
+      | undefined;
+    const healthListenerClose = vi.fn(async () => {});
+
+    const runtime = createGatewayConfigRuntime({
+      enableNotifications: true,
+      loadLatestSnapshot,
+      createConfigChangedListener: async (_onNotification) => {
+        return { close: async () => {} };
+      },
+      createHealthSummaryChangedListener: async (onNotification) => {
+        capturedHealthNotify = onNotification;
+        return { close: healthListenerClose };
+      },
+      reconcileIntervalMs: 0,
+    });
+
+    await runtime.start();
+
+    // Initial snapshot should show "healthy"
+    expect(runtime.getSnapshot().routePolicies[0]?.candidates[0]?.healthStatus).toBe("healthy");
+    expect(runtime.getSnapshot().version).toBe(FIXED_VERSION);
+
+    // Simulate a health_summary_changed notification
+    const samplePayload: HealthSummaryChangedPayload = {
+      consecutiveFailures: 1,
+      eventId: "event-1",
+      providerId: "provider-1",
+      providerModelId: "model-1",
+      status: "unhealthy",
+      summaryId: "summary-1",
+    };
+    capturedHealthNotify?.(samplePayload);
+
+    // Wait for async force reload to complete
+    await expect
+      .poll(() => runtime.getSnapshot().routePolicies[0]?.candidates[0]?.healthStatus)
+      .toBe("unhealthy");
+
+    // Version is still FIXED_VERSION — health change didn't bump the version
+    expect(runtime.getSnapshot().version).toBe(FIXED_VERSION);
+
+    await runtime.stop();
+    expect(healthListenerClose).toHaveBeenCalledTimes(1);
   });
 });
 

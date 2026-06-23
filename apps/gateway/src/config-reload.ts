@@ -8,6 +8,10 @@ import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
 } from "@llmingress/db/config-versions";
+import {
+  type HealthSummaryChangedPayload,
+  createHealthSummaryChangedListener as createPostgresHealthSummaryChangedListener,
+} from "@llmingress/db/provider-health";
 import { isRemovedProviderKey } from "@llmingress/db/providers";
 import { PostgresClient } from "@llmingress/db/routes";
 import {
@@ -78,8 +82,13 @@ type CreateConfigChangedListener = (
   onNotification: (notification: ConfigChangedNotification) => void,
 ) => Promise<ConfigChangedListener>;
 
+type CreateHealthSummaryChangedListener = (
+  onNotification: (payload: HealthSummaryChangedPayload) => void,
+) => Promise<ConfigChangedListener>;
+
 type GatewayConfigRuntimeOptions = {
   createConfigChangedListener?: CreateConfigChangedListener;
+  createHealthSummaryChangedListener?: CreateHealthSummaryChangedListener;
   databaseUrl?: string;
   enableNotifications?: boolean;
   gatewayInstanceId?: string;
@@ -150,6 +159,7 @@ export function createGatewayConfigRuntime(
 
   let currentSnapshot = emptySnapshot;
   let listener: ConfigChangedListener | undefined;
+  let healthListener: ConfigChangedListener | undefined;
   let reconcileTimer: NodeJS.Timeout | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
   let reloadInFlight: Promise<void> | undefined;
@@ -206,6 +216,39 @@ export function createGatewayConfigRuntime(
     }
   }
 
+  async function forceReload(): Promise<void> {
+    if (reloadInFlight) {
+      await reloadInFlight;
+      // After the in-flight reload settles, do one more unconditional reload
+      // to ensure health changes that arrived during the in-flight load are applied.
+      await forceReload();
+      return;
+    }
+
+    reloadInFlight = (async () => {
+      let nextSnapshot: GatewayConfigSnapshot;
+      try {
+        nextSnapshot = await loadLatestSnapshot();
+      } catch (error) {
+        await recordRuntimeStatusSafe({
+          type: "reload-failed",
+          targetConfigVersion: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+
+      // Unconditional swap — health changes don't bump config version.
+      currentSnapshot = nextSnapshot;
+    })();
+
+    try {
+      await reloadInFlight;
+    } finally {
+      reloadInFlight = undefined;
+    }
+  }
+
   return {
     getSnapshot: () => currentSnapshot,
     reconcile: () => reloadIfNewer(),
@@ -223,6 +266,15 @@ export function createGatewayConfigRuntime(
         listener = await createConfigChangedListener((notification) => {
           void reloadIfNewer(notification.version);
         });
+
+        const createHealthChangedListener =
+          options.createHealthSummaryChangedListener ??
+          (options.databaseUrl ? createPostgresHealthNotificationListener(options) : undefined);
+        if (createHealthChangedListener) {
+          healthListener = await createHealthChangedListener((_payload) => {
+            void forceReload();
+          });
+        }
       }
 
       if (reconcileIntervalMs > 0) {
@@ -253,6 +305,8 @@ export function createGatewayConfigRuntime(
       }
       await listener?.close();
       listener = undefined;
+      await healthListener?.close();
+      healthListener = undefined;
     },
   };
 }
@@ -455,6 +509,22 @@ function createPostgresNotificationListener(
 
   return (onNotification) =>
     createPostgresConfigChangedListener({
+      databaseUrl: options.databaseUrl as string,
+      onNotification,
+    });
+}
+
+function createPostgresHealthNotificationListener(
+  options: GatewayConfigRuntimeOptions,
+): CreateHealthSummaryChangedListener {
+  if (!options.databaseUrl) {
+    throw new Error(
+      "Gateway config runtime requires databaseUrl or createHealthSummaryChangedListener.",
+    );
+  }
+
+  return (onNotification) =>
+    createPostgresHealthSummaryChangedListener({
       databaseUrl: options.databaseUrl as string,
       onNotification,
     });

@@ -2696,6 +2696,202 @@ details.disclosure[open] > .disclosure-summary {
   flex: 1 1 160px;
 }
 
+/* ---- Activity reference workspace ---- */
+.activity-page {
+  max-width: none;
+  margin: 0;
+  padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
+    clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);
+}
+.activity-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.activity-filter-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(8.5rem, 0.75fr) minmax(9.5rem, 0.95fr) minmax(9rem, 0.85fr)
+    minmax(8rem, 0.65fr) minmax(9rem, 0.75fr) minmax(13rem, 1.2fr) auto;
+  gap: var(--space-sm);
+  align-items: end;
+}
+.activity-filter-grid .console-field {
+  min-width: 0;
+}
+.activity-request-filter input {
+  font-family: var(--font-mono);
+}
+.activity-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(25rem, 0.46fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+.activity-table-region {
+  min-width: 0;
+}
+.activity-region-title {
+  margin-bottom: var(--space-xs);
+  font-size: var(--text-lg);
+}
+.activity-table-wrap {
+  background: var(--surface);
+}
+.activity-table {
+  min-width: 68rem;
+  table-layout: fixed;
+}
+.activity-table th,
+.activity-table td {
+  height: 3.25rem;
+}
+.activity-table th:nth-child(1),
+.activity-table td:nth-child(1) {
+  width: 4.8rem;
+}
+.activity-table td:nth-child(2) {
+  width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-table th:nth-child(3),
+.activity-table td:nth-child(3) {
+  width: 6.8rem;
+}
+.activity-table th:nth-child(4),
+.activity-table td:nth-child(4) {
+  width: 6.8rem;
+}
+.activity-table th:nth-child(5),
+.activity-table td:nth-child(5) {
+  width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-table th:nth-child(6),
+.activity-table td:nth-child(6) {
+  width: 4.8rem;
+}
+.activity-table th:nth-child(7),
+.activity-table td:nth-child(7) {
+  width: 6rem;
+}
+.activity-table th:nth-child(8),
+.activity-table td:nth-child(8) {
+  width: 4.8rem;
+}
+.activity-table th:nth-child(9),
+.activity-table td:nth-child(9) {
+  width: 4.8rem;
+}
+.activity-table th:nth-child(10),
+.activity-table td:nth-child(10) {
+  width: 6.2rem;
+}
+.activity-table td:nth-child(2) a {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-detail-panel {
+  gap: var(--space-lg);
+  background: var(--surface);
+}
+.activity-request-key {
+  width: 100%;
+  justify-content: flex-start;
+  overflow-wrap: anywhere;
+}
+.activity-detail-fields .detail-field-wide {
+  display: block;
+}
+.activity-detail-fields .detail-field-wide dd {
+  margin-top: var(--space-2xs);
+  text-align: left;
+}
+.activity-timeline {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.activity-timeline li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: center;
+}
+.activity-timeline-step {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+.activity-timeline-step-ok {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+.activity-timeline-step-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.activity-timeline strong {
+  display: block;
+  font-size: var(--text-sm);
+}
+.activity-timeline em {
+  display: block;
+  margin-top: 1px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-style: normal;
+}
+.activity-empty-timeline {
+  margin-top: var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.activity-legacy-timeline {
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-md);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.activity-legacy-timeline li + li {
+  margin-top: var(--space-2xs);
+}
+.activity-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+.activity-metric-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+.activity-metric-grid span {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+.activity-metric-grid strong {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+}
+.activity-metadata-block {
+  margin-top: var(--space-xs);
+}
+
 /* ---- Virtual Models / Routes ---- */
 .vm-dashboard {
   display: flex;
@@ -2930,6 +3126,10 @@ details.disclosure[open] > .disclosure-summary {
   .vm-model-filter-bar {
     grid-template-columns: 1fr;
   }
+  .activity-filter-grid,
+  .activity-shell {
+    grid-template-columns: 1fr;
+  }
   .detail-panel,
   .wizard-steps {
     position: static;
@@ -2949,6 +3149,12 @@ details.disclosure[open] > .disclosure-summary {
   }
   .provider-card-grid,
   .provider-detail-stats {
+    grid-template-columns: 1fr;
+  }
+  .activity-page {
+    padding-inline: var(--space-md);
+  }
+  .activity-metric-grid {
     grid-template-columns: 1fr;
   }
 }

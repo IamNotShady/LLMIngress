@@ -8,11 +8,10 @@ export default async function ActivityPage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page activity-page">
       <PageHeader
-        eyebrow="Monitor"
         title="Activity"
-        description="Recent gateway requests with provider, model, cost, and routing detail."
+        description="Inspect request metadata, routing results, costs, latency, and fallback flow."
       />
       <ActivitySection searchParams={resolved} />
     </div>

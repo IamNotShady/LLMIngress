@@ -1477,3 +1477,11 @@
   - Subscription OAuth follow-up: OpenAI OAuth delete now revokes the token remotely before local deletion, Claude Code revoke remains local-only, Codex Responses bodies are cleaned for the ChatGPT backend, Codex SSE text is normalized into Responses output text, and Claude Code OAuth requests inject the required Claude Agent SDK system identifier for JSON and streaming messages.
   - Full E2E repair: `feat-048` seeds runtime heartbeat data inside the Console process lock so the heartbeat does not age into `Stale` while waiting for another Next dev server; `feat-061` waits for the Provider dialog and switches to the API Keys tab before asserting base-URL field layout because subscription providers are now the default create group.
   - Verification passed: focused `feat-048`/`feat-061` E2E, focused `feat-038`/`feat-039` Gateway E2E and neighboring 5-worker Gateway subset, `pnpm lint`, `pnpm typecheck`, and full `pnpm test:e2e` with 131 passing tests. One earlier full E2E run showed transient Gateway startup exits for `feat-038`/`feat-039`; both targeted reruns and the final full run passed.
+
+- [x] 2026-06-23 feat-116 Activity Reference UI Alignment:
+  - Scope: align Console Activity with `docs/UI/06_activity.png` while keeping the current English Console UI direction.
+  - Started on branch `codex/feat-116-activity-reference-ui`.
+  - RED tests added first for server-side Activity filters/metadata formatting and real browser Activity layout/detail behavior.
+  - Implemented SQL-backed Agent/Virtual Model/Provider/Status/time-range/Request ID filters, 8-row request table, selected request detail, ordered fallback timeline, metric cards, conditional error info, safe request metadata, and Activity-only responsive CSS.
+  - Visual QA: compared `docs/UI/06_activity.png` with Playwright desktop/mobile screenshots through `view_image`; adjusted table column sizing and compact missing table values to avoid clipped headers or overlapping text; mobile `body` horizontal overflow was false.
+  - Verification passed: focused feat-116 unit/E2E, related feat-046/098/104 regressions, console-ui Activity smoke, `pnpm run verify`, and final `pnpm run verify:features` with all 116 passing features re-verified.

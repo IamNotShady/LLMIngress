@@ -195,8 +195,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'succeeded',
         200,
         37,
-        '2026-06-14T10:00:00.000Z',
-        '2026-06-14T10:00:00.037Z'
+        '2026-06-23T10:00:00.000Z',
+        '2026-06-23T10:00:00.037Z'
       ),
       (
         $9,
@@ -215,8 +215,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'failed',
         502,
         12,
-        '2026-06-14T10:01:00.000Z',
-        '2026-06-14T10:01:00.012Z'
+        '2026-06-23T10:01:00.000Z',
+        '2026-06-23T10:01:00.012Z'
       )
     `,
     [

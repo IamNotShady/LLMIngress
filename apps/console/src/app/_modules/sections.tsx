@@ -1,8 +1,13 @@
 import {
   type ConsoleActivity,
+  type ConsoleActivityDetail,
+  type ConsoleFallbackEvent,
+  countConsoleActivities,
   formatConsoleActivityCost,
   formatConsoleActivityFallbackAttempts,
+  formatConsoleActivityMetadata,
   formatConsoleActivityRouteReason,
+  getConsoleActivityDetail,
   listConsoleActivities,
 } from "../../server/activity";
 import {
@@ -76,7 +81,7 @@ import { TrendLineChart } from "../_components/charts/trend-line-chart";
 import { FlatIcon } from "../_components/flat-icon";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
-import { buildQueryHref, paginate, readPageParam } from "../_lib/pagination";
+import { buildQueryHref, PAGE_SIZE, paginate, readPageParam } from "../_lib/pagination";
 import { ProviderCreateForm } from "./provider-create-form";
 import { VirtualModelRouteDialogClient } from "./virtual-model-route-dialog";
 
@@ -295,6 +300,18 @@ function formatCompactNumber(value: number): string {
     return `${(value / 1_000).toFixed(1)}K`;
   }
   return String(value);
+}
+
+function formatFullNumber(value: number | null): string {
+  return value === null ? "Unavailable" : value.toLocaleString("en-US");
+}
+
+function formatActivityTableTokens(value: number | null): string {
+  return value === null ? "N/A" : value.toLocaleString("en-US");
+}
+
+function formatActivityTableCost(value: string | null): string {
+  return value === null ? "N/A" : formatConsoleActivityCost(value);
 }
 
 function formatOverviewMoney(totalCostUsd: string | null): string {
@@ -867,46 +884,105 @@ function UsageCostDonut({
 
 export async function ActivitySection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
+  const page = readPageParam(searchParams);
   const selectedActivityId = readSingleSearchParam(searchParams.activityId);
-  const statusFilter = readSingleSearchParam(searchParams.status) ?? "";
-  const requestQuery = (readSingleSearchParam(searchParams.q) ?? "").trim();
-  const allActivities = await listConsoleActivities(databaseUrl);
-  const statusOptions = Array.from(
-    new Set(allActivities.map((activity) => activity.status)),
-  ).sort();
-
-  // Filtering runs over the fetched rows (the activity query is unparameterized).
-  const activities = allActivities.filter((activity) => {
-    if (statusFilter && activity.status !== statusFilter) {
-      return false;
-    }
-    if (requestQuery && !activity.requestId.toLowerCase().includes(requestQuery.toLowerCase())) {
-      return false;
-    }
-    return true;
-  });
-
-  const selectedActivity =
+  const activityRange = parseActivityRange(readSingleSearchParam(searchParams.activityRange));
+  const filters = {
+    agentApiKeyId: readSingleSearchParam(searchParams.agentId),
+    from: getActivityWindowStart(new Date(), activityRange),
+    providerId: readSingleSearchParam(searchParams.providerId),
+    requestIdQuery: readSingleSearchParam(searchParams.q),
+    status: readSingleSearchParam(searchParams.status),
+    virtualModelId: readSingleSearchParam(searchParams.virtualModelId),
+  };
+  const [agents, virtualModels, providers, total, activities] = await Promise.all([
+    listAgents(databaseUrl),
+    listVirtualModels(databaseUrl),
+    listProviders(databaseUrl),
+    countConsoleActivities({ databaseUrl, filters }),
+    listConsoleActivities({ databaseUrl, filters, limit: PAGE_SIZE, page }),
+  ]);
+  const selectedListActivity =
     activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
-  const view = paginate(activities, readPageParam(searchParams));
+  const selectedDetail = selectedListActivity
+    ? await getConsoleActivityDetail({ activityId: selectedListActivity.id, databaseUrl })
+    : null;
+  const selectedActivity = selectedDetail?.activity ?? selectedListActivity;
+  const view = {
+    from: total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1,
+    items: activities,
+    page,
+    to: total === 0 ? 0 : (page - 1) * PAGE_SIZE + activities.length,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+  };
 
   return (
-    <section className="providers-panel" id="activity" aria-label="Activity">
-      <form className="filter-bar" action="/activity" method="get">
+    <section className="activity-workspace" id="activity" aria-label="Activity">
+      <form className="activity-filter-grid" action="/activity" method="get">
         <div className="console-field">
-          <label htmlFor="activity-status">Status</label>
-          <select id="activity-status" name="status" defaultValue={statusFilter}>
-            <option value="">All statuses</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
+          <label htmlFor="activity-agent">Agent</label>
+          <select id="activity-agent" name="agentId" defaultValue={filters.agentApiKeyId ?? ""}>
+            <option value="">All agents</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
               </option>
             ))}
           </select>
         </div>
         <div className="console-field">
+          <label htmlFor="activity-virtual-model">Virtual Model</label>
+          <select
+            id="activity-virtual-model"
+            name="virtualModelId"
+            defaultValue={filters.virtualModelId ?? ""}
+          >
+            <option value="">All virtual models</option>
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {virtualModel.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="console-field">
+          <label htmlFor="activity-provider">Provider</label>
+          <select id="activity-provider" name="providerId" defaultValue={filters.providerId ?? ""}>
+            <option value="">All providers</option>
+            {providers.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.displayName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="console-field">
+          <label htmlFor="activity-status">Status</label>
+          <select id="activity-status" name="status" defaultValue={filters.status ?? ""}>
+            <option value="">All statuses</option>
+            <option value="succeeded">Success</option>
+            <option value="failed">Failed</option>
+            <option value="started">Started</option>
+            <option value="canceled">Canceled</option>
+          </select>
+        </div>
+        <div className="console-field">
+          <label htmlFor="activity-range">Time range</label>
+          <select id="activity-range" name="activityRange" defaultValue={activityRange}>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </div>
+        <div className="console-field activity-request-filter">
           <label htmlFor="activity-q">Request ID</label>
-          <input id="activity-q" name="q" defaultValue={requestQuery} placeholder="req_..." />
+          <input
+            id="activity-q"
+            name="q"
+            defaultValue={filters.requestIdQuery ?? ""}
+            placeholder="req_..."
+          />
         </div>
         <div className="console-actions">
           <button type="submit">
@@ -916,118 +992,179 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
         </div>
       </form>
 
-      {allActivities.length === 0 ? (
-        <p>No activity recorded.</p>
-      ) : (
-        <div className="detail-layout">
-          <div className="activity-list-col">
-            <div className="data-table-wrap">
-              <table className="data-table">
-                <thead>
+      <div className="activity-shell">
+        <div className="activity-table-region">
+          <h2 className="activity-region-title">Request list</h2>
+          <div className="data-table-wrap activity-table-wrap">
+            <table className="data-table activity-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Request ID</th>
+                  <th>Agent</th>
+                  <th>Virtual Model</th>
+                  <th>Provider / Model</th>
+                  <th className="num">Tokens</th>
+                  <th className="num">Cost</th>
+                  <th className="num">Latency</th>
+                  <th>Status</th>
+                  <th className="num">Fallbacks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activities.length === 0 ? (
                   <tr>
-                    <th>Request</th>
-                    <th>Provider / Model</th>
-                    <th className="num">Tokens</th>
-                    <th className="num">Cost</th>
-                    <th className="num">Latency</th>
-                    <th>Status</th>
+                    <td colSpan={10}>No requests match the filters.</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {view.items.length === 0 ? (
-                    <tr>
-                      <td colSpan={6}>No requests match the filters.</td>
+                ) : (
+                  activities.map((activity) => (
+                    <tr
+                      key={activity.id}
+                      className={
+                        selectedActivity?.id === activity.id ? "is-selected" : "is-clickable"
+                      }
+                    >
+                      <td className="mono">{formatTime(activity.startedAt)}</td>
+                      <td className="mono">
+                        <a href={buildQueryHref(searchParams, { activityId: activity.id })}>
+                          {activity.requestId}
+                        </a>
+                      </td>
+                      <td>{activity.agentName ?? "Unknown agent"}</td>
+                      <td>{formatActivityVirtualModelLabel(activity)}</td>
+                      <td>{formatActivityProviderModelLabel(activity)}</td>
+                      <td className="num">{formatActivityTableTokens(activity.totalTokens)}</td>
+                      <td className="num">{formatActivityTableCost(activity.totalCostUsd)}</td>
+                      <td className="num">{formatActivityLatency(activity.latencyMs)}</td>
+                      <td>
+                        <ActivityStatusPill status={activity.status} />
+                      </td>
+                      <td className="num">{formatFullNumber(activityFallbackCount(activity))}</td>
                     </tr>
-                  ) : (
-                    view.items.map((activity) => (
-                      <tr
-                        key={activity.id}
-                        className={
-                          selectedActivity?.id === activity.id ? "is-selected" : "is-clickable"
-                        }
-                      >
-                        <td className="mono">
-                          <a href={buildQueryHref(searchParams, { activityId: activity.id })}>
-                            {activity.requestId}
-                          </a>
-                        </td>
-                        <td>{formatActivityModelSummary(activity)}</td>
-                        <td className="num">{formatCompactNumber(activity.totalTokens ?? 0)}</td>
-                        <td className="num">{formatConsoleActivityCost(activity.totalCostUsd)}</td>
-                        <td className="num">{formatActivityLatency(activity.latencyMs)}</td>
-                        <td>
-                          <ActivityStatusPill status={activity.status} />
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <Pager view={view} searchParams={searchParams} />
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-          {selectedActivity ? (
-            <section className="detail-panel" aria-labelledby="activity-detail-title">
-              <div className="detail-panel-head">
-                <h2 className="detail-panel-title" id="activity-detail-title">
-                  Request detail
-                </h2>
-                <ActivityStatusPill status={selectedActivity.status} />
-              </div>
-              <p className="key-display">{selectedActivity.requestId}</p>
-              <dl className="detail-field-list">
-                <div className="detail-field">
-                  <dt>Provider</dt>
-                  <dd>{formatActivityProviderLabel(selectedActivity)}</dd>
-                </div>
-                <div className="detail-field">
-                  <dt>Model hit</dt>
-                  <dd>{formatActivityModelHitLabel(selectedActivity)}</dd>
-                </div>
-                <div className="detail-field">
-                  <dt>Tokens</dt>
-                  <dd>{formatCompactNumber(selectedActivity.totalTokens ?? 0)}</dd>
-                </div>
-                <div className="detail-field">
-                  <dt>Cost</dt>
-                  <dd>{formatConsoleActivityCost(selectedActivity.totalCostUsd)}</dd>
-                </div>
-                <div className="detail-field">
-                  <dt>Latency</dt>
-                  <dd>{formatActivityLatency(selectedActivity.latencyMs)}</dd>
-                </div>
-                <div className="detail-field">
-                  <dt>Route reason</dt>
-                  <dd>{formatConsoleActivityRouteReason(selectedActivity.routeReason)}</dd>
-                </div>
-              </dl>
-              <div>
-                <p className="detail-section-label">Fallback timeline</p>
-                <ul className="timeline">
-                  {formatConsoleActivityFallbackAttempts(selectedActivity.fallbackAttempts).map(
-                    (attempt) => (
-                      <li key={attempt}>{attempt}</li>
-                    ),
-                  )}
-                </ul>
-              </div>
-              {selectedActivity.errorCode ? (
-                <p className="callout callout--warn">Error: {selectedActivity.errorCode}</p>
-              ) : null}
-              <div>
-                <p className="detail-section-label">Request metadata</p>
-                <pre className="code-block">
-                  {`protocol: ${selectedActivity.protocol}
-http_status: ${selectedActivity.httpStatus ?? "—"}
-model: ${selectedActivity.model ?? "—"}
-started_at: ${formatDateTime(selectedActivity.startedAt)}`}
-                </pre>
-                <p className="callout">Prompt / response bodies are not stored.</p>
-              </div>
-            </section>
-          ) : null}
+          <Pager view={view} searchParams={searchParams} />
         </div>
-      )}
+
+        {selectedActivity ? (
+          <ActivityReferenceDetail detail={selectedDetail} fallbackActivity={selectedActivity} />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ActivityReferenceDetail({
+  detail,
+  fallbackActivity,
+}: {
+  detail: ConsoleActivityDetail | null;
+  fallbackActivity: ConsoleActivity;
+}) {
+  const activity = detail?.activity ?? fallbackActivity;
+  const metadataLines = buildActivityMetadataLines(activity, detail?.requestMetadata ?? {});
+  const fallbackEvents = detail?.fallbackEvents ?? [];
+  const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(activity.fallbackAttempts);
+
+  return (
+    <section
+      className="detail-panel activity-detail-panel"
+      aria-label="Request detail"
+      aria-labelledby="activity-detail-title"
+    >
+      <div className="detail-panel-head">
+        <h2 className="detail-panel-title" id="activity-detail-title">
+          Request detail
+        </h2>
+        <ActivityStatusPill status={activity.status} />
+      </div>
+
+      <dl className="detail-field-list activity-detail-fields">
+        <div className="detail-field">
+          <dt>Request ID</dt>
+          <dd>{activity.requestId}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Agent</dt>
+          <dd>{activity.agentName ?? "Unknown agent"}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>API Key Prefix</dt>
+          <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Virtual Model</dt>
+          <dd>{formatActivityVirtualModelLabel(activity)}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Provider / Model</dt>
+          <dd>{formatActivityProviderModelLabel(activity)}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Strategy</dt>
+          <dd>{formatRouteReasonStrategy(activity.routeReason)}</dd>
+        </div>
+        <div className="detail-field detail-field-wide">
+          <dt>Route reason</dt>
+          <dd>{formatConsoleActivityRouteReason(activity.routeReason)}</dd>
+        </div>
+      </dl>
+
+      <div>
+        <p className="detail-section-label">Fallback timeline</p>
+        {fallbackEvents.length === 0 ? (
+          <ul className="activity-legacy-timeline">
+            {fallbackAttemptLines.map((attempt) => (
+              <li key={attempt}>{attempt}</li>
+            ))}
+          </ul>
+        ) : (
+          <ol className="activity-timeline">
+            {fallbackEvents.map((event) => (
+              <li key={`${event.attemptOrder}:${event.status}`}>
+                <span className={activityTimelineStepClass(event.status)}>
+                  {event.attemptOrder}
+                </span>
+                <span>
+                  <strong>{formatFallbackEventModel(event)}</strong>
+                  <em>{formatFallbackEventResult(event)}</em>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      <div className="activity-metric-grid">
+        <div>
+          <span>Tokens</span>
+          <strong>{formatFullNumber(activity.totalTokens)}</strong>
+        </div>
+        <div>
+          <span>Cost</span>
+          <strong>{formatConsoleActivityCost(activity.totalCostUsd)}</strong>
+        </div>
+        <div>
+          <span>Latency</span>
+          <strong>{formatActivityLatency(activity.latencyMs)}</strong>
+        </div>
+      </div>
+
+      {activity.errorMessage || activity.errorCode ? (
+        <div>
+          <p className="detail-section-label">Error info</p>
+          <p className="callout callout--warn">{formatActivityError(activity)}</p>
+        </div>
+      ) : null}
+
+      <div>
+        <p className="detail-section-label">Request metadata</p>
+        <pre className="code-block activity-metadata-block">{metadataLines.join("\n")}</pre>
+        <p className="callout">Prompt / response bodies are not stored.</p>
+      </div>
     </section>
   );
 }
@@ -4061,10 +4198,97 @@ function formatActivityModelSummary(activity: ConsoleActivity): string {
   return activity.providerModelName ?? activity.model ?? "Unknown model";
 }
 
-function formatActivityModelHitLabel(activity: ConsoleActivity): string {
-  const displayName = activity.providerModelDisplayName ?? "Unknown model";
-  const modelName = activity.providerModelName ?? activity.providerModelId ?? "unknown";
-  return `${displayName} (${modelName})`;
+function formatActivityProviderModelLabel(activity: ConsoleActivity): string {
+  return `${formatActivityProviderLabel(activity)} / ${formatActivityModelDisplayLabel(activity)}`;
+}
+
+function formatActivityModelDisplayLabel(activity: ConsoleActivity): string {
+  const displayName =
+    activity.providerModelDisplayName ?? activity.providerModelName ?? activity.model ?? null;
+  if (!displayName) {
+    return "Unknown model";
+  }
+  if (activity.providerModelName && displayName !== activity.providerModelName) {
+    return `${displayName} (${activity.providerModelName})`;
+  }
+  return displayName;
+}
+
+function activityFallbackCount(activity: ConsoleActivity): number {
+  if (Array.isArray(activity.fallbackAttempts)) {
+    return activity.fallbackAttempts.length;
+  }
+  return 0;
+}
+
+type ActivityRange = "24h" | "7d" | "30d";
+
+function parseActivityRange(value: string | undefined): ActivityRange {
+  if (value === "24h" || value === "30d") {
+    return value;
+  }
+  return "7d";
+}
+
+function getActivityWindowStart(now: Date, range: ActivityRange): Date {
+  const days = range === "24h" ? 1 : range === "30d" ? 30 : 7;
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function formatRouteReasonStrategy(routeReason: unknown): string {
+  if (isActivityRecord(routeReason) && typeof routeReason.strategy === "string") {
+    return routeReason.strategy;
+  }
+  return "Unknown";
+}
+
+function formatFallbackEventModel(event: ConsoleFallbackEvent): string {
+  return (
+    event.providerModelDisplayName ??
+    event.providerModelName ??
+    event.providerModelId ??
+    "Unknown provider model"
+  );
+}
+
+function formatFallbackEventResult(event: ConsoleFallbackEvent): string {
+  if (event.status === "succeeded") {
+    return "Success";
+  }
+  return event.errorMessage ?? event.errorCode ?? event.status;
+}
+
+function buildActivityMetadataLines(activity: ConsoleActivity, metadata: unknown): string[] {
+  const safeLines = formatConsoleActivityMetadata(metadata).filter(
+    (line) => line !== "No request metadata recorded",
+  );
+  return [
+    `protocol: ${activity.protocol}`,
+    `http_status: ${activity.httpStatus ?? "—"}`,
+    `model: ${activity.model ?? "—"}`,
+    `started_at: ${formatDateTime(activity.startedAt)}`,
+    ...safeLines,
+  ];
+}
+
+function formatActivityError(activity: ConsoleActivity): string {
+  if (activity.errorCode) {
+    return activity.errorMessage
+      ? `Error: ${activity.errorCode} - ${activity.errorMessage}`
+      : `Error: ${activity.errorCode}`;
+  }
+  return activity.errorMessage ?? "Error details unavailable";
+}
+
+function activityTimelineStepClass(status: string): string {
+  if (status === "succeeded") {
+    return "activity-timeline-step activity-timeline-step-ok";
+  }
+  return "activity-timeline-step activity-timeline-step-danger";
+}
+
+function isActivityRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string }>): string {

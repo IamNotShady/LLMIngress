@@ -1529,3 +1529,9 @@
   - During post-merge full regression, reproduced a Console E2E startup failure after `pnpm run build`: build-produced `apps/console/.next` artifacts caused later `next dev` E2E runs to miss short readiness windows. `scripts/run-with-env.ts` now clears `apps/console/.next` before `playwright test` invocations so `pnpm test:e2e` and `verify:features` do not require manual cleanup after build.
   - Stabilized `feat-084` webhook retry E2E by polling `runner.runOnce()` until the zero-backoff retry job is claimable, matching database timestamp scheduling granularity.
   - Verification passed: `pnpm run build && pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard' --workers=1`, `pnpm run verify`, full `pnpm test:e2e --workers=1` (133 passed, 10.8m), and `pnpm run verify:features` (all 116 passing features re-verified; E2E batch 528.5s).
+
+- [x] 2026-06-24 Console local startup hang repair:
+  - Reproduced the live issue on `http://127.0.0.1:3000/`: TCP connected to Console, but `/` returned zero bytes for 15s while `next-server (v16.2.9)` spun at roughly 660% CPU. `apps/console/.next` still contained production build artifacts from `pnpm run build`.
+  - Fixed `apps/console/src/main.ts` so `@llmingress/console dev` clears the Console package `.next` directory before spawning `next dev`; `start` production mode is unchanged.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-054-local-deployment-smoke.unit.test.ts`, `pnpm --filter @llmingress/console typecheck`, live curl returned `HTTP/1.1 200 OK`, in-app browser showed `LLMIngress Console` / `Overview` with no console errors, and `pnpm run verify` passed.
+  - Current local Console was restarted detached on port 3000; process tree includes `pnpm --filter @llmingress/console dev` PID 56642 and `next-server` PID 56684.

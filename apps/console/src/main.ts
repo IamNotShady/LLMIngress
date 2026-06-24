@@ -1,5 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 
 type ConsoleMode = "dev" | "start";
@@ -18,6 +20,7 @@ type ConsoleCommand = {
 };
 
 const shutdownSignals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+const consolePackageRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultConsoleRuntime: ConsoleRuntime = {
   exit: (code) => process.exit(code),
   killSelf: (signal) => process.kill(process.pid, signal),
@@ -45,6 +48,10 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
 }
 
 export function startConsole(mode: ConsoleMode): void {
+  if (mode === "dev") {
+    clearConsoleDevArtifacts();
+  }
+
   const { command, args, env } = buildConsoleCommand(mode);
   const child = spawn(command, args, {
     env,
@@ -53,6 +60,10 @@ export function startConsole(mode: ConsoleMode): void {
   });
 
   attachConsoleChildLifecycle(child);
+}
+
+export function clearConsoleDevArtifacts(consoleRoot = consolePackageRoot): void {
+  rmSync(resolve(consoleRoot, ".next"), { force: true, recursive: true });
 }
 
 export function attachConsoleChildLifecycle(

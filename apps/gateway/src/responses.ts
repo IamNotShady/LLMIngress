@@ -11,6 +11,7 @@ import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
   type GatewayBudgetReservation,
+  GatewayBudgetRejectedError,
   releaseGatewayBudgetReservation,
   reserveGatewayBudget,
 } from "./budgets.js";
@@ -26,7 +27,6 @@ import type {
 } from "./config-reload.js";
 import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
-  buildFallbackAttemptCandidates,
   buildFallbackFailedAttempt,
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
@@ -39,7 +39,7 @@ import {
   buildOpenAIResponsesRequestMetadata,
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
-import { selectRouteCandidate } from "./route-engine.js";
+import { type RouteDecision, selectRouteAttempts } from "./route-engine.js";
 import { recordGatewayProviderTrace } from "./tracing.js";
 import {
   type GatewayUsageCostDetails,
@@ -53,6 +53,7 @@ export type GatewayResponsesErrorCode =
   | "provider_credentials_missing"
   | "provider_protocol_unsupported"
   | "provider_request_failed"
+  | "provider_unavailable"
   | "route_not_found"
   | "unsupported_stateful_responses";
 
@@ -182,48 +183,54 @@ export async function executeGatewayOpenAIResponse(input: {
   }
 
   const concurrencyLease = rateLimit.concurrencyLease;
-  let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
   try {
-    const routeDecision = selectRouteCandidate({
+    const routeResult = selectRouteAttempts({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
       usesTools: requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
+    if (!routeResult.decision || routeResult.chain.length === 0) {
+      return {
+        activity,
+        body: createGatewayResponsesErrorBody("provider_unavailable", input.requestId),
+        requestMetadata,
+        statusCode: mapGatewayErrorStatus("provider_unavailable"),
+      };
+    }
+    const routeDecision = routeResult.decision;
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const attemptCandidates = buildFallbackAttemptCandidates({
-      routePolicy,
-      selectedProviderModelId: routeDecision.providerModelId,
-    });
-    const selectedCandidate = requireFirstCandidate(attemptCandidates);
+
+    const headOrder = routeResult.chain[0]?.candidateOrder;
+    const selectedCandidate =
+      routePolicy.candidates.find((c) => c.candidateOrder === headOrder) ??
+      routePolicy.candidates.find((c) => c.providerModelId === routeDecision.providerModelId);
+    if (!selectedCandidate) {
+      throw new Error("Selected route candidate was not found in route policy.");
+    }
     activity = buildRequestActivityRoute({
       candidate: selectedCandidate,
       fallbackAttempts,
       routeDecision,
     });
-    const budget = await reserveGatewayBudget({
-      agentApiKeyId: input.agentApiKeyId,
-      databaseUrl: input.databaseUrl,
-      price: selectedCandidate.price,
-      requestId: input.requestId,
-      requestMetadata,
-    });
-    if (!budget.ok) {
-      return {
-        activity,
-        body: budget.body,
-        requestMetadata,
-        statusCode: budget.statusCode,
-      };
-    }
-    budgetReservation = budget.reservation;
+
+    const chainOrderMap = new Map(
+      routeResult.chain.map((c, idx) => [c.candidateOrder, idx]),
+    );
+    const gatewayChain = routePolicy.candidates
+      .filter((c) => chainOrderMap.has(c.candidateOrder))
+      .sort((a, b) => {
+        const ia = chainOrderMap.get(a.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
+        const ib = chainOrderMap.get(b.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
+        return ia - ib;
+      });
 
     const candidates = await attachGatewayProviderCredentials({
-      candidates: attemptCandidates,
+      candidates: gatewayChain,
       databaseUrl: input.databaseUrl,
       masterKeySource: readGatewayMasterKeySource(),
     });
@@ -232,6 +239,23 @@ export async function executeGatewayOpenAIResponse(input: {
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
+      finalizeAttempt: (r) =>
+        finalizeGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
+      releaseAttempt: (r) =>
+        releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
+      reserveAttempt: async (candidate) => {
+        const d = await reserveGatewayBudget({
+          agentApiKeyId: input.agentApiKeyId,
+          databaseUrl: input.databaseUrl,
+          price: candidate.price,
+          requestId: input.requestId,
+          requestMetadata,
+        });
+        if (!d.ok) {
+          throw new GatewayBudgetRejectedError(d.body, d.statusCode);
+        }
+        return d.reservation;
+      },
       request: normalized.request,
       requestActivityId: input.requestActivityId,
       requestId: input.requestId,
@@ -240,10 +264,6 @@ export async function executeGatewayOpenAIResponse(input: {
       throw new Error("Provider request failed.");
     }
 
-    await finalizeGatewayBudgetReservation({
-      databaseUrl: input.databaseUrl,
-      reservation: budgetReservation,
-    });
     await recordGatewayProviderApiKeyLastUsed({
       databaseUrl: input.databaseUrl,
       providerApiKeyId: success.candidate.providerApiKeyId,
@@ -270,10 +290,14 @@ export async function executeGatewayOpenAIResponse(input: {
       },
     };
   } catch (error) {
-    await releaseGatewayBudgetReservation({
-      databaseUrl: input.databaseUrl,
-      reservation: budgetReservation,
-    });
+    if (error instanceof GatewayBudgetRejectedError) {
+      return {
+        activity,
+        body: error.body,
+        requestMetadata,
+        statusCode: error.statusCode,
+      };
+    }
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyResponsesError(message);
     return {
@@ -301,6 +325,9 @@ async function executeResponsesFallback(input: {
   candidates: readonly FallbackChainCandidate[];
   databaseUrl: string;
   fallbackAttempts: FallbackFailedAttempt[];
+  finalizeAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
+  releaseAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
+  reserveAttempt: (candidate: FallbackChainCandidate) => Promise<GatewayBudgetReservation | undefined>;
   request: NormalizedOpenAIResponsesRequest;
   requestActivityId?: string;
   requestId: string;
@@ -335,6 +362,7 @@ async function executeResponsesFallback(input: {
     if (!adapter.response) {
       throw new Error("OpenAI responses provider adapter is not configured.");
     }
+    const reservation = await input.reserveAttempt(candidate);
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
       const providerStartedAt = new Date();
@@ -356,6 +384,7 @@ async function executeResponsesFallback(input: {
       });
 
       if (result.ok) {
+        await input.finalizeAttempt(reservation);
         await recordSucceededAttemptInDatabase(input, {
           attemptOrder,
           ...(providerApiKey.providerApiKeyId
@@ -383,10 +412,12 @@ async function executeResponsesFallback(input: {
       });
       input.fallbackAttempts.push(failedAttempt);
       await recordFailedAttemptInDatabase(input, failedAttempt);
-      if (!failedAttempt.failedBeforeFirstByte) {
+      if (!failedAttempt.retryable) {
+        await input.releaseAttempt(reservation);
         return undefined;
       }
     }
+    await input.releaseAttempt(reservation);
   }
   if (attemptOrder === 0 && unsupportedProviders.size > 0) {
     throw new Error(
@@ -514,15 +545,6 @@ function requireRoutePolicy(
   return routePolicy;
 }
 
-function requireFirstCandidate(
-  candidates: readonly GatewayRouteCandidateSnapshot[],
-): GatewayRouteCandidateSnapshot {
-  const candidate = candidates[0];
-  if (!candidate) {
-    throw new Error("Selected route candidate was not found in route policy.");
-  }
-  return candidate;
-}
 
 function buildRequestActivityRoute(input: {
   candidate: GatewayRouteCandidateSnapshot & {
@@ -530,7 +552,7 @@ function buildRequestActivityRoute(input: {
     providerApiKeyPrefix?: string;
   };
   fallbackAttempts: FallbackFailedAttempt[];
-  routeDecision: ReturnType<typeof selectRouteCandidate>;
+  routeDecision: RouteDecision;
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: input.fallbackAttempts,
@@ -589,6 +611,9 @@ function responsesErrorMessage(code: GatewayResponsesErrorCode): string {
   }
   if (code === "provider_protocol_unsupported") {
     return "The selected provider cannot serve Responses API requests.";
+  }
+  if (code === "provider_unavailable") {
+    return "No eligible provider candidates are available for the selected route.";
   }
   return "Provider request failed.";
 }

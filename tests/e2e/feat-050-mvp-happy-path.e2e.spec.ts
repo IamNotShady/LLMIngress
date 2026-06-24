@@ -441,7 +441,7 @@ async function postVirtualModelWithRoute(
     body.set("description", payload.description);
     body.set("strategy", payload.strategy);
     for (const providerModelId of payload.primaryProviderModelIds) {
-      body.append("primaryProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     const response = await fetch("/api/virtual-models", { body, method: "POST" });
     return { status: response.status, text: await response.text() };
@@ -466,7 +466,7 @@ async function postRoutePolicyAction(
     body.set("virtualModelId", payload.virtualModelId);
     body.set("strategy", payload.strategy);
     for (const providerModelId of payload.primaryProviderModelIds) {
-      body.append("primaryProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     const response = await fetch("/api/route-policies", { body, method: "POST" });
     return { status: response.status, text: await response.text() };

@@ -262,10 +262,10 @@ async function submitRoutePolicyForm(
     body.set("virtualModelId", payload.virtualModelId);
     body.set("strategy", payload.strategy);
     for (const providerModelId of payload.primaryProviderModelIds) {
-      body.append("primaryProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     for (const providerModelId of payload.fallbackProviderModelIds) {
-      body.append("fallbackProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
 
     const response = await fetch("/api/route-policies", {

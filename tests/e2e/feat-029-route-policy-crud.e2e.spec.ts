@@ -311,10 +311,10 @@ async function postRoutePolicyAction(
       body.set("strategy", payload.strategy);
     }
     for (const providerModelId of payload.primaryProviderModelIds ?? []) {
-      body.append("primaryProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     for (const providerModelId of payload.fallbackProviderModelIds ?? []) {
-      body.append("fallbackProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     const response = await fetch("/api/route-policies", { body, method: "POST" });
     return { status: response.status, text: await response.text() };

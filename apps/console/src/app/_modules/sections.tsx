@@ -78,6 +78,7 @@ import {
   parseConsoleUsageWindow,
 } from "../../server/usage";
 import { type ConsoleVirtualModel, listVirtualModels } from "../../server/virtual-models";
+import { AgentVirtualModelMultiSelect } from "../_components/agent-virtual-model-multi-select";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
@@ -724,12 +725,20 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
   const selectedAgentId = readOptionalFilterParam(searchParams.agentId);
   const selectedVirtualModelId = readOptionalFilterParam(searchParams.virtualModelId);
   const selectedProviderId = readOptionalFilterParam(searchParams.providerId);
+  const now = new Date();
+  const { dateFromValue, dateToValue } = getUsageDateInputValues({
+    dateFromParam,
+    dateToParam,
+    now,
+    window: usageWindow,
+  });
   const [usageSummary, agents, virtualModels, providers] = await Promise.all([
     getConsoleUsageSummary({
       agentId: selectedAgentId,
       databaseUrl,
-      dateFrom: parseUsageDateStart(dateFromParam),
-      dateTo: parseUsageDateEndExclusive(dateToParam),
+      dateFrom: parseUsageDateStart(dateFromValue),
+      dateTo: parseUsageDateEndExclusive(dateToValue),
+      now,
       providerId: selectedProviderId,
       virtualModelId: selectedVirtualModelId,
       window: usageWindow,
@@ -755,12 +764,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
       ? `${((usageSummary.lowCostRequestCount / usageSummary.costedRequestCount) * 100).toFixed(1)}%`
       : "0.0%";
   const avgLatency = formatLatencyMs(usageSummary.avgLatencyMs);
-  const { dateFromValue, dateToValue } = getUsageDateInputValues({
-    dateFromParam,
-    dateToParam,
-    now: new Date(),
-    window: usageWindow,
-  });
   const costTrend = usageSummary.trend.map(formatCostTrendPoint);
   const tokenTrend = usageSummary.trend.map(formatTokenTrendPoint);
 
@@ -2402,18 +2405,14 @@ function AgentCreateDialog({
             <option value="false">disabled</option>
           </select>
           <label htmlFor="agent-allowed-virtual-models">Allowed virtual models</label>
-          <select
+          <AgentVirtualModelMultiSelect
             id="agent-allowed-virtual-models"
             name="allowedVirtualModelIds"
-            multiple
-            size={virtualModelSelectSize(virtualModels.length)}
-          >
-            {virtualModels.map((virtualModel) => (
-              <option key={virtualModel.id} value={virtualModel.id}>
-                {formatVirtualModelOptionLabel(virtualModel)}
-              </option>
-            ))}
-          </select>
+            options={virtualModels.map((virtualModel) => ({
+              id: virtualModel.id,
+              label: formatVirtualModelOptionLabel(virtualModel),
+            }))}
+          />
           <label htmlFor="agent-default-virtual-model">Default virtual model</label>
           <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
             <option value="">No default virtual model</option>
@@ -2562,19 +2561,15 @@ function AgentEditDialog({
             <option value="false">disabled</option>
           </select>
           <label htmlFor={`agent-allowed-virtual-models-${agent.id}`}>Allowed virtual models</label>
-          <select
+          <AgentVirtualModelMultiSelect
+            defaultValue={access.allowedVirtualModels.map((virtualModel) => virtualModel.id)}
             id={`agent-allowed-virtual-models-${agent.id}`}
             name="allowedVirtualModelIds"
-            defaultValue={access.allowedVirtualModels.map((virtualModel) => virtualModel.id)}
-            multiple
-            size={virtualModelSelectSize(virtualModels.length)}
-          >
-            {virtualModels.map((virtualModel) => (
-              <option key={virtualModel.id} value={virtualModel.id}>
-                {formatVirtualModelOptionLabel(virtualModel)}
-              </option>
-            ))}
-          </select>
+            options={virtualModels.map((virtualModel) => ({
+              id: virtualModel.id,
+              label: formatVirtualModelOptionLabel(virtualModel),
+            }))}
+          />
           <label htmlFor={`agent-default-virtual-model-${agent.id}`}>Default virtual model</label>
           <select
             id={`agent-default-virtual-model-${agent.id}`}
@@ -4769,10 +4764,6 @@ function formatModelAvailability(value: string): string {
     return "Disabled";
   }
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function virtualModelSelectSize(optionCount: number): number {
-  return Math.min(6, Math.max(2, optionCount));
 }
 
 function formatVirtualModelOptionLabel(virtualModel: {

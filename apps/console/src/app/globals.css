@@ -837,6 +837,107 @@ textarea {
   width: auto;
   min-height: 0;
 }
+.agent-vm-multi-select {
+  position: relative;
+  min-height: 2.75rem;
+}
+.agent-vm-multi-select-native {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.agent-vm-multi-select-button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 400;
+  text-align: left;
+  box-shadow: none;
+}
+.agent-vm-multi-select-button:hover,
+.agent-vm-multi-select-button:active {
+  background: var(--surface);
+  color: var(--text);
+}
+.agent-vm-multi-select-button:active {
+  transform: none;
+}
+.agent-vm-multi-select-button:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.agent-vm-multi-select-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-vm-multi-select-summary.is-empty {
+  color: var(--text-muted);
+}
+.agent-vm-multi-select-chevron {
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: var(--space-sm);
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-0.1rem) rotate(45deg);
+}
+.agent-vm-multi-select-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2xs));
+  right: 0;
+  left: 0;
+  z-index: 55;
+  display: grid;
+  gap: var(--space-2xs);
+  max-height: 14rem;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-2xs);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+}
+.agent-vm-multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 2.25rem;
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 400;
+}
+.agent-vm-multi-select-option:hover {
+  background: var(--surface-inset);
+}
+.agent-vm-multi-select-option input {
+  width: auto;
+  min-height: 0;
+}
+.agent-vm-multi-select-empty {
+  margin: 0;
+  padding: var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
 
 button,
 .btn {
@@ -2337,6 +2438,7 @@ details.disclosure[open] > .disclosure-summary {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+  min-width: 0;
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
@@ -2354,6 +2456,9 @@ details.disclosure[open] > .disclosure-summary {
   white-space: nowrap;
 }
 .donut-legend-value {
+  display: inline-flex;
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-feature-settings: "tnum" 1;
   color: var(--text);

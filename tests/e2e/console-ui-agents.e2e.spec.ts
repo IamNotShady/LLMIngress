@@ -70,6 +70,14 @@ test("agents page matches the designed list and detail layout", async ({ browser
         "long-context",
         "smart",
       ]);
+      const allowedToggle = editDialog.locator(".agent-vm-multi-select-button");
+      await expect(allowedToggle).toBeVisible();
+      const allowedToggleBox = await allowedToggle.boundingBox();
+      const defaultSelectBox = await editDialog.getByLabel("Default virtual model").boundingBox();
+      if (!allowedToggleBox || !defaultSelectBox) {
+        throw new Error("Agent virtual model controls did not render with measurable bounds.");
+      }
+      expect(Math.abs(allowedToggleBox.height - defaultSelectBox.height)).toBeLessThanOrEqual(8);
 
       for (const hiddenText of [
         /^Integration platform:/,

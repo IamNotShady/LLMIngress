@@ -119,6 +119,21 @@ test("usage virtual model filter shows virtual model names without descriptions"
   );
 });
 
+test("usage page applies displayed default dates before Apply is clicked", async ({ browser }) => {
+  await withConsoleDevServer(
+    browser,
+    async ({ page, baseUrl }) => {
+      await page.goto(`${baseUrl}/usage`);
+
+      await expect(
+        page.locator(".stat-card", { hasText: "Total requests" }).locator(".stat-card-value"),
+      ).toHaveText("1");
+      await expect(page.getByRole("cell", { name: "Default Date Provider" })).toBeVisible();
+    },
+    { seed: seedDefaultDateUsage },
+  );
+});
+
 async function seedUsageVirtualModels(databaseUrl: string): Promise<void> {
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
@@ -133,6 +148,89 @@ async function seedUsageVirtualModels(databaseUrl: string): Promise<void> {
         [randomUUID(), name, description],
       );
     }
+  } finally {
+    await client.end();
+  }
+}
+
+async function seedDefaultDateUsage(databaseUrl: string): Promise<void> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const ids = {
+      agentId: randomUUID(),
+      providerId: randomUUID(),
+      providerModelId: randomUUID(),
+      virtualModelId: randomUUID(),
+      requestActivityId: randomUUID(),
+    };
+    await client.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'api_key', 'openai', 'Default Date Provider', 'https://default-date.example/v1', true)
+      `,
+      [ids.providerId],
+    );
+    await client.query(
+      `
+        insert into provider_models (id, provider_id, model_id, display_name, availability)
+        values ($1, $2, 'default-date-model', 'Default Date Model', 'available')
+      `,
+      [ids.providerModelId, ids.providerId],
+    );
+    await client.query(
+      `
+        insert into virtual_models (id, name, description, enabled)
+        values ($1, 'default-date-vm', 'Default date usage model', true)
+      `,
+      [ids.virtualModelId],
+    );
+    await client.query(
+      `
+        insert into agents (
+          id, name, agent_type, key_prefix, key_hash, default_virtual_model_id, enabled
+        )
+        values ($1, 'Default Date Agent', 'coding', 'usage-default-date', 'hash-default-date', $2, true)
+      `,
+      [ids.agentId, ids.virtualModelId],
+    );
+    await client.query(
+      `
+        insert into request_activity (
+          id, request_id, agent_id, virtual_model_id, provider_id, provider_model_id,
+          agent_key_prefix, protocol, model, stream, status, http_status, latency_ms,
+          started_at, completed_at
+        )
+        values (
+          $1, 'req_usage_default_date', $2, $3, $4, $5,
+          'usage-default-date', 'chat_completions', 'default-date-vm', false,
+          'succeeded', 200, 100,
+          date_trunc('day', now()) - interval '1 day',
+          date_trunc('day', now()) - interval '1 day' + interval '100 milliseconds'
+        )
+      `,
+      [ids.requestActivityId, ids.agentId, ids.virtualModelId, ids.providerId, ids.providerModelId],
+    );
+    await client.query(
+      `
+        insert into request_usage (
+          id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
+          input_tokens, output_tokens, total_tokens, token_source
+        )
+        values ($1, $2, $3, $4, $5, 10, 20, 30, 'estimated')
+      `,
+      [randomUUID(), ids.requestActivityId, ids.agentId, ids.virtualModelId, ids.providerModelId],
+    );
+    await client.query(
+      `
+        insert into request_costs (
+          id, request_activity_id, agent_id, provider_model_id, total_cost_usd,
+          cost_source, actual_cost_usd, baseline_cost_usd, savings_usd
+        )
+        values ($1, $2, $3, $4, 0.00010000, 'estimated', 0.00010000, 0.00020000, 0.00010000)
+      `,
+      [randomUUID(), ids.requestActivityId, ids.agentId, ids.providerModelId],
+    );
   } finally {
     await client.end();
   }

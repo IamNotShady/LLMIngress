@@ -75,6 +75,20 @@ test("usage page shows agent virtual model provider model cost failure and savin
               .getByLabel("provider cost breakdown")
               .getByText("Usage Anthropic", { exact: true }),
           ).toBeVisible();
+          const wrappedLegendValues = await usageSection
+            .locator(".donut-legend-value")
+            .evaluateAll((nodes) =>
+              nodes.flatMap((node) => {
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                const lineTops = Array.from(range.getClientRects()).map((rect) =>
+                  Math.round(rect.top),
+                );
+                const lineCount = new Set(lineTops).size;
+                return lineCount > 1 ? [node.textContent?.trim() ?? ""] : [];
+              }),
+            );
+          expect(wrappedLegendValues).toEqual([]);
 
           // Provider / Model summary table lists each provider+model row.
           await expect(

@@ -55,9 +55,8 @@ export type ExportedVirtualModel = {
 };
 
 export type ExportedRoutePolicy = {
-  fallbackProviderModelIds: string[];
   id: string;
-  primaryProviderModelIds: string[];
+  providerModelIds: string[];
   rules: RoutePolicyRules;
   strategy: "cost_first" | "fixed" | "quality_first" | "random";
   virtualModelId: string;
@@ -152,7 +151,6 @@ type RoutePolicyRow = PostgresQueryResultRow & {
 
 type RoutePolicyCandidateRow = PostgresQueryResultRow & {
   candidate_order: number;
-  is_fallback: boolean;
   provider_model_id: string;
   route_policy_id: string;
 };
@@ -391,8 +389,7 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
     `
       select route_policy_id::text,
              provider_model_id::text,
-             candidate_order,
-             is_fallback
+             candidate_order
       from route_policy_candidates
       join route_policies on route_policies.id = route_policy_candidates.route_policy_id
       join provider_models on provider_models.id = route_policy_candidates.provider_model_id
@@ -413,13 +410,8 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
   return policies.rows.map((policy) => {
     const policyCandidates = candidatesByPolicyId.get(policy.id) ?? [];
     return {
-      fallbackProviderModelIds: policyCandidates
-        .filter((candidate) => candidate.is_fallback)
-        .map((candidate) => candidate.provider_model_id),
       id: policy.id,
-      primaryProviderModelIds: policyCandidates
-        .filter((candidate) => !candidate.is_fallback)
-        .map((candidate) => candidate.provider_model_id),
+      providerModelIds: policyCandidates.map((candidate) => candidate.provider_model_id),
       rules: normalizeRoutePolicyRules(policy.rules),
       strategy: policy.strategy,
       virtualModelId: policy.virtual_model_id,
@@ -737,19 +729,9 @@ async function writeRoutePolicyCandidates(
   );
   for (const routePolicy of routePolicies) {
     let candidateOrder = 1;
-    for (const providerModelId of routePolicy.primaryProviderModelIds) {
+    for (const providerModelId of routePolicy.providerModelIds) {
       await writeRoutePolicyCandidate(client, {
         candidateOrder,
-        isFallback: false,
-        providerModelId,
-        routePolicyId: routePolicy.id,
-      });
-      candidateOrder += 1;
-    }
-    for (const providerModelId of routePolicy.fallbackProviderModelIds) {
-      await writeRoutePolicyCandidate(client, {
-        candidateOrder,
-        isFallback: true,
         providerModelId,
         routePolicyId: routePolicy.id,
       });
@@ -762,7 +744,6 @@ async function writeRoutePolicyCandidate(
   client: QueryClient,
   input: {
     candidateOrder: number;
-    isFallback: boolean;
     providerModelId: string;
     routePolicyId: string;
   },
@@ -770,17 +751,11 @@ async function writeRoutePolicyCandidate(
   await client.query(
     `
       insert into route_policy_candidates (
-        id, route_policy_id, provider_model_id, candidate_order, is_fallback
+        id, route_policy_id, provider_model_id, candidate_order
       )
-      values ($1, $2, $3, $4, $5)
+      values ($1, $2, $3, $4)
     `,
-    [
-      randomUUID(),
-      input.routePolicyId,
-      input.providerModelId,
-      input.candidateOrder,
-      input.isFallback,
-    ],
+    [randomUUID(), input.routePolicyId, input.providerModelId, input.candidateOrder],
   );
 }
 
@@ -895,15 +870,8 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
       throw new Error(`routePolicies[${index}] must be an object.`);
     }
     return {
-      fallbackProviderModelIds: normalizeUuidArray(
-        input.fallbackProviderModelIds,
-        `routePolicies[${index}].fallbackProviderModelIds`,
-      ),
       id: normalizeUuid(input.id, `routePolicies[${index}].id`),
-      primaryProviderModelIds: normalizeUuidArray(
-        input.primaryProviderModelIds,
-        `routePolicies[${index}].primaryProviderModelIds`,
-      ),
+      providerModelIds: normalizeRoutePolicyProviderModelIds(input, index),
       rules: normalizeRoutePolicyRules(input.rules ?? {}),
       strategy: normalizeEnum(
         input.strategy,
@@ -913,6 +881,31 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
       virtualModelId: normalizeUuid(input.virtualModelId, `routePolicies[${index}].virtualModelId`),
     };
   });
+}
+
+// Accepts the new single ordered `providerModelIds`, or the legacy
+// `primaryProviderModelIds` + `fallbackProviderModelIds` pair (concatenated
+// primary-then-fallback) for backward-compatible imports.
+function normalizeRoutePolicyProviderModelIds(
+  input: Record<string, unknown>,
+  index: number,
+): string[] {
+  if (input.providerModelIds !== undefined) {
+    return normalizeUuidArray(
+      input.providerModelIds,
+      `routePolicies[${index}].providerModelIds`,
+    );
+  }
+  return [
+    ...normalizeUuidArray(
+      input.primaryProviderModelIds,
+      `routePolicies[${index}].primaryProviderModelIds`,
+    ),
+    ...normalizeUuidArray(
+      input.fallbackProviderModelIds,
+      `routePolicies[${index}].fallbackProviderModelIds`,
+    ),
+  ];
 }
 
 function normalizeAgents(value: unknown): ExportedAgent[] {
@@ -1065,13 +1058,10 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
     if (!virtualModelIds.has(routePolicy.virtualModelId)) {
       throw new Error("Route Policy references an unknown Virtual Model.");
     }
-    if (routePolicy.primaryProviderModelIds.length === 0) {
-      throw new Error("Route Policy requires at least one primary provider model.");
+    if (routePolicy.providerModelIds.length === 0) {
+      throw new Error("Route Policy requires at least one provider model.");
     }
-    const candidateIds = [
-      ...routePolicy.primaryProviderModelIds,
-      ...routePolicy.fallbackProviderModelIds,
-    ];
+    const candidateIds = routePolicy.providerModelIds;
     assertUnique(candidateIds, "Route Policy candidate ids");
     for (const candidateId of candidateIds) {
       if (!providerModelIds.has(candidateId)) {

@@ -1446,10 +1446,7 @@ export async function VirtualModelsSection({
                 {selectedRoutePolicy?.candidates.length ? (
                   <div className="vm-candidate-list">
                     {selectedRoutePolicy.candidates.map((candidate) => (
-                      <div
-                        className="vm-candidate-card"
-                        key={`${candidate.id}-${candidate.isFallback}`}
-                      >
+                      <div className="vm-candidate-card" key={candidate.id}>
                         <div>
                           <strong>
                             {candidate.providerDisplayName} / {candidate.modelDisplayName}
@@ -1619,25 +1616,12 @@ export async function RoutePoliciesSection({
                 </option>
               ))}
             </select>
-            <label htmlFor="route-policy-primary-models">Primary provider models</label>
+            <label htmlFor="route-policy-models">Provider models (in priority order)</label>
             <select
-              id="route-policy-primary-models"
-              name="primaryProviderModelIds"
+              id="route-policy-models"
+              name="providerModelIds"
               multiple
               required
-              size={providerModelSelectSize(routePolicyCreateProviderModelOptions.length)}
-            >
-              {routePolicyCreateProviderModelOptions.map((providerModel) => (
-                <option key={providerModel.id} value={providerModel.id}>
-                  {providerModel.pricedOptionLabel}
-                </option>
-              ))}
-            </select>
-            <label htmlFor="route-policy-fallback-models">Fallback provider models</label>
-            <select
-              id="route-policy-fallback-models"
-              name="fallbackProviderModelIds"
-              multiple
               size={providerModelSelectSize(routePolicyCreateProviderModelOptions.length)}
             >
               {routePolicyCreateProviderModelOptions.map((providerModel) => (
@@ -1695,11 +1679,8 @@ export async function RoutePoliciesSection({
                     {warning}
                   </p>
                 ))}
-                <p>Primary: {formatRoutePolicyCandidateList(routePolicy.primaryCandidates)}</p>
-                <p>Fallback: {formatRoutePolicyCandidateList(routePolicy.fallbackCandidates)}</p>
-                <p>
-                  Fallback order: {formatRoutePolicyFallbackOrder(routePolicy.fallbackCandidates)}
-                </p>
+                <p>Candidates: {formatRoutePolicyCandidateList(routePolicy.candidates)}</p>
+                <p>Candidate order: {formatRoutePolicyCandidateOrder(routePolicy.candidates)}</p>
                 <form className="provider-edit-form" action="/api/route-policies" method="post">
                   <input type="hidden" name="action" value="update" />
                   <input type="hidden" name="id" value={routePolicy.id} />
@@ -1719,31 +1700,15 @@ export async function RoutePoliciesSection({
                       </option>
                     ))}
                   </select>
-                  <label htmlFor={`route-policy-primary-models-${routePolicy.id}`}>
-                    Edit primary provider models
+                  <label htmlFor={`route-policy-models-${routePolicy.id}`}>
+                    Edit provider models (in priority order)
                   </label>
                   <select
-                    id={`route-policy-primary-models-${routePolicy.id}`}
-                    name="primaryProviderModelIds"
-                    defaultValue={routePolicy.primaryCandidates.map((candidate) => candidate.id)}
+                    id={`route-policy-models-${routePolicy.id}`}
+                    name="providerModelIds"
+                    defaultValue={routePolicy.candidates.map((candidate) => candidate.id)}
                     multiple
                     required
-                    size={providerModelSelectSize(routePolicyEditorOptions.length)}
-                  >
-                    {routePolicyEditorOptions.map((providerModel) => (
-                      <option key={providerModel.id} value={providerModel.id}>
-                        {providerModel.pricedOptionLabel}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor={`route-policy-fallback-models-${routePolicy.id}`}>
-                    Edit fallback provider models
-                  </label>
-                  <select
-                    id={`route-policy-fallback-models-${routePolicy.id}`}
-                    name="fallbackProviderModelIds"
-                    defaultValue={routePolicy.fallbackCandidates.map((candidate) => candidate.id)}
-                    multiple
                     size={providerModelSelectSize(routePolicyEditorOptions.length)}
                   >
                     {routePolicyEditorOptions.map((providerModel) => (
@@ -4303,7 +4268,7 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
 }
 
 function formatDefaultCandidate(routePolicy: ConsoleRoutePolicy | null | undefined): string {
-  return routePolicy?.primaryCandidates[0]?.modelDisplayName ?? "-";
+  return routePolicy?.candidates[0]?.modelDisplayName ?? "-";
 }
 
 function parseUsd(value: number | string | null): number {
@@ -4339,7 +4304,7 @@ function formatRouteStrategyLabel(strategy: string): string {
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
 }
 
-function formatRoutePolicyFallbackOrder(candidates: Array<{ optionLabel: string }>): string {
+function formatRoutePolicyCandidateOrder(candidates: Array<{ optionLabel: string }>): string {
   return candidates.length === 0
     ? "None"
     : candidates.map((candidate, index) => `${index + 1}. ${candidate.optionLabel}`).join(" -> ");

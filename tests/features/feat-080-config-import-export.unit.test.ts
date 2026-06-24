@@ -95,6 +95,70 @@ describe("feat-080 config import export", () => {
     ]);
   });
 
+  it("imports legacy primary+fallback route policies into one ordered candidate pool", async () => {
+    const source = await createFixture("legacy_source");
+    const target = await createFixture("legacy_target");
+    fixtures.push(source, target);
+
+    await seedConfigExportData(source);
+    const exported = await exportConsoleConfig({
+      databaseUrl: source.databaseUrl,
+      now: new Date("2026-06-16T12:00:00.000Z"),
+    });
+
+    const primaryModelId = exported.providers[0]?.models[0]?.id as string;
+    const fallbackModelId = "00000000-0000-4000-8000-0000000003ff";
+    const legacyDocument = {
+      ...exported,
+      providers: exported.providers.map((provider) => ({
+        ...provider,
+        models: [
+          ...provider.models,
+          {
+            ...provider.models[0],
+            id: fallbackModelId,
+            modelId: "deepseek-reasoner",
+            displayName: "DeepSeek Reasoner",
+          },
+        ],
+      })),
+      // Legacy shape: no providerModelIds; primary + fallback split instead.
+      routePolicies: exported.routePolicies.map((routePolicy) => {
+        const { providerModelIds: _omit, ...rest } = routePolicy;
+        return {
+          ...rest,
+          primaryProviderModelIds: [primaryModelId],
+          fallbackProviderModelIds: [fallbackModelId],
+        };
+      }),
+    };
+
+    await importConsoleConfig({
+      databaseUrl: target.databaseUrl,
+      document: legacyDocument,
+    });
+
+    const targetExport = await exportConsoleConfig({
+      databaseUrl: target.databaseUrl,
+      now: new Date("2026-06-16T12:05:00.000Z"),
+    });
+    expect(targetExport.routePolicies[0]?.providerModelIds).toEqual([
+      primaryModelId,
+      fallbackModelId,
+    ]);
+    expect(targetExport.routePolicies[0]).not.toHaveProperty("primaryProviderModelIds");
+    expect(targetExport.routePolicies[0]).not.toHaveProperty("fallbackProviderModelIds");
+
+    const candidateOrder = await target.query<{ candidate_order: number }>(
+      `
+        select candidate_order
+        from route_policy_candidates
+        order by candidate_order
+      `,
+    );
+    expect(candidateOrder.rows.map((row) => row.candidate_order)).toEqual([1, 2]);
+  });
+
   it("rejects imported providers with unknown templates before publishing a config version", async () => {
     const source = await createFixture("invalid_source");
     const target = await createFixture("invalid_target");
@@ -244,9 +308,9 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
   await fixture.query(
     `
       insert into route_policy_candidates (
-        id, route_policy_id, provider_model_id, candidate_order, is_fallback
+        id, route_policy_id, provider_model_id, candidate_order
       )
-      values ($1, $2, $3, 1, false)
+      values ($1, $2, $3, 1)
     `,
     [randomUUID(), ids.routePolicyId, ids.providerModelId],
   );

@@ -45,13 +45,12 @@ export async function POST(request: NextRequest) {
           name: readText(form, "name"),
         }),
       });
-      const primaryProviderModelIds = readAllText(form, "primaryProviderModelIds");
-      if (primaryProviderModelIds.length > 0) {
+      const providerModelIds = readAllText(form, "providerModelIds");
+      if (providerModelIds.length > 0) {
         await createRoutePolicy({
           databaseUrl,
           routePolicy: normalizeRoutePolicyFormInput({
-            fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
-            primaryProviderModelIds,
+            providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: virtualModel.id,
           }),
@@ -76,24 +75,22 @@ export async function POST(request: NextRequest) {
         }),
       });
       const routePolicyId = readText(form, "routePolicyId");
-      const primaryProviderModelIds = readAllText(form, "primaryProviderModelIds");
-      if (routePolicyId && primaryProviderModelIds.length > 0) {
+      const providerModelIds = readAllText(form, "providerModelIds");
+      if (routePolicyId && providerModelIds.length > 0) {
         await updateRoutePolicy({
           databaseUrl,
           id: routePolicyId,
           routePolicy: normalizeRoutePolicyFormInput({
-            fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
-            primaryProviderModelIds,
+            providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: readRequiredText(form, "id"),
           }),
         });
-      } else if (!routePolicyId && primaryProviderModelIds.length > 0) {
+      } else if (!routePolicyId && providerModelIds.length > 0) {
         await createRoutePolicy({
           databaseUrl,
           routePolicy: normalizeRoutePolicyFormInput({
-            fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
-            primaryProviderModelIds,
+            providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: readRequiredText(form, "id"),
           }),

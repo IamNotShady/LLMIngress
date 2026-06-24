@@ -22,7 +22,6 @@ type ProviderModelOption = {
 
 type Candidate = ProviderModelOption & {
   candidateOrder: number;
-  isFallback: boolean;
 };
 
 type RoutePolicy = {
@@ -91,7 +90,7 @@ export function VirtualModelRouteDialogClient({
   function addModel(option: ProviderModelOption) {
     setSelectedCandidates((current) => [
       ...current,
-      { ...option, candidateOrder: current.length, isFallback: false },
+      { ...option, candidateOrder: current.length },
     ]);
     setPickerOpen(false);
   }
@@ -224,7 +223,7 @@ export function VirtualModelRouteDialogClient({
                       {selectedCandidates.map((candidate, index) => (
                         <tr
                           draggable
-                          key={`${candidate.id}-${candidate.isFallback ? "fallback" : "primary"}`}
+                          key={candidate.id}
                           onDragOver={(event) => event.preventDefault()}
                           onDragStart={(event) =>
                             event.dataTransfer.setData("text/plain", String(index))
@@ -232,15 +231,7 @@ export function VirtualModelRouteDialogClient({
                           onDrop={(event) => handleCandidateDrop(event, index)}
                         >
                           <td>
-                            <input
-                              type="hidden"
-                              name={
-                                candidate.isFallback
-                                  ? "fallbackProviderModelIds"
-                                  : "primaryProviderModelIds"
-                              }
-                              value={candidate.id}
-                            />
+                            <input type="hidden" name="providerModelIds" value={candidate.id} />
                             <span className="vm-candidate-order">
                               <span aria-hidden="true" className="vm-drag-handle">
                                 ::

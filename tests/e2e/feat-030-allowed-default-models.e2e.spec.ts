@@ -52,12 +52,8 @@ test("default virtual model must be in allowed list", async ({ browser }) => {
 
           await openRow(page, "Codex");
           await expect(page.getByLabel("Allowed virtual models")).toBeVisible({ timeout: 3_000 });
-          await page
-            .getByLabel("Allowed virtual models")
-            .selectOption([{ label: "Coding Fast (coding-fast)" }]);
-          await page
-            .getByLabel("Default virtual model")
-            .selectOption({ label: "Coding Fast (coding-fast)" });
+          await page.getByLabel("Allowed virtual models").selectOption([{ label: "coding-fast" }]);
+          await page.getByLabel("Default virtual model").selectOption({ label: "coding-fast" });
           await page.getByRole("button", { exact: true, name: "Save" }).click();
 
           await openRow(page, "Codex");

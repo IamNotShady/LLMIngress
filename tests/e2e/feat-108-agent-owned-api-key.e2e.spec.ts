@@ -40,7 +40,7 @@ test("agent creation returns one api key and gateway uses agent owned auth", asy
           await page.goto(`${consoleBaseUrl}/agents`);
 
           await openDisclosure(page, "New agent");
-          const virtualModelLabel = `${seeded.virtualModelDisplayName} (${seeded.virtualModelName})`;
+          const virtualModelLabel = seeded.virtualModelName;
           await page.getByLabel("Agent name").fill("Agent Owned Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page

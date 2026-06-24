@@ -4780,8 +4780,7 @@ function formatVirtualModelOptionLabel(virtualModel: {
   displayName?: string;
   name: string;
 }): string {
-  const label = virtualModel.description ?? virtualModel.displayName ?? virtualModel.name;
-  return `${label} (${virtualModel.name})`;
+  return virtualModel.name;
 }
 
 function findAgentLimit(

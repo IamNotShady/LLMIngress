@@ -2,13 +2,21 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-24 (Usage date picker repair)
-**Active Feature:** none - Usage date picker repair complete
+**Last Updated:** 2026-06-24 (Agent Virtual Model option label repair)
+**Active Feature:** none - Agent Virtual Model option label repair complete
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **Agent Virtual Model option label repair (feat-030 follow-up)**:
+  - Root cause: Agent create/edit forms used the shared select label helper that rendered Virtual Models as `description (name)`, so the Allowed virtual models and Default virtual model controls showed descriptive text such as `random open ai completion (random)`.
+  - Changed the Agent form option label helper to render only `virtualModel.name`, matching the current Agent detail/snippet behavior and keeping the submitted IDs unchanged.
+  - Updated affected E2E interactions to select Virtual Models by name instead of the old description/name combined label.
+  - TDD red observed first in `tests/e2e/console-ui-agents.e2e.spec.ts`; it failed on `Cheap (cheap)` / `Coding Balanced (coding-balanced)` before the UI fix.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --workers=1`, focused feat-030/077/108 E2Es, focused feat-050/058 E2Es, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, and live in-app browser verification on `/agents?agentDialog=e7358090-0b5a-4d42-8af4-6f4deb8817ab` showing `gpt55`, `opus48`, and `random` only with zero console errors/warnings.
+  - Full `verify:features` was intentionally not run per user request.
 
 - [x] **Usage date picker repair (feat-047 follow-up)**:
   - Root cause: the in-app browser's Usage page `input[type=date]` does not expose `HTMLInputElement.showPicker`, so the reference UI date fields could focus/select text without showing a date selection window.

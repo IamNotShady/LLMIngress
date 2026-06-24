@@ -255,7 +255,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   const agentApiKey = await page.locator("code").innerText();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
 
-  const virtualModelLabel = `${mvpHappyPathNames.virtualModelDisplayName} (${mvpHappyPathNames.virtualModelName})`;
+  const virtualModelLabel = mvpHappyPathNames.virtualModelName;
   await openRow(page, "MVP Codex");
   await page.getByLabel("Allowed virtual models").selectOption({ label: virtualModelLabel });
   await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });

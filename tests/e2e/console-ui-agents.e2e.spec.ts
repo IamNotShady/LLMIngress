@@ -57,6 +57,19 @@ test("agents page matches the designed list and detail layout", async ({ browser
       await expect(editDialog.getByRole("heading", { name: "Integration snippets" })).toHaveCount(
         0,
       );
+      await expect(editDialog.getByLabel("Allowed virtual models").locator("option")).toHaveText([
+        "cheap",
+        "coding-balanced",
+        "long-context",
+        "smart",
+      ]);
+      await expect(editDialog.getByLabel("Default virtual model").locator("option")).toHaveText([
+        "No default virtual model",
+        "cheap",
+        "coding-balanced",
+        "long-context",
+        "smart",
+      ]);
 
       for (const hiddenText of [
         /^Integration platform:/,

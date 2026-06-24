@@ -1523,3 +1523,9 @@
   - Existing selected candidates still render in the route policy display; the filter only affects new selectable options.
   - TDD red observed first in `tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`.
   - Verification passed: `pnpm exec vitest run tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`. Full E2E was not rerun during the active interactive dev-server session.
+
+- [x] 2026-06-24 Usage & Cost reference UI merge to dev and full regression:
+  - Fast-forwarded `dev` through `codex/usage-cost-reference-ui` at `37964713`, bringing in the `/usage` reference-layout implementation and prior `.worktrees/` ignore setup.
+  - During post-merge full regression, reproduced a Console E2E startup failure after `pnpm run build`: build-produced `apps/console/.next` artifacts caused later `next dev` E2E runs to miss short readiness windows. `scripts/run-with-env.ts` now clears `apps/console/.next` before `playwright test` invocations so `pnpm test:e2e` and `verify:features` do not require manual cleanup after build.
+  - Stabilized `feat-084` webhook retry E2E by polling `runner.runOnce()` until the zero-backoff retry job is claimable, matching database timestamp scheduling granularity.
+  - Verification passed: `pnpm run build && pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard' --workers=1`, `pnpm run verify`, full `pnpm test:e2e --workers=1` (133 passed, 10.8m), and `pnpm run verify:features` (all 116 passing features re-verified; E2E batch 528.5s).

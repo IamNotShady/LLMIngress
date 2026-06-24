@@ -15,6 +15,11 @@ import {
   type RoutePolicyCandidateRow,
 } from "../../apps/gateway/src/config-reload.js";
 import type { HealthSummaryChangedPayload } from "../../packages/db/src/provider-health.js";
+import {
+  executeFallbackChain,
+  type FallbackChainCandidate,
+} from "../../apps/gateway/src/fallback-chain.js";
+import type { GatewayBudgetReservation } from "../../apps/gateway/src/budgets.js";
 
 describe("feat-117 strategy fallback chain", () => {
   describe("route attempt chain", () => {
@@ -341,6 +346,395 @@ describe("health force reload", () => {
     expect(healthListenerClose).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---- fallback chain execution ----
+
+describe("fallback chain", () => {
+  it("429 on candidate A then success on candidate B returns B's success with retryable failed attempt", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const candidateB = fallbackCandidate({ providerModelId: "model-b" });
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "rate_limited",
+          errorMessage: "429 too many requests",
+          ok: false,
+          retryable: true,
+          statusCode: 429,
+        })
+        .mockResolvedValueOnce({
+          body: { id: "success-b", choices: [] },
+          ok: true,
+          providerRequestId: "req-b",
+          statusCode: 200,
+        }),
+    };
+
+    const result = await executeFallbackChain({
+      adapter,
+      candidates: [candidateA, candidateB],
+      databaseUrl: undefined,
+      request: { messages: [{ content: "hello", role: "user" }], stream: false },
+    });
+
+    expect(result.selectedCandidate.providerModelId).toBe("model-b");
+    expect(result.result.ok).toBe(true);
+    expect(result.failedAttempts).toHaveLength(1);
+    expect(result.failedAttempts[0]).toMatchObject({
+      retryable: true,
+      statusCode: 429,
+    });
+  });
+
+  it("400 on candidate A stops the chain without trying candidate B", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const candidateB = fallbackCandidate({ providerModelId: "model-b" });
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "bad_request",
+          errorMessage: "400 bad request",
+          ok: false,
+          retryable: false,
+          statusCode: 400,
+        }),
+    };
+
+    await expect(
+      executeFallbackChain({
+        adapter,
+        candidates: [candidateA, candidateB],
+        databaseUrl: undefined,
+        request: { messages: [{ content: "hello", role: "user" }], stream: false },
+      }),
+    ).rejects.toThrow("400 bad request");
+
+    expect(adapter.chatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it("5xx failure is retryable and advances to the next candidate", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const candidateB = fallbackCandidate({ providerModelId: "model-b" });
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "internal_server_error",
+          errorMessage: "503 service unavailable",
+          ok: false,
+          retryable: true,
+          statusCode: 503,
+        })
+        .mockResolvedValueOnce({
+          body: { id: "ok-b", choices: [] },
+          ok: true,
+          providerRequestId: "req-b",
+          statusCode: 200,
+        }),
+    };
+
+    const result = await executeFallbackChain({
+      adapter,
+      candidates: [candidateA, candidateB],
+      databaseUrl: undefined,
+      request: { messages: [{ content: "hello", role: "user" }], stream: false },
+    });
+
+    expect(result.selectedCandidate.providerModelId).toBe("model-b");
+    expect(result.failedAttempts[0]).toMatchObject({ retryable: true, statusCode: 503 });
+  });
+
+  it("network-null failure is retryable and advances to the next candidate", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const candidateB = fallbackCandidate({ providerModelId: "model-b" });
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "network_error",
+          errorMessage: "socket closed",
+          ok: false,
+          retryable: true,
+          statusCode: null,
+        })
+        .mockResolvedValueOnce({
+          body: { id: "ok-b", choices: [] },
+          ok: true,
+          providerRequestId: "req-b",
+          statusCode: 200,
+        }),
+    };
+
+    const result = await executeFallbackChain({
+      adapter,
+      candidates: [candidateA, candidateB],
+      databaseUrl: undefined,
+      request: { messages: [{ content: "hello", role: "user" }], stream: false },
+    });
+
+    expect(result.selectedCandidate.providerModelId).toBe("model-b");
+    expect(result.failedAttempts[0]).toMatchObject({ retryable: true, statusCode: null, failedBeforeFirstByte: true });
+  });
+
+  it("budget hooks: reserveAttempt before each call, releaseAttempt on failure, finalizeAttempt on success", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const candidateB = fallbackCandidate({ providerModelId: "model-b" });
+
+    const reservationA: GatewayBudgetReservation = {
+      budgetPeriodId: "period-a",
+      id: "res-a",
+      reservedCostUsd: 0.01,
+      reservedInputTokens: 10,
+      reservedOutputTokens: 10,
+      reservedTotalTokens: 20,
+    };
+    const reservationB: GatewayBudgetReservation = {
+      budgetPeriodId: "period-b",
+      id: "res-b",
+      reservedCostUsd: 0.01,
+      reservedInputTokens: 10,
+      reservedOutputTokens: 10,
+      reservedTotalTokens: 20,
+    };
+
+    const reserveAttempt = vi
+      .fn()
+      .mockResolvedValueOnce(reservationA)
+      .mockResolvedValueOnce(reservationB);
+    const releaseAttempt = vi.fn().mockResolvedValue(undefined);
+    const finalizeAttempt = vi.fn().mockResolvedValue(undefined);
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "rate_limited",
+          errorMessage: "429",
+          ok: false,
+          retryable: true,
+          statusCode: 429,
+        })
+        .mockResolvedValueOnce({
+          body: { id: "ok-b", choices: [] },
+          ok: true,
+          providerRequestId: "req-b",
+          statusCode: 200,
+        }),
+    };
+
+    await executeFallbackChain({
+      adapter,
+      candidates: [candidateA, candidateB],
+      databaseUrl: undefined,
+      finalizeAttempt,
+      releaseAttempt,
+      reserveAttempt,
+      request: { messages: [{ content: "hello", role: "user" }], stream: false },
+    });
+
+    // reserveAttempt called before each provider call
+    expect(reserveAttempt).toHaveBeenCalledTimes(2);
+    expect(reserveAttempt).toHaveBeenNthCalledWith(1, candidateA);
+    expect(reserveAttempt).toHaveBeenNthCalledWith(2, candidateB);
+
+    // releaseAttempt only for the failed attempt (A), not the successful one (B)
+    expect(releaseAttempt).toHaveBeenCalledTimes(1);
+    expect(releaseAttempt).toHaveBeenCalledWith(reservationA);
+
+    // finalizeAttempt exactly once, for the winner
+    expect(finalizeAttempt).toHaveBeenCalledTimes(1);
+    expect(finalizeAttempt).toHaveBeenCalledWith(reservationB);
+  });
+
+  it("health split: recordHealthEvent NOT called when all failures are retryable (429)", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const candidateB = fallbackCandidate({ providerModelId: "model-b" });
+    const recordHealthEvent = vi.fn().mockResolvedValue(undefined);
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "rate_limited",
+          errorMessage: "429",
+          ok: false,
+          retryable: true,
+          statusCode: 429,
+        })
+        .mockResolvedValueOnce({
+          body: { id: "ok-b", choices: [] },
+          ok: true,
+          providerRequestId: "req-b",
+          statusCode: 200,
+        }),
+    };
+
+    await executeFallbackChain({
+      adapter,
+      candidates: [candidateA, candidateB],
+      databaseUrl: "postgresql://localhost/test",
+      recordHealthEvent,
+      request: { messages: [{ content: "hello", role: "user" }], stream: false },
+    });
+
+    expect(recordHealthEvent).not.toHaveBeenCalled();
+  });
+
+  it("health split: recordHealthEvent IS called when a non-retryable failure (401) occurs", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const recordHealthEvent = vi.fn().mockResolvedValue(undefined);
+
+    const adapter = {
+      chatCompletion: vi.fn().mockResolvedValueOnce({
+        body: null,
+        errorCode: "auth_failed",
+        errorMessage: "401 unauthorized",
+        ok: false,
+        retryable: false,
+        statusCode: 401,
+      }),
+    };
+
+    await expect(
+      executeFallbackChain({
+        adapter,
+        candidates: [candidateA],
+        databaseUrl: "postgresql://localhost/test",
+        recordHealthEvent,
+        request: { messages: [{ content: "hello", role: "user" }], stream: false },
+      }),
+    ).rejects.toThrow("401 unauthorized");
+
+    // called twice: once for provider-level, once for providerModel-level
+    expect(recordHealthEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("health split: recordHealthEvent NOT called for 5xx that exhausts all candidates", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const candidateB = fallbackCandidate({ providerModelId: "model-b" });
+    const recordHealthEvent = vi.fn().mockResolvedValue(undefined);
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "server_error",
+          errorMessage: "503",
+          ok: false,
+          retryable: true,
+          statusCode: 503,
+        })
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "server_error",
+          errorMessage: "503",
+          ok: false,
+          retryable: true,
+          statusCode: 503,
+        }),
+    };
+
+    await expect(
+      executeFallbackChain({
+        adapter,
+        candidates: [candidateA, candidateB],
+        databaseUrl: "postgresql://localhost/test",
+        recordHealthEvent,
+        request: { messages: [{ content: "hello", role: "user" }], stream: false },
+      }),
+    ).rejects.toThrow();
+
+    // health NOT recorded because all failures are retryable — only the exhaustion error is thrown
+    expect(recordHealthEvent).not.toHaveBeenCalled();
+  });
+
+  it("multi-key: key1 fails (retryable), key2 succeeds → returns success via key2", async () => {
+    const candidate = fallbackCandidate({
+      providerModelId: "model-a",
+      providerApiKeys: [
+        { apiKey: "key-1", providerApiKeyId: "kid-1" },
+        { apiKey: "key-2", providerApiKeyId: "kid-2" },
+      ],
+    });
+
+    const adapter = {
+      chatCompletion: vi
+        .fn()
+        .mockResolvedValueOnce({
+          body: null,
+          errorCode: "rate_limited",
+          errorMessage: "429",
+          ok: false,
+          retryable: true,
+          statusCode: 429,
+        })
+        .mockResolvedValueOnce({
+          body: { id: "ok-key2", choices: [] },
+          ok: true,
+          providerRequestId: "req-key2",
+          statusCode: 200,
+        }),
+    };
+
+    const result = await executeFallbackChain({
+      adapter,
+      candidates: [candidate],
+      databaseUrl: undefined,
+      request: { messages: [{ content: "hello", role: "user" }], stream: false },
+    });
+
+    expect(result.selectedCandidate.providerModelId).toBe("model-a");
+    expect(result.selectedCandidate.providerApiKeyId).toBe("kid-2");
+    expect(result.failedAttempts).toHaveLength(1);
+    expect(result.failedAttempts[0]).toMatchObject({ retryable: true, statusCode: 429 });
+    expect(adapter.chatCompletion).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---- helpers ----
+
+function fallbackCandidate(input: {
+  providerModelId: string;
+  providerApiKeys?: FallbackChainCandidate["providerApiKeys"];
+}): FallbackChainCandidate {
+  return {
+    apiKey: "sk-test",
+    baseUrl: "https://api.openai.com/v1",
+    candidateOrder: 1,
+    displayName: input.providerModelId,
+    healthStatus: "healthy",
+    modelId: input.providerModelId,
+    price: {
+      currency: "USD",
+      inputUsdPerMillionTokens: 1,
+      modelId: input.providerModelId,
+      outputUsdPerMillionTokens: 4,
+      priceVersion: "mvp-static-2026-06-13",
+      providerKey: "openai",
+      snapshotDate: "2026-06-13",
+      source: "built_in_static_snapshot",
+      status: "priced",
+      unit: "per_1m_tokens",
+    },
+    providerId: "provider-1",
+    providerKey: "openai",
+    providerModelId: input.providerModelId,
+    ...(input.providerApiKeys ? { providerApiKeys: input.providerApiKeys } : {}),
+  };
+}
 
 // ---- helpers ----
 

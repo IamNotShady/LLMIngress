@@ -138,8 +138,8 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order, is_fallback)
-      values ($1, $2, $3, 1, false)
+      insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order)
+      values ($1, $2, $3, 1)
     `,
     [randomUUID(), routePolicyId, openaiNanoModelId],
   );

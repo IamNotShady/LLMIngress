@@ -418,7 +418,6 @@ async function readPrimaryProviderModelId(fixture: Fixture): Promise<string | nu
     `
       select provider_model_id::text
       from route_policy_candidates
-      where is_fallback = false
       order by candidate_order
       limit 1
     `,

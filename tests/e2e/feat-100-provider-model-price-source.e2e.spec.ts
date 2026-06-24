@@ -478,12 +478,11 @@ async function seedRoutePolicyForProviderModels(
           id,
           route_policy_id,
           provider_model_id,
-          candidate_order,
-          is_fallback
+          candidate_order
         )
-        values ($1, $2, $3, $4, $5)
+        values ($1, $2, $3, $4)
       `,
-      [randomUUID(), routePolicyId, modelsById.get(modelId), order, order > 1],
+      [randomUUID(), routePolicyId, modelsById.get(modelId), order],
     );
     order += 1;
   }

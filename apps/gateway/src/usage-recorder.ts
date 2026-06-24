@@ -286,7 +286,6 @@ export function selectGatewayBaselineCandidate(
   routePolicy: GatewayRoutePolicySnapshot,
 ): GatewayRouteCandidateSnapshot {
   const candidate = routePolicy.candidates
-    .filter((routeCandidate) => !routeCandidate.isFallback)
     .sort((left, right) => left.candidateOrder - right.candidateOrder)[0];
   if (!candidate) {
     throw new Error(`Route policy ${routePolicy.id} has no baseline candidate.`);

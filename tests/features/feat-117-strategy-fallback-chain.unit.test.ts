@@ -3,6 +3,7 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
 import {
   buildRouteAttemptCandidates,
+  selectRouteAttempts,
   selectRouteCandidate,
   type RouteCandidate,
   type RoutePolicy,
@@ -701,6 +702,109 @@ describe("fallback chain", () => {
     expect(result.failedAttempts).toHaveLength(1);
     expect(result.failedAttempts[0]).toMatchObject({ retryable: true, statusCode: 429 });
     expect(adapter.chatCompletion).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("selectRouteAttempts", () => {
+  it("random strategy with injected random: decision.selectedCandidateOrder === chain[0].candidateOrder (single-shuffle consistency)", () => {
+    // With random: () => 0, Fisher-Yates always picks index 0 in each iteration
+    // so the shuffle result is deterministic. The key property is that the
+    // decision's selectedCandidateOrder matches the actual head of the chain.
+    const policy = makePolicy("random", [
+      makeCandidate({ candidateOrder: 1, providerModelId: "model-a" }),
+      makeCandidate({ candidateOrder: 2, providerModelId: "model-b" }),
+      makeCandidate({ candidateOrder: 3, providerModelId: "model-c" }),
+    ]);
+    const snapshot = { routePolicies: [policy] };
+
+    const result = selectRouteAttempts({
+      estimatedInputTokens: 100,
+      estimatedOutputTokens: 100,
+      snapshot,
+      virtualModelId: "vm-1",
+      random: () => 0,
+    });
+
+    expect(result.decision).toBeDefined();
+    expect(result.chain.length).toBeGreaterThan(0);
+    // Single-shuffle consistency: decision head must match chain head
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    expect(result.decision!.routeReason.selectedCandidateOrder).toBe(result.chain[0]!.candidateOrder);
+    // All eligible candidates are in the chain
+    expect(result.chain).toHaveLength(3);
+  });
+
+  it("empty policy: decision === undefined and chain.length === 0", () => {
+    const policy = makePolicy("fixed", []);
+    const snapshot = { routePolicies: [policy] };
+
+    const result = selectRouteAttempts({
+      estimatedInputTokens: 100,
+      estimatedOutputTokens: 100,
+      snapshot,
+      virtualModelId: "vm-1",
+    });
+
+    expect(result.decision).toBeUndefined();
+    expect(result.chain).toHaveLength(0);
+  });
+
+  it("all-ineligible policy (all unhealthy): decision === undefined, chain.length === 0", () => {
+    const policy = makePolicy("fixed", [
+      makeCandidate({ candidateOrder: 1, providerModelId: "model-a", healthStatus: "unhealthy" }),
+      makeCandidate({ candidateOrder: 2, providerModelId: "model-b", healthStatus: "auth_failed" }),
+    ]);
+    const snapshot = { routePolicies: [policy] };
+
+    const result = selectRouteAttempts({
+      estimatedInputTokens: 100,
+      estimatedOutputTokens: 100,
+      snapshot,
+      virtualModelId: "vm-1",
+    });
+
+    expect(result.decision).toBeUndefined();
+    expect(result.chain).toHaveLength(0);
+  });
+
+  it("selectRouteCandidate still throws when chain is empty", () => {
+    const policy = makePolicy("fixed", [
+      makeCandidate({ candidateOrder: 1, providerModelId: "model-a", healthStatus: "unhealthy" }),
+    ]);
+    const snapshot = { routePolicies: [policy] };
+
+    expect(() =>
+      selectRouteCandidate({
+        estimatedInputTokens: 100,
+        estimatedOutputTokens: 100,
+        snapshot,
+        virtualModelId: "vm-1",
+      }),
+    ).toThrow("has no eligible candidates");
+  });
+
+  it("fixed strategy: chain[0] is the lowest-order eligible and decision matches it", () => {
+    const policy = makePolicy("fixed", [
+      makeCandidate({ candidateOrder: 3, providerModelId: "model-c" }),
+      makeCandidate({ candidateOrder: 1, providerModelId: "model-a" }),
+      makeCandidate({ candidateOrder: 2, providerModelId: "model-b" }),
+    ]);
+    const snapshot = { routePolicies: [policy] };
+
+    const result = selectRouteAttempts({
+      estimatedInputTokens: 100,
+      estimatedOutputTokens: 100,
+      snapshot,
+      virtualModelId: "vm-1",
+    });
+
+    expect(result.decision).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    expect(result.chain[0]!.candidateOrder).toBe(1);
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    expect(result.decision!.routeReason.selectedCandidateOrder).toBe(1);
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    expect(result.decision!.providerModelId).toBe("model-a");
   });
 });
 

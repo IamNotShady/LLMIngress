@@ -232,7 +232,9 @@ export function normalizeProviderModelCapabilities(value: unknown): ProviderMode
   });
 }
 
-export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecision {
+export function selectRouteAttempts(
+  input: RouteSelectionRequest & { random?: () => number },
+): { decision: RouteDecision | undefined; chain: RouteCandidate[] } {
   assertTokenEstimate(input.estimatedInputTokens, "estimatedInputTokens");
   assertTokenEstimate(input.estimatedOutputTokens, "estimatedOutputTokens");
 
@@ -246,17 +248,18 @@ export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecisio
     evaluateCandidate({ candidate, input, routePolicy }),
   );
 
-  // Get the ordered attempt chain (head = selected candidate)
+  // Build the ordered attempt chain ONCE (single shuffle for random strategy)
   const chain = buildRouteAttemptCandidates({
     routePolicy,
     estimatedInputTokens: input.estimatedInputTokens,
     estimatedOutputTokens: input.estimatedOutputTokens,
     taskType: input.taskType,
     usesTools: input.usesTools,
+    random: input.random,
   });
 
   if (chain.length === 0) {
-    throw new Error(`Route policy ${routePolicy.id} has no eligible candidates.`);
+    return { decision: undefined, chain: [] };
   }
 
   // Head of chain = selected candidate
@@ -264,16 +267,18 @@ export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecisio
   const selectedCandidate = chain[0]!;
 
   if (routePolicy.strategy === "fixed") {
-    return createDecision({
-      candidate: selectedCandidate,
-      evaluated,
-      message: `fixed route for ${routePolicy.virtualModelName} selected configured candidate ${selectedCandidate.candidateOrder}.`,
-      routePolicy,
-    });
+    return {
+      chain,
+      decision: createDecision({
+        candidate: selectedCandidate,
+        evaluated,
+        message: `fixed route for ${routePolicy.virtualModelName} selected configured candidate ${selectedCandidate.candidateOrder}.`,
+        routePolicy,
+      }),
+    };
   }
 
   if (routePolicy.strategy === "cost_first") {
-    // Compute cost for the selected candidate for the decision's estimatedCostUsd
     const costResult = calculateTokenCostUsd(selectedCandidate.price, {
       inputTokens: input.estimatedInputTokens,
       outputTokens: input.estimatedOutputTokens,
@@ -283,14 +288,17 @@ export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecisio
       selectedCandidate.price.status !== "unknown_price"
         ? selectedCandidate.price.source
         : undefined;
-    return createDecision({
-      candidate: selectedCandidate,
-      estimatedCostUsd,
-      evaluated,
-      message: `cost_first route for ${routePolicy.virtualModelName} selected cheapest eligible candidate ${selectedCandidate.candidateOrder}.`,
-      priceSource,
-      routePolicy,
-    });
+    return {
+      chain,
+      decision: createDecision({
+        candidate: selectedCandidate,
+        estimatedCostUsd,
+        evaluated,
+        message: `cost_first route for ${routePolicy.virtualModelName} selected cheapest eligible candidate ${selectedCandidate.candidateOrder}.`,
+        priceSource,
+        routePolicy,
+      }),
+    };
   }
 
   if (routePolicy.strategy === "quality_first") {
@@ -303,22 +311,37 @@ export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecisio
       selectedCandidate.price.status !== "unknown_price"
         ? selectedCandidate.price.source
         : undefined;
-    return createDecision({
-      candidate: selectedCandidate,
-      estimatedCostUsd,
-      evaluated,
-      message: `quality_first route for ${routePolicy.virtualModelName} selected highest-priced eligible candidate ${selectedCandidate.candidateOrder}.`,
-      priceSource,
-      routePolicy,
-    });
+    return {
+      chain,
+      decision: createDecision({
+        candidate: selectedCandidate,
+        estimatedCostUsd,
+        evaluated,
+        message: `quality_first route for ${routePolicy.virtualModelName} selected highest-priced eligible candidate ${selectedCandidate.candidateOrder}.`,
+        priceSource,
+        routePolicy,
+      }),
+    };
   }
 
-  return createDecision({
-    candidate: selectedCandidate,
-    evaluated,
-    message: `random route for ${routePolicy.virtualModelName} selected eligible candidate ${selectedCandidate.candidateOrder}.`,
-    routePolicy,
-  });
+  return {
+    chain,
+    decision: createDecision({
+      candidate: selectedCandidate,
+      evaluated,
+      message: `random route for ${routePolicy.virtualModelName} selected eligible candidate ${selectedCandidate.candidateOrder}.`,
+      routePolicy,
+    }),
+  };
+}
+
+export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecision {
+  const r = selectRouteAttempts(input);
+  if (!r.decision) {
+    const routePolicy = findRoutePolicy(input.snapshot, input);
+    throw new Error(`Route policy ${routePolicy.id} has no eligible candidates.`);
+  }
+  return r.decision;
 }
 
 function findRoutePolicy(

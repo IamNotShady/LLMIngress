@@ -19,7 +19,7 @@ import {
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
-  type GatewayBudgetReservation,
+  GatewayBudgetRejectedError,
   releaseGatewayBudgetReservation,
   reserveGatewayBudget,
 } from "./budgets.js";
@@ -30,7 +30,6 @@ import type {
 } from "./config-reload.js";
 import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
-  buildFallbackAttemptCandidates,
   executeFallbackChain,
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
@@ -41,7 +40,7 @@ import {
   buildOpenAIChatCompletionRequestMetadata,
   type GatewayRequestMetadata,
 } from "./request-metadata.js";
-import { selectRouteCandidate } from "./route-engine.js";
+import { type RouteDecision, selectRouteAttempts } from "./route-engine.js";
 import {
   type GatewayUsageCostDetails,
   readGatewayProviderTokenUsage,
@@ -53,6 +52,7 @@ export type GatewayChatCompletionErrorCode =
   | "invalid_chat_request"
   | "provider_credentials_missing"
   | "provider_request_failed"
+  | "provider_unavailable"
   | "route_not_found";
 
 export type GatewayChatCompletionErrorBody = {
@@ -198,25 +198,36 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   }
 
   const concurrencyLease = rateLimit.concurrencyLease;
-  let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   let selectedActivityCandidate: GatewayRouteCandidateSnapshot | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
   try {
-    const routeDecision = selectRouteCandidate({
+    const routeResult = selectRouteAttempts({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
       usesTools: requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
+    if (!routeResult.decision || routeResult.chain.length === 0) {
+      return {
+        activity,
+        body: createGatewayChatCompletionErrorBody("provider_unavailable", input.requestId),
+        requestMetadata,
+        statusCode: mapGatewayErrorStatus("provider_unavailable"),
+      };
+    }
+    const routeDecision = routeResult.decision;
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const attemptCandidates = buildFallbackAttemptCandidates({
-      routePolicy,
-      selectedProviderModelId: routeDecision.providerModelId,
-    });
-    const selectedCandidate = attemptCandidates[0];
+
+    // Look up the gateway-typed selected candidate from routePolicy.candidates
+    // (preserves the required healthStatus from GatewayRouteCandidateSnapshot).
+    // chain[0].candidateOrder identifies the head; fall back to providerModelId match.
+    const headOrder = routeResult.chain[0]?.candidateOrder;
+    const selectedCandidate =
+      routePolicy.candidates.find((c) => c.candidateOrder === headOrder) ??
+      routePolicy.candidates.find((c) => c.providerModelId === routeDecision.providerModelId);
     if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
     }
@@ -227,24 +238,18 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       routeDecision,
     });
 
-    const budget = await reserveGatewayBudget({
-      agentApiKeyId: input.agentApiKeyId,
-      databaseUrl: input.databaseUrl,
-      price: selectedCandidate.price,
-      requestId: input.requestId,
-      requestMetadata,
-    });
-    if (!budget.ok) {
-      return {
-        activity,
-        body: budget.body,
-        requestMetadata,
-        statusCode: budget.statusCode,
-      };
-    }
-    budgetReservation = budget.reservation;
-
-    const chatCompletionCandidates = attemptCandidates.filter(
+    // Build the full ordered chain of gateway-typed candidates in the same order as routeResult.chain
+    const chainOrderMap = new Map(
+      routeResult.chain.map((c, idx) => [c.candidateOrder, idx]),
+    );
+    const gatewayChain = routePolicy.candidates
+      .filter((c) => chainOrderMap.has(c.candidateOrder))
+      .sort((a, b) => {
+        const ia = chainOrderMap.get(a.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
+        const ib = chainOrderMap.get(b.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
+        return ia - ib;
+      });
+    const chatCompletionCandidates = gatewayChain.filter(
       (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
     );
     if (chatCompletionCandidates.length === 0) {
@@ -259,8 +264,25 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       adapter: input.adapter,
       candidates,
       databaseUrl: input.databaseUrl,
+      finalizeAttempt: (r) =>
+        finalizeGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
       recordFailedAttempt: async (attempt) => {
         fallbackAttempts.push(attempt);
+      },
+      releaseAttempt: (r) =>
+        releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
+      reserveAttempt: async (candidate) => {
+        const d = await reserveGatewayBudget({
+          agentApiKeyId: input.agentApiKeyId,
+          databaseUrl: input.databaseUrl,
+          price: candidate.price,
+          requestId: input.requestId,
+          requestMetadata,
+        });
+        if (!d.ok) {
+          throw new GatewayBudgetRejectedError(d.body, d.statusCode);
+        }
+        return d.reservation;
       },
       request: normalized.request,
       requestActivityId: input.requestActivityId,
@@ -274,10 +296,6 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       candidate: result.selectedCandidate,
       fallbackAttempts: result.failedAttempts,
       routeDecision,
-    });
-    await finalizeGatewayBudgetReservation({
-      databaseUrl: input.databaseUrl,
-      reservation: budgetReservation,
     });
 
     return {
@@ -296,10 +314,14 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       },
     };
   } catch (error) {
-    await releaseGatewayBudgetReservation({
-      databaseUrl: input.databaseUrl,
-      reservation: budgetReservation,
-    });
+    if (error instanceof GatewayBudgetRejectedError) {
+      return {
+        activity,
+        body: error.body,
+        requestMetadata,
+        statusCode: error.statusCode,
+      };
+    }
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyChatCompletionError(message);
     return {
@@ -322,7 +344,7 @@ function buildRequestActivityRoute(input: {
     providerApiKeyPrefix?: string;
   };
   fallbackAttempts: FallbackFailedAttempt[];
-  routeDecision: ReturnType<typeof selectRouteCandidate>;
+  routeDecision: RouteDecision;
 }): GatewayRequestActivityRoute {
   return {
     fallbackAttempts: input.fallbackAttempts,
@@ -743,6 +765,9 @@ function chatCompletionErrorMessage(code: GatewayChatCompletionErrorCode): strin
   }
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
+  }
+  if (code === "provider_unavailable") {
+    return "No eligible provider candidates are available for the selected route.";
   }
   return "Provider request failed.";
 }

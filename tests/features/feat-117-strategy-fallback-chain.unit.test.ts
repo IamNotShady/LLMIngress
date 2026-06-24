@@ -1,3 +1,4 @@
+import { PassThrough, Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
@@ -21,6 +22,47 @@ import {
   type FallbackChainCandidate,
 } from "../../apps/gateway/src/fallback-chain.js";
 import type { GatewayBudgetReservation } from "../../apps/gateway/src/budgets.js";
+
+// ---- module-level mocks for streaming fallback tests ----
+// These are hoisted before any imports by vitest's vi.mock transform.
+vi.mock("../../apps/gateway/src/rate-limits.js", () => ({
+  enforceGatewayRateLimits: vi.fn(),
+  releaseGatewayConcurrency: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../../apps/gateway/src/budgets.js", () => ({
+  reserveGatewayBudget: vi.fn(),
+  releaseGatewayBudgetReservation: vi.fn().mockResolvedValue(undefined),
+  finalizeGatewayBudgetReservation: vi.fn().mockResolvedValue(undefined),
+  GatewayBudgetRejectedError: class GatewayBudgetRejectedError extends Error {
+    body: unknown;
+    statusCode: number;
+    constructor(body: unknown, statusCode: number) {
+      super("Budget rejected");
+      this.body = body;
+      this.statusCode = statusCode;
+    }
+  },
+}));
+vi.mock("../../apps/gateway/src/chat-completions.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../apps/gateway/src/chat-completions.js")>();
+  return {
+    ...actual,
+    attachGatewayProviderCredentials: vi.fn(),
+    readGatewayMasterKeySource: vi.fn().mockReturnValue({ kind: "inline", value: "test-key" }),
+    recordGatewayProviderApiKeyLastUsed: vi.fn().mockResolvedValue(undefined),
+  };
+});
+vi.mock("../../apps/gateway/src/tracing.js", () => ({
+  recordGatewayProviderTrace: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../../apps/gateway/src/fallback-chain.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../apps/gateway/src/fallback-chain.js")>();
+  return {
+    ...actual,
+    recordFailedAttemptInDatabase: vi.fn().mockResolvedValue(undefined),
+    recordSucceededAttemptInDatabase: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 describe("feat-117 strategy fallback chain", () => {
   describe("route attempt chain", () => {
@@ -931,3 +973,242 @@ function unknownPriceModel(modelId: string): ModelTokenPrice {
     status: "unknown_price",
   };
 }
+
+// ---- streaming fallback helpers ----
+
+function makeStreamingSnapshot(
+  candidates: Array<{ providerModelId: string; candidateOrder: number }>,
+): GatewayConfigSnapshot {
+  return {
+    loadedAt: new Date(),
+    providers: [],
+    routePolicies: [
+      {
+        id: "policy-1",
+        strategy: "fixed",
+        virtualModelId: "vm-1",
+        virtualModelName: "test-model",
+        candidates: candidates.map((c) => ({
+          candidateOrder: c.candidateOrder,
+          displayName: c.providerModelId,
+          healthStatus: "healthy" as const,
+          modelId: c.providerModelId,
+          price: pricedModel(c.providerModelId, 1, 4),
+          providerId: `provider-${c.candidateOrder}`,
+          providerKey: "openai",
+          providerModelId: c.providerModelId,
+        })),
+      },
+    ],
+    version: 1,
+  };
+}
+
+function makeStreamingCandidate(
+  providerModelId: string,
+  candidateOrder: number,
+): FallbackChainCandidate {
+  return {
+    apiKey: "sk-test",
+    baseUrl: "https://api.openai.com/v1",
+    candidateOrder,
+    displayName: providerModelId,
+    healthStatus: "healthy",
+    modelId: providerModelId,
+    price: pricedModel(providerModelId, 1, 4),
+    providerId: `provider-${candidateOrder}`,
+    providerKey: "openai",
+    providerModelId,
+  };
+}
+
+function makeOkStreamResponse(): Response {
+  const pt = new PassThrough();
+  pt.end("data: [DONE]\n\n");
+  // biome-ignore lint/suspicious/noExplicitAny: test helper
+  return new Response(Readable.toWeb(pt) as any, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
+function drainStream(stream: Readable): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
+
+// ---- streaming fallback describe ----
+
+describe("streaming fallback", () => {
+  // Import at the describe level so vi.mock stubs are in place.
+  // We use lazy requires inside each test via a dynamic import to avoid
+  // module resolution ordering issues.
+
+  it("A returns 429, B returns 200 stream → result ok:true, streamed bytes from B; fetch called A then B", async () => {
+    const { enforceGatewayRateLimits } = await import(
+      "../../apps/gateway/src/rate-limits.js"
+    );
+    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../apps/gateway/src/chat-completions.js"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../apps/gateway/src/streaming.js"
+    );
+
+    vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
+      concurrencyLease: { agentApiKeyId: "key-1", window: { windowEnd: new Date(), windowStart: new Date() } },
+      ok: true,
+    });
+    vi.mocked(reserveGatewayBudget).mockResolvedValue({
+      ok: true,
+      reservation: { budgetPeriodId: "bp", id: "res-1", reservedCostUsd: 0, reservedInputTokens: 0, reservedOutputTokens: 0, reservedTotalTokens: 0 },
+    });
+    vi.mocked(attachGatewayProviderCredentials)
+      .mockResolvedValueOnce([makeStreamingCandidate("model-a", 1)])
+      .mockResolvedValueOnce([makeStreamingCandidate("model-b", 2)]);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 429 }))
+      .mockResolvedValueOnce(makeOkStreamResponse());
+
+    const snapshot = makeStreamingSnapshot([
+      { providerModelId: "model-a", candidateOrder: 1 },
+      { providerModelId: "model-b", candidateOrder: 2 },
+    ]);
+
+    const result = await executeGatewayStreamingRequest({
+      agentApiKeyId: "key-1",
+      databaseUrl: "",
+      fetch: fetchMock,
+      protocol: "chat_completions",
+      requestBody: { messages: [{ role: "user", content: "hi" }], stream: true },
+      requestId: "req-1",
+      snapshot,
+      virtualModel: { id: "vm-1", name: "test-model" },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.statusCode).toBe(200);
+    // fetch was called for both A (429) and B (200)
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // First call was to A's URL (contains model-a in body or headers)
+    // Second call was to B's URL
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("openai.com");
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("openai.com");
+
+    if (result.ok) {
+      const bytes = await drainStream(result.body);
+      expect(bytes.toString()).toContain("[DONE]");
+    }
+
+    vi.clearAllMocks();
+  });
+
+  it("A returns 400 → result ok:false with 502 statusCode; B not fetched", async () => {
+    const { enforceGatewayRateLimits } = await import(
+      "../../apps/gateway/src/rate-limits.js"
+    );
+    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../apps/gateway/src/chat-completions.js"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../apps/gateway/src/streaming.js"
+    );
+
+    vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
+      concurrencyLease: { agentApiKeyId: "key-1", window: { windowEnd: new Date(), windowStart: new Date() } },
+      ok: true,
+    });
+    vi.mocked(reserveGatewayBudget).mockResolvedValue({
+      ok: true,
+      reservation: { budgetPeriodId: "bp", id: "res-1", reservedCostUsd: 0, reservedInputTokens: 0, reservedOutputTokens: 0, reservedTotalTokens: 0 },
+    });
+    vi.mocked(attachGatewayProviderCredentials).mockResolvedValue([
+      makeStreamingCandidate("model-a", 1),
+    ]);
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 400 }));
+
+    const snapshot = makeStreamingSnapshot([
+      { providerModelId: "model-a", candidateOrder: 1 },
+      { providerModelId: "model-b", candidateOrder: 2 },
+    ]);
+
+    const result = await executeGatewayStreamingRequest({
+      agentApiKeyId: "key-1",
+      databaseUrl: "",
+      fetch: fetchMock,
+      protocol: "chat_completions",
+      requestBody: { messages: [{ role: "user", content: "hi" }], stream: true },
+      requestId: "req-1",
+      snapshot,
+      virtualModel: { id: "vm-1", name: "test-model" },
+    });
+
+    expect(result.ok).toBe(false);
+    // FIX m1: assert result.statusCode (400 → provider_request_failed → 502)
+    expect(result.statusCode).toBe(502);
+    // B was never fetched because 400 is non-retryable
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+  });
+
+  it("single candidate 200 stream → streams normally", async () => {
+    const { enforceGatewayRateLimits } = await import(
+      "../../apps/gateway/src/rate-limits.js"
+    );
+    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../apps/gateway/src/chat-completions.js"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../apps/gateway/src/streaming.js"
+    );
+
+    vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
+      concurrencyLease: { agentApiKeyId: "key-1", window: { windowEnd: new Date(), windowStart: new Date() } },
+      ok: true,
+    });
+    vi.mocked(reserveGatewayBudget).mockResolvedValue({
+      ok: true,
+      reservation: { budgetPeriodId: "bp", id: "res-1", reservedCostUsd: 0, reservedInputTokens: 0, reservedOutputTokens: 0, reservedTotalTokens: 0 },
+    });
+    vi.mocked(attachGatewayProviderCredentials).mockResolvedValue([
+      makeStreamingCandidate("model-a", 1),
+    ]);
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeOkStreamResponse());
+
+    const snapshot = makeStreamingSnapshot([{ providerModelId: "model-a", candidateOrder: 1 }]);
+
+    const result = await executeGatewayStreamingRequest({
+      agentApiKeyId: "key-1",
+      databaseUrl: "",
+      fetch: fetchMock,
+      protocol: "chat_completions",
+      requestBody: { messages: [{ role: "user", content: "hi" }], stream: true },
+      requestId: "req-1",
+      snapshot,
+      virtualModel: { id: "vm-1", name: "test-model" },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    if (result.ok) {
+      const bytes = await drainStream(result.body);
+      expect(bytes.toString()).toContain("[DONE]");
+    }
+
+    vi.clearAllMocks();
+  });
+});

@@ -1,27 +1,27 @@
 import { PassThrough, Readable } from "node:stream";
-import { describe, expect, it, vi } from "vitest";
-import { loadSqlMigrations } from "../../packages/db/src/index";
-import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
-import {
-  buildRouteAttemptCandidates,
-  selectRouteAttempts,
-  selectRouteCandidate,
-  type RouteCandidate,
-  type RoutePolicy,
-} from "../../packages/domain/src/index";
 import type { ModelTokenPrice } from "@llmingress/billing/price-registry";
+import { describe, expect, it, vi } from "vitest";
+import type { GatewayBudgetReservation } from "../../apps/gateway/src/budgets.js";
 import {
   createGatewayConfigRuntime,
-  rowToRoutePolicySnapshots,
   type GatewayConfigSnapshot,
   type RoutePolicyCandidateRow,
+  rowToRoutePolicySnapshots,
 } from "../../apps/gateway/src/config-reload.js";
-import type { HealthSummaryChangedPayload } from "../../packages/db/src/provider-health.js";
 import {
   executeFallbackChain,
   type FallbackChainCandidate,
 } from "../../apps/gateway/src/fallback-chain.js";
-import type { GatewayBudgetReservation } from "../../apps/gateway/src/budgets.js";
+import { loadSqlMigrations } from "../../packages/db/src/index";
+import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
+import type { HealthSummaryChangedPayload } from "../../packages/db/src/provider-health.js";
+import {
+  buildRouteAttemptCandidates,
+  type RouteCandidate,
+  type RoutePolicy,
+  selectRouteAttempts,
+  selectRouteCandidate,
+} from "../../packages/domain/src/index";
 
 // ---- module-level mocks for streaming fallback tests ----
 // These are hoisted before any imports by vitest's vi.mock transform.
@@ -196,12 +196,32 @@ describe("feat-117 strategy fallback chain", () => {
 
     it("health exclusion: unhealthy/auth_failed/quota_limited/network_error candidates are excluded", () => {
       const policy = makePolicy("fixed", [
-        makeCandidate({ candidateOrder: 1, providerModelId: "unhealthy", healthStatus: "unhealthy" }),
-        makeCandidate({ candidateOrder: 2, providerModelId: "auth-failed", healthStatus: "auth_failed" }),
-        makeCandidate({ candidateOrder: 3, providerModelId: "quota", healthStatus: "quota_limited" }),
-        makeCandidate({ candidateOrder: 4, providerModelId: "network-err", healthStatus: "network_error" }),
+        makeCandidate({
+          candidateOrder: 1,
+          providerModelId: "unhealthy",
+          healthStatus: "unhealthy",
+        }),
+        makeCandidate({
+          candidateOrder: 2,
+          providerModelId: "auth-failed",
+          healthStatus: "auth_failed",
+        }),
+        makeCandidate({
+          candidateOrder: 3,
+          providerModelId: "quota",
+          healthStatus: "quota_limited",
+        }),
+        makeCandidate({
+          candidateOrder: 4,
+          providerModelId: "network-err",
+          healthStatus: "network_error",
+        }),
         makeCandidate({ candidateOrder: 5, providerModelId: "healthy", healthStatus: "healthy" }),
-        makeCandidate({ candidateOrder: 6, providerModelId: "unknown-status", healthStatus: "unknown" }),
+        makeCandidate({
+          candidateOrder: 6,
+          providerModelId: "unknown-status",
+          healthStatus: "unknown",
+        }),
         makeCandidate({ candidateOrder: 7, providerModelId: "no-status" }),
       ]);
 
@@ -224,7 +244,11 @@ describe("feat-117 strategy fallback chain", () => {
     it("all-ineligible: buildRouteAttemptCandidates returns [] and selectRouteCandidate throws", () => {
       const policy = makePolicy("fixed", [
         makeCandidate({ candidateOrder: 1, providerModelId: "down-1", healthStatus: "unhealthy" }),
-        makeCandidate({ candidateOrder: 2, providerModelId: "down-2", healthStatus: "auth_failed" }),
+        makeCandidate({
+          candidateOrder: 2,
+          providerModelId: "down-2",
+          healthStatus: "auth_failed",
+        }),
       ]);
 
       const chain = buildRouteAttemptCandidates({
@@ -251,12 +275,14 @@ describe("feat-117 strategy fallback chain", () => {
   describe("migration 0048", () => {
     const migration = loadSqlMigrations().find(
       (candidate) =>
-        candidate.id === "0048" &&
-        candidate.name === "remove_route_policy_candidate_fallback",
+        candidate.id === "0048" && candidate.name === "remove_route_policy_candidate_fallback",
     );
 
     it("ships the 0048 remove_route_policy_candidate_fallback migration", () => {
-      expect(migration, "missing 0048_remove_route_policy_candidate_fallback migration").toBeDefined();
+      expect(
+        migration,
+        "missing 0048_remove_route_policy_candidate_fallback migration",
+      ).toBeDefined();
     });
 
     it("0048 SQL drops the is_fallback column", () => {
@@ -294,7 +320,7 @@ describe("gateway snapshot health", () => {
     expect(snapshots).toHaveLength(1);
     const candidate = snapshots[0]?.candidates[0];
     expect(candidate?.healthStatus).toBe("unhealthy");
-    expect(Object.prototype.hasOwnProperty.call(candidate, "isFallback")).toBe(false);
+    expect(Object.hasOwn(candidate, "isFallback")).toBe(false);
   });
 
   it("rowToRoutePolicySnapshots passes through healthStatus: 'healthy'", () => {
@@ -302,7 +328,7 @@ describe("gateway snapshot health", () => {
     const snapshots = rowToRoutePolicySnapshots([row]);
     const candidate = snapshots[0]?.candidates[0];
     expect(candidate?.healthStatus).toBe("healthy");
-    expect(Object.prototype.hasOwnProperty.call(candidate, "isFallback")).toBe(false);
+    expect(Object.hasOwn(candidate, "isFallback")).toBe(false);
   });
 });
 
@@ -331,7 +357,13 @@ describe("health force reload", () => {
                 displayName: "test",
                 healthStatus,
                 modelId: "gpt-4",
-                price: { modelId: "gpt-4", priceVersion: "v1", providerKey: "openai", reason: "model_not_in_builtin_registry", status: "unknown_price" },
+                price: {
+                  modelId: "gpt-4",
+                  priceVersion: "v1",
+                  providerKey: "openai",
+                  reason: "model_not_in_builtin_registry",
+                  status: "unknown_price",
+                },
                 providerId: "provider-1",
                 providerKey: "openai",
                 providerModelId: "model-1",
@@ -342,9 +374,7 @@ describe("health force reload", () => {
       };
     });
 
-    let capturedHealthNotify:
-      | ((payload: HealthSummaryChangedPayload) => void)
-      | undefined;
+    let capturedHealthNotify: ((payload: HealthSummaryChangedPayload) => void) | undefined;
     const healthListenerClose = vi.fn(async () => {});
 
     const runtime = createGatewayConfigRuntime({
@@ -437,16 +467,14 @@ describe("fallback chain", () => {
     const candidateB = fallbackCandidate({ providerModelId: "model-b" });
 
     const adapter = {
-      chatCompletion: vi
-        .fn()
-        .mockResolvedValueOnce({
-          body: null,
-          errorCode: "bad_request",
-          errorMessage: "400 bad request",
-          ok: false,
-          retryable: false,
-          statusCode: 400,
-        }),
+      chatCompletion: vi.fn().mockResolvedValueOnce({
+        body: null,
+        errorCode: "bad_request",
+        errorMessage: "400 bad request",
+        ok: false,
+        retryable: false,
+        statusCode: 400,
+      }),
     };
 
     await expect(
@@ -526,7 +554,11 @@ describe("fallback chain", () => {
     });
 
     expect(result.selectedCandidate.providerModelId).toBe("model-b");
-    expect(result.failedAttempts[0]).toMatchObject({ retryable: true, statusCode: null, failedBeforeFirstByte: true });
+    expect(result.failedAttempts[0]).toMatchObject({
+      retryable: true,
+      statusCode: null,
+      failedBeforeFirstByte: true,
+    });
   });
 
   it("budget hooks: reserveAttempt before each call, releaseAttempt on failure, finalizeAttempt on success", async () => {
@@ -771,7 +803,9 @@ describe("selectRouteAttempts", () => {
     expect(result.chain.length).toBeGreaterThan(0);
     // Single-shuffle consistency: decision head must match chain head
     // biome-ignore lint/style/noNonNullAssertion: checked above
-    expect(result.decision!.routeReason.selectedCandidateOrder).toBe(result.chain[0]!.candidateOrder);
+    expect(result.decision!.routeReason.selectedCandidateOrder).toBe(
+      result.chain[0]!.candidateOrder,
+    );
     // All eligible candidates are in the chain
     expect(result.chain).toHaveLength(3);
   });
@@ -917,10 +951,7 @@ function makeCandidateRow(
   };
 }
 
-function makePolicy(
-  strategy: RoutePolicy["strategy"],
-  candidates: RouteCandidate[],
-): RoutePolicy {
+function makePolicy(strategy: RoutePolicy["strategy"], candidates: RouteCandidate[]): RoutePolicy {
   return {
     candidates,
     id: "test-policy",
@@ -1049,24 +1080,30 @@ describe("streaming fallback", () => {
   // module resolution ordering issues.
 
   it("A returns 429, B returns 200 stream → result ok:true, streamed bytes from B; fetch called A then B", async () => {
-    const { enforceGatewayRateLimits } = await import(
-      "../../apps/gateway/src/rate-limits.js"
-    );
+    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
     const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
     const { attachGatewayProviderCredentials } = await import(
       "../../apps/gateway/src/chat-completions.js"
     );
-    const { executeGatewayStreamingRequest } = await import(
-      "../../apps/gateway/src/streaming.js"
-    );
+    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
-      concurrencyLease: { agentApiKeyId: "key-1", window: { windowEnd: new Date(), windowStart: new Date() } },
+      concurrencyLease: {
+        agentApiKeyId: "key-1",
+        window: { windowEnd: new Date(), windowStart: new Date() },
+      },
       ok: true,
     });
     vi.mocked(reserveGatewayBudget).mockResolvedValue({
       ok: true,
-      reservation: { budgetPeriodId: "bp", id: "res-1", reservedCostUsd: 0, reservedInputTokens: 0, reservedOutputTokens: 0, reservedTotalTokens: 0 },
+      reservation: {
+        budgetPeriodId: "bp",
+        id: "res-1",
+        reservedCostUsd: 0,
+        reservedInputTokens: 0,
+        reservedOutputTokens: 0,
+        reservedTotalTokens: 0,
+      },
     });
     vi.mocked(attachGatewayProviderCredentials)
       .mockResolvedValueOnce([makeStreamingCandidate("model-a", 1)])
@@ -1111,24 +1148,30 @@ describe("streaming fallback", () => {
   });
 
   it("A returns 400 → result ok:false with 502 statusCode; B not fetched", async () => {
-    const { enforceGatewayRateLimits } = await import(
-      "../../apps/gateway/src/rate-limits.js"
-    );
+    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
     const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
     const { attachGatewayProviderCredentials } = await import(
       "../../apps/gateway/src/chat-completions.js"
     );
-    const { executeGatewayStreamingRequest } = await import(
-      "../../apps/gateway/src/streaming.js"
-    );
+    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
-      concurrencyLease: { agentApiKeyId: "key-1", window: { windowEnd: new Date(), windowStart: new Date() } },
+      concurrencyLease: {
+        agentApiKeyId: "key-1",
+        window: { windowEnd: new Date(), windowStart: new Date() },
+      },
       ok: true,
     });
     vi.mocked(reserveGatewayBudget).mockResolvedValue({
       ok: true,
-      reservation: { budgetPeriodId: "bp", id: "res-1", reservedCostUsd: 0, reservedInputTokens: 0, reservedOutputTokens: 0, reservedTotalTokens: 0 },
+      reservation: {
+        budgetPeriodId: "bp",
+        id: "res-1",
+        reservedCostUsd: 0,
+        reservedInputTokens: 0,
+        reservedOutputTokens: 0,
+        reservedTotalTokens: 0,
+      },
     });
     vi.mocked(attachGatewayProviderCredentials).mockResolvedValue([
       makeStreamingCandidate("model-a", 1),
@@ -1162,24 +1205,30 @@ describe("streaming fallback", () => {
   });
 
   it("single candidate 200 stream → streams normally", async () => {
-    const { enforceGatewayRateLimits } = await import(
-      "../../apps/gateway/src/rate-limits.js"
-    );
+    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
     const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
     const { attachGatewayProviderCredentials } = await import(
       "../../apps/gateway/src/chat-completions.js"
     );
-    const { executeGatewayStreamingRequest } = await import(
-      "../../apps/gateway/src/streaming.js"
-    );
+    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
-      concurrencyLease: { agentApiKeyId: "key-1", window: { windowEnd: new Date(), windowStart: new Date() } },
+      concurrencyLease: {
+        agentApiKeyId: "key-1",
+        window: { windowEnd: new Date(), windowStart: new Date() },
+      },
       ok: true,
     });
     vi.mocked(reserveGatewayBudget).mockResolvedValue({
       ok: true,
-      reservation: { budgetPeriodId: "bp", id: "res-1", reservedCostUsd: 0, reservedInputTokens: 0, reservedOutputTokens: 0, reservedTotalTokens: 0 },
+      reservation: {
+        budgetPeriodId: "bp",
+        id: "res-1",
+        reservedCostUsd: 0,
+        reservedInputTokens: 0,
+        reservedOutputTokens: 0,
+        reservedTotalTokens: 0,
+      },
     });
     vi.mocked(attachGatewayProviderCredentials).mockResolvedValue([
       makeStreamingCandidate("model-a", 1),

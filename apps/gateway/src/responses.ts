@@ -10,8 +10,8 @@ import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscriptio
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
-  type GatewayBudgetReservation,
   GatewayBudgetRejectedError,
+  type GatewayBudgetReservation,
   releaseGatewayBudgetReservation,
   reserveGatewayBudget,
 } from "./budgets.js";
@@ -218,9 +218,7 @@ export async function executeGatewayOpenAIResponse(input: {
       routeDecision,
     });
 
-    const chainOrderMap = new Map(
-      routeResult.chain.map((c, idx) => [c.candidateOrder, idx]),
-    );
+    const chainOrderMap = new Map(routeResult.chain.map((c, idx) => [c.candidateOrder, idx]));
     const gatewayChain = routePolicy.candidates
       .filter((c) => chainOrderMap.has(c.candidateOrder))
       .sort((a, b) => {
@@ -327,7 +325,9 @@ async function executeResponsesFallback(input: {
   fallbackAttempts: FallbackFailedAttempt[];
   finalizeAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
   releaseAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-  reserveAttempt: (candidate: FallbackChainCandidate) => Promise<GatewayBudgetReservation | undefined>;
+  reserveAttempt: (
+    candidate: FallbackChainCandidate,
+  ) => Promise<GatewayBudgetReservation | undefined>;
   request: NormalizedOpenAIResponsesRequest;
   requestActivityId?: string;
   requestId: string;
@@ -544,7 +544,6 @@ function requireRoutePolicy(
   }
   return routePolicy;
 }
-
 
 function buildRequestActivityRoute(input: {
   candidate: GatewayRouteCandidateSnapshot & {

@@ -232,9 +232,10 @@ export function normalizeProviderModelCapabilities(value: unknown): ProviderMode
   });
 }
 
-export function selectRouteAttempts(
-  input: RouteSelectionRequest & { random?: () => number },
-): { decision: RouteDecision | undefined; chain: RouteCandidate[] } {
+export function selectRouteAttempts(input: RouteSelectionRequest & { random?: () => number }): {
+  decision: RouteDecision | undefined;
+  chain: RouteCandidate[];
+} {
   assertTokenEstimate(input.estimatedInputTokens, "estimatedInputTokens");
   assertTokenEstimate(input.estimatedOutputTokens, "estimatedOutputTokens");
 
@@ -283,7 +284,8 @@ export function selectRouteAttempts(
       inputTokens: input.estimatedInputTokens,
       outputTokens: input.estimatedOutputTokens,
     });
-    const estimatedCostUsd = costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
+    const estimatedCostUsd =
+      costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
     const priceSource =
       selectedCandidate.price.status !== "unknown_price"
         ? selectedCandidate.price.source
@@ -306,7 +308,8 @@ export function selectRouteAttempts(
       inputTokens: input.estimatedInputTokens,
       outputTokens: input.estimatedOutputTokens,
     });
-    const estimatedCostUsd = costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
+    const estimatedCostUsd =
+      costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
     const priceSource =
       selectedCandidate.price.status !== "unknown_price"
         ? selectedCandidate.price.source

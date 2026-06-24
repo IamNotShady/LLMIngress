@@ -172,9 +172,7 @@ export async function executeGatewayStreamingRequest(input: {
 
     // Reconstruct ordered chain from routePolicy.candidates (preserving GatewayRouteCandidateSnapshot
     // with healthStatus) using the same ordering as routeResult.chain.
-    const chainOrderMap = new Map(
-      routeResult.chain.map((c, idx) => [c.candidateOrder, idx]),
-    );
+    const chainOrderMap = new Map(routeResult.chain.map((c, idx) => [c.candidateOrder, idx]));
     const gatewayChain = routePolicy.candidates
       .filter((c) => chainOrderMap.has(c.candidateOrder))
       .sort((a, b) => {
@@ -305,9 +303,7 @@ export async function executeGatewayStreamingRequest(input: {
           attemptOrder,
           providerApiKey: {
             apiKey: candidate.apiKey,
-            ...(candidate.providerApiKeyId
-              ? { providerApiKeyId: candidate.providerApiKeyId }
-              : {}),
+            ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
             ...(candidate.providerApiKeyPrefix
               ? { keyPrefix: candidate.providerApiKeyPrefix }
               : {}),
@@ -363,9 +359,7 @@ export async function executeGatewayStreamingRequest(input: {
           attemptOrder,
           providerApiKey: {
             apiKey: candidate.apiKey,
-            ...(candidate.providerApiKeyId
-              ? { providerApiKeyId: candidate.providerApiKeyId }
-              : {}),
+            ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
             ...(candidate.providerApiKeyPrefix
               ? { keyPrefix: candidate.providerApiKeyPrefix }
               : {}),
@@ -412,9 +406,7 @@ export async function executeGatewayStreamingRequest(input: {
         { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
         {
           attemptOrder,
-          ...(candidate.providerApiKeyId
-            ? { providerApiKeyId: candidate.providerApiKeyId }
-            : {}),
+          ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
           ...(candidate.providerApiKeyPrefix
             ? { providerApiKeyPrefix: candidate.providerApiKeyPrefix }
             : {}),

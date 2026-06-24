@@ -88,10 +88,7 @@ export function VirtualModelRouteDialogClient({
   });
 
   function addModel(option: ProviderModelOption) {
-    setSelectedCandidates((current) => [
-      ...current,
-      { ...option, candidateOrder: current.length },
-    ]);
+    setSelectedCandidates((current) => [...current, { ...option, candidateOrder: current.length }]);
     setPickerOpen(false);
   }
 

@@ -891,10 +891,7 @@ function normalizeRoutePolicyProviderModelIds(
   index: number,
 ): string[] {
   if (input.providerModelIds !== undefined) {
-    return normalizeUuidArray(
-      input.providerModelIds,
-      `routePolicies[${index}].providerModelIds`,
-    );
+    return normalizeUuidArray(input.providerModelIds, `routePolicies[${index}].providerModelIds`);
   }
   return [
     ...normalizeUuidArray(

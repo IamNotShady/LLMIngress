@@ -239,9 +239,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     });
 
     // Build the full ordered chain of gateway-typed candidates in the same order as routeResult.chain
-    const chainOrderMap = new Map(
-      routeResult.chain.map((c, idx) => [c.candidateOrder, idx]),
-    );
+    const chainOrderMap = new Map(routeResult.chain.map((c, idx) => [c.candidateOrder, idx]));
     const gatewayChain = routePolicy.candidates
       .filter((c) => chainOrderMap.has(c.candidateOrder))
       .sort((a, b) => {

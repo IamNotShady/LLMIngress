@@ -9,8 +9,8 @@ import {
   createConfigChangedListener as createPostgresConfigChangedListener,
 } from "@llmingress/db/config-versions";
 import {
-  type HealthSummaryChangedPayload,
   createHealthSummaryChangedListener as createPostgresHealthSummaryChangedListener,
+  type HealthSummaryChangedPayload,
 } from "@llmingress/db/provider-health";
 import { isRemovedProviderKey } from "@llmingress/db/providers";
 import { PostgresClient } from "@llmingress/db/routes";
@@ -405,7 +405,9 @@ export async function loadGatewayConfigSnapshot(
   }
 }
 
-export function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRoutePolicySnapshot[] {
+export function rowToRoutePolicySnapshots(
+  rows: RoutePolicyCandidateRow[],
+): GatewayRoutePolicySnapshot[] {
   const routePolicies = new Map<string, GatewayRoutePolicySnapshot>();
 
   for (const row of rows) {

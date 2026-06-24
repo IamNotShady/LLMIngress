@@ -10,9 +10,9 @@ import {
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
+import type { GatewayBudgetReservation } from "./budgets.js";
 import type { GatewayRouteCandidateSnapshot } from "./config-reload.js";
 import { recordGatewayProviderTrace } from "./tracing.js";
-import type { GatewayBudgetReservation } from "./budgets.js";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
@@ -63,7 +63,9 @@ export type ExecuteFallbackChainInput = {
   recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void>;
   recordHealthEvent?: typeof recordProviderHealthEvent;
   releaseAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-  reserveAttempt?: (candidate: FallbackChainCandidate) => Promise<GatewayBudgetReservation | undefined>;
+  reserveAttempt?: (
+    candidate: FallbackChainCandidate,
+  ) => Promise<GatewayBudgetReservation | undefined>;
   request: NormalizedOpenAIChatRequest;
   requestActivityId?: string;
   requestId?: string;

@@ -5,6 +5,13 @@ test("usage & cost page renders reference filters, KPI cards, charts, savings, a
   browser,
 }) => {
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
+    await page.addInitScript(() => {
+      const usageWindow = window as unknown as { __usageDatePickerCalls?: string[] };
+      usageWindow.__usageDatePickerCalls = [];
+      HTMLInputElement.prototype.showPicker = function showPickerSpy() {
+        usageWindow.__usageDatePickerCalls?.push(this.id);
+      };
+    });
     await page.goto(`${baseUrl}/usage`);
 
     await expect(page.getByRole("heading", { level: 1, name: "Usage & Cost" })).toBeVisible();
@@ -12,6 +19,14 @@ test("usage & cost page renders reference filters, KPI cards, charts, savings, a
     for (const label of ["Start date", "End date", "Agent", "Virtual Model", "Provider"]) {
       await expect(page.getByLabel(label, { exact: true })).toBeVisible();
     }
+    await page.getByLabel("Start date", { exact: true }).click();
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          () => (window as unknown as { __usageDatePickerCalls?: string[] }).__usageDatePickerCalls,
+        ),
+      )
+      .toContain("usage-date-from");
 
     // KPI tiles (scoped to stat-card labels — savings is also repeated in the side panel).
     for (const label of [
@@ -52,5 +67,33 @@ test("usage & cost page renders reference filters, KPI cards, charts, savings, a
     ]) {
       await expect(table.getByRole("columnheader", { name: column })).toBeVisible();
     }
+  });
+});
+
+test("usage date filters show a calendar popover when native date picker is unavailable", async ({
+  browser,
+}) => {
+  await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(HTMLInputElement.prototype, "showPicker", {
+        configurable: true,
+        value: undefined,
+      });
+    });
+    await page.goto(`${baseUrl}/usage`);
+
+    const startDateInput = page.getByLabel("Start date", { exact: true });
+    await startDateInput.click();
+
+    const picker = page.getByRole("dialog", { name: "Start date calendar" });
+    await expect(picker).toBeVisible();
+
+    const firstDateButton = picker.locator(".date-picker-day").first();
+    const selectedDate = await firstDateButton.getAttribute("data-date");
+    expect(selectedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await firstDateButton.click();
+
+    await expect(startDateInput).toHaveValue(selectedDate ?? "");
+    await expect(picker).toBeHidden();
   });
 });

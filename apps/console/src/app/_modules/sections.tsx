@@ -81,6 +81,7 @@ import { type ConsoleVirtualModel, listVirtualModels } from "../../server/virtua
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
+import { DatePickerInput } from "../_components/date-picker-input";
 import { FlatIcon } from "../_components/flat-icon";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
@@ -772,16 +773,21 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <div className="usage-date-range-fields">
             <div className="console-field">
               <label htmlFor="usage-date-from">Start date</label>
-              <input
+              <DatePickerInput
                 id="usage-date-from"
                 name="dateFrom"
-                type="date"
                 defaultValue={dateFromValue}
+                pickerLabel="Start date"
               />
             </div>
             <div className="console-field">
               <label htmlFor="usage-date-to">End date</label>
-              <input id="usage-date-to" name="dateTo" type="date" defaultValue={dateToValue} />
+              <DatePickerInput
+                id="usage-date-to"
+                name="dateTo"
+                defaultValue={dateToValue}
+                pickerLabel="End date"
+              />
             </div>
           </div>
         </fieldset>

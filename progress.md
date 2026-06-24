@@ -2,13 +2,21 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-24 (Usage & Cost reference UI)
-**Active Feature:** none — Usage & Cost reference UI restoration complete
-**Branch:** `codex/usage-cost-reference-ui` (isolated worktree off `dev`)
+**Last Updated:** 2026-06-24 (Usage date picker repair)
+**Active Feature:** none - Usage date picker repair complete
+**Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **Usage date picker repair (feat-047 follow-up)**:
+  - Root cause: the in-app browser's Usage page `input[type=date]` does not expose `HTMLInputElement.showPicker`, so the reference UI date fields could focus/select text without showing a date selection window.
+  - Added `DatePickerInput`, which uses native `showPicker()` when available and falls back to an in-page calendar dialog when it is not available.
+  - Wired the Usage Start date and End date filters through the new component while preserving form field names, `dateFrom` / `dateTo` query behavior, and manual keyboard entry.
+  - Added Playwright coverage for both native picker invocation and the no-native-picker fallback calendar selection path.
+  - Browser verification passed in the live in-app browser: `#usage-date-from` reported no native `showPicker`, clicking it opened `Start date calendar` with 30 day buttons, selecting `2026-06-15` updated the input and closed the dialog, with zero console errors.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-usage.e2e.spec.ts --workers=1`, focused feat-047 E2E, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and `pnpm run verify:features` with all 116 passing features re-verified (E2E batch 525.5s).
 
 - [x] **Usage & Cost reference UI restoration (extends feat-047/feat-079)**:
   - Reworked `/usage` body to match `docs/UI/07_usage_cost.png` structure while leaving global sidebar/topbar chrome unchanged: date range, Agent, Virtual Model, and Provider filters; six KPI cards; two dual-line trend charts; right-side savings overview; three cost-distribution donuts; and an expanded Provider / Model summary table.

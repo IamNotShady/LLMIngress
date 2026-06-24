@@ -40,24 +40,40 @@ test("usage page shows agent virtual model provider model cost failure and savin
               .locator(".stat-card-value"),
           ).toHaveText("3");
           await expect(
-            usageSection.locator(".stat-card", { hasText: "Savings" }).locator(".stat-card-value"),
+            usageSection
+              .locator(".stat-card", { hasText: "Estimated savings" })
+              .locator(".stat-card-value"),
           ).toHaveText("$0.00400000");
 
           // Cost breakdown donuts surface agent / virtual model / provider names in their legends.
-          await expect(usageSection.getByRole("heading", { name: "Agent cost" })).toBeVisible();
-          await expect(usageSection.getByText("Codex Usage", { exact: true })).toBeVisible();
           await expect(
-            usageSection.getByRole("heading", { name: "Virtual Model cost" }),
+            usageSection.getByRole("heading", { name: "Agent cost distribution" }),
           ).toBeVisible();
           await expect(
-            usageSection.getByText("Usage Fast (usage-fast)", { exact: true }),
-          ).toBeVisible();
-          await expect(usageSection.getByRole("heading", { name: "Provider cost" })).toBeVisible();
-          await expect(
-            usageSection.getByText("Usage OpenAI", { exact: true }).first(),
+            usageSection
+              .getByLabel("agent cost breakdown")
+              .getByText("Codex Usage", { exact: true }),
           ).toBeVisible();
           await expect(
-            usageSection.getByText("Usage Anthropic", { exact: true }).first(),
+            usageSection.getByRole("heading", { name: "Virtual Model cost distribution" }),
+          ).toBeVisible();
+          await expect(
+            usageSection
+              .getByLabel("virtual model cost breakdown")
+              .getByText("Usage Fast (usage-fast)", { exact: true }),
+          ).toBeVisible();
+          await expect(
+            usageSection.getByRole("heading", { name: "Provider cost distribution" }),
+          ).toBeVisible();
+          await expect(
+            usageSection
+              .getByLabel("provider cost breakdown")
+              .getByText("Usage OpenAI", { exact: true }),
+          ).toBeVisible();
+          await expect(
+            usageSection
+              .getByLabel("provider cost breakdown")
+              .getByText("Usage Anthropic", { exact: true }),
           ).toBeVisible();
 
           // Provider / Model summary table lists each provider+model row.

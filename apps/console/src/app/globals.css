@@ -2696,6 +2696,117 @@ details.disclosure[open] > .disclosure-summary {
   flex: 1 1 160px;
 }
 
+/* ---- Usage & Cost reference layout ---- */
+.usage-page {
+  max-width: none;
+  margin: 0;
+  padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
+    clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);
+}
+.usage-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.usage-dashboard.providers-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.usage-filter-bar {
+  display: grid;
+  grid-template-columns:
+    minmax(17rem, 1.3fr) minmax(10rem, 0.8fr) minmax(12rem, 1fr)
+    minmax(10rem, 0.8fr) auto;
+  gap: var(--space-sm);
+  align-items: end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.usage-filter-bar .console-actions {
+  align-self: end;
+}
+.usage-filter-bar input,
+.usage-filter-bar select {
+  min-height: 2.35rem;
+  background: var(--surface);
+}
+.usage-date-range {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.usage-date-range legend,
+.usage-filter-bar label {
+  margin-bottom: var(--space-2xs);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.usage-date-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(8rem, 1fr));
+  gap: var(--space-sm);
+}
+.usage-kpi-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.usage-kpi-grid .stat-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.usage-analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(18rem, 0.45fr);
+  gap: var(--space-md);
+  align-items: stretch;
+}
+.usage-savings-card {
+  gap: var(--space-md);
+}
+.usage-savings-list {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+}
+.usage-savings-list div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.usage-savings-list dt {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.usage-savings-list dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-feature-settings: "tnum" 1;
+  color: var(--text);
+}
+.usage-distribution-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+.usage-summary-card {
+  min-width: 0;
+}
+.usage-summary-table {
+  min-width: 74rem;
+}
+
 /* ---- Activity reference workspace ---- */
 .activity-page {
   max-width: none;
@@ -3127,6 +3238,17 @@ details.disclosure[open] > .disclosure-summary {
   .vm-editor-fields,
   .vm-dialog-actions,
   .vm-model-filter-bar {
+    grid-template-columns: 1fr;
+  }
+  .usage-filter-bar,
+  .usage-analysis-grid,
+  .usage-distribution-grid {
+    grid-template-columns: 1fr;
+  }
+  .usage-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .usage-date-range-fields {
     grid-template-columns: 1fr;
   }
   .activity-filter-grid,

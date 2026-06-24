@@ -71,6 +71,8 @@ import {
 } from "../../server/runtime";
 import {
   type ConsoleUsageDimensionBreakdown,
+  type ConsoleUsageTrendPoint,
+  type ConsoleUsageWindow,
   formatConsoleUsageCost,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
@@ -89,6 +91,9 @@ import { VirtualModelRouteDialogClient } from "./virtual-model-route-dialog";
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 
 const providerTemplateGroups = listProviderTemplateSelectorGroups();
+const usageTrendActualColor = "#16a34a";
+const usageTrendBaselineColor = "#2563eb";
+const usageTrendTokenColor = "#f59e0b";
 const directProviderCreateChoices = [
   {
     action: "create",
@@ -713,7 +718,25 @@ function formatProviderHealthStatusLabel(status: string): string {
 export async function UsageSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
   const usageWindow = parseConsoleUsageWindow(readSingleSearchParam(searchParams.usageWindow));
-  const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: usageWindow });
+  const dateFromParam = readSingleSearchParam(searchParams.dateFrom);
+  const dateToParam = readSingleSearchParam(searchParams.dateTo);
+  const selectedAgentId = readOptionalFilterParam(searchParams.agentId);
+  const selectedVirtualModelId = readOptionalFilterParam(searchParams.virtualModelId);
+  const selectedProviderId = readOptionalFilterParam(searchParams.providerId);
+  const [usageSummary, agents, virtualModels, providers] = await Promise.all([
+    getConsoleUsageSummary({
+      agentId: selectedAgentId,
+      databaseUrl,
+      dateFrom: parseUsageDateStart(dateFromParam),
+      dateTo: parseUsageDateEndExclusive(dateToParam),
+      providerId: selectedProviderId,
+      virtualModelId: selectedVirtualModelId,
+      window: usageWindow,
+    }),
+    listAgents(databaseUrl),
+    listVirtualModels(databaseUrl),
+    listProviders(databaseUrl),
+  ]);
 
   const failureRate =
     usageSummary.requestCount > 0
@@ -725,19 +748,78 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
     totalCost + totalSavings > 0
       ? `${((totalSavings / (totalCost + totalSavings)) * 100).toFixed(1)}%`
       : "0.0%";
-  // Average latency is not part of the usage rollup yet; seeded placeholder.
-  const avgLatency = `${placeholderFloat(`usage-latency-${usageSummary.window}`, 0.8, 2.6).toFixed(2)}s`;
-  const trend = placeholderTrend(`usage-trend-${usageSummary.window}`, 14);
+  const baselineCost = totalCost + totalSavings;
+  const lowCostHitRate =
+    usageSummary.costedRequestCount > 0
+      ? `${((usageSummary.lowCostRequestCount / usageSummary.costedRequestCount) * 100).toFixed(1)}%`
+      : "0.0%";
+  const avgLatency = formatLatencyMs(usageSummary.avgLatencyMs);
+  const { dateFromValue, dateToValue } = getUsageDateInputValues({
+    dateFromParam,
+    dateToParam,
+    now: new Date(),
+    window: usageWindow,
+  });
+  const costTrend = usageSummary.trend.map(formatCostTrendPoint);
+  const tokenTrend = usageSummary.trend.map(formatTokenTrendPoint);
 
   return (
-    <section className="providers-panel" id="usage" aria-label="Usage & Cost">
-      <form className="filter-bar" action="/usage" method="get">
+    <section className="providers-panel usage-dashboard" id="usage" aria-label="Usage & Cost">
+      <form className="usage-filter-bar" action="/usage" method="get">
+        <input type="hidden" name="usageWindow" value={usageSummary.window} />
+        <fieldset className="usage-date-range" aria-label="Date range">
+          <legend>Date range</legend>
+          <div className="usage-date-range-fields">
+            <div className="console-field">
+              <label htmlFor="usage-date-from">Start date</label>
+              <input
+                id="usage-date-from"
+                name="dateFrom"
+                type="date"
+                defaultValue={dateFromValue}
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor="usage-date-to">End date</label>
+              <input id="usage-date-to" name="dateTo" type="date" defaultValue={dateToValue} />
+            </div>
+          </div>
+        </fieldset>
         <div className="console-field">
-          <label htmlFor="usage-window">Window</label>
-          <select id="usage-window" name="usageWindow" defaultValue={usageSummary.window}>
-            <option value="24h">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
+          <label htmlFor="usage-agent">Agent</label>
+          <select id="usage-agent" name="agentId" defaultValue={selectedAgentId ?? ""}>
+            <option value="">All agents</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="console-field">
+          <label htmlFor="usage-virtual-model">Virtual Model</label>
+          <select
+            id="usage-virtual-model"
+            name="virtualModelId"
+            defaultValue={selectedVirtualModelId ?? ""}
+          >
+            <option value="">All virtual models</option>
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {virtualModel.description} ({virtualModel.name})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="console-field">
+          <label htmlFor="usage-provider">Provider</label>
+          <select id="usage-provider" name="providerId" defaultValue={selectedProviderId ?? ""}>
+            <option value="">All providers</option>
+            {providers.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.displayName}
+              </option>
+            ))}
           </select>
         </div>
         <div className="console-actions">
@@ -748,7 +830,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
         </div>
       </form>
 
-      <div className="stat-grid">
+      <div className="stat-grid usage-kpi-grid">
         <StatCard
           icon="$"
           label="Total cost"
@@ -768,98 +850,111 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
         <StatCard icon="FR" label="Failure rate" value={failureRate} />
         <StatCard
           icon="SV"
-          label="Savings"
+          label="Estimated savings"
           value={formatConsoleUsageCost(usageSummary.totalSavingsUsd)}
         />
       </div>
 
-      <div className="chart-grid-2">
+      <div className="usage-analysis-grid">
         <div className="chart-card">
           <h2 className="chart-card-title">Cost trend</h2>
           <TrendLineChart
             ariaLabel="Cost trend"
-            data={trend}
-            series={[{ key: "costUsd", name: "Cost (USD)", color: chartOk }]}
+            data={costTrend}
+            series={[
+              { key: "baselineCostUsd", name: "Baseline (USD)", color: usageTrendBaselineColor },
+              { key: "actualCostUsd", name: "Actual (USD)", color: usageTrendActualColor },
+            ]}
           />
         </div>
         <div className="chart-card">
           <h2 className="chart-card-title">Tokens trend</h2>
           <TrendLineChart
             ariaLabel="Tokens trend"
-            data={trend}
-            series={[{ key: "requests", name: "Requests", color: chartAccent }]}
+            data={tokenTrend}
+            series={[
+              { key: "inputTokens", name: "Input tokens", color: usageTrendBaselineColor },
+              { key: "outputTokens", name: "Output tokens", color: usageTrendTokenColor },
+            ]}
           />
+        </div>
+        <div className="chart-card usage-savings-card">
+          <h2 className="chart-card-title">Savings overview</h2>
+          <dl className="usage-savings-list">
+            <div>
+              <dt>Saved amount</dt>
+              <dd>{formatConsoleUsageCost(usageSummary.totalSavingsUsd)}</dd>
+            </div>
+            <div>
+              <dt>Baseline cost</dt>
+              <dd>{formatConsoleUsageCost(baselineCost.toFixed(8))}</dd>
+            </div>
+            <div>
+              <dt>Savings ratio</dt>
+              <dd>{savingsRatio}</dd>
+            </div>
+            <div>
+              <dt>Low-cost hit rate</dt>
+              <dd>{lowCostHitRate}</dd>
+            </div>
+          </dl>
         </div>
       </div>
 
-      <div className="chart-grid-3">
+      <div className="usage-distribution-grid">
         <div className="chart-card">
-          <h2 className="chart-card-title">Agent cost</h2>
+          <h2 className="chart-card-title">Agent cost distribution</h2>
           <UsageCostDonut breakdowns={usageSummary.agentBreakdowns} label="agent" />
         </div>
         <div className="chart-card">
-          <h2 className="chart-card-title">Virtual Model cost</h2>
+          <h2 className="chart-card-title">Virtual Model cost distribution</h2>
           <UsageCostDonut breakdowns={usageSummary.virtualModelBreakdowns} label="virtual model" />
         </div>
         <div className="chart-card">
-          <h2 className="chart-card-title">Provider cost</h2>
+          <h2 className="chart-card-title">Provider cost distribution</h2>
           <UsageCostDonut breakdowns={usageSummary.providerBreakdowns} label="provider" />
         </div>
       </div>
 
-      <div className="detail-layout">
-        <div className="chart-card">
-          <h2 className="chart-card-title">Provider / Model summary</h2>
-          {usageSummary.breakdowns.length === 0 ? (
-            <p>No usage recorded for this window.</p>
-          ) : (
-            <div className="data-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Provider</th>
-                    <th>Model</th>
-                    <th className="num">Requests</th>
-                    <th className="num">Tokens</th>
-                    <th className="num">Cost</th>
+      <div className="chart-card usage-summary-card">
+        <h2 className="chart-card-title">Provider / Model summary</h2>
+        <div className="data-table-wrap">
+          <table className="data-table usage-summary-table">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Model</th>
+                <th className="num">Requests</th>
+                <th className="num">Tokens</th>
+                <th className="num">Cost</th>
+                <th className="num">Avg latency</th>
+                <th className="num">Failure rate</th>
+                <th className="num">Savings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usageSummary.breakdowns.length === 0 ? (
+                <tr>
+                  <td colSpan={8}>No usage recorded for this range.</td>
+                </tr>
+              ) : (
+                usageSummary.breakdowns.map((breakdown) => (
+                  <tr key={`${breakdown.providerId}:${breakdown.modelId}`}>
+                    <td>{breakdown.providerLabel}</td>
+                    <td>{breakdown.modelLabel}</td>
+                    <td className="num">{formatCompactNumber(breakdown.requestCount)}</td>
+                    <td className="num">{formatCompactNumber(breakdown.totalTokens)}</td>
+                    <td className="num">{formatConsoleUsageCost(breakdown.totalCostUsd)}</td>
+                    <td className="num">{formatLatencyMs(breakdown.avgLatencyMs)}</td>
+                    <td className="num">
+                      {formatFailureRate(breakdown.failureCount, breakdown.requestCount)}
+                    </td>
+                    <td className="num">{formatConsoleUsageCost(breakdown.totalSavingsUsd)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {usageSummary.breakdowns.map((breakdown) => (
-                    <tr key={`${breakdown.providerId}:${breakdown.modelId}`}>
-                      <td>{breakdown.providerLabel}</td>
-                      <td>{breakdown.modelLabel}</td>
-                      <td className="num">{formatCompactNumber(breakdown.requestCount)}</td>
-                      <td className="num">{formatCompactNumber(breakdown.totalTokens)}</td>
-                      <td className="num">{formatConsoleUsageCost(breakdown.totalCostUsd)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <div className="detail-panel">
-          <div className="detail-panel-head">
-            <h2 className="detail-panel-title">Savings</h2>
-          </div>
-          <dl className="detail-field-list">
-            <div className="detail-field">
-              <dt>Saved amount</dt>
-              <dd>{formatConsoleUsageCost(usageSummary.totalSavingsUsd)}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Savings ratio</dt>
-              <dd>{savingsRatio}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Billed cost</dt>
-              <dd>{formatConsoleUsageCost(usageSummary.totalCostUsd)}</dd>
-            </div>
-          </dl>
-          <p className="callout">
-            Savings estimate the difference vs. each request's most expensive candidate.
-          </p>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -881,6 +976,99 @@ function UsageCostDonut({
     return <p>No {label} cost recorded.</p>;
   }
   return <DonutBreakdown ariaLabel={`${label} cost breakdown`} data={slices} valueFormat="usd" />;
+}
+
+function readOptionalFilterParam(value: string | string[] | undefined): string | null {
+  const param = readSingleSearchParam(value)?.trim();
+  return param ? param : null;
+}
+
+function parseUsageDateStart(value: string | undefined): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseUsageDateEndExclusive(value: string | undefined): Date | null {
+  const start = parseUsageDateStart(value);
+  if (!start) {
+    return null;
+  }
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
+}
+
+function getUsageDateInputValues(input: {
+  dateFromParam: string | undefined;
+  dateToParam: string | undefined;
+  now: Date;
+  window: ConsoleUsageWindow;
+}): { dateFromValue: string; dateToValue: string } {
+  const fallbackFrom = getUsageDateFallbackStart(input.now, input.window);
+  return {
+    dateFromValue: parseUsageDateStart(input.dateFromParam)
+      ? (input.dateFromParam ?? formatUsageDateInput(fallbackFrom))
+      : formatUsageDateInput(fallbackFrom),
+    dateToValue: parseUsageDateStart(input.dateToParam)
+      ? (input.dateToParam ?? formatUsageDateInput(input.now))
+      : formatUsageDateInput(input.now),
+  };
+}
+
+function getUsageDateFallbackStart(now: Date, window: ConsoleUsageWindow): Date {
+  const durationMs = {
+    "24h": 24 * 60 * 60 * 1000,
+    "30d": 30 * 24 * 60 * 60 * 1000,
+    "7d": 7 * 24 * 60 * 60 * 1000,
+  }[window];
+  return new Date(now.getTime() - durationMs);
+}
+
+function formatUsageDateInput(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function formatCostTrendPoint(point: ConsoleUsageTrendPoint) {
+  const actualCostUsd = Number(point.totalCostUsd ?? 0);
+  const savingsUsd = Number(point.totalSavingsUsd ?? 0);
+  return {
+    actualCostUsd,
+    baselineCostUsd: actualCostUsd + savingsUsd,
+    label: formatUsageTrendLabel(point.bucketStart),
+  };
+}
+
+function formatTokenTrendPoint(point: ConsoleUsageTrendPoint) {
+  return {
+    inputTokens: point.inputTokens,
+    label: formatUsageTrendLabel(point.bucketStart),
+    outputTokens: point.outputTokens,
+  };
+}
+
+function formatUsageTrendLabel(value: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "short",
+  }).format(value);
+}
+
+function formatLatencyMs(value: number | null): string {
+  if (value === null) {
+    return "Unavailable";
+  }
+  if (value < 1000) {
+    return `${Math.round(value)}ms`;
+  }
+  return `${(value / 1000).toFixed(2)}s`;
+}
+
+function formatFailureRate(failureCount: number, requestCount: number): string {
+  if (requestCount <= 0) {
+    return "0.00%";
+  }
+  return `${((failureCount / requestCount) * 100).toFixed(2)}%`;
 }
 
 export async function ActivitySection({ searchParams }: { searchParams: ConsoleSearchParams }) {

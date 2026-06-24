@@ -42,6 +42,7 @@ describe("feat-082 cost report export", () => {
       ],
       breakdowns: [
         {
+          avgLatencyMs: 320,
           failureCount: 0,
           modelId: "model-1",
           modelLabel: "GPT 4.1 Mini",
@@ -53,8 +54,11 @@ describe("feat-082 cost report export", () => {
           totalTokens: 200,
         },
       ],
+      avgLatencyMs: 320,
       failureCount: 1,
+      costedRequestCount: 2,
       inputTokens: 200,
+      lowCostRequestCount: 2,
       modelBreakdowns: [
         breakdown("model-1", "GPT 4.1 Mini (gpt-4.1-mini)", {
           requestCount: 1,
@@ -103,8 +107,11 @@ describe("feat-082 cost report export", () => {
       exportType: "cost_report",
       generatedAt: "2026-06-16T12:00:00.000Z",
       summary: {
+        avgLatencyMs: 320,
+        costedRequestCount: 2,
         failureCount: 1,
         inputTokens: 200,
+        lowCostRequestCount: 2,
         outputTokens: 400,
         requestCount: 3,
         totalCostUsd: "0.00300000",
@@ -136,6 +143,7 @@ function breakdown(
   },
 ) {
   return {
+    avgLatencyMs: null,
     failureCount: 0,
     id,
     label,

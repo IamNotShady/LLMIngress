@@ -2,13 +2,22 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-23 (console UI refresh + English i18n)
-**Active Feature:** none — console UI style refresh + full English translation complete
-**Branch:** `console-ui-refresh` (worktree off `dev`)
+**Last Updated:** 2026-06-24 (Usage & Cost reference UI)
+**Active Feature:** none — Usage & Cost reference UI restoration complete
+**Branch:** `codex/usage-cost-reference-ui` (isolated worktree off `dev`)
 
 ## Status
 
 ### What's Done
+
+- [x] **Usage & Cost reference UI restoration (extends feat-047/feat-079)**:
+  - Reworked `/usage` body to match `docs/UI/07_usage_cost.png` structure while leaving global sidebar/topbar chrome unchanged: date range, Agent, Virtual Model, and Provider filters; six KPI cards; two dual-line trend charts; right-side savings overview; three cost-distribution donuts; and an expanded Provider / Model summary table.
+  - Extended `getConsoleUsageSummary` without schema changes: optional date range and Agent / Virtual Model / Provider filters, real average latency, costed request count, low-cost hit count, savings totals, per-provider/model latency/failure/savings fields, and real hour/day trend points from `request_activity`, `request_usage`, and `request_costs`.
+  - Removed Usage page placeholder latency/trend data; existing `usageWindow` query compatibility remains for old links.
+  - Visual comparison ledger against `docs/UI/07_usage_cost.png`: copy remains English to match the current Console shell; layout now follows filter -> 6 KPI -> two charts + savings side panel -> three donuts -> table; KPI/table coverage matches the reference fields; trend charts render real two-line series with deterministic dots; donut/table density and white-card styling now align with the reference; Usage-specific CSS avoids global sidebar/topbar rewrites.
+  - Screenshot and Chrome DevTools Protocol verification artifacts: `/tmp/llmingress-usage-cost-reference-ui/usage-desktop-1920x1400.png`, `/tmp/llmingress-usage-cost-reference-ui/usage-current-1440x900.png`, `/tmp/llmingress-usage-cost-reference-ui/usage-mobile-390x844.png`, and `/tmp/llmingress-usage-cost-reference-ui/chrome-devtools-computed.json`.
+  - Focused verification passed: feat-047/feat-079 unit tests, Usage structure E2E, feat-047 Usage E2E, feat-079 Usage breakdowns E2E, `pnpm run lint`, and `pnpm run typecheck`.
+  - Full regression follow-up: first `pnpm run verify:features` found stale E2E `--grep` strings for feat-063/066/097 and a real feat-082 export parity gap after Usage breakdowns gained `avgLatencyMs`; repaired those by aligning verification titles and adding avg-latency/costed/low-cost fields to cost report export. Final `pnpm run verify:features` re-verified all 116 passing features.
 
 - [x] **Console UI refresh + English i18n (style-only, no behavior change)**:
   - Replaced the multicolor `flat-color-icons` with an inline monochrome line-icon set

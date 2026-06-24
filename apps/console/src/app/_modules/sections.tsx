@@ -812,7 +812,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
             <option value="">All virtual models</option>
             {virtualModels.map((virtualModel) => (
               <option key={virtualModel.id} value={virtualModel.id}>
-                {virtualModel.description} ({virtualModel.name})
+                {virtualModel.name}
               </option>
             ))}
           </select>

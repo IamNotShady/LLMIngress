@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { Client } from "pg";
 import { withConsoleDevServer } from "../support/console-dev-server";
 
 test("usage & cost page renders reference filters, KPI cards, charts, savings, and summary table", async ({
@@ -97,3 +99,41 @@ test("usage date filters show a calendar popover when native date picker is unav
     await expect(picker).toBeHidden();
   });
 });
+
+test("usage virtual model filter shows virtual model names without descriptions", async ({
+  browser,
+}) => {
+  await withConsoleDevServer(
+    browser,
+    async ({ page, baseUrl }) => {
+      await page.goto(`${baseUrl}/usage`);
+
+      await expect(page.locator("select#usage-virtual-model option")).toHaveText([
+        "All virtual models",
+        "gpt55",
+        "opus48",
+        "random",
+      ]);
+    },
+    { seed: seedUsageVirtualModels },
+  );
+});
+
+async function seedUsageVirtualModels(databaseUrl: string): Promise<void> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    for (const [name, description] of [
+      ["gpt55", "openai codex"],
+      ["opus48", "claude opus"],
+      ["random", "random open ai completion"],
+    ] as const) {
+      await client.query(
+        "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
+        [randomUUID(), name, description],
+      );
+    }
+  } finally {
+    await client.end();
+  }
+}

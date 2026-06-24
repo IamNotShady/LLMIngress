@@ -2,13 +2,21 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-24 (Agent Virtual Model option label repair)
-**Active Feature:** none - Agent Virtual Model option label repair complete
+**Last Updated:** 2026-06-24 (Usage Virtual Model filter label repair)
+**Active Feature:** none - Usage Virtual Model filter label repair complete
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **Usage Virtual Model filter label repair (feat-047 follow-up)**:
+  - Root cause: the Usage filter's Virtual Model select still rendered options inline as `description (name)`, separate from the Agent form label helper fixed earlier.
+  - Changed `#usage-virtual-model` options to render only `virtualModel.name`, preserving option values and filter query behavior.
+  - Added focused Playwright coverage that seeds `gpt55`, `opus48`, and `random` with descriptions and asserts the Usage filter displays only names.
+  - TDD red observed first in `tests/e2e/console-ui-usage.e2e.spec.ts`; it failed on `openai codex (gpt55)` / `claude opus (opus48)` / `random open ai completion (random)` before the UI fix.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-usage.e2e.spec.ts --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and live in-app browser verification on `/usage` showing `All virtual models`, `gpt55`, `opus48`, and `random` only with zero console errors/warnings.
+  - Full `verify:features` was intentionally not run per user request.
 
 - [x] **Agent Virtual Model option label repair (feat-030 follow-up)**:
   - Root cause: Agent create/edit forms used the shared select label helper that rendered Virtual Models as `description (name)`, so the Allowed virtual models and Default virtual model controls showed descriptive text such as `random open ai completion (random)`.

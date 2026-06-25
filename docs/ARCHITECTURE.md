@@ -1085,7 +1085,7 @@ Agent 协议、Provider 协议、Route Policy、配置发布、配置校验、Po
 - Console 删除配置默认写入 `deleted_at` 软删除；Agents、Providers、Provider Models、Virtual Models 和 Route Policies 的 active 查询都过滤 deleted rows。
 - Runtime history 表继续使用 restrictive foreign keys，不 cascade、不 set null；硬删除只作为维护操作，并且必须确认没有 active 配置依赖和没有 runtime history 引用。
 - Provider 派生模型数据仍使用 availability marker 表达 refresh 结果；Provider Model 被软删除后不会参与 active routing、price sync 或 health checks。
-- Route Policy 的主候选和 fallback chain 当前统一存放在 `route_policy_candidates`，用 `candidate_order` 和 `is_fallback` 表达顺序与 fallback 语义；不单独维护 `fallback_chain_items` 表。
+- Route Policy 的候选模型统一存放在 `route_policy_candidates`，构成单一有序候选池，仅用 `candidate_order` 表达顺序；不再使用 `is_fallback` 区分主/备候选，完整的 fallback 链在请求时由 route policy 的 `strategy`（`fixed` 按 `candidate_order`、`cost_first`/`quality_first` 按估算成本、`random` 随机）推导，并按 provider/model 健康状态排除不可用候选；不单独维护 `fallback_chain_items` 表。
 - OpenAI-compatible 长尾 Provider 通过内置白名单 template 复用通用 adapter，不开放任意自定义 endpoint。
 - Playground 使用 Gateway Public API 测试；用户手动输入 Agent API key 并选择 Virtual Model Name，Console 后端不代理请求也不保存该 key。
 - Gateway 拥有同步限流、预算预留、并发计数和 in-memory health view；数据库保存可恢复的窗口、预算周期累计、健康事件和 health summary。

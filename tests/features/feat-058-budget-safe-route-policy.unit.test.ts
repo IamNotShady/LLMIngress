@@ -28,7 +28,7 @@ describe("feat-058 budget-safe route policy validation", () => {
       createRoutePolicy({
         databaseUrl: fixture.databaseUrl,
         routePolicy: normalizeRoutePolicyFormInput({
-          primaryProviderModelIds: [seeded.providerModelId],
+          providerModelIds: [seeded.providerModelId],
           strategy: "fixed",
           virtualModelId: seeded.virtualModelId,
         }),
@@ -53,13 +53,13 @@ describe("feat-058 budget-safe route policy validation", () => {
       createRoutePolicy({
         databaseUrl: fixture.databaseUrl,
         routePolicy: normalizeRoutePolicyFormInput({
-          primaryProviderModelIds: [seeded.providerModelId],
+          providerModelIds: [seeded.providerModelId],
           strategy: "fixed",
           virtualModelId: seeded.virtualModelId,
         }),
       }),
     ).resolves.toMatchObject({
-      primaryCandidates: [
+      candidates: [
         {
           modelId: "unknown-budget-model",
           priceStatusLabel: "Priced (manual override)",

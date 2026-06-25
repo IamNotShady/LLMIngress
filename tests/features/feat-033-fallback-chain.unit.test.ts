@@ -1,17 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayRoutePolicySnapshot } from "../../apps/gateway/src/config-reload";
 import {
-  buildFallbackAttemptCandidates,
   executeFallbackChain,
   type FallbackChainCandidate,
 } from "../../apps/gateway/src/fallback-chain";
+import { buildRouteAttemptCandidates } from "../../apps/gateway/src/route-engine";
 
 describe("feat-033 fallback chain execution", () => {
   it("falls back after a first-byte failure and records the failed provider attempt", async () => {
     const primary = candidate({ candidateOrder: 1, providerModelId: "primary-model" });
     const fallback = candidate({
       candidateOrder: 2,
-      isFallback: true,
       modelId: "fallback",
       providerModelId: "fallback-model",
     });
@@ -63,26 +62,19 @@ describe("feat-033 fallback chain execution", () => {
         errorMessage: "socket closed before first byte",
         failedBeforeFirstByte: true,
         providerModelId: "primary-model",
+        retryable: true,
+        statusCode: null,
       },
     ]);
   });
 
-  it("builds an attempt sequence from the selected candidate followed by fallbacks", () => {
-    const selected = candidate({ candidateOrder: 2, providerModelId: "selected" });
+  it("builds an attempt sequence covering the full ordered eligible chain", () => {
     const routePolicy: GatewayRoutePolicySnapshot = {
       candidates: [
-        candidate({ candidateOrder: 1, providerModelId: "not-selected" }),
-        selected,
-        candidate({
-          candidateOrder: 3,
-          isFallback: true,
-          providerModelId: "fallback-one",
-        }),
-        candidate({
-          candidateOrder: 4,
-          isFallback: true,
-          providerModelId: "fallback-two",
-        }),
+        candidate({ candidateOrder: 1, providerModelId: "first" }),
+        candidate({ candidateOrder: 2, providerModelId: "second" }),
+        candidate({ candidateOrder: 3, providerModelId: "third" }),
+        candidate({ candidateOrder: 4, providerModelId: "fourth" }),
       ],
       id: "route-policy",
       strategy: "cost_first",
@@ -90,37 +82,36 @@ describe("feat-033 fallback chain execution", () => {
       virtualModelName: "coding",
     };
 
+    // cost_first with equal prices → sorted by candidateOrder asc
     expect(
-      buildFallbackAttemptCandidates({
+      buildRouteAttemptCandidates({
         routePolicy,
-        selectedProviderModelId: "selected",
-      }).map((attempt) => attempt.providerModelId),
-    ).toEqual(["selected", "fallback-one", "fallback-two"]);
+        estimatedInputTokens: 100,
+        estimatedOutputTokens: 100,
+      }).map((c) => c.providerModelId),
+    ).toEqual(["first", "second", "third", "fourth"]);
   });
 
   it("orders quality_first fallback attempts from most expensive to least expensive", () => {
-    const selected = candidate({
-      candidateOrder: 1,
-      inputPrice: 10,
-      outputPrice: 20,
-      providerModelId: "selected",
-    });
     const routePolicy: GatewayRoutePolicySnapshot = {
       candidates: [
-        selected,
+        candidate({
+          candidateOrder: 1,
+          inputPrice: 10,
+          outputPrice: 20,
+          providerModelId: "expensive",
+        }),
         candidate({
           candidateOrder: 2,
           inputPrice: 2,
-          isFallback: true,
           outputPrice: 4,
-          providerModelId: "fallback-cheap",
+          providerModelId: "cheap",
         }),
         candidate({
           candidateOrder: 3,
           inputPrice: 6,
-          isFallback: true,
           outputPrice: 12,
-          providerModelId: "fallback-expensive",
+          providerModelId: "medium",
         }),
       ],
       id: "route-policy",
@@ -129,19 +120,20 @@ describe("feat-033 fallback chain execution", () => {
       virtualModelName: "coding",
     };
 
+    // quality_first: sorted by cost desc → expensive first, then medium, then cheap
     expect(
-      buildFallbackAttemptCandidates({
+      buildRouteAttemptCandidates({
         routePolicy,
-        selectedProviderModelId: "selected",
-      }).map((attempt) => attempt.providerModelId),
-    ).toEqual(["selected", "fallback-expensive", "fallback-cheap"]);
+        estimatedInputTokens: 100,
+        estimatedOutputTokens: 100,
+      }).map((c) => c.providerModelId),
+    ).toEqual(["expensive", "medium", "cheap"]);
   });
 });
 
 function candidate(input: {
   candidateOrder: number;
   inputPrice?: number;
-  isFallback?: boolean;
   modelId?: string;
   outputPrice?: number;
   providerModelId: string;
@@ -151,7 +143,7 @@ function candidate(input: {
     baseUrl: "https://provider.example/v1",
     candidateOrder: input.candidateOrder,
     displayName: input.modelId ?? "primary",
-    isFallback: input.isFallback ?? false,
+    healthStatus: "unknown",
     modelId: input.modelId ?? "primary",
     price: {
       currency: "USD",

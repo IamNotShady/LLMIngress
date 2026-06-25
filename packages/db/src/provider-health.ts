@@ -91,6 +91,35 @@ export function buildHealthSummaryChangedPayload(
   };
 }
 
+export async function createHealthSummaryChangedListener(options: {
+  databaseUrl: string;
+  onNotification: (payload: HealthSummaryChangedPayload) => void;
+}): Promise<{ close: () => Promise<void> }> {
+  const client = new Client({ connectionString: options.databaseUrl });
+  client.on("notification", (message) => {
+    if (message.channel !== HEALTH_SUMMARY_CHANGED_CHANNEL || !message.payload) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(message.payload) as HealthSummaryChangedPayload;
+      options.onNotification(payload);
+    } catch {
+      return;
+    }
+  });
+
+  await client.connect();
+  await client.query(`listen ${HEALTH_SUMMARY_CHANGED_CHANNEL}`);
+
+  return {
+    close: async () => {
+      await client.query(`unlisten ${HEALTH_SUMMARY_CHANGED_CHANNEL}`);
+      await client.end();
+    },
+  };
+}
+
 export async function recordProviderHealthEvent(
   input: RecordProviderHealthEventInput,
 ): Promise<RecordProviderHealthEventResult> {

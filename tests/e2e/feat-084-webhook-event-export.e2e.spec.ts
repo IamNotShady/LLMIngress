@@ -131,7 +131,13 @@ test("webhook event export sends request fallback and error events separately fr
     await expect(runner.runOnce()).resolves.toBe(true);
     await expect(readJobStatus(fixture, jobId)).resolves.toBe("pending");
 
-    await expect(runner.runOnce()).resolves.toBe(true);
+    await expect
+      .poll(() => runner.runOnce(), {
+        intervals: [10, 25, 50, 100],
+        message: "webhook export retry job becomes claimable",
+        timeout: 1_000,
+      })
+      .toBe(true);
     await expect(readJobStatus(fixture, jobId)).resolves.toBe("succeeded");
 
     expect(webhook.requests.map((request) => request.eventType)).toEqual([

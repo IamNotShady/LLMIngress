@@ -14,15 +14,13 @@ export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "r
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
 export type RoutePolicyFormInput = {
-  fallbackProviderModelIds?: readonly (string | null | undefined)[];
-  primaryProviderModelIds?: readonly (string | null | undefined)[];
+  providerModelIds?: readonly (string | null | undefined)[];
   strategy?: string | null;
   virtualModelId?: string | null;
 };
 
 export type NormalizedRoutePolicyFormInput = {
-  fallbackProviderModelIds: string[];
-  primaryProviderModelIds: string[];
+  providerModelIds: string[];
   strategy: RoutePolicyStrategy;
   virtualModelId: string;
 };
@@ -51,14 +49,11 @@ export type ConsoleProviderModelOption = {
 
 export type ConsoleRoutePolicyCandidate = ConsoleProviderModelOption & {
   candidateOrder: number;
-  isFallback: boolean;
 };
 
 export type ConsoleRoutePolicy = {
   candidates: ConsoleRoutePolicyCandidate[];
-  fallbackCandidates: ConsoleRoutePolicyCandidate[];
   id: string;
-  primaryCandidates: ConsoleRoutePolicyCandidate[];
   routeReason: string;
   routeWarnings: string[];
   strategy: RoutePolicyStrategy;
@@ -97,8 +92,7 @@ export type RoutePolicyHealthWarningCandidate = {
 };
 
 export type RouteReasonMetadataInput = {
-  fallbackCandidateCount: number;
-  primaryCandidateCount: number;
+  candidateCount: number;
   strategy: RoutePolicyStrategy;
   virtualModelName: string;
 };
@@ -116,7 +110,6 @@ type CandidateRow = PostgresQueryResultRow & {
   candidate_order: number;
   context_window?: number | null;
   id: string;
-  is_fallback: boolean;
   model_display_name: string;
   model_id: string;
   price_override_cached_input_usd_per_million_tokens: string | null;
@@ -180,8 +173,7 @@ export function normalizeRoutePolicyFormInput(
 ): NormalizedRoutePolicyFormInput {
   const virtualModelId = input.virtualModelId?.trim();
   const strategy = input.strategy?.trim();
-  const primaryProviderModelIds = normalizeUuidList(input.primaryProviderModelIds);
-  const fallbackProviderModelIds = normalizeUuidList(input.fallbackProviderModelIds);
+  const providerModelIds = normalizeUuidList(input.providerModelIds);
 
   if (!virtualModelId || !isUuid(virtualModelId)) {
     throw new Error("Route policy virtual model is required.");
@@ -189,33 +181,24 @@ export function normalizeRoutePolicyFormInput(
   if (!isRoutePolicyStrategy(strategy)) {
     throw new Error("Route policy strategy must be fixed, cost_first, quality_first, or random.");
   }
-  if (primaryProviderModelIds.length === 0) {
-    throw new Error("Route policy requires at least one primary provider model.");
+  if (providerModelIds.length === 0) {
+    throw new Error("Route policy requires at least one provider model.");
   }
 
-  const candidateIds = [...primaryProviderModelIds, ...fallbackProviderModelIds];
-  if (new Set(candidateIds).size !== candidateIds.length) {
+  if (new Set(providerModelIds).size !== providerModelIds.length) {
     throw new Error("Route policy candidates must not contain duplicate provider models.");
   }
 
   return {
-    fallbackProviderModelIds,
-    primaryProviderModelIds,
+    providerModelIds,
     strategy,
     virtualModelId,
   };
 }
 
 export function buildRouteReasonMetadata(input: RouteReasonMetadataInput): string {
-  const primary = `${input.primaryCandidateCount} primary ${pluralize(
-    "candidate",
-    input.primaryCandidateCount,
-  )}`;
-  const fallback =
-    input.fallbackCandidateCount === 0
-      ? "no fallback"
-      : `${input.fallbackCandidateCount} ${pluralize("fallback", input.fallbackCandidateCount)}`;
-  return `${input.strategy} route for ${input.virtualModelName} uses ${primary} with ${fallback}.`;
+  const candidates = `${input.candidateCount} ${pluralize("candidate", input.candidateCount)}`;
+  return `${input.strategy} route for ${input.virtualModelName} uses ${candidates}.`;
 }
 
 export function buildRoutePolicyWarnings(
@@ -421,8 +404,7 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                        provider_models.synced_price_version as price_sync_price_version,
                        provider_models.synced_price_source_url as price_sync_source_url,
                        provider_models.synced_price_synced_at as price_sync_synced_at,
-                       route_policy_candidates.candidate_order,
-                       route_policy_candidates.is_fallback
+                       route_policy_candidates.candidate_order
                 from route_policy_candidates
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
@@ -458,10 +440,7 @@ export async function createRoutePolicy(input: {
     write: async (client) => {
       await assertVirtualModelExists(client, input.routePolicy.virtualModelId);
       await assertVirtualModelHasNoRoutePolicy(client, input.routePolicy.virtualModelId);
-      await assertProviderModelsExist(client, [
-        ...input.routePolicy.primaryProviderModelIds,
-        ...input.routePolicy.fallbackProviderModelIds,
-      ]);
+      await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
       await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
@@ -513,10 +492,7 @@ export async function updateRoutePolicy(input: {
       if (existing.virtual_model_id !== input.routePolicy.virtualModelId) {
         throw new Error("Route policy virtual model cannot be changed.");
       }
-      await assertProviderModelsExist(client, [
-        ...input.routePolicy.primaryProviderModelIds,
-        ...input.routePolicy.fallbackProviderModelIds,
-      ]);
+      await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
       await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
@@ -635,10 +611,7 @@ async function assertBudgetSafeRoutePolicyCandidates(
     return;
   }
 
-  const candidates = await readProviderModelOptionsById(client, [
-    ...routePolicy.primaryProviderModelIds,
-    ...routePolicy.fallbackProviderModelIds,
-  ]);
+  const candidates = await readProviderModelOptionsById(client, routePolicy.providerModelIds);
   const unknownPriceCandidates = candidates.filter(
     (candidate) => candidate.priceStatus === "unknown_price",
   );
@@ -740,19 +713,9 @@ async function writeRoutePolicyCandidates(
   routePolicyId: string,
   routePolicy: NormalizedRoutePolicyFormInput,
 ): Promise<ConsoleRoutePolicyCandidate[]> {
-  const candidateInputs = [
-    ...routePolicy.primaryProviderModelIds.map((providerModelId) => ({
-      isFallback: false,
-      providerModelId,
-    })),
-    ...routePolicy.fallbackProviderModelIds.map((providerModelId) => ({
-      isFallback: true,
-      providerModelId,
-    })),
-  ];
   const candidateRows: ConsoleRoutePolicyCandidate[] = [];
 
-  for (const [index, candidate] of candidateInputs.entries()) {
+  for (const [index, providerModelId] of routePolicy.providerModelIds.entries()) {
     const result = await client.query<CandidateRow>(
       `
         with inserted as (
@@ -760,14 +723,12 @@ async function writeRoutePolicyCandidates(
             id,
             route_policy_id,
             provider_model_id,
-            candidate_order,
-            is_fallback
+            candidate_order
           )
-          values ($1, $2, $3, $4, $5)
+          values ($1, $2, $3, $4)
           returning route_policy_id,
                     provider_model_id,
-                    candidate_order,
-                    is_fallback
+                    candidate_order
         )
         select inserted.route_policy_id::text,
                provider_models.id::text as id,
@@ -797,15 +758,14 @@ async function writeRoutePolicyCandidates(
                provider_models.synced_price_version as price_sync_price_version,
                provider_models.synced_price_source_url as price_sync_source_url,
                provider_models.synced_price_synced_at as price_sync_synced_at,
-               inserted.candidate_order,
-               inserted.is_fallback
+               inserted.candidate_order
         from inserted
         join provider_models on provider_models.id = inserted.provider_model_id
         join providers on providers.id = provider_models.provider_id
         where provider_models.deleted_at is null
           and providers.deleted_at is null
       `,
-      [randomUUID(), routePolicyId, candidate.providerModelId, index + 1, candidate.isFallback],
+      [randomUUID(), routePolicyId, providerModelId, index + 1],
     );
     candidateRows.push(rowToConsoleRoutePolicyCandidate(requireRow(result.rows[0])));
   }
@@ -912,16 +872,11 @@ function rowToConsoleRoutePolicy(
   row: RoutePolicyRow,
   candidates: ConsoleRoutePolicyCandidate[],
 ): ConsoleRoutePolicy {
-  const primaryCandidates = candidates.filter((candidate) => !candidate.isFallback);
-  const fallbackCandidates = candidates.filter((candidate) => candidate.isFallback);
   return {
     candidates,
-    fallbackCandidates,
     id: row.id,
-    primaryCandidates,
     routeReason: buildRouteReasonMetadata({
-      fallbackCandidateCount: fallbackCandidates.length,
-      primaryCandidateCount: primaryCandidates.length,
+      candidateCount: candidates.length,
       strategy: row.strategy,
       virtualModelName: row.virtual_model_name,
     }),
@@ -937,7 +892,6 @@ function rowToConsoleRoutePolicyCandidate(row: CandidateRow): ConsoleRoutePolicy
   return {
     ...rowToProviderModelOption(row),
     candidateOrder: row.candidate_order,
-    isFallback: row.is_fallback,
   };
 }
 

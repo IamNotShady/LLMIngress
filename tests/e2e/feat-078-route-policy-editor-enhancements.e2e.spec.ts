@@ -60,17 +60,14 @@ test("route policy editor supports strategy filters fallback warnings validation
               candidates: [
                 {
                   candidateOrder: 1,
-                  isFallback: false,
                   providerModelId: seeded.openaiGpt.id,
                 },
                 {
                   candidateOrder: 2,
-                  isFallback: true,
                   providerModelId: seeded.anthropicClaude.id,
                 },
                 {
                   candidateOrder: 3,
-                  isFallback: true,
                   providerModelId: seeded.backupMixtral.id,
                 },
               ],
@@ -91,17 +88,14 @@ test("route policy editor supports strategy filters fallback warnings validation
               candidates: [
                 {
                   candidateOrder: 1,
-                  isFallback: false,
                   providerModelId: seeded.anthropicClaude.id,
                 },
                 {
                   candidateOrder: 2,
-                  isFallback: true,
                   providerModelId: seeded.openaiGpt.id,
                 },
                 {
                   candidateOrder: 3,
-                  isFallback: true,
                   providerModelId: seeded.backupMixtral.id,
                 },
               ],
@@ -137,7 +131,6 @@ type SeededModel = {
 type RoutePolicyState = {
   candidates: Array<{
     candidateOrder: number;
-    isFallback: boolean;
     providerModelId: string;
   }>;
   strategy: string;
@@ -269,10 +262,10 @@ async function submitRoutePolicyForm(
     body.set("virtualModelId", payload.virtualModelId);
     body.set("strategy", payload.strategy);
     for (const providerModelId of payload.primaryProviderModelIds) {
-      body.append("primaryProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     for (const providerModelId of payload.fallbackProviderModelIds) {
-      body.append("fallbackProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
 
     const response = await fetch("/api/route-policies", {
@@ -310,13 +303,11 @@ async function readRoutePolicyState(fixture: Fixture): Promise<RoutePolicyState>
   const policy = await fixture.query<{ strategy: string }>("select strategy from route_policies");
   const candidates = await fixture.query<{
     candidate_order: number;
-    is_fallback: boolean;
     provider_model_id: string;
   }>(
     `
       select provider_model_id::text,
-             candidate_order,
-             is_fallback
+             candidate_order
       from route_policy_candidates
       order by candidate_order
     `,
@@ -329,7 +320,6 @@ async function readRoutePolicyState(fixture: Fixture): Promise<RoutePolicyState>
   return {
     candidates: candidates.rows.map((row) => ({
       candidateOrder: row.candidate_order,
-      isFallback: row.is_fallback,
       providerModelId: row.provider_model_id,
     })),
     strategy: policyRow.strategy,

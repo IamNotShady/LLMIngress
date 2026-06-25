@@ -126,11 +126,12 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
           agentApiKeyId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
           databaseUrl,
-          execute: () =>
+          execute: (requestActivityId) =>
             executeGatewayStreamingRequest({
               agentApiKeyId: auth.agentApiKey.id,
               databaseUrl,
               protocol: "chat_completions",
+              requestActivityId,
               requestBody: request.body,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
@@ -305,11 +306,12 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
           agentApiKeyId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
           databaseUrl,
-          execute: () =>
+          execute: (requestActivityId) =>
             executeGatewayStreamingRequest({
               agentApiKeyId: auth.agentApiKey.id,
               databaseUrl,
               protocol: "responses",
+              requestActivityId,
               requestBody: request.body,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
@@ -395,11 +397,12 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
           agentApiKeyId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
           databaseUrl,
-          execute: () =>
+          execute: (requestActivityId) =>
             executeGatewayStreamingRequest({
               agentApiKeyId: auth.agentApiKey.id,
               databaseUrl,
               protocol: "messages",
+              requestActivityId,
               requestBody: request.body,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
@@ -675,7 +678,7 @@ async function executeRecordedGatewayStreamingRequest(input: {
   agentApiKeyId: string;
   agentApiKeyPrefix: string;
   databaseUrl: string;
-  execute: () => Promise<GatewayStreamingResult>;
+  execute: (requestActivityId: string) => Promise<GatewayStreamingResult>;
   model: string;
   protocol: GatewayRequestActivityProtocol;
   requestLoggingEnabled: boolean;
@@ -692,7 +695,7 @@ async function executeRecordedGatewayStreamingRequest(input: {
     stream: true,
     virtualModelId: input.virtualModelId,
   });
-  const response = await input.execute();
+  const response = await input.execute(activity.id);
   if (!response.ok) {
     await completeGatewayRequestActivity({
       activityId: activity.id,

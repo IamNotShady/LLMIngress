@@ -837,6 +837,107 @@ textarea {
   width: auto;
   min-height: 0;
 }
+.agent-vm-multi-select {
+  position: relative;
+  min-height: 2.75rem;
+}
+.agent-vm-multi-select-native {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.agent-vm-multi-select-button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 400;
+  text-align: left;
+  box-shadow: none;
+}
+.agent-vm-multi-select-button:hover,
+.agent-vm-multi-select-button:active {
+  background: var(--surface);
+  color: var(--text);
+}
+.agent-vm-multi-select-button:active {
+  transform: none;
+}
+.agent-vm-multi-select-button:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.agent-vm-multi-select-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-vm-multi-select-summary.is-empty {
+  color: var(--text-muted);
+}
+.agent-vm-multi-select-chevron {
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: var(--space-sm);
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-0.1rem) rotate(45deg);
+}
+.agent-vm-multi-select-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2xs));
+  right: 0;
+  left: 0;
+  z-index: 55;
+  display: grid;
+  gap: var(--space-2xs);
+  max-height: 14rem;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-2xs);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+}
+.agent-vm-multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 2.25rem;
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 400;
+}
+.agent-vm-multi-select-option:hover {
+  background: var(--surface-inset);
+}
+.agent-vm-multi-select-option input {
+  width: auto;
+  min-height: 0;
+}
+.agent-vm-multi-select-empty {
+  margin: 0;
+  padding: var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
 
 button,
 .btn {
@@ -2337,6 +2438,7 @@ details.disclosure[open] > .disclosure-summary {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+  min-width: 0;
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
@@ -2354,6 +2456,9 @@ details.disclosure[open] > .disclosure-summary {
   white-space: nowrap;
 }
 .donut-legend-value {
+  display: inline-flex;
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-feature-settings: "tnum" 1;
   color: var(--text);
@@ -2694,6 +2799,187 @@ details.disclosure[open] > .disclosure-summary {
 }
 .filter-bar .console-field {
   flex: 1 1 160px;
+}
+
+/* ---- Usage & Cost reference layout ---- */
+.usage-page {
+  max-width: none;
+  margin: 0;
+  padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
+    clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);
+}
+.usage-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.usage-dashboard.providers-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.usage-filter-bar {
+  display: grid;
+  grid-template-columns:
+    minmax(17rem, 1.3fr) minmax(10rem, 0.8fr) minmax(12rem, 1fr)
+    minmax(10rem, 0.8fr) auto;
+  gap: var(--space-sm);
+  align-items: end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.usage-filter-bar .console-actions {
+  align-self: end;
+}
+.usage-filter-bar input,
+.usage-filter-bar select {
+  min-height: 2.35rem;
+  background: var(--surface);
+}
+.date-picker-input {
+  position: relative;
+}
+.date-picker-popover {
+  position: absolute;
+  top: calc(100% + var(--space-2xs));
+  left: 0;
+  z-index: 20;
+  width: min(20rem, calc(100vw - 2rem));
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-pop);
+}
+.date-picker-header {
+  display: grid;
+  grid-template-columns: 2rem 1fr 2rem;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+  text-align: center;
+}
+.date-picker-header strong {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.date-picker-nav-button,
+.date-picker-day {
+  display: inline-grid;
+  place-items: center;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.date-picker-nav-button {
+  width: 2rem;
+  height: 2rem;
+}
+.date-picker-nav-button:hover,
+.date-picker-day:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.date-picker-weekdays,
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-2xs);
+}
+.date-picker-weekdays {
+  margin-bottom: var(--space-2xs);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+}
+.date-picker-day,
+.date-picker-day-spacer {
+  aspect-ratio: 1;
+  width: 100%;
+}
+.date-picker-day[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+.usage-date-range {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.usage-date-range legend,
+.usage-filter-bar label {
+  margin-bottom: var(--space-2xs);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.usage-date-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(8rem, 1fr));
+  gap: var(--space-sm);
+}
+.usage-kpi-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.usage-kpi-grid .stat-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.usage-analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(18rem, 0.45fr);
+  gap: var(--space-md);
+  align-items: stretch;
+}
+.usage-savings-card {
+  gap: var(--space-md);
+}
+.usage-savings-list {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+}
+.usage-savings-list div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.usage-savings-list dt {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.usage-savings-list dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-feature-settings: "tnum" 1;
+  color: var(--text);
+}
+.usage-distribution-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+.usage-summary-card {
+  min-width: 0;
+}
+.usage-summary-table {
+  min-width: 74rem;
 }
 
 /* ---- Activity reference workspace ---- */
@@ -3127,6 +3413,17 @@ details.disclosure[open] > .disclosure-summary {
   .vm-editor-fields,
   .vm-dialog-actions,
   .vm-model-filter-bar {
+    grid-template-columns: 1fr;
+  }
+  .usage-filter-bar,
+  .usage-analysis-grid,
+  .usage-distribution-grid {
+    grid-template-columns: 1fr;
+  }
+  .usage-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .usage-date-range-fields {
     grid-template-columns: 1fr;
   }
   .activity-filter-grid,

@@ -233,12 +233,11 @@ async function seedUsageRoutes(
         id,
         route_policy_id,
         provider_model_id,
-        candidate_order,
-        is_fallback
+        candidate_order
       )
-      values ($1, $2, $3, 1, false),
-             ($4, $2, $5, 2, false),
-             ($6, $7, $8, 1, false)
+      values ($1, $2, $3, 1),
+             ($4, $2, $5, 2),
+             ($6, $7, $8, 1)
     `,
     [
       randomUUID(),

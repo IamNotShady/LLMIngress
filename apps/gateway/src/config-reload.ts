@@ -8,12 +8,17 @@ import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
 } from "@llmingress/db/config-versions";
+import {
+  createHealthSummaryChangedListener as createPostgresHealthSummaryChangedListener,
+  type HealthSummaryChangedPayload,
+} from "@llmingress/db/provider-health";
 import { isRemovedProviderKey } from "@llmingress/db/providers";
 import { PostgresClient } from "@llmingress/db/routes";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
   type ProviderModelCapabilities,
+  type RouteCandidateHealthStatus,
   type RoutePolicyRules,
   type RoutePolicyStrategy,
 } from "@llmingress/domain";
@@ -37,7 +42,7 @@ export type GatewayRouteCandidateSnapshot = {
   capabilities?: ProviderModelCapabilities;
   contextWindow?: number | null;
   displayName: string;
-  isFallback: boolean;
+  healthStatus: RouteCandidateHealthStatus;
   modelId: string;
   price: ModelTokenPrice;
   providerId: string;
@@ -77,8 +82,13 @@ type CreateConfigChangedListener = (
   onNotification: (notification: ConfigChangedNotification) => void,
 ) => Promise<ConfigChangedListener>;
 
+type CreateHealthSummaryChangedListener = (
+  onNotification: (payload: HealthSummaryChangedPayload) => void,
+) => Promise<ConfigChangedListener>;
+
 type GatewayConfigRuntimeOptions = {
   createConfigChangedListener?: CreateConfigChangedListener;
+  createHealthSummaryChangedListener?: CreateHealthSummaryChangedListener;
   databaseUrl?: string;
   enableNotifications?: boolean;
   gatewayInstanceId?: string;
@@ -94,7 +104,7 @@ type ProviderRow = {
   providerKey: string;
 };
 
-type RoutePolicyCandidateRow = {
+export type RoutePolicyCandidateRow = {
   candidateOrder: number;
   capabilityMetadata: unknown;
   displayName: string;
@@ -102,7 +112,7 @@ type RoutePolicyCandidateRow = {
   cachedInputUsdPerMillionTokens: string | null;
   contextWindow: number | null;
   inputUsdPerMillionTokens: string | null;
-  isFallback: boolean;
+  healthStatus: RouteCandidateHealthStatus;
   modelId: string;
   outputUsdPerMillionTokens: string | null;
   providerId: string;
@@ -149,6 +159,7 @@ export function createGatewayConfigRuntime(
 
   let currentSnapshot = emptySnapshot;
   let listener: ConfigChangedListener | undefined;
+  let healthListener: ConfigChangedListener | undefined;
   let reconcileTimer: NodeJS.Timeout | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
   let reloadInFlight: Promise<void> | undefined;
@@ -205,9 +216,54 @@ export function createGatewayConfigRuntime(
     }
   }
 
+  async function forceReload(): Promise<void> {
+    if (reloadInFlight) {
+      await reloadInFlight;
+      // After the in-flight reload settles, do one more unconditional reload
+      // to ensure health changes that arrived during the in-flight load are applied.
+      await forceReload();
+      return;
+    }
+
+    reloadInFlight = (async () => {
+      let nextSnapshot: GatewayConfigSnapshot;
+      try {
+        nextSnapshot = await loadLatestSnapshot();
+      } catch (error) {
+        await recordRuntimeStatusSafe({
+          type: "reload-failed",
+          targetConfigVersion: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+
+      // Unconditional swap — health changes don't bump config version.
+      const previousVersion = currentSnapshot.version;
+      currentSnapshot = nextSnapshot;
+      // Only a config-version bump is a "reload"; same-version health refreshes are silent.
+      if (nextSnapshot.version > previousVersion) {
+        await recordRuntimeStatusSafe({
+          type: "reload-succeeded",
+          appliedConfigVersion: nextSnapshot.version,
+          targetConfigVersion: nextSnapshot.version,
+        });
+      }
+    })();
+
+    try {
+      await reloadInFlight;
+    } finally {
+      reloadInFlight = undefined;
+    }
+  }
+
   return {
     getSnapshot: () => currentSnapshot,
-    reconcile: () => reloadIfNewer(),
+    // forceReload (not reloadIfNewer) so reconcile also recovers health-only
+    // changes whose config version is unchanged, including ones whose
+    // health_summary_changed LISTEN/NOTIFY was dropped.
+    reconcile: () => forceReload(),
     start: async () => {
       currentSnapshot = await loadLatestSnapshot();
       await recordRuntimeStatusSafe({
@@ -222,11 +278,20 @@ export function createGatewayConfigRuntime(
         listener = await createConfigChangedListener((notification) => {
           void reloadIfNewer(notification.version);
         });
+
+        const createHealthChangedListener =
+          options.createHealthSummaryChangedListener ??
+          (options.databaseUrl ? createPostgresHealthNotificationListener(options) : undefined);
+        if (createHealthChangedListener) {
+          healthListener = await createHealthChangedListener((_payload) => {
+            void forceReload();
+          });
+        }
       }
 
       if (reconcileIntervalMs > 0) {
         reconcileTimer = setInterval(() => {
-          void reloadIfNewer();
+          void forceReload();
         }, reconcileIntervalMs);
         reconcileTimer.unref?.();
       }
@@ -252,6 +317,8 @@ export function createGatewayConfigRuntime(
       }
       await listener?.close();
       listener = undefined;
+      await healthListener?.close();
+      healthListener = undefined;
     },
   };
 }
@@ -286,7 +353,6 @@ export async function loadGatewayConfigSnapshot(
                virtual_models.name as "virtualModelName",
                route_policy_candidates.provider_model_id::text as "providerModelId",
                route_policy_candidates.candidate_order as "candidateOrder",
-               route_policy_candidates.is_fallback as "isFallback",
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
                provider_models.context_window as "contextWindow",
@@ -312,13 +378,17 @@ export async function loadGatewayConfigSnapshot(
                provider_models.synced_price_source_url
                  as "syncedSourceUrl",
                provider_models.synced_price_synced_at
-                 as "syncedAt"
+                 as "syncedAt",
+               coalesce(provider_health_summary.status, 'unknown') as "healthStatus"
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
         join route_policy_candidates
           on route_policy_candidates.route_policy_id = route_policies.id
         join provider_models on provider_models.id = route_policy_candidates.provider_model_id
         join providers on providers.id = provider_models.provider_id
+        left join provider_health_summary
+          on provider_health_summary.provider_id = providers.id
+         and provider_health_summary.provider_model_id = provider_models.id
         where virtual_models.enabled = true
           and virtual_models.deleted_at is null
           and route_policies.deleted_at is null
@@ -328,7 +398,6 @@ export async function loadGatewayConfigSnapshot(
           and provider_models.availability = 'available'
         order by virtual_models.name,
                  route_policies.id,
-                 route_policy_candidates.is_fallback,
                  route_policy_candidates.candidate_order
       `,
     );
@@ -348,7 +417,9 @@ export async function loadGatewayConfigSnapshot(
   }
 }
 
-function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRoutePolicySnapshot[] {
+export function rowToRoutePolicySnapshots(
+  rows: RoutePolicyCandidateRow[],
+): GatewayRoutePolicySnapshot[] {
   const routePolicies = new Map<string, GatewayRoutePolicySnapshot>();
 
   for (const row of rows) {
@@ -370,7 +441,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
       capabilities: normalizeProviderModelCapabilities(row.capabilityMetadata),
       contextWindow: row.contextWindow,
       displayName: row.displayName,
-      isFallback: row.isFallback,
+      healthStatus: row.healthStatus,
       modelId: row.modelId,
       price: resolveEffectiveModelTokenPrice({
         manualOverride: rowToManualPriceOverride(row),
@@ -452,6 +523,22 @@ function createPostgresNotificationListener(
 
   return (onNotification) =>
     createPostgresConfigChangedListener({
+      databaseUrl: options.databaseUrl as string,
+      onNotification,
+    });
+}
+
+function createPostgresHealthNotificationListener(
+  options: GatewayConfigRuntimeOptions,
+): CreateHealthSummaryChangedListener {
+  if (!options.databaseUrl) {
+    throw new Error(
+      "Gateway config runtime requires databaseUrl or createHealthSummaryChangedListener.",
+    );
+  }
+
+  return (onNotification) =>
+    createPostgresHealthSummaryChangedListener({
       databaseUrl: options.databaseUrl as string,
       onNotification,
     });

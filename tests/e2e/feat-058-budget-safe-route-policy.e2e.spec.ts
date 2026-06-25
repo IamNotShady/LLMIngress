@@ -73,7 +73,7 @@ test("budget enabled agent cannot save route policy with unknown price provider 
           await openRow(page, "Budget Agent");
           await expect(
             page.getByLabel("Default virtual model").locator("option:checked"),
-          ).toHaveText("Budget Safe VM (budget-safe-vm)");
+          ).toHaveText("budget-safe-vm");
           await expect(
             postRoutePolicy(page, {
               primaryProviderModelId: seededProviderModel.id,
@@ -146,7 +146,7 @@ async function createAgentApiKey(page: Page): Promise<void> {
 }
 
 async function assignVirtualModelAccess(page: Page): Promise<void> {
-  const label = "Budget Safe VM (budget-safe-vm)";
+  const label = "budget-safe-vm";
   await openRow(page, "Budget Agent");
   await page.getByLabel("Allowed virtual models").selectOption({ label });
   await page.getByLabel("Default virtual model").selectOption({ label });
@@ -181,7 +181,7 @@ async function postRoutePolicy(
     body.set("action", "create");
     body.set("virtualModelId", payload.virtualModelId);
     body.set("strategy", "fixed");
-    body.append("primaryProviderModelIds", payload.primaryProviderModelId);
+    body.append("providerModelIds", payload.primaryProviderModelId);
 
     const response = await fetch("/api/route-policies", {
       body,

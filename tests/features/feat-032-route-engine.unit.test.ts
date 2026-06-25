@@ -156,7 +156,10 @@ describe("feat-032 deterministic route engine", () => {
       ],
     });
 
-    vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0.9);
+    // Fisher–Yates with 2 candidates [first(0), second(1)]: only i=1 step.
+    // j = floor(r * 2): r=0.9 → j=1 (swap [1],[1], no-op) → head = first-model
+    //                   r=0.1 → j=0 (swap [0],[1]) → head = second-model
+    vi.spyOn(Math, "random").mockReturnValueOnce(0.9).mockReturnValueOnce(0.1);
 
     expect(
       selectRouteCandidate({
@@ -209,7 +212,6 @@ function createCandidate(input: {
   return {
     candidateOrder: input.candidateOrder,
     displayName: input.modelId,
-    isFallback: false,
     modelId: input.modelId,
     price: input.price,
     providerId: "provider",

@@ -31,6 +31,8 @@ import {
 } from "./streaming.js";
 import { recordGatewayRequestTrace } from "./tracing.js";
 import {
+  buildGatewayProviderUsageResponseBody,
+  createGatewayStreamingUsageCollector,
   type GatewayUsageCostDetails,
   recordGatewayUsageCostAndSavings,
 } from "./usage-recorder.js";
@@ -710,20 +712,39 @@ async function executeRecordedGatewayStreamingRequest(input: {
     return response;
   }
 
+  const usageCollector = createGatewayStreamingUsageCollector();
   return {
     ...response,
     body: wrapProviderStreamWithActivityCompletion(response.body, {
-      completeActivity: ({ statusCode }) =>
-        completeGatewayRequestActivity({
-          activityId: activity.id,
-          databaseUrl: input.databaseUrl,
-          requestLoggingEnabled: input.requestLoggingEnabled,
-          requestMetadata: response.requestMetadata,
-          responseBody: {},
-          route: response.activity,
-          startedAt: activity.startedAt,
-          statusCode,
-        }),
+      collectChunk: (chunk) => usageCollector.collect(chunk),
+      completeActivity: async ({ statusCode }) => {
+        const providerUsage = usageCollector.readUsage();
+        try {
+          if (response.usageCost) {
+            await recordGatewayUsageCostAndSavings({
+              activityId: activity.id,
+              agentApiKeyId: input.agentApiKeyId,
+              databaseUrl: input.databaseUrl,
+              usageCost: {
+                ...response.usageCost,
+                ...(providerUsage ? { providerUsage } : {}),
+              },
+              virtualModelId: input.virtualModelId,
+            });
+          }
+        } finally {
+          await completeGatewayRequestActivity({
+            activityId: activity.id,
+            databaseUrl: input.databaseUrl,
+            requestLoggingEnabled: input.requestLoggingEnabled,
+            requestMetadata: response.requestMetadata,
+            responseBody: providerUsage ? buildGatewayProviderUsageResponseBody(providerUsage) : {},
+            route: response.activity,
+            startedAt: activity.startedAt,
+            statusCode,
+          });
+        }
+      },
       statusCode: response.statusCode,
     }),
   };

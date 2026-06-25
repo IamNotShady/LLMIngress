@@ -24,11 +24,7 @@ import {
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./chat-completions.js";
-import type {
-  GatewayConfigSnapshot,
-  GatewayRouteCandidateSnapshot,
-  GatewayRoutePolicySnapshot,
-} from "./config-reload.js";
+import type { GatewayConfigSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
 import { mapGatewayErrorStatus } from "./error-mapping.js";
 import {
   buildFallbackFailedAttempt,
@@ -52,6 +48,7 @@ import {
 import { normalizeOpenAIResponsesRequest } from "./responses.js";
 import { type RouteDecision, selectRouteAttempts } from "./route-engine.js";
 import { recordGatewayProviderTrace } from "./tracing.js";
+import { type GatewayUsageCostDetails, selectGatewayBaselineCandidate } from "./usage-recorder.js";
 import type { GatewayVirtualModel } from "./virtual-model-access.js";
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";
@@ -65,6 +62,7 @@ export type GatewayStreamingResult =
       ok: true;
       requestMetadata: GatewayRequestMetadata;
       statusCode: number;
+      usageCost?: GatewayUsageCostDetails;
     }
   | {
       body: unknown;
@@ -169,6 +167,7 @@ export async function executeGatewayStreamingRequest(input: {
 
     const routeDecision = routeResult.decision;
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
 
     // Reconstruct ordered chain from routePolicy.candidates (preserving GatewayRouteCandidateSnapshot
     // with healthStatus) using the same ordering as routeResult.chain.
@@ -523,6 +522,14 @@ export async function executeGatewayStreamingRequest(input: {
         ok: true,
         requestMetadata: normalized.requestMetadata,
         statusCode: response.status,
+        usageCost: {
+          actualPrice: candidate.price,
+          baselinePrice: baselineCandidate.price,
+          baselineProviderModelId: baselineCandidate.providerModelId,
+          estimatedInputTokens: normalized.estimatedInputTokens,
+          estimatedOutputTokens: normalized.estimatedOutputTokens,
+          providerModelId: candidate.providerModelId,
+        },
       };
     }
 
@@ -629,6 +636,7 @@ function createReadaheadStream(
 export function wrapProviderStreamWithActivityCompletion(
   source: Readable,
   input: {
+    collectChunk?: (chunk: Buffer | Uint8Array | string) => void;
     completeActivity: (completion: { statusCode: number }) => Promise<void>;
     errorStatusCode?: number;
     statusCode: number;
@@ -638,6 +646,7 @@ export function wrapProviderStreamWithActivityCompletion(
   let settled = false;
 
   source.on("data", (chunk) => {
+    input.collectChunk?.(chunk);
     output.write(chunk);
   });
   source.once("end", () => {
@@ -991,7 +1000,25 @@ export function buildStreamingProviderRequestBody(input: {
       system: withClaudeCodeSystemPrompt(body.system),
     };
   }
+  if (shouldRequestStreamingUsage(input)) {
+    return {
+      ...body,
+      stream_options: {
+        ...(isRecord(body.stream_options) ? body.stream_options : {}),
+        include_usage: true,
+      },
+    };
+  }
   return body;
+}
+
+function shouldRequestStreamingUsage(input: { pathSuffix: string; providerKey: string }): boolean {
+  return (
+    input.pathSuffix === "chat/completions" &&
+    (input.providerKey === "openai" ||
+      input.providerKey === "google" ||
+      input.providerKey === "lmstudio")
+  );
 }
 
 const codexUnsupportedResponsesParameters = [

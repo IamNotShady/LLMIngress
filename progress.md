@@ -1669,3 +1669,10 @@
 - [x] 2026-06-25 Playground API key memory note placement:
   - Moved the `Agent API Key 只保存在浏览器内存中` notice from the bottom of the Playground body into the Playground title/description area.
   - Verification passed: `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `git diff --check`, `jq empty feature_list.json`, and Browser/IAB DOM check confirming the note renders before `#playground` with no console error/warn logs.
+
+- [x] 2026-06-25 Full E2E regression repair before commit:
+  - Ran full `pnpm test:e2e --workers=1`; initial result was 130 passed / 8 failed.
+  - Repaired stale E2E assumptions after the recent Console UI changes: current `route_policy_candidates` schema no longer has `is_fallback`; Agent limit-dependent flows must explicitly enable `Enable limits`; Agent edit saves stay on `/agents?selected=<agentId>`; Playground memory note now lives above `#playground`; Provider template selection needs a hydrated client form before changing templates.
+  - Focused repair verification passed for the previously failing specs, including `console-ui-limits`, `console-ui-playground`, `feat-031`, `feat-050`, `feat-058`, `feat-063`, `feat-096`, and `feat-108`.
+  - Final full E2E passed: `pnpm test:e2e --workers=1` => 138 passed in 12.0m.
+  - Static checks passed: `pnpm run typecheck`; `pnpm run lint` exited 0 with two unrelated pre-existing warnings in `apps/gateway/src/streaming.ts` and `tests/features/feat-117-strategy-fallback-chain.unit.test.ts`.

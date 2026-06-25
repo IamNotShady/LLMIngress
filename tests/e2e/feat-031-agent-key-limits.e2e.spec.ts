@@ -35,6 +35,7 @@ test("agent limit form saves budget rpm tpm token rules without manual price fie
           await openDisclosure(page, "New agent");
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
+          await page.getByLabel("Enable limits").check();
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
@@ -55,15 +56,15 @@ test("agent limit form saves budget rpm tpm token rules without manual price fie
           await page.getByLabel("Token limit").fill("8000");
           await page.getByRole("button", { exact: true, name: "Save" }).click();
 
-          await expect(page).toHaveURL(new RegExp(`/limits\\?selected=${agentId}$`));
-          await expect(page.getByRole("heading", { level: 1, name: "Limits" })).toBeVisible();
-          await expect(page.getByLabel("成本上限 (USD)", { exact: true })).toHaveValue("10");
-          await expect(page.getByLabel("周期", { exact: true })).toHaveValue("month");
-          await expect(page.getByLabel("RPM", { exact: true })).toHaveValue("60");
-          await expect(page.getByLabel("TPM", { exact: true })).toHaveValue("120000");
-          await expect(page.getByLabel("Token 上限", { exact: true })).toHaveValue("8000");
-          await expect(page.getByLabel("并发数", { exact: true })).toHaveValue("10");
-          await expect(page.getByLabel("告警阈值", { exact: true })).toHaveValue("80");
+          await expect(page).toHaveURL(new RegExp(`/agents\\?selected=${agentId}$`));
+          await openRow(page, "Codex");
+          await expect(page.getByLabel("Budget USD limit")).toHaveValue("10");
+          await expect(page.getByLabel("Budget period")).toHaveValue("month");
+          await expect(page.getByLabel("RPM limit")).toHaveValue("60");
+          await expect(page.getByLabel("TPM limit")).toHaveValue("120000");
+          await expect(page.getByLabel("Token limit")).toHaveValue("8000");
+          await expect(page.getByLabel("Concurrency limit")).toHaveValue("10");
+          await expect(page.getByLabel("Alert threshold (%)")).toHaveValue("80");
           await expect
             .poll(() => readAgentLimits(fixture))
             .toEqual([

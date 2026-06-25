@@ -82,14 +82,17 @@ test("supported remote templates expose fixed urls capabilities auth behavior an
           const providerType = dialog.getByLabel("Provider type", { exact: true });
           const displayNameInput = dialog.getByLabel("Provider display name");
           const baseUrlInput = dialog.getByLabel("Provider base URL");
-          for (const [id, displayName, fixedBaseUrl] of remoteTemplateExpectations) {
+          await page.getByRole("tab", { name: "Local" }).click();
+          await expect(providerType).toContainText("Ollama");
+          await page.getByRole("tab", { name: "API Keys" }).click();
+          for (const [, displayName, fixedBaseUrl] of remoteTemplateExpectations) {
             await expect(providerType).toContainText(displayName);
-            await providerType.selectOption(id);
+            await providerType.selectOption({ label: displayName });
             await expect(displayNameInput).toHaveValue(displayName);
             await expect(baseUrlInput).toHaveValue(fixedBaseUrl);
           }
 
-          await providerType.selectOption("qwen");
+          await providerType.selectOption({ label: "Qwen" });
           await dialog.getByRole("button", { name: "Create provider" }).click();
 
           await expect(page.locator("table.providers-table")).toContainText("Qwen");

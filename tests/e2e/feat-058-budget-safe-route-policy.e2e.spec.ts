@@ -159,6 +159,7 @@ async function assignVirtualModelAccess(page: Page): Promise<void> {
 
 async function saveKnownPriceCostBudget(page: Page): Promise<void> {
   await openRow(page, "Budget Agent");
+  await page.getByLabel("Enable limits").check();
   await page.getByLabel("Budget USD limit").fill("10");
   await page.getByLabel("Budget period").selectOption("month");
   await page.getByLabel("RPM limit").fill("60");

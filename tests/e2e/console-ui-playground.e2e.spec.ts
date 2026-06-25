@@ -29,7 +29,7 @@ test("playground page renders the reference request and result workspace", async
       0,
     );
     await expect(playgroundSection.getByText("暂无对比结果。")).toHaveCount(0);
-    await expect(playgroundSection.getByText(/Agent API Key 只保存在浏览器内存中/)).toBeVisible();
+    await expect(page.getByText(/Agent API Key 只保存在浏览器内存中/)).toBeVisible();
 
     await expect(playgroundSection.getByLabel("Gateway base URL")).toHaveCount(0);
     await expect(

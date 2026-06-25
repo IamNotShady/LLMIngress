@@ -91,6 +91,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           });
 
           await openRow(page, "Auto Budget Agent");
+          await page.getByLabel("Enable limits").check();
           await page.getByLabel("Budget USD limit").fill("25");
           await page.getByLabel("Budget period").selectOption("month");
           await page.getByLabel("RPM limit").fill("120");
@@ -104,7 +105,7 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await expect(page.getByLabel("RPM limit")).toHaveValue("120");
           await expect(page.getByLabel("TPM limit")).toHaveValue("640000");
           await expect(page.getByLabel("Token limit")).toHaveValue("32000");
-          await expect.poll(() => countAgentLimits(fixture, seededIds.agentApiKeyId)).toBe(4);
+          await expect.poll(() => countAgentLimits(fixture, seededIds.agentApiKeyId)).toBe(5);
           await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(1);
         } finally {
           await context.close();

@@ -265,6 +265,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
     virtualModelLabel,
   );
 
+  await page.getByLabel("Enable limits").check();
   await page.getByLabel("Budget USD limit").fill("100");
   await page.getByLabel("Budget period").selectOption("month");
   await page.getByLabel("RPM limit").fill("120");

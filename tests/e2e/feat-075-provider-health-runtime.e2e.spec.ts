@@ -20,7 +20,7 @@ const masterKey = "test-master-key";
 const providerApiKey = "sk-provider-health-075";
 const agentApiKey = "llmi_provider_health_gateway_key_075";
 
-test("provider health summary updates notifications and scheduled checks without changing route selection", async () => {
+test("provider health summary updates notifications and scheduled checks and health-aware routing excludes unhealthy models", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_provider_health_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -139,30 +139,35 @@ test("provider health summary updates notifications and scheduled checks without
       await expect(response.json()).resolves.toMatchObject({
         choices: [{ message: { content: "fake provider response", role: "assistant" } }],
       });
+      // primary-health-model is excluded: its MODEL-level health is 'unhealthy' (seeded),
+      // so the gateway snapshot filters it out before building the fallback chain.
       expect(provider.requests.map((request) => request.bodyJson)).toEqual([
         expect.objectContaining({ model: "manual-health-model" }),
         expect.objectContaining({ model: "scheduled-health-model" }),
-        expect.objectContaining({ model: "primary-health-model" }),
         expect.objectContaining({ model: "fallback-health-model" }),
       ]);
+      // primary-health-model was never requested (excluded by health-aware routing),
+      // so the seeded 'unhealthy' state is preserved unchanged.
       await expect(
         readProviderSummary(fixture, seeded.requestPrimaryProviderId, null),
       ).resolves.toEqual({
-        consecutive_failures: 3,
-        status: "network_error",
+        consecutive_failures: 2,
+        status: "unhealthy",
       });
       await expect(
         readProviderSummary(fixture, seeded.requestPrimaryProviderId, seeded.requestPrimaryModelId),
       ).resolves.toEqual({
-        consecutive_failures: 3,
-        status: "network_error",
+        consecutive_failures: 2,
+        status: "unhealthy",
       });
       await expect(readRequestActivity(fixture, "req_provider_health_075")).resolves.toEqual({
         provider_model_id: seeded.requestFallbackModelId,
         status: "succeeded",
       });
+      // Only the two seeded events remain: retryable request-path failures no longer
+      // persist provider health, and primary was never requested anyway.
       const requestHealthEvents = await readHealthEvents(fixture, seeded.requestPrimaryProviderId);
-      expect(requestHealthEvents).toHaveLength(4);
+      expect(requestHealthEvents).toHaveLength(2);
       expect(requestHealthEvents).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -177,41 +182,23 @@ test("provider health summary updates notifications and scheduled checks without
             status: "unhealthy",
             trigger: "request_path",
           }),
-          expect.objectContaining({
-            error_code: "provider_request_failed",
-            provider_model_id: null,
-            status: "network_error",
-            trigger: "request_path",
-          }),
-          expect.objectContaining({
-            error_code: "provider_request_failed",
-            provider_model_id: seeded.requestPrimaryModelId,
-            status: "network_error",
-            trigger: "request_path",
-          }),
         ]),
       );
     } finally {
       await stopGatewayProcess(gateway);
     }
 
+    // Only manual (healthy) and scheduled (unhealthy) connectivity checks emit notifications.
+    // primary was excluded by health-aware routing and never requested, so no new notifications
+    // are emitted for it. The seeded summary was inserted directly without calling
+    // recordProviderHealthEvent, so no pg_notify was fired for it.
     await expect
       .poll(() => notifications.payloads.length, { timeout: 5_000 })
-      .toBeGreaterThanOrEqual(4);
+      .toBeGreaterThanOrEqual(2);
     expect(notifications.payloads).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ providerId: seeded.manualProviderId, status: "healthy" }),
         expect.objectContaining({ providerId: seeded.scheduledProviderId, status: "unhealthy" }),
-        expect.objectContaining({
-          providerId: seeded.requestPrimaryProviderId,
-          providerModelId: null,
-          status: "network_error",
-        }),
-        expect.objectContaining({
-          providerId: seeded.requestPrimaryProviderId,
-          providerModelId: seeded.requestPrimaryModelId,
-          status: "network_error",
-        }),
       ]),
     );
   } finally {
@@ -373,11 +360,10 @@ async function seedProviderHealthScenario(
         id,
         route_policy_id,
         provider_model_id,
-        candidate_order,
-        is_fallback
+        candidate_order
       )
-      values ($1, $2, $3, 1, false),
-             ($4, $2, $5, 2, true)
+      values ($1, $2, $3, 1),
+             ($4, $2, $5, 2)
     `,
     [randomUUID(), routePolicyId, requestPrimaryModelId, randomUUID(), requestFallbackModelId],
   );

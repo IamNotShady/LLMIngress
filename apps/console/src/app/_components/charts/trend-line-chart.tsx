@@ -70,7 +70,8 @@ export function TrendLineChart({
               name={line.name}
               stroke={line.color}
               strokeWidth={2}
-              dot={false}
+              dot={{ r: 3, strokeWidth: 2 }}
+              isAnimationActive={false}
               activeDot={{ r: 4 }}
             />
           ))}

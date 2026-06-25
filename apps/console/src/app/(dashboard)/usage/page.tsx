@@ -8,11 +8,11 @@ export default async function UsagePage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page usage-page">
       <PageHeader
         eyebrow="Monitor"
         title="Usage & Cost"
-        description="Spend, tokens, savings, and breakdowns across the selected window."
+        description="Analyze tokens, cost, latency, failure rate, and savings by agent, virtual model, provider, and model."
       />
       <UsageSection searchParams={resolved} />
     </div>

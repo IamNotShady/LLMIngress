@@ -28,8 +28,7 @@ export async function POST(request: NextRequest) {
       await createRoutePolicy({
         databaseUrl,
         routePolicy: normalizeRoutePolicyFormInput({
-          fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
-          primaryProviderModelIds: readAllText(form, "primaryProviderModelIds"),
+          providerModelIds: readAllText(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
           virtualModelId: readText(form, "virtualModelId"),
         }),
@@ -39,8 +38,7 @@ export async function POST(request: NextRequest) {
         databaseUrl,
         id: readRequiredText(form, "id"),
         routePolicy: normalizeRoutePolicyFormInput({
-          fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
-          primaryProviderModelIds: readAllText(form, "primaryProviderModelIds"),
+          providerModelIds: readAllText(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
           virtualModelId: readText(form, "virtualModelId"),
         }),

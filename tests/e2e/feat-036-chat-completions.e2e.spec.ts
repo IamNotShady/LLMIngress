@@ -159,11 +159,10 @@ async function seedChatCompletionRoute(
         id,
         route_policy_id,
         provider_model_id,
-        candidate_order,
-        is_fallback
+        candidate_order
       )
-      values ($1, $2, $3, 1, false),
-             ($4, $5, $3, 1, false)
+      values ($1, $2, $3, 1),
+             ($4, $5, $3, 1)
     `,
     [randomUUID(), allowedRoutePolicyId, providerModelId, randomUUID(), blockedRoutePolicyId],
   );

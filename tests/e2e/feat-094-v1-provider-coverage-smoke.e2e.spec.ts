@@ -159,10 +159,9 @@ async function seedV1ProviderCoverageRoutes(
           id,
           route_policy_id,
           provider_model_id,
-          candidate_order,
-          is_fallback
+          candidate_order
         )
-        values ($1, $2, $3, 1, false)
+        values ($1, $2, $3, 1)
       `,
       [randomUUID(), routePolicyId, providerModelId],
     );

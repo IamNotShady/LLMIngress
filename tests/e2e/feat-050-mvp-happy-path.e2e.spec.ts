@@ -255,7 +255,7 @@ async function createAgentApiKeyWithAccessAndLimits(page: Page): Promise<string>
   const agentApiKey = await page.locator("code").innerText();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
 
-  const virtualModelLabel = `${mvpHappyPathNames.virtualModelDisplayName} (${mvpHappyPathNames.virtualModelName})`;
+  const virtualModelLabel = mvpHappyPathNames.virtualModelName;
   await openRow(page, "MVP Codex");
   await page.getByLabel("Allowed virtual models").selectOption({ label: virtualModelLabel });
   await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
@@ -418,7 +418,6 @@ async function readPrimaryProviderModelId(fixture: Fixture): Promise<string | nu
     `
       select provider_model_id::text
       from route_policy_candidates
-      where is_fallback = false
       order by candidate_order
       limit 1
     `,
@@ -442,7 +441,7 @@ async function postVirtualModelWithRoute(
     body.set("description", payload.description);
     body.set("strategy", payload.strategy);
     for (const providerModelId of payload.primaryProviderModelIds) {
-      body.append("primaryProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     const response = await fetch("/api/virtual-models", { body, method: "POST" });
     return { status: response.status, text: await response.text() };
@@ -467,7 +466,7 @@ async function postRoutePolicyAction(
     body.set("virtualModelId", payload.virtualModelId);
     body.set("strategy", payload.strategy);
     for (const providerModelId of payload.primaryProviderModelIds) {
-      body.append("primaryProviderModelIds", providerModelId);
+      body.append("providerModelIds", providerModelId);
     }
     const response = await fetch("/api/route-policies", { body, method: "POST" });
     return { status: response.status, text: await response.text() };

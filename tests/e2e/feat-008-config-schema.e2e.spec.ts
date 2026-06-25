@@ -108,8 +108,8 @@ test("core config schema accepts valid graph and rejects broken references", asy
     });
     await expectConstraintViolation(
       fixture.query(
-        "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order, is_fallback) values ($1, $2, $3, $4, $5)",
-        [randomUUID(), graph.routePolicyId, graph.providerModelId, 2, true],
+        "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order) values ($1, $2, $3, $4)",
+        [randomUUID(), graph.routePolicyId, graph.providerModelId, 2],
       ),
     );
   } finally {
@@ -168,8 +168,8 @@ async function insertValidCoreConfigGraph(query: Query): Promise<CoreConfigGraph
     "fixed",
   ]);
   await query(
-    "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order, is_fallback) values ($1, $2, $3, $4, $5)",
-    [routePolicyCandidateId, routePolicyId, providerModelId, 1, false],
+    "insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order) values ($1, $2, $3, $4)",
+    [routePolicyCandidateId, routePolicyId, providerModelId, 1],
   );
   await query("insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)", [
     agentId,

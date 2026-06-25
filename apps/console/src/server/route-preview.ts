@@ -38,7 +38,6 @@ type RoutePreviewRow = PostgresQueryResultRow & {
   displayName: string;
   id: string;
   inputUsdPerMillionTokens: string | null;
-  isFallback: boolean;
   modelId: string;
   outputUsdPerMillionTokens: string | null;
   providerId: string;
@@ -117,7 +116,6 @@ async function loadRoutePreviewPolicies(databaseUrl: string): Promise<RoutePolic
                virtual_models.name as "virtualModelName",
                route_policy_candidates.provider_model_id::text as "providerModelId",
                route_policy_candidates.candidate_order as "candidateOrder",
-               route_policy_candidates.is_fallback as "isFallback",
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
                provider_models.context_window as "contextWindow",
@@ -159,7 +157,6 @@ async function loadRoutePreviewPolicies(databaseUrl: string): Promise<RoutePolic
           and provider_models.availability = 'available'
         order by virtual_models.name,
                  route_policies.id,
-                 route_policy_candidates.is_fallback,
                  route_policy_candidates.candidate_order
       `,
     );
@@ -199,7 +196,6 @@ function rowToRouteCandidate(row: RoutePreviewRow): RouteCandidate {
     capabilities: normalizeProviderModelCapabilities(row.capabilityMetadata),
     contextWindow: row.contextWindow,
     displayName: row.displayName,
-    isFallback: row.isFallback,
     modelId: row.modelId,
     price: resolveEffectiveModelTokenPrice({
       manualOverride: rowToManualPriceOverride(row),

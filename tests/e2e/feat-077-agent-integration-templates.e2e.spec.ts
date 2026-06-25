@@ -38,7 +38,7 @@ test("agent integration templates show codex claude code cursor openclaw gateway
 
           await page.goto(`${baseUrl}/agents`);
           await openDisclosure(page, "New agent");
-          const virtualModelLabel = `${virtualModel.description} (${virtualModel.name})`;
+          const virtualModelLabel = virtualModel.name;
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page

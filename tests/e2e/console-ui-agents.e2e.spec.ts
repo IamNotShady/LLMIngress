@@ -57,6 +57,27 @@ test("agents page matches the designed list and detail layout", async ({ browser
       await expect(editDialog.getByRole("heading", { name: "Integration snippets" })).toHaveCount(
         0,
       );
+      await expect(editDialog.getByLabel("Allowed virtual models").locator("option")).toHaveText([
+        "cheap",
+        "coding-balanced",
+        "long-context",
+        "smart",
+      ]);
+      await expect(editDialog.getByLabel("Default virtual model").locator("option")).toHaveText([
+        "No default virtual model",
+        "cheap",
+        "coding-balanced",
+        "long-context",
+        "smart",
+      ]);
+      const allowedToggle = editDialog.locator(".agent-vm-multi-select-button");
+      await expect(allowedToggle).toBeVisible();
+      const allowedToggleBox = await allowedToggle.boundingBox();
+      const defaultSelectBox = await editDialog.getByLabel("Default virtual model").boundingBox();
+      if (!allowedToggleBox || !defaultSelectBox) {
+        throw new Error("Agent virtual model controls did not render with measurable bounds.");
+      }
+      expect(Math.abs(allowedToggleBox.height - defaultSelectBox.height)).toBeLessThanOrEqual(8);
 
       for (const hiddenText of [
         /^Integration platform:/,

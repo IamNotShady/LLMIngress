@@ -104,9 +104,9 @@ async function seedVirtualModelMetricData(databaseUrl: string): Promise<void> {
     await client.query(
       `
         insert into route_policy_candidates
-          (id, route_policy_id, provider_model_id, candidate_order, is_fallback)
-        values ($1, $2, $3, 1, false),
-               ($4, $5, $3, 1, false)
+          (id, route_policy_id, provider_model_id, candidate_order)
+        values ($1, $2, $3, 1),
+               ($4, $5, $3, 1)
       `,
       [randomUUID(), unusedRoutePolicyId, providerModelId, randomUUID(), usedRoutePolicyId],
     );

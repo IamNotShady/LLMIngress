@@ -38,17 +38,46 @@ test("usage page shows counts tokens cost and provider model breakdown", async (
           await expect(
             page.locator(".stat-card", { hasText: "Total tokens" }).locator(".stat-card-value"),
           ).toHaveText("450");
+          await expect(
+            page.locator(".stat-card", { hasText: "Avg latency" }).locator(".stat-card-value"),
+          ).toHaveText("180ms");
+          await expect(
+            page
+              .locator(".stat-card", { hasText: "Estimated savings" })
+              .locator(".stat-card-value"),
+          ).toHaveText("$0.00070000");
           const summary = page.getByRole("table");
           await expect(
-            summary.getByRole("row", { name: /Console OpenAI.*GPT 4\.1 Nano.*150.*\$0\.00050000/ }),
+            summary.getByRole("row", {
+              name: /Console OpenAI.*GPT 4\.1 Nano.*1.*150.*\$0\.00050000.*120ms.*0\.00%.*\$0\.00020000/,
+            }),
           ).toBeVisible();
           await expect(
             summary.getByRole("row", {
-              name: /Console Anthropic.*Claude Haiku.*300.*\$0\.00100000/,
+              name: /Console Anthropic.*Claude Haiku.*1.*300.*\$0\.00100000.*240ms.*0\.00%.*\$0\.00050000/,
             }),
           ).toBeVisible();
 
-          await page.getByLabel("Window").selectOption("30d");
+          await page.getByLabel("Provider", { exact: true }).selectOption({
+            label: "Console Anthropic",
+          });
+          await page.getByRole("button", { name: "Apply" }).click();
+
+          await expect(
+            page.locator(".stat-card", { hasText: "Total requests" }).locator(".stat-card-value"),
+          ).toHaveText("1");
+          await expect(
+            page.locator(".stat-card", { hasText: "Total tokens" }).locator(".stat-card-value"),
+          ).toHaveText("300");
+          await expect(page.getByRole("cell", { name: "Console OpenAI" })).toHaveCount(0);
+
+          const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10);
+          await page.getByLabel("Provider", { exact: true }).selectOption({
+            label: "All providers",
+          });
+          await page.getByLabel("Start date", { exact: true }).fill(startDate);
           await page.getByRole("button", { name: "Apply" }).click();
 
           await expect(
@@ -138,8 +167,8 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order, is_fallback)
-      values ($1, $2, $3, 1, false)
+      insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order)
+      values ($1, $2, $3, 1)
     `,
     [randomUUID(), routePolicyId, openaiNanoModelId],
   );
@@ -158,10 +187,12 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
     agentApiKeyId,
     costUsd: "0.00050000",
     inputTokens: 50,
+    latencyMs: 120,
     outputTokens: 100,
     providerId: openaiProviderId,
     providerModelId: openaiNanoModelId,
     requestId: "req_usage_page_openai_047",
+    savingsUsd: "0.00020000",
     startedAtSql: "now() - interval '1 hour'",
     virtualModelId,
   });
@@ -169,10 +200,12 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
     agentApiKeyId,
     costUsd: "0.00100000",
     inputTokens: 100,
+    latencyMs: 240,
     outputTokens: 200,
     providerId: anthropicProviderId,
     providerModelId: anthropicModelId,
     requestId: "req_usage_page_anthropic_047",
+    savingsUsd: "0.00050000",
     startedAtSql: "now() - interval '2 hours'",
     virtualModelId,
   });
@@ -180,10 +213,12 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
     agentApiKeyId,
     costUsd: "0.00123456",
     inputTokens: 99,
+    latencyMs: 360,
     outputTokens: 450,
     providerId: openaiProviderId,
     providerModelId: openaiLargeModelId,
     requestId: "req_usage_page_old_047",
+    savingsUsd: "0.00010000",
     startedAtSql: "now() - interval '10 days'",
     virtualModelId,
   });
@@ -195,10 +230,12 @@ async function insertUsageRequest(
     agentApiKeyId: string;
     costUsd: string;
     inputTokens: number;
+    latencyMs: number;
     outputTokens: number;
     providerId: string;
     providerModelId: string;
     requestId: string;
+    savingsUsd: string;
     startedAtSql: string;
     virtualModelId: string;
   },
@@ -238,9 +275,9 @@ async function insertUsageRequest(
         false,
         'succeeded',
         200,
-        25,
+        $7::integer,
         ${input.startedAtSql},
-        ${input.startedAtSql} + interval '25 milliseconds'
+        ${input.startedAtSql} + ($7::integer * interval '1 millisecond')
       )
     `,
     [
@@ -250,6 +287,7 @@ async function insertUsageRequest(
       input.virtualModelId,
       input.providerId,
       input.providerModelId,
+      input.latencyMs,
     ],
   );
   await fixture.query(
@@ -288,11 +326,33 @@ async function insertUsageRequest(
         total_cost_usd,
         cost_source,
         price_source,
-        price_version
+        price_version,
+        actual_cost_usd,
+        baseline_cost_usd,
+        savings_usd
       )
-      values ($1, $2, $3, $4, $5::numeric, 'estimated', 'built_in_static_snapshot', 'mvp-static-2026-06-13')
+      values (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5::numeric,
+        'estimated',
+        'built_in_static_snapshot',
+        'mvp-static-2026-06-13',
+        $5::numeric,
+        ($5::numeric + $6::numeric),
+        $6::numeric
+      )
     `,
-    [randomUUID(), activityId, input.agentApiKeyId, input.providerModelId, input.costUsd],
+    [
+      randomUUID(),
+      activityId,
+      input.agentApiKeyId,
+      input.providerModelId,
+      input.costUsd,
+      input.savingsUsd,
+    ],
   );
 }
 

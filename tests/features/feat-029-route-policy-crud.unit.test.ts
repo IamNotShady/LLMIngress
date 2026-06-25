@@ -6,43 +6,39 @@ import {
 } from "../../apps/console/src/server/route-policies";
 
 describe("feat-029 route policy CRUD", () => {
-  it("normalizes route policy form input for persistence", () => {
+  it("normalizes route policy form input into a single ordered candidate pool", () => {
     const virtualModelId = randomUUID();
-    const primaryModelId = randomUUID();
-    const fallbackModelId = randomUUID();
+    const firstModelId = randomUUID();
+    const secondModelId = randomUUID();
 
     expect(
       normalizeRoutePolicyFormInput({
-        fallbackProviderModelIds: ["", fallbackModelId],
-        primaryProviderModelIds: [primaryModelId],
+        providerModelIds: [firstModelId, "", secondModelId],
         strategy: " random ",
         virtualModelId,
       }),
     ).toEqual({
-      fallbackProviderModelIds: [fallbackModelId],
-      primaryProviderModelIds: [primaryModelId],
+      providerModelIds: [firstModelId, secondModelId],
       strategy: "random",
       virtualModelId,
     });
   });
 
-  it("rejects missing candidates invalid strategies and duplicate candidates", () => {
+  it("rejects empty candidates invalid strategies and duplicate candidates", () => {
     const virtualModelId = randomUUID();
     const providerModelId = randomUUID();
 
     expect(() =>
       normalizeRoutePolicyFormInput({
-        fallbackProviderModelIds: [],
-        primaryProviderModelIds: [],
+        providerModelIds: [],
         strategy: "random",
         virtualModelId,
       }),
-    ).toThrow(/primary/i);
+    ).toThrow(/at least one provider model/i);
 
     expect(() =>
       normalizeRoutePolicyFormInput({
-        fallbackProviderModelIds: [],
-        primaryProviderModelIds: [providerModelId],
+        providerModelIds: [providerModelId],
         strategy: "cheapest",
         virtualModelId,
       }),
@@ -50,8 +46,7 @@ describe("feat-029 route policy CRUD", () => {
 
     expect(() =>
       normalizeRoutePolicyFormInput({
-        fallbackProviderModelIds: [providerModelId],
-        primaryProviderModelIds: [providerModelId],
+        providerModelIds: [providerModelId, providerModelId],
         strategy: "random",
         virtualModelId,
       }),
@@ -59,22 +54,28 @@ describe("feat-029 route policy CRUD", () => {
 
     expect(() =>
       normalizeRoutePolicyFormInput({
-        fallbackProviderModelIds: [],
-        primaryProviderModelIds: [providerModelId],
+        providerModelIds: [providerModelId],
         strategy: "balanced",
         virtualModelId,
       }),
     ).toThrow(/strategy/i);
   });
 
-  it("builds route reason metadata from strategy and fallback configuration", () => {
+  it("builds route reason metadata from strategy and candidate count", () => {
     expect(
       buildRouteReasonMetadata({
-        fallbackCandidateCount: 1,
-        primaryCandidateCount: 2,
+        candidateCount: 3,
         strategy: "cost_first",
         virtualModelName: "coding-fast",
       }),
-    ).toBe("cost_first route for coding-fast uses 2 primary candidates with 1 fallback.");
+    ).toBe("cost_first route for coding-fast uses 3 candidates.");
+
+    expect(
+      buildRouteReasonMetadata({
+        candidateCount: 1,
+        strategy: "fixed",
+        virtualModelName: "coding-fast",
+      }),
+    ).toBe("fixed route for coding-fast uses 1 candidate.");
   });
 });

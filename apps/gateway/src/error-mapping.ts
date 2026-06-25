@@ -41,6 +41,9 @@ export function mapGatewayErrorStatus(code: string, fallbackStatus = 500): numbe
   if (code === "provider_request_failed") {
     return 502;
   }
+  if (code === "provider_unavailable") {
+    return 503;
+  }
   return fallbackStatus;
 }
 

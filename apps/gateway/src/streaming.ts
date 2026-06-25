@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/providers";
+import { openRouterAttributionHeaders } from "@llmingress/provider/openrouter";
+import {
+  buildClaudeCodeMessagesUrl,
+  buildClaudeCodeSubscriptionHeaders,
+  buildCodexResponsesUrl,
+  buildCodexSubscriptionHeaders,
+  withClaudeCodeSystemPrompt,
+} from "@llmingress/provider/subscription";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
@@ -21,8 +29,11 @@ import type {
 } from "./config-reload.js";
 import { mapGatewayErrorStatus } from "./error-mapping.js";
 import { normalizeAnthropicMessagesRequest } from "./messages.js";
-import { openRouterAttributionHeaders } from "./provider-adapters/openrouter.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import {
+  enforceGatewayRateLimits,
+  type GatewayConcurrencyLease,
+  releaseGatewayConcurrency,
+} from "./rate-limits.js";
 import {
   buildAnthropicMessagesRequestMetadata,
   buildOpenAIChatCompletionRequestMetadata,
@@ -62,6 +73,8 @@ export type GatewayRuntimeStreamError = {
 
 type GatewayStreamingErrorCode =
   | "provider_credentials_missing"
+  | "provider_protocol_unsupported"
+  | "provider_rate_limited"
   | "provider_request_failed"
   | "route_not_found";
 
@@ -115,11 +128,13 @@ export async function executeGatewayStreamingRequest(input: {
   }
 
   let budgetReservation: GatewayBudgetReservation | undefined;
+  let concurrencyLease = rateLimit.concurrencyLease;
   try {
     const routeDecision = selectRouteCandidate({
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
       snapshot: input.snapshot,
+      usesTools: normalized.requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
@@ -140,6 +155,11 @@ export async function executeGatewayStreamingRequest(input: {
       requestMetadata: normalized.requestMetadata,
     });
     if (!budget.ok) {
+      await releaseGatewayConcurrency({
+        databaseUrl: input.databaseUrl,
+        lease: concurrencyLease,
+      });
+      concurrencyLease = undefined;
       return {
         activity,
         body: budget.body,
@@ -159,24 +179,53 @@ export async function executeGatewayStreamingRequest(input: {
     if (!selected) {
       throw new Error("Provider credentials are missing for the selected route.");
     }
+    if (
+      !isStreamingProtocolSupportedByProvider({
+        pathSuffix: normalized.pathSuffix,
+        providerKey: selected.providerKey,
+      })
+    ) {
+      await releaseGatewayBudgetReservation({
+        databaseUrl: input.databaseUrl,
+        reservation: budgetReservation,
+      });
+      budgetReservation = undefined;
+      await releaseGatewayConcurrency({
+        databaseUrl: input.databaseUrl,
+        lease: concurrencyLease,
+      });
+      concurrencyLease = undefined;
+      return {
+        activity,
+        body: createGatewayStreamingErrorBody("provider_protocol_unsupported", input.requestId),
+        ok: false,
+        requestMetadata: normalized.requestMetadata,
+        statusCode: mapGatewayErrorStatus("provider_protocol_unsupported"),
+      };
+    }
 
     const providerStartedAt = new Date();
-    const response = await (input.fetch ?? globalThis.fetch)(
-      buildProviderUrl(selected.baseUrl, normalized.pathSuffix),
-      {
-        body: JSON.stringify({
-          ...normalized.payload,
-          model: selected.modelId,
-          stream: true,
-        }),
-        headers: buildStreamingProviderHeaders({
-          apiKey: selected.apiKey,
-          headersWithApiKey: normalized.headersWithApiKey,
+    const providerUrl = buildStreamingProviderUrl({
+      baseUrl: selected.baseUrl,
+      pathSuffix: normalized.pathSuffix,
+      providerKey: selected.providerKey,
+    });
+    const response = await (input.fetch ?? globalThis.fetch)(providerUrl, {
+      body: JSON.stringify(
+        buildStreamingProviderRequestBody({
+          modelId: selected.modelId,
+          pathSuffix: normalized.pathSuffix,
+          payload: normalized.payload,
           providerKey: selected.providerKey,
         }),
-        method: "POST",
-      },
-    );
+      ),
+      headers: buildStreamingProviderHeaders({
+        apiKey: selected.apiKey,
+        headersWithApiKey: normalized.headersWithApiKey,
+        providerKey: selected.providerKey,
+      }),
+      method: "POST",
+    });
     await recordGatewayProviderTrace({
       errorCode: response.ok && response.body ? null : "provider_request_failed",
       modelId: selected.modelId,
@@ -187,46 +236,69 @@ export async function executeGatewayStreamingRequest(input: {
     });
 
     if (!response.ok || !response.body) {
+      const providerErrorBody = await readProviderErrorBody(response);
+      console.error("gateway provider streaming request failed", {
+        body: providerErrorBody,
+        modelId: selected.modelId,
+        providerKey: selected.providerKey,
+        requestId: input.requestId,
+        statusCode: response.status,
+        url: providerUrl,
+      });
       await releaseGatewayBudgetReservation({
         databaseUrl: input.databaseUrl,
         reservation: budgetReservation,
       });
       budgetReservation = undefined;
+      await releaseGatewayConcurrency({
+        databaseUrl: input.databaseUrl,
+        lease: concurrencyLease,
+      });
+      concurrencyLease = undefined;
+      const errorCode =
+        response.status === 429 ? "provider_rate_limited" : "provider_request_failed";
       return {
         activity,
-        body: createGatewayStreamingErrorBody("provider_request_failed", input.requestId),
+        body: createGatewayStreamingErrorBody(errorCode, input.requestId),
         ok: false,
         requestMetadata: normalized.requestMetadata,
-        statusCode: 502,
+        statusCode: mapGatewayErrorStatus(errorCode),
       };
     }
     await recordGatewayProviderApiKeyLastUsed({
       databaseUrl: input.databaseUrl,
       providerApiKeyId: selected.providerApiKeyId,
     });
-    const body = wrapProviderStreamWithBudgetFinalization(
-      wrapProviderStreamWithErrorRecording(
-        Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
+    const body = wrapProviderStreamWithConcurrencyRelease(
+      wrapProviderStreamWithBudgetFinalization(
+        wrapProviderStreamWithErrorRecording(
+          Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
+          {
+            recordRuntimeError: (error) =>
+              recordGatewayRuntimeError({
+                databaseUrl: input.databaseUrl,
+                error,
+                metadata: {
+                  protocol: input.protocol,
+                  providerModelId: selected.providerModelId,
+                  requestId: input.requestId,
+                  virtualModelId: input.virtualModel.id,
+                },
+              }),
+          },
+        ),
         {
-          recordRuntimeError: (error) =>
-            recordGatewayRuntimeError({
-              databaseUrl: input.databaseUrl,
-              error,
-              metadata: {
-                protocol: input.protocol,
-                providerModelId: selected.providerModelId,
-                requestId: input.requestId,
-                virtualModelId: input.virtualModel.id,
-              },
-            }),
+          databaseUrl: input.databaseUrl,
+          reservation: budgetReservation,
         },
       ),
       {
         databaseUrl: input.databaseUrl,
-        reservation: budgetReservation,
+        lease: concurrencyLease,
       },
     );
     budgetReservation = undefined;
+    concurrencyLease = undefined;
 
     return {
       activity,
@@ -240,6 +312,10 @@ export async function executeGatewayStreamingRequest(input: {
     await releaseGatewayBudgetReservation({
       databaseUrl: input.databaseUrl,
       reservation: budgetReservation,
+    });
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
     });
     const message = error instanceof Error ? error.message : "Provider request failed.";
     const code = classifyStreamingError(message);
@@ -362,6 +438,27 @@ function wrapProviderStreamWithBudgetFinalization(
   return source;
 }
 
+function wrapProviderStreamWithConcurrencyRelease(
+  source: Readable,
+  input: {
+    databaseUrl: string;
+    lease: GatewayConcurrencyLease | undefined;
+  },
+): Readable {
+  let settled = false;
+  const release = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    void releaseGatewayConcurrency(input);
+  };
+  source.once("end", release);
+  source.once("error", release);
+  source.once("close", release);
+  return source;
+}
+
 function buildStreamingPayload(input: {
   protocol: GatewayStreamingProtocol;
   requestBody: unknown;
@@ -432,6 +529,7 @@ function buildStreamingPayload(input: {
       pathSuffix: "responses",
       payload: omitUndefined({
         input: normalized.request.input,
+        instructions: normalized.request.instructions,
         max_output_tokens: normalized.request.maxOutputTokens,
         store: false,
         temperature: normalized.request.temperature,
@@ -484,7 +582,7 @@ async function recordGatewayRuntimeError(input: {
   error: GatewayRuntimeStreamError;
   metadata: Record<string, unknown>;
 }): Promise<void> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(
@@ -520,11 +618,82 @@ function buildProviderUrl(baseUrl: string, suffix: string): string {
   return url.toString();
 }
 
-function buildStreamingProviderHeaders(input: {
+export function buildStreamingProviderUrl(input: {
+  baseUrl: string;
+  pathSuffix: string;
+  providerKey: string;
+}): string {
+  if (input.providerKey === "openai_codex" && input.pathSuffix === "responses") {
+    return buildCodexResponsesUrl(input.baseUrl);
+  }
+  if (input.providerKey === "claude_code" && input.pathSuffix === "messages") {
+    return buildClaudeCodeMessagesUrl(input.baseUrl);
+  }
+  return buildProviderUrl(input.baseUrl, input.pathSuffix);
+}
+
+export function buildStreamingProviderRequestBody(input: {
+  modelId: string;
+  pathSuffix: string;
+  payload: Record<string, unknown>;
+  providerKey: string;
+}): Record<string, unknown> {
+  const body = buildProviderRequestBody(input.payload, input.modelId);
+  if (input.providerKey === "openai_codex" && input.pathSuffix === "responses") {
+    return buildCodexStreamingResponsesBody(body);
+  }
+  if (input.providerKey === "claude_code" && input.pathSuffix === "messages") {
+    return {
+      ...body,
+      system: withClaudeCodeSystemPrompt(body.system),
+    };
+  }
+  return body;
+}
+
+const codexUnsupportedResponsesParameters = [
+  "max_output_tokens",
+  "metadata",
+  "prompt_cache_retention",
+  "safety_identifier",
+  "temperature",
+  "top_p",
+  "truncation",
+];
+
+function buildProviderRequestBody(
+  payload: Record<string, unknown>,
+  modelId: string,
+): Record<string, unknown> {
+  return {
+    ...payload,
+    model: modelId,
+    stream: true,
+  };
+}
+
+function buildCodexStreamingResponsesBody(body: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = { ...body, store: false, stream: true };
+  for (const key of codexUnsupportedResponsesParameters) {
+    delete cleaned[key];
+  }
+  if (typeof cleaned.instructions !== "string" || !cleaned.instructions.trim()) {
+    cleaned.instructions = "You are a helpful assistant.";
+  }
+  return cleaned;
+}
+
+export function buildStreamingProviderHeaders(input: {
   apiKey: string;
   headersWithApiKey: (apiKey: string) => Record<string, string>;
   providerKey: string;
 }): Record<string, string> {
+  if (input.providerKey === "openai_codex") {
+    return buildCodexSubscriptionHeaders(input.apiKey);
+  }
+  if (input.providerKey === "claude_code") {
+    return buildClaudeCodeSubscriptionHeaders(input.apiKey);
+  }
   const headers = input.headersWithApiKey(input.apiKey);
   if (input.providerKey === "openrouter") {
     return {
@@ -533,6 +702,28 @@ function buildStreamingProviderHeaders(input: {
     };
   }
   return headers;
+}
+
+export function isStreamingProtocolSupportedByProvider(input: {
+  pathSuffix: string;
+  providerKey: string;
+}): boolean {
+  if (input.providerKey === "openai_codex") {
+    return input.pathSuffix === "responses";
+  }
+  if (input.providerKey === "claude_code") {
+    return input.pathSuffix === "messages";
+  }
+  return true;
+}
+
+async function readProviderErrorBody(response: Response): Promise<string | null> {
+  try {
+    const text = await response.text();
+    return text ? text.slice(0, 2000) : null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Unable to read provider error body.";
+  }
 }
 
 function requireRoutePolicy(
@@ -608,6 +799,12 @@ function streamingErrorMessage(code: GatewayStreamingErrorCode): string {
   }
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
+  }
+  if (code === "provider_rate_limited") {
+    return "Provider rate limit exceeded.";
+  }
+  if (code === "provider_protocol_unsupported") {
+    return "Provider protocol is not supported for this endpoint.";
   }
   return "Provider request failed.";
 }

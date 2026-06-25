@@ -115,7 +115,8 @@ test("scheduled rate limit evaluator uses configurable window threshold detects 
         expect.objectContaining({
           eventType: "rate_limit_high_frequency",
           payload: expect.objectContaining({
-            agentApiKeyId: ids.agentApiKeyId,
+            agentId: ids.agentId,
+            agentApiKeyPrefix: "llmi_rl_089",
             blockCount: 3,
             limitType: "rpm",
             thresholdCount: 3,
@@ -126,7 +127,8 @@ test("scheduled rate limit evaluator uses configurable window threshold detects 
         expect.objectContaining({
           eventType: "rate_limit_high_frequency",
           payload: expect.objectContaining({
-            agentApiKeyId: ids.agentApiKeyId,
+            agentId: ids.agentId,
+            agentApiKeyPrefix: "llmi_rl_089",
             blockCount: 3,
             limitType: "tpm",
             thresholdCount: 3,
@@ -165,7 +167,7 @@ test("scheduled rate limit evaluator uses configurable window threshold detects 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 type RateLimitAlertSeedIds = {
-  agentApiKeyId: string;
+  agentId: string;
 };
 
 type RateLimitAlertJobRow = {
@@ -204,7 +206,7 @@ async function seedRateLimitAlertData(fixture: Fixture): Promise<RateLimitAlertS
   };
 
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'rate-limit-alerts-fast', 'Rate Limit Alerts Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'rate-limit-alerts-fast', 'Rate Limit Alerts Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -213,21 +215,13 @@ async function seedRateLimitAlertData(fixture: Fixture): Promise<RateLimitAlertS
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_rl_089', 'sha256:v1:rate-limit-alert-089', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_rl_089', key_hash = 'sha256:v1:rate-limit-alert-089', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [ids.agentApiKeyId, ids.virtualModelId],
@@ -252,7 +246,7 @@ async function seedRateLimitAlertData(fixture: Fixture): Promise<RateLimitAlertS
     });
   }
 
-  return { agentApiKeyId: ids.agentApiKeyId };
+  return { agentId: ids.agentApiKeyId };
 }
 
 async function insertRateLimitBlockedActivity(
@@ -270,9 +264,9 @@ async function insertRateLimitBlockedActivity(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,

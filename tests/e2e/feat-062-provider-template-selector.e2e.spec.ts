@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
+import { openDisclosure } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("provider template selector lists categories fixed capabilities and rejects arbitrary endpoints", async ({
@@ -33,53 +33,34 @@ test("provider template selector lists categories fixed capabilities and rejects
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "Add from template");
-          const remoteTemplates = page.getByRole("group", {
-            name: "Remote API-key templates",
-          });
-          const deepSeekTemplate = remoteTemplates.locator(".provider-template-card").filter({
-            has: page.getByRole("heading", { name: "DeepSeek" }),
-          });
-          await expect(deepSeekTemplate.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
-          await expect(
-            deepSeekTemplate.getByText("Fixed base URL: https://api.deepseek.com"),
-          ).toBeVisible();
-          await expect(
-            deepSeekTemplate.getByText("Auth: Authorization Bearer API key"),
-          ).toBeVisible();
-          await expect(
-            deepSeekTemplate.getByText("Capabilities: Chat completions, Streaming, Tools"),
-          ).toBeVisible();
+          const providerType = page.getByLabel("Provider type", { exact: true });
+          await expect(providerType).toContainText("OpenAI");
+          await expect(providerType).toContainText("Anthropic");
+          await expect(providerType).toContainText("OpenRouter");
+          await expect(providerType).toContainText("DeepSeek");
+          await expect(providerType).not.toContainText("Ollama");
 
-          const localTemplates = page.getByRole("group", { name: "Local templates" });
-          const ollamaTemplate = localTemplates.locator(".provider-template-card").filter({
-            has: page.getByRole("heading", { name: "Ollama" }),
-          });
-          await expect(ollamaTemplate.getByRole("heading", { name: "Ollama" })).toBeVisible();
-          await expect(
-            ollamaTemplate.getByText("Base URL: user-provided local/private URL"),
-          ).toBeVisible();
-          await expect(ollamaTemplate.getByText("Model list path: /api/tags")).toBeVisible();
-          await expect(ollamaTemplate.getByText("Chat path: /api/chat")).toBeVisible();
-          await expect(ollamaTemplate.getByText("Capabilities: Chat completions")).toBeVisible();
+          await page.getByRole("tab", { name: "Local" }).click();
+          await expect(providerType).toContainText("Ollama");
+          await page.getByRole("tab", { name: "API Keys" }).click();
 
-          await page.getByLabel("Provider template").selectOption("deepseek");
-          await page.getByRole("button", { name: "Add template provider" }).click();
-
-          const providerList = page.locator(".row-list");
-          await expect(providerList.getByRole("heading", { name: "DeepSeek" })).toBeVisible();
-          await openRow(page, "DeepSeek");
-          await expect(
-            providerList.getByText("Template provider base URL: https://api.deepseek.com"),
-          ).toBeVisible();
+          await providerType.selectOption({ label: "DeepSeek" });
+          await expect(page.getByLabel("Provider display name")).toHaveValue("DeepSeek");
+          await expect(page.getByLabel("Provider base URL")).toHaveAttribute(
+            "placeholder",
+            "https://api.deepseek.com",
+          );
+          await page.getByRole("button", { name: "Create provider" }).click();
+          await expect(page.getByRole("row", { name: /DeepSeek/ })).toBeVisible();
 
           const customCreate = await postProviderForm(page, {
             action: "createFromTemplate",
             baseUrl: "https://arbitrary.example/v1",
             templateId: "deepseek",
           });
-          expect(customCreate.status).toBe(400);
-          expect(customCreate.body).toMatchObject({
+          expect(customCreate).toMatchObject({
             error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
+            status: 200,
           });
 
           const legacyCustomCreate = await postProviderForm(page, {
@@ -89,9 +70,9 @@ test("provider template selector lists categories fixed capabilities and rejects
             providerKey: "custom",
             providerType: "api_key",
           });
-          expect(legacyCustomCreate.status).toBe(400);
-          expect(legacyCustomCreate.body).toMatchObject({
+          expect(legacyCustomCreate).toMatchObject({
             error: expect.stringMatching(/custom OpenAI-compatible endpoints are not allowed/i),
+            status: 200,
           });
         } finally {
           await context.close();
@@ -115,20 +96,19 @@ type ConsoleProcess = {
 async function postProviderForm(
   page: Page,
   form: Record<string, string>,
-): Promise<{ body: unknown; status: number }> {
+): Promise<{ error: string | null; status: number; url: string }> {
   return page.evaluate(async (formInput) => {
     const response = await fetch("/api/providers", {
       body: new URLSearchParams(formInput),
       headers: { "content-type": "application/x-www-form-urlencoded" },
       method: "POST",
     });
+    const url = new URL(response.url);
 
     return {
-      body:
-        response.headers.get("content-type")?.includes("application/json") === true
-          ? await response.json()
-          : null,
+      error: url.searchParams.get("providerError"),
       status: response.status,
+      url: response.url,
     };
   }, form);
 }

@@ -2,25 +2,22 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
+import { openDisclosure } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
 const remoteTemplateExpectations = [
   ["deepseek", "DeepSeek", "https://api.deepseek.com"],
   ["xai", "xAI", "https://api.x.ai/v1"],
-  ["mistral", "Mistral", "https://api.mistral.ai/v1"],
   ["qwen", "Qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"],
   ["moonshot", "Moonshot/Kimi", "https://api.moonshot.ai/v1"],
   ["minimax", "MiniMax", "https://api.minimax.io/v1"],
-  ["groq", "Groq", "https://api.groq.com/openai/v1"],
-  ["fireworks", "Fireworks AI", "https://api.fireworks.ai/inference/v1"],
   ["zai", "Z.ai", "https://api.z.ai/api/paas/v4"],
 ] as const;
 
-test("all nine remote templates expose fixed urls capabilities auth behavior and representative generic adapter request works", async ({
+test("supported remote templates expose fixed urls capabilities auth behavior and representative generic adapter request works", async ({
   browser,
 }) => {
   const provider = await createFakeProviderServer();
@@ -81,42 +78,29 @@ test("all nine remote templates expose fixed urls capabilities auth behavior and
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "Add from template");
-          const remoteTemplates = page.getByRole("group", {
-            name: "Remote API-key templates",
-          });
+          const dialog = page.getByRole("dialog", { name: "Add Provider" });
+          const providerType = dialog.getByLabel("Provider type", { exact: true });
+          const displayNameInput = dialog.getByLabel("Provider display name");
+          const baseUrlInput = dialog.getByLabel("Provider base URL");
           for (const [id, displayName, fixedBaseUrl] of remoteTemplateExpectations) {
-            const templateCard = remoteTemplates.locator(".provider-template-card").filter({
-              has: page.getByRole("heading", { name: displayName }),
-            });
-            await expect(templateCard.getByRole("heading", { name: displayName })).toBeVisible();
-            await expect(templateCard.getByText(`Fixed base URL: ${fixedBaseUrl}`)).toBeVisible();
-            await expect(
-              templateCard.getByText("Capabilities: Chat completions, Streaming, Tools"),
-            ).toBeVisible();
-            await expect(
-              templateCard.getByText("Auth: Authorization Bearer API key"),
-            ).toBeVisible();
-            await expect(page.getByLabel("Provider template")).toContainText(displayName);
-            await page.getByLabel("Provider template").selectOption(id);
+            await expect(providerType).toContainText(displayName);
+            await providerType.selectOption(id);
+            await expect(displayNameInput).toHaveValue(displayName);
+            await expect(baseUrlInput).toHaveValue(fixedBaseUrl);
           }
 
-          await page.getByLabel("Provider template").selectOption("groq");
-          await page.getByRole("button", { name: "Add template provider" }).click();
+          await providerType.selectOption("qwen");
+          await dialog.getByRole("button", { name: "Create provider" }).click();
 
-          const providerList = page.locator(".row-list");
-          await expect(providerList.getByRole("heading", { name: "Groq" })).toBeVisible();
-          await openRow(page, "Groq");
-          await expect(
-            providerList.getByText("Template provider base URL: https://api.groq.com/openai/v1"),
-          ).toBeVisible();
+          await expect(page.locator("table.providers-table")).toContainText("Qwen");
 
           const providers = await readTemplateProviders(fixture);
           expect(providers).toEqual([
             {
-              base_url: "https://api.groq.com/openai/v1",
-              display_name: "Groq",
-              provider_key: "groq",
-              provider_template_id: "groq",
+              base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+              display_name: "Qwen",
+              provider_key: "qwen",
+              provider_template_id: "qwen",
             },
           ]);
         } finally {

@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("route policy CRUD persists candidates cost preference and fallback chain", async ({
@@ -31,45 +30,34 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
-          await page.goto(`${baseUrl}/models`);
+          await postVirtualModelAction(page, {
+            action: "create",
+            description: "Coding Fast",
+            name: "coding-fast",
+          });
+          const virtualModelId = await readVirtualModelId(fixture, "coding-fast");
 
-          await openDisclosure(page, "New virtual model");
-          await page.getByRole("textbox", { name: "Virtual model name" }).fill("Coding Fast");
-          await page
-            .getByRole("textbox", { name: "Virtual model display name" })
-            .fill("Coding Fast");
-          await page.getByRole("button", { name: "Create virtual model" }).click();
-          await expect(page.getByRole("heading", { name: "Coding Fast" })).toBeVisible();
+          await page.goto(`${baseUrl}/models?virtualModelDialog=${virtualModelId}`);
+          await page.locator(".vm-add-model-button").click();
+          const modelPickerRow = page
+            .locator(".vm-model-picker-table tbody tr")
+            .filter({ hasText: "GPT 4.1 Mini" });
+          await expect(modelPickerRow).toContainText("128K");
+          await expect(modelPickerRow.locator("td").nth(5)).toHaveText("Yes");
+          await expect(modelPickerRow.locator("td").nth(6)).toHaveText("Yes");
 
-          await page.goto(`${baseUrl}/routing`);
-          await openDisclosure(page, "New route policy");
-          await page
-            .getByLabel("Route policy virtual model")
-            .selectOption({ label: "Coding Fast (coding-fast)" });
-          await page.getByLabel("Route policy strategy").selectOption("balanced");
-          await page
-            .getByLabel("Primary provider models")
-            .selectOption({ label: seededModels.openai.selectorLabel });
-          await page
-            .getByLabel("Fallback provider models")
-            .selectOption({ label: seededModels.anthropic.selectorLabel });
-          await page.getByRole("button", { name: "Create route policy" }).click();
-
-          await expect(
-            page.getByRole("heading", { name: "Coding Fast", exact: true }),
-          ).toBeVisible();
-          await openRow(page, "Coding Fast");
-          await expect(page.getByText("Virtual Model: Coding Fast (coding-fast)")).toBeVisible();
-          await expect(page.getByText("Strategy: balanced")).toBeVisible();
-          await expect(
-            page.getByText(
-              "Route reason: balanced route for coding-fast uses 1 primary candidate with 1 fallback.",
-            ),
-          ).toBeVisible();
-          await expect(page.getByText(`Primary: ${seededModels.openai.optionLabel}`)).toBeVisible();
-          await expect(
-            page.getByText(`Fallback: ${seededModels.anthropic.optionLabel}`),
-          ).toBeVisible();
+          await postRoutePolicyAction(page, {
+            action: "create",
+            fallbackProviderModelIds: [seededModels.anthropic.id],
+            primaryProviderModelIds: [seededModels.openai.id],
+            strategy: "random",
+            virtualModelId,
+          });
+          await page.goto(`${baseUrl}/models?virtualModelDialog=${virtualModelId}`);
+          const candidateTable = page.locator(".vm-candidate-table");
+          await expect(candidateTable).toContainText("GPT 4.1 Mini");
+          await expect(candidateTable).toContainText("128K");
+          await expect(candidateTable).toContainText("Yes");
 
           await expect
             .poll(() => readRoutePolicyState(fixture))
@@ -86,26 +74,20 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
                   providerModelId: seededModels.anthropic.id,
                 },
               ],
-              strategy: "balanced",
+              strategy: "random",
               virtualModelName: "coding-fast",
             });
 
-          await page.getByLabel("Edit route policy strategy").selectOption("quality_first");
-          await page
-            .getByLabel("Edit primary provider models")
-            .selectOption({ label: seededModels.anthropic.selectorLabel });
-          await page
-            .getByLabel("Edit fallback provider models")
-            .selectOption({ label: seededModels.openai.selectorLabel });
-          await page.getByRole("button", { name: "Save route policy" }).click();
+          const routePolicyId = await readRoutePolicyId(fixture);
+          await postRoutePolicyAction(page, {
+            action: "update",
+            fallbackProviderModelIds: [seededModels.openai.id],
+            id: routePolicyId,
+            primaryProviderModelIds: [seededModels.anthropic.id],
+            strategy: "quality_first",
+            virtualModelId,
+          });
 
-          await openRow(page, "Coding Fast");
-          await expect(page.getByText("Strategy: quality_first")).toBeVisible();
-          await expect(
-            page.getByText(
-              "Route reason: quality_first route for coding-fast uses 1 primary candidate with 1 fallback.",
-            ),
-          ).toBeVisible();
           await expect
             .poll(() => readRoutePolicyState(fixture))
             .toEqual({
@@ -125,8 +107,10 @@ test("route policy CRUD persists candidates cost preference and fallback chain",
               virtualModelName: "coding-fast",
             });
 
-          await page.getByRole("button", { name: "Delete route policy" }).click();
-          await expect(page.getByText("No route policies configured.")).toBeVisible();
+          await postRoutePolicyAction(page, {
+            action: "delete",
+            id: routePolicyId,
+          });
           await expect.poll(() => countRoutePolicies(fixture)).toBe(0);
         } finally {
           await context.close();
@@ -201,20 +185,16 @@ async function seedProviderModels(fixture: Fixture): Promise<{
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:029', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = 0.40,
+          synced_output_usd_per_million_tokens = 1.60,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:029',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      where model_id = 'gpt-4.1-mini'
     `,
-    [randomUUID()],
   );
 
   return {
@@ -274,9 +254,80 @@ async function readRoutePolicyState(fixture: Fixture): Promise<RoutePolicyState>
 
 async function countRoutePolicies(fixture: Fixture): Promise<number> {
   const result = await fixture.query<{ count: number }>(
-    "select count(*)::integer as count from route_policies",
+    "select count(*)::integer as count from route_policies where deleted_at is null",
   );
   return result.rows[0]?.count ?? 0;
+}
+
+async function readRoutePolicyId(fixture: Fixture): Promise<string> {
+  const result = await fixture.query<{ id: string }>("select id::text from route_policies");
+  const id = result.rows[0]?.id;
+  if (!id) {
+    throw new Error("Route policy was not found.");
+  }
+  return id;
+}
+
+async function readVirtualModelId(fixture: Fixture, name: string): Promise<string> {
+  const result = await fixture.query<{ id: string }>(
+    "select id::text from virtual_models where name = $1",
+    [name],
+  );
+  const id = result.rows[0]?.id;
+  if (!id) {
+    throw new Error(`Virtual model ${name} was not found.`);
+  }
+  return id;
+}
+
+async function postVirtualModelAction(
+  page: Page,
+  input: { action: string; description: string; name: string },
+): Promise<void> {
+  const result = await page.evaluate(async (payload) => {
+    const body = new FormData();
+    body.set("action", payload.action);
+    body.set("name", payload.name);
+    body.set("description", payload.description);
+    const response = await fetch("/api/virtual-models", { body, method: "POST" });
+    return { status: response.status, text: await response.text() };
+  }, input);
+  expect(result.status).toBe(200);
+}
+
+async function postRoutePolicyAction(
+  page: Page,
+  input: {
+    action: string;
+    fallbackProviderModelIds?: string[];
+    id?: string;
+    primaryProviderModelIds?: string[];
+    strategy?: string;
+    virtualModelId?: string;
+  },
+): Promise<void> {
+  const result = await page.evaluate(async (payload) => {
+    const body = new FormData();
+    body.set("action", payload.action);
+    if (payload.id) {
+      body.set("id", payload.id);
+    }
+    if (payload.virtualModelId) {
+      body.set("virtualModelId", payload.virtualModelId);
+    }
+    if (payload.strategy) {
+      body.set("strategy", payload.strategy);
+    }
+    for (const providerModelId of payload.primaryProviderModelIds ?? []) {
+      body.append("primaryProviderModelIds", providerModelId);
+    }
+    for (const providerModelId of payload.fallbackProviderModelIds ?? []) {
+      body.append("fallbackProviderModelIds", providerModelId);
+    }
+    const response = await fetch("/api/route-policies", { body, method: "POST" });
+    return { status: response.status, text: await response.text() };
+  }, input);
+  expect(result.status).toBe(200);
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

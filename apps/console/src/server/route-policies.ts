@@ -5,10 +5,11 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { isRemovedProviderKey } from "@llmingress/db/providers";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
 
-export const routePolicyStrategies = ["fixed", "cost_first", "balanced", "quality_first"] as const;
+export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
@@ -28,6 +29,7 @@ export type NormalizedRoutePolicyFormInput = {
 
 export type ConsoleProviderModelOption = {
   availability: string;
+  contextWindow: number | null;
   id: string;
   modelDisplayName: string;
   modelId: string;
@@ -35,10 +37,16 @@ export type ConsoleProviderModelOption = {
   pricedOptionLabel: string;
   priceStatus: ModelTokenPrice["status"];
   priceStatusLabel: string;
+  /** Effective input price (manual override > synced > built-in); null when unknown. */
+  inputUsdPerMillionTokens: number | null;
+  /** Effective output price; null when unknown. */
+  outputUsdPerMillionTokens: number | null;
   providerDisplayName: string;
   providerId: string;
   providerKey: string;
   providerEnabled: boolean;
+  supportsStreaming: boolean;
+  supportsTools: boolean;
 };
 
 export type ConsoleRoutePolicyCandidate = ConsoleProviderModelOption & {
@@ -75,6 +83,11 @@ export type RoutePolicyEditorFilters = {
   providerKey: string | null;
 };
 
+export type RoutePolicyEditorProviderHealth = {
+  id: string;
+  status: string | null | undefined;
+};
+
 export type RoutePolicyHealthWarningCandidate = {
   modelHealthIsStale?: boolean;
   modelHealthStatus?: string | null;
@@ -90,7 +103,7 @@ export type RouteReasonMetadataInput = {
   virtualModelName: string;
 };
 
-type RoutePolicyRow = QueryResultRow & {
+type RoutePolicyRow = PostgresQueryResultRow & {
   id: string;
   strategy: RoutePolicyStrategy;
   virtual_model_display_name: string;
@@ -98,9 +111,10 @@ type RoutePolicyRow = QueryResultRow & {
   virtual_model_name: string;
 };
 
-type CandidateRow = QueryResultRow & {
+type CandidateRow = PostgresQueryResultRow & {
   availability: string;
   candidate_order: number;
+  context_window?: number | null;
   id: string;
   is_fallback: boolean;
   model_display_name: string;
@@ -120,10 +134,13 @@ type CandidateRow = QueryResultRow & {
   provider_id: string;
   provider_key: string;
   route_policy_id: string;
+  supports_streaming?: boolean | null;
+  supports_tools?: boolean | null;
 };
 
-type ProviderModelOptionRow = QueryResultRow & {
+type ProviderModelOptionRow = PostgresQueryResultRow & {
   availability: string;
+  context_window?: number | null;
   id: string;
   model_display_name: string;
   model_id: string;
@@ -141,10 +158,12 @@ type ProviderModelOptionRow = QueryResultRow & {
   provider_enabled: boolean;
   provider_id: string;
   provider_key: string;
+  supports_streaming?: boolean | null;
+  supports_tools?: boolean | null;
 };
 
-type BudgetedVirtualModelUsageRow = QueryResultRow & {
-  budgeted_agent_api_key_count: number;
+type BudgetedVirtualModelUsageRow = PostgresQueryResultRow & {
+  budgeted_agent_count: number;
   display_name: string;
   name: string;
 };
@@ -168,7 +187,7 @@ export function normalizeRoutePolicyFormInput(
     throw new Error("Route policy virtual model is required.");
   }
   if (!isRoutePolicyStrategy(strategy)) {
-    throw new Error("Route policy strategy must be fixed, cost_first, balanced, or quality_first.");
+    throw new Error("Route policy strategy must be fixed, cost_first, quality_first, or random.");
   }
   if (primaryProviderModelIds.length === 0) {
     throw new Error("Route policy requires at least one primary provider model.");
@@ -286,6 +305,18 @@ export function filterRoutePolicyEditorProviderModelOptions(
   });
 }
 
+export function filterRoutePolicyEditorHealthyProviderModelOptions(
+  options: readonly ConsoleProviderModelOption[],
+  providerHealth: readonly RoutePolicyEditorProviderHealth[],
+): ConsoleProviderModelOption[] {
+  const unhealthyProviderIds = new Set(
+    providerHealth
+      .filter((summary) => isWarningHealthStatus(summary.status))
+      .map((summary) => summary.id),
+  );
+  return options.filter((option) => !unhealthyProviderIds.has(option.providerId));
+}
+
 export function mergeRoutePolicyEditorProviderModelOptions(
   filteredOptions: readonly ConsoleProviderModelOption[],
   selectedCandidates: readonly ConsoleProviderModelOption[],
@@ -339,7 +370,9 @@ export async function listProviderModelOptions(
 ): Promise<ConsoleProviderModelOption[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderModelOptionRow>(providerModelOptionsSql());
-    return result.rows.map(rowToProviderModelOption);
+    return result.rows
+      .filter((row) => !isRemovedProviderKey(row.provider_key))
+      .map(rowToProviderModelOption);
   });
 }
 
@@ -351,9 +384,11 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                route_policies.strategy,
                virtual_models.id::text as virtual_model_id,
                virtual_models.name as virtual_model_name,
-               virtual_models.display_name as virtual_model_display_name
+               virtual_models.description as virtual_model_display_name
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
+        where route_policies.deleted_at is null
+          and virtual_models.deleted_at is null
         order by virtual_models.name
       `,
     );
@@ -372,48 +407,36 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
                        providers.enabled as provider_enabled,
                        provider_models.model_id,
                        provider_models.display_name as model_display_name,
+                       provider_models.context_window,
+                       provider_models.supports_streaming,
+                       provider_models.supports_tools,
                        provider_models.availability,
                        provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
                        provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
                        provider_models.manual_output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
                        provider_models.manual_price_updated_at as price_override_updated_at,
-                       latest_provider_model_price.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
-                       latest_provider_model_price.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
-                       latest_provider_model_price.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
-                       latest_provider_model_price.price_version as price_sync_price_version,
-                       latest_provider_model_price.source_url as price_sync_source_url,
-                       latest_provider_model_price.synced_at as price_sync_synced_at,
+                       provider_models.synced_input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+                       provider_models.synced_cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+                       provider_models.synced_output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+                       provider_models.synced_price_version as price_sync_price_version,
+                       provider_models.synced_price_source_url as price_sync_source_url,
+                       provider_models.synced_price_synced_at as price_sync_synced_at,
                        route_policy_candidates.candidate_order,
                        route_policy_candidates.is_fallback
                 from route_policy_candidates
                 join provider_models on provider_models.id = route_policy_candidates.provider_model_id
                 join providers on providers.id = provider_models.provider_id
-                left join lateral (
-                  select input_usd_per_million_tokens,
-                         cached_input_usd_per_million_tokens,
-                         output_usd_per_million_tokens,
-                         price_version,
-                         source_url,
-                         synced_at
-                  from provider_models_price
-                  where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-                    and provider_models_price.model_id = provider_models.model_id
-                  order by case provider_models_price.source
-                             when 'models.dev' then 0
-                             when 'litellm' then 1
-                             else 2
-                           end,
-                           synced_at desc,
-                           updated_at desc
-                  limit 1
-                ) latest_provider_model_price on true
                 where route_policy_candidates.route_policy_id = any($1::uuid[])
+                  and providers.deleted_at is null
+                  and provider_models.deleted_at is null
                 order by route_policy_candidates.candidate_order
               `,
               [policyIds],
             )
           ).rows;
-    const candidatesByPolicyId = groupCandidatesByPolicyId(candidateRows);
+    const candidatesByPolicyId = groupCandidatesByPolicyId(
+      candidateRows.filter((row) => !isRemovedProviderKey(row.provider_key)),
+    );
     return policies.rows.map((policy) =>
       rowToConsoleRoutePolicy(policy, candidatesByPolicyId.get(policy.id) ?? []),
     );
@@ -454,7 +477,7 @@ export async function createRoutePolicy(input: {
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_name,
                     (
-                      select display_name
+                      select description
                       from virtual_models
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_display_name
@@ -511,7 +534,7 @@ export async function updateRoutePolicy(input: {
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_name,
                     (
-                      select display_name
+                      select description
                       from virtual_models
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_display_name
@@ -538,7 +561,14 @@ export async function deleteRoutePolicy(input: { databaseUrl: string; id: string
     write: async (client) => {
       await readRoutePolicyForUpdate(client, input.id);
       const result = await client.query<{ id: string }>(
-        "delete from route_policies where id = $1 returning id::text",
+        `
+          update route_policies
+          set deleted_at = now(),
+              updated_at = now()
+          where id = $1
+            and deleted_at is null
+          returning id::text
+        `,
         [input.id],
       );
       if (!result.rows[0]) {
@@ -552,9 +582,10 @@ async function assertVirtualModelExists(
   client: QueryClient,
   virtualModelId: string,
 ): Promise<void> {
-  const result = await client.query("select 1 from virtual_models where id = $1 for update", [
-    virtualModelId,
-  ]);
+  const result = await client.query(
+    "select 1 from virtual_models where id = $1 and deleted_at is null for update",
+    [virtualModelId],
+  );
   if (!result.rows[0]) {
     throw new Error("Virtual Model was not found.");
   }
@@ -565,7 +596,7 @@ async function assertVirtualModelHasNoRoutePolicy(
   virtualModelId: string,
 ): Promise<void> {
   const result = await client.query(
-    "select 1 from route_policies where virtual_model_id = $1 limit 1",
+    "select 1 from route_policies where virtual_model_id = $1 and deleted_at is null limit 1",
     [virtualModelId],
   );
   if (result.rows[0]) {
@@ -578,7 +609,14 @@ async function assertProviderModelsExist(
   providerModelIds: readonly string[],
 ): Promise<void> {
   const result = await client.query<{ id: string }>(
-    "select id::text from provider_models where id = any($1::uuid[])",
+    `
+      select provider_models.id::text
+      from provider_models
+      join providers on providers.id = provider_models.provider_id
+      where provider_models.id = any($1::uuid[])
+        and provider_models.deleted_at is null
+        and providers.deleted_at is null
+    `,
     [providerModelIds],
   );
   const foundIds = new Set(result.rows.map((row) => row.id));
@@ -593,7 +631,7 @@ async function assertBudgetSafeRoutePolicyCandidates(
   routePolicy: NormalizedRoutePolicyFormInput,
 ): Promise<void> {
   const budgetedUsage = await readBudgetedVirtualModelUsage(client, routePolicy.virtualModelId);
-  if (budgetedUsage.budgeted_agent_api_key_count === 0) {
+  if (budgetedUsage.budgeted_agent_count === 0) {
     return;
   }
 
@@ -624,27 +662,29 @@ async function readBudgetedVirtualModelUsage(
   const result = await client.query<BudgetedVirtualModelUsageRow>(
     `
       select virtual_models.name,
-             virtual_models.display_name,
-             count(distinct agent_api_keys.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_api_key_count
+             virtual_models.description as display_name,
+             count(distinct agents.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_count
       from virtual_models
-      left join agent_api_keys
-        on agent_api_keys.enabled = true
+      left join agents
+        on agents.enabled = true
+       and agents.deleted_at is null
        and (
-            agent_api_keys.default_virtual_model_id = virtual_models.id
+            agents.default_virtual_model_id = virtual_models.id
             or exists (
               select 1
-              from agent_api_key_virtual_models
-              where agent_api_key_virtual_models.agent_api_key_id = agent_api_keys.id
-                and agent_api_key_virtual_models.virtual_model_id = virtual_models.id
+              from agent_virtual_models
+              where agent_virtual_models.agent_id = agents.id
+                and agent_virtual_models.virtual_model_id = virtual_models.id
             )
        )
       left join agent_limits
-        on agent_limits.agent_api_key_id = agent_api_keys.id
+        on agent_limits.agent_id = agents.id
        and agent_limits.enabled = true
        and agent_limits.limit_type = 'budget'
        and agent_limits.unit = 'usd'
       where virtual_models.id = $1
-      group by virtual_models.id, virtual_models.name, virtual_models.display_name
+        and virtual_models.deleted_at is null
+      group by virtual_models.id, virtual_models.name, virtual_models.description
     `,
     [virtualModelId],
   );
@@ -663,6 +703,8 @@ async function readProviderModelOptionsById(
     `
       ${providerModelOptionsSelectSql()}
       where provider_models.id = any($1::uuid[])
+        and provider_models.deleted_at is null
+        and providers.deleted_at is null
       order by providers.display_name, provider_models.display_name
     `,
     [providerModelIds],
@@ -680,10 +722,12 @@ async function readRoutePolicyForUpdate(
              route_policies.strategy,
              route_policies.virtual_model_id::text,
              virtual_models.name as virtual_model_name,
-             virtual_models.display_name as virtual_model_display_name
+             virtual_models.description as virtual_model_display_name
       from route_policies
       join virtual_models on virtual_models.id = route_policies.virtual_model_id
       where route_policies.id = $1
+        and route_policies.deleted_at is null
+        and virtual_models.deleted_at is null
       for update of route_policies
     `,
     [routePolicyId],
@@ -733,6 +777,9 @@ async function writeRoutePolicyCandidates(
                providers.enabled as provider_enabled,
                provider_models.model_id,
                provider_models.display_name as model_display_name,
+               provider_models.context_window,
+               provider_models.supports_streaming,
+               provider_models.supports_tools,
                provider_models.availability,
                provider_models.manual_input_usd_per_million_tokens::text
                  as price_override_input_usd_per_million_tokens,
@@ -741,39 +788,22 @@ async function writeRoutePolicyCandidates(
                provider_models.manual_output_usd_per_million_tokens::text
                  as price_override_output_usd_per_million_tokens,
                provider_models.manual_price_updated_at as price_override_updated_at,
-               latest_provider_model_price.input_usd_per_million_tokens::text
+               provider_models.synced_input_usd_per_million_tokens::text
                  as price_sync_input_usd_per_million_tokens,
-               latest_provider_model_price.cached_input_usd_per_million_tokens::text
+               provider_models.synced_cached_input_usd_per_million_tokens::text
                  as price_sync_cached_input_usd_per_million_tokens,
-               latest_provider_model_price.output_usd_per_million_tokens::text
+               provider_models.synced_output_usd_per_million_tokens::text
                  as price_sync_output_usd_per_million_tokens,
-               latest_provider_model_price.price_version as price_sync_price_version,
-               latest_provider_model_price.source_url as price_sync_source_url,
-               latest_provider_model_price.synced_at as price_sync_synced_at,
+               provider_models.synced_price_version as price_sync_price_version,
+               provider_models.synced_price_source_url as price_sync_source_url,
+               provider_models.synced_price_synced_at as price_sync_synced_at,
                inserted.candidate_order,
                inserted.is_fallback
         from inserted
         join provider_models on provider_models.id = inserted.provider_model_id
         join providers on providers.id = provider_models.provider_id
-        left join lateral (
-          select input_usd_per_million_tokens,
-                 cached_input_usd_per_million_tokens,
-                 output_usd_per_million_tokens,
-                 price_version,
-                 source_url,
-                 synced_at
-          from provider_models_price
-          where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-            and provider_models_price.model_id = provider_models.model_id
-          order by case provider_models_price.source
-                     when 'models.dev' then 0
-                     when 'litellm' then 1
-                     else 2
-                   end,
-                   synced_at desc,
-                   updated_at desc
-          limit 1
-        ) latest_provider_model_price on true
+        where provider_models.deleted_at is null
+          and providers.deleted_at is null
       `,
       [randomUUID(), routePolicyId, candidate.providerModelId, index + 1, candidate.isFallback],
     );
@@ -800,11 +830,23 @@ function isRoutePolicyStrategy(value: string | null | undefined): value is Route
 }
 
 function isWarningHealthStatus(value: string | null | undefined): value is string {
-  return value === "degraded" || value === "unhealthy";
+  return (
+    value === "auth_failed" ||
+    value === "network_error" ||
+    value === "quota_limited" ||
+    value === "unhealthy"
+  );
 }
 
 function formatRoutePolicyHealthStatus(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  return (
+    {
+      auth_failed: "Auth failed",
+      network_error: "Network error",
+      quota_limited: "Quota limited",
+      unhealthy: "Unhealthy",
+    }[value] ?? `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+  );
 }
 
 function normalizeOptionalFilter(value: string | null | undefined): string | null {
@@ -819,6 +861,9 @@ function isUuid(value: string): boolean {
 function providerModelOptionsSql(): string {
   return `
     ${providerModelOptionsSelectSql()}
+    where provider_models.deleted_at is null
+      and provider_models.availability = 'available'
+      and providers.deleted_at is null
     order by providers.display_name, provider_models.display_name
   `;
 }
@@ -832,38 +877,22 @@ function providerModelOptionsSelectSql(): string {
            providers.enabled as provider_enabled,
            provider_models.model_id,
            provider_models.display_name as model_display_name,
+           provider_models.context_window,
+           provider_models.supports_streaming,
+           provider_models.supports_tools,
            provider_models.availability,
            provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
            provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
            provider_models.manual_output_usd_per_million_tokens::text as price_override_output_usd_per_million_tokens,
            provider_models.manual_price_updated_at as price_override_updated_at,
-           latest_provider_model_price.input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
-           latest_provider_model_price.cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
-           latest_provider_model_price.output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
-           latest_provider_model_price.price_version as price_sync_price_version,
-           latest_provider_model_price.source_url as price_sync_source_url,
-           latest_provider_model_price.synced_at as price_sync_synced_at
+           provider_models.synced_input_usd_per_million_tokens::text as price_sync_input_usd_per_million_tokens,
+           provider_models.synced_cached_input_usd_per_million_tokens::text as price_sync_cached_input_usd_per_million_tokens,
+           provider_models.synced_output_usd_per_million_tokens::text as price_sync_output_usd_per_million_tokens,
+           provider_models.synced_price_version as price_sync_price_version,
+           provider_models.synced_price_source_url as price_sync_source_url,
+           provider_models.synced_price_synced_at as price_sync_synced_at
     from provider_models
     join providers on providers.id = provider_models.provider_id
-    left join lateral (
-      select input_usd_per_million_tokens,
-             cached_input_usd_per_million_tokens,
-             output_usd_per_million_tokens,
-             price_version,
-             source_url,
-             synced_at
-      from provider_models_price
-      where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-        and provider_models_price.model_id = provider_models.model_id
-      order by case provider_models_price.source
-                 when 'models.dev' then 0
-                 when 'litellm' then 1
-                 else 2
-               end,
-               synced_at desc,
-               updated_at desc
-      limit 1
-    ) latest_provider_model_price on true
   `;
 }
 
@@ -923,6 +952,7 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
 
   return {
     availability: row.availability,
+    contextWindow: row.context_window ?? null,
     id: row.id,
     modelDisplayName: row.model_display_name,
     modelId: row.model_id,
@@ -939,10 +969,16 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     }),
     priceStatus: price.status,
     priceStatusLabel,
+    inputUsdPerMillionTokens:
+      price.status === "unknown_price" ? null : price.inputUsdPerMillionTokens,
+    outputUsdPerMillionTokens:
+      price.status === "unknown_price" ? null : price.outputUsdPerMillionTokens,
     providerDisplayName: row.provider_display_name,
     providerEnabled: row.provider_enabled,
     providerId: row.provider_id,
     providerKey: row.provider_key,
+    supportsStreaming: row.supports_streaming ?? false,
+    supportsTools: row.supports_tools ?? false,
   };
 }
 
@@ -1013,9 +1049,9 @@ function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): C
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

@@ -5,6 +5,11 @@ import {
   verifyConsoleSession,
 } from "../../../server/auth";
 import {
+  createRoutePolicy,
+  normalizeRoutePolicyFormInput,
+  updateRoutePolicy,
+} from "../../../server/route-policies";
+import {
   createVirtualModel,
   deleteVirtualModel,
   normalizeVirtualModelFormInput,
@@ -28,19 +33,72 @@ export async function POST(request: NextRequest) {
       await createVirtualModel({
         databaseUrl,
         virtualModel: normalizeVirtualModelFormInput({
-          displayName: readText(form, "displayName"),
+          description: readText(form, "description"),
           name: readText(form, "name"),
         }),
       });
+    } else if (action === "createWithRoute") {
+      const virtualModel = await createVirtualModel({
+        databaseUrl,
+        virtualModel: normalizeVirtualModelFormInput({
+          description: readText(form, "description"),
+          name: readText(form, "name"),
+        }),
+      });
+      const primaryProviderModelIds = readAllText(form, "primaryProviderModelIds");
+      if (primaryProviderModelIds.length > 0) {
+        await createRoutePolicy({
+          databaseUrl,
+          routePolicy: normalizeRoutePolicyFormInput({
+            fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
+            primaryProviderModelIds,
+            strategy: readText(form, "strategy"),
+            virtualModelId: virtualModel.id,
+          }),
+        });
+      }
     } else if (action === "update") {
       await updateVirtualModel({
         databaseUrl,
         id: readRequiredText(form, "id"),
         virtualModel: normalizeVirtualModelFormInput({
-          displayName: readText(form, "displayName"),
+          description: readText(form, "description"),
           name: readText(form, "name"),
         }),
       });
+    } else if (action === "updateWithRoute") {
+      await updateVirtualModel({
+        databaseUrl,
+        id: readRequiredText(form, "id"),
+        virtualModel: normalizeVirtualModelFormInput({
+          description: readText(form, "description"),
+          name: readText(form, "name"),
+        }),
+      });
+      const routePolicyId = readText(form, "routePolicyId");
+      const primaryProviderModelIds = readAllText(form, "primaryProviderModelIds");
+      if (routePolicyId && primaryProviderModelIds.length > 0) {
+        await updateRoutePolicy({
+          databaseUrl,
+          id: routePolicyId,
+          routePolicy: normalizeRoutePolicyFormInput({
+            fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
+            primaryProviderModelIds,
+            strategy: readText(form, "strategy"),
+            virtualModelId: readRequiredText(form, "id"),
+          }),
+        });
+      } else if (!routePolicyId && primaryProviderModelIds.length > 0) {
+        await createRoutePolicy({
+          databaseUrl,
+          routePolicy: normalizeRoutePolicyFormInput({
+            fallbackProviderModelIds: readAllText(form, "fallbackProviderModelIds"),
+            primaryProviderModelIds,
+            strategy: readText(form, "strategy"),
+            virtualModelId: readRequiredText(form, "id"),
+          }),
+        });
+      }
     } else if (action === "delete") {
       await deleteVirtualModel({
         databaseUrl,
@@ -62,6 +120,13 @@ export async function POST(request: NextRequest) {
 function readText(form: FormData, name: string): string | undefined {
   const value = form.get(name);
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readAllText(form: FormData, name: string): string[] {
+  return form
+    .getAll(name)
+    .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    .map((value) => value.trim());
 }
 
 function readRequiredText(form: FormData, name: string): string {

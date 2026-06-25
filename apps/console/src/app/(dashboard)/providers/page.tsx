@@ -1,3 +1,4 @@
+import { FlatIcon } from "../../_components/flat-icon";
 import { PageHeader } from "../../_components/page-header";
 import { type ConsoleSearchParams, ProvidersSection } from "../../_modules/sections";
 
@@ -8,11 +9,16 @@ export default async function ProvidersPage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page providers-page">
       <PageHeader
-        eyebrow="Infrastructure"
-        title="Providers"
-        description="Upstream providers, API keys, discovered models, and health."
+        title="Providers & Models"
+        description="Configure provider keys, refresh model lists, and manage model pricing."
+        actions={
+          <a className="btn" href="?providerDialog=new">
+            <FlatIcon name="add" />
+            <span>Add Provider</span>
+          </a>
+        }
       />
       <ProvidersSection searchParams={resolved} />
     </div>

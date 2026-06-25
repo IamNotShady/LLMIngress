@@ -150,7 +150,7 @@ async function seedFallbackRoute(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'fallback-coding', 'Fallback Coding', true)
     `,
     [virtualModelId],
@@ -179,15 +179,7 @@ async function seedFallbackRoute(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_test', $3, $4, true)
+      update agents set id = $1, key_prefix = 'llmi_test', key_hash = $3, default_virtual_model_id = $4, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, `hash_${randomUUID()}`, virtualModelId],
   );
@@ -196,10 +188,10 @@ async function seedFallbackRoute(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,

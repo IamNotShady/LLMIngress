@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   const providerKey = readText(form, "providerKey");
   const modelId = readText(form, "modelId");
+  const redirectModel = readText(form, "redirectModel");
   const inputPrice = readNumber(form, "inputUsdPerMillionTokens");
   const outputPrice = readNumber(form, "outputUsdPerMillionTokens");
 
@@ -43,7 +44,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/pricing", request.url), { status: 303 });
+  const redirectUrl = new URL("/pricing", request.url);
+  if (redirectModel) {
+    redirectUrl.searchParams.set("model", redirectModel);
+  }
+  return NextResponse.redirect(redirectUrl, { status: 303 });
 }
 
 function readText(form: FormData, name: string): string | undefined {

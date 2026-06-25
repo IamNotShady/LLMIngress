@@ -1,8 +1,8 @@
 import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
 
-type PriceOverrideRow = QueryResultRow & {
+type PriceOverrideRow = PostgresQueryResultRow & {
   id: string;
   cached_input_usd_per_million_tokens: string | null;
   input_usd_per_million_tokens: string;
@@ -32,6 +32,8 @@ export async function getManualPriceOverride(input: {
         join providers on providers.id = provider_models.provider_id
         where lower(providers.provider_key) = lower($1)
           and provider_models.model_id = $2
+          and providers.deleted_at is null
+          and provider_models.deleted_at is null
           and provider_models.manual_input_usd_per_million_tokens is not null
           and provider_models.manual_output_usd_per_million_tokens is not null
           and provider_models.manual_price_updated_at is not null
@@ -75,6 +77,8 @@ export async function saveManualPriceOverride(input: {
           where providers.id = provider_models.provider_id
             and lower(providers.provider_key) = lower($1)
             and provider_models.model_id = $2
+            and providers.deleted_at is null
+            and provider_models.deleted_at is null
           returning provider_models.id::text as id,
                     providers.provider_key,
                     provider_models.model_id,
@@ -128,9 +132,9 @@ function normalizeProviderKey(providerKey: string): string {
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

@@ -1,9 +1,9 @@
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/health";
 import {
   getMigrationStatusFromDatabase,
   type MigrationStatusSummary,
   shippedSqlMigrations,
 } from "@llmingress/db/migration-status";
-import { Client, type QueryResultRow } from "pg";
 
 export type ConsoleGatewayRuntimeStatus = {
   appliedConfigVersion: number | null;
@@ -33,7 +33,7 @@ export type ConsoleRuntimeSnapshot = {
   migrations: MigrationStatusSummary;
 };
 
-type GatewayRuntimeRow = QueryResultRow & {
+type GatewayRuntimeRow = PostgresQueryResultRow & {
   applied_config_version: number | null;
   gateway_instance_id: string;
   heartbeat_at: Date | null;
@@ -46,7 +46,7 @@ type GatewayRuntimeRow = QueryResultRow & {
   updated_at: Date;
 };
 
-type RuntimeErrorRow = QueryResultRow & {
+type RuntimeErrorRow = PostgresQueryResultRow & {
   created_at: Date;
   error_code: string;
   error_message: string;
@@ -58,7 +58,7 @@ type RuntimeErrorRow = QueryResultRow & {
 export async function getConsoleRuntimeSnapshot(
   databaseUrl: string,
 ): Promise<ConsoleRuntimeSnapshot> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

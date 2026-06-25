@@ -10,11 +10,11 @@ export type FakeProviderMode =
   | "json"
   | "stream"
   | "error"
+  | "rate-limit"
   | "timeout"
   | "first-byte-failure"
   | "midstream-error"
   | "openrouter-error"
-  | "gemini"
   | "embeddings"
   | "cached-usage";
 
@@ -28,6 +28,7 @@ export type CapturedFakeProviderRequest = {
 };
 
 export type FakeProviderModel = {
+  contextWindow?: number;
   id: string;
   name?: string;
 };
@@ -142,6 +143,7 @@ async function handleRequest(
       writeJson(response, 200, {
         object: "list",
         data: options.getModels().map((model) => ({
+          ...(model.contextWindow === undefined ? {} : { context_window: model.contextWindow }),
           id: model.id,
           name: model.name ?? model.id,
           object: "model",
@@ -247,40 +249,6 @@ async function handleRequest(
       return;
     }
 
-    if (mode === "gemini" && url.pathname.includes(":generateContent")) {
-      writeJson(response, 200, {
-        candidates: [
-          {
-            content: {
-              role: "model",
-              parts: [{ text: "fake gemini response" }],
-            },
-            finishReason: "STOP",
-            index: 0,
-          },
-        ],
-        modelVersion: "gemini-3.5-flash",
-        responseId: "fake-gemini-response",
-        usageMetadata: {
-          candidatesTokenCount: 4,
-          promptTokenCount: 6,
-          totalTokenCount: 10,
-        },
-      });
-      return;
-    }
-
-    if (mode === "gemini") {
-      writeJson(response, 404, {
-        error: {
-          code: 404,
-          message: "Gemini fake provider expected generateContent path",
-          status: "NOT_FOUND",
-        },
-      });
-      return;
-    }
-
     if (mode === "json") {
       writeJson(response, 200, {
         id: "fake-provider-response",
@@ -296,12 +264,16 @@ async function handleRequest(
         "cache-control": "no-cache",
       });
       response.write('data: {"delta":"fake"}\n\n');
-      const secondChunkTimer = setTimeout(() => {
-        response.write('data: {"delta":" stream"}\n\n');
-      }, 300);
+      const streamEndMs = readPositiveIntegerQuery(url, "stream_end_ms", 700);
+      const secondChunkTimer = setTimeout(
+        () => {
+          response.write('data: {"delta":" stream"}\n\n');
+        },
+        Math.min(300, streamEndMs),
+      );
       const endTimer = setTimeout(() => {
         response.end("data: [DONE]\n\n");
-      }, 700);
+      }, streamEndMs);
       response.once("close", () => {
         clearTimeout(secondChunkTimer);
         clearTimeout(endTimer);
@@ -327,6 +299,16 @@ async function handleRequest(
         error: {
           code: "fake_provider_error",
           message: "Fake provider error",
+        },
+      });
+      return;
+    }
+
+    if (mode === "rate-limit") {
+      writeJson(response, 429, {
+        error: {
+          code: "rate_limit_error",
+          message: "Fake provider rate limit",
         },
       });
       return;
@@ -373,17 +355,22 @@ function readMode(url: URL): FakeProviderMode {
     mode === "json" ||
     mode === "stream" ||
     mode === "error" ||
+    mode === "rate-limit" ||
     mode === "timeout" ||
     mode === "first-byte-failure" ||
     mode === "midstream-error" ||
     mode === "openrouter-error" ||
-    mode === "gemini" ||
     mode === "embeddings" ||
     mode === "cached-usage"
   ) {
     return mode;
   }
   return "json";
+}
+
+function readPositiveIntegerQuery(url: URL, name: string, fallback: number): number {
+  const value = Number(url.searchParams.get(name));
+  return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 function writeJson(response: ServerResponse<IncomingMessage>, status: number, body: unknown): void {

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 import { createFakeProviderServer } from "../support/fake-provider";
 
 test("openai adapter sends compatible payload auth header and maps response error", async () => {

@@ -36,7 +36,7 @@ test("config import export redacts secrets validates publishes config version an
 
           const settingsSection = page.getByRole("region", { name: "Settings" });
           await expect(
-            settingsSection.getByRole("heading", { name: "Config import/export" }),
+            settingsSection.getByRole("heading", { name: "Data", exact: true }),
           ).toBeVisible();
 
           const downloadPromise = page.waitForEvent("download");
@@ -54,8 +54,8 @@ test("config import export redacts secrets validates publishes config version an
             agents: Array<Record<string, unknown>>;
           };
           exported.agents.push({
-            agentApiKeys: [],
             agentType: "coding",
+            apiKey: null,
             enabled: true,
             id: randomUUID(),
             name: "Imported Config Agent",
@@ -68,12 +68,10 @@ test("config import export redacts secrets validates publishes config version an
 
           await expect(page.getByText(/Config import published version v\d+/)).toBeVisible();
           await page.goto(`${baseUrl}/agents`);
-          await expect(
-            page.getByRole("heading", { exact: true, name: "Imported Config Agent" }),
-          ).toBeVisible();
+          await expect(page.locator("table.agents-table")).toContainText("Imported Config Agent");
           await page.goto(`${baseUrl}/providers`);
           await openRow(page, "Config Export DeepSeek");
-          await expect(page.getByText("Provider API key prefix: sk-cfg80")).toBeVisible();
+          await expect(page.getByRole("row", { name: /- 100 Unknown/ })).toBeVisible();
         } finally {
           await context.close();
         }
@@ -138,7 +136,7 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
     [ids.providerApiKeyId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'config-e2e', 'Config E2E', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'config-e2e', 'Config E2E', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -160,16 +158,13 @@ async function seedConfigExportData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-      )
-      values ($1, $2, 'llmi_cfg80', 'sha256:v1:config-export-e2e-secret-hash-080', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_cfg80', key_hash = 'sha256:v1:config-export-e2e-secret-hash-080', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [ids.agentApiKeyId, ids.virtualModelId],

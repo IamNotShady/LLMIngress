@@ -17,6 +17,7 @@ export function mapGatewayErrorStatus(code: string, fallbackStatus = 500): numbe
     code === "invalid_messages_request" ||
     code === "invalid_responses_request" ||
     code === "missing_model" ||
+    code === "provider_protocol_unsupported" ||
     code === "unsupported_stateful_responses"
   ) {
     return 400;
@@ -24,7 +25,7 @@ export function mapGatewayErrorStatus(code: string, fallbackStatus = 500): numbe
   if (code === "route_not_found") {
     return 404;
   }
-  if (code === "rate_limit_exceeded") {
+  if (code === "rate_limit_exceeded" || code === "provider_rate_limited") {
     return 429;
   }
   if (

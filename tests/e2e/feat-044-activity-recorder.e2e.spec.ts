@@ -52,7 +52,7 @@ test("success and failure requests create activity rows with route fallback late
         .poll(() => readActivities(fixture))
         .toEqual([
           {
-            agent_api_key_prefix: agentApiKey.slice(0, 12),
+            agent_key_prefix: agentApiKey.slice(0, 12),
             error_code: null,
             fallback_attempts: [
               expect.objectContaining({
@@ -68,16 +68,16 @@ test("success and failure requests create activity rows with route fallback late
             provider_model_id: seeded.successProviderModelId,
             request_id: "req_activity_success_044",
             route_policy_id: seeded.fallbackRoutePolicyId,
-            route_reason: {
+            route_reason: expect.objectContaining({
               message: "fixed route for activity-fallback selected configured candidate 1.",
               selectedCandidateOrder: 1,
               strategy: "fixed",
-            },
+            }),
             status: "succeeded",
             virtual_model_id: seeded.fallbackVirtualModelId,
           },
           {
-            agent_api_key_prefix: agentApiKey.slice(0, 12),
+            agent_key_prefix: agentApiKey.slice(0, 12),
             error_code: "provider_request_failed",
             fallback_attempts: [
               expect.objectContaining({
@@ -93,11 +93,11 @@ test("success and failure requests create activity rows with route fallback late
             provider_model_id: seeded.hardFailureProviderModelId,
             request_id: "req_activity_failure_044",
             route_policy_id: seeded.failureRoutePolicyId,
-            route_reason: {
+            route_reason: expect.objectContaining({
               message: "fixed route for activity-failure selected configured candidate 1.",
               selectedCandidateOrder: 1,
               strategy: "fixed",
-            },
+            }),
             status: "failed",
             virtual_model_id: seeded.failureVirtualModelId,
           },
@@ -164,7 +164,7 @@ type GatewayChatExpectation = {
 };
 
 type ActivityRow = {
-  agent_api_key_prefix: string;
+  agent_key_prefix: string;
   error_code: string | null;
   fallback_attempts: unknown;
   http_status: number;
@@ -272,7 +272,7 @@ async function seedActivityRoutes(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'activity-fallback', 'Activity Fallback', true),
              ($2, 'activity-failure', 'Activity Failure', true)
     `,
@@ -316,15 +316,7 @@ async function seedActivityRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -336,7 +328,7 @@ async function seedActivityRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2),
              ($1, $3)
     `,
@@ -399,7 +391,7 @@ async function readActivities(fixture: Fixture): Promise<ActivityRow[]> {
   const result = await fixture.query<ActivityRow>(
     `
       select request_id,
-             agent_api_key_prefix,
+             agent_key_prefix,
              virtual_model_id::text,
              route_policy_id::text,
              provider_model_id::text,

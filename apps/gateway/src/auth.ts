@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
 
 export type GatewayAuthErrorCode =
   | "disabled_agent_api_key"
@@ -38,7 +38,7 @@ export type GatewayAuthErrorBody = {
 
 type GatewayAuthHeaders = Record<string, string | string[] | undefined>;
 
-type AgentApiKeyAuthRow = QueryResultRow & {
+type AgentApiKeyAuthRow = PostgresQueryResultRow & {
   agent_id: string;
   default_virtual_model_id: string | null;
   enabled: boolean;
@@ -127,20 +127,20 @@ async function readAgentApiKeyByHash(
   databaseUrl: string,
   keyHash: string,
 ): Promise<AgentApiKeyAuthRow | undefined> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
   try {
     const result = await client.query<AgentApiKeyAuthRow>(
       `
-        select agent_api_keys.id::text,
-               agent_api_keys.agent_id::text,
-               agent_api_keys.key_prefix,
-               agent_api_keys.default_virtual_model_id::text,
-               agent_api_keys.enabled,
+        select agents.id::text,
+               agents.id::text as agent_id,
+               agents.key_prefix,
+               agents.default_virtual_model_id::text,
+               agents.enabled,
                agents.request_logging_enabled
-        from agent_api_keys
-        join agents on agents.id = agent_api_keys.agent_id
-        where key_hash = $1
+        from agents
+        where agents.key_hash = $1
+          and agents.deleted_at is null
       `,
       [keyHash],
     );

@@ -15,9 +15,6 @@ test("budget enabled agent cannot save route policy with unknown price provider 
   const seededProviderModel = {
     id: randomUUID(),
     modelId: "unknown-budget-model",
-    optionLabel: "OpenAI Budget Safe Provider - Unknown Budget Model (unknown-budget-model)",
-    pricedOptionLabel:
-      "OpenAI Budget Safe Provider - Unknown Budget Model (unknown-budget-model) - Priced (manual override)",
   };
 
   try {
@@ -74,20 +71,18 @@ test("budget enabled agent cannot save route policy with unknown price provider 
 
           await page.goto(`${baseUrl}/agents`);
           await openRow(page, "Budget Agent");
-          await expect(page.getByText(`Default Virtual Model: Budget Safe VM`)).toBeVisible();
-          await page.goto(`${baseUrl}/routing`);
-          await openDisclosure(page, "New route policy");
-          await page
-            .getByLabel("Route policy virtual model")
-            .selectOption({ label: "Budget Safe VM (budget-safe-vm)" });
-          await page.getByLabel("Route policy strategy").selectOption("fixed");
-          await page
-            .getByLabel("Primary provider models")
-            .selectOption({ label: seededProviderModel.pricedOptionLabel });
-          await page.getByRole("button", { name: "Create route policy" }).click();
-
-          await openRow(page, "Budget Safe VM");
-          await expect(page.getByText(`Primary: ${seededProviderModel.optionLabel}`)).toBeVisible();
+          await expect(
+            page.getByLabel("Default virtual model").locator("option:checked"),
+          ).toHaveText("Budget Safe VM (budget-safe-vm)");
+          await expect(
+            postRoutePolicy(page, {
+              primaryProviderModelId: seededProviderModel.id,
+              virtualModelId,
+            }),
+          ).resolves.toEqual({
+            body: null,
+            status: 200,
+          });
           await expect.poll(() => countRoutePolicies(fixture)).toBe(1);
           await expect.poll(() => countBudgetLimitRows(fixture, apiKeyId)).toBe(1);
         } finally {
@@ -130,11 +125,15 @@ async function seedUnknownProviderModel(fixture: Fixture, providerModelId: strin
 }
 
 async function createVirtualModel(page: Page): Promise<void> {
-  await openDisclosure(page, "New virtual model");
-  await page.getByRole("textbox", { name: "Virtual model name" }).fill("budget-safe-vm");
-  await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Budget Safe VM");
-  await page.getByRole("button", { name: "Create virtual model" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "Budget Safe VM" })).toBeVisible();
+  const result = await page.evaluate(async () => {
+    const body = new FormData();
+    body.set("action", "create");
+    body.set("name", "budget-safe-vm");
+    body.set("description", "Budget Safe VM");
+    const response = await fetch("/api/virtual-models", { body, method: "POST" });
+    return { status: response.status, text: await response.text() };
+  });
+  expect(result.status, result.text).toBe(200);
 }
 
 async function createAgentApiKey(page: Page): Promise<void> {
@@ -142,10 +141,7 @@ async function createAgentApiKey(page: Page): Promise<void> {
   await page.getByLabel("Agent name").fill("Budget Agent");
   await page.getByLabel("Agent type").selectOption("coding");
   await page.getByRole("button", { name: "Create agent" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "Budget Agent" })).toBeVisible();
-  await openRow(page, "Budget Agent");
-  await page.getByRole("button", { name: "Create Agent API key" }).click();
-  await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
 }
 
@@ -154,9 +150,11 @@ async function assignVirtualModelAccess(page: Page): Promise<void> {
   await openRow(page, "Budget Agent");
   await page.getByLabel("Allowed virtual models").selectOption({ label });
   await page.getByLabel("Default virtual model").selectOption({ label });
-  await page.getByRole("button", { name: "Save Agent API key virtual models" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await openRow(page, "Budget Agent");
-  await expect(page.getByText(`Default Virtual Model: ${label}`)).toBeVisible();
+  await expect(page.getByLabel("Default virtual model").locator("option:checked")).toHaveText(
+    label,
+  );
 }
 
 async function saveKnownPriceCostBudget(page: Page): Promise<void> {
@@ -166,9 +164,9 @@ async function saveKnownPriceCostBudget(page: Page): Promise<void> {
   await page.getByLabel("RPM limit").fill("60");
   await page.getByLabel("TPM limit").fill("120000");
   await page.getByLabel("Token limit").fill("8000");
-  await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await openRow(page, "Budget Agent");
-  await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
+  await expect(page.getByLabel("Budget USD limit")).toHaveValue("10");
 }
 
 async function postRoutePolicy(
@@ -188,9 +186,9 @@ async function postRoutePolicy(
     const response = await fetch("/api/route-policies", {
       body,
       method: "POST",
-      redirect: "manual",
     });
-    const text = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
+    const text = contentType.includes("application/json") ? await response.text() : "";
     return {
       body: text ? JSON.parse(text) : null,
       status: response.status,
@@ -233,7 +231,7 @@ async function readVirtualModelId(fixture: Fixture): Promise<string> {
 }
 
 async function readOnlyAgentApiKeyId(fixture: Fixture): Promise<string> {
-  const result = await fixture.query<{ id: string }>("select id::text from agent_api_keys");
+  const result = await fixture.query<{ id: string }>("select id::text from agents");
   const row = result.rows[0];
   if (!row || result.rows.length !== 1) {
     throw new Error("Expected exactly one Agent API key.");
@@ -252,8 +250,9 @@ async function countRoutePolicyConfigChanges(fixture: Fixture): Promise<number> 
   const result = await fixture.query<{ count: number }>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where changed_table = 'route_policies'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'table' = 'route_policies'
     `,
   );
   return result.rows[0]?.count ?? 0;
@@ -264,7 +263,7 @@ async function countBudgetLimitRows(fixture: Fixture, agentApiKeyId: string): Pr
     `
       select count(*)::integer as count
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
         and limit_type = 'budget'
         and enabled = true
     `,

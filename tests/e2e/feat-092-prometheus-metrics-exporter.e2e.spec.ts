@@ -42,7 +42,7 @@ test("prometheus metrics exposes gateway worker request latency cost fallback he
         'llmingress_gateway_fallback_events_total{provider="openai",model="gpt-4.1-mini",status="failed",error_code="upstream_timeout"} 1',
       );
       expect(body).toContain(
-        'llmingress_provider_health_status{provider="openai",model="gpt-4.1-mini",status="degraded"} 1',
+        'llmingress_provider_health_status{provider="openai",model="gpt-4.1-mini",status="quota_limited"} 1',
       );
       expect(body).toContain(
         'llmingress_worker_jobs_total{job_type="price_sync",status="succeeded",trigger="scheduled"} 1',
@@ -105,7 +105,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
     [ids.providerModelId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'metrics-vm', 'Metrics VM', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'metrics-vm', 'Metrics VM', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -114,16 +114,15 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_secret092', 'hash-secret-092', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_secret092', key_hash = 'hash-secret-092', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_api_key_id, virtual_model_id, provider_id,
-        provider_model_id, agent_api_key_prefix, protocol, model, stream,
+        id, request_id, agent_id, virtual_model_id, provider_id,
+        provider_model_id, agent_key_prefix, protocol, model, stream,
         status, http_status, latency_ms, started_at, completed_at
       )
       values (
@@ -137,7 +136,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_api_key_id, virtual_model_id, agent_api_key_prefix,
+        id, request_id, agent_id, virtual_model_id, agent_key_prefix,
         protocol, model, stream, status, error_code, error_message, http_status,
         latency_ms, started_at, completed_at
       )
@@ -153,7 +152,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
   await fixture.query(
     `
       insert into request_costs (
-        id, request_activity_id, agent_api_key_id, provider_model_id, total_cost_usd, cost_source
+        id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source
       )
       values ($1, $2, $3, $4, 0.01230000, 'estimated')
     `,
@@ -175,7 +174,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         id, provider_id, provider_model_id, trigger, status, error_code, error_message,
         latency_ms, observed_at
       )
-      values ($1, $2, $3, 'worker_probe', 'failed', 'upstream_timeout', 'sensitive upstream failure', 42, now())
+      values ($1, $2, $3, 'worker_probe', 'quota_limited', 'upstream_timeout', 'sensitive upstream failure', 42, now())
     `,
     [ids.healthEventId, ids.providerId, ids.providerModelId],
   );
@@ -185,7 +184,7 @@ async function seedPrometheusMetricsData(fixture: Fixture): Promise<void> {
         id, provider_id, provider_model_id, last_event_id, status, consecutive_failures,
         last_failure_at, updated_at
       )
-      values ($1, $2, $3, $4, 'degraded', 2, now(), now())
+      values ($1, $2, $3, $4, 'quota_limited', 2, now(), now())
     `,
     [ids.healthSummaryId, ids.providerId, ids.providerModelId, ids.healthEventId],
   );

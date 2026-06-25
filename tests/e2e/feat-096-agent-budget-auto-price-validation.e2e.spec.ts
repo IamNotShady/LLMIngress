@@ -41,24 +41,18 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await signInFromFirstRun(page, baseUrl);
 
           await page.goto(`${baseUrl}/agents`);
-          await expect(page.getByRole("heading", { name: "Auto Budget Agent" })).toBeVisible();
+          await expect(
+            page
+              .getByLabel("Selected agent details")
+              .getByRole("heading", { name: "Auto Budget Agent" }),
+          ).toBeVisible();
           await openRow(page, "Auto Budget Agent");
-          await expect(page.getByText("Default Virtual Model: Auto Budget VM")).toBeVisible();
-          await expect(
-            page.getByText("Allowed Virtual Models: Auto Budget VM (auto-budget-vm)"),
-          ).toBeVisible();
-          await page.goto(`${baseUrl}/routing`);
-          await openRow(page, "Auto Budget VM");
-          await expect(
-            page.getByText(
-              "Primary: OpenAI Auto Budget Provider - Unknown Primary Model (unknown-primary-model)",
-            ),
-          ).toBeVisible();
-          await expect(
-            page.getByText(
-              "Fallback: OpenAI Auto Budget Provider - Unknown Fallback Model (unknown-fallback-model)",
-            ),
-          ).toBeVisible();
+          await expect(page.getByLabel("Default virtual model")).toHaveValue(
+            seededIds.virtualModelId,
+          );
+          await expect(page.getByLabel("Allowed virtual models")).toHaveValues([
+            seededIds.virtualModelId,
+          ]);
 
           await page.goto(`${baseUrl}/agents`);
           await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
@@ -102,13 +96,14 @@ test("agent budget saves without manual price fields and blocks accessible unkno
           await page.getByLabel("RPM limit").fill("120");
           await page.getByLabel("TPM limit").fill("640000");
           await page.getByLabel("Token limit").fill("32000");
-          await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+          await page.getByRole("button", { name: "Save" }).click();
 
           await openRow(page, "Auto Budget Agent");
-          await expect(page.getByText("Budget Limit: $25.00 / month")).toBeVisible();
-          await expect(page.getByText("RPM Limit: 120 requests / minute")).toBeVisible();
-          await expect(page.getByText("TPM Limit: 640000 tokens / minute")).toBeVisible();
-          await expect(page.getByText("Token Limit: 32000 tokens / request")).toBeVisible();
+          await expect(page.getByLabel("Budget USD limit")).toHaveValue("25");
+          await expect(page.getByLabel("Budget period")).toHaveValue("month");
+          await expect(page.getByLabel("RPM limit")).toHaveValue("120");
+          await expect(page.getByLabel("TPM limit")).toHaveValue("640000");
+          await expect(page.getByLabel("Token limit")).toHaveValue("32000");
           await expect.poll(() => countAgentLimits(fixture, seededIds.agentApiKeyId)).toBe(4);
           await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(1);
         } finally {
@@ -142,7 +137,7 @@ type SeededIds = {
 };
 
 async function seedAgentBudgetRouteGraph(fixture: Fixture, ids: SeededIds): Promise<void> {
-  const agentId = randomUUID();
+  const agentId = ids.agentApiKeyId;
 
   await fixture.query(
     `
@@ -161,7 +156,7 @@ async function seedAgentBudgetRouteGraph(fixture: Fixture, ids: SeededIds): Prom
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'auto-budget-vm', 'Auto Budget VM', true)
     `,
     [ids.virtualModelId],
@@ -196,20 +191,12 @@ async function seedAgentBudgetRouteGraph(fixture: Fixture, ids: SeededIds): Prom
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_auto96', 'sha256:v1:auto-budget-e2e-096', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_auto96', key_hash = 'sha256:v1:auto-budget-e2e-096', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, agentId, ids.virtualModelId],
   );
   await fixture.query(
-    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
     [ids.agentApiKeyId, ids.virtualModelId],
   );
 }
@@ -274,7 +261,7 @@ async function countAgentLimits(fixture: Fixture, agentApiKeyId: string): Promis
     `
       select count(*)::integer as count
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
     `,
     [agentApiKeyId],
   );
@@ -285,9 +272,10 @@ async function countAgentLimitConfigChanges(fixture: Fixture): Promise<number> {
   const result = await fixture.query<{ count: number }>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where source = 'console'
-        and changed_table = 'agent_limits'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'source' = 'console'
+        and change.value->>'table' = 'agent_limits'
     `,
   );
   return result.rows[0]?.count ?? 0;

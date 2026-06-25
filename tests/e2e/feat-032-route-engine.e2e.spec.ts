@@ -135,7 +135,7 @@ async function seedRouteEngineConfig(fixture: Fixture): Promise<SeededRouteEngin
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'fixed-coding', 'Fixed Coding', true),
              ($2, 'cost-coding', 'Cost Coding', true)
     `,

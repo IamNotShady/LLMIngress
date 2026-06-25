@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 import { queueNotificationEvent } from "./notification-dispatcher.js";
 
@@ -29,7 +29,7 @@ type EvaluateProviderFailureAlertsOptions = CreateProviderFailureAlertsJobHandle
   payload: unknown;
 };
 
-type ProviderFailureAlertCandidateRow = QueryResultRow & {
+type ProviderFailureAlertCandidateRow = PostgresQueryResultRow & {
   consecutive_failures: number;
   last_failure_at: Date | null;
   model_display_name: string | null;
@@ -179,7 +179,7 @@ function buildProviderFailureNotificationEvent(input: {
 }
 
 async function countProviderFailureSummaries(databaseUrl: string): Promise<number> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -188,9 +188,15 @@ async function countProviderFailureSummaries(databaseUrl: string): Promise<numbe
         select count(*)::text as count
         from provider_health_summary
         join providers on providers.id = provider_health_summary.provider_id
-        where provider_health_summary.status in ('degraded', 'unhealthy')
+        where provider_health_summary.status in (
+          'unhealthy',
+          'auth_failed',
+          'quota_limited',
+          'network_error'
+        )
           and provider_health_summary.consecutive_failures > 0
           and providers.enabled = true
+          and providers.deleted_at is null
       `,
     );
     return Number(result.rows[0]?.count ?? 0);
@@ -203,7 +209,7 @@ async function readProviderFailureAlertCandidates(input: {
   databaseUrl: string;
   thresholdCount: number;
 }): Promise<ProviderFailureAlertCandidate[]> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -223,9 +229,19 @@ async function readProviderFailureAlertCandidates(input: {
         from provider_health_summary
         join providers on providers.id = provider_health_summary.provider_id
         left join provider_models on provider_models.id = provider_health_summary.provider_model_id
-        where provider_health_summary.status in ('degraded', 'unhealthy')
+        where provider_health_summary.status in (
+          'unhealthy',
+          'auth_failed',
+          'quota_limited',
+          'network_error'
+        )
           and provider_health_summary.consecutive_failures >= $1
           and providers.enabled = true
+          and providers.deleted_at is null
+          and (
+            provider_health_summary.provider_model_id is null
+            or provider_models.deleted_at is null
+          )
         order by providers.provider_key,
                  provider_models.model_id nulls first,
                  provider_health_summary.id
@@ -257,7 +273,7 @@ function rowToProviderFailureAlertCandidate(
 }
 
 async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -274,7 +290,7 @@ async function providerFailureAlertAlreadyQueued(
   databaseUrl: string,
   alertKey: string,
 ): Promise<boolean> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

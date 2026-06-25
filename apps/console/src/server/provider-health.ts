@@ -1,6 +1,13 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/health";
 
-export type ConsoleProviderHealthStatus = "degraded" | "healthy" | "unknown" | "unhealthy";
+export type ConsoleStoredProviderHealthStatus =
+  | "auth_failed"
+  | "healthy"
+  | "network_error"
+  | "quota_limited"
+  | "unknown"
+  | "unhealthy";
+export type ConsoleProviderHealthStatus = "checking" | ConsoleStoredProviderHealthStatus;
 export type ConsoleProviderHealthTrigger = "manual" | "request_path" | "worker_probe";
 
 export type ConsoleProviderModelHealthSummary = {
@@ -33,24 +40,28 @@ export type ListConsoleProviderHealthSummariesInput = {
   staleAfterMs?: number;
 };
 
-type ProviderHealthSummaryRow = QueryResultRow & {
+type ActiveProviderConnectivityCheckJobRow = PostgresQueryResultRow & {
+  provider_id: string | null;
+};
+
+type StoredProviderHealthSummaryRow = PostgresQueryResultRow & {
   consecutive_failures: number | null;
   display_name: string;
   id: string;
   latest_probe_at: Date | null;
   provider_key: string;
-  status: ConsoleProviderHealthStatus | null;
+  status: ConsoleStoredProviderHealthStatus | null;
   trigger: ConsoleProviderHealthTrigger | null;
 };
 
-type ProviderModelHealthSummaryRow = QueryResultRow & {
+type ProviderModelHealthSummaryRow = PostgresQueryResultRow & {
   consecutive_failures: number | null;
   display_name: string;
   id: string;
   latest_probe_at: Date | null;
   model_id: string;
   provider_id: string;
-  status: ConsoleProviderHealthStatus | null;
+  status: ConsoleStoredProviderHealthStatus | null;
   trigger: ConsoleProviderHealthTrigger | null;
 };
 
@@ -59,13 +70,17 @@ const defaultHealthStaleAfterMs = 5 * 60 * 1000;
 export async function listConsoleProviderHealthSummaries(
   input: ListConsoleProviderHealthSummariesInput,
 ): Promise<ConsoleProviderHealthSummary[]> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
-    const [providerResult, modelResult] = await Promise.all([
-      client.query<ProviderHealthSummaryRow>(
-        `
+    const hasSoftDeleteColumns = await providerHealthSoftDeleteColumnsAvailable(client);
+    const providerDeletedFilter = hasSoftDeleteColumns ? "where providers.deleted_at is null" : "";
+    const providerModelDeletedFilter = hasSoftDeleteColumns
+      ? "where providers.deleted_at is null and provider_models.deleted_at is null"
+      : "";
+    const providerResult = await client.query<StoredProviderHealthSummaryRow>(
+      `
           select providers.id::text,
                  providers.provider_key,
                  providers.display_name,
@@ -79,11 +94,12 @@ export async function listConsoleProviderHealthSummaries(
            and provider_health_summary.provider_model_id is null
           left join provider_health_events
             on provider_health_events.id = provider_health_summary.last_event_id
+          ${providerDeletedFilter}
           order by providers.provider_key
         `,
-      ),
-      client.query<ProviderModelHealthSummaryRow>(
-        `
+    );
+    const modelResult = await client.query<ProviderModelHealthSummaryRow>(
+      `
           select provider_models.id::text,
                  provider_models.provider_id::text,
                  provider_models.model_id,
@@ -99,13 +115,27 @@ export async function listConsoleProviderHealthSummaries(
            and provider_health_summary.provider_model_id = provider_models.id
           left join provider_health_events
             on provider_health_events.id = provider_health_summary.last_event_id
+          ${providerModelDeletedFilter}
           order by providers.provider_key,
                    provider_models.display_name
         `,
-      ),
-    ]);
+    );
+    const activeJobResult = await client.query<ActiveProviderConnectivityCheckJobRow>(
+      `
+          select distinct payload ->> 'providerId' as provider_id
+          from jobs
+          where job_type = 'provider_connectivity_check'
+            and status in ('pending', 'running')
+            and payload ->> 'providerId' is not null
+        `,
+    );
     const now = input.now ?? new Date();
     const staleAfterMs = input.staleAfterMs ?? defaultHealthStaleAfterMs;
+    const checkingProviderIds = new Set(
+      activeJobResult.rows
+        .map((row) => row.provider_id)
+        .filter((providerId): providerId is string => typeof providerId === "string"),
+    );
     const modelsByProviderId = groupModelsByProviderId(
       modelResult.rows.map((row) =>
         rowToProviderModelHealthSummary(row, {
@@ -117,6 +147,7 @@ export async function listConsoleProviderHealthSummaries(
 
     return providerResult.rows.map((row) =>
       rowToProviderHealthSummary(row, {
+        checkingProviderIds,
         models: modelsByProviderId.get(row.id) ?? [],
         now,
         staleAfterMs,
@@ -127,14 +158,33 @@ export async function listConsoleProviderHealthSummaries(
   }
 }
 
+async function providerHealthSoftDeleteColumnsAvailable(client: PostgresClient): Promise<boolean> {
+  const result = await client.query<{ available: boolean }>(
+    `
+      select count(*) = 2 as available
+      from information_schema.columns
+      where table_schema = 'public'
+        and column_name = 'deleted_at'
+        and table_name in ('providers', 'provider_models')
+    `,
+  );
+  return result.rows[0]?.available ?? false;
+}
+
 export function formatProviderHealthStatus(
   status: ConsoleProviderHealthStatus | null | undefined,
 ): string {
-  if (!status) {
-    return "Unknown";
-  }
-
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  return (
+    {
+      auth_failed: "Auth failed",
+      checking: "Checking",
+      healthy: "Healthy",
+      network_error: "Network error",
+      quota_limited: "Quota limited",
+      unhealthy: "Unhealthy",
+      unknown: "Unknown",
+    }[status ?? "unknown"] ?? "Unknown"
+  );
 }
 
 export function formatProviderHealthLatestProbe(input: {
@@ -168,14 +218,16 @@ export function formatProviderHealthStaleStatus(input: {
 }
 
 function rowToProviderHealthSummary(
-  row: ProviderHealthSummaryRow,
+  row: StoredProviderHealthSummaryRow,
   input: {
+    checkingProviderIds: Set<string>;
     models: ConsoleProviderModelHealthSummary[];
     now: Date;
     staleAfterMs: number;
   },
 ): ConsoleProviderHealthSummary {
   const latestProbeAt = row.latest_probe_at;
+  const status = input.checkingProviderIds.has(row.id) ? "checking" : (row.status ?? "unknown");
   return {
     consecutiveFailures: row.consecutive_failures ?? 0,
     displayName: row.display_name,
@@ -189,7 +241,7 @@ function rowToProviderHealthSummary(
     latestProbeAt,
     models: input.models,
     providerKey: row.provider_key,
-    status: row.status ?? "unknown",
+    status,
     trigger: row.trigger,
   };
 }

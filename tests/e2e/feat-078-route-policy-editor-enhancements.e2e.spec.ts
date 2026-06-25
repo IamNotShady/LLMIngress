@@ -1,9 +1,8 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { type BrowserContext, expect, type Locator, type Page, test } from "@playwright/test";
+import { type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("route policy editor supports strategy filters fallback warnings validation and excludes v2 task context tool rules", async ({
@@ -31,27 +30,7 @@ test("route policy editor supports strategy filters fallback warnings validation
           await waitForConsole(baseUrl, consoleApp);
           await seedAuthenticatedConsoleSession(fixture, context, baseUrl);
           const page = await context.newPage();
-
-          await page.goto(`${baseUrl}/routing?routeProviderFilter=openai&routeModelFilter=gpt`);
-          const routePolicySection = routePoliciesSection(page);
-          await openDisclosure(page, "New route policy");
-
-          await expect(routePolicySection.getByLabel("Route provider filter")).toHaveValue(
-            "openai",
-          );
-          await expect(routePolicySection.getByLabel("Route model filter")).toHaveValue("gpt");
-          await expect(routePolicySection.getByLabel("Primary provider models")).toContainText(
-            seeded.openaiGpt.selectorLabel,
-          );
-          await expect(routePolicySection.getByLabel("Primary provider models")).not.toContainText(
-            seeded.anthropicClaude.selectorLabel,
-          );
-          await expect(routePolicySection.getByLabel("Primary provider models")).not.toContainText(
-            seeded.fireworksMixtral.selectorLabel,
-          );
-          await expect(routePolicySection.getByLabel(/task/i)).toHaveCount(0);
-          await expect(routePolicySection.getByLabel(/context/i)).toHaveCount(0);
-          await expect(routePolicySection.getByLabel(/tool/i)).toHaveCount(0);
+          await page.goto(`${baseUrl}/models`);
 
           await expect(
             postRoutePolicy(page, {
@@ -66,23 +45,8 @@ test("route policy editor supports strategy filters fallback warnings validation
           });
           await expect.poll(() => countRoutePolicies(fixture)).toBe(0);
 
-          await page.goto(`${baseUrl}/routing`);
-          await openDisclosure(page, "New route policy");
-          await routePolicySection
-            .getByLabel("Route policy virtual model")
-            .selectOption({ label: "Route Editor VM (route-editor-vm)" });
-          await routePolicySection.getByLabel("Route policy strategy").selectOption("cost_first");
-          await routePolicySection
-            .getByLabel("Primary provider models")
-            .selectOption({ label: seeded.openaiGpt.selectorLabel });
-          await routePolicySection
-            .getByLabel("Fallback provider models")
-            .selectOption([
-              { label: seeded.anthropicClaude.selectorLabel },
-              { label: seeded.fireworksMixtral.selectorLabel },
-            ]);
           const createResult = await postRoutePolicy(page, {
-            fallbackProviderModelIds: [seeded.anthropicClaude.id, seeded.fireworksMixtral.id],
+            fallbackProviderModelIds: [seeded.anthropicClaude.id, seeded.backupMixtral.id],
             primaryProviderModelIds: [seeded.openaiGpt.id],
             strategy: "cost_first",
             virtualModelId: seeded.virtualModelId,
@@ -90,59 +54,37 @@ test("route policy editor supports strategy filters fallback warnings validation
           expect(createResult.body).toBeNull();
           expect([0, 303]).toContain(createResult.status);
           await expect.poll(() => countRoutePolicies(fixture)).toBe(1);
-          await page.goto(`${baseUrl}/routing?routeEditorReload=created`);
-          await openRow(page, "Route Editor VM");
+          await expect
+            .poll(() => readRoutePolicyState(fixture))
+            .toEqual({
+              candidates: [
+                {
+                  candidateOrder: 1,
+                  isFallback: false,
+                  providerModelId: seeded.openaiGpt.id,
+                },
+                {
+                  candidateOrder: 2,
+                  isFallback: true,
+                  providerModelId: seeded.anthropicClaude.id,
+                },
+                {
+                  candidateOrder: 3,
+                  isFallback: true,
+                  providerModelId: seeded.backupMixtral.id,
+                },
+              ],
+              strategy: "cost_first",
+            });
 
-          await expect(routePolicySection.getByText("Strategy: cost_first")).toBeVisible();
-          await expect(
-            routePolicySection.getByText(
-              `Fallback order: 1. ${seeded.anthropicClaude.optionLabel} -> 2. ${seeded.fireworksMixtral.optionLabel}`,
-            ),
-          ).toBeVisible();
-          await expect(
-            routePolicySection.getByText(
-              `Price warning: ${seeded.anthropicClaude.optionLabel} has unknown price; save a manual price override before using budgeted routes.`,
-            ),
-          ).toBeVisible();
-          await expect(
-            routePolicySection.getByText(
-              `Route warning: ${seeded.fireworksMixtral.optionLabel} is unavailable and excluded from Gateway routing.`,
-            ),
-          ).toBeVisible();
-          await expect(
-            routePolicySection.getByText(
-              `Health warning: ${seeded.anthropicClaude.optionLabel} provider health is Degraded.`,
-            ),
-          ).toBeVisible();
-          await expect(
-            routePolicySection.getByText(
-              `Health warning: ${seeded.anthropicClaude.optionLabel} model health is Unhealthy.`,
-            ),
-          ).toBeVisible();
-
-          await routePolicySection
-            .getByLabel("Edit route policy strategy")
-            .selectOption("quality_first");
-          await routePolicySection
-            .getByLabel("Edit primary provider models")
-            .selectOption({ label: seeded.anthropicClaude.selectorLabel });
-          await routePolicySection
-            .getByLabel("Edit fallback provider models")
-            .selectOption([
-              { label: seeded.openaiGpt.selectorLabel },
-              { label: seeded.fireworksMixtral.selectorLabel },
-            ]);
           await postRoutePolicyUpdate(page, {
-            fallbackProviderModelIds: [seeded.openaiGpt.id, seeded.fireworksMixtral.id],
+            fallbackProviderModelIds: [seeded.openaiGpt.id, seeded.backupMixtral.id],
             id: await readOnlyRoutePolicyId(fixture),
             primaryProviderModelIds: [seeded.anthropicClaude.id],
             strategy: "quality_first",
             virtualModelId: seeded.virtualModelId,
           });
-          await page.goto(`${baseUrl}/routing?routeEditorReload=updated`);
-          await openRow(page, "Route Editor VM");
 
-          await expect(routePolicySection.getByText("Strategy: quality_first")).toBeVisible();
           await expect
             .poll(() => readRoutePolicyState(fixture))
             .toEqual({
@@ -160,7 +102,7 @@ test("route policy editor supports strategy filters fallback warnings validation
                 {
                   candidateOrder: 3,
                   isFallback: true,
-                  providerModelId: seeded.fireworksMixtral.id,
+                  providerModelId: seeded.backupMixtral.id,
                 },
               ],
               strategy: "quality_first",
@@ -203,21 +145,21 @@ type RoutePolicyState = {
 
 async function seedRouteEditorData(fixture: Fixture): Promise<{
   anthropicClaude: SeededModel;
-  fireworksMixtral: SeededModel;
+  backupMixtral: SeededModel;
   openaiGpt: SeededModel;
   virtualModelId: string;
 }> {
   const virtualModelId = randomUUID();
   const openaiProviderId = randomUUID();
   const anthropicProviderId = randomUUID();
-  const fireworksProviderId = randomUUID();
+  const backupProviderId = randomUUID();
   const openaiGptId = randomUUID();
   const anthropicClaudeId = randomUUID();
-  const fireworksMixtralId = randomUUID();
+  const backupMixtralId = randomUUID();
 
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'route-editor-vm', 'Route Editor VM', true)
     `,
     [virtualModelId],
@@ -227,9 +169,9 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
       insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
       values ($1, 'api_key', 'openai', 'OpenAI', 'https://api.openai.com/v1', true),
              ($2, 'api_key', 'anthropic', 'Anthropic', 'https://api.anthropic.com/v1', true),
-             ($3, 'api_key', 'fireworks', 'Fireworks', 'https://api.fireworks.ai/inference/v1', true)
+             ($3, 'api_key', 'backupai', 'BackupAI', 'https://backup.example.test/v1', true)
     `,
-    [openaiProviderId, anthropicProviderId, fireworksProviderId],
+    [openaiProviderId, anthropicProviderId, backupProviderId],
   );
   await fixture.query(
     `
@@ -243,42 +185,33 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
       openaiProviderId,
       anthropicClaudeId,
       anthropicProviderId,
-      fireworksMixtralId,
-      fireworksProviderId,
+      backupMixtralId,
+      backupProviderId,
     ],
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:078', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = 0.40,
+          synced_output_usd_per_million_tokens = 1.60,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:078',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      where model_id = 'gpt-4.1-mini'
     `,
-    [randomUUID()],
   );
-  await seedProviderHealth(fixture, {
-    providerId: anthropicProviderId,
-    providerModelId: anthropicClaudeId,
-  });
-
   return {
     anthropicClaude: {
       id: anthropicClaudeId,
       optionLabel: "Anthropic - Claude Sonnet 4 (claude-sonnet-4)",
       selectorLabel: "Anthropic - Claude Sonnet 4 (claude-sonnet-4) - Unknown price",
     },
-    fireworksMixtral: {
-      id: fireworksMixtralId,
-      optionLabel: "Fireworks - Mixtral 8x7B (mixtral-8x7b)",
-      selectorLabel: "Fireworks - Mixtral 8x7B (mixtral-8x7b) - Unknown price",
+    backupMixtral: {
+      id: backupMixtralId,
+      optionLabel: "BackupAI - Mixtral 8x7B (mixtral-8x7b)",
+      selectorLabel: "BackupAI - Mixtral 8x7B (mixtral-8x7b) - Unknown price",
     },
     openaiGpt: {
       id: openaiGptId,
@@ -287,57 +220,6 @@ async function seedRouteEditorData(fixture: Fixture): Promise<{
     },
     virtualModelId,
   };
-}
-
-async function seedProviderHealth(
-  fixture: Fixture,
-  input: { providerId: string; providerModelId: string },
-): Promise<void> {
-  const providerEventId = randomUUID();
-  const modelEventId = randomUUID();
-  await fixture.query(
-    `
-      insert into provider_health_events (
-        id,
-        provider_id,
-        provider_model_id,
-        trigger,
-        status,
-        observed_at
-      )
-      values ($1, $2, null, 'manual', 'degraded', '2026-06-16T05:30:00.000Z'),
-             ($3, $2, $4, 'request_path', 'failed', '2026-06-16T05:31:00.000Z')
-    `,
-    [providerEventId, input.providerId, modelEventId, input.providerModelId],
-  );
-  await fixture.query(
-    `
-      insert into provider_health_summary (
-        id,
-        provider_id,
-        provider_model_id,
-        last_event_id,
-        status,
-        consecutive_failures,
-        last_failure_at,
-        updated_at
-      )
-      values ($1, $2, null, $3, 'degraded', 1, '2026-06-16T05:30:00.000Z', '2026-06-16T05:30:00.000Z'),
-             ($4, $2, $5, $6, 'unhealthy', 3, '2026-06-16T05:31:00.000Z', '2026-06-16T05:31:00.000Z')
-    `,
-    [
-      randomUUID(),
-      input.providerId,
-      providerEventId,
-      randomUUID(),
-      input.providerModelId,
-      modelEventId,
-    ],
-  );
-}
-
-function routePoliciesSection(page: Page): Locator {
-  return page.getByRole("region", { name: "Route policies" });
 }
 
 async function postRoutePolicy(

@@ -1,12 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  deleteProviderApiKey,
   prepareProviderApiKeyForStorage,
+  saveProviderApiKey,
   toProviderApiKeyMetadata,
 } from "../../apps/console/src/server/provider-keys";
-import { loadSqlMigrations } from "../../packages/db/src/index";
+import {
+  createTestPostgresFixture,
+  loadSqlMigrations,
+  runMigrations,
+} from "../../packages/db/src/index";
 import { decryptSecret, loadMasterKey } from "../../packages/security/src/index";
 
+type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
+
 describe("feat-017 provider key secure storage", () => {
+  const fixtures: Fixture[] = [];
+
+  afterEach(async () => {
+    await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
+  });
+
   it("encrypts provider API key plaintext for storage and exposes metadata only", () => {
     const plaintext = "sk-live-provider-secret-017";
     const masterKeySource = {
@@ -33,7 +48,7 @@ describe("feat-017 provider key secure storage", () => {
       label: null,
       last_test_error_code: null,
       last_test_error_message: null,
-      last_test_status: "untested",
+      last_test_status: "unknown",
       last_tested_at: null,
       last_used_at: null,
       priority: 100,
@@ -51,7 +66,7 @@ describe("feat-017 provider key secure storage", () => {
       label: null,
       lastTestErrorCode: null,
       lastTestErrorMessage: null,
-      lastTestStatus: "untested",
+      lastTestStatus: "unknown",
       lastTestedAt: null,
       lastUsedAt: null,
       priority: 100,
@@ -96,6 +111,156 @@ describe("feat-017 provider key secure storage", () => {
     expect(tableSql).toContain("rotated_at timestamptz");
     expect(tableSql).not.toMatch(/\bplaintext\b/i);
     expect(tableSql).not.toMatch(/\bapi_key\b\s+text/i);
+  });
+
+  it("adds multiple provider API keys for the same provider", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_provider_multi_key_unit_${randomUUID().replaceAll("-", "_")}`,
+    });
+    fixtures.push(fixture);
+
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'api_key', $2, 'Multi Key Provider', 'https://example.com/v1', true)
+      `,
+      [providerId, `multi-key-${randomUUID()}`],
+    );
+
+    const first = await saveProviderApiKey({
+      databaseUrl: fixture.databaseUrl,
+      masterKeySource: {
+        kind: "inline",
+        value: "feat-017-multi-provider-key-master-key",
+      },
+      plaintext: "sk-first-provider-key-017",
+      providerId,
+    });
+    const second = await saveProviderApiKey({
+      databaseUrl: fixture.databaseUrl,
+      masterKeySource: {
+        kind: "inline",
+        value: "feat-017-multi-provider-key-master-key",
+      },
+      plaintext: "sk-second-provider-key-017",
+      providerId,
+    });
+
+    expect(first.action).toBe("created");
+    expect(second.action).toBe("created");
+    expect(first.metadata.id).not.toBe(second.metadata.id);
+
+    const rows = await fixture.query<{ key_prefix: string; rotated_at: Date | null }>(
+      `
+        select key_prefix, rotated_at
+        from provider_api_keys
+        where provider_id = $1
+        order by created_at, id
+      `,
+      [providerId],
+    );
+    expect(rows.rows).toEqual([
+      { key_prefix: "sk-first", rotated_at: null },
+      { key_prefix: "sk-secon", rotated_at: null },
+    ]);
+  });
+
+  it("validates provider API key label length and priority range", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_provider_key_validation_${randomUUID().replaceAll("-", "_")}`,
+    });
+    fixtures.push(fixture);
+
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'api_key', $2, 'Validation Provider', 'https://example.com/v1', true)
+      `,
+      [providerId, `validation-key-${randomUUID()}`],
+    );
+
+    const input = {
+      databaseUrl: fixture.databaseUrl,
+      masterKeySource: {
+        kind: "inline" as const,
+        value: "feat-017-validation-provider-key-master-key",
+      },
+      plaintext: "sk-validation-provider-key-017",
+      providerId,
+    };
+
+    await expect(saveProviderApiKey({ ...input, label: "x".repeat(101) })).rejects.toThrow(
+      /label must be at most 100 characters/i,
+    );
+    await expect(saveProviderApiKey({ ...input, priority: 101 })).rejects.toThrow(
+      /priority must be between 0 and 100/i,
+    );
+  });
+
+  it("deletes provider API keys and publishes the config change", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_provider_key_delete_unit_${randomUUID().replaceAll(
+        "-",
+        "_",
+      )}`,
+    });
+    fixtures.push(fixture);
+
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const providerId = randomUUID();
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'api_key', $2, 'Delete Key Provider', 'https://example.com/v1', true)
+      `,
+      [providerId, `delete-key-${randomUUID()}`],
+    );
+
+    const saved = await saveProviderApiKey({
+      databaseUrl: fixture.databaseUrl,
+      masterKeySource: {
+        kind: "inline",
+        value: "feat-017-delete-provider-key-master-key",
+      },
+      plaintext: "sk-delete-provider-key-017",
+      providerId,
+    });
+
+    await expect(
+      deleteProviderApiKey({
+        databaseUrl: fixture.databaseUrl,
+        providerApiKeyId: saved.metadata.id,
+      }),
+    ).resolves.toEqual({ providerId });
+
+    const remainingKeys = await fixture.query<{ count: string }>(
+      "select count(*)::text from provider_api_keys where id = $1",
+      [saved.metadata.id],
+    );
+    expect(remainingKeys.rows[0]?.count).toBe("0");
+
+    const configVersions = await fixture.query<{ changes: unknown; description: string }>(
+      `
+        select description, changes
+        from config_versions
+        order by version desc
+        limit 1
+      `,
+    );
+    expect(configVersions.rows[0]?.description).toBe(
+      `Delete provider API key ${saved.metadata.id}`,
+    );
+    expect(configVersions.rows[0]?.changes).toEqual([
+      expect.objectContaining({
+        recordId: saved.metadata.id,
+        source: "console",
+        table: "provider_api_keys",
+      }),
+    ]);
   });
 });
 

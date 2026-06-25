@@ -1,11 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  attachGatewayProviderCredentials,
   createGatewayChatCompletionErrorBody,
   normalizeOpenAIChatCompletionRequest,
   readGatewayMasterKeySource,
 } from "../../apps/gateway/src/chat-completions";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 describe("feat-036 OpenAI chat completions endpoint", () => {
+  const fixtures: Array<Awaited<ReturnType<typeof createTestPostgresFixture>>> = [];
+
+  afterEach(async () => {
+    await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
+  });
+
   it("normalizes OpenAI chat completion payloads for provider adapters", () => {
     expect(
       normalizeOpenAIChatCompletionRequest(
@@ -35,11 +44,81 @@ describe("feat-036 OpenAI chat completions endpoint", () => {
     });
   });
 
+  it("normalizes chat text parts and tool-call messages from agent context", () => {
+    expect(
+      normalizeOpenAIChatCompletionRequest(
+        {
+          messages: [
+            {
+              content: [{ text: "which model are you?", type: "text" }],
+              role: "user",
+            },
+            {
+              content: null,
+              role: "assistant",
+              tool_calls: [
+                {
+                  function: { arguments: "{}", name: "terminal" },
+                  id: "call_terminal",
+                  type: "function",
+                },
+              ],
+            },
+            {
+              content: [{ text: "model: random", type: "text" }],
+              role: "tool",
+              tool_call_id: "call_terminal",
+            },
+          ],
+          model: "random",
+        },
+        "req_chat_tool_context",
+      ),
+    ).toEqual({
+      ok: true,
+      request: {
+        messages: [
+          { content: "which model are you?", role: "user" },
+          {
+            content: null,
+            role: "assistant",
+            tool_calls: [
+              {
+                function: { arguments: "{}", name: "terminal" },
+                id: "call_terminal",
+                type: "function",
+              },
+            ],
+          },
+          { content: "model: random", role: "tool", tool_call_id: "call_terminal" },
+        ],
+      },
+    });
+  });
+
   it("returns stable 400 errors for invalid chat completion payloads", () => {
     expect(normalizeOpenAIChatCompletionRequest({ messages: [] }, "req_invalid_unit")).toEqual({
       body: createGatewayChatCompletionErrorBody("invalid_chat_request", "req_invalid_unit"),
       ok: false,
       statusCode: 400,
+    });
+  });
+
+  it("caps oversized max_tokens from OpenAI-compatible clients", () => {
+    expect(
+      normalizeOpenAIChatCompletionRequest(
+        {
+          max_tokens: 65_536,
+          messages: [{ content: "hello", role: "user" }],
+          model: "mix",
+        },
+        "req_oversized_tokens",
+      ),
+    ).toMatchObject({
+      ok: true,
+      request: {
+        maxOutputTokens: 16_384,
+      },
     });
   });
 
@@ -52,5 +131,48 @@ describe("feat-036 OpenAI chat completions endpoint", () => {
       kind: "file",
       path: "/tmp/master-key",
     });
+  });
+
+  it("attaches local provider credentials without a stored API key", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_chat_local_${randomUUID().replaceAll("-", "_")}`,
+    });
+    fixtures.push(fixture);
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+
+    const providerId = randomUUID();
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'local', 'ollama', 'Ollama', 'http://127.0.0.1:11434/v1', true)
+      `,
+      [providerId],
+    );
+
+    await expect(
+      attachGatewayProviderCredentials({
+        candidates: [
+          {
+            candidateOrder: 1,
+            displayName: "llama3.2:3b",
+            isFallback: false,
+            modelId: "llama3.2:3b",
+            price: { inputUsdPerMillionTokens: null, outputUsdPerMillionTokens: null },
+            providerId,
+            providerKey: "ollama",
+            providerModelId: randomUUID(),
+          },
+        ],
+        databaseUrl: fixture.databaseUrl,
+        masterKeySource: { kind: "inline", value: "chat-local-master-key" },
+      }),
+    ).resolves.toMatchObject([
+      {
+        apiKey: "",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        providerApiKeyId: undefined,
+        providerApiKeyPrefix: undefined,
+      },
+    ]);
   });
 });

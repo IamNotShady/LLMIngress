@@ -13,7 +13,11 @@ test("model refresh writes derived rows marks missing referenced models unavaila
     databaseNamePrefix: `llmingress_model_refresh_${randomUUID().replaceAll("-", "_")}`,
   });
   const server = await createFakeProviderServer({
-    models: [{ id: "stable" }, { id: "stable" }, { id: "old-referenced" }],
+    models: [
+      { contextWindow: 8192, id: "stable" },
+      { contextWindow: 8192, id: "stable" },
+      { contextWindow: 8192, id: "old-referenced" },
+    ],
   });
   const providerId = randomUUID();
 
@@ -37,7 +41,10 @@ test("model refresh writes derived rows marks missing referenced models unavaila
     const referencedModelId = await readProviderModelId(fixture, providerId, "old-referenced");
     await insertRouteReference(fixture, referencedModelId);
 
-    server.setModels([{ id: "stable" }, { id: "new-derived" }]);
+    server.setModels([
+      { contextWindow: 8192, id: "stable" },
+      { contextWindow: 8192, id: "new-derived" },
+    ]);
     await runModelRefreshJob(fixture, providerId);
 
     await expectModelRows(fixture, [
@@ -62,7 +69,7 @@ test("anthropic model refresh authenticates model list with Anthropic API key he
     databaseNamePrefix: `llmingress_anthropic_model_refresh_${randomUUID().replaceAll("-", "_")}`,
   });
   const server = await createFakeProviderServer({
-    models: [{ id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }],
+    models: [{ contextWindow: 200_000, id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }],
   });
   const providerId = randomUUID();
 
@@ -159,7 +166,7 @@ async function insertRouteReference(fixture: Fixture, providerModelId: string): 
   const virtualModelId = randomUUID();
   const routePolicyId = randomUUID();
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
     [virtualModelId, `vm_${randomUUID().replaceAll("-", "_")}`, "Refresh Route"],
   );
   await fixture.query(
@@ -221,10 +228,11 @@ async function expectProviderModelConfigChanges(
 ): Promise<void> {
   const result = await fixture.query<{ changed_record_id: string }>(
     `
-      select changed_record_id::text
-      from config_change_events
-      where changed_table = 'provider_models'
-      order by changed_record_id
+      select change.value->>'recordId' as changed_record_id
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'table' = 'provider_models'
+      order by change.value->>'recordId'
     `,
   );
   expect(result.rows.map((row) => row.changed_record_id)).toEqual([...expectedRecordIds].sort());

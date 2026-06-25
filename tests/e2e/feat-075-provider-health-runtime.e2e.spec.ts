@@ -102,12 +102,12 @@ test("provider health summary updates notifications and scheduled checks without
     await runPendingConnectivityJob(fixture, masterKeySource);
     await expect(readProviderSummary(fixture, seeded.scheduledProviderId, null)).resolves.toEqual({
       consecutive_failures: 1,
-      status: "degraded",
+      status: "unhealthy",
     });
     await expect(readHealthEvents(fixture, seeded.scheduledProviderId)).resolves.toEqual([
       expect.objectContaining({
         error_code: "fake_provider_error",
-        status: "failed",
+        status: "unhealthy",
         trigger: "worker_probe",
       }),
     ]);
@@ -140,8 +140,8 @@ test("provider health summary updates notifications and scheduled checks without
         choices: [{ message: { content: "fake provider response", role: "assistant" } }],
       });
       expect(provider.requests.map((request) => request.bodyJson)).toEqual([
-        expect.objectContaining({ model: "connectivity-check" }),
-        expect.objectContaining({ model: "connectivity-check" }),
+        expect.objectContaining({ model: "manual-health-model" }),
+        expect.objectContaining({ model: "scheduled-health-model" }),
         expect.objectContaining({ model: "primary-health-model" }),
         expect.objectContaining({ model: "fallback-health-model" }),
       ]);
@@ -149,13 +149,13 @@ test("provider health summary updates notifications and scheduled checks without
         readProviderSummary(fixture, seeded.requestPrimaryProviderId, null),
       ).resolves.toEqual({
         consecutive_failures: 3,
-        status: "unhealthy",
+        status: "network_error",
       });
       await expect(
         readProviderSummary(fixture, seeded.requestPrimaryProviderId, seeded.requestPrimaryModelId),
       ).resolves.toEqual({
         consecutive_failures: 3,
-        status: "unhealthy",
+        status: "network_error",
       });
       await expect(readRequestActivity(fixture, "req_provider_health_075")).resolves.toEqual({
         provider_model_id: seeded.requestFallbackModelId,
@@ -168,25 +168,25 @@ test("provider health summary updates notifications and scheduled checks without
           expect.objectContaining({
             error_code: "seeded_unhealthy",
             provider_model_id: null,
-            status: "failed",
+            status: "unhealthy",
             trigger: "request_path",
           }),
           expect.objectContaining({
             error_code: "seeded_unhealthy",
             provider_model_id: seeded.requestPrimaryModelId,
-            status: "failed",
+            status: "unhealthy",
             trigger: "request_path",
           }),
           expect.objectContaining({
             error_code: "provider_request_failed",
             provider_model_id: null,
-            status: "failed",
+            status: "network_error",
             trigger: "request_path",
           }),
           expect.objectContaining({
             error_code: "provider_request_failed",
             provider_model_id: seeded.requestPrimaryModelId,
-            status: "failed",
+            status: "network_error",
             trigger: "request_path",
           }),
         ]),
@@ -201,16 +201,16 @@ test("provider health summary updates notifications and scheduled checks without
     expect(notifications.payloads).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ providerId: seeded.manualProviderId, status: "healthy" }),
-        expect.objectContaining({ providerId: seeded.scheduledProviderId, status: "degraded" }),
+        expect.objectContaining({ providerId: seeded.scheduledProviderId, status: "unhealthy" }),
         expect.objectContaining({
           providerId: seeded.requestPrimaryProviderId,
           providerModelId: null,
-          status: "unhealthy",
+          status: "network_error",
         }),
         expect.objectContaining({
           providerId: seeded.requestPrimaryProviderId,
           providerModelId: seeded.requestPrimaryModelId,
-          status: "unhealthy",
+          status: "network_error",
         }),
       ]),
     );
@@ -253,10 +253,12 @@ type RequestActivityRow = {
 };
 
 type SeededProviderHealthScenario = {
+  manualModelId: string;
   manualProviderId: string;
   requestFallbackModelId: string;
   requestPrimaryModelId: string;
   requestPrimaryProviderId: string;
+  scheduledModelId: string;
   scheduledProviderId: string;
 };
 
@@ -271,7 +273,9 @@ async function seedProviderHealthScenario(
 ): Promise<SeededProviderHealthScenario> {
   const encryption = createSecretEncryption({ kind: "inline", value: masterKey });
   const manualProviderId = randomUUID();
+  const manualModelId = randomUUID();
   const scheduledProviderId = randomUUID();
+  const scheduledModelId = randomUUID();
   const requestPrimaryProviderId = randomUUID();
   const requestFallbackProviderId = randomUUID();
   const requestPrimaryModelId = randomUUID();
@@ -333,10 +337,16 @@ async function seedProviderHealthScenario(
         supports_tools,
         availability
       )
-      values ($1, $2, 'primary-health-model', 'Primary Health Model', 128000, true, true, 'available'),
-             ($3, $4, 'fallback-health-model', 'Fallback Health Model', 128000, true, true, 'available')
+      values ($1, $2, 'manual-health-model', 'Manual Health Model', 128000, true, true, 'available'),
+             ($3, $4, 'scheduled-health-model', 'Scheduled Health Model', 128000, true, true, 'available'),
+             ($5, $6, 'primary-health-model', 'Primary Health Model', 128000, true, true, 'available'),
+             ($7, $8, 'fallback-health-model', 'Fallback Health Model', 128000, true, true, 'available')
     `,
     [
+      manualModelId,
+      manualProviderId,
+      scheduledModelId,
+      scheduledProviderId,
       requestPrimaryModelId,
       requestPrimaryProviderId,
       requestFallbackModelId,
@@ -345,7 +355,7 @@ async function seedProviderHealthScenario(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'health-routing', 'Health Routing', true)
     `,
     [virtualModelId],
@@ -377,15 +387,7 @@ async function seedProviderHealthScenario(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -397,7 +399,7 @@ async function seedProviderHealthScenario(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [agentApiKeyId, virtualModelId],
@@ -415,10 +417,12 @@ async function seedProviderHealthScenario(
   });
 
   return {
+    manualModelId,
     manualProviderId,
     requestFallbackModelId,
     requestPrimaryModelId,
     requestPrimaryProviderId,
+    scheduledModelId,
     scheduledProviderId,
   };
 }
@@ -440,7 +444,7 @@ async function seedUnhealthyRequestSummary(
         error_message,
         observed_at
       )
-      values ($1, $2, $3, 'request_path', 'failed', 'seeded_unhealthy', 'Seeded unhealthy state', '2026-06-16T04:59:00.000Z')
+      values ($1, $2, $3, 'request_path', 'unhealthy', 'seeded_unhealthy', 'Seeded unhealthy state', '2026-06-16T04:59:00.000Z')
     `,
     [eventId, input.providerId, input.providerModelId],
   );

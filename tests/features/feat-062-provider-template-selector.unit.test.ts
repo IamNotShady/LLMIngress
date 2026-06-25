@@ -6,16 +6,42 @@ import {
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
 
 describe("feat-062 provider template selector", () => {
-  it("lists remote API-key and local template groups with fixed capabilities", () => {
+  it("lists subscription, remote API-key, and local template groups with fixed capabilities", () => {
     const groups = listProviderTemplateSelectorGroups();
+    const subscriptionGroup = groups.find((group) => group.id === "subscription");
     const remoteGroup = groups.find((group) => group.id === "remote_api_key");
     const localGroup = groups.find((group) => group.id === "local");
 
+    expect(groups.map((group) => group.id)).toEqual(["subscription", "remote_api_key", "local"]);
+    expect(subscriptionGroup).toMatchObject({
+      id: "subscription",
+      label: "Subscription",
+      templates: [
+        {
+          baseUrlMode: "fixed_remote",
+          capabilities: ["responses"],
+          displayName: "OpenAI Codex",
+          fixedBaseUrl: "https://chatgpt.com/backend-api",
+          id: "openai_codex",
+          providerKey: "openai_codex",
+          providerType: "subscription",
+        },
+        {
+          baseUrlMode: "fixed_remote",
+          capabilities: ["messages"],
+          displayName: "Claude Code",
+          fixedBaseUrl: "https://api.anthropic.com",
+          id: "claude_code",
+          providerKey: "claude_code",
+          providerType: "subscription",
+        },
+      ],
+    });
     expect(remoteGroup).toMatchObject({
       id: "remote_api_key",
-      label: "Remote API-key templates",
+      label: "API Keys",
     });
-    expect(remoteGroup?.templates).toHaveLength(11);
+    expect(remoteGroup?.templates).toHaveLength(8);
     expect(remoteGroup?.templates).toEqual(
       expect.arrayContaining([
         {
@@ -35,15 +61,15 @@ describe("feat-062 provider template selector", () => {
     );
     expect(localGroup).toEqual({
       id: "local",
-      label: "Local templates",
+      label: "Local",
       templates: expect.arrayContaining([
         expect.objectContaining({
           baseUrlMode: "user_local_private",
-          capabilities: ["chat_completions"],
-          chatPath: "/api/chat",
+          capabilities: ["chat_completions", "streaming", "tools"],
+          chatPath: "/chat/completions",
           displayName: "Ollama",
           id: "ollama",
-          modelListPath: "/api/tags",
+          modelListPath: "/models",
           providerKey: "ollama",
           providerType: "local",
         }),
@@ -58,13 +84,29 @@ describe("feat-062 provider template selector", () => {
       providerType: "api_key",
     });
 
+    expect(normalizeProviderTemplateFormInput({ templateId: "openai_codex" })).toMatchObject({
+      baseUrl: "https://chatgpt.com/backend-api",
+      providerKey: "openai_codex",
+      providerType: "subscription",
+    });
     expect(
       normalizeProviderTemplateFormInput({
-        baseUrl: "http://127.0.0.1:11434",
+        baseUrl: "https://chatgpt.com/backend-api",
+        templateId: "openai_codex",
+      }),
+    ).toMatchObject({
+      baseUrl: "https://chatgpt.com/backend-api",
+      providerKey: "openai_codex",
+      providerType: "subscription",
+    });
+
+    expect(
+      normalizeProviderTemplateFormInput({
+        baseUrl: "http://127.0.0.1:11434/v1",
         templateId: "ollama",
       }),
     ).toMatchObject({
-      baseUrl: "http://127.0.0.1:11434",
+      baseUrl: "http://127.0.0.1:11434/v1",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
@@ -76,6 +118,12 @@ describe("feat-062 provider template selector", () => {
         templateId: "deepseek",
       }),
     ).toThrow(/custom OpenAI-compatible endpoints are not allowed/i);
+    expect(() =>
+      normalizeProviderTemplateFormInput({
+        baseUrl: "https://arbitrary.example/subscription",
+        templateId: "openai_codex",
+      }),
+    ).toThrow(/custom subscription endpoints are not allowed/i);
 
     expect(() =>
       normalizeProviderFormInput({

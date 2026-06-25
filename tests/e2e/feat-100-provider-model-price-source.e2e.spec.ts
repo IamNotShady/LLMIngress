@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { enqueueProviderModelRefreshJob } from "../../apps/console/src/server/model-refresh-jobs";
 import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
 import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { enqueueProviderModelRefreshJob } from "../../packages/db/src/provider-jobs";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 import { createFakeProviderServer } from "../support/fake-provider";
 
@@ -25,6 +25,53 @@ test("refresh models syncs provider model prices with manual override precedence
     ],
   });
   const providerId = randomUUID();
+  const priceSource = async () => [
+    {
+      cachedInputUsdPerMillionTokens: 0.4,
+      inputUsdPerMillionTokens: 1,
+      modelId: "manual-priced-model",
+      outputUsdPerMillionTokens: 3,
+      priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+      providerKey: "openai",
+      source: "models.dev" as const,
+      sourceUrl: "https://models.dev/api.json",
+      syncedAt,
+    },
+    {
+      cachedInputUsdPerMillionTokens: 0.5,
+      inputUsdPerMillionTokens: 1.25,
+      modelId: "sync-priced-model",
+      outputUsdPerMillionTokens: 4,
+      priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+      providerKey: "openai",
+      source: "models.dev" as const,
+      sourceUrl: "https://models.dev/api.json",
+      syncedAt,
+    },
+    {
+      cachedInputUsdPerMillionTokens: null,
+      inputUsdPerMillionTokens: 0.75,
+      modelId: "litellm-priced-model",
+      outputUsdPerMillionTokens: 1.5,
+      priceVersion: "litellm:2026-06-17T00:00:00.000Z",
+      providerKey: "openai",
+      source: "litellm" as const,
+      sourceUrl:
+        "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      syncedAt,
+    },
+    {
+      cachedInputUsdPerMillionTokens: null,
+      inputUsdPerMillionTokens: 2,
+      modelId: "claude-side-model",
+      outputUsdPerMillionTokens: 10,
+      priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
+      providerKey: "anthropic",
+      source: "models.dev" as const,
+      sourceUrl: "https://models.dev/api.json",
+      syncedAt,
+    },
+  ];
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
@@ -41,6 +88,8 @@ test("refresh models syncs provider model prices with manual override precedence
         model_refresh: createModelRefreshJobHandler({
           databaseUrl: fixture.databaseUrl,
           masterKeySource,
+          modelPriceSource: priceSource,
+          modelRegistrySource: async () => [],
         }),
       },
       workerId: `worker-model-refresh-price-source-${randomUUID()}`,
@@ -52,6 +101,11 @@ test("refresh models syncs provider model prices with manual override precedence
 
     await expect(modelRefreshRunner.runOnce()).resolves.toBe(true);
     const chainedPriceSyncJobId = await readChainedPriceSyncJobId(fixture, queuedRefresh.id);
+    await expect(readProviderModelIds(fixture)).resolves.toEqual([
+      "litellm-priced-model",
+      "manual-priced-model",
+      "sync-priced-model",
+    ]);
 
     await setManualProviderModelPrice(fixture, {
       cachedInputUsdPerMillionTokens: 9,
@@ -64,7 +118,6 @@ test("refresh models syncs provider model prices with manual override precedence
       "manual-priced-model",
       "sync-priced-model",
       "litellm-priced-model",
-      "unknown-price-model",
     ]);
 
     const priceSyncRunner = createPostgresJobRunner({
@@ -73,53 +126,7 @@ test("refresh models syncs provider model prices with manual override precedence
         price_sync: createPriceSyncJobHandler({
           databaseUrl: fixture.databaseUrl,
           now: () => syncedAt,
-          priceSource: async () => [
-            {
-              cachedInputUsdPerMillionTokens: 0.4,
-              inputUsdPerMillionTokens: 1,
-              modelId: "manual-priced-model",
-              outputUsdPerMillionTokens: 3,
-              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
-              providerKey: "openai",
-              source: "models.dev",
-              sourceUrl: "https://models.dev/api.json",
-              syncedAt,
-            },
-            {
-              cachedInputUsdPerMillionTokens: 0.5,
-              inputUsdPerMillionTokens: 1.25,
-              modelId: "sync-priced-model",
-              outputUsdPerMillionTokens: 4,
-              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
-              providerKey: "openai",
-              source: "models.dev",
-              sourceUrl: "https://models.dev/api.json",
-              syncedAt,
-            },
-            {
-              cachedInputUsdPerMillionTokens: null,
-              inputUsdPerMillionTokens: 0.75,
-              modelId: "litellm-priced-model",
-              outputUsdPerMillionTokens: 1.5,
-              priceVersion: "litellm:2026-06-17T00:00:00.000Z",
-              providerKey: "openai",
-              source: "litellm",
-              sourceUrl:
-                "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
-              syncedAt,
-            },
-            {
-              cachedInputUsdPerMillionTokens: null,
-              inputUsdPerMillionTokens: 2,
-              modelId: "claude-side-model",
-              outputUsdPerMillionTokens: 10,
-              priceVersion: "models.dev:2026-06-17T00:00:00.000Z",
-              providerKey: "anthropic",
-              source: "models.dev",
-              sourceUrl: "https://models.dev/api.json",
-              syncedAt,
-            },
-          ],
+          priceSource,
         } satisfies PriceSyncOptions),
       },
       workerId: `worker-price-source-sync-${randomUUID()}`,
@@ -129,22 +136,12 @@ test("refresh models syncs provider model prices with manual override precedence
 
     await expect(readJobResult(fixture, chainedPriceSyncJobId)).resolves.toMatchObject({
       result: {
-        syncedPriceCount: 4,
+        syncedPriceCount: 3,
         trigger: "system",
       },
       status: "succeeded",
     });
     await expect(readProviderModelPriceRows(fixture)).resolves.toEqual([
-      {
-        cached_input_usd_per_million_tokens: null,
-        input_usd_per_million_tokens: "2.00000000",
-        model_id: "claude-side-model",
-        output_usd_per_million_tokens: "10.00000000",
-        price_version: "models.dev:2026-06-17T00:00:00.000Z",
-        provider_key: "anthropic",
-        source: "models.dev",
-        source_url: "https://models.dev/api.json",
-      },
       {
         cached_input_usd_per_million_tokens: null,
         input_usd_per_million_tokens: "0.75000000",
@@ -201,16 +198,118 @@ test("refresh models syncs provider model prices with manual override precedence
         source: "price_sync",
         status: "priced",
       },
-      {
-        modelId: "unknown-price-model",
-        reason: "no_current_price",
-        status: "unknown_price",
-      },
     ]);
     await expect(readConfigPublication(fixture)).resolves.toEqual({
       providerModelsPriceChangeCount: "1",
       workerVersionCount: "1",
     });
+  } finally {
+    await provider.close();
+    await fixture.dispose();
+  }
+});
+
+test("refresh models writes synced provider model capabilities", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_provider_model_capability_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const provider = await createFakeProviderServer({
+    models: [
+      { id: "gpt-capable", name: "GPT Capable" },
+      { id: "unknown-capability", name: "Unknown Capability" },
+    ],
+  });
+  const providerId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await insertProvider(fixture, {
+      baseUrl: `${provider.url}/v1`,
+      id: providerId,
+      providerKey: "openai",
+    });
+    await insertProviderApiKey(fixture, providerId);
+
+    const modelRefreshRunner = createPostgresJobRunner({
+      databaseUrl: fixture.databaseUrl,
+      handlers: {
+        model_refresh: createModelRefreshJobHandler({
+          databaseUrl: fixture.databaseUrl,
+          masterKeySource,
+          modelPriceSource: async () => [],
+          modelRegistrySource: async () => [
+            {
+              contextWindow: 128_000,
+              modelId: "gpt-capable",
+              outputTokenLimit: 16_384,
+              providerKey: "openai",
+              reasoningDefaultLevel: "medium",
+              reasoningLevels: ["low", "medium", "high"],
+              reasoningSupport: true,
+              registrySources: {
+                contextWindow: "models.dev",
+                reasoning: "models.dev",
+                supportsStreaming: "litellm",
+                supportsTools: "models.dev",
+              },
+              streamingInferred: false,
+              supportsStreaming: true,
+              supportsTools: true,
+              syncedAt,
+            },
+          ],
+        }),
+      },
+      workerId: `worker-model-refresh-capabilities-${randomUUID()}`,
+    });
+
+    await enqueueProviderModelRefreshJob({
+      databaseUrl: fixture.databaseUrl,
+      providerId,
+    });
+    await expect(modelRefreshRunner.runOnce()).resolves.toBe(true);
+
+    await expect(readProviderModelCapabilityRows(fixture)).resolves.toEqual([
+      {
+        capability_metadata: {
+          outputTokenLimit: 16_384,
+          reasoning: true,
+          reasoningDefaultLevel: "medium",
+          reasoningLevels: ["low", "medium", "high"],
+          registrySources: {
+            contextWindow: "models.dev",
+            reasoning: "models.dev",
+            supportsStreaming: "litellm",
+            supportsTools: "models.dev",
+          },
+          registrySyncedAt: syncedAt.toISOString(),
+          streamingInferred: false,
+          tools: true,
+        },
+        context_window: 128_000,
+        model_id: "gpt-capable",
+        supports_streaming: true,
+        supports_tools: true,
+      },
+    ]);
+
+    const routeSeed = await seedRoutePolicyForProviderModels(fixture, providerId, ["gpt-capable"]);
+    const snapshot = await loadGatewayConfigSnapshot(fixture.databaseUrl);
+    const routePolicy = snapshot.routePolicies.find(
+      (candidate) => candidate.id === routeSeed.routePolicyId,
+    );
+
+    expect(routePolicy?.candidates).toEqual([
+      expect.objectContaining({
+        capabilities: expect.objectContaining({
+          reasoning: true,
+          tools: true,
+        }),
+        contextWindow: 128_000,
+        modelId: "gpt-capable",
+        supportsTools: true,
+      }),
+    ]);
   } finally {
     await provider.close();
     await fixture.dispose();
@@ -262,6 +361,14 @@ type ProviderModelPriceRow = {
   provider_key: string;
   source: string;
   source_url: string;
+};
+
+type ProviderModelCapabilityRow = {
+  capability_metadata: unknown;
+  context_window: number | null;
+  model_id: string;
+  supports_streaming: boolean;
+  supports_tools: boolean;
 };
 
 async function insertProvider(fixture: Fixture, input: ProviderInput): Promise<void> {
@@ -353,7 +460,7 @@ async function seedRoutePolicyForProviderModels(
 
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'feat-100-price-source', 'Feat 100 Price Source', true)
     `,
     [virtualModelId],
@@ -389,14 +496,44 @@ async function readProviderModelPriceRows(fixture: Fixture): Promise<ProviderMod
     `
       select provider_key,
              model_id,
-             input_usd_per_million_tokens::text,
-             cached_input_usd_per_million_tokens::text,
-             output_usd_per_million_tokens::text,
-             source,
-             source_url,
-             price_version
-      from provider_models_price
+             synced_input_usd_per_million_tokens::text as input_usd_per_million_tokens,
+             synced_cached_input_usd_per_million_tokens::text as cached_input_usd_per_million_tokens,
+             synced_output_usd_per_million_tokens::text as output_usd_per_million_tokens,
+             synced_price_source as source,
+             synced_price_source_url as source_url,
+             synced_price_version as price_version
+      from provider_models
+      join providers on providers.id = provider_models.provider_id
+      where synced_price_version is not null
       order by provider_key, model_id, source
+    `,
+  );
+  return result.rows;
+}
+
+async function readProviderModelIds(fixture: Fixture): Promise<string[]> {
+  const result = await fixture.query<{ model_id: string }>(
+    `
+      select model_id
+      from provider_models
+      order by model_id
+    `,
+  );
+  return result.rows.map((row) => row.model_id);
+}
+
+async function readProviderModelCapabilityRows(
+  fixture: Fixture,
+): Promise<ProviderModelCapabilityRow[]> {
+  const result = await fixture.query<ProviderModelCapabilityRow>(
+    `
+      select model_id,
+             context_window,
+             supports_streaming,
+             supports_tools,
+             capability_metadata
+      from provider_models
+      order by model_id
     `,
   );
   return result.rows;
@@ -442,9 +579,10 @@ async function readConfigPublication(fixture: Fixture): Promise<{
     `
       select (
                select count(*)::text
-               from config_change_events
-               where source = 'worker'
-                 and changed_table = 'provider_models_price'
+               from config_versions
+               cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+               where change.value->>'source' = 'worker'
+                 and change.value->>'table' = 'provider_models'
              ) as provider_models_price_change_count,
              (
                select count(*)::text

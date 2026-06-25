@@ -24,8 +24,11 @@ describe("feat-076 provider health console summary", () => {
     const staleProbe = new Date("2026-06-16T05:30:00.000Z");
 
     expect(formatProviderHealthStatus("healthy")).toBe("Healthy");
-    expect(formatProviderHealthStatus("degraded")).toBe("Degraded");
+    expect(formatProviderHealthStatus("checking")).toBe("Checking");
     expect(formatProviderHealthStatus("unhealthy")).toBe("Unhealthy");
+    expect(formatProviderHealthStatus("auth_failed")).toBe("Auth failed");
+    expect(formatProviderHealthStatus("quota_limited")).toBe("Quota limited");
+    expect(formatProviderHealthStatus("network_error")).toBe("Network error");
     expect(formatProviderHealthStatus(null)).toBe("Unknown");
     expect(formatProviderHealthFailureCount(3)).toBe("Consecutive failures: 3");
     expect(formatProviderHealthLatestProbe({ latestProbeAt: recentProbe, trigger: "manual" })).toBe(
@@ -98,7 +101,7 @@ describe("feat-076 provider health console summary", () => {
         latestProbeAt: null,
         models: [],
         providerKey: "no-probe",
-        status: "unknown",
+        status: "checking",
         trigger: null,
       },
     ]);
@@ -148,7 +151,7 @@ async function seedProviderHealthConsoleData(fixture: Fixture): Promise<{
         observed_at
       )
       values ($1, $2, null, 'manual', 'healthy', '2026-06-16T05:58:30.000Z'),
-             ($3, $2, $4, 'request_path', 'failed', '2026-06-16T05:30:00.000Z')
+             ($3, $2, $4, 'request_path', 'network_error', '2026-06-16T05:30:00.000Z')
     `,
     [providerEventId, providerId, modelEventId, providerModelId],
   );
@@ -169,6 +172,13 @@ async function seedProviderHealthConsoleData(fixture: Fixture): Promise<{
              ($4, $2, $5, $6, 'unhealthy', 3, null, '2026-06-16T05:30:00.000Z', '2026-06-16T05:30:00.000Z')
     `,
     [randomUUID(), providerId, providerEventId, randomUUID(), providerModelId, modelEventId],
+  );
+  await fixture.query(
+    `
+      insert into jobs (id, job_type, status, trigger, payload, max_attempts)
+      values ($1, 'provider_connectivity_check', 'pending', 'manual', $2::jsonb, 1)
+    `,
+    [randomUUID(), JSON.stringify({ providerId: noProbeProviderId })],
   );
 
   return {

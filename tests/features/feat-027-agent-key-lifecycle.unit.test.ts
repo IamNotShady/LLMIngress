@@ -3,10 +3,9 @@ import {
   buildAgentApiKeyHash,
   generateAgentApiKeyPlaintext,
   prepareAgentApiKeyForStorage,
-  toAgentApiKeyMetadata,
-} from "../../apps/console/src/server/agent-api-keys";
+} from "../../apps/console/src/server/agents";
 
-describe("feat-027 agent API key lifecycle", () => {
+describe("feat-027 agent-owned API key", () => {
   it("generates high-entropy Agent API keys and stores only prefix plus hash", () => {
     const plaintext = generateAgentApiKeyPlaintext();
     const stored = prepareAgentApiKeyForStorage(plaintext);
@@ -23,26 +22,12 @@ describe("feat-027 agent API key lifecycle", () => {
     expect(() => prepareAgentApiKeyForStorage("llmi_short")).toThrow(/longer than the stored/i);
   });
 
-  it("maps persisted rows to metadata without plaintext or hash", () => {
-    const metadata = toAgentApiKeyMetadata({
-      agent_id: "agent-027",
-      created_at: new Date("2026-01-01T00:00:00.000Z"),
-      enabled: true,
-      id: "key-027",
-      key_hash: "hash-secret",
-      key_prefix: "llmi_prefix",
-      updated_at: new Date("2026-01-02T00:00:00.000Z"),
-    });
+  it("normalizes plaintext before hashing and prefix extraction", () => {
+    const plaintext = `${generateAgentApiKeyPlaintext()}   `;
+    const stored = prepareAgentApiKeyForStorage(plaintext);
+    const normalized = plaintext.trim();
 
-    expect(metadata).toEqual({
-      agentId: "agent-027",
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      enabled: true,
-      id: "key-027",
-      keyPrefix: "llmi_prefix",
-      updatedAt: new Date("2026-01-02T00:00:00.000Z"),
-    });
-    expect(metadata).not.toHaveProperty("plaintext");
-    expect(metadata).not.toHaveProperty("keyHash");
+    expect(stored.keyPrefix).toBe(normalized.slice(0, 12));
+    expect(stored.keyHash).toBe(buildAgentApiKeyHash(normalized));
   });
 });

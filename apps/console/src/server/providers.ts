@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import {
+  isRemovedProviderKey,
+  PostgresClient,
+  type PostgresQueryResultRow,
+} from "@llmingress/db/providers";
 import { isKnownProviderTemplateKey, type ProviderTemplateCreateInput } from "./provider-templates";
 
-export type ProviderType = "api_key" | "local";
+export type ProviderType = "api_key" | "local" | "subscription";
 
 export type ProviderFormInput = {
   baseUrl?: string | null;
@@ -27,7 +31,7 @@ export type ConsoleProvider = NormalizedProviderFormInput & {
   providerTemplateId: string | null;
 };
 
-type ProviderRow = QueryResultRow & {
+type ProviderRow = PostgresQueryResultRow & {
   base_url: string | null;
   default_priority: number;
   display_name: string;
@@ -62,16 +66,22 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
     throw new Error("Provider display name is required.");
   }
 
+  if (isRemovedProviderKey(providerKey)) {
+    throw new Error(`${displayName} provider is no longer supported.`);
+  }
+
   if (isKnownProviderTemplateKey(providerKey)) {
     throw new Error(`${displayName} providers must be created from their provider template.`);
   }
 
   if (!isProviderType(providerType)) {
-    throw new Error("Provider type must be api_key or local.");
+    throw new Error("Provider type must be api_key, local, or subscription.");
   }
 
-  if (providerType === "local") {
-    throw new Error("Local providers must be created from a provider template.");
+  if (providerType === "local" || providerType === "subscription") {
+    throw new Error(
+      "Local providers and subscription providers must be created from a provider template.",
+    );
   }
 
   if (baseUrl) {
@@ -101,10 +111,13 @@ export async function listProviders(databaseUrl: string): Promise<ConsoleProvide
                default_priority,
                enabled
         from providers
+        where deleted_at is null
         order by provider_key
       `,
     );
-    return result.rows.map(rowToConsoleProvider);
+    return result.rows
+      .filter((row) => !isRemovedProviderKey(row.provider_key))
+      .map(rowToConsoleProvider);
   });
 }
 
@@ -247,6 +260,7 @@ export async function updateProvider(input: {
                      enabled
               from providers
               where id = $1
+                and deleted_at is null
               for update
             `,
             [input.id],
@@ -262,6 +276,7 @@ export async function updateProvider(input: {
               default_priority = $4,
               updated_at = now()
           where id = $1
+            and deleted_at is null
           returning id::text,
                     provider_type,
                     provider_key,
@@ -298,6 +313,7 @@ export async function setProviderEnabled(input: {
           set enabled = $2,
               updated_at = now()
           where id = $1
+            and deleted_at is null
           returning id::text,
                     provider_type,
                     provider_key,
@@ -314,6 +330,43 @@ export async function setProviderEnabled(input: {
   });
 
   return requireSavedProvider(provider);
+}
+
+export async function deleteProvider(input: { databaseUrl: string; id: string }): Promise<void> {
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `Delete provider ${input.id}`,
+    changes: [{ table: "providers", recordId: input.id }],
+    write: async (client) => {
+      const result = await client.query<{ id: string }>(
+        `
+          update providers
+          set deleted_at = now(),
+              enabled = false,
+              updated_at = now()
+          where id = $1
+            and deleted_at is null
+          returning id::text
+        `,
+        [input.id],
+      );
+      if (!result.rows[0]) {
+        throw new Error("Provider was not found.");
+      }
+      await client.query("delete from provider_api_keys where provider_id = $1", [input.id]);
+      await client.query(
+        `
+          update provider_models
+          set deleted_at = now(),
+              updated_at = now()
+          where provider_id = $1
+            and deleted_at is null
+        `,
+        [input.id],
+      );
+    },
+  });
 }
 
 function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
@@ -389,7 +442,7 @@ function requireSavedProvider(provider: ConsoleProvider | undefined): ConsolePro
 }
 
 function isProviderType(value: string | undefined): value is ProviderType {
-  return value === "api_key" || value === "local";
+  return value === "api_key" || value === "local" || value === "subscription";
 }
 
 function assertUrl(value: string): void {
@@ -413,9 +466,9 @@ function normalizeDefaultPriority(value: number | string | null | undefined): nu
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

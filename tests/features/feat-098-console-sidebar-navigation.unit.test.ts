@@ -8,14 +8,14 @@ import {
 
 const expectedRoutes = [
   "/",
-  "/usage",
-  "/activity",
-  "/models",
-  "/routing",
   "/agents",
   "/providers",
-  "/pricing",
+  "/models",
+  "/activity",
+  "/usage",
+  "/limits",
   "/playground",
+  "/runtime",
   "/settings",
 ];
 
@@ -47,7 +47,7 @@ describe("console module navigation config", () => {
     expect(findActiveNavItem("/agents")?.href).toBe("/agents");
     expect(findActiveNavItem("/providers?modelRefreshProviderId=abc")?.href).toBe("/providers");
     // A deeper path under a module still resolves to that module, not Overview.
-    expect(findActiveNavItem("/routing/anything")?.href).toBe("/routing");
+    expect(findActiveNavItem("/limits/anything")?.href).toBe("/limits");
   });
 
   test("overview lives at the root so first-run login lands somewhere real", () => {

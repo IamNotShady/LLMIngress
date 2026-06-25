@@ -1,0 +1,621 @@
+{
+  "createdAt": "2026-06-18T09:25:24.830Z",
+  "kind": "llmingress.backup",
+  "mode": "scheduled",
+  "skippedTables": [],
+  "tableCounts": {
+    "providers": 1,
+    "provider_models": 0,
+    "provider_api_keys": 0,
+    "agents": 0,
+    "virtual_models": 0,
+    "route_policies": 0,
+    "route_policy_candidates": 0,
+    "agent_api_keys": 0,
+    "agent_api_key_virtual_models": 0,
+    "agent_limits": 0,
+    "provider_models_price": 0,
+    "config_versions": 0,
+    "config_change_events": 0,
+    "notification_channels": 0,
+    "rate_limit_windows": 0,
+    "budget_periods": 0,
+    "request_activity": 0,
+    "request_usage": 0,
+    "request_costs": 0,
+    "request_savings": 0,
+    "fallback_events": 0,
+    "budget_reservations": 0,
+    "jobs": 7,
+    "job_attempts": 7,
+    "provider_health_events": 0,
+    "provider_health_summary": 0,
+    "gateway_runtime_status": 0,
+    "runtime_errors": 0,
+    "billing_reconciliation_runs": 0,
+    "billing_reconciliation_items": 0,
+    "export_tasks": 0,
+    "notification_events": 0,
+    "notification_deliveries": 0,
+    "webhook_deliveries": 0,
+    "migration_history": 25,
+    "schema_version": 1,
+    "console_admins": 0,
+    "console_sessions": 0
+  },
+  "tables": {
+    "config": {
+      "providers": [
+        {
+          "id": "bfdfce94-0a8a-4de4-9aa6-86d64b0cec44",
+          "provider_type": "api_key",
+          "provider_key": "openai",
+          "display_name": "OpenAI Price Status Provider",
+          "base_url": "http://127.0.0.1:52474/v1",
+          "enabled": true,
+          "created_at": "2026-06-18T09:25:23.975Z",
+          "updated_at": "2026-06-18T09:25:23.975Z",
+          "provider_template_id": null
+        }
+      ],
+      "provider_models": [],
+      "provider_api_keys": [],
+      "agents": [],
+      "virtual_models": [],
+      "route_policies": [],
+      "route_policy_candidates": [],
+      "agent_api_keys": [],
+      "agent_api_key_virtual_models": [],
+      "agent_limits": [],
+      "provider_models_price": [],
+      "config_versions": [],
+      "config_change_events": [],
+      "notification_channels": []
+    },
+    "operational": {
+      "rate_limit_windows": [],
+      "budget_periods": [],
+      "request_activity": [],
+      "request_usage": [],
+      "request_costs": [],
+      "request_savings": [],
+      "fallback_events": [],
+      "budget_reservations": [],
+      "jobs": [
+        {
+          "id": "166b7e9e-e48c-4781-ac68-fd396ebde44a",
+          "job_type": "budget_threshold_alerts",
+          "status": "succeeded",
+          "trigger": "scheduled",
+          "priority": -5,
+          "payload": {
+            "schedule": {
+              "taskId": "budget-threshold-alerts",
+              "intervalMs": 900000,
+              "windowStart": "2026-06-18T09:15:00.000Z"
+            },
+            "thresholdRatios": [
+              0.8,
+              0.9
+            ]
+          },
+          "result": {
+            "thresholdRatios": [
+              0.8,
+              0.9
+            ],
+            "queuedAlertCount": 0,
+            "evaluatedBudgetCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "run_after": "2026-06-18T09:15:00.000Z",
+          "lease_owner": null,
+          "lease_expires_at": null,
+          "attempt_count": 1,
+          "max_attempts": 1,
+          "created_at": "2026-06-18T09:25:24.668Z",
+          "updated_at": "2026-06-18T09:25:24.725Z",
+          "completed_at": "2026-06-18T09:25:24.725Z"
+        },
+        {
+          "id": "16dcfd88-39f5-4a82-acb1-321cc09083b5",
+          "job_type": "backup",
+          "status": "running",
+          "trigger": "scheduled",
+          "priority": -10,
+          "payload": {
+            "schedule": {
+              "taskId": "backup",
+              "intervalMs": 86400000,
+              "windowStart": "2026-06-18T00:00:00.000Z"
+            },
+            "outputDir": ".llmingress/backups"
+          },
+          "result": null,
+          "error_code": null,
+          "error_message": null,
+          "run_after": "2026-06-18T00:00:00.000Z",
+          "lease_owner": "worker-72580",
+          "lease_expires_at": "2026-06-18T09:25:54.825Z",
+          "attempt_count": 1,
+          "max_attempts": 1,
+          "created_at": "2026-06-18T09:25:24.658Z",
+          "updated_at": "2026-06-18T09:25:24.825Z",
+          "completed_at": null
+        },
+        {
+          "id": "5f210dc9-e54e-454a-915e-c3aeca2dc809",
+          "job_type": "stale_reservation_cleanup",
+          "status": "succeeded",
+          "trigger": "scheduled",
+          "priority": 0,
+          "payload": {
+            "schedule": {
+              "taskId": "stale-reservation-cleanup",
+              "intervalMs": 60000,
+              "windowStart": "2026-06-18T09:25:00.000Z"
+            }
+          },
+          "result": {
+            "releasedReservedTokens": 0,
+            "releasedReservedCostUsd": 0,
+            "releasedReservationCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "run_after": "2026-06-18T09:25:00.000Z",
+          "lease_owner": null,
+          "lease_expires_at": null,
+          "attempt_count": 1,
+          "max_attempts": 1,
+          "created_at": "2026-06-18T09:25:24.623Z",
+          "updated_at": "2026-06-18T09:25:24.661Z",
+          "completed_at": "2026-06-18T09:25:24.661Z"
+        },
+        {
+          "id": "7c8cfc00-c495-4a4b-b837-1902673dd58f",
+          "job_type": "fallback_exhaustion_alerts",
+          "status": "succeeded",
+          "trigger": "scheduled",
+          "priority": -5,
+          "payload": {
+            "schedule": {
+              "taskId": "fallback-exhaustion-alerts",
+              "intervalMs": 300000,
+              "windowStart": "2026-06-18T09:25:00.000Z"
+            },
+            "windowMs": 900000
+          },
+          "result": {
+            "windowMs": 900000,
+            "queuedAlertCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0,
+            "evaluatedFailedRequestCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "run_after": "2026-06-18T09:25:00.000Z",
+          "lease_owner": null,
+          "lease_expires_at": null,
+          "attempt_count": 1,
+          "max_attempts": 1,
+          "created_at": "2026-06-18T09:25:24.698Z",
+          "updated_at": "2026-06-18T09:25:24.812Z",
+          "completed_at": "2026-06-18T09:25:24.812Z"
+        },
+        {
+          "id": "b0208b0c-94ec-41cb-8f18-897a4f3558ac",
+          "job_type": "provider_failure_alerts",
+          "status": "succeeded",
+          "trigger": "scheduled",
+          "priority": -5,
+          "payload": {
+            "schedule": {
+              "taskId": "provider-failure-alerts",
+              "intervalMs": 300000,
+              "windowStart": "2026-06-18T09:25:00.000Z"
+            },
+            "thresholdCount": 3
+          },
+          "result": {
+            "thresholdCount": 3,
+            "queuedAlertCount": 0,
+            "evaluatedSummaryCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "run_after": "2026-06-18T09:25:00.000Z",
+          "lease_owner": null,
+          "lease_expires_at": null,
+          "attempt_count": 1,
+          "max_attempts": 1,
+          "created_at": "2026-06-18T09:25:24.688Z",
+          "updated_at": "2026-06-18T09:25:24.783Z",
+          "completed_at": "2026-06-18T09:25:24.783Z"
+        },
+        {
+          "id": "c4cec171-8134-4199-b988-430d3ac8a270",
+          "job_type": "rate_limit_alerts",
+          "status": "succeeded",
+          "trigger": "scheduled",
+          "priority": -5,
+          "payload": {
+            "schedule": {
+              "taskId": "rate-limit-alerts",
+              "intervalMs": 300000,
+              "windowStart": "2026-06-18T09:25:00.000Z"
+            },
+            "windowMs": 900000,
+            "thresholdCount": 3
+          },
+          "result": {
+            "windowMs": 900000,
+            "thresholdCount": 3,
+            "queuedAlertCount": 0,
+            "evaluatedBlockCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "run_after": "2026-06-18T09:25:00.000Z",
+          "lease_owner": null,
+          "lease_expires_at": null,
+          "attempt_count": 1,
+          "max_attempts": 1,
+          "created_at": "2026-06-18T09:25:24.679Z",
+          "updated_at": "2026-06-18T09:25:24.752Z",
+          "completed_at": "2026-06-18T09:25:24.752Z"
+        },
+        {
+          "id": "cab1ae9c-bc5d-473a-84d5-7e0777d4f7a1",
+          "job_type": "retention_cleanup",
+          "status": "succeeded",
+          "trigger": "scheduled",
+          "priority": 0,
+          "payload": {
+            "schedule": {
+              "taskId": "retention-cleanup",
+              "intervalMs": 86400000,
+              "windowStart": "2026-06-18T00:00:00.000Z"
+            },
+            "retentionDays": 30
+          },
+          "result": {
+            "cutoff": "2026-05-19T09:25:24.682Z",
+            "retentionDays": 30,
+            "deletedExportFileCount": 0,
+            "deletedExportTaskCount": 0,
+            "preservedBudgetPeriodCount": 0,
+            "deletedRequestActivityCount": 0,
+            "preservedRateLimitWindowCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "run_after": "2026-06-18T00:00:00.000Z",
+          "lease_owner": null,
+          "lease_expires_at": null,
+          "attempt_count": 1,
+          "max_attempts": 1,
+          "created_at": "2026-06-18T09:25:24.644Z",
+          "updated_at": "2026-06-18T09:25:24.692Z",
+          "completed_at": "2026-06-18T09:25:24.692Z"
+        }
+      ],
+      "job_attempts": [
+        {
+          "id": "07df22b0-57da-49b4-a3ef-fa3890e39959",
+          "job_id": "cab1ae9c-bc5d-473a-84d5-7e0777d4f7a1",
+          "attempt_number": 1,
+          "worker_id": "worker-72580",
+          "status": "succeeded",
+          "result": {
+            "cutoff": "2026-05-19T09:25:24.682Z",
+            "retentionDays": 30,
+            "deletedExportFileCount": 0,
+            "deletedExportTaskCount": 0,
+            "preservedBudgetPeriodCount": 0,
+            "deletedRequestActivityCount": 0,
+            "preservedRateLimitWindowCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "started_at": "2026-06-18T09:25:24.677Z",
+          "finished_at": "2026-06-18T09:25:24.692Z"
+        },
+        {
+          "id": "0b7d0acc-523c-4e01-ab3e-155b9a3891a9",
+          "job_id": "166b7e9e-e48c-4781-ac68-fd396ebde44a",
+          "attempt_number": 1,
+          "worker_id": "worker-72580",
+          "status": "succeeded",
+          "result": {
+            "thresholdRatios": [
+              0.8,
+              0.9
+            ],
+            "queuedAlertCount": 0,
+            "evaluatedBudgetCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "started_at": "2026-06-18T09:25:24.706Z",
+          "finished_at": "2026-06-18T09:25:24.725Z"
+        },
+        {
+          "id": "24b9d6ba-7023-437d-ab2c-01b8feeafeff",
+          "job_id": "5f210dc9-e54e-454a-915e-c3aeca2dc809",
+          "attempt_number": 1,
+          "worker_id": "worker-72580",
+          "status": "succeeded",
+          "result": {
+            "releasedReservedTokens": 0,
+            "releasedReservedCostUsd": 0,
+            "releasedReservationCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "started_at": "2026-06-18T09:25:24.645Z",
+          "finished_at": "2026-06-18T09:25:24.661Z"
+        },
+        {
+          "id": "88e42103-697a-4656-9a2a-df9f4fd91f44",
+          "job_id": "7c8cfc00-c495-4a4b-b837-1902673dd58f",
+          "attempt_number": 1,
+          "worker_id": "worker-72580",
+          "status": "succeeded",
+          "result": {
+            "windowMs": 900000,
+            "queuedAlertCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0,
+            "evaluatedFailedRequestCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "started_at": "2026-06-18T09:25:24.796Z",
+          "finished_at": "2026-06-18T09:25:24.812Z"
+        },
+        {
+          "id": "9dffe408-b891-4698-86d9-5793c6515af3",
+          "job_id": "c4cec171-8134-4199-b988-430d3ac8a270",
+          "attempt_number": 1,
+          "worker_id": "worker-72580",
+          "status": "succeeded",
+          "result": {
+            "windowMs": 900000,
+            "thresholdCount": 3,
+            "queuedAlertCount": 0,
+            "evaluatedBlockCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "started_at": "2026-06-18T09:25:24.738Z",
+          "finished_at": "2026-06-18T09:25:24.752Z"
+        },
+        {
+          "id": "ab40cc0c-137d-4255-8fa8-63263128a7c0",
+          "job_id": "b0208b0c-94ec-41cb-8f18-897a4f3558ac",
+          "attempt_number": 1,
+          "worker_id": "worker-72580",
+          "status": "succeeded",
+          "result": {
+            "thresholdCount": 3,
+            "queuedAlertCount": 0,
+            "evaluatedSummaryCount": 0,
+            "skippedNoChannelCount": 0,
+            "notificationEventCount": 0,
+            "skippedDuplicateAlertCount": 0
+          },
+          "error_code": null,
+          "error_message": null,
+          "started_at": "2026-06-18T09:25:24.763Z",
+          "finished_at": "2026-06-18T09:25:24.783Z"
+        },
+        {
+          "id": "f0776964-4baa-4489-9aeb-f5f003162a33",
+          "job_id": "16dcfd88-39f5-4a82-acb1-321cc09083b5",
+          "attempt_number": 1,
+          "worker_id": "worker-72580",
+          "status": "running",
+          "result": null,
+          "error_code": null,
+          "error_message": null,
+          "started_at": "2026-06-18T09:25:24.825Z",
+          "finished_at": null
+        }
+      ],
+      "provider_health_events": [],
+      "provider_health_summary": [],
+      "gateway_runtime_status": [],
+      "runtime_errors": [],
+      "billing_reconciliation_runs": [],
+      "billing_reconciliation_items": [],
+      "export_tasks": [],
+      "notification_events": [],
+      "notification_deliveries": [],
+      "webhook_deliveries": []
+    },
+    "system": {
+      "migration_history": [
+        {
+          "id": "0001",
+          "name": "create_schema_version",
+          "checksum": "793a079d4d978a49bbd50fce36e868dfa2a110c3e47d3cf554a8397c90070606",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0002",
+          "name": "core_config_schema",
+          "checksum": "b874655baab3e693783baa9ba34bab3cdcd7af2cab0ad73e9625a9ad64d31a53",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0003",
+          "name": "runtime_records_jobs_schema",
+          "checksum": "1897fcdb0b25189e00f3456d80aef53993a7be5605c94c1d8185b5051ae1dfde",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0004",
+          "name": "console_auth_schema",
+          "checksum": "2c3fe7d7a982a2b0aaea2ac6b049bc53b3d39b0f1a79f6c343b47102c2c5e69a",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0005",
+          "name": "model_price_overrides",
+          "checksum": "19a2bce61ec841cfdadeeec4e4a8dc6816022c15becb96271f9c84580c06532e",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0006",
+          "name": "provider_key_secure_storage",
+          "checksum": "b350ec33260e38cb90dc91f550b52b91b2db2b6d945551a8d04eaf3e8edfc6dc",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0007",
+          "name": "provider_templates",
+          "checksum": "e861f18888c83835a35e3314d767aae8528ee5af7f469a367155d1b3138bf192",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0008",
+          "name": "ollama_provider_template",
+          "checksum": "2c72096424b78bb24506476615a97b70858af6d6099ca46d2bb22fc1f1807d4c",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0009",
+          "name": "remote_openai_compatible_templates",
+          "checksum": "e67e5e9e9e80c881aad3ad8acdf905ef0e159687dc610bf81beaf6c91a406df6",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0010",
+          "name": "local_provider_templates",
+          "checksum": "d2f0191712dd5e831a4f2f70ed52cc22adc2cd2b37dd88b4b28a1dab21be6f27",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0011",
+          "name": "openrouter_provider",
+          "checksum": "d359f730fd555fcbfff4958a451aa72d7e9fcdaf4f3611bc979be4a949963545",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0012",
+          "name": "gemini_provider",
+          "checksum": "c4f13adf27d510e892cf74f8d1c1ce1b5a85ea9b8bd91eb6b8a8a1acf4038078",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0013",
+          "name": "provider_multi_key_failover",
+          "checksum": "482606052b58145e78bc9b9aafe180da1b95c1123d5c9da6883116ed239111e8",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0014",
+          "name": "price_registry_snapshots",
+          "checksum": "52a86d0c41c9625bcb1149aaa75635c75c0ab97360b70c082ae57cca0c42edf9",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0015",
+          "name": "billing_reconciliation",
+          "checksum": "8a4a7d627fc704d64f7379a30c7dcf5fe4d8676fe0193c388d8009b4505b59ad",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0016",
+          "name": "jsonl_request_log_export",
+          "checksum": "a71ffa86f0f1c09ed12bc36accba7255d49d3ffa4bbe0654a201b918e9c67acb",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0017",
+          "name": "cost_report_export",
+          "checksum": "e27124e5c28c9fdd38634478e56614590465d30e9f65ce18329b0f95dafc882c",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0018",
+          "name": "notification_channels",
+          "checksum": "99e048949865f663735fb157137c60a7513e4f8412e2f6419af8b7040680dcd1",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0019",
+          "name": "webhook_event_export",
+          "checksum": "4bec8dd6b3808938ff23d54f40305d4947096e50165b000ecfb93289fc82833a",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0020",
+          "name": "budget_threshold_alerts",
+          "checksum": "2fbeb0f5655ca8e0f68288bb5986fc116d14aa2d0544d8738d94c8ec79c40aac",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0021",
+          "name": "rate_limit_alerts",
+          "checksum": "3a5806520e66b7e045169033b1be7fed77d6fa3bc4766c400c89e7e5e3265b1c",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0022",
+          "name": "provider_failure_alerts",
+          "checksum": "f16a567274d5939c739f7fd7bb00bf88e07526a27f9cf44f4aca08fdcdae3496",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0023",
+          "name": "fallback_exhaustion_alerts",
+          "checksum": "c659fdc22f61d6a62fffb0a1003f8165d338b6b81096ce5d009e0da8dc8d0fba",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0024",
+          "name": "provider_model_prices",
+          "checksum": "bf88fbe37f7a3c443bdc9c66f41235ceacf5306dba5f42af8bb0ac87e8a46121",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        },
+        {
+          "id": "0025",
+          "name": "remove_process_heartbeats",
+          "checksum": "fec8a2f10b88ca2f7d1d7f0e320a341b045c811233a25705e014abb38041208a",
+          "applied_at": "2026-06-18T09:25:23.334Z"
+        }
+      ],
+      "schema_version": [
+        {
+          "id": 1,
+          "version": "0025",
+          "updated_at": "2026-06-18T09:25:23.334Z"
+        }
+      ],
+      "console_admins": [],
+      "console_sessions": []
+    }
+  },
+  "version": 1
+}

@@ -60,12 +60,6 @@ test("v1 daily operations smoke verifies breakdowns exports alerts metrics trace
         requestCount: 5,
       }),
     ]);
-    expect(usage.agentApiKeyBreakdowns).toEqual([
-      expect.objectContaining({
-        label: "Daily Ops Agent / llmi_daily95",
-        requestCount: 5,
-      }),
-    ]);
     expect(usage.virtualModelBreakdowns).toEqual([
       expect.objectContaining({
         label: "Daily Ops Fast (daily-ops-fast)",
@@ -209,7 +203,8 @@ test("v1 daily operations smoke verifies breakdowns exports alerts metrics trace
     await expect(runJobRunnerUntilIdle(runner, 3)).resolves.toBeGreaterThanOrEqual(1);
     await expect(readRetentionState(fixture, seeded)).resolves.toEqual({
       currentRequestCount: 5,
-      oldExportTaskCount: 0,
+      oldExportFileDeletedMarkers: 1,
+      oldExportJobCount: 1,
       oldRequestCount: 0,
       preservedBudgetPeriodCount: 1,
       preservedRateLimitWindowCount: 1,
@@ -230,7 +225,7 @@ type DailyOperationsSeed = {
   failedActivityId: string;
   failedRequestId: string;
   oldActivityId: string;
-  oldExportTaskId: string;
+  oldExportJobId: string;
   providerId: string;
   providerModelId: string;
   rateLimitWindowId: string;
@@ -264,7 +259,7 @@ async function seedDailyOperationsData(
     healthEventId: randomUUID(),
     healthSummaryId: randomUUID(),
     oldActivityId: randomUUID(),
-    oldExportTaskId: randomUUID(),
+    oldExportJobId: randomUUID(),
     providerApiKeyId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
@@ -297,7 +292,7 @@ async function seedDailyOperationsData(
     [ids.providerModelId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'daily-ops-fast', 'Daily Ops Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'daily-ops-fast', 'Daily Ops Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -306,16 +301,13 @@ async function seedDailyOperationsData(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-      )
-      values ($1, $2, 'llmi_daily95', 'sha256:v1:daily-ops-agent-key-hash-095', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_daily95', key_hash = 'sha256:v1:daily-ops-agent-key-hash-095', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'budget', 'month', 10.000000, 'usd', true)
     `,
     [randomUUID(), ids.agentApiKeyId],
@@ -330,7 +322,7 @@ async function seedDailyOperationsData(
   await fixture.query(
     `
       insert into budget_periods (
-        id, agent_api_key_id, period_type, period_start, period_end,
+        id, agent_id, period_type, period_start, period_end,
         tokens_used, cost_used_usd, reserved_cost_usd, created_at, updated_at
       )
       values (
@@ -352,7 +344,7 @@ async function seedDailyOperationsData(
   await fixture.query(
     `
       insert into rate_limit_windows (
-        id, agent_api_key_id, limit_type, window_start, window_end,
+        id, agent_id, limit_type, window_start, window_end,
         request_count, token_count, created_at, updated_at
       )
       values (
@@ -477,7 +469,7 @@ async function seedDailyOperationsData(
         id, provider_id, provider_model_id, trigger, status,
         error_code, error_message, latency_ms, observed_at
       )
-      values ($1, $2, $3, 'worker_probe', 'failed', 'provider_timeout',
+      values ($1, $2, $3, 'worker_probe', 'unhealthy', 'provider_timeout',
               'provider timeout with sk-secret-095', 5000, $4::timestamptz)
     `,
     [ids.healthEventId, ids.providerId, ids.providerModelId, plan.now.toISOString()],
@@ -500,19 +492,28 @@ async function seedDailyOperationsData(
   );
   await fixture.query(
     `
-      insert into export_tasks (
-        id, export_type, status, output_path, line_count, started_at, completed_at
+      insert into jobs (
+        id, job_type, status, trigger, payload, result, completed_at, created_at, updated_at
       )
       values (
-        $1, 'jsonl_request_logs', 'succeeded', $2, 1,
+        $1,
+        'jsonl_export',
+        'succeeded',
+        'manual',
+        '{}'::jsonb,
+        $2::jsonb,
         $3::timestamptz,
-        $4::timestamptz
+        $3::timestamptz,
+        $3::timestamptz
       )
     `,
     [
-      ids.oldExportTaskId,
-      plan.paths.oldExport,
-      isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000),
+      ids.oldExportJobId,
+      JSON.stringify({
+        exportType: "jsonl_request_logs",
+        lineCount: 1,
+        outputPath: plan.paths.oldExport,
+      }),
       isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000 + 1000),
     ],
   );
@@ -526,7 +527,7 @@ async function seedDailyOperationsData(
     failedActivityId: ids.failedActivityId,
     failedRequestId: "req_daily_fallback_exhausted_095",
     oldActivityId: ids.oldActivityId,
-    oldExportTaskId: ids.oldExportTaskId,
+    oldExportJobId: ids.oldExportJobId,
     providerId: ids.providerId,
     providerModelId: ids.providerModelId,
     rateLimitWindowId: ids.rateLimitWindowId,
@@ -558,8 +559,8 @@ async function insertRequestActivity(
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_api_key_id, virtual_model_id, provider_id,
-        provider_model_id, agent_api_key_prefix, protocol, model, stream,
+        id, request_id, agent_id, virtual_model_id, provider_id,
+        provider_model_id, agent_key_prefix, protocol, model, stream,
         status, error_code, error_message, http_status, latency_ms,
         started_at, completed_at, created_at
       )
@@ -605,7 +606,7 @@ async function insertUsageCostSavings(
   await fixture.query(
     `
       insert into request_usage (
-        id, request_activity_id, agent_api_key_id, virtual_model_id,
+        id, request_activity_id, agent_id, virtual_model_id,
         provider_model_id, input_tokens, output_tokens, total_tokens, token_source
       )
       values ($1, $2, $3, $4, $5, $6, $7, $8, 'provider')
@@ -624,30 +625,16 @@ async function insertUsageCostSavings(
   await fixture.query(
     `
       insert into request_costs (
-        id, request_activity_id, agent_api_key_id, provider_model_id,
-        total_cost_usd, cost_source
+        id, request_activity_id, agent_id, provider_model_id,
+        total_cost_usd, cost_source, baseline_provider_model_id,
+        actual_cost_usd, baseline_cost_usd, savings_usd, savings_percent
       )
-      values ($1, $2, $3, $4, $5, 'estimated')
+      values ($1, $2, $3, $4, $5, 'estimated', $4, $5, $6, $7, 61.162790)
     `,
     [
       randomUUID(),
       input.activityId,
       input.agentApiKeyId,
-      input.providerModelId,
-      input.totalCostUsd,
-    ],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id, request_activity_id, baseline_provider_model_id,
-        actual_cost_usd, baseline_cost_usd, savings_usd, savings_percent
-      )
-      values ($1, $2, $3, $4, $5, $6, 61.162790)
-    `,
-    [
-      randomUUID(),
-      input.activityId,
       input.providerModelId,
       input.totalCostUsd,
       String(Number(input.totalCostUsd) + Number(input.savingsUsd)),
@@ -797,14 +784,16 @@ async function readRetentionState(
   seeded: DailyOperationsSeed,
 ): Promise<{
   currentRequestCount: number;
-  oldExportTaskCount: number;
+  oldExportFileDeletedMarkers: number;
+  oldExportJobCount: number;
   oldRequestCount: number;
   preservedBudgetPeriodCount: number;
   preservedRateLimitWindowCount: number;
 }> {
   const result = await fixture.query<{
     current_request_count: string;
-    old_export_task_count: string;
+    old_export_file_deleted_markers: string;
+    old_export_job_count: string;
     old_request_count: string;
     preserved_budget_period_count: string;
     preserved_rate_limit_window_count: string;
@@ -815,19 +804,22 @@ async function readRetentionState(
           as current_request_count,
         (select count(*)::text from request_activity where id = $1)
           as old_request_count,
-        (select count(*)::text from export_tasks where id = $2)
-          as old_export_task_count,
+        (select count(*)::text from jobs where id = $2)
+          as old_export_job_count,
+        (select count(*)::text from jobs where id = $2 and result ? 'exportFileDeletedAt')
+          as old_export_file_deleted_markers,
         (select count(*)::text from budget_periods where id = $3)
           as preserved_budget_period_count,
         (select count(*)::text from rate_limit_windows where id = $4)
           as preserved_rate_limit_window_count
     `,
-    [seeded.oldActivityId, seeded.oldExportTaskId, seeded.budgetPeriodId, seeded.rateLimitWindowId],
+    [seeded.oldActivityId, seeded.oldExportJobId, seeded.budgetPeriodId, seeded.rateLimitWindowId],
   );
   const row = result.rows[0];
   return {
     currentRequestCount: Number(row?.current_request_count ?? 0),
-    oldExportTaskCount: Number(row?.old_export_task_count ?? 0),
+    oldExportFileDeletedMarkers: Number(row?.old_export_file_deleted_markers ?? 0),
+    oldExportJobCount: Number(row?.old_export_job_count ?? 0),
     oldRequestCount: Number(row?.old_request_count ?? 0),
     preservedBudgetPeriodCount: Number(row?.preserved_budget_period_count ?? 0),
     preservedRateLimitWindowCount: Number(row?.preserved_rate_limit_window_count ?? 0),

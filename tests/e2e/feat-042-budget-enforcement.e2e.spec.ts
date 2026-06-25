@@ -235,7 +235,7 @@ async function seedBudgetRoutes(
       [providerModelId, providerId, route.providerModel, route.providerModel],
     );
     await fixture.query(
-      "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+      "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
       [virtualModelId, route.virtualModel, route.virtualModel],
     );
     await fixture.query(
@@ -257,19 +257,19 @@ async function seedBudgetRoutes(
     );
     await fixture.query(
       `
-        insert into agent_api_keys (
+        insert into agents (
           id,
-          agent_id,
+          name,
+          agent_type,
           key_prefix,
           key_hash,
           default_virtual_model_id,
           enabled
         )
-        values ($1, $2, $3, $4, $5, true)
+        values ($1, 'Budget Agent', 'coding', $2, $3, $4, true)
       `,
       [
         route.agentApiKeyId,
-        agentId,
         route.key.slice(0, 12),
         buildGatewayAgentApiKeyHash(route.key),
         virtualModelId,
@@ -277,7 +277,7 @@ async function seedBudgetRoutes(
     );
     await fixture.query(
       `
-        insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+        insert into agent_virtual_models (agent_id, virtual_model_id)
         values ($1, $2)
       `,
       [route.agentApiKeyId, virtualModelId],
@@ -286,7 +286,7 @@ async function seedBudgetRoutes(
 
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'token', 'request', 80, 'tokens', true),
              ($3, $4, 'budget', 'month', 0.00015, 'usd', true),
              ($5, $6, 'budget', 'month', 1, 'usd', true),
@@ -320,21 +320,21 @@ async function seedBudgetRoutes(
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:042', now()),
-             ($2, 'anthropic', 'claude-sonnet-4-6', 3.00, 15.00, 'models.dev', 'https://models.dev/api.json', 'models.dev:042', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = prices.input_price,
+          synced_output_usd_per_million_tokens = prices.output_price,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:042',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      from (
+        values
+          ('gpt-4.1-mini', 0.40::numeric, 1.60::numeric),
+          ('claude-sonnet-4-6', 3.00::numeric, 15.00::numeric)
+      ) as prices(model_id, input_price, output_price)
+      where provider_models.model_id = prices.model_id
     `,
-    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     "insert into config_versions (version, source, description) values (1, 'console', 'Budget config')",
@@ -394,7 +394,7 @@ async function expectFinalizedBudget(fixture: Fixture, agentApiKeyId: string): P
                  max(budget_reservations.status) as status
           from budget_periods
           join budget_reservations on budget_reservations.budget_period_id = budget_periods.id
-          where budget_periods.agent_api_key_id = $1
+          where budget_periods.agent_id = $1
           group by budget_periods.id
         `,
         [agentApiKeyId],

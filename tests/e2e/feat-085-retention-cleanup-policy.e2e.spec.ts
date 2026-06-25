@@ -65,17 +65,16 @@ test("scheduled retention cleanup uses configurable window deletes expired data 
     await expect(readRetentionState(fixture, ids)).resolves.toEqual({
       aggregateBudgetPeriods: 1,
       aggregateRateLimitWindows: 1,
-      newExportTasks: 1,
+      newExportJobs: 1,
       newFallbackEvents: 1,
       newRequestActivities: 1,
       newRequestCosts: 1,
-      newRequestSavings: 1,
       newRequestUsages: 1,
-      oldExportTasks: 0,
+      oldExportFileDeletedMarkers: 1,
+      oldExportJobs: 1,
       oldFallbackEvents: 0,
       oldRequestActivities: 0,
       oldRequestCosts: 0,
-      oldRequestSavings: 0,
       oldRequestUsages: 0,
     });
     await expect(readRetentionJob(fixture)).resolves.toMatchObject({
@@ -105,9 +104,9 @@ type RetentionSeedIds = {
   agentApiKeyId: string;
   budgetPeriodId: string;
   newActivityId: string;
-  newExportTaskId: string;
+  newExportJobId: string;
   oldActivityId: string;
-  oldExportTaskId: string;
+  oldExportJobId: string;
   rateLimitWindowId: string;
 };
 
@@ -123,9 +122,9 @@ async function seedRetentionCleanupData(
     agentId: randomUUID(),
     budgetPeriodId: randomUUID(),
     newActivityId: randomUUID(),
-    newExportTaskId: randomUUID(),
+    newExportJobId: randomUUID(),
     oldActivityId: randomUUID(),
-    oldExportTaskId: randomUUID(),
+    oldExportJobId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
     rateLimitWindowId: randomUUID(),
@@ -148,7 +147,7 @@ async function seedRetentionCleanupData(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'retention-fast', 'Retention Fast', true)
     `,
     [ids.virtualModelId],
@@ -159,8 +158,7 @@ async function seedRetentionCleanupData(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_ret85', 'sha256:v1:retention-secret-hash', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_ret85', key_hash = 'sha256:v1:retention-secret-hash', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -183,21 +181,21 @@ async function seedRetentionCleanupData(
     requestId: "req_retention_new_085",
     virtualModelId: ids.virtualModelId,
   });
-  await insertExportTask(fixture, {
+  await insertCompletedExportJob(fixture, {
     completedAt: "2026-05-01T00:00:00.000Z",
-    exportTaskId: ids.oldExportTaskId,
+    exportJobId: ids.oldExportJobId,
     outputPath: input.oldExportPath,
   });
-  await insertExportTask(fixture, {
+  await insertCompletedExportJob(fixture, {
     completedAt: "2026-06-01T00:00:00.000Z",
-    exportTaskId: ids.newExportTaskId,
+    exportJobId: ids.newExportJobId,
     outputPath: input.newExportPath,
   });
   await fixture.query(
     `
       insert into budget_periods (
         id,
-        agent_api_key_id,
+        agent_id,
         period_type,
         period_start,
         period_end,
@@ -224,7 +222,7 @@ async function seedRetentionCleanupData(
     `
       insert into rate_limit_windows (
         id,
-        agent_api_key_id,
+        agent_id,
         limit_type,
         window_start,
         window_end,
@@ -268,11 +266,11 @@ async function insertRequestData(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -315,7 +313,7 @@ async function insertRequestData(
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -338,27 +336,17 @@ async function insertRequestData(
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         total_cost_usd,
-        cost_source
-      )
-      values ($1, $2, $3, $4, 0.00100000, 'estimated')
-    `,
-    [randomUUID(), input.activityId, input.agentApiKeyId, input.providerModelId],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id,
-        request_activity_id,
+        cost_source,
         actual_cost_usd,
         baseline_cost_usd,
         savings_usd
       )
-      values ($1, $2, 0.00100000, 0.00300000, 0.00200000)
+      values ($1, $2, $3, $4, 0.00100000, 'estimated', 0.00100000, 0.00300000, 0.00200000)
     `,
-    [randomUUID(), input.activityId],
+    [randomUUID(), input.activityId, input.agentApiKeyId, input.providerModelId],
   );
   await fixture.query(
     `
@@ -379,40 +367,48 @@ async function insertRequestData(
   );
 }
 
-async function insertExportTask(
+async function insertCompletedExportJob(
   fixture: Fixture,
   input: {
     completedAt: string;
-    exportTaskId: string;
+    exportJobId: string;
     outputPath: string;
   },
 ): Promise<void> {
   await fixture.query(
     `
-      insert into export_tasks (
+      insert into jobs (
         id,
-        export_type,
+        job_type,
         status,
-        output_path,
-        line_count,
-        started_at,
+        trigger,
+        payload,
+        result,
         completed_at,
         created_at,
         updated_at
       )
       values (
         $1,
-        'jsonl_request_logs',
+        'jsonl_export',
         'succeeded',
-        $2,
-        1,
-        $3::timestamptz,
+        'manual',
+        '{}'::jsonb,
+        $2::jsonb,
         $3::timestamptz,
         $3::timestamptz,
         $3::timestamptz
       )
     `,
-    [input.exportTaskId, input.outputPath, input.completedAt],
+    [
+      input.exportJobId,
+      JSON.stringify({
+        exportType: "jsonl_request_logs",
+        lineCount: 1,
+        outputPath: input.outputPath,
+      }),
+      input.completedAt,
+    ],
   );
 }
 
@@ -420,17 +416,16 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
   const result = await fixture.query<{
     aggregate_budget_periods: number;
     aggregate_rate_limit_windows: number;
-    new_export_tasks: number;
+    new_export_jobs: number;
     new_fallback_events: number;
     new_request_activities: number;
     new_request_costs: number;
-    new_request_savings: number;
     new_request_usages: number;
-    old_export_tasks: number;
+    old_export_file_deleted_markers: number;
+    old_export_jobs: number;
     old_fallback_events: number;
     old_request_activities: number;
     old_request_costs: number;
-    old_request_savings: number;
     old_request_usages: number;
   }>(
     `
@@ -438,23 +433,23 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
         (select count(*)::integer from request_activity where id = $1) as old_request_activities,
         (select count(*)::integer from request_usage where request_activity_id = $1) as old_request_usages,
         (select count(*)::integer from request_costs where request_activity_id = $1) as old_request_costs,
-        (select count(*)::integer from request_savings where request_activity_id = $1) as old_request_savings,
         (select count(*)::integer from fallback_events where request_activity_id = $1) as old_fallback_events,
-        (select count(*)::integer from export_tasks where id = $2) as old_export_tasks,
+        (select count(*)::integer from jobs where id = $2) as old_export_jobs,
+        (select count(*)::integer from jobs where id = $2 and result ? 'exportFileDeletedAt')
+          as old_export_file_deleted_markers,
         (select count(*)::integer from request_activity where id = $3) as new_request_activities,
         (select count(*)::integer from request_usage where request_activity_id = $3) as new_request_usages,
         (select count(*)::integer from request_costs where request_activity_id = $3) as new_request_costs,
-        (select count(*)::integer from request_savings where request_activity_id = $3) as new_request_savings,
         (select count(*)::integer from fallback_events where request_activity_id = $3) as new_fallback_events,
-        (select count(*)::integer from export_tasks where id = $4) as new_export_tasks,
+        (select count(*)::integer from jobs where id = $4) as new_export_jobs,
         (select count(*)::integer from budget_periods where id = $5) as aggregate_budget_periods,
         (select count(*)::integer from rate_limit_windows where id = $6) as aggregate_rate_limit_windows
     `,
     [
       ids.oldActivityId,
-      ids.oldExportTaskId,
+      ids.oldExportJobId,
       ids.newActivityId,
-      ids.newExportTaskId,
+      ids.newExportJobId,
       ids.budgetPeriodId,
       ids.rateLimitWindowId,
     ],
@@ -464,17 +459,16 @@ async function readRetentionState(fixture: Fixture, ids: RetentionSeedIds) {
   return {
     aggregateBudgetPeriods: row.aggregate_budget_periods,
     aggregateRateLimitWindows: row.aggregate_rate_limit_windows,
-    newExportTasks: row.new_export_tasks,
+    newExportJobs: row.new_export_jobs,
     newFallbackEvents: row.new_fallback_events,
     newRequestActivities: row.new_request_activities,
     newRequestCosts: row.new_request_costs,
-    newRequestSavings: row.new_request_savings,
     newRequestUsages: row.new_request_usages,
-    oldExportTasks: row.old_export_tasks,
+    oldExportFileDeletedMarkers: row.old_export_file_deleted_markers,
+    oldExportJobs: row.old_export_jobs,
     oldFallbackEvents: row.old_fallback_events,
     oldRequestActivities: row.old_request_activities,
     oldRequestCosts: row.old_request_costs,
-    oldRequestSavings: row.old_request_savings,
     oldRequestUsages: row.old_request_usages,
   };
 }

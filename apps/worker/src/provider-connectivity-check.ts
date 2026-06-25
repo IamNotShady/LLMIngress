@@ -1,46 +1,37 @@
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
+import {
+  completeProviderOAuthConnection,
+  isRemovedProviderKey,
+  readEnabledCompletedProviderOAuthConnections,
+  updateProviderOAuthTestResult,
+  withPostgresClient,
+} from "@llmingress/db/providers";
+import {
+  type ConnectivityCheckProvider,
+  checkProviderConnectivity,
+  type ProviderConnectivityCheckResult,
+  type ProviderProbeModelCandidate,
+  selectProviderProbeModel,
+} from "@llmingress/provider/connectivity";
+import { type ProviderOAuthTokenBlob, refreshProviderOAuthToken } from "@llmingress/provider/oauth";
+import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
-import { Client, type QueryResultRow } from "pg";
 import type { JobHandler } from "./job-runner.js";
 
-export type ConnectivityCheckProvider = {
-  baseUrl: string;
-  displayName: string;
-  id: string;
-  providerKey: string;
-};
-
-export type ProviderConnectivityCheckResult = {
-  checkedAt: string;
-  errorCode: string | null;
-  errorMessage: string | null;
-  latencyMs: number;
-  ok: boolean;
-  providerApiKeyId?: string;
-  providerApiKeyPrefix?: string;
-  providerId: string;
-  providerKey: string;
-  retryable: boolean;
-  status: "healthy" | "failed";
-  statusCode: number | null;
-};
+export type {
+  ConnectivityCheckProvider,
+  ProviderConnectivityCheckResult,
+} from "@llmingress/provider/connectivity";
+export { checkProviderConnectivity } from "@llmingress/provider/connectivity";
 
 type CreateProviderConnectivityCheckJobHandlerOptions = {
   databaseUrl: string;
   fetch?: typeof globalThis.fetch;
   masterKeySource?: MasterKeySource;
-  timeoutMs?: number;
-};
-
-type CheckProviderConnectivityOptions = {
-  apiKey: string;
-  fetch?: typeof globalThis.fetch;
-  nowMs?: () => number;
-  provider: ConnectivityCheckProvider;
   timeoutMs?: number;
 };
 
@@ -50,21 +41,57 @@ type ConnectivityCheckPayload = {
   timeoutMs?: number;
 };
 
-type ProviderApiKeyRow = QueryResultRow & {
+type ProviderApiKeyRow = {
   encrypted_key: unknown;
   id: string;
   key_prefix: string;
 };
 
-type ProviderRow = QueryResultRow & {
+type ProviderApiKeyConnectivityResult = ProviderConnectivityCheckResult & {
+  providerApiKeyId?: string;
+  providerApiKeyPrefix?: string;
+};
+
+type ProviderOAuthConnectivityResult = ProviderConnectivityCheckResult & {
+  providerOAuthId: string;
+  providerOAuthLabel: string | null;
+};
+
+type AggregatedProviderConnectivityResult = {
+  apiKeyResults: ProviderApiKeyConnectivityResult[];
+  checkedAt: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  latencyMs: number;
+  ok: boolean;
+  oauthResults: ProviderOAuthConnectivityResult[];
+  probeModelId: string | null;
+  providerId: string;
+  providerKey: string;
+  requestedProviderApiKeyId?: string;
+  retryable: boolean;
+  status: "healthy" | "unhealthy";
+  statusCode: number | null;
+};
+
+type ProviderRow = {
   base_url: string | null;
   display_name: string;
   id: string;
   provider_key: string;
+  provider_type: "api_key" | "local" | "subscription";
 };
 
-const defaultTimeoutMs = 5_000;
-const timeoutErrorMessage = "Provider connectivity check timed out.";
+type WorkerConnectivityProvider = ConnectivityCheckProvider & {
+  provider_type: ProviderRow["provider_type"];
+};
+
+type ProviderModelRow = {
+  context_window: number | null;
+  input_usd_per_million_tokens: string | null;
+  model_id: string;
+  output_usd_per_million_tokens: string | null;
+};
 
 export function createProviderConnectivityCheckJobHandler(
   options: CreateProviderConnectivityCheckJobHandlerOptions,
@@ -72,27 +99,77 @@ export function createProviderConnectivityCheckJobHandler(
   return async (job) => {
     const payload = readConnectivityCheckPayload(job.payload);
     const provider = await readProvider(options.databaseUrl, payload.providerId);
-    const providerApiKey = await readProviderApiKey({
-      databaseUrl: options.databaseUrl,
-      masterKeySource: options.masterKeySource ?? readWorkerMasterKeySource(),
-      providerApiKeyId: payload.providerApiKeyId,
-      providerId: provider.id,
-    });
-
-    const checkResult = await checkProviderConnectivity({
-      apiKey: providerApiKey.apiKey,
-      fetch: options.fetch,
+    const masterKeySource = options.masterKeySource ?? readWorkerMasterKeySource();
+    const apiKeyResults: ProviderApiKeyConnectivityResult[] = [];
+    const oauthResults: ProviderOAuthConnectivityResult[] = [];
+    if (provider.provider_type === "subscription") {
+      const providerOAuthConnections = await readEnabledProviderOAuthAccessTokens({
+        databaseUrl: options.databaseUrl,
+        fetch: options.fetch ?? globalThis.fetch,
+        masterKeySource,
+        providerId: provider.id,
+      });
+      for (const connection of providerOAuthConnections) {
+        const checkResult = await checkProviderConnectivity({
+          apiKey: connection.accessToken,
+          fetch: options.fetch,
+          provider,
+          timeoutMs: payload.timeoutMs ?? options.timeoutMs,
+        });
+        const oauthResult = {
+          ...checkResult,
+          providerOAuthId: connection.id,
+          providerOAuthLabel: connection.label,
+        };
+        oauthResults.push(oauthResult);
+        await updateProviderOAuthTestResult({
+          databaseUrl: options.databaseUrl,
+          errorCode: oauthResult.errorCode,
+          errorMessage: oauthResult.errorMessage,
+          providerOAuthId: oauthResult.providerOAuthId,
+          status: oauthResult.status,
+          testedAt: oauthResult.checkedAt,
+        });
+      }
+    } else if (provider.provider_type === "local") {
+      apiKeyResults.push(
+        await checkProviderConnectivity({
+          apiKey: null,
+          fetch: options.fetch,
+          provider,
+          timeoutMs: payload.timeoutMs ?? options.timeoutMs,
+        }),
+      );
+    } else {
+      const providerApiKeys = await readEnabledProviderApiKeys({
+        databaseUrl: options.databaseUrl,
+        masterKeySource,
+        providerId: provider.id,
+      });
+      for (const providerApiKey of providerApiKeys) {
+        const checkResult = await checkProviderConnectivity({
+          apiKey: providerApiKey.apiKey,
+          fetch: options.fetch,
+          provider,
+          timeoutMs: payload.timeoutMs ?? options.timeoutMs,
+        });
+        const apiKeyResult = {
+          ...checkResult,
+          providerApiKeyId: providerApiKey.id,
+          providerApiKeyPrefix: providerApiKey.keyPrefix,
+        };
+        apiKeyResults.push(apiKeyResult);
+        await updateProviderApiKeyTestResult({
+          databaseUrl: options.databaseUrl,
+          result: apiKeyResult,
+        });
+      }
+    }
+    const result = aggregateProviderConnectivityResults({
+      apiKeyResults,
+      oauthResults,
       provider,
-      timeoutMs: payload.timeoutMs ?? options.timeoutMs,
-    });
-    const result = {
-      ...checkResult,
-      providerApiKeyId: providerApiKey.id,
-      providerApiKeyPrefix: providerApiKey.keyPrefix,
-    };
-    await updateProviderApiKeyTestResult({
-      databaseUrl: options.databaseUrl,
-      result,
+      requestedProviderApiKeyId: payload.providerApiKeyId,
     });
     await recordProviderHealthEvent({
       databaseUrl: options.databaseUrl,
@@ -102,131 +179,145 @@ export function createProviderConnectivityCheckJobHandler(
       latencyMs: result.latencyMs,
       metadata: {
         checkedAt: result.checkedAt,
-        providerApiKeyPrefix: result.providerApiKeyPrefix,
+        apiKeyResults: result.apiKeyResults.map((apiKeyResult) => ({
+          errorCode: apiKeyResult.errorCode,
+          ok: apiKeyResult.ok,
+          probeModelId: apiKeyResult.probeModelId,
+          providerApiKeyPrefix: apiKeyResult.providerApiKeyPrefix,
+          retryable: apiKeyResult.retryable,
+          status: apiKeyResult.status,
+          statusCode: apiKeyResult.statusCode,
+        })),
+        oauthResults: result.oauthResults.map((oauthResult) => ({
+          errorCode: oauthResult.errorCode,
+          ok: oauthResult.ok,
+          probeModelId: oauthResult.probeModelId,
+          providerOAuthId: oauthResult.providerOAuthId,
+          providerOAuthLabel: oauthResult.providerOAuthLabel,
+          retryable: oauthResult.retryable,
+          status: oauthResult.status,
+          statusCode: oauthResult.statusCode,
+        })),
+        probeModelId: result.probeModelId,
         providerKey: result.providerKey,
+        requestedProviderApiKeyId: result.requestedProviderApiKeyId,
         retryable: result.retryable,
         statusCode: result.statusCode,
       },
       observedAt: new Date(result.checkedAt),
       providerId: provider.id,
-      status: result.ok ? "healthy" : "failed",
+      status: result.status,
       trigger: job.trigger === "manual" ? "manual" : "worker_probe",
     });
     return result;
   };
 }
 
-export async function checkProviderConnectivity(
-  options: CheckProviderConnectivityOptions,
-): Promise<ProviderConnectivityCheckResult> {
-  const fetchImpl = options.fetch ?? globalThis.fetch;
-  const nowMs = options.nowMs ?? Date.now;
-  const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
-  const startedAt = nowMs();
-  const checkedAt = new Date(startedAt).toISOString();
+function aggregateProviderConnectivityResults(input: {
+  apiKeyResults: ProviderApiKeyConnectivityResult[];
+  oauthResults: ProviderOAuthConnectivityResult[];
+  provider: ConnectivityCheckProvider;
+  requestedProviderApiKeyId?: string;
+}): AggregatedProviderConnectivityResult {
+  const credentialResults = [...input.apiKeyResults, ...input.oauthResults];
+  const success = credentialResults.find((result) => result.ok);
+  const representative = success ?? credentialResults[0];
+  const checkedAt = representative?.checkedAt ?? new Date().toISOString();
 
-  try {
-    const response = await fetchWithTimeout(
-      fetchImpl,
-      buildChatCompletionsUrl(options.provider.baseUrl),
-      {
-        body: JSON.stringify({
-          max_tokens: 1,
-          messages: [{ content: "ping", role: "user" }],
-          model: "connectivity-check",
-          stream: false,
-        }),
-        headers: {
-          authorization: `Bearer ${options.apiKey}`,
-          "content-type": "application/json",
-        },
-        method: "POST",
-      },
-      timeoutMs,
-    );
-    const body = await readResponseBody(response);
-    const latencyMs = Math.max(0, nowMs() - startedAt);
-
-    if (!response.ok) {
-      const error = readProviderError(body);
-      return {
-        checkedAt,
-        errorCode: error.code,
-        errorMessage: error.message,
-        latencyMs,
-        ok: false,
-        providerId: options.provider.id,
-        providerKey: options.provider.providerKey,
-        retryable: response.status === 429 || response.status >= 500,
-        status: "failed",
-        statusCode: response.status,
-      };
-    }
-
-    return {
-      checkedAt,
-      errorCode: null,
-      errorMessage: null,
-      latencyMs,
-      ok: true,
-      providerId: options.provider.id,
-      providerKey: options.provider.providerKey,
-      retryable: false,
-      status: "healthy",
-      statusCode: response.status,
-    };
-  } catch (error) {
-    const latencyMs = Math.max(0, nowMs() - startedAt);
-    const timedOut = error instanceof ProviderProbeTimeoutError;
-
-    return {
-      checkedAt,
-      errorCode: timedOut ? "provider_probe_timeout" : "provider_request_failed",
-      errorMessage: timedOut
-        ? timeoutErrorMessage
-        : error instanceof Error
-          ? error.message
-          : "Provider request failed.",
-      latencyMs,
-      ok: false,
-      providerId: options.provider.id,
-      providerKey: options.provider.providerKey,
-      retryable: true,
-      status: "failed",
-      statusCode: null,
-    };
-  }
+  return {
+    apiKeyResults: input.apiKeyResults,
+    checkedAt,
+    errorCode: success ? null : (representative?.errorCode ?? "provider_api_key_unavailable"),
+    errorMessage: success
+      ? null
+      : (representative?.errorMessage ??
+        "Provider has no enabled credentials for connectivity check."),
+    latencyMs: credentialResults.reduce((total, result) => total + result.latencyMs, 0),
+    ok: Boolean(success),
+    oauthResults: input.oauthResults,
+    probeModelId: representative?.probeModelId ?? null,
+    providerId: input.provider.id,
+    providerKey: input.provider.providerKey,
+    requestedProviderApiKeyId: input.requestedProviderApiKeyId,
+    retryable: success ? false : credentialResults.some((result) => result.retryable),
+    status: success ? "healthy" : "unhealthy",
+    statusCode: success ? success.statusCode : (representative?.statusCode ?? null),
+  };
 }
 
 async function readProvider(
   databaseUrl: string,
   providerId: string,
-): Promise<ConnectivityCheckProvider> {
-  return withClient(databaseUrl, async (client) => {
-    const result = await client.query<ProviderRow>(
+): Promise<WorkerConnectivityProvider> {
+  return withPostgresClient(databaseUrl, async (client) => {
+    const providerResult = await client.query<ProviderRow>(
       `
-        select id::text, provider_key, display_name, base_url
+        select providers.id::text,
+               providers.provider_key,
+               providers.display_name,
+               providers.provider_type,
+               providers.base_url
         from providers
-        where id = $1
-          and enabled = true
+        where providers.id = $1
+          and providers.enabled = true
+          and providers.deleted_at is null
       `,
       [providerId],
     );
-    const row = result.rows[0];
+    const row = providerResult.rows[0];
     if (!row) {
       throw new Error("Provider was not found.");
     }
     if (!row.base_url) {
       throw new Error("Provider base URL is required for connectivity check.");
     }
+    if (isRemovedProviderKey(row.provider_key)) {
+      throw new Error("Provider is no longer supported.");
+    }
+
+    const modelResult = await client.query<ProviderModelRow>(
+      `
+        select model_id,
+               context_window,
+               coalesce(
+                 manual_input_usd_per_million_tokens,
+                 synced_input_usd_per_million_tokens
+               )::text as input_usd_per_million_tokens,
+               coalesce(
+                 manual_output_usd_per_million_tokens,
+                 synced_output_usd_per_million_tokens
+               )::text as output_usd_per_million_tokens
+        from provider_models
+        where provider_id = $1
+          and availability = 'available'
+          and deleted_at is null
+          and context_window is not null
+      `,
+      [providerId],
+    );
+    const modelId = selectProviderProbeModel(modelResult.rows.map(toProbeModelCandidate));
+    if (!modelId) {
+      throw new Error("Provider has no ordinary chat-compatible models for connectivity check.");
+    }
 
     return {
       baseUrl: row.base_url,
       displayName: row.display_name,
       id: row.id,
+      modelId,
       providerKey: row.provider_key,
+      provider_type: row.provider_type,
     };
   });
+}
+
+function toProbeModelCandidate(row: ProviderModelRow): ProviderProbeModelCandidate {
+  return {
+    contextWindow: row.context_window,
+    inputUsdPerMillionTokens: row.input_usd_per_million_tokens,
+    modelId: row.model_id,
+    outputUsdPerMillionTokens: row.output_usd_per_million_tokens,
+  };
 }
 
 function readConnectivityCheckPayload(payload: unknown): ConnectivityCheckPayload {
@@ -250,13 +341,12 @@ function readConnectivityCheckPayload(payload: unknown): ConnectivityCheckPayloa
   };
 }
 
-async function readProviderApiKey(input: {
+async function readEnabledProviderApiKeys(input: {
   databaseUrl: string;
   masterKeySource: MasterKeySource;
-  providerApiKeyId?: string;
   providerId: string;
-}): Promise<{ apiKey: string; id: string; keyPrefix: string }> {
-  const stored = await withClient(input.databaseUrl, async (client) => {
+}): Promise<Array<{ apiKey: string; id: string; keyPrefix: string }>> {
+  const stored = await withPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderApiKeyRow>(
       `
         select id::text,
@@ -265,30 +355,67 @@ async function readProviderApiKey(input: {
         from provider_api_keys
         where provider_id = $1
           and enabled = true
-          and ($2::uuid is null or id = $2::uuid)
         order by priority asc,
                  created_at asc,
                  id asc
-        limit 1
       `,
-      [input.providerId, input.providerApiKeyId ?? null],
+      [input.providerId],
     );
-    const row = result.rows[0];
-    if (!row) {
-      throw new Error("Provider API key was not found.");
-    }
-    return {
+    return result.rows.map((row) => ({
       encryptedKey: readEncryptedSecret(row.encrypted_key),
       id: row.id,
       keyPrefix: row.key_prefix,
-    };
+    }));
   });
 
-  return {
-    apiKey: createSecretEncryption(input.masterKeySource).decrypt(stored.encryptedKey),
-    id: stored.id,
-    keyPrefix: stored.keyPrefix,
-  };
+  const encryption = createSecretEncryption(input.masterKeySource);
+  return stored.map((row) => ({
+    apiKey: encryption.decrypt(row.encryptedKey),
+    id: row.id,
+    keyPrefix: row.keyPrefix,
+  }));
+}
+
+async function readEnabledProviderOAuthAccessTokens(input: {
+  databaseUrl: string;
+  fetch: typeof globalThis.fetch;
+  masterKeySource: MasterKeySource;
+  providerId: string;
+}): Promise<Array<{ accessToken: string; id: string; label: string | null }>> {
+  const connections = await readEnabledCompletedProviderOAuthConnections({
+    databaseUrl: input.databaseUrl,
+    providerId: input.providerId,
+  });
+  const encryption = createSecretEncryption(input.masterKeySource);
+  return Promise.all(
+    connections.map(async (connection) => {
+      let token = readOAuthTokenBlob(
+        encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
+      );
+      if (isOAuthTokenExpired(token)) {
+        if (!token.refreshToken || !isSubscriptionProviderKey(connection.providerKey)) {
+          throw new Error("Provider OAuth token expired and cannot be refreshed.");
+        }
+        token = await refreshProviderOAuthToken({
+          fetch: input.fetch,
+          providerKey: connection.providerKey,
+          refreshToken: token.refreshToken,
+        });
+        await completeProviderOAuthConnection({
+          databaseUrl: input.databaseUrl,
+          encryptedToken: encryption.encrypt(JSON.stringify(token)),
+          providerOAuthId: connection.id,
+          tokenExpiresAt: token.expiresAt === null ? null : new Date(token.expiresAt),
+        });
+      }
+
+      return {
+        accessToken: token.accessToken,
+        id: connection.id,
+        label: connection.label,
+      };
+    }),
+  );
 }
 
 async function updateProviderApiKeyTestResult(input: {
@@ -298,7 +425,7 @@ async function updateProviderApiKeyTestResult(input: {
     providerApiKeyPrefix: string;
   };
 }): Promise<void> {
-  await withClient(input.databaseUrl, async (client) => {
+  await withPostgresClient(input.databaseUrl, async (client) => {
     await client.query(
       `
         update provider_api_keys
@@ -312,7 +439,7 @@ async function updateProviderApiKeyTestResult(input: {
       [
         input.result.providerApiKeyId,
         input.result.checkedAt,
-        input.result.ok ? "healthy" : "failed",
+        input.result.status,
         input.result.errorCode,
         input.result.errorMessage,
       ],
@@ -349,94 +476,42 @@ function readEncryptedSecret(value: unknown): EncryptedSecret {
     return value as EncryptedSecret;
   }
 
-  throw new Error("Stored provider API key is not a valid encrypted secret.");
+  throw new Error("Stored provider credential is not a valid encrypted secret.");
 }
 
-async function fetchWithTimeout(
-  fetchImpl: typeof globalThis.fetch,
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-
+function readOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new ProviderProbeTimeoutError();
+    const parsed = JSON.parse(value);
+    if (isRecord(parsed) && typeof parsed.accessToken === "string" && parsed.accessToken.trim()) {
+      return {
+        accessToken: parsed.accessToken,
+        expiresAt:
+          typeof parsed.expiresAt === "number" && Number.isFinite(parsed.expiresAt)
+            ? parsed.expiresAt
+            : null,
+        refreshToken:
+          typeof parsed.refreshToken === "string" && parsed.refreshToken.trim()
+            ? parsed.refreshToken
+            : null,
+        scopes: Array.isArray(parsed.scopes)
+          ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
+          : [],
+        tokenType:
+          typeof parsed.tokenType === "string" && parsed.tokenType.trim()
+            ? parsed.tokenType
+            : "Bearer",
+      };
     }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function buildChatCompletionsUrl(baseUrl: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/chat/completions`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
-}
-
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
   } catch {
-    return { raw: text };
+    // handled by final throw
   }
+  throw new Error("Stored provider OAuth token was not recognized.");
 }
 
-function readProviderError(body: unknown): { code: string; message: string } {
-  if (isRecord(body) && isRecord(body.error)) {
-    const code = typeof body.error.code === "string" ? body.error.code : "provider_http_error";
-    const message =
-      typeof body.error.message === "string" ? body.error.message : "Provider request failed.";
-    return { code, message };
-  }
-
-  return {
-    code: "provider_http_error",
-    message: "Provider request failed.",
-  };
-}
-
-function normalizeTimeoutMs(value: number | undefined): number {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return Math.floor(value);
-  }
-  return defaultTimeoutMs;
+function isOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
+  return token.expiresAt !== null && token.expiresAt <= Date.now() + 60_000;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-class ProviderProbeTimeoutError extends Error {
-  constructor() {
-    super(timeoutErrorMessage);
-    this.name = "ProviderProbeTimeoutError";
-  }
-}
-
-async function withClient<T>(
-  databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
-): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

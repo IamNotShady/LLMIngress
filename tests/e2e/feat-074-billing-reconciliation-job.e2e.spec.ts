@@ -4,7 +4,7 @@ import { createBillingReconciliationJobHandler } from "../../apps/worker/src/bil
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-test("billing reconciliation updates request costs and records runs and items", async () => {
+test("billing reconciliation updates request costs without audit tables", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_billing_reconciliation_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -41,7 +41,8 @@ test("billing reconciliation updates request costs and records runs and items", 
 
     await expect(runner.runOnce()).resolves.toBe(true);
 
-    await expect(readJobResult(fixture, jobId)).resolves.toMatchObject({
+    const jobResult = await readJobResult(fixture, jobId);
+    expect(jobResult).toMatchObject({
       result: {
         scannedRequestCount: 2,
         skippedRequestCount: 0,
@@ -49,35 +50,11 @@ test("billing reconciliation updates request costs and records runs and items", 
       },
       status: "succeeded",
     });
-    await expect(readReconciliationRun(fixture, jobId)).resolves.toMatchObject({
-      job_id: jobId,
-      scanned_request_count: 2,
-      status: "succeeded",
-      trigger: "manual",
-      updated_request_count: 2,
+    expect(jobResult.result).not.toHaveProperty("runId");
+    await expect(readBillingReconciliationAuditTables(fixture)).resolves.toEqual({
+      items: null,
+      runs: null,
     });
-    await expect(readReconciliationItems(fixture)).resolves.toEqual([
-      {
-        new_price_source: "price_sync",
-        new_price_version: "price-sync:reconcile-v1",
-        new_savings_usd: "0.00660000",
-        new_total_cost_usd: "0.00340000",
-        previous_total_cost_usd: "0.00030000",
-        reconciliation_source: "price_data",
-        request_id: "req_price_reconcile_074",
-        status: "updated",
-      },
-      {
-        new_price_source: "provider_billing",
-        new_price_version: "provider-bill:2026-06-16",
-        new_savings_usd: "0.00840000",
-        new_total_cost_usd: "0.00160000",
-        previous_total_cost_usd: "0.00030000",
-        reconciliation_source: "provider_actual",
-        request_id: "req_provider_reconcile_074",
-        status: "updated",
-      },
-    ]);
     await expect(readCostsAndSavings(fixture)).resolves.toEqual([
       {
         actual_cost_usd: "0.00340000",
@@ -127,17 +104,6 @@ type BillingReconciliationJobInput = {
 type SeededBillingReconciliationData = {
   priceProviderModelId: string;
   providerActualProviderModelId: string;
-};
-
-type ReconciliationItemRow = {
-  new_price_source: string | null;
-  new_price_version: string | null;
-  new_savings_usd: string | null;
-  new_total_cost_usd: string | null;
-  previous_total_cost_usd: string | null;
-  reconciliation_source: string;
-  request_id: string;
-  status: string;
 };
 
 type CostAndSavingsRow = {
@@ -190,36 +156,21 @@ async function seedBillingReconciliationData(
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        cached_input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values (
-        $1,
-        'synced-provider',
-        'synced-model',
-        2,
-        0.5,
-        4,
-        'models.dev',
-        'test://prices/reconcile',
-        'price-sync:reconcile-v1',
-        '2026-06-16T00:00:00.000Z'
-      )
+      update provider_models
+      set synced_input_usd_per_million_tokens = 2,
+          synced_cached_input_usd_per_million_tokens = 0.5,
+          synced_output_usd_per_million_tokens = 4,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'test://prices/reconcile',
+          synced_price_version = 'price-sync:reconcile-v1',
+          synced_price_synced_at = '2026-06-16T00:00:00.000Z',
+          synced_price_updated_at = '2026-06-16T00:00:00.000Z'
+      where model_id = 'synced-model'
     `,
-    [randomUUID()],
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'billing-reconcile-coding', 'Billing Reconcile Coding', true)
     `,
     [virtualModelId],
@@ -237,15 +188,7 @@ async function seedBillingReconciliationData(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_bill_074', $3, $4, true)
+      update agents set id = $1, key_prefix = 'llmi_bill_074', key_hash = $3, default_virtual_model_id = $4, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, `hash-${randomUUID()}`, virtualModelId],
   );
@@ -308,12 +251,12 @@ async function seedCompletedRequest(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -351,7 +294,7 @@ async function seedCompletedRequest(
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -380,14 +323,21 @@ async function seedCompletedRequest(
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         input_cost_usd,
         output_cost_usd,
         total_cost_usd,
         cost_source,
         price_source,
-        price_version
+        price_version,
+        baseline_provider_model_id,
+        actual_cost_usd,
+        baseline_cost_usd,
+        savings_usd,
+        savings_percent,
+        savings_price_source,
+        savings_price_version
       )
       values (
         $1,
@@ -399,31 +349,11 @@ async function seedCompletedRequest(
         0.00030000,
         'estimated',
         'built_in_static_snapshot',
-        'stale-price-version'
-      )
-    `,
-    [randomUUID(), requestActivityId, input.agentApiKeyId, input.providerModelId],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id,
-        request_activity_id,
-        baseline_provider_model_id,
-        actual_cost_usd,
-        baseline_cost_usd,
-        savings_usd,
-        savings_percent,
-        price_source,
-        price_version
-      )
-      values (
-        $1,
-        $2,
-        $3,
-        0.00030000,
-        $4,
+        'stale-price-version',
         $5,
+        0.00030000,
+        $6,
+        $7,
         97.000000,
         'built_in_static_snapshot',
         'stale-price-version'
@@ -432,6 +362,8 @@ async function seedCompletedRequest(
     [
       randomUUID(),
       requestActivityId,
+      input.agentApiKeyId,
+      input.providerModelId,
       input.providerModelId,
       input.baselineCostUsd,
       input.baselineCostUsd - 0.0003,
@@ -475,41 +407,16 @@ async function readJobResult(
   };
 }
 
-async function readReconciliationRun(fixture: Fixture, jobId: string) {
-  const result = await fixture.query(
+async function readBillingReconciliationAuditTables(
+  fixture: Fixture,
+): Promise<{ items: string | null; runs: string | null }> {
+  const result = await fixture.query<{ items: string | null; runs: string | null }>(
     `
-      select job_id::text,
-             status,
-             trigger,
-             scanned_request_count,
-             updated_request_count,
-             skipped_request_count
-      from billing_reconciliation_runs
-      where job_id = $1
-    `,
-    [jobId],
-  );
-  return result.rows[0] ?? null;
-}
-
-async function readReconciliationItems(fixture: Fixture): Promise<ReconciliationItemRow[]> {
-  const result = await fixture.query<ReconciliationItemRow>(
-    `
-      select request_activity.request_id,
-             billing_reconciliation_items.status,
-             billing_reconciliation_items.reconciliation_source,
-             billing_reconciliation_items.previous_total_cost_usd::text,
-             billing_reconciliation_items.new_total_cost_usd::text,
-             billing_reconciliation_items.new_price_source,
-             billing_reconciliation_items.new_price_version,
-             billing_reconciliation_items.new_savings_usd::text
-      from billing_reconciliation_items
-      join request_activity
-        on request_activity.id = billing_reconciliation_items.request_activity_id
-      order by request_activity.request_id
+      select to_regclass('public.billing_reconciliation_runs')::text as runs,
+             to_regclass('public.billing_reconciliation_items')::text as items
     `,
   );
-  return result.rows;
+  return result.rows[0] ?? { items: null, runs: null };
 }
 
 async function readCostsAndSavings(fixture: Fixture): Promise<CostAndSavingsRow[]> {
@@ -523,11 +430,10 @@ async function readCostsAndSavings(fixture: Fixture): Promise<CostAndSavingsRow[
              request_costs.cost_source,
              request_costs.price_source,
              request_costs.price_version,
-             request_savings.actual_cost_usd::text,
-             request_savings.savings_usd::text
+             request_costs.actual_cost_usd::text,
+             request_costs.savings_usd::text
       from request_activity
       join request_costs on request_costs.request_activity_id = request_activity.id
-      join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.request_id in (
         'req_price_reconcile_074',
         'req_provider_reconcile_074'

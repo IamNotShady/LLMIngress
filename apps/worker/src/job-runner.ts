@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/jobs";
 import { recordOpenTelemetrySpan } from "@llmingress/observability/traces";
-import { Client, type QueryResultRow } from "pg";
 
 export const JOB_CREATED_CHANNEL = "job_created";
 
@@ -83,7 +83,7 @@ type RunNextJobResult = {
   processed: boolean;
 };
 
-type JobRow = QueryResultRow & {
+type JobRow = PostgresQueryResultRow & {
   attempt_number: number;
   id: string;
   job_type: string;
@@ -320,7 +320,7 @@ function dateToUnixNano(value: Date): string {
 }
 
 class PostgresJobStore implements JobStore {
-  private listenerClient: Client | undefined;
+  private listenerClient: PostgresClient | undefined;
 
   constructor(private readonly databaseUrl: string) {}
 
@@ -511,7 +511,7 @@ class PostgresJobStore implements JobStore {
   }
 
   async subscribeJobCreated(onJobCreated: () => void): Promise<{ stop: () => Promise<void> }> {
-    const client = new Client({ connectionString: this.databaseUrl });
+    const client = new PostgresClient({ connectionString: this.databaseUrl });
     await client.connect();
     client.on("notification", (message) => {
       if (message.channel === JOB_CREATED_CHANNEL) {
@@ -561,9 +561,9 @@ function stringifyJson(value: unknown): string {
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

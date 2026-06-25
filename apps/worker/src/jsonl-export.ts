@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 
 export type JsonlRequestLogExportJobHandlerOptions = {
@@ -9,10 +8,9 @@ export type JsonlRequestLogExportJobHandlerOptions = {
   now?: () => Date;
 };
 
-export type JsonlRequestLogActivityRow = QueryResultRow & {
-  agent_api_key_id: string;
-  agent_api_key_prefix: string;
+export type JsonlRequestLogActivityRow = PostgresQueryResultRow & {
   agent_id: string;
+  agent_key_prefix: string;
   agent_name: string;
   agent_type: string;
   completed_at: Date | null;
@@ -41,7 +39,7 @@ export type JsonlRequestLogActivityRow = QueryResultRow & {
   virtual_model_name: string | null;
 };
 
-export type JsonlRequestLogUsageRow = QueryResultRow & {
+export type JsonlRequestLogUsageRow = PostgresQueryResultRow & {
   cached_input_tokens: number;
   input_tokens: number;
   output_tokens: number;
@@ -50,7 +48,7 @@ export type JsonlRequestLogUsageRow = QueryResultRow & {
   total_tokens: number;
 };
 
-export type JsonlRequestLogCostRow = QueryResultRow & {
+export type JsonlRequestLogCostRow = PostgresQueryResultRow & {
   cost_source: string;
   input_cost_usd: string | null;
   output_cost_usd: string | null;
@@ -59,7 +57,7 @@ export type JsonlRequestLogCostRow = QueryResultRow & {
   total_cost_usd: string | null;
 };
 
-export type JsonlRequestLogFallbackEventRow = QueryResultRow & {
+export type JsonlRequestLogFallbackEventRow = PostgresQueryResultRow & {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -99,7 +97,7 @@ export function createJsonlRequestLogExportJobHandler(
   return async (job) => {
     const startedAt = now();
     const payload = normalizeJsonlExportPayload(job.payload);
-    const client = new Client({ connectionString: options.databaseUrl });
+    const client = new PostgresClient({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
@@ -115,19 +113,13 @@ export function createJsonlRequestLogExportJobHandler(
       await writeJsonlFile(payload.outputPath, records);
 
       const completedAt = now();
-      const exportTaskId = await insertSucceededExportTask(client, {
-        completedAt,
-        jobId: job.id,
-        lineCount: records.length,
-        outputPath: payload.outputPath,
-        startedAt,
-      });
 
       return {
-        exportTaskId,
+        completedAt: completedAt.toISOString(),
         exportType,
         lineCount: records.length,
         outputPath: payload.outputPath,
+        startedAt: startedAt.toISOString(),
         trigger: job.trigger,
       };
     } finally {
@@ -142,12 +134,9 @@ export function buildJsonlRequestLogRecord(input: JsonlRequestLogRecordInput) {
   return {
     agent: {
       id: activity.agent_id,
+      keyPrefix: activity.agent_key_prefix,
       name: activity.agent_name,
       type: activity.agent_type,
-    },
-    agentApiKey: {
-      id: activity.agent_api_key_id,
-      prefix: activity.agent_api_key_prefix,
     },
     completedAt: toIsoString(activity.completed_at),
     cost: input.cost
@@ -271,7 +260,7 @@ function normalizeJsonlExportPayload(rawPayload: unknown): NormalizedJsonlExport
 }
 
 async function readRequestLogRows(
-  client: Client,
+  client: PostgresClient,
   payload: NormalizedJsonlExportPayload,
 ): Promise<
   Array<{
@@ -304,8 +293,8 @@ async function readRequestLogRows(
       select
         request_activity.id::text,
         request_activity.request_id,
-        request_activity.agent_api_key_id::text,
-        request_activity.agent_api_key_prefix,
+        request_activity.agent_id::text as agent_id,
+        request_activity.agent_key_prefix as agent_key_prefix,
         request_activity.protocol,
         request_activity.model,
         request_activity.stream,
@@ -320,17 +309,26 @@ async function readRequestLogRows(
         request_activity.completed_at,
         request_activity.created_at,
         agents.id::text as agent_id,
-        agents.name as agent_name,
+        coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
         agents.agent_type,
         virtual_models.id::text as virtual_model_id,
-        virtual_models.name as virtual_model_name,
+        coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
+          as virtual_model_name,
         route_policies.id::text as route_policy_id,
         providers.id::text as provider_id,
-        providers.provider_key,
-        providers.display_name as provider_display_name,
+        coalesce(request_activity.provider_key_snapshot, providers.provider_key)
+          as provider_key,
+        coalesce(
+          request_activity.provider_display_name_snapshot,
+          providers.display_name
+        ) as provider_display_name,
         provider_models.id::text as provider_model_id,
-        provider_models.model_id as provider_model_model_id,
-        provider_models.display_name as provider_model_display_name,
+        coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
+          as provider_model_model_id,
+        coalesce(
+          request_activity.provider_model_display_name_snapshot,
+          provider_models.display_name
+        ) as provider_model_display_name,
         request_usage.input_tokens,
         request_usage.output_tokens,
         request_usage.total_tokens,
@@ -344,8 +342,7 @@ async function readRequestLogRows(
         request_costs.price_source,
         request_costs.price_version
       from request_activity
-      join agent_api_keys on agent_api_keys.id = request_activity.agent_api_key_id
-      join agents on agents.id = agent_api_keys.agent_id
+      join agents on agents.id = request_activity.agent_id
       left join virtual_models on virtual_models.id = request_activity.virtual_model_id
       left join route_policies on route_policies.id = request_activity.route_policy_id
       left join providers on providers.id = request_activity.provider_id
@@ -387,7 +384,7 @@ async function readRequestLogRows(
 }
 
 async function readFallbackEventsByActivityId(
-  client: Client,
+  client: PostgresClient,
   activityIds: string[],
 ): Promise<Map<string, JsonlRequestLogFallbackEventRow[]>> {
   const eventsByActivityId = new Map<string, JsonlRequestLogFallbackEventRow[]>();
@@ -432,57 +429,6 @@ async function writeJsonlFile(outputPath: string, records: unknown[]): Promise<v
   await mkdir(dirname(outputPath), { recursive: true });
   const jsonl = records.map((record) => JSON.stringify(record)).join("\n");
   await writeFile(outputPath, jsonl ? `${jsonl}\n` : "", "utf8");
-}
-
-async function insertSucceededExportTask(
-  client: Client,
-  input: {
-    completedAt: Date;
-    jobId: string;
-    lineCount: number;
-    outputPath: string;
-    startedAt: Date;
-  },
-): Promise<string> {
-  const exportTaskId = randomUUID();
-  const result = await client.query<{ id: string }>(
-    `
-      insert into export_tasks (
-        id,
-        job_id,
-        export_type,
-        status,
-        output_path,
-        line_count,
-        started_at,
-        completed_at,
-        metadata,
-        updated_at
-      )
-      values ($1, $2, $3, 'succeeded', $4, $5, $6::timestamptz, $7::timestamptz, '{}'::jsonb, $7::timestamptz)
-      on conflict (job_id)
-      do update set
-        status = excluded.status,
-        output_path = excluded.output_path,
-        line_count = excluded.line_count,
-        error_code = null,
-        error_message = null,
-        completed_at = excluded.completed_at,
-        updated_at = excluded.updated_at
-      returning id::text
-    `,
-    [
-      exportTaskId,
-      input.jobId,
-      exportType,
-      input.outputPath,
-      input.lineCount,
-      input.startedAt.toISOString(),
-      input.completedAt.toISOString(),
-    ],
-  );
-
-  return result.rows[0]?.id ?? exportTaskId;
 }
 
 function readObject(value: unknown): Record<string, unknown> {

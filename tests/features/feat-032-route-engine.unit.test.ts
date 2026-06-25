@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
 import { selectRouteCandidate } from "../../apps/gateway/src/route-engine";
 
 describe("feat-032 deterministic route engine", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("selects the fixed target deterministically with a route reason", () => {
     const snapshot = createSnapshot({
       strategy: "fixed",
@@ -95,6 +98,82 @@ describe("feat-032 deterministic route engine", () => {
       },
     });
     expect(decision.routeReason.message).toContain("cheapest eligible candidate");
+  });
+
+  it("selects the highest-priced primary candidate for quality_first", () => {
+    const snapshot = createSnapshot({
+      strategy: "quality_first",
+      candidates: [
+        createCandidate({
+          candidateOrder: 1,
+          modelId: "gpt-4.1-mini",
+          providerModelId: "medium-model",
+          price: pricedModel("gpt-4o-mini", 0.15, 0.6),
+        }),
+        createCandidate({
+          candidateOrder: 2,
+          modelId: "gpt-5.5",
+          providerModelId: "expensive-model",
+          price: pricedModel("gpt-5.5", 5, 20),
+        }),
+      ],
+    });
+
+    const decision = selectRouteCandidate({
+      estimatedInputTokens: 1_000_000,
+      estimatedOutputTokens: 1_000_000,
+      snapshot,
+      virtualModelName: "coding",
+    });
+
+    expect(decision).toMatchObject({
+      providerModelId: "expensive-model",
+      routeReason: {
+        estimatedCostUsd: 25,
+        selectedCandidateOrder: 2,
+        strategy: "quality_first",
+      },
+    });
+    expect(decision.routeReason.message).toContain("highest-priced eligible candidate");
+  });
+
+  it("selects a random eligible primary candidate for random", () => {
+    const snapshot = createSnapshot({
+      strategy: "random",
+      candidates: [
+        createCandidate({
+          candidateOrder: 1,
+          modelId: "gpt-4.1",
+          providerModelId: "first-model",
+          price: pricedModel("gpt-4.1", 2, 8),
+        }),
+        createCandidate({
+          candidateOrder: 2,
+          modelId: "gpt-4.1-mini",
+          providerModelId: "second-model",
+          price: pricedModel("gpt-4.1-mini", 0.4, 1.6),
+        }),
+      ],
+    });
+
+    vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0.9);
+
+    expect(
+      selectRouteCandidate({
+        estimatedInputTokens: 10,
+        estimatedOutputTokens: 10,
+        snapshot,
+        virtualModelName: "coding",
+      }).providerModelId,
+    ).toBe("first-model");
+    expect(
+      selectRouteCandidate({
+        estimatedInputTokens: 10,
+        estimatedOutputTokens: 10,
+        snapshot,
+        virtualModelName: "coding",
+      }).providerModelId,
+    ).toBe("second-model");
   });
 });
 

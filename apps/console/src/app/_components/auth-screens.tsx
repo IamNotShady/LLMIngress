@@ -1,6 +1,7 @@
 // Auth screens shown by the dashboard layout when the console is not yet
 // initialized (setup) or the visitor is not signed in (login). Markup mirrors
 // the original inline forms so existing auth flows/tests keep working.
+import { FlatIcon } from "./flat-icon";
 
 export function FirstRunSetup() {
   return (
@@ -19,7 +20,10 @@ export function FirstRunSetup() {
             minLength={8}
             required
           />
-          <button type="submit">Create admin</button>
+          <button type="submit">
+            <FlatIcon name="lock" />
+            <span>Create admin</span>
+          </button>
         </form>
       </section>
     </main>
@@ -41,7 +45,10 @@ export function Login() {
             autoComplete="current-password"
             required
           />
-          <button type="submit">Sign in</button>
+          <button type="submit">
+            <FlatIcon name="unlock" />
+            <span>Sign in</span>
+          </button>
         </form>
       </section>
     </main>

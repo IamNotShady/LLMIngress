@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/health";
 
 export type GatewayRuntimeStatusEvent =
   | { type: "startup"; appliedConfigVersion: number; startedAt: Date }
@@ -16,7 +16,7 @@ export function createGatewayRuntimeStatusRecorder(options: {
   gatewayInstanceId: string;
 }): RecordGatewayRuntimeStatus {
   return async (event) => {
-    const client = new Client({ connectionString: options.databaseUrl });
+    const client = new PostgresClient({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
@@ -28,7 +28,7 @@ export function createGatewayRuntimeStatusRecorder(options: {
 }
 
 async function writeRuntimeStatusEvent(
-  client: Client,
+  client: PostgresClient,
   gatewayInstanceId: string,
   event: GatewayRuntimeStatusEvent,
 ): Promise<void> {

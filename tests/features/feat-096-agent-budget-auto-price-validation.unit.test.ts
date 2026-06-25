@@ -15,10 +15,10 @@ describe("feat-096 Agent budget automatic price validation", () => {
     await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
   });
 
-  it("normalizes Agent API key-scoped limits without manual budget price fields", () => {
+  it("normalizes Agent-scoped limits without manual budget price fields", () => {
     expect(
       normalizeAgentLimitFormInput({
-        agentApiKeyId: " key-096 ",
+        agentId: " agent-096 ",
         budgetPeriod: " month ",
         budgetUsd: "12.50",
         rpm: "90",
@@ -26,29 +26,41 @@ describe("feat-096 Agent budget automatic price validation", () => {
         tpm: "240000",
       }),
     ).toEqual({
-      agentApiKeyId: "key-096",
+      agentId: "agent-096",
       rules: [
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "budget",
           limitValue: 12.5,
+          manualBypass: false,
           period: "month",
           unit: "usd",
         },
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "rpm",
           limitValue: 90,
+          manualBypass: false,
           period: "minute",
           unit: "requests",
         },
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "tpm",
           limitValue: 240000,
+          manualBypass: false,
           period: "minute",
           unit: "tokens",
         },
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "token",
           limitValue: 16000,
+          manualBypass: false,
           period: "request",
           unit: "tokens",
         },
@@ -68,7 +80,7 @@ describe("feat-096 Agent budget automatic price validation", () => {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedAgentBudgetValidationGraph(fixture);
     const limits = normalizeAgentLimitFormInput({
-      agentApiKeyId: seeded.agentApiKeyId,
+      agentId: seeded.agentApiKeyId,
       budgetPeriod: "month",
       budgetUsd: "12.50",
       rpm: "90",
@@ -99,20 +111,16 @@ describe("feat-096 Agent budget automatic price validation", () => {
     );
     await fixture.query(
       `
-        insert into provider_models_price (
-          id,
-          provider_key,
-          model_id,
-          input_usd_per_million_tokens,
-          output_usd_per_million_tokens,
-          source,
-          source_url,
-          price_version,
-          synced_at
-        )
-        values ($1, 'openai', 'unknown-fallback-model', 0.75, 2.25, 'models.dev', 'test://prices', 'price-sync:096', now())
+        update provider_models
+        set synced_input_usd_per_million_tokens = 0.75,
+            synced_output_usd_per_million_tokens = 2.25,
+            synced_price_source = 'models.dev',
+            synced_price_source_url = 'test://prices',
+            synced_price_version = 'price-sync:096',
+            synced_price_synced_at = now(),
+            synced_price_updated_at = now()
+        where model_id = 'unknown-fallback-model'
       `,
-      [randomUUID()],
     );
 
     await expect(
@@ -143,7 +151,7 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   const builtInModelId = randomUUID();
   const unrelatedUnknownModelId = randomUUID();
   const agentId = randomUUID();
-  const agentApiKeyId = randomUUID();
+  const agentApiKeyId = agentId;
   const defaultVirtualModelId = randomUUID();
   const allowedVirtualModelId = randomUUID();
   const unrelatedVirtualModelId = randomUUID();
@@ -176,24 +184,20 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:096', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = 0.40,
+          synced_output_usd_per_million_tokens = 1.60,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:096',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      where model_id = 'gpt-4.1-mini'
     `,
-    [randomUUID()],
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'auto-budget-default', 'Auto Budget Default', true),
              ($2, 'auto-budget-allowed', 'Auto Budget Allowed', true),
              ($3, 'auto-budget-unrelated', 'Auto Budget Unrelated', true)
@@ -257,21 +261,17 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_auto96', 'sha256:v1:auto-budget-096', $3, true)
+      update agents
+      set key_prefix = 'llmi_auto96',
+          key_hash = 'sha256:v1:auto-budget-096',
+          default_virtual_model_id = $2
+      where id = $1
     `,
-    [agentApiKeyId, agentId, defaultVirtualModelId],
+    [agentId, defaultVirtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2),
              ($1, $3)
     `,
@@ -286,7 +286,7 @@ async function countAgentLimits(fixture: Fixture, agentApiKeyId: string): Promis
     `
       select count(*)::integer as count
       from agent_limits
-      where agent_api_key_id = $1
+      where agent_id = $1
     `,
     [agentApiKeyId],
   );
@@ -297,9 +297,10 @@ async function countAgentLimitConfigChanges(fixture: Fixture): Promise<number> {
   const result = await fixture.query<{ count: number }>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where source = 'console'
-        and changed_table = 'agent_limits'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'source' = 'console'
+        and change.value->>'table' = 'agent_limits'
     `,
   );
   return result.rows[0]?.count ?? 0;

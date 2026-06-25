@@ -69,11 +69,12 @@ async function seedProviderModels(fixture: Fixture): Promise<void> {
     `
       insert into provider_models (id, provider_id, model_id, display_name, availability)
       values
-        ($1, $4, 'gpt-4.1-mini', 'GPT-4.1 Mini', 'available'),
-        ($2, $4, 'manual-priced-model', 'Manual Priced Model', 'available'),
-        ($3, $4, 'unknown-refresh-model', 'Unknown Refresh Model', 'available')
+        ($1, $5, 'gpt-4.1-mini', 'GPT-4.1 Mini', 'available'),
+        ($2, $5, 'manual-priced-model', 'Manual Priced Model', 'available'),
+        ($3, $5, 'not-listed-model', 'Not Listed Model', 'not_listed'),
+        ($4, $5, 'unknown-refresh-model', 'Unknown Refresh Model', 'available')
     `,
-    [randomUUID(), randomUUID(), randomUUID(), providerId],
+    [randomUUID(), randomUUID(), randomUUID(), randomUUID(), providerId],
   );
   await fixture.query(
     `
@@ -88,19 +89,17 @@ async function seedProviderModels(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.40, 1.60, 'models.dev', 'https://models.dev/api.json', 'models.dev:test', now())
+      update provider_models
+      set synced_input_usd_per_million_tokens = 0.40,
+          synced_output_usd_per_million_tokens = 1.60,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'https://models.dev/api.json',
+          synced_price_version = 'models.dev:test',
+          synced_price_synced_at = now(),
+          synced_price_updated_at = now()
+      where provider_id = $1
+        and model_id = 'gpt-4.1-mini'
     `,
-    [randomUUID()],
+    [providerId],
   );
 }

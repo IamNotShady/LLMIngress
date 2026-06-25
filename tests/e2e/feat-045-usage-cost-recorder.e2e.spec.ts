@@ -194,26 +194,26 @@ async function seedUsageRoutes(
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        cached_input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1', 2, null, 8, 'models.dev', 'test://prices/feat-045', 'test:feat-045', '2026-06-17T00:00:00.000Z'),
-             ($2, 'openai', 'gpt-4.1-nano', 0.1, null, 0.4, 'models.dev', 'test://prices/feat-045', 'test:feat-045', '2026-06-17T00:00:00.000Z')
+      update provider_models
+      set synced_input_usd_per_million_tokens = prices.input_price,
+          synced_cached_input_usd_per_million_tokens = prices.cached_input_price,
+          synced_output_usd_per_million_tokens = prices.output_price,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'test://prices/feat-045',
+          synced_price_version = 'test:feat-045',
+          synced_price_synced_at = '2026-06-17T00:00:00.000Z',
+          synced_price_updated_at = '2026-06-17T00:00:00.000Z'
+      from (
+        values
+          ('gpt-4.1', 2::numeric, null::numeric, 8::numeric),
+          ('gpt-4.1-nano', 0.1::numeric, null::numeric, 0.4::numeric)
+      ) as prices(model_id, input_price, cached_input_price, output_price)
+      where provider_models.model_id = prices.model_id
     `,
-    [randomUUID(), randomUUID()],
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'usage-cost-known', 'Usage Cost Known', true),
              ($2, 'usage-cost-unknown', 'Usage Cost Unknown', true)
     `,
@@ -257,15 +257,7 @@ async function seedUsageRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -277,7 +269,7 @@ async function seedUsageRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2),
              ($1, $3)
     `,
@@ -330,13 +322,12 @@ async function readUsageCostRows(fixture: Fixture): Promise<UsageCostRow[]> {
              request_costs.total_cost_usd::text,
              request_costs.cost_source,
              request_costs.price_source,
-             request_savings.baseline_provider_model_id::text,
-             request_savings.baseline_cost_usd::text,
-             request_savings.savings_usd::text
+             request_costs.baseline_provider_model_id::text,
+             request_costs.baseline_cost_usd::text,
+             request_costs.savings_usd::text
       from request_activity
       join request_usage on request_usage.request_activity_id = request_activity.id
       join request_costs on request_costs.request_activity_id = request_activity.id
-      join request_savings on request_savings.request_activity_id = request_activity.id
       where request_activity.request_id in ('req_usage_known_045', 'req_usage_unknown_045')
       order by request_activity.request_id
     `,

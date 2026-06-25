@@ -1,13 +1,13 @@
+import {
+  enqueueProviderModelRefreshJob,
+  normalizeProviderModelRefreshInput,
+} from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
 import {
   getConsoleDatabaseUrl,
   sessionCookieName,
   verifyConsoleSession,
 } from "../../../server/auth";
-import {
-  enqueueProviderModelRefreshJob,
-  normalizeProviderModelRefreshInput,
-} from "../../../server/model-refresh-jobs";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     await enqueueProviderModelRefreshJob({ databaseUrl, providerId: input.providerId });
     return NextResponse.redirect(
       new URL(
-        `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}`,
+        `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}&selected=${encodeURIComponent(input.providerId)}`,
         request.url,
       ),
       { status: 303 },

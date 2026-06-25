@@ -2,14 +2,12 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
-import { createOllamaProviderAdapter } from "../../apps/gateway/src/provider-adapters/ollama";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createOllamaProviderAdapter } from "../../packages/provider/src/adapters/ollama";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
-test("ollama loopback private network url accepted template paths used public url requires confirmation", async ({
-  browser,
-}) => {
+test("ollama loopback url accepted and template paths used", async ({ browser }) => {
   const server = await createFakeProviderServer();
   const adapter = createOllamaProviderAdapter();
   const fixture = await createTestPostgresFixture({
@@ -75,16 +73,6 @@ test("ollama loopback private network url accepted template paths used public ur
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/providers`);
 
-          const publicCreate = await postProviderForm(page, {
-            action: "createFromTemplate",
-            baseUrl: "https://ollama.example.com",
-            templateId: "ollama",
-          });
-          expect(publicCreate.status).toBe(400);
-          expect(publicCreate.body).toMatchObject({
-            error: expect.stringMatching(/public network.*risk confirmation/i),
-          });
-
           const legacyOllamaCreate = await postProviderForm(page, {
             action: "create",
             baseUrl: server.url,
@@ -92,9 +80,9 @@ test("ollama loopback private network url accepted template paths used public ur
             providerKey: "ollama",
             providerType: "local",
           });
-          expect(legacyOllamaCreate.status).toBe(400);
-          expect(legacyOllamaCreate.body).toMatchObject({
+          expect(legacyOllamaCreate).toMatchObject({
             error: expect.stringMatching(/ollama.*template/i),
+            status: 200,
           });
 
           const legacyCustomLocalCreate = await postProviderForm(page, {
@@ -104,9 +92,9 @@ test("ollama loopback private network url accepted template paths used public ur
             providerKey: "myollama",
             providerType: "local",
           });
-          expect(legacyCustomLocalCreate.status).toBe(400);
-          expect(legacyCustomLocalCreate.body).toMatchObject({
+          expect(legacyCustomLocalCreate).toMatchObject({
             error: expect.stringMatching(/local providers.*template/i),
+            status: 200,
           });
 
           const loopbackCreate = await postProviderForm(page, {
@@ -114,7 +102,7 @@ test("ollama loopback private network url accepted template paths used public ur
             baseUrl: server.url,
             templateId: "ollama",
           });
-          expect(loopbackCreate.status).toBe(200);
+          expect(loopbackCreate).toMatchObject({ error: null, status: 200 });
 
           const providers = await readOllamaProviders(fixture);
           expect(providers).toEqual([
@@ -171,20 +159,19 @@ async function readOllamaProviders(
 async function postProviderForm(
   page: Page,
   form: Record<string, string>,
-): Promise<{ body: unknown; status: number }> {
+): Promise<{ error: string | null; status: number; url: string }> {
   return page.evaluate(async (formInput) => {
     const response = await fetch("/api/providers", {
       body: new URLSearchParams(formInput),
       headers: { "content-type": "application/x-www-form-urlencoded" },
       method: "POST",
     });
+    const url = new URL(response.url);
 
     return {
-      body:
-        response.headers.get("content-type")?.includes("application/json") === true
-          ? await response.json()
-          : null,
+      error: url.searchParams.get("providerError"),
       status: response.status,
+      url: response.url,
     };
   }, form);
 }

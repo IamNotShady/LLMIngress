@@ -144,7 +144,7 @@ async function seedV1ProviderCoverageRoutes(
     );
     await fixture.query(
       `
-        insert into virtual_models (id, name, display_name, enabled)
+        insert into virtual_models (id, name, description, enabled)
         values ($1, $2, $3, true)
       `,
       [virtualModelId, scenario.virtualModelName, scenario.virtualModelDisplayName],
@@ -170,15 +170,7 @@ async function seedV1ProviderCoverageRoutes(
 
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -192,7 +184,7 @@ async function seedV1ProviderCoverageRoutes(
   for (const virtualModelId of seededVirtualModelIds) {
     await fixture.query(
       `
-        insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+        insert into agent_virtual_models (agent_id, virtual_model_id)
         values ($1, $2)
       `,
       [agentApiKeyId, virtualModelId],
@@ -254,7 +246,7 @@ async function expectScenarioResponse(
     choices: [
       {
         message: {
-          content: scenario.id === "gemini" ? "fake gemini response" : "fake provider response",
+          content: "fake provider response",
           role: "assistant",
         },
       },
@@ -278,10 +270,6 @@ function expectCapturedProviderRequest(
       model: scenario.modelId,
       stream: false,
     });
-  } else if (scenario.id === "gemini") {
-    expect(request?.bodyJson, scenario.id).toMatchObject({
-      contents: [{ parts: [{ text: `hello through ${scenario.id}` }], role: "user" }],
-    });
   } else {
     expect(request?.bodyJson, scenario.id).toMatchObject({
       messages: [{ content: `hello through ${scenario.id}`, role: "user" }],
@@ -290,9 +278,12 @@ function expectCapturedProviderRequest(
     });
   }
 
-  expect(readHeader(request, scenario.expectedAuthHeader), scenario.id).toBe(
-    scenario.expectedAuthValue,
-  );
+  const authHeader = readHeader(request, scenario.expectedAuthHeader);
+  if (scenario.providerType === "local") {
+    expect(authHeader, scenario.id).toBeUndefined();
+  } else {
+    expect(authHeader, scenario.id).toBe(scenario.expectedAuthValue);
+  }
   if (scenario.id === "openrouter") {
     expect(readHeader(request, "http-referer"), scenario.id).toBe("https://llmingress.local");
     expect(readHeader(request, "x-openrouter-title"), scenario.id).toBe("LLMIngress");

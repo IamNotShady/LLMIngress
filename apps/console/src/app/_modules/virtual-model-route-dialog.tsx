@@ -1,0 +1,489 @@
+"use client";
+
+import { type DragEvent, useMemo, useState } from "react";
+import { FlatIcon } from "../_components/flat-icon";
+
+type Strategy = "fixed" | "cost_first" | "quality_first" | "random";
+
+type ProviderModelOption = {
+  availability: string;
+  contextWindow: number | null;
+  id: string;
+  inputUsdPerMillionTokens: number | null;
+  modelDisplayName: string;
+  modelId: string;
+  optionLabel: string;
+  outputUsdPerMillionTokens: number | null;
+  providerDisplayName: string;
+  providerKey: string;
+  supportsStreaming: boolean;
+  supportsTools: boolean;
+};
+
+type Candidate = ProviderModelOption & {
+  candidateOrder: number;
+  isFallback: boolean;
+};
+
+type RoutePolicy = {
+  candidates: Candidate[];
+  id: string;
+  strategy: Strategy;
+};
+
+type VirtualModel = {
+  description: string;
+  id: string;
+  name: string;
+};
+
+const strategies: Strategy[] = ["fixed", "cost_first", "quality_first", "random"];
+
+export function VirtualModelRouteDialogClient({
+  closeHref,
+  mode,
+  providerModelOptions,
+  routePolicy,
+  virtualModel,
+}: {
+  closeHref: string;
+  mode: "create" | "edit";
+  providerModelOptions: ProviderModelOption[];
+  routePolicy: RoutePolicy | null;
+  virtualModel: VirtualModel | null;
+}) {
+  const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "random");
+  const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>(
+    routePolicy?.candidates ?? [],
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [providerFilter, setProviderFilter] = useState("all");
+  const [modelQuery, setModelQuery] = useState("");
+
+  const providerFilters = useMemo(() => {
+    const providers = new Map<string, string>();
+    for (const option of providerModelOptions) {
+      providers.set(option.providerKey, option.providerDisplayName);
+    }
+    return [...providers.entries()];
+  }, [providerModelOptions]);
+
+  const selectedIds = useMemo(
+    () => new Set(selectedCandidates.map((candidate) => candidate.id)),
+    [selectedCandidates],
+  );
+  const visibleOptions = providerModelOptions.filter((option) => {
+    if (selectedIds.has(option.id)) {
+      return false;
+    }
+    if (providerFilter !== "all" && option.providerKey !== providerFilter) {
+      return false;
+    }
+    const query = modelQuery.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+    return `${option.providerDisplayName} ${option.modelDisplayName} ${option.modelId}`
+      .toLowerCase()
+      .includes(query);
+  });
+
+  function addModel(option: ProviderModelOption) {
+    setSelectedCandidates((current) => [
+      ...current,
+      { ...option, candidateOrder: current.length, isFallback: false },
+    ]);
+    setPickerOpen(false);
+  }
+
+  function moveCandidate(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+      return;
+    }
+    setSelectedCandidates((current) => {
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      if (!moved) {
+        return current;
+      }
+      next.splice(toIndex, 0, moved);
+      return next.map((candidate, index) => ({ ...candidate, candidateOrder: index }));
+    });
+  }
+
+  function handleCandidateDrop(event: DragEvent<HTMLTableRowElement>, toIndex: number) {
+    event.preventDefault();
+    moveCandidate(Number(event.dataTransfer.getData("text/plain")), toIndex);
+  }
+
+  function removeCandidate(index: number) {
+    setSelectedCandidates((current) =>
+      current
+        .filter((_, candidateIndex) => candidateIndex !== index)
+        .map((candidate, candidateIndex) => ({ ...candidate, candidateOrder: candidateIndex })),
+    );
+  }
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="virtual-model-dialog-title"
+        aria-modal="true"
+        className="console-dialog vm-route-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="virtual-model-dialog-title">
+            {mode === "create"
+              ? "Create Virtual Model"
+              : `Edit Virtual Model: ${virtualModel?.name}`}
+          </h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <div className="vm-editor-grid">
+          <form className="vm-editor-form" action="/api/virtual-models" method="post">
+            <input
+              type="hidden"
+              name="action"
+              value={mode === "create" ? "createWithRoute" : "updateWithRoute"}
+            />
+            {virtualModel ? <input type="hidden" name="id" value={virtualModel.id} /> : null}
+            {routePolicy ? (
+              <input type="hidden" name="routePolicyId" value={routePolicy.id} />
+            ) : null}
+            <section className="chart-card">
+              <h3 className="chart-card-title">Basic info</h3>
+              <div className="vm-editor-fields">
+                <div>
+                  <label htmlFor="virtual-model-dialog-name">Virtual Model name</label>
+                  <input
+                    id="virtual-model-dialog-name"
+                    name="name"
+                    defaultValue={virtualModel?.name ?? ""}
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="virtual-model-dialog-description">Description</label>
+                  <input
+                    id="virtual-model-dialog-description"
+                    name="description"
+                    defaultValue={virtualModel?.description ?? ""}
+                    required
+                  />
+                </div>
+              </div>
+            </section>
+            <section className="chart-card">
+              <h3 className="chart-card-title">1. Choose routing strategy</h3>
+              <div className="option-cards">
+                {strategies.map((candidateStrategy) => (
+                  <label className="option-card" key={candidateStrategy}>
+                    <input
+                      checked={candidateStrategy === strategy}
+                      name="strategy"
+                      onChange={() => setStrategy(candidateStrategy)}
+                      type="radio"
+                      value={candidateStrategy}
+                    />
+                    <span className="option-card-title">
+                      {formatRouteStrategyLabel(candidateStrategy)}
+                    </span>
+                    <span className="option-card-desc">
+                      {formatRouteStrategyDescription(candidateStrategy)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+            <section className="chart-card">
+              <h3 className="chart-card-title">2. Selected candidates</h3>
+              {selectedCandidates.length === 0 ? (
+                <p>No candidates selected.</p>
+              ) : (
+                <div className="data-table-wrap">
+                  <table className="data-table vm-candidate-table">
+                    <thead>
+                      <tr>
+                        <th>Order</th>
+                        <th>Provider</th>
+                        <th>Model</th>
+                        <th>Context</th>
+                        <th>Input price</th>
+                        <th>Output price</th>
+                        <th>Tools</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCandidates.map((candidate, index) => (
+                        <tr
+                          draggable
+                          key={`${candidate.id}-${candidate.isFallback ? "fallback" : "primary"}`}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDragStart={(event) =>
+                            event.dataTransfer.setData("text/plain", String(index))
+                          }
+                          onDrop={(event) => handleCandidateDrop(event, index)}
+                        >
+                          <td>
+                            <input
+                              type="hidden"
+                              name={
+                                candidate.isFallback
+                                  ? "fallbackProviderModelIds"
+                                  : "primaryProviderModelIds"
+                              }
+                              value={candidate.id}
+                            />
+                            <span className="vm-candidate-order">
+                              <span aria-hidden="true" className="vm-drag-handle">
+                                ::
+                              </span>
+                              {index + 1}
+                            </span>
+                          </td>
+                          <td>{candidate.providerDisplayName}</td>
+                          <td>{candidate.modelDisplayName}</td>
+                          <td>{formatModelContext(candidate.contextWindow)}</td>
+                          <td>{formatModelPrice(candidate.inputUsdPerMillionTokens)}</td>
+                          <td>{formatModelPrice(candidate.outputUsdPerMillionTokens)}</td>
+                          <td>{formatBooleanFeature(candidate.supportsTools)}</td>
+                          <td>
+                            {candidate.availability === "available" ? (
+                              <span className="pill--ok pill">Available</span>
+                            ) : (
+                              <span className="pill--danger pill">Disabled</span>
+                            )}
+                          </td>
+                          <td>
+                            <button
+                              className="vm-candidate-remove"
+                              type="button"
+                              onClick={() => removeCandidate(index)}
+                            >
+                              <FlatIcon name="delete" />
+                              <span>Remove</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="callout">
+                Candidates are tried in order; fallback continues to the next available candidate.
+              </p>
+              <button
+                className="secondary-button vm-add-model-button"
+                type="button"
+                onClick={() => setPickerOpen(true)}
+              >
+                <FlatIcon name="add" />
+                <span>Add Model</span>
+              </button>
+            </section>
+            <div className="vm-dialog-actions">
+              <a className="secondary-button" href={closeHref}>
+                <span>Cancel</span>
+              </a>
+              <button type="submit">
+                <span>Save</span>
+              </button>
+            </div>
+          </form>
+          <aside className="chart-card vm-policy-note">
+            <h3 className="chart-card-title">Current strategy</h3>
+            <dl className="agent-detail-fields">
+              <div>
+                <dt>Strategy</dt>
+                <dd>{formatRouteStrategyLabel(strategy)}</dd>
+              </div>
+              <div>
+                <dt>Candidates</dt>
+                <dd>
+                  {selectedCandidates.length
+                    ? `${selectedCandidates.length} models`
+                    : "Not configured"}
+                </dd>
+              </div>
+              <div>
+                <dt>Takes effect</dt>
+                <dd>Applies to new requests after saving</dd>
+              </div>
+              <div>
+                <dt>Fallback</dt>
+                <dd>Tries the next candidate on failure</dd>
+              </div>
+            </dl>
+            <section className="agent-detail-section">
+              <h3>Advanced capabilities not included</h3>
+              <p>- Task-type rules</p>
+              <p>- Context-length thresholds</p>
+              <p>- Tool-call conditions</p>
+              <p>- timeout / retry settings</p>
+            </section>
+            <p className="callout callout--warn">
+              This version only supports strategy + candidates.
+            </p>
+          </aside>
+        </div>
+      </section>
+
+      {pickerOpen ? (
+        <>
+          <div className="vm-model-picker-scrim" aria-hidden="true" />
+          <section
+            aria-labelledby="vm-model-picker-title"
+            aria-modal="true"
+            className="console-dialog vm-model-picker"
+            role="dialog"
+          >
+            <div className="console-dialog-head">
+              <h2 id="vm-model-picker-title">Add Model</h2>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setPickerOpen(false)}
+              >
+                <FlatIcon name="cancel" />
+                <span>Close</span>
+              </button>
+            </div>
+            <div className="vm-model-filter-bar">
+              <div>
+                <label htmlFor="vm-model-provider-filter">Provider</label>
+                <select
+                  id="vm-model-provider-filter"
+                  value={providerFilter}
+                  onChange={(event) => setProviderFilter(event.target.value)}
+                >
+                  <option value="all">All</option>
+                  {providerFilters.map(([providerKey, providerDisplayName]) => (
+                    <option key={providerKey} value={providerKey}>
+                      {providerDisplayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="vm-model-name-filter">Model name</label>
+                <input
+                  id="vm-model-name-filter"
+                  placeholder="Search model name"
+                  value={modelQuery}
+                  onChange={(event) => setModelQuery(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="data-table-wrap">
+              <table className="data-table vm-model-picker-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Model ID</th>
+                    <th>Context</th>
+                    <th>Input price</th>
+                    <th>Output price</th>
+                    <th>Tools</th>
+                    <th>Streaming</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleOptions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7}>No models found.</td>
+                    </tr>
+                  ) : (
+                    visibleOptions.map((option) => (
+                      <tr key={option.id}>
+                        <td>{option.providerDisplayName}</td>
+                        <td>
+                          <button
+                            className="vm-model-select-button"
+                            type="button"
+                            onClick={() => addModel(option)}
+                          >
+                            <strong>{option.modelDisplayName}</strong>
+                            {option.modelId !== option.modelDisplayName ? (
+                              <span>{option.modelId}</span>
+                            ) : null}
+                          </button>
+                        </td>
+                        <td>{formatModelContext(option.contextWindow)}</td>
+                        <td>{formatModelPrice(option.inputUsdPerMillionTokens)}</td>
+                        <td>{formatModelPrice(option.outputUsdPerMillionTokens)}</td>
+                        <td>{formatBooleanFeature(option.supportsTools)}</td>
+                        <td>{formatBooleanFeature(option.supportsStreaming)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function formatRouteStrategyLabel(strategy: Strategy): string {
+  if (strategy === "cost_first") {
+    return "Cost First";
+  }
+  if (strategy === "quality_first") {
+    return "Quality First";
+  }
+  if (strategy === "random") {
+    return "Random";
+  }
+  return strategy.charAt(0).toUpperCase() + strategy.slice(1);
+}
+
+function formatRouteStrategyDescription(strategy: Strategy): string {
+  if (strategy === "fixed") {
+    return "Always use the first candidate";
+  }
+  if (strategy === "cost_first") {
+    return "Prefer the lowest-cost candidate";
+  }
+  if (strategy === "quality_first") {
+    return "Prefer the highest-priced candidate";
+  }
+  return "Pick a random eligible candidate each request";
+}
+
+function formatModelContext(contextWindow: number | null): string {
+  if (contextWindow === null) {
+    return "Unknown";
+  }
+  if (contextWindow >= 1_000_000) {
+    return `${formatDecimal(contextWindow / 1_000_000)}M`;
+  }
+  if (contextWindow >= 1_000) {
+    return `${formatDecimal(contextWindow / 1_000)}K`;
+  }
+  return String(contextWindow);
+}
+
+function formatModelPrice(price: number | null): string {
+  if (price === null) {
+    return "Unknown";
+  }
+  return `$${price.toFixed(price >= 1 ? 2 : 4)}`;
+}
+
+function formatDecimal(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatBooleanFeature(value: boolean): string {
+  return value ? "Yes" : "No";
+}

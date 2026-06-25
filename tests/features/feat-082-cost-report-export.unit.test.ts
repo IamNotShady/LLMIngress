@@ -10,14 +10,17 @@ import { loadSqlMigrations } from "../../packages/db/src/index";
 const root = resolve(__dirname, "../..");
 
 describe("feat-082 cost report export", () => {
-  it("declares cost_report_export jobs and cost report export task tracking", () => {
+  it("declares cost_report_export jobs and current job-result export tracking", () => {
     const migration = loadSqlMigrations().find(
       (candidate) => candidate.id === "0017" && candidate.name === "cost_report_export",
+    );
+    const cleanupMigration = loadSqlMigrations().find(
+      (candidate) => candidate.id === "0039" && candidate.name === "merge_export_tasks_into_jobs",
     );
 
     expect(migration?.sql).toContain("'cost_report_export'");
     expect(migration?.sql).toContain("'cost_report'");
-    expect(migration?.sql).toContain("export_tasks");
+    expect(cleanupMigration?.sql).toContain("drop table if exists export_tasks");
   });
 
   it("registers cost_report_export in the default Worker job handlers", () => {
@@ -29,14 +32,6 @@ describe("feat-082 cost report export", () => {
 
   it("builds a cost report document from usage summary totals and breakdowns", () => {
     const usageSummary: CostReportUsageSummary = {
-      agentApiKeyBreakdowns: [
-        breakdown("agent-key-1", "Codex / llmi_cost82", {
-          requestCount: 2,
-          totalCostUsd: "0.00300000",
-          totalSavingsUsd: "0.00600000",
-          totalTokens: 600,
-        }),
-      ],
       agentBreakdowns: [
         breakdown("agent-1", "Codex", {
           requestCount: 2,
@@ -122,7 +117,6 @@ describe("feat-082 cost report export", () => {
         start: "2026-06-15T12:00:00.000Z",
       },
     });
-    expect(report.breakdowns.agentApiKeys).toEqual(usageSummary.agentApiKeyBreakdowns);
     expect(report.breakdowns.agents).toEqual(usageSummary.agentBreakdowns);
     expect(report.breakdowns.providerModels).toEqual(usageSummary.breakdowns);
     expect(report.breakdowns.virtualModels).toEqual(usageSummary.virtualModelBreakdowns);

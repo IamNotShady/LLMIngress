@@ -1,3 +1,4 @@
+import { FlatIcon } from "../../_components/flat-icon";
 import { PageHeader } from "../../_components/page-header";
 import { AgentsSection, type ConsoleSearchParams } from "../../_modules/sections";
 
@@ -8,11 +9,16 @@ export default async function AgentsPage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page agents-page">
       <PageHeader
-        eyebrow="Access"
         title="Agents"
-        description="Agents, their API keys, virtual model access, and per-key limits."
+        description="Agents, their API key, virtual model access, and limits."
+        actions={
+          <a className="btn" href="?agentDialog=new">
+            <FlatIcon name="add" />
+            <span>Create Agent</span>
+          </a>
+        }
       />
       <AgentsSection searchParams={resolved} />
     </div>

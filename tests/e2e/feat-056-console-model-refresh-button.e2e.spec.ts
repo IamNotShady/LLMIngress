@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
+import { openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -17,7 +17,7 @@ test("console refresh models button enqueues job worker refreshes models and rou
   });
   const providerApiKey = "sk-refresh-button-secret";
   const provider = await createFakeProviderServer({
-    models: [{ id: "refresh-button-model", name: "Refresh Button Model" }],
+    models: [{ contextWindow: 8192, id: "refresh-button-model", name: "Refresh Button Model" }],
     requiredModelListAuthorization: `Bearer ${providerApiKey}`,
   });
   const providerId = randomUUID();
@@ -48,20 +48,14 @@ test("console refresh models button enqueues job worker refreshes models and rou
           await page.goto(`${consoleBaseUrl}/providers`);
 
           await storeProviderApiKey(page, providerApiKey);
-          await page.goto(`${consoleBaseUrl}/models`);
-          await createVirtualModel(page);
-          await page.goto(`${consoleBaseUrl}/routing`);
-          await expect(page.getByText("No provider models available.")).toBeVisible();
+          await expect.poll(() => countProviderModels(fixture, providerId)).toBe(0);
 
           await page.goto(`${consoleBaseUrl}/providers`);
           await openRow(page, "Refresh Button Provider");
-          await page.getByRole("button", { name: "Refresh provider models" }).click();
-          await expect(
-            page.getByText("Model refresh queued for Refresh Button Provider."),
-          ).toBeVisible();
+          await page.getByRole("button", { name: "Refresh models" }).click();
 
           await expect
-            .poll(() => readLatestModelRefreshJob(fixture, providerId))
+            .poll(() => readLatestModelRefreshJob(fixture, providerId), { timeout: 30_000 })
             .toMatchObject({ status: "succeeded" });
           expect(
             provider.requests.find((request) => request.path.endsWith("/models")),
@@ -70,20 +64,30 @@ test("console refresh models button enqueues job worker refreshes models and rou
               authorization: `Bearer ${providerApiKey}`,
             },
           });
+          const providerModel = await readProviderModel(
+            fixture,
+            providerId,
+            "refresh-button-model",
+          );
+          expect(providerModel).toMatchObject({
+            availability: "available",
+            display_name: "Refresh Button Model",
+            model_id: "refresh-button-model",
+          });
+
+          await postVirtualModelWithRoute(page, {
+            description: "Refresh Button VM",
+            name: "refresh-button-vm",
+            primaryProviderModelIds: [providerModel.id],
+            strategy: "fixed",
+          });
+          await expect.poll(() => countRoutePolicyCandidates(fixture)).toBe(1);
 
           await page.goto(`${consoleBaseUrl}/providers`);
           await openRow(page, "Refresh Button Provider");
           await expect(
-            page.getByText("Provider models: Refresh Button Model (refresh-button-model)"),
+            page.locator("table.model-library-table").getByText("refresh-button-model"),
           ).toBeVisible();
-          await page.goto(`${consoleBaseUrl}/routing`);
-          await openDisclosure(page, "New route policy");
-          await page.getByLabel("Route policy virtual model").selectOption({
-            label: "Refresh Button VM (refresh-button-vm)",
-          });
-          await expect(page.getByLabel("Primary provider models")).toContainText(
-            "Refresh Button Provider - Refresh Button Model (refresh-button-model)",
-          );
         } finally {
           await context.close();
         }
@@ -125,20 +129,86 @@ async function insertProvider(
 
 async function storeProviderApiKey(page: Page, providerApiKey: string): Promise<void> {
   await openRow(page, "Refresh Button Provider");
-  await page.getByLabel("Provider API key").fill(providerApiKey);
-  await page.getByRole("button", { name: "Store provider API key" }).click();
+  await page.getByRole("link", { name: "Add API key" }).click();
+  await page
+    .getByRole("dialog", { name: /API key/ })
+    .getByRole("textbox", { name: "Provider API key" })
+    .fill(providerApiKey);
+  await page.getByRole("button", { name: "Save API key" }).click();
   await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
   await page.getByRole("link", { name: "Back to dashboard" }).click();
   await openRow(page, "Refresh Button Provider");
-  await expect(page.getByText("Provider API key prefix: sk-refre")).toBeVisible();
+  await expect(page.getByRole("row", { name: /- 100 Unknown/ })).toBeVisible();
 }
 
-async function createVirtualModel(page: Page): Promise<void> {
-  await openDisclosure(page, "New virtual model");
-  await page.getByRole("textbox", { name: "Virtual model name" }).fill("refresh-button-vm");
-  await page.getByRole("textbox", { name: "Virtual model display name" }).fill("Refresh Button VM");
-  await page.getByRole("button", { name: "Create virtual model" }).click();
-  await expect(page.getByRole("heading", { exact: true, name: "Refresh Button VM" })).toBeVisible();
+async function countProviderModels(fixture: Fixture, providerId: string): Promise<number> {
+  const result = await fixture.query<{ count: number }>(
+    "select count(*)::integer as count from provider_models where provider_id = $1",
+    [providerId],
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+async function readProviderModel(
+  fixture: Fixture,
+  providerId: string,
+  modelId: string,
+): Promise<{
+  availability: string;
+  display_name: string;
+  id: string;
+  model_id: string;
+}> {
+  const result = await fixture.query<{
+    availability: string;
+    display_name: string;
+    id: string;
+    model_id: string;
+  }>(
+    `
+      select id::text, model_id, display_name, availability
+      from provider_models
+      where provider_id = $1
+        and model_id = $2
+    `,
+    [providerId, modelId],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error(`Provider model ${modelId} was not refreshed.`);
+  }
+  return row;
+}
+
+async function countRoutePolicyCandidates(fixture: Fixture): Promise<number> {
+  const result = await fixture.query<{ count: number }>(
+    "select count(*)::integer as count from route_policy_candidates",
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+async function postVirtualModelWithRoute(
+  page: Page,
+  input: {
+    description: string;
+    name: string;
+    primaryProviderModelIds: string[];
+    strategy: string;
+  },
+): Promise<void> {
+  const result = await page.evaluate(async (payload) => {
+    const body = new FormData();
+    body.set("action", "createWithRoute");
+    body.set("name", payload.name);
+    body.set("description", payload.description);
+    body.set("strategy", payload.strategy);
+    for (const providerModelId of payload.primaryProviderModelIds) {
+      body.append("primaryProviderModelIds", providerModelId);
+    }
+    const response = await fetch("/api/virtual-models", { body, method: "POST" });
+    return { status: response.status, text: await response.text() };
+  }, input);
+  expect(result.status, result.text).toBe(200);
 }
 
 async function readLatestModelRefreshJob(

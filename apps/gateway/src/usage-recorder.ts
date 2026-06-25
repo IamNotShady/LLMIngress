@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/activity";
 import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
 
 export type GatewayUsageCostDetails = {
@@ -60,7 +60,7 @@ export async function recordGatewayUsageCostAndSavings(
   input: RecordGatewayUsageCostInput,
 ): Promise<void> {
   const records = buildGatewayUsageCostRecords(input.usageCost);
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -70,7 +70,7 @@ export async function recordGatewayUsageCostAndSavings(
         insert into request_usage (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           virtual_model_id,
           provider_model_id,
           input_tokens,
@@ -101,16 +101,23 @@ export async function recordGatewayUsageCostAndSavings(
         insert into request_costs (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           provider_model_id,
           input_cost_usd,
           output_cost_usd,
           total_cost_usd,
           cost_source,
           price_source,
-          price_version
+          price_version,
+          baseline_provider_model_id,
+          actual_cost_usd,
+          baseline_cost_usd,
+          savings_usd,
+          savings_percent,
+          savings_price_source,
+          savings_price_version
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       `,
       [
         randomUUID(),
@@ -123,26 +130,6 @@ export async function recordGatewayUsageCostAndSavings(
         records.requestCost.costSource,
         records.requestCost.priceSource,
         records.requestCost.priceVersion,
-      ],
-    );
-    await client.query(
-      `
-        insert into request_savings (
-          id,
-          request_activity_id,
-          baseline_provider_model_id,
-          actual_cost_usd,
-          baseline_cost_usd,
-          savings_usd,
-          savings_percent,
-          price_source,
-          price_version
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      `,
-      [
-        randomUUID(),
-        input.activityId,
         records.requestSavings.baselineProviderModelId,
         records.requestSavings.actualCostUsd,
         records.requestSavings.baselineCostUsd,

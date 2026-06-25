@@ -2,7 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
-import { consoleNavGroups, consoleNavItems } from "../../apps/console/src/app/_lib/nav";
+import { consoleNavItems } from "../../apps/console/src/app/_lib/nav";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
@@ -34,18 +34,15 @@ test("sidebar groups modules and routes each nav item to its own page with a the
           const sidebar = page.getByRole("navigation", { name: "Console sections" });
           await expect(sidebar).toBeVisible();
 
-          // Every group label is rendered as a section header in the sidebar.
-          for (const group of consoleNavGroups) {
-            await expect(sidebar.getByText(group.label, { exact: true })).toBeVisible();
-          }
-
+          // The redesigned sidebar is a flat icon-chip list (no group headers).
           // Each module is reachable from the sidebar and renders only its own page.
           for (const item of consoleNavItems) {
             await sidebar.getByRole("link", { name: item.label, exact: true }).click();
             const expectedPath = item.href === "/" ? "/" : item.href;
+            const expectedHeading = item.pageTitle ?? item.label;
             await page.waitForURL((url) => url.pathname === expectedPath);
             await expect(
-              page.getByRole("heading", { level: 1, name: item.label, exact: true }),
+              page.getByRole("heading", { level: 1, name: expectedHeading, exact: true }),
             ).toBeVisible();
             // The active item is marked for assistive tech.
             await expect(

@@ -21,7 +21,10 @@ test("missing referenced model marked unavailable excluded from routing and warn
     databaseNamePrefix: `llmingress_model_soft_delete_${randomUUID().replaceAll("-", "_")}`,
   });
   const server = await createFakeProviderServer({
-    models: [{ id: "old-referenced" }, { id: "stable" }],
+    models: [
+      { contextWindow: 8192, id: "old-referenced" },
+      { contextWindow: 8192, id: "stable" },
+    ],
   });
   const providerId = randomUUID();
 
@@ -42,7 +45,7 @@ test("missing referenced model marked unavailable excluded from routing and warn
       stableModelId,
     });
 
-    server.setModels([{ id: "stable" }]);
+    server.setModels([{ contextWindow: 8192, id: "stable" }]);
     await runModelRefreshJob(fixture, providerId);
 
     await expectModelRows(fixture, [
@@ -149,7 +152,7 @@ async function insertRoutePolicy(
 
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'soft-delete-coding', 'Soft Delete Coding', true)
     `,
     [virtualModelId],

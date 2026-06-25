@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/activity";
 import type { GatewayRequestMetadata } from "./request-metadata.js";
 import { readGatewayProviderTokenUsage } from "./usage-recorder.js";
 
@@ -75,7 +75,7 @@ export async function createGatewayRequestActivity(
 ): Promise<GatewayStartedRequestActivity> {
   const startedAt = input.startedAt ?? new Date();
   const id = randomUUID();
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -84,17 +84,33 @@ export async function createGatewayRequestActivity(
         insert into request_activity (
           id,
           request_id,
-          agent_api_key_id,
+          agent_id,
           virtual_model_id,
-          agent_api_key_prefix,
+          agent_key_prefix,
           protocol,
           model,
           stream,
+          agent_name_snapshot,
+          virtual_model_name_snapshot,
           status,
           started_at,
           created_at
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, 'started', $9, $9)
+        values (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          (select name from agents where id = $3),
+          (select name from virtual_models where id = $4),
+          'started',
+          $9,
+          $9
+        )
       `,
       [
         id,
@@ -134,7 +150,7 @@ export async function completeGatewayRequestActivity(
     }),
     route: input.route,
   });
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -150,6 +166,21 @@ export async function completeGatewayRequestActivity(
             response_metadata = $8::jsonb,
             provider_api_key_id = $9,
             provider_api_key_prefix = $10,
+            route_policy_strategy_snapshot = (
+              select strategy::text from route_policies where id = $2
+            ),
+            provider_key_snapshot = (
+              select provider_key from providers where id = $3
+            ),
+            provider_display_name_snapshot = (
+              select display_name from providers where id = $3
+            ),
+            provider_model_name_snapshot = (
+              select model_id from provider_models where id = $4
+            ),
+            provider_model_display_name_snapshot = (
+              select display_name from provider_models where id = $4
+            ),
             status = $11,
             error_code = $12,
             error_message = $13,

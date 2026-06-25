@@ -1,3 +1,12 @@
+import {
+  createOpenAIProviderAdapter,
+  type NormalizedOpenAIResponsesInputMessage,
+  type NormalizedOpenAIResponsesRequest,
+  type OpenAIAdapterSuccess,
+  type OpenAIProviderAdapter,
+} from "@llmingress/provider/openai";
+import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
+import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
@@ -25,14 +34,7 @@ import {
   recordFailedAttemptInDatabase,
   recordSucceededAttemptInDatabase,
 } from "./fallback-chain.js";
-import {
-  createOpenAIProviderAdapter,
-  type NormalizedOpenAIResponsesInputMessage,
-  type NormalizedOpenAIResponsesRequest,
-  type OpenAIAdapterSuccess,
-  type OpenAIProviderAdapter,
-} from "./provider-adapters/openai.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildOpenAIResponsesRequestMetadata,
   type GatewayRequestMetadata,
@@ -49,6 +51,7 @@ import type { GatewayVirtualModel } from "./virtual-model-access.js";
 export type GatewayResponsesErrorCode =
   | "invalid_responses_request"
   | "provider_credentials_missing"
+  | "provider_protocol_unsupported"
   | "provider_request_failed"
   | "route_not_found"
   | "unsupported_stateful_responses";
@@ -108,6 +111,11 @@ export function normalizeOpenAIResponsesRequest(
     return invalidResponsesRequest(requestId);
   }
 
+  const instructions = readOptionalNonEmptyString(body.instructions);
+  if (instructions === null) {
+    return invalidResponsesRequest(requestId);
+  }
+
   const maxOutputTokens = readOptionalPositiveInteger(body.max_output_tokens);
   if (maxOutputTokens === null) {
     return invalidResponsesRequest(requestId);
@@ -126,6 +134,7 @@ export function normalizeOpenAIResponsesRequest(
     ok: true,
     request: omitUndefined({
       input,
+      instructions,
       maxOutputTokens,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       temperature,
@@ -172,6 +181,7 @@ export async function executeGatewayOpenAIResponse(input: {
     };
   }
 
+  const concurrencyLease = rateLimit.concurrencyLease;
   let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
@@ -180,6 +190,7 @@ export async function executeGatewayOpenAIResponse(input: {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
+      usesTools: requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
@@ -216,12 +227,8 @@ export async function executeGatewayOpenAIResponse(input: {
       databaseUrl: input.databaseUrl,
       masterKeySource: readGatewayMasterKeySource(),
     });
-    const adapter = input.adapter ?? createOpenAIProviderAdapter();
-    if (!adapter.response) {
-      throw new Error("OpenAI responses provider adapter is not configured.");
-    }
     const success = await executeResponsesFallback({
-      adapter,
+      adapter: input.adapter,
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
@@ -271,15 +278,26 @@ export async function executeGatewayOpenAIResponse(input: {
     const code = classifyResponsesError(message);
     return {
       activity,
-      body: createGatewayResponsesErrorBody(code, input.requestId),
+      body: createGatewayResponsesErrorBody(
+        code,
+        input.requestId,
+        code === "provider_protocol_unsupported" || code === "provider_request_failed"
+          ? message
+          : undefined,
+      ),
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
+  } finally {
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
+    });
   }
 }
 
 async function executeResponsesFallback(input: {
-  adapter: OpenAIProviderAdapter;
+  adapter?: OpenAIProviderAdapter;
   candidates: readonly FallbackChainCandidate[];
   databaseUrl: string;
   fallbackAttempts: FallbackFailedAttempt[];
@@ -296,16 +314,31 @@ async function executeResponsesFallback(input: {
     }
   | undefined
 > {
-  if (!input.adapter.response) {
+  const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
+  if (!genericAdapter.response) {
     throw new Error("OpenAI responses provider adapter is not configured.");
   }
 
   let attemptOrder = 0;
+  const codexAdapter = input.adapter ? null : createCodexSubscriptionAdapter();
+  const unsupportedProviders = new Set<string>();
   for (const candidate of input.candidates) {
+    if (
+      isSubscriptionProviderKey(candidate.providerKey) &&
+      candidate.providerKey !== "openai_codex"
+    ) {
+      unsupportedProviders.add(candidate.providerKey);
+      continue;
+    }
+    const adapter =
+      candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : genericAdapter;
+    if (!adapter.response) {
+      throw new Error("OpenAI responses provider adapter is not configured.");
+    }
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
       const providerStartedAt = new Date();
-      const result = await input.adapter.response({
+      const result = await adapter.response({
         request: input.request,
         target: {
           apiKey: providerApiKey.apiKey,
@@ -355,17 +388,23 @@ async function executeResponsesFallback(input: {
       }
     }
   }
+  if (attemptOrder === 0 && unsupportedProviders.size > 0) {
+    throw new Error(
+      `Responses API cannot use provider ${Array.from(unsupportedProviders).join(", ")}.`,
+    );
+  }
   return undefined;
 }
 
 export function createGatewayResponsesErrorBody(
   code: GatewayResponsesErrorCode,
   requestId: string,
+  message?: string,
 ): GatewayResponsesErrorBody {
   return {
     error: {
       code,
-      message: responsesErrorMessage(code),
+      message: message ?? responsesErrorMessage(code),
     },
     requestId,
   };
@@ -389,17 +428,52 @@ function readResponsesInput(
 }
 
 function readResponsesInputMessage(value: unknown): NormalizedOpenAIResponsesInputMessage | null {
-  if (!isRecord(value) || typeof value.content !== "string" || !value.content.trim()) {
+  if (!isRecord(value)) {
     return null;
   }
-  if (value.role !== "system" && value.role !== "user" && value.role !== "assistant") {
+  const content = readResponsesMessageContent(value.content);
+  if (!content) {
+    return null;
+  }
+  if (
+    value.role !== "developer" &&
+    value.role !== "system" &&
+    value.role !== "user" &&
+    value.role !== "assistant"
+  ) {
     return null;
   }
 
   return {
-    content: value.content,
+    content,
     role: value.role,
   };
+}
+
+function readResponsesMessageContent(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+
+  const textParts = value.map(readResponsesTextContentPart);
+  if (textParts.some((part) => part === null)) {
+    return null;
+  }
+  const text = textParts.join("\n").trim();
+  return text || null;
+}
+
+function readResponsesTextContentPart(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.text !== "string") {
+    return null;
+  }
+  if (value.type !== "input_text" && value.type !== "output_text") {
+    return null;
+  }
+  return value.text;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {
@@ -420,6 +494,13 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
+}
+
+function readOptionalNonEmptyString(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function requireRoutePolicy(
@@ -487,6 +568,9 @@ function classifyResponsesError(message: string): GatewayResponsesErrorCode {
   if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
     return "provider_credentials_missing";
   }
+  if (message.includes("Responses API cannot use provider")) {
+    return "provider_protocol_unsupported";
+  }
   return "provider_request_failed";
 }
 
@@ -502,6 +586,9 @@ function responsesErrorMessage(code: GatewayResponsesErrorCode): string {
   }
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
+  }
+  if (code === "provider_protocol_unsupported") {
+    return "The selected provider cannot serve Responses API requests.";
   }
   return "Provider request failed.";
 }

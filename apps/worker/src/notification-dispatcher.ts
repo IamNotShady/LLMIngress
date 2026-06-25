@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./job-runner.js";
 
 export type NotificationChannelType = "email" | "webhook";
@@ -61,12 +61,12 @@ export type NotificationDeliveryResult =
       status: "failed";
     };
 
-type NotificationChannelRow = QueryResultRow & {
+type NotificationChannelRow = PostgresQueryResultRow & {
   channel_type: NotificationChannelType;
   id: string;
 };
 
-type ClaimedNotificationEventRow = QueryResultRow & {
+type ClaimedNotificationEventRow = PostgresQueryResultRow & {
   attempt_number: number;
   body: string;
   channel_config: unknown;
@@ -282,7 +282,7 @@ function normalizeNotificationEventInput(input: QueueNotificationEventInput["eve
 }
 
 async function readEnabledNotificationChannels(
-  client: Client,
+  client: PostgresClient,
   channelIds: string[] | undefined,
 ): Promise<NotificationChannelRow[]> {
   if (channelIds && channelIds.length > 0) {
@@ -311,7 +311,7 @@ async function readEnabledNotificationChannels(
 }
 
 async function enqueueNotificationDispatchJob(
-  client: Client,
+  client: PostgresClient,
   input: {
     eventIds: string[];
     jobId: string;
@@ -689,9 +689,9 @@ function stringifyJson(value: unknown): string {
 
 async function withClient<T>(
   databaseUrl: string,
-  operation: (client: Client) => Promise<T>,
+  operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

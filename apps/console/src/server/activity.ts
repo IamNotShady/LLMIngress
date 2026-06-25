@@ -1,8 +1,11 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/activity";
 
 export type ConsoleActivity = {
+  agentKeyPrefix: string | null;
+  agentName: string | null;
   completedAt: Date | null;
   errorCode: string | null;
+  errorMessage: string | null;
   fallbackAttempts: unknown;
   httpStatus: number | null;
   id: string;
@@ -24,6 +27,9 @@ export type ConsoleActivity = {
   status: string;
   totalCostUsd: string | null;
   totalTokens: number | null;
+  virtualModelId: string | null;
+  virtualModelDisplayName: string | null;
+  virtualModelName: string | null;
 };
 
 export type ConsoleActivityFilters = {
@@ -33,8 +39,10 @@ export type ConsoleActivityFilters = {
   providerId?: string;
   providerModelId?: string;
   requestId?: string;
+  requestIdQuery?: string;
   status?: ConsoleActivityStatus;
   to?: Date;
+  virtualModelId?: string;
 };
 
 export type ConsoleActivityListInput = {
@@ -53,8 +61,10 @@ export type ConsoleActivityFiltersInput = {
   providerId?: string | null;
   providerModelId?: string | null;
   requestId?: string | null;
+  requestIdQuery?: string | null;
   status?: string | null;
   to?: Date | string | null;
+  virtualModelId?: string | null;
 };
 
 export type ConsoleFallbackEvent = {
@@ -81,9 +91,12 @@ export type ConsoleActivityDetail = {
 type ConsoleActivityProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 type ConsoleActivityStatus = "canceled" | "failed" | "started" | "succeeded";
 
-type ActivityRow = QueryResultRow & {
+type ActivityRow = PostgresQueryResultRow & {
+  agent_key_prefix: string | null;
+  agent_name: string | null;
   completed_at: Date | null;
   error_code: string | null;
+  error_message: string | null;
   fallback_attempts: unknown;
   http_status: number | null;
   id: string;
@@ -107,9 +120,12 @@ type ActivityRow = QueryResultRow & {
   status: string;
   total_cost_usd: string | null;
   total_tokens: number | null;
+  virtual_model_id: string | null;
+  virtual_model_display_name: string | null;
+  virtual_model_name: string | null;
 };
 
-type FallbackEventRow = QueryResultRow & {
+type FallbackEventRow = PostgresQueryResultRow & {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -151,7 +167,7 @@ export async function listConsoleActivities(
     typeof input === "string"
       ? normalizeActivityListInput({ databaseUrl: input, limit })
       : normalizeActivityListInput(input);
-  const client = new Client({ connectionString: listInput.databaseUrl });
+  const client = new PostgresClient({ connectionString: listInput.databaseUrl });
   await client.connect();
 
   try {
@@ -164,24 +180,42 @@ export async function listConsoleActivities(
                request_activity.model,
                request_activity.status,
                request_activity.error_code,
+               request_activity.error_message,
                request_activity.http_status,
                request_activity.latency_ms,
                request_activity.started_at,
                request_activity.completed_at,
                request_activity.route_reason,
                request_activity.fallback_attempts,
+               request_activity.agent_key_prefix,
+               coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
                request_activity.provider_api_key_prefix,
-               providers.display_name as provider_display_name,
-               providers.provider_key,
+               coalesce(
+                 request_activity.provider_display_name_snapshot,
+                 providers.display_name
+               ) as provider_display_name,
+               coalesce(request_activity.provider_key_snapshot, providers.provider_key)
+                 as provider_key,
                request_activity.provider_model_id::text as provider_model_id,
-               provider_models.display_name as provider_model_display_name,
-               provider_models.model_id as provider_model_name,
+               coalesce(
+                 request_activity.provider_model_display_name_snapshot,
+                 provider_models.display_name
+               ) as provider_model_display_name,
+               coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
+                 as provider_model_name,
+               request_activity.virtual_model_id::text as virtual_model_id,
+               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
+                 as virtual_model_display_name,
+               coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
+                 as virtual_model_name,
                request_usage.input_tokens,
                request_usage.output_tokens,
                request_usage.total_tokens,
                request_costs.total_cost_usd::text
         from request_activity
+        left join agents on agents.id = request_activity.agent_id
+        left join virtual_models on virtual_models.id = request_activity.virtual_model_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -201,6 +235,34 @@ export async function listConsoleActivities(
   }
 }
 
+export async function countConsoleActivities(input: {
+  databaseUrl: string;
+  filters?: ConsoleActivityFiltersInput;
+}): Promise<number> {
+  const {
+    limit: _filterLimit,
+    page: _filterPage,
+    ...filters
+  } = normalizeConsoleActivityFilters(input.filters ?? {});
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
+  await client.connect();
+
+  try {
+    const where = buildActivityWhereClause(filters);
+    const result = await client.query<PostgresQueryResultRow & { count: string }>(
+      `
+        select count(*)::text as count
+        from request_activity
+        ${where.sql}
+      `,
+      where.values,
+    );
+    return Number.parseInt(result.rows[0]?.count ?? "0", 10);
+  } finally {
+    await client.end();
+  }
+}
+
 export async function getConsoleActivityDetail(input: {
   activityId?: string;
   databaseUrl: string;
@@ -210,7 +272,7 @@ export async function getConsoleActivityDetail(input: {
     throw new Error("Activity detail requires activityId or requestId.");
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -222,6 +284,7 @@ export async function getConsoleActivityDetail(input: {
                request_activity.model,
                request_activity.status,
                request_activity.error_code,
+               request_activity.error_message,
                request_activity.http_status,
                request_activity.latency_ms,
                request_activity.started_at,
@@ -230,18 +293,35 @@ export async function getConsoleActivityDetail(input: {
                request_activity.fallback_attempts,
                request_activity.request_metadata,
                request_activity.response_metadata,
+               request_activity.agent_key_prefix,
+               coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
                request_activity.provider_api_key_prefix,
-               providers.display_name as provider_display_name,
-               providers.provider_key,
+               coalesce(
+                 request_activity.provider_display_name_snapshot,
+                 providers.display_name
+               ) as provider_display_name,
+               coalesce(request_activity.provider_key_snapshot, providers.provider_key)
+                 as provider_key,
                request_activity.provider_model_id::text as provider_model_id,
-               provider_models.display_name as provider_model_display_name,
-               provider_models.model_id as provider_model_name,
+               coalesce(
+                 request_activity.provider_model_display_name_snapshot,
+                 provider_models.display_name
+               ) as provider_model_display_name,
+               coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
+                 as provider_model_name,
+               request_activity.virtual_model_id::text as virtual_model_id,
+               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
+                 as virtual_model_display_name,
+               coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
+                 as virtual_model_name,
                request_usage.input_tokens,
                request_usage.output_tokens,
                request_usage.total_tokens,
                request_costs.total_cost_usd::text
         from request_activity
+        left join agents on agents.id = request_activity.agent_id
+        left join virtual_models on virtual_models.id = request_activity.virtual_model_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -304,8 +384,10 @@ export function normalizeConsoleActivityFilters(
     providerId: readTrimmed(input.providerId),
     providerModelId: readTrimmed(input.providerModelId),
     requestId: readTrimmed(input.requestId),
+    requestIdQuery: readTrimmed(input.requestIdQuery),
     status,
     to: readDate(input.to),
+    virtualModelId: readTrimmed(input.virtualModelId),
   };
 }
 
@@ -346,11 +428,17 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
   if (filters.providerModelId) {
     add("request_activity.provider_model_id = ?::uuid", filters.providerModelId);
   }
+  if (filters.virtualModelId) {
+    add("request_activity.virtual_model_id = ?::uuid", filters.virtualModelId);
+  }
   if (filters.agentApiKeyId) {
-    add("request_activity.agent_api_key_id = ?::uuid", filters.agentApiKeyId);
+    add("request_activity.agent_id = ?::uuid", filters.agentApiKeyId);
   }
   if (filters.requestId) {
     add("request_activity.request_id = ?", filters.requestId);
+  }
+  if (filters.requestIdQuery) {
+    add("request_activity.request_id ilike ?", `%${escapeLike(filters.requestIdQuery)}%`);
   }
   if (filters.from) {
     add("request_activity.started_at >= ?", filters.from);
@@ -429,10 +517,19 @@ export function formatConsoleActivityFallbackAttempts(fallbackAttempts: unknown)
   });
 }
 
+export function formatConsoleActivityMetadata(metadata: unknown): string[] {
+  const lines: string[] = [];
+  collectMetadataLines("", metadata, lines);
+  return lines.length > 0 ? lines.sort() : ["No request metadata recorded"];
+}
+
 function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
   return {
+    agentKeyPrefix: row.agent_key_prefix,
+    agentName: row.agent_name,
     completedAt: row.completed_at,
     errorCode: row.error_code,
+    errorMessage: row.error_message,
     fallbackAttempts: row.fallback_attempts,
     httpStatus: row.http_status,
     id: row.id,
@@ -454,6 +551,9 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     status: row.status,
     totalCostUsd: row.total_cost_usd,
     totalTokens: row.total_tokens,
+    virtualModelId: row.virtual_model_id,
+    virtualModelDisplayName: row.virtual_model_display_name,
+    virtualModelName: row.virtual_model_name,
   };
 }
 
@@ -511,6 +611,54 @@ function normalizePage(value: number | string | null | undefined): number {
     return 1;
   }
   return Math.max(1, Math.trunc(parsed));
+}
+
+function escapeLike(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+const hiddenMetadataKeys = new Set([
+  "apiKey",
+  "content",
+  "encryptedKey",
+  "plaintext",
+  "prompt",
+  "promptPreview",
+  "promptText",
+  "response",
+  "responsePreview",
+  "responseText",
+  "secret",
+  "text",
+]);
+
+function collectMetadataLines(prefix: string, value: unknown, lines: string[]): void {
+  if (value === null || value === undefined) {
+    return;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    if (prefix) {
+      lines.push(`${prefix}: ${String(value)}`);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (prefix) {
+      lines.push(`${prefix}: [${value.length} items]`);
+    }
+    return;
+  }
+  if (!isRecord(value)) {
+    return;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    if (hiddenMetadataKeys.has(key)) {
+      continue;
+    }
+    const nextPrefix = prefix ? `${prefix}.${key}` : key;
+    collectMetadataLines(nextPrefix, child, lines);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

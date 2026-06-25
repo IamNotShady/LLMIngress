@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
-import { Client } from "pg";
-import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
-import { createGeminiProviderAdapter } from "./provider-adapters/gemini.js";
+import { PostgresClient } from "@llmingress/db/providers";
+import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIChatRequest,
   type OpenAIAdapterError,
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
-} from "./provider-adapters/openai.js";
-import { createOpenRouterProviderAdapter } from "./provider-adapters/openrouter.js";
+} from "@llmingress/provider/openai";
+import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
+import type { GatewayRouteCandidateSnapshot, GatewayRoutePolicySnapshot } from "./config-reload.js";
 import { recordGatewayProviderTrace } from "./tracing.js";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
@@ -23,8 +23,10 @@ export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
 
 export type FallbackProviderApiKey = {
   apiKey: string;
+  credentialKind?: "api_key" | "oauth";
   keyPrefix?: string;
   providerApiKeyId?: string;
+  providerOAuthId?: string;
 };
 
 export type FallbackFailedAttempt = {
@@ -79,9 +81,28 @@ export function buildFallbackAttemptCandidates(input: {
 
   const fallbackCandidates = input.routePolicy.candidates
     .filter((candidate) => candidate.isFallback)
-    .sort((left, right) => left.candidateOrder - right.candidateOrder);
+    .sort((left, right) =>
+      input.routePolicy.strategy === "quality_first"
+        ? compareFallbackPriceDescending(left, right)
+        : left.candidateOrder - right.candidateOrder,
+    );
 
   return [selectedCandidate, ...fallbackCandidates];
+}
+
+function compareFallbackPriceDescending(
+  left: GatewayRouteCandidateSnapshot,
+  right: GatewayRouteCandidateSnapshot,
+): number {
+  const priceDiff = readCandidatePriceScore(right) - readCandidatePriceScore(left);
+  return priceDiff === 0 ? left.candidateOrder - right.candidateOrder : priceDiff;
+}
+
+function readCandidatePriceScore(candidate: GatewayRouteCandidateSnapshot): number {
+  if (candidate.price.status === "unknown_price") {
+    return Number.NEGATIVE_INFINITY;
+  }
+  return candidate.price.inputUsdPerMillionTokens + candidate.price.outputUsdPerMillionTokens;
 }
 
 export async function executeFallbackChain(
@@ -92,19 +113,13 @@ export async function executeFallbackChain(
   }
 
   const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
-  const geminiAdapter = input.adapter ?? createGeminiProviderAdapter();
   const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
   const failedAttempts: FallbackFailedAttempt[] = [];
   let lastError: OpenAIAdapterError | undefined;
 
   let attemptOrder = 0;
   for (const candidate of input.candidates) {
-    const adapter =
-      candidate.providerKey === "gemini"
-        ? geminiAdapter
-        : candidate.providerKey === "openrouter"
-          ? openRouterAdapter
-          : genericAdapter;
+    const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
     const providerApiKeys = readFallbackProviderApiKeys(candidate);
     const candidateFailedAttempts: FallbackFailedAttempt[] = [];
 
@@ -217,7 +232,7 @@ export async function recordSucceededAttemptInDatabase(
     return;
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(
@@ -256,7 +271,7 @@ export async function recordFailedAttemptInDatabase(
     return;
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(
@@ -315,7 +330,11 @@ async function recordCandidateHealthFailure(
       failedBeforeFirstByte: latestAttempt.failedBeforeFirstByte,
       providerApiKeyPrefix: latestAttempt.providerApiKeyPrefix ?? null,
     },
-    status: "failed" as const,
+    status: classifyProviderFailureStatus({
+      errorCode: latestAttempt.errorCode,
+      errorMessage: latestAttempt.errorMessage,
+      statusCode: latestAttempt.failedBeforeFirstByte ? null : undefined,
+    }),
     trigger: "request_path" as const,
   };
 

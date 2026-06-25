@@ -48,7 +48,6 @@ test("cost report export matches usage breakdown totals", async () => {
     expect(rawReport).not.toContain("sha256:v1:cost-report-secret-hash");
     const report = JSON.parse(rawReport) as {
       breakdowns: {
-        agentApiKeys: unknown[];
         agents: unknown[];
         models: unknown[];
         providerModels: unknown[];
@@ -78,7 +77,6 @@ test("cost report export matches usage breakdown totals", async () => {
       },
     });
     expect(report.breakdowns.agents).toEqual(expectedUsage.agentBreakdowns);
-    expect(report.breakdowns.agentApiKeys).toEqual(expectedUsage.agentApiKeyBreakdowns);
     expect(report.breakdowns.providerModels).toEqual(expectedUsage.breakdowns);
     expect(report.breakdowns.virtualModels).toEqual(expectedUsage.virtualModelBreakdowns);
     expect(report.breakdowns.providers).toEqual(expectedUsage.providerBreakdowns);
@@ -91,12 +89,6 @@ test("cost report export matches usage breakdown totals", async () => {
         requestCount: expectedUsage.requestCount,
         totalCostUsd: expectedUsage.totalCostUsd,
       },
-      status: "succeeded",
-    });
-    await expect(readExportTask(fixture, jobId)).resolves.toMatchObject({
-      export_type: "cost_report",
-      line_count: 1,
-      output_path: outputPath,
       status: "succeeded",
     });
   } finally {
@@ -143,7 +135,7 @@ async function seedCostReportUsageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'cost-fast', 'Cost Fast', true)
     `,
     [ids.virtualModelId],
@@ -154,8 +146,7 @@ async function seedCostReportUsageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_cost82', 'sha256:v1:cost-report-secret-hash', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_cost82', key_hash = 'sha256:v1:cost-report-secret-hash', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -234,11 +225,11 @@ async function insertCostReportRequest(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -276,7 +267,7 @@ async function insertCostReportRequest(
         insert into request_usage (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           virtual_model_id,
           provider_model_id,
           input_tokens,
@@ -302,27 +293,24 @@ async function insertCostReportRequest(
         insert into request_costs (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           provider_model_id,
           total_cost_usd,
-          cost_source
-        )
-        values ($1, $2, $3, $4, $5::numeric, 'estimated')
-      `,
-      [randomUUID(), activityId, input.agentApiKeyId, input.providerModelId, input.costUsd],
-    );
-    await fixture.query(
-      `
-        insert into request_savings (
-          id,
-          request_activity_id,
+          cost_source,
           actual_cost_usd,
           baseline_cost_usd,
           savings_usd
         )
-        values ($1, $2, $3::numeric, ($3::numeric + $4::numeric), $4::numeric)
+        values ($1, $2, $3, $4, $5::numeric, 'estimated', $5::numeric, ($5::numeric + $6::numeric), $6::numeric)
       `,
-      [randomUUID(), activityId, input.costUsd, input.savingsUsd],
+      [
+        randomUUID(),
+        activityId,
+        input.agentApiKeyId,
+        input.providerModelId,
+        input.costUsd,
+        input.savingsUsd,
+      ],
     );
   }
 }
@@ -356,23 +344,6 @@ async function insertCostReportExportJob(
 async function readJobResult(fixture: Fixture, jobId: string) {
   const result = await fixture.query<{ result: unknown; status: string }>(
     "select status, result from jobs where id = $1",
-    [jobId],
-  );
-  return result.rows[0];
-}
-
-async function readExportTask(fixture: Fixture, jobId: string) {
-  const result = await fixture.query<{
-    export_type: string;
-    line_count: number;
-    output_path: string;
-    status: string;
-  }>(
-    `
-      select export_type, status, output_path, line_count
-      from export_tasks
-      where job_id = $1
-    `,
     [jobId],
   );
   return result.rows[0];

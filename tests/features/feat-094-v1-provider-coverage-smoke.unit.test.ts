@@ -2,14 +2,15 @@ import { describe, expect, it } from "vitest";
 import { buildV1ProviderCoverageSmokePlan } from "../support/v1-provider-coverage-smoke";
 
 describe("feat-094 V1 provider coverage smoke", () => {
-  it("plans core remote providers two local providers and all nine long-tail templates", () => {
+  it("plans core remote providers three local providers and supported long-tail templates", () => {
     const plan = buildV1ProviderCoverageSmokePlan("http://127.0.0.1:12345");
 
     expect(plan.providerScenarios.map((scenario) => scenario.id)).toEqual([
       "openai",
       "anthropic",
-      "gemini",
+      "google",
       "openrouter",
+      "ollama",
       "lmstudio",
       "llama_cpp",
     ]);
@@ -35,8 +36,8 @@ describe("feat-094 V1 provider coverage smoke", () => {
       },
       {
         endpoint: "chat_completions",
-        providerKey: "gemini",
-        providerTemplateId: "gemini",
+        providerKey: "google",
+        providerTemplateId: "google",
         providerType: "api_key",
       },
       {
@@ -44,6 +45,12 @@ describe("feat-094 V1 provider coverage smoke", () => {
         providerKey: "openrouter",
         providerTemplateId: "openrouter",
         providerType: "api_key",
+      },
+      {
+        endpoint: "chat_completions",
+        providerKey: "ollama",
+        providerTemplateId: "ollama",
+        providerType: "local",
       },
       {
         endpoint: "chat_completions",
@@ -70,11 +77,6 @@ describe("feat-094 V1 provider coverage smoke", () => {
         id: "xai",
       },
       {
-        baseUrl: "https://api.mistral.ai/v1",
-        displayName: "Mistral",
-        id: "mistral",
-      },
-      {
         baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         displayName: "Qwen",
         id: "qwen",
@@ -88,16 +90,6 @@ describe("feat-094 V1 provider coverage smoke", () => {
         baseUrl: "https://api.minimax.io/v1",
         displayName: "MiniMax",
         id: "minimax",
-      },
-      {
-        baseUrl: "https://api.groq.com/openai/v1",
-        displayName: "Groq",
-        id: "groq",
-      },
-      {
-        baseUrl: "https://api.fireworks.ai/inference/v1",
-        displayName: "Fireworks AI",
-        id: "fireworks",
       },
       {
         baseUrl: "https://api.z.ai/api/paas/v4",

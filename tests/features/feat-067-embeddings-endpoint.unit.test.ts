@@ -4,7 +4,7 @@ import {
   createGatewayEmbeddingsProviderAdapter,
   normalizeOpenAIEmbeddingsRequest,
 } from "../../apps/gateway/src/embeddings";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 
 describe("feat-067 embeddings endpoint", () => {
   it("normalizes embeddings requests and estimates input-only usage metadata", () => {

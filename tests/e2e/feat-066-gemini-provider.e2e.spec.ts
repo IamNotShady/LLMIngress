@@ -12,7 +12,7 @@ const providerApiKey = "gemini-e2e-secret";
 const agentApiKey = "llmi_gemini_gateway_key_066";
 const geminiModelId = "gemini-3.5-flash";
 
-test("gemini adapter maps payload responses errors and routes chat through gateway", async () => {
+test("gemini routes chat through OpenAI-compatible gateway path", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_gemini_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -21,7 +21,7 @@ test("gemini adapter maps payload responses errors and routes chat through gatew
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     await seedGeminiRoute(fixture, {
-      providerBaseUrl: `${server.url}/v1beta?mode=gemini`,
+      providerBaseUrl: `${server.url}/v1beta/openai`,
     });
 
     const gateway = startGatewayProcess({
@@ -54,27 +54,27 @@ test("gemini adapter maps payload responses errors and routes chat through gatew
 
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toMatchObject({
-        choices: [{ message: { content: "fake gemini response", role: "assistant" } }],
-        id: "fake-gemini-response",
-        model: geminiModelId,
+        choices: [{ message: { content: "fake provider response", role: "assistant" } }],
+        id: "fake-provider-response",
         object: "chat.completion",
       });
       expect(server.requests).toHaveLength(1);
       expect(server.requests[0]).toMatchObject({
         bodyJson: {
-          contents: [{ parts: [{ text: "hello through gemini" }], role: "user" }],
-          generationConfig: {
-            maxOutputTokens: 32,
-            temperature: 0.4,
-          },
-          systemInstruction: {
-            parts: [{ text: "Use short answers." }],
-          },
+          max_tokens: 32,
+          messages: [
+            { content: "Use short answers.", role: "system" },
+            { content: "hello through gemini", role: "user" },
+          ],
+          model: geminiModelId,
+          stream: false,
+          temperature: 0.4,
         },
         method: "POST",
-        path: `/v1beta/models/${geminiModelId}:generateContent`,
+        path: "/v1beta/openai/chat/completions",
       });
-      expect(server.requests[0]?.headers["x-goog-api-key"]).toBe(providerApiKey);
+      expect(server.requests[0]?.headers.authorization).toBe(`Bearer ${providerApiKey}`);
+      expect(server.requests[0]?.headers["x-goog-api-key"]).toBeUndefined();
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -118,7 +118,7 @@ async function seedGeminiRoute(
         base_url,
         enabled
       )
-      values ($1, 'api_key', 'gemini', 'gemini', 'Google Gemini', $2, true)
+      values ($1, 'api_key', 'google', 'google', 'Google Gemini', $2, true)
     `,
     [providerId, input.providerBaseUrl],
   );
@@ -153,7 +153,7 @@ async function seedGeminiRoute(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'gemini-coding', 'Gemini Coding', true)
     `,
     [virtualModelId],
@@ -181,15 +181,7 @@ async function seedGeminiRoute(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -201,7 +193,7 @@ async function seedGeminiRoute(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [agentApiKeyId, virtualModelId],

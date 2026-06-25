@@ -6,7 +6,7 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
-test("agent crud works and delete with active dependencies is blocked", async ({ browser }) => {
+test("agent crud works and delete with request attribution soft-deletes", async ({ browser }) => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_agent_crud_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -34,33 +34,33 @@ test("agent crud works and delete with active dependencies is blocked", async ({
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
+          await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
+          await page.getByRole("link", { name: "Back to dashboard" }).click();
 
-          await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
-          await expect(page.getByText("Type: coding")).toBeVisible();
+          await expect(page.getByRole("row", { name: /Codex CLI/ })).toBeVisible();
 
           await openRow(page, "Codex");
           await page.getByLabel("Edit agent name").fill("Codex CLI");
           await page.getByLabel("Edit agent type").selectOption("terminal");
-          await page.getByRole("button", { name: "Save agent" }).click();
+          await page.getByRole("button", { exact: true, name: "Save" }).click();
 
-          await expect(page.getByRole("heading", { name: "Codex CLI" })).toBeVisible();
-          await expect(page.getByText("Type: terminal")).toBeVisible();
+          await expect(page.getByRole("row", { name: /Codex CLI Terminal/ })).toBeVisible();
 
-          await openRow(page, "Codex CLI");
-          await page.getByRole("button", { name: "Delete agent" }).click();
-          await expect(page.getByText("No agents configured.")).toBeVisible();
+          await page
+            .getByRole("row", { name: /Codex CLI Terminal/ })
+            .getByRole("link", { name: "Delete" })
+            .click();
+          await page.getByRole("button", { name: "Delete" }).click();
+          await expect(page.getByText("No agents yet")).toBeVisible();
 
           const protectedAgents = await insertProtectedAgents(fixture);
           await page.reload();
-          await expect(page.getByRole("heading", { name: "Active Key Agent" })).toBeVisible();
-          await expect(page.getByRole("heading", { name: "Attributed Agent" })).toBeVisible();
+          await expect(page.getByRole("row", { name: /Active Key Agent/ })).toBeVisible();
+          await expect(page.getByRole("row", { name: /Attributed Agent/ })).toBeVisible();
 
-          await expectAgentActionError(page, protectedAgents.activeKeyAgentId, /active API keys/i);
-          await expectAgentActionError(
-            page,
-            protectedAgents.attributedAgentId,
-            /request attribution/i,
-          );
+          await deleteAgentByApi(page, protectedAgents.attributedAgentId);
+          await page.reload();
+          await expect(page.getByRole("row", { name: /Attributed Agent/ })).toHaveCount(0);
         } finally {
           await context.close();
         }
@@ -83,70 +83,58 @@ type ConsoleProcess = {
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 type ProtectedAgents = {
-  activeKeyAgentId: string;
   attributedAgentId: string;
 };
 
 async function insertProtectedAgents(fixture: Fixture): Promise<ProtectedAgents> {
   const activeKeyAgentId = randomUUID();
   const attributedAgentId = randomUUID();
-  const attributedApiKeyId = randomUUID();
 
   await fixture.query(
     `
-      insert into agents (id, name, agent_type, enabled)
-      values ($1, 'Active Key Agent', 'coding', true),
-             ($2, 'Attributed Agent', 'desktop', true)
+      insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
+      values ($1, 'Active Key Agent', 'coding', 'active26', 'hash-active-26', true),
+             ($2, 'Attributed Agent', 'desktop', 'attr26', 'hash-attributed-26', false)
     `,
     [activeKeyAgentId, attributedAgentId],
-  );
-  await fixture.query(
-    `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, enabled)
-      values ($1, $2, 'active26', 'hash-active-26', true),
-             ($3, $4, 'attr26', 'hash-attributed-26', false)
-    `,
-    [randomUUID(), activeKeyAgentId, attributedApiKeyId, attributedAgentId],
   );
   await fixture.query(
     `
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
-        agent_api_key_prefix,
+        agent_id,
+        agent_key_prefix,
         protocol,
         status
       )
       values ($1, $2, $3, 'attr26', 'chat_completions', 'succeeded')
     `,
-    [randomUUID(), `request-${randomUUID()}`, attributedApiKeyId],
+    [randomUUID(), `request-${randomUUID()}`, attributedAgentId],
   );
 
-  return { activeKeyAgentId, attributedAgentId };
+  return { attributedAgentId };
 }
 
-async function expectAgentActionError(
-  page: Page,
-  agentId: string,
-  errorPattern: RegExp,
-): Promise<void> {
+async function deleteAgentByApi(page: Page, agentId: string): Promise<void> {
   const result = await page.evaluate(
     async ({ id }) => {
       const body = new FormData();
       body.set("action", "delete");
       body.set("id", id);
-      const response = await fetch("/api/agents", { body, method: "POST" });
+      const response = await fetch("/api/agents", {
+        body,
+        method: "POST",
+        redirect: "manual",
+      });
       return {
-        body: await response.json(),
         status: response.status,
       };
     },
     { id: agentId },
   );
 
-  expect(result.status).toBe(400);
-  expect(result.body).toEqual({ error: expect.stringMatching(errorPattern) });
+  expect([0, 303]).toContain(result.status);
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

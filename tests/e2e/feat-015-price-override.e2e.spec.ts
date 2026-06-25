@@ -30,22 +30,32 @@ test("console shows unknown current price and manual price override changes subs
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
-          await page.goto(`${baseUrl}/pricing`);
+          await page.goto(`${baseUrl}/providers`);
+          await expect(
+            page.getByRole("heading", { level: 1, name: "Providers & Models" }),
+          ).toBeVisible();
+          await expect(
+            page.getByRole("heading", { name: "Model library - OpenAI Pricing Provider" }),
+          ).toBeVisible();
+          await expect(page.getByRole("cell", { name: "Unknown" }).first()).toBeVisible();
 
-          await expect(page.getByRole("heading", { name: "Pricing" })).toBeVisible();
-          await expect(page.getByText("Unknown price")).toBeVisible();
-          await expect(page.getByText("Unknown input price")).toBeVisible();
-          await expect(page.getByText("Unknown output price")).toBeVisible();
-          await expect(page.getByText("Sample estimate: unavailable")).toBeVisible();
+          const response = await context.request.post(`${baseUrl}/api/prices/override`, {
+            form: {
+              inputUsdPerMillionTokens: "9",
+              modelId: "gpt-4.1-mini",
+              outputUsdPerMillionTokens: "10",
+              providerKey: "openai",
+              redirectModel: "gpt-4.1-mini",
+            },
+          });
+          expect(response.ok()).toBe(true);
 
-          await page.getByLabel("Override input price").fill("9");
-          await page.getByLabel("Override output price").fill("10");
-          await page.getByRole("button", { name: "Save price override" }).click();
-
-          await expect(page.getByText("Manual override")).toBeVisible();
-          await expect(page.getByText("$9.00 / 1M input")).toBeVisible();
-          await expect(page.getByText("$10.00 / 1M output")).toBeVisible();
-          await expect(page.getByText("Sample estimate: $19.00")).toBeVisible();
+          await expect
+            .poll(async () => readManualPriceOverride(fixture))
+            .toEqual({
+              inputUsdPerMillionTokens: 9,
+              outputUsdPerMillionTokens: 10,
+            });
           await expect.poll(async () => countPriceOverrideConfigChanges(fixture)).toBe(1);
         } finally {
           await context.close();
@@ -70,15 +80,46 @@ type PriceOverrideConfigChangeCount = {
   count: number;
 };
 
+type ManualPriceOverrideRow = {
+  input_usd_per_million_tokens: string | null;
+  output_usd_per_million_tokens: string | null;
+};
+
+async function readManualPriceOverride(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+): Promise<{
+  inputUsdPerMillionTokens: number | null;
+  outputUsdPerMillionTokens: number | null;
+}> {
+  const result = await fixture.query<ManualPriceOverrideRow>(
+    `
+      select manual_input_usd_per_million_tokens::text as input_usd_per_million_tokens,
+             manual_output_usd_per_million_tokens::text as output_usd_per_million_tokens
+      from provider_models
+      where model_id = 'gpt-4.1-mini'
+    `,
+  );
+  const row = result.rows[0];
+  return {
+    inputUsdPerMillionTokens: row?.input_usd_per_million_tokens
+      ? Number(row.input_usd_per_million_tokens)
+      : null,
+    outputUsdPerMillionTokens: row?.output_usd_per_million_tokens
+      ? Number(row.output_usd_per_million_tokens)
+      : null,
+  };
+}
+
 async function countPriceOverrideConfigChanges(
   fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
 ): Promise<number> {
   const result = await fixture.query<PriceOverrideConfigChangeCount>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where source = 'console'
-        and changed_table = 'provider_models'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'source' = 'console'
+        and change.value->>'table' = 'provider_models'
     `,
   );
   return result.rows[0]?.count ?? 0;

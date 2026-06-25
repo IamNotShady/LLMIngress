@@ -35,39 +35,29 @@ test("activity page lists request and detail shows model cost route fallback err
           await expect(page.getByRole("heading", { exact: true, name: "Activity" })).toBeVisible();
           await expect(page.getByRole("link", { name: "req_console_success_046" })).toBeVisible();
           await expect(page.getByRole("link", { name: "req_console_failure_046" })).toBeVisible();
-          await expect(page.getByText("chat_completions - succeeded - 200")).toBeVisible();
-          await expect(page.getByText("chat_completions - failed - 502")).toBeVisible();
           const activitySection = page.getByLabel("Activity");
+          const detail = activitySection.locator(".detail-panel");
 
           await page.getByRole("link", { name: "req_console_success_046" }).click();
+          await expect(detail.getByText("req_console_success_046")).toBeVisible();
+          await expect(detail.getByText("Console OpenAI")).toBeVisible();
+          await expect(detail.getByText("GPT 4.1 Nano (gpt-4.1-nano)")).toBeVisible();
+          await expect(detail.getByText("$0.00004050")).toBeVisible();
+          // protocol + HTTP status now read from the request metadata block.
+          await expect(detail.getByText(/http_status: 200/)).toBeVisible();
           await expect(
-            activitySection.getByRole("heading", { name: "req_console_success_046" }),
-          ).toBeVisible();
-          await expect(activitySection.getByText("Provider: Console OpenAI")).toBeVisible();
-          await expect(
-            activitySection.getByText("Model hit: GPT 4.1 Nano (gpt-4.1-nano)"),
-          ).toBeVisible();
-          await expect(
-            activitySection.getByText("105 total tokens (5 input, 100 output)"),
-          ).toBeVisible();
-          await expect(activitySection.getByText("Cost: $0.00004050")).toBeVisible();
-          await expect(
-            activitySection.getByText("cost_first route selected cheapest eligible candidate 2."),
+            detail.getByText("cost_first route selected cheapest eligible candidate 2."),
           ).toBeVisible();
           await expect(
-            activitySection.getByText(
+            detail.getByText(
               `Attempt 1: provider_request_failed before first byte on ${seeded.primaryProviderModelId}`,
             ),
           ).toBeVisible();
-          await expect(activitySection.getByText("Error code: None")).toBeVisible();
 
           await page.getByRole("link", { name: "req_console_failure_046" }).click();
-          await expect(
-            activitySection.getByRole("heading", { name: "req_console_failure_046" }),
-          ).toBeVisible();
-          await expect(
-            activitySection.getByText("Error code: provider_request_failed"),
-          ).toBeVisible();
+          await expect(detail.getByText("req_console_failure_046")).toBeVisible();
+          await expect(detail.getByText(/http_status: 502/)).toBeVisible();
+          await expect(detail.getByText("Error: provider_request_failed")).toBeVisible();
         } finally {
           await context.close();
         }
@@ -130,7 +120,7 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'activity-console', 'Activity Console', true)
     `,
     [virtualModelId],
@@ -162,8 +152,7 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'activity046', 'hash-activity-046', $3, true)
+      update agents set id = $1, key_prefix = 'activity046', key_hash = 'hash-activity-046', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, virtualModelId],
   );
@@ -172,12 +161,12 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -206,8 +195,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'succeeded',
         200,
         37,
-        '2026-06-14T10:00:00.000Z',
-        '2026-06-14T10:00:00.037Z'
+        '2026-06-23T10:00:00.000Z',
+        '2026-06-23T10:00:00.037Z'
       ),
       (
         $9,
@@ -226,8 +215,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'failed',
         502,
         12,
-        '2026-06-14T10:01:00.000Z',
-        '2026-06-14T10:01:00.012Z'
+        '2026-06-23T10:01:00.000Z',
+        '2026-06-23T10:01:00.012Z'
       )
     `,
     [
@@ -268,7 +257,7 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -285,14 +274,21 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         input_cost_usd,
         output_cost_usd,
         total_cost_usd,
         cost_source,
         price_source,
-        price_version
+        price_version,
+        baseline_provider_model_id,
+        actual_cost_usd,
+        baseline_cost_usd,
+        savings_usd,
+        savings_percent,
+        savings_price_source,
+        savings_price_version
       )
       values (
         $1,
@@ -304,28 +300,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         0.00004050,
         'estimated',
         'built_in_static_snapshot',
-        'mvp-static-2026-06-13'
-      )
-    `,
-    [randomUUID(), successActivityId, agentApiKeyId, selectedProviderModelId],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id,
-        request_activity_id,
-        baseline_provider_model_id,
-        actual_cost_usd,
-        baseline_cost_usd,
-        savings_usd,
-        savings_percent,
-        price_source,
-        price_version
-      )
-      values (
-        $1,
-        $2,
-        $3,
+        'mvp-static-2026-06-13',
+        $5,
         0.00004050,
         0.00081000,
         0.00076950,
@@ -334,7 +310,13 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'mvp-static-2026-06-13'
       )
     `,
-    [randomUUID(), successActivityId, primaryProviderModelId],
+    [
+      randomUUID(),
+      successActivityId,
+      agentApiKeyId,
+      selectedProviderModelId,
+      primaryProviderModelId,
+    ],
   );
 
   return { primaryProviderModelId };

@@ -6,7 +6,7 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
-test("provider key plaintext once on create and rotate ciphertext stored metadata only after reload", async ({
+test("provider key plaintext once and repeated saves add multiple stored keys", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -27,7 +27,7 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
         const context = await browser.newContext();
         const page = await context.newPage();
         const firstSecret = "sk-live-provider-secret-017";
-        const rotatedSecret = "sk-rotated-provider-secret-017";
+        const secondSecret = "sk-second-provider-secret-017";
 
         try {
           await waitForConsole(baseUrl, consoleApp);
@@ -35,15 +35,15 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "New provider");
-          await page.getByLabel("Provider key").fill("OpenAI");
+          await page.getByLabel("Provider type", { exact: true }).selectOption({ label: "OpenAI" });
           await page.getByLabel("Provider display name").fill("OpenAI");
-          await page.getByLabel("Provider base URL").fill("https://api.openai.com/v1");
           await page.getByRole("button", { name: "Create provider" }).click();
-          await expect(page.getByRole("heading", { name: "OpenAI" })).toBeVisible();
+          await expect(page.getByRole("row", { name: /OpenAI/ })).toBeVisible();
 
-          await openRow(page, "OpenAI");
-          await page.getByLabel("Provider API key").fill(firstSecret);
-          await page.getByRole("button", { name: "Store provider API key" }).click();
+          await saveProviderApiKey(page, "OpenAI", firstSecret, {
+            label: "Primary provider key",
+            priority: "5",
+          });
 
           await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
           await expect(page.getByText(firstSecret)).toBeVisible();
@@ -52,7 +52,7 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           expect(createdRows).toHaveLength(1);
           expect(createdRows[0]).toMatchObject({
             encrypted_contains_first_secret: false,
-            encrypted_contains_rotated_secret: false,
+            encrypted_contains_second_secret: false,
             has_created_at: true,
             has_rotated_at: false,
             key_prefix: "sk-live-",
@@ -62,37 +62,62 @@ test("provider key plaintext once on create and rotate ciphertext stored metadat
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
           await openRow(page, "OpenAI");
-          await expect(page.getByText("Provider API key prefix: sk-live-")).toBeVisible();
+          await expect(
+            page.getByRole("cell", { exact: true, name: "Primary provider key" }),
+          ).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "5" })).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "sk-live-" })).toHaveCount(0);
 
           await page.reload();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
           await openRow(page, "OpenAI");
-          await expect(page.getByText("Provider API key prefix: sk-live-")).toBeVisible();
-
-          await page.getByLabel("Provider API key").fill(rotatedSecret);
-          await page.getByRole("button", { name: "Rotate provider API key" }).click();
-
           await expect(
-            page.getByRole("heading", { name: "Provider API key rotated" }),
+            page.getByRole("cell", { exact: true, name: "Primary provider key" }),
           ).toBeVisible();
-          await expect(page.getByText(rotatedSecret)).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "5" })).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "sk-live-" })).toHaveCount(0);
 
-          const rotatedRows = await readProviderKeyRows(fixture);
-          expect(rotatedRows).toHaveLength(1);
-          expect(rotatedRows[0]).toMatchObject({
-            encrypted_contains_first_secret: false,
-            encrypted_contains_rotated_secret: false,
-            has_created_at: true,
-            has_rotated_at: true,
-            key_prefix: "sk-rotat",
-            provider_key: "openai",
+          await saveProviderApiKey(page, "OpenAI", secondSecret, {
+            label: "Fallback provider key",
+            priority: "10",
           });
+
+          await expect(page.getByRole("heading", { name: "Provider API key saved" })).toBeVisible();
+          await expect(page.getByText(secondSecret)).toBeVisible();
+
+          const savedRows = await readProviderKeyRows(fixture);
+          expect(savedRows).toHaveLength(2);
+          expect(savedRows).toEqual([
+            expect.objectContaining({
+              encrypted_contains_first_secret: false,
+              encrypted_contains_second_secret: false,
+              has_created_at: true,
+              has_rotated_at: false,
+              key_prefix: "sk-live-",
+              provider_key: "openai",
+            }),
+            expect.objectContaining({
+              encrypted_contains_first_secret: false,
+              encrypted_contains_second_secret: false,
+              has_created_at: true,
+              has_rotated_at: false,
+              key_prefix: "sk-secon",
+              provider_key: "openai",
+            }),
+          ]);
 
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstSecret)).toHaveCount(0);
-          await expect(page.getByText(rotatedSecret)).toHaveCount(0);
+          await expect(page.getByText(secondSecret)).toHaveCount(0);
           await openRow(page, "OpenAI");
-          await expect(page.getByText("Provider API key prefix: sk-rotat")).toBeVisible();
+          await expect(
+            page.getByRole("cell", { exact: true, name: "Primary provider key" }),
+          ).toBeVisible();
+          await expect(
+            page.getByRole("cell", { exact: true, name: "Fallback provider key" }),
+          ).toBeVisible();
+          await expect(page.getByRole("cell", { exact: true, name: "sk-live-" })).toHaveCount(0);
+          await expect(page.getByRole("cell", { exact: true, name: "sk-secon" })).toHaveCount(0);
         } finally {
           await context.close();
         }
@@ -114,12 +139,29 @@ type ConsoleProcess = {
 
 type ProviderKeyStorageRow = {
   encrypted_contains_first_secret: boolean;
-  encrypted_contains_rotated_secret: boolean;
+  encrypted_contains_second_secret: boolean;
   has_created_at: boolean;
   has_rotated_at: boolean;
   key_prefix: string;
   provider_key: string;
 };
+
+async function saveProviderApiKey(
+  page: Page,
+  providerName: string,
+  plaintext: string,
+  metadata: { label: string; priority: string },
+): Promise<void> {
+  await openRow(page, providerName);
+  await page.getByRole("link", { name: "Add API key" }).click();
+  await page
+    .getByRole("dialog", { name: /API key/ })
+    .getByRole("textbox", { name: "Provider API key" })
+    .fill(plaintext);
+  await page.getByLabel("Label").fill(metadata.label);
+  await page.getByLabel("Priority").fill(metadata.priority);
+  await page.getByRole("button", { name: "Save API key" }).click();
+}
 
 async function readProviderKeyRows(
   fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
@@ -131,10 +173,10 @@ async function readProviderKeyRows(
              k.created_at is not null as has_created_at,
              k.rotated_at is not null as has_rotated_at,
              k.encrypted_key::text like '%sk-live-provider-secret-017%' as encrypted_contains_first_secret,
-             k.encrypted_key::text like '%sk-rotated-provider-secret-017%' as encrypted_contains_rotated_secret
+             k.encrypted_key::text like '%sk-second-provider-secret-017%' as encrypted_contains_second_secret
       from provider_api_keys k
       join providers p on p.id = k.provider_id
-      order by p.provider_key
+      order by p.provider_key, k.created_at, k.id
     `,
   );
   return result.rows;

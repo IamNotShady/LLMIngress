@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   calculateTokenCostUsd,
   type ManualPriceOverride,
@@ -6,7 +5,7 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 
 export type BillingReconciliationJobHandlerOptions = {
@@ -61,7 +60,7 @@ type NormalizedBillingReconciliationPayload = {
   requestIds: string[];
 };
 
-type BillingReconciliationCandidateRow = QueryResultRow & {
+type BillingReconciliationCandidateRow = PostgresQueryResultRow & {
   activity_id: string;
   baseline_cost_usd: string | null;
   cached_input_tokens: number;
@@ -80,7 +79,6 @@ type BillingReconciliationCandidateRow = QueryResultRow & {
   provider_key: string;
   request_cost_id: string;
   request_id: string;
-  request_savings_id: string | null;
   savings_usd: string | null;
   synced_at: Date | null;
   synced_cached_input_usd_per_million_tokens: string | null;
@@ -105,35 +103,18 @@ export function createBillingReconciliationJobHandler(
   return async (job) => {
     const observedAt = now();
     const payload = normalizeBillingReconciliationPayload(job.payload);
-    const runId = randomUUID();
-    const client = new Client({ connectionString: options.databaseUrl });
+    const client = new PostgresClient({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
       await client.query("begin");
-      await insertReconciliationRun(client, {
-        jobId: job.id,
-        runId,
-        startedAt: observedAt,
-        trigger: job.trigger,
-      });
-
       const counts = await reconcileCandidateRequests(client, {
         observedAt,
         payload,
-        runId,
-      });
-      await completeReconciliationRun(client, {
-        completedAt: observedAt,
-        counts,
-        runId,
       });
       await client.query("commit");
 
-      return {
-        runId,
-        ...counts,
-      };
+      return counts;
     } catch (error) {
       await client.query("rollback").catch(() => undefined);
       throw error;
@@ -280,11 +261,10 @@ function normalizeProviderCost(rawValue: unknown): {
 }
 
 async function reconcileCandidateRequests(
-  client: Client,
+  client: PostgresClient,
   input: {
     observedAt: Date;
     payload: NormalizedBillingReconciliationPayload;
-    runId: string;
   },
 ): Promise<BillingReconciliationCounts> {
   const candidates = await readReconciliationCandidates(client, input.payload.requestIds);
@@ -329,18 +309,13 @@ async function reconcileCandidateRequests(
     } else {
       counts.skippedRequestCount += 1;
     }
-    await insertReconciliationItem(client, {
-      candidate,
-      runId: input.runId,
-      update,
-    });
   }
 
   return counts;
 }
 
 async function readReconciliationCandidates(
-  client: Client,
+  client: PostgresClient,
   requestIds: string[],
 ): Promise<BillingReconciliationCandidateRow[]> {
   const result = await client.query<BillingReconciliationCandidateRow>(
@@ -359,9 +334,8 @@ async function readReconciliationCandidates(
              request_costs.cost_source,
              request_costs.price_source,
              request_costs.price_version,
-             request_savings.id::text as request_savings_id,
-             request_savings.baseline_cost_usd::text,
-             request_savings.savings_usd::text,
+             request_costs.baseline_cost_usd::text,
+             request_costs.savings_usd::text,
              provider_models.manual_input_usd_per_million_tokens::text
                as manual_input_usd_per_million_tokens,
              provider_models.manual_cached_input_usd_per_million_tokens::text
@@ -369,43 +343,23 @@ async function readReconciliationCandidates(
              provider_models.manual_output_usd_per_million_tokens::text
                as manual_output_usd_per_million_tokens,
              provider_models.manual_price_updated_at as manual_updated_at,
-             latest_provider_model_price.input_usd_per_million_tokens::text
+             provider_models.synced_input_usd_per_million_tokens::text
                as synced_input_usd_per_million_tokens,
-             latest_provider_model_price.cached_input_usd_per_million_tokens::text
+             provider_models.synced_cached_input_usd_per_million_tokens::text
                as synced_cached_input_usd_per_million_tokens,
-             latest_provider_model_price.output_usd_per_million_tokens::text
+             provider_models.synced_output_usd_per_million_tokens::text
                as synced_output_usd_per_million_tokens,
-             latest_provider_model_price.price_version
+             provider_models.synced_price_version
                as synced_price_version,
-             latest_provider_model_price.source_url
+             provider_models.synced_price_source_url
                as synced_source_url,
-             latest_provider_model_price.synced_at
+             provider_models.synced_price_synced_at
                as synced_at
       from request_activity
       join request_usage on request_usage.request_activity_id = request_activity.id
       join request_costs on request_costs.request_activity_id = request_activity.id
-      left join request_savings on request_savings.request_activity_id = request_activity.id
       join provider_models on provider_models.id = request_usage.provider_model_id
       join providers on providers.id = provider_models.provider_id
-      left join lateral (
-        select input_usd_per_million_tokens,
-               cached_input_usd_per_million_tokens,
-               output_usd_per_million_tokens,
-               price_version,
-               source_url,
-               synced_at
-        from provider_models_price
-        where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-          and provider_models_price.model_id = provider_models.model_id
-        order by case provider_models_price.source
-                   when 'models.dev' then 0
-                   when 'litellm' then 1
-                   else 2
-                 end,
-                 synced_at desc,
-                 updated_at desc
-        limit 1
-      ) latest_provider_model_price on true
       where request_activity.status = 'succeeded'
         and ($1::text[] is null or request_activity.request_id = any($1::text[]))
       order by request_activity.created_at, request_activity.id
@@ -416,56 +370,8 @@ async function readReconciliationCandidates(
   return result.rows;
 }
 
-async function insertReconciliationRun(
-  client: Client,
-  input: { jobId: string; runId: string; startedAt: Date; trigger: string },
-): Promise<void> {
-  await client.query(
-    `
-      insert into billing_reconciliation_runs (
-        id,
-        job_id,
-        trigger,
-        status,
-        started_at
-      )
-      values ($1, $2, $3, 'running', $4::timestamptz)
-    `,
-    [input.runId, input.jobId, input.trigger, input.startedAt.toISOString()],
-  );
-}
-
-async function completeReconciliationRun(
-  client: Client,
-  input: {
-    completedAt: Date;
-    counts: BillingReconciliationCounts;
-    runId: string;
-  },
-): Promise<void> {
-  await client.query(
-    `
-      update billing_reconciliation_runs
-      set status = 'succeeded',
-          scanned_request_count = $2,
-          updated_request_count = $3,
-          skipped_request_count = $4,
-          completed_at = $5::timestamptz,
-          updated_at = $5::timestamptz
-      where id = $1
-    `,
-    [
-      input.runId,
-      input.counts.scannedRequestCount,
-      input.counts.updatedRequestCount,
-      input.counts.skippedRequestCount,
-      input.completedAt.toISOString(),
-    ],
-  );
-}
-
 async function updateReconciledCostAndSavings(
-  client: Client,
+  client: PostgresClient,
   input: {
     candidate: BillingReconciliationCandidateRow;
     observedAt: Date;
@@ -481,7 +387,12 @@ async function updateReconciledCostAndSavings(
           cost_source = $5,
           price_source = $6,
           price_version = $7,
-          reconciled_at = $8::timestamptz
+          reconciled_at = $8::timestamptz,
+          actual_cost_usd = $9,
+          savings_usd = $10,
+          savings_percent = $11,
+          savings_price_source = $12,
+          savings_price_version = $13
       where id = $1
     `,
     [
@@ -493,104 +404,11 @@ async function updateReconciledCostAndSavings(
       input.update.newCost.priceSource,
       input.update.newCost.priceVersion,
       input.observedAt.toISOString(),
-    ],
-  );
-
-  if (!input.candidate.request_savings_id) {
-    return;
-  }
-
-  await client.query(
-    `
-      update request_savings
-      set actual_cost_usd = $2,
-          savings_usd = $3,
-          savings_percent = $4,
-          price_source = $5,
-          price_version = $6
-      where id = $1
-    `,
-    [
-      input.candidate.request_savings_id,
       input.update.newSavings.actualCostUsd,
       input.update.newSavings.savingsUsd,
       input.update.newSavings.savingsPercent,
       input.update.newCost.priceSource,
       input.update.newCost.priceVersion,
-    ],
-  );
-}
-
-async function insertReconciliationItem(
-  client: Client,
-  input: {
-    candidate: BillingReconciliationCandidateRow;
-    runId: string;
-    update: BillingReconciliationUpdate;
-  },
-): Promise<void> {
-  await client.query(
-    `
-      insert into billing_reconciliation_items (
-        id,
-        run_id,
-        request_activity_id,
-        request_cost_id,
-        request_savings_id,
-        reconciliation_source,
-        status,
-        previous_cost_source,
-        new_cost_source,
-        previous_total_cost_usd,
-        new_total_cost_usd,
-        previous_price_source,
-        new_price_source,
-        previous_price_version,
-        new_price_version,
-        previous_savings_usd,
-        new_savings_usd,
-        metadata
-      )
-      values (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        $11,
-        $12,
-        $13,
-        $14,
-        $15,
-        $16,
-        $17,
-        $18::jsonb
-      )
-    `,
-    [
-      randomUUID(),
-      input.runId,
-      input.candidate.activity_id,
-      input.candidate.request_cost_id,
-      input.candidate.request_savings_id,
-      input.update.reconciliationSource,
-      input.update.itemStatus,
-      input.candidate.cost_source,
-      input.update.newCost.costSource,
-      parseNullableNumber(input.candidate.total_cost_usd),
-      input.update.newCost.totalCostUsd,
-      input.candidate.price_source,
-      input.update.newCost.priceSource,
-      input.candidate.price_version,
-      input.update.newCost.priceVersion,
-      parseNullableNumber(input.candidate.savings_usd),
-      input.update.newSavings.savingsUsd,
-      JSON.stringify(input.update.skipReason ? { skipReason: input.update.skipReason } : {}),
     ],
   );
 }

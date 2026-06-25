@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { defaultAgentLimitFormValues } from "../../apps/console/src/server/agent-limits";
 import { normalizeOpenAIChatCompletionRequest } from "../../apps/gateway/src/chat-completions";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { buildOpenAIChatCompletionRequestMetadata } from "../../apps/gateway/src/request-metadata";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 import {
   buildHermesLikeOpenAICompatibleChatBody,
   realAgentOpenAICompatibleSmokeNames,

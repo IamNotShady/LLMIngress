@@ -14,9 +14,10 @@ test("runtime page shows heartbeat config version reload result and recent error
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedRuntimePageData(fixture);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
+      await seedRuntimePageData(fixture);
+
       const consoleApp = startConsoleProcess({
         databaseUrl: fixture.databaseUrl,
         port: await getFreePort(),
@@ -31,28 +32,39 @@ test("runtime page shows heartbeat config version reload result and recent error
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
-          const runtimeSection = page.getByLabel("Runtime");
+          await page.goto(`${baseUrl}/runtime`);
 
+          const runtimeSection = page.getByLabel("Gateway Runtime");
           await expect(
-            runtimeSection.getByRole("heading", { exact: true, name: "Runtime" }),
+            page.getByRole("heading", { level: 1, name: "Gateway Runtime" }),
           ).toBeVisible();
-          await expect(runtimeSection.getByText("Gateway: gateway-runtime-048")).toBeVisible();
-          await expect(runtimeSection.getByText("Heartbeat: Healthy")).toBeVisible();
-          await expect(runtimeSection.getByText("Gateway status: degraded")).toBeVisible();
-          await expect(runtimeSection.getByText("Applied config version: v7")).toBeVisible();
-          await expect(runtimeSection.getByText("Target config version: v8")).toBeVisible();
+          // Status cards: gateway status + heartbeat.
+          await expect(
+            runtimeSection
+              .locator(".stat-card", { hasText: "Gateway status" })
+              .locator(".stat-card-value"),
+          ).toHaveText("degraded");
+          await expect(
+            runtimeSection
+              .locator(".stat-card", { hasText: "Heartbeat" })
+              .locator(".stat-card-value"),
+          ).toHaveText("Healthy");
+          // Config versions + reload result.
+          await expect(runtimeSection.getByText("v7", { exact: true })).toBeVisible();
+          await expect(runtimeSection.getByText("v8", { exact: true })).toBeVisible();
           await expect(
             runtimeSection.getByText(/Reload failed at .*provider key missing/),
           ).toBeVisible();
+          // Recent runtime errors table rows (source + code + message).
           await expect(
-            runtimeSection.getByText(
-              /fatal gateway\/gateway-runtime-048: config_reload_failed - Provider key missing at /,
-            ),
+            runtimeSection.getByRole("row", {
+              name: /gateway.*config_reload_failed.*Provider key missing/,
+            }),
           ).toBeVisible();
           await expect(
-            runtimeSection.getByText(
-              /warning worker\/budget-cleaner: reservation_cleanup_delayed - Cleanup lag high at /,
-            ),
+            runtimeSection.getByRole("row", {
+              name: /worker.*reservation_cleanup_delayed.*Cleanup lag high/,
+            }),
           ).toBeVisible();
         } finally {
           await context.close();

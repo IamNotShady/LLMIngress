@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/activity";
 
 export type ConsoleUsageWindow = "24h" | "7d" | "30d";
 
@@ -25,7 +25,6 @@ export type ConsoleUsageDimensionBreakdown = {
 };
 
 export type ConsoleUsageSummary = {
-  agentApiKeyBreakdowns: ConsoleUsageDimensionBreakdown[];
   agentBreakdowns: ConsoleUsageDimensionBreakdown[];
   breakdowns: ConsoleUsageBreakdown[];
   failureCount: number;
@@ -41,7 +40,7 @@ export type ConsoleUsageSummary = {
   window: ConsoleUsageWindow;
 };
 
-type UsageSummaryRow = QueryResultRow & {
+type UsageSummaryRow = PostgresQueryResultRow & {
   failure_count: number;
   input_tokens: string | null;
   output_tokens: string | null;
@@ -51,7 +50,7 @@ type UsageSummaryRow = QueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageBreakdownRow = QueryResultRow & {
+type UsageBreakdownRow = PostgresQueryResultRow & {
   failure_count: number;
   model_id: string | null;
   model_label: string | null;
@@ -63,7 +62,7 @@ type UsageBreakdownRow = QueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageDimensionBreakdownRow = QueryResultRow & {
+type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
   failure_count: number;
   id: string | null;
   label: string | null;
@@ -86,7 +85,7 @@ export async function getConsoleUsageSummary(input: {
   window: ConsoleUsageWindow;
 }): Promise<ConsoleUsageSummary> {
   const windowStart = getUsageWindowStart(input.now ?? new Date(), input.window);
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -100,12 +99,11 @@ export async function getConsoleUsageSummary(input: {
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd,
-                 coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                    as total_savings_usd
           from request_activity
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
-          left join request_savings on request_savings.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
         `,
       [windowStart.toISOString()],
@@ -114,26 +112,33 @@ export async function getConsoleUsageSummary(input: {
       `
           select request_activity.provider_id::text as provider_id,
                  request_activity.provider_model_id::text as model_id,
-                 providers.display_name as provider_label,
-                 provider_models.display_name as model_label,
+                 coalesce(
+                   request_activity.provider_display_name_snapshot,
+                   providers.display_name
+                 ) as provider_label,
+                 coalesce(
+                   request_activity.provider_model_display_name_snapshot,
+                   provider_models.display_name
+                 ) as model_label,
                  count(request_activity.id)::integer as request_count,
                  count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                    as failure_count,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd,
-                 coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                    as total_savings_usd
           from request_activity
           left join providers on providers.id = request_activity.provider_id
           left join provider_models on provider_models.id = request_activity.provider_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
-          left join request_savings on request_savings.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
           group by request_activity.provider_id,
                    request_activity.provider_model_id,
+                   request_activity.provider_display_name_snapshot,
                    providers.display_name,
+                   request_activity.provider_model_display_name_snapshot,
                    provider_models.display_name
           order by coalesce(sum(request_costs.total_cost_usd), 0) desc,
                    count(request_activity.id) desc,
@@ -145,56 +150,24 @@ export async function getConsoleUsageSummary(input: {
     const agentBreakdownResult = await client.query<UsageDimensionBreakdownRow>(
       `
           select coalesce(agents.id::text, 'unknown-agent') as id,
-                 coalesce(agents.name, 'Unknown agent') as label,
+                 coalesce(request_activity.agent_name_snapshot, agents.name, 'Unknown agent')
+                   as label,
                  count(request_activity.id)::integer as request_count,
                  count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                    as failure_count,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd,
-                 coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                    as total_savings_usd
           from request_activity
-          left join agent_api_keys on agent_api_keys.id = request_activity.agent_api_key_id
-          left join agents on agents.id = agent_api_keys.agent_id
+          left join agents on agents.id = request_activity.agent_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
-          left join request_savings on request_savings.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
           group by agents.id,
-                   agents.name
-          order by min(request_activity.created_at),
-                   label
-        `,
-      [windowStart.toISOString()],
-    );
-    const agentApiKeyBreakdownResult = await client.query<UsageDimensionBreakdownRow>(
-      `
-          select coalesce(request_activity.agent_api_key_id::text, 'unknown-agent-api-key') as id,
-                 concat(
-                   coalesce(agents.name, 'Unknown agent'),
-                   ' / ',
-                   coalesce(request_activity.agent_api_key_prefix, agent_api_keys.key_prefix, 'unknown-key')
-                 ) as label,
-                 count(request_activity.id)::integer as request_count,
-                 count(request_activity.id) filter (where request_activity.status = 'failed')::integer
-                   as failure_count,
-                 coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
-                 coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
-          from request_activity
-          left join agent_api_keys on agent_api_keys.id = request_activity.agent_api_key_id
-          left join agents on agents.id = agent_api_keys.agent_id
-          left join request_usage on request_usage.request_activity_id = request_activity.id
-          left join request_costs on request_costs.request_activity_id = request_activity.id
-          left join request_savings on request_savings.request_activity_id = request_activity.id
-          where request_activity.started_at >= $1
-          group by request_activity.agent_api_key_id,
-                   request_activity.agent_api_key_prefix,
-                   agent_api_keys.key_prefix,
-                   agents.name
+                 request_activity.agent_name_snapshot,
+                 agents.name
           order by min(request_activity.created_at),
                    label
         `,
@@ -204,8 +177,10 @@ export async function getConsoleUsageSummary(input: {
       `
           select coalesce(request_activity.virtual_model_id::text, 'unknown-virtual-model') as id,
                  case
-                   when virtual_models.display_name is not null and virtual_models.name is not null
-                     then concat(virtual_models.display_name, ' (', virtual_models.name, ')')
+                   when request_activity.virtual_model_name_snapshot is not null
+                     then request_activity.virtual_model_name_snapshot
+                   when virtual_models.description is not null and virtual_models.name is not null
+                     then concat(virtual_models.description, ' (', virtual_models.name, ')')
                    when virtual_models.name is not null then virtual_models.name
                    else 'Unknown virtual model'
                  end as label,
@@ -215,17 +190,17 @@ export async function getConsoleUsageSummary(input: {
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd,
-                 coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                    as total_savings_usd
           from request_activity
           left join virtual_models on virtual_models.id = request_activity.virtual_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
-          left join request_savings on request_savings.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
           group by request_activity.virtual_model_id,
-                   virtual_models.display_name,
-                   virtual_models.name
+                   virtual_models.description,
+                   virtual_models.name,
+                   request_activity.virtual_model_name_snapshot
           order by min(request_activity.created_at),
                    label
         `,
@@ -234,22 +209,26 @@ export async function getConsoleUsageSummary(input: {
     const providerBreakdownResult = await client.query<UsageDimensionBreakdownRow>(
       `
           select coalesce(request_activity.provider_id::text, 'unknown-provider') as id,
-                 coalesce(providers.display_name, 'Unknown provider') as label,
+                 coalesce(
+                   request_activity.provider_display_name_snapshot,
+                   providers.display_name,
+                   'Unknown provider'
+                 ) as label,
                  count(request_activity.id)::integer as request_count,
                  count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                    as failure_count,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd,
-                 coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                    as total_savings_usd
           from request_activity
           left join providers on providers.id = request_activity.provider_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
-          left join request_savings on request_savings.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
           group by request_activity.provider_id,
+                   request_activity.provider_display_name_snapshot,
                    providers.display_name
           order by min(request_activity.created_at),
                    label
@@ -260,6 +239,16 @@ export async function getConsoleUsageSummary(input: {
       `
           select coalesce(request_activity.provider_model_id::text, 'unknown-model') as id,
                  case
+                   when request_activity.provider_model_display_name_snapshot is not null
+                     and request_activity.provider_model_name_snapshot is not null
+                     then concat(
+                       request_activity.provider_model_display_name_snapshot,
+                       ' (',
+                       request_activity.provider_model_name_snapshot,
+                       ')'
+                     )
+                   when request_activity.provider_model_name_snapshot is not null
+                     then request_activity.provider_model_name_snapshot
                    when provider_models.display_name is not null and provider_models.model_id is not null
                      then concat(provider_models.display_name, ' (', provider_models.model_id, ')')
                    when provider_models.model_id is not null then provider_models.model_id
@@ -271,17 +260,18 @@ export async function getConsoleUsageSummary(input: {
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                    as total_cost_usd,
-                 coalesce(sum(request_savings.savings_usd), 0)::numeric(20, 8)::text
+                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
                    as total_savings_usd
           from request_activity
           left join provider_models on provider_models.id = request_activity.provider_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
-          left join request_savings on request_savings.request_activity_id = request_activity.id
           where request_activity.started_at >= $1
           group by request_activity.provider_model_id,
                    provider_models.display_name,
-                   provider_models.model_id
+                   provider_models.model_id,
+                   request_activity.provider_model_display_name_snapshot,
+                   request_activity.provider_model_name_snapshot
           order by min(request_activity.created_at),
                    label
         `,
@@ -290,9 +280,6 @@ export async function getConsoleUsageSummary(input: {
     const summaryRow = summaryResult.rows[0];
 
     return {
-      agentApiKeyBreakdowns: agentApiKeyBreakdownResult.rows.map(
-        rowToConsoleUsageDimensionBreakdown,
-      ),
       agentBreakdowns: agentBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       breakdowns: breakdownResult.rows.map(rowToConsoleUsageBreakdown),
       failureCount: summaryRow?.failure_count ?? 0,

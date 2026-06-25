@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { Client } from "pg";
 import { createBackupArtifact } from "../../apps/worker/src/backup";
 import {
   createTestPostgresFixture,
@@ -51,7 +52,9 @@ test("runtime schema no longer creates or keeps process_heartbeats", async () =>
     await runMigrations({ databaseUrl: upgradeFixture.databaseUrl });
 
     await expect(tableExists(upgradeFixture, "process_heartbeats")).resolves.toBe(false);
-    await expect(readSchemaVersion(upgradeFixture)).resolves.toBe("0028");
+    await expect(readLatestAppliedMigrationId(upgradeFixture)).resolves.toBe(
+      loadSqlMigrations().at(-1)?.id,
+    );
     await expect(readAppliedMigration(upgradeFixture, "0025")).resolves.toEqual({
       id: "0025",
       name: "remove_process_heartbeats",
@@ -73,19 +76,26 @@ type BackupArtifact = {
 };
 
 async function applyMigrationsThrough(fixture: Fixture, targetId: string): Promise<void> {
-  for (const migration of loadSqlMigrations()) {
-    if (migration.id > targetId) {
-      break;
-    }
+  const client = new Client({ connectionString: fixture.databaseUrl });
+  await client.connect();
 
-    await fixture.query(migration.sql);
-    await fixture.query(
-      `
-        insert into migration_history (id, name, checksum)
-        values ($1, $2, $3)
-      `,
-      [migration.id, migration.name, migration.checksum],
-    );
+  try {
+    for (const migration of loadSqlMigrations()) {
+      if (migration.id > targetId) {
+        break;
+      }
+
+      await client.query(migration.sql);
+      await client.query(
+        `
+          insert into migration_history (id, name, checksum)
+          values ($1, $2, $3)
+        `,
+        [migration.id, migration.name, migration.checksum],
+      );
+    }
+  } finally {
+    await client.end();
   }
 }
 
@@ -119,11 +129,11 @@ async function readBackupArtifact(outputPath: string): Promise<BackupArtifact> {
   return JSON.parse(await readFile(outputPath, "utf8")) as BackupArtifact;
 }
 
-async function readSchemaVersion(fixture: Fixture): Promise<string | undefined> {
-  const result = await fixture.query<{ version: string }>(
-    "select version from schema_version where id = 1",
+async function readLatestAppliedMigrationId(fixture: Fixture): Promise<string | undefined> {
+  const result = await fixture.query<{ id: string }>(
+    "select id from migration_history order by id desc limit 1",
   );
-  return result.rows[0]?.version;
+  return result.rows[0]?.id;
 }
 
 async function tableExists(fixture: Fixture, tableName: string): Promise<boolean> {

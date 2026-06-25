@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 import { queueNotificationEvent } from "./notification-dispatcher.js";
 
@@ -29,10 +29,10 @@ type EvaluateFallbackExhaustionAlertsOptions = CreateFallbackExhaustionAlertsJob
   payload: unknown;
 };
 
-type FallbackExhaustionCandidateRow = QueryResultRow & {
+type FallbackExhaustionCandidateRow = PostgresQueryResultRow & {
   activity_id: string;
-  agent_api_key_id: string;
-  agent_api_key_prefix: string;
+  agent_id: string;
+  agent_key_prefix: string;
   completed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
@@ -195,7 +195,7 @@ async function countFailedProviderRequests(input: {
   windowEnd: Date;
   windowStart: Date;
 }): Promise<number> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -221,7 +221,7 @@ async function readFallbackExhaustionCandidates(input: {
   windowEnd: Date;
   windowStart: Date;
 }): Promise<FallbackExhaustionCandidate[]> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -229,8 +229,8 @@ async function readFallbackExhaustionCandidates(input: {
       `
         select request_activity.id::text as activity_id,
                request_activity.request_id,
-               request_activity.agent_api_key_id::text,
-               request_activity.agent_api_key_prefix,
+               request_activity.agent_id::text as agent_id,
+               request_activity.agent_key_prefix as agent_key_prefix,
                request_activity.virtual_model_id::text,
                request_activity.protocol,
                request_activity.model,
@@ -272,8 +272,8 @@ function rowToFallbackExhaustionCandidate(
 ): FallbackExhaustionCandidate {
   return {
     activityId: row.activity_id,
-    agentApiKeyId: row.agent_api_key_id,
-    agentApiKeyPrefix: row.agent_api_key_prefix,
+    agentApiKeyId: row.agent_id,
+    agentApiKeyPrefix: row.agent_key_prefix,
     completedAt: row.completed_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,
@@ -289,7 +289,7 @@ function rowToFallbackExhaustionCandidate(
 }
 
 async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -306,7 +306,7 @@ async function fallbackExhaustionAlertAlreadyQueued(
   databaseUrl: string,
   alertKey: string,
 ): Promise<boolean> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

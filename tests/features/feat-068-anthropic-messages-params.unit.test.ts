@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAnthropicMessagesRequest } from "../../apps/gateway/src/messages";
-import { createAnthropicProviderAdapter } from "../../apps/gateway/src/provider-adapters/anthropic";
+import { createAnthropicProviderAdapter } from "../../packages/provider/src/adapters/anthropic";
 
 describe("feat-068 Anthropic messages parameter passthrough", () => {
   it("normalizes common sampling stop metadata and safe Anthropic parameters", () => {

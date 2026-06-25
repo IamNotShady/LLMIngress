@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildProviderModelListRequest,
+  enrichListedProviderModels,
+  filterRefreshableListedProviderModels,
   planProviderModelRefresh,
 } from "../../apps/worker/src/model-refresh";
+import {
+  buildProviderModelListRequest,
+  fetchListedProviderModels,
+  parseProviderModelList,
+} from "../../packages/provider/src/model-list";
 
 describe("feat-023 provider model refresh job", () => {
   it("plans derived model inserts and only treats referenced availability changes as routing-visible", () => {
@@ -106,6 +112,212 @@ describe("feat-023 provider model refresh job", () => {
     });
 
     expect(plan.insertModels).toEqual([{ displayName: "New Model", modelId: "new-model" }]);
+  });
+
+  it("filters models with no context or token prices before planning refresh writes", () => {
+    const syncedAt = new Date("2026-06-21T00:00:00.000Z");
+
+    expect(
+      filterRefreshableListedProviderModels({
+        listedModels: [
+          { displayName: "No Metadata", modelId: "no-metadata" },
+          { contextWindow: 128_000, displayName: "Has Context", modelId: "has-context" },
+          { displayName: "Has Price", modelId: "has-price" },
+        ],
+        providerKey: "OpenAI",
+        syncedPrices: [
+          {
+            cachedInputUsdPerMillionTokens: null,
+            inputUsdPerMillionTokens: 0.4,
+            modelId: "has-price",
+            outputUsdPerMillionTokens: 1.6,
+            priceVersion: "models.dev:test",
+            providerKey: "openai",
+            source: "models.dev",
+            sourceUrl: "https://models.dev/api.json",
+            syncedAt,
+          },
+        ],
+      }),
+    ).toEqual([
+      { contextWindow: 128_000, displayName: "Has Context", modelId: "has-context" },
+      { displayName: "Has Price", modelId: "has-price" },
+    ]);
+  });
+
+  it("keeps Claude Code models when Anthropic metadata supplies context", () => {
+    const syncedAt = new Date("2026-06-21T00:00:00.000Z");
+    const enriched = enrichListedProviderModels({
+      listedModels: [
+        {
+          displayName: "Claude Sonnet 4",
+          modelId: "claude-sonnet-4-20250514",
+        },
+      ],
+      providerKey: "claude_code",
+      registryEntries: [
+        {
+          contextWindow: 200_000,
+          modelId: "claude-sonnet-4-20250514",
+          providerKey: "anthropic",
+          supportsStreaming: true,
+          supportsTools: true,
+          syncedAt,
+        },
+      ],
+    });
+
+    expect(
+      filterRefreshableListedProviderModels({
+        listedModels: enriched,
+        providerKey: "claude_code",
+        syncedPrices: [],
+      }),
+    ).toEqual([
+      {
+        capabilityMetadata: {
+          registrySyncedAt: "2026-06-21T00:00:00.000Z",
+          tools: true,
+        },
+        contextWindow: 200_000,
+        displayName: "Claude Sonnet 4",
+        modelId: "claude-sonnet-4-20250514",
+        supportsStreaming: true,
+        supportsTools: true,
+      },
+    ]);
+  });
+
+  it("keeps local models without registry metadata or token prices", () => {
+    const enriched = enrichListedProviderModels({
+      listedModels: [{ displayName: "llama3.2:3b", modelId: "llama3.2:3b" }],
+      providerKey: "ollama",
+      registryEntries: [],
+    });
+
+    expect(
+      filterRefreshableListedProviderModels({
+        listedModels: enriched,
+        providerKey: "ollama",
+        syncedPrices: [],
+      }),
+    ).toEqual([
+      {
+        contextWindow: 4096,
+        displayName: "llama3.2:3b",
+        modelId: "llama3.2:3b",
+      },
+    ]);
+  });
+
+  it("reads LM Studio model capabilities from its local API response", () => {
+    expect(
+      buildProviderModelListRequest({
+        baseUrl: "http://127.0.0.1:1234/v1",
+        providerKey: "lmstudio",
+      }),
+    ).toEqual({
+      init: { method: "GET" },
+      url: "http://127.0.0.1:1234/api/v0/models",
+    });
+
+    expect(
+      parseProviderModelList({
+        data: [
+          {
+            capabilities: ["tool_use"],
+            id: "qwen/qwen3-1.7b",
+            max_context_length: 40960,
+            object: "model",
+          },
+        ],
+        object: "list",
+      }),
+    ).toEqual([
+      {
+        contextWindow: 40960,
+        displayName: "qwen/qwen3-1.7b",
+        modelId: "qwen/qwen3-1.7b",
+        supportsTools: true,
+      },
+    ]);
+  });
+
+  it("reads llama.cpp capabilities from models and context from data metadata", () => {
+    expect(
+      parseProviderModelList({
+        data: [
+          {
+            id: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+            meta: { n_ctx: 8192 },
+            object: "model",
+          },
+        ],
+        models: [
+          {
+            capabilities: ["completion", "tools"],
+            name: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+          },
+        ],
+        object: "list",
+      }),
+    ).toEqual([
+      {
+        contextWindow: 8192,
+        displayName: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+        modelId: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+        supportsTools: true,
+      },
+    ]);
+  });
+
+  it("adds llama.cpp tool support from props when models only list completion", async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      if (String(url).endsWith("/v1/models")) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+                meta: { n_ctx: 8192 },
+                object: "model",
+              },
+            ],
+            models: [
+              {
+                capabilities: ["completion"],
+                name: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+              },
+            ],
+            object: "list",
+          }),
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          chat_template_caps: { supports_tools: true },
+          default_generation_settings: { params: { n_ctx: 8192 } },
+        }),
+      );
+    }) as typeof globalThis.fetch;
+
+    await expect(
+      fetchListedProviderModels({
+        baseUrl: "http://127.0.0.1:8080/v1",
+        fetch: fetchImpl,
+        providerKey: "llama_cpp",
+      }),
+    ).resolves.toEqual([
+      {
+        contextWindow: 8192,
+        displayName: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+        modelId: "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M",
+        supportsTools: true,
+      },
+    ]);
+    expect(calls).toEqual(["http://127.0.0.1:8080/v1/models", "http://127.0.0.1:8080/props"]);
   });
 
   it("builds an authenticated provider model list request", () => {

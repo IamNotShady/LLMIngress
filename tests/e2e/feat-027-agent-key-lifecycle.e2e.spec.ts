@@ -6,7 +6,7 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
-test("agent key plaintext once hash prefix status metadata persisted after rotate disable delete", async ({
+test("agent creation returns one plaintext key and removes independent key lifecycle", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -36,11 +36,7 @@ test("agent key plaintext once hash prefix status metadata persisted after rotat
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
-          await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
-
-          await openRow(page, "Codex");
-          await page.getByRole("button", { name: "Create Agent API key" }).click();
-          await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           const firstKey = await page.locator("code").innerText();
           expect(firstKey).toMatch(/^llmi_[A-Za-z0-9_-]{32,}$/);
 
@@ -52,57 +48,23 @@ test("agent key plaintext once hash prefix status metadata persisted after rotat
             has_created_at: true,
             has_updated_at: true,
             key_hash_contains_first: false,
-            key_hash_contains_rotated: false,
             key_prefix: firstKey.slice(0, 12),
+            legacy_key_tables: "absent",
           });
 
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(firstKey)).toHaveCount(0);
           await openRow(page, "Codex");
-          await expect(
-            page.getByText(`Agent API key prefix: ${firstKey.slice(0, 12)}`),
-          ).toBeVisible();
-          await expect(page.getByText("Agent API key status: Enabled")).toBeVisible();
+          await expect(page.getByText(/^Agent API key prefix:/)).toHaveCount(0);
+          await expect(page.getByRole("button", { name: "Create Agent API key" })).toHaveCount(0);
+          await expect(page.getByRole("button", { name: "Rotate Agent API key" })).toHaveCount(0);
+          await expect(page.getByRole("button", { name: "Disable Agent API key" })).toHaveCount(0);
+          await expect(page.getByRole("button", { name: "Delete Agent API key" })).toHaveCount(0);
 
           await page.reload();
           await expect(page.getByText(firstKey)).toHaveCount(0);
           await openRow(page, "Codex");
-          await expect(
-            page.getByText(`Agent API key prefix: ${firstKey.slice(0, 12)}`),
-          ).toBeVisible();
-
-          await page.getByRole("button", { name: "Rotate Agent API key" }).click();
-          await expect(page.getByRole("heading", { name: "Agent API key rotated" })).toBeVisible();
-          const rotatedKey = await page.locator("code").innerText();
-          expect(rotatedKey).toMatch(/^llmi_[A-Za-z0-9_-]{32,}$/);
-          expect(rotatedKey).not.toBe(firstKey);
-
-          const rotatedRows = await readAgentKeyRows(fixture, { firstKey, rotatedKey });
-          expect(rotatedRows).toHaveLength(1);
-          expect(rotatedRows[0]).toMatchObject({
-            enabled: true,
-            key_hash_contains_first: false,
-            key_hash_contains_rotated: false,
-            key_prefix: rotatedKey.slice(0, 12),
-          });
-
-          await page.getByRole("link", { name: "Back to dashboard" }).click();
-          await expect(page.getByText(firstKey)).toHaveCount(0);
-          await expect(page.getByText(rotatedKey)).toHaveCount(0);
-          await openRow(page, "Codex");
-          await expect(
-            page.getByText(`Agent API key prefix: ${rotatedKey.slice(0, 12)}`),
-          ).toBeVisible();
-
-          await page.getByRole("button", { name: "Disable Agent API key" }).click();
-          await openRow(page, "Codex");
-          await expect(page.getByText("Agent API key status: Disabled")).toBeVisible();
-          expect(await readAgentKeyStatuses(fixture)).toEqual([false]);
-
-          await page.getByRole("button", { name: "Delete Agent API key" }).click();
-          await openRow(page, "Codex");
-          await expect(page.getByText("No Agent API keys saved.")).toBeVisible();
-          expect(await readAgentKeyStatuses(fixture)).toEqual([]);
+          await expect(page.getByText(/^Agent API key prefix:/)).toHaveCount(0);
         } finally {
           await context.close();
         }
@@ -130,37 +92,35 @@ type AgentKeyStorageRow = {
   has_created_at: boolean;
   has_updated_at: boolean;
   key_hash_contains_first: boolean;
-  key_hash_contains_rotated: boolean;
   key_prefix: string;
+  legacy_key_tables: "absent" | "present";
 };
 
 async function readAgentKeyRows(
   fixture: Fixture,
-  keys: { firstKey?: string; rotatedKey?: string } = {},
+  keys: { firstKey?: string } = {},
 ): Promise<AgentKeyStorageRow[]> {
   const result = await fixture.query<AgentKeyStorageRow>(
     `
       select agents.name as agent_name,
-             agent_api_keys.key_prefix,
-             agent_api_keys.enabled,
-             agent_api_keys.created_at is not null as has_created_at,
-             agent_api_keys.updated_at is not null as has_updated_at,
-             agent_api_keys.key_hash like $1 as key_hash_contains_first,
-             agent_api_keys.key_hash like $2 as key_hash_contains_rotated
-      from agent_api_keys
-      join agents on agents.id = agent_api_keys.agent_id
-      order by agent_api_keys.created_at
+             agents.key_prefix,
+             agents.enabled,
+             agents.created_at is not null as has_created_at,
+             agents.updated_at is not null as has_updated_at,
+             agents.key_hash like $1 as key_hash_contains_first,
+             case
+               when to_regclass('agent_api_keys') is null
+                and to_regclass('agent_api_key_virtual_models') is null
+               then 'absent'
+               else 'present'
+             end as legacy_key_tables
+      from agents
+      where agents.key_hash is not null
+      order by agents.created_at
     `,
-    [`%${keys.firstKey ?? "missing-first-key"}%`, `%${keys.rotatedKey ?? "missing-rotated-key"}%`],
+    [`%${keys.firstKey ?? "missing-first-key"}%`],
   );
   return result.rows;
-}
-
-async function readAgentKeyStatuses(fixture: Fixture): Promise<boolean[]> {
-  const result = await fixture.query<{ enabled: boolean }>(
-    "select enabled from agent_api_keys order by created_at",
-  );
-  return result.rows.map((row) => row.enabled);
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

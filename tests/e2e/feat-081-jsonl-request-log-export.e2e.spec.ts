@@ -52,11 +52,9 @@ test("jsonl request log export writes metadata fallback errors without secrets",
     expect(records).toHaveLength(2);
     expect(records[0]).toMatchObject({
       agent: {
+        keyPrefix: "llmi_jsonl81",
         name: "JSONL Export Agent",
         type: "coding",
-      },
-      agentApiKey: {
-        prefix: "llmi_jsonl81",
       },
       error: null,
       fallbackEvents: [],
@@ -104,12 +102,6 @@ test("jsonl request log export writes metadata fallback errors without secrets",
         lineCount: 2,
         outputPath,
       },
-      status: "succeeded",
-    });
-    await expect(readExportTask(fixture, jobId)).resolves.toMatchObject({
-      export_type: "jsonl_request_logs",
-      line_count: 2,
-      output_path: outputPath,
       status: "succeeded",
     });
   } finally {
@@ -164,7 +156,7 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
     [ids.providerApiKeyId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'jsonl-fast', 'JSONL Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'jsonl-fast', 'JSONL Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -180,10 +172,7 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-      )
-      values ($1, $2, 'llmi_jsonl81', 'sha256:v1:jsonl-agent-secret-hash', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_jsonl81', key_hash = 'sha256:v1:jsonl-agent-secret-hash', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -192,12 +181,12 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -233,12 +222,12 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -279,7 +268,7 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -304,7 +293,7 @@ async function seedJsonlExportData(fixture: Fixture): Promise<void> {
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         input_cost_usd,
         output_cost_usd,
@@ -365,23 +354,6 @@ async function insertJsonlExportJob(fixture: Fixture, input: JsonlExportJobInput
 async function readJobResult(fixture: Fixture, jobId: string) {
   const result = await fixture.query<{ result: unknown; status: string }>(
     "select status, result from jobs where id = $1",
-    [jobId],
-  );
-  return result.rows[0];
-}
-
-async function readExportTask(fixture: Fixture, jobId: string) {
-  const result = await fixture.query<{
-    export_type: string;
-    line_count: number;
-    output_path: string;
-    status: string;
-  }>(
-    `
-      select export_type, status, output_path, line_count
-      from export_tasks
-      where job_id = $1
-    `,
     [jobId],
   );
   return result.rows[0];

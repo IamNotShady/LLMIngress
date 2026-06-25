@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     await saveAgentLimitRules({
       databaseUrl,
       limits: normalizeAgentLimitFormInput({
-        agentApiKeyId: readRequiredText(form, "agentApiKeyId"),
+        agentId: readRequiredText(form, "agentId", "agentApiKeyId"),
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
         rpm: readRequiredText(form, "rpm"),
@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
 }
 
-function readRequiredText(form: FormData, name: string): string {
-  const value = form.get(name);
+function readRequiredText(form: FormData, name: string, fallbackName?: string): string {
+  const value = form.get(name) ?? (fallbackName ? form.get(fallbackName) : null);
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${name} is required.`);
   }

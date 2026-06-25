@@ -4,11 +4,11 @@ import {
   normalizeAgentLimitFormInput,
 } from "../../apps/console/src/server/agent-limits";
 
-describe("feat-031 Agent API key limit configuration", () => {
+describe("feat-031 Agent limit configuration", () => {
   it("normalizes budget rpm tpm and token limit form input", () => {
     expect(
       normalizeAgentLimitFormInput({
-        agentApiKeyId: " key-031 ",
+        agentId: " agent-031 ",
         budgetPeriod: " month ",
         budgetUsd: "10.50",
         rpm: "60",
@@ -16,29 +16,41 @@ describe("feat-031 Agent API key limit configuration", () => {
         tpm: "120000",
       }),
     ).toEqual({
-      agentApiKeyId: "key-031",
+      agentId: "agent-031",
       rules: [
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "budget",
           limitValue: 10.5,
+          manualBypass: false,
           period: "month",
           unit: "usd",
         },
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "rpm",
           limitValue: 60,
+          manualBypass: false,
           period: "minute",
           unit: "requests",
         },
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "tpm",
           limitValue: 120000,
+          manualBypass: false,
           period: "minute",
           unit: "tokens",
         },
         {
+          alertThreshold: null,
+          enforcementPolicy: "block",
           limitType: "token",
           limitValue: 8000,
+          manualBypass: false,
           period: "request",
           unit: "tokens",
         },
@@ -49,7 +61,7 @@ describe("feat-031 Agent API key limit configuration", () => {
   it("rejects non-positive values and invalid budget periods", () => {
     expect(() =>
       normalizeAgentLimitFormInput({
-        agentApiKeyId: "key-031",
+        agentId: "agent-031",
         budgetPeriod: "minute",
         budgetUsd: "10",
         rpm: "60",
@@ -60,7 +72,7 @@ describe("feat-031 Agent API key limit configuration", () => {
 
     expect(() =>
       normalizeAgentLimitFormInput({
-        agentApiKeyId: "key-031",
+        agentId: "agent-031",
         budgetPeriod: "month",
         budgetUsd: "0",
         rpm: "60",
@@ -74,7 +86,7 @@ describe("feat-031 Agent API key limit configuration", () => {
     expect(
       formatAgentLimitSummaries([
         {
-          agentApiKeyId: "key-031",
+          agentId: "agent-031",
           enabled: true,
           id: "budget-limit",
           limitType: "budget",
@@ -83,7 +95,7 @@ describe("feat-031 Agent API key limit configuration", () => {
           unit: "usd",
         },
         {
-          agentApiKeyId: "key-031",
+          agentId: "agent-031",
           enabled: true,
           id: "rpm-limit",
           limitType: "rpm",

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPlaygroundChatRequest,
+  buildPlaygroundMessagesRequest,
+  buildPlaygroundResponsesRequest,
   formatPlaygroundFetchError,
   isValidPlaygroundGatewayBaseUrl,
   normalizePlaygroundGatewayBaseUrl,
@@ -25,6 +27,31 @@ describe("feat-049 Playground live public API test", () => {
       max_tokens: 100,
       messages: [{ content: "hello from playground", role: "user" }],
       model: "playground-live",
+      stream: false,
+    });
+
+    expect(
+      buildPlaygroundResponsesRequest({
+        model: "gpt55",
+        prompt: "hello from responses",
+      }),
+    ).toEqual({
+      input: "hello from responses",
+      max_output_tokens: 100,
+      model: "gpt55",
+      store: false,
+      stream: false,
+    });
+
+    expect(
+      buildPlaygroundMessagesRequest({
+        model: "opus48",
+        prompt: "hello from messages",
+      }),
+    ).toEqual({
+      max_tokens: 100,
+      messages: [{ content: "hello from messages", role: "user" }],
+      model: "opus48",
       stream: false,
     });
   });

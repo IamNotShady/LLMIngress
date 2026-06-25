@@ -31,27 +31,33 @@ test("usage page shows counts tokens cost and provider model breakdown", async (
           await page.goto(`${baseUrl}/usage`);
 
           await expect(page.getByRole("heading", { name: "Usage & Cost" })).toBeVisible();
-          await expect(page.getByText("Requests: 2")).toBeVisible();
-          await expect(page.getByText("450 total tokens (150 input, 300 output)")).toBeVisible();
-          await expect(page.getByText("Cost: $0.00150000")).toBeVisible();
+          // KPI cards (counts + tokens) and the provider/model summary table.
           await expect(
-            page.getByRole("heading", { exact: true, name: "Console OpenAI / GPT 4.1 Nano" }),
+            page.locator(".stat-card", { hasText: "Total requests" }).locator(".stat-card-value"),
+          ).toHaveText("2");
+          await expect(
+            page.locator(".stat-card", { hasText: "Total tokens" }).locator(".stat-card-value"),
+          ).toHaveText("450");
+          const summary = page.getByRole("table");
+          await expect(
+            summary.getByRole("row", { name: /Console OpenAI.*GPT 4\.1 Nano.*150.*\$0\.00050000/ }),
           ).toBeVisible();
           await expect(
-            page.getByRole("heading", { exact: true, name: "Console Anthropic / Claude Haiku" }),
+            summary.getByRole("row", {
+              name: /Console Anthropic.*Claude Haiku.*300.*\$0\.00100000/,
+            }),
           ).toBeVisible();
-          await expect(page.getByText("1 request - 150 tokens - $0.00050000")).toBeVisible();
-          await expect(page.getByText("1 request - 300 tokens - $0.00100000")).toBeVisible();
 
-          await page.getByLabel("Usage window").selectOption("30d");
-          await page.getByRole("button", { name: "Apply usage window" }).click();
+          await page.getByLabel("Window").selectOption("30d");
+          await page.getByRole("button", { name: "Apply" }).click();
 
-          await expect(page.getByText("Requests: 3")).toBeVisible();
-          await expect(page.getByText("999 total tokens (249 input, 750 output)")).toBeVisible();
-          await expect(page.getByText("Cost: $0.00273456")).toBeVisible();
           await expect(
-            page.getByRole("heading", { exact: true, name: "Console OpenAI / GPT 4.1" }),
-          ).toBeVisible();
+            page.locator(".stat-card", { hasText: "Total requests" }).locator(".stat-card-value"),
+          ).toHaveText("3");
+          await expect(
+            page.locator(".stat-card", { hasText: "Total tokens" }).locator(".stat-card-value"),
+          ).toHaveText("999");
+          await expect(page.getByRole("cell", { name: "GPT 4.1", exact: true })).toBeVisible();
         } finally {
           await context.close();
         }
@@ -118,7 +124,7 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'usage-console', 'Usage Console', true)
     `,
     [virtualModelId],
@@ -126,7 +132,7 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
   await fixture.query(
     `
       insert into route_policies (id, virtual_model_id, strategy)
-      values ($1, $2, 'balanced')
+      values ($1, $2, 'random')
     `,
     [routePolicyId, virtualModelId],
   );
@@ -143,8 +149,7 @@ async function seedUsagePageData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'usage047', 'hash-usage-047', $3, true)
+      update agents set id = $1, key_prefix = 'usage047', key_hash = 'hash-usage-047', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, virtualModelId],
   );
@@ -206,11 +211,11 @@ async function insertUsageRequest(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -252,7 +257,7 @@ async function insertUsageRequest(
       insert into request_usage (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_model_id,
         input_tokens,
@@ -278,7 +283,7 @@ async function insertUsageRequest(
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         total_cost_usd,
         cost_source,

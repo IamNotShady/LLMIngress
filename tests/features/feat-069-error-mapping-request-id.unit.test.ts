@@ -12,6 +12,7 @@ describe("feat-069 Gateway error mapping and request id trace", () => {
     expect(mapGatewayErrorStatus("disabled_agent_api_key")).toBe(401);
     expect(mapGatewayErrorStatus("route_not_found")).toBe(404);
     expect(mapGatewayErrorStatus("rate_limit_exceeded")).toBe(429);
+    expect(mapGatewayErrorStatus("provider_rate_limited")).toBe(429);
     expect(mapGatewayErrorStatus("cost_budget_exceeded")).toBe(402);
     expect(mapGatewayErrorStatus("provider_request_failed")).toBe(502);
     expect(mapGatewayErrorStatus("unknown_gateway_error", 500)).toBe(500);

@@ -209,19 +209,35 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, enabled)
-      values ($1, $2, 'online103', 'hash-online-103', true),
-             ($3, $4, 'risk103', 'hash-risk-103', true)
+      update agents
+      set id = $1,
+          key_prefix = 'online103',
+          key_hash = 'hash-online-103',
+          enabled = true,
+          updated_at = now()
+      where id = $2
     `,
-    [onlineAgentApiKeyId, onlineAgentId, highRiskAgentApiKeyId, highRiskAgentId],
+    [onlineAgentApiKeyId, onlineAgentId],
+  );
+  await fixture.query(
+    `
+      update agents
+      set id = $1,
+          key_prefix = 'risk103',
+          key_hash = 'hash-risk-103',
+          enabled = true,
+          updated_at = now()
+      where id = $2
+    `,
+    [highRiskAgentApiKeyId, highRiskAgentId],
   );
   await fixture.query(
     `
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
-        agent_api_key_prefix,
+        agent_id,
+        agent_key_prefix,
         protocol,
         model,
         status,
@@ -238,8 +254,8 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
         insert into request_activity (
           id,
           request_id,
-          agent_api_key_id,
-          agent_api_key_prefix,
+          agent_id,
+          agent_key_prefix,
           protocol,
           model,
           status,
@@ -283,7 +299,7 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
     [providerModelId, providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'risk-platform-status', 'Risk Platform Status', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'risk-platform-status', 'Risk Platform Status', true)",
     [virtualModelId],
   );
   await fixture.query(
@@ -304,7 +320,7 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
     [randomUUID(), routePolicyId, providerModelId],
   );
   await fixture.query(
-    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
     [highRiskAgentApiKeyId, virtualModelId],
   );
   await fixture.query(
@@ -318,7 +334,7 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
         error_code,
         error_message
       )
-      values ($1, $2, $3, 'request_path', 'failed', 'seeded_unhealthy', 'Seeded unhealthy status')
+      values ($1, $2, $3, 'request_path', 'unhealthy', 'seeded_unhealthy', 'Seeded unhealthy status')
     `,
     [healthEventId, providerId, providerModelId],
   );
@@ -341,7 +357,7 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
     `
       insert into agent_limits (
         id,
-        agent_api_key_id,
+        agent_id,
         limit_type,
         period,
         limit_value,
@@ -356,7 +372,7 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
     `
       insert into rate_limit_windows (
         id,
-        agent_api_key_id,
+        agent_id,
         limit_type,
         window_start,
         window_end,
@@ -367,7 +383,11 @@ async function seedDerivedStatusAgents(fixture: Fixture): Promise<DerivedStatusA
     [randomUUID(), highRiskAgentApiKeyId],
   );
 
-  return { highRiskAgentId, offlineAgentId, onlineAgentId };
+  return {
+    highRiskAgentId: highRiskAgentApiKeyId,
+    offlineAgentId,
+    onlineAgentId: onlineAgentApiKeyId,
+  };
 }
 
 async function seedGatewayLoggingScenario(
@@ -425,7 +445,7 @@ async function seedGatewayLoggingScenario(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'logging-platform', 'Logging Platform', true)
     `,
     [virtualModelId],
@@ -463,15 +483,7 @@ async function seedGatewayLoggingScenario(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -483,7 +495,7 @@ async function seedGatewayLoggingScenario(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [agentApiKeyId, virtualModelId],

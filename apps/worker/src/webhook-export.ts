@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 import { redactSecretsFromJsonlValue } from "./jsonl-export.js";
 
@@ -117,8 +117,8 @@ type NormalizedWebhookEventExportPayload = {
   webhookUrl: string;
 };
 
-type WebhookEventExportActivityRow = QueryResultRow & {
-  agent_api_key_prefix: string;
+type WebhookEventExportActivityRow = PostgresQueryResultRow & {
+  agent_key_prefix: string;
   completed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
@@ -137,7 +137,7 @@ type WebhookEventExportActivityRow = QueryResultRow & {
   virtual_model_name: string | null;
 };
 
-type WebhookEventExportFallbackRow = QueryResultRow & {
+type WebhookEventExportFallbackRow = PostgresQueryResultRow & {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -163,7 +163,7 @@ export function createWebhookEventExportJobHandler(
   return async (job) => {
     const payload = normalizeWebhookEventExportPayload(job.payload);
     const redactedWebhookUrl = redactWebhookUrl(payload.webhookUrl);
-    const client = new Client({ connectionString: options.databaseUrl });
+    const client = new PostgresClient({ connectionString: options.databaseUrl });
     await client.connect();
 
     try {
@@ -352,7 +352,7 @@ function readWebhookUrl(value: unknown): string {
 }
 
 async function readWebhookEventExportInputs(
-  client: Client,
+  client: PostgresClient,
   payload: NormalizedWebhookEventExportPayload,
 ): Promise<
   Array<{
@@ -372,7 +372,7 @@ async function readWebhookEventExportInputs(
 }
 
 async function readWebhookEventExportActivities(
-  client: Client,
+  client: PostgresClient,
   payload: NormalizedWebhookEventExportPayload,
 ): Promise<WebhookEventExportActivity[]> {
   const values: unknown[] = [];
@@ -396,7 +396,7 @@ async function readWebhookEventExportActivities(
     `
       select request_activity.id::text,
              request_activity.request_id,
-             request_activity.agent_api_key_prefix,
+             request_activity.agent_key_prefix as agent_key_prefix,
              request_activity.protocol,
              request_activity.model,
              request_activity.stream,
@@ -408,9 +408,12 @@ async function readWebhookEventExportActivities(
              request_activity.latency_ms,
              request_activity.started_at,
              request_activity.completed_at,
-             virtual_models.name as virtual_model_name,
-             providers.provider_key,
-             provider_models.model_id as provider_model_model_id
+             coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
+               as virtual_model_name,
+             coalesce(request_activity.provider_key_snapshot, providers.provider_key)
+               as provider_key,
+             coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
+               as provider_model_model_id
       from request_activity
       left join virtual_models on virtual_models.id = request_activity.virtual_model_id
       left join providers on providers.id = request_activity.provider_id
@@ -423,7 +426,7 @@ async function readWebhookEventExportActivities(
   );
 
   return result.rows.map((row) => ({
-    agentApiKeyPrefix: row.agent_api_key_prefix,
+    agentApiKeyPrefix: row.agent_key_prefix,
     completedAt: row.completed_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,
@@ -444,7 +447,7 @@ async function readWebhookEventExportActivities(
 }
 
 async function readFallbackEventsByActivityId(
-  client: Client,
+  client: PostgresClient,
   activityIds: string[],
 ): Promise<Map<string, WebhookEventExportFallback[]>> {
   const eventsByActivityId = new Map<string, WebhookEventExportFallback[]>();
@@ -494,7 +497,7 @@ async function readFallbackEventsByActivityId(
 }
 
 async function insertWebhookDelivery(
-  client: Client,
+  client: PostgresClient,
   input: {
     completedAt: Date;
     fallbackEventId: string | null;
@@ -549,7 +552,7 @@ async function insertWebhookDelivery(
 }
 
 async function hasSuccessfulWebhookDelivery(
-  client: Client,
+  client: PostgresClient,
   input: {
     fallbackEventId: string | null;
     jobId: string;

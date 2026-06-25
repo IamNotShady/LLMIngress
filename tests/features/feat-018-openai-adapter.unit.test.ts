@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 
 describe("feat-018 OpenAI provider adapter", () => {
   it("sends normalized chat requests as OpenAI-compatible payloads with bearer auth", async () => {

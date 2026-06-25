@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnthropicProviderAdapter } from "../../apps/gateway/src/provider-adapters/anthropic";
+import { createAnthropicProviderAdapter } from "../../packages/provider/src/adapters/anthropic";
 
 describe("feat-019 Anthropic provider adapter", () => {
   it("sends normalized messages requests as Anthropic payloads with auth headers", async () => {

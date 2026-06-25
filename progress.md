@@ -2,13 +2,51 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-18 (feat-102 passing)
-**Active Feature:** none — feat-102 is `passing`; feat-103 is next
-**Branch:** `dev`
+**Last Updated:** 2026-06-23 (console UI refresh + English i18n)
+**Active Feature:** none — console UI style refresh + full English translation complete
+**Branch:** `console-ui-refresh` (worktree off `dev`)
 
 ## Status
 
 ### What's Done
+
+- [x] **Console UI refresh + English i18n (style-only, no behavior change)**:
+  - Replaced the multicolor `flat-color-icons` with an inline monochrome line-icon set
+    by reimplementing `apps/console/src/app/_components/flat-icon.tsx` (same `FlatIcon` /
+    `FlatIconName` API, same `flat-icon` class), so all ~60 call sites and selectors are
+    untouched. Fixed mismatched glyphs (`filter`→funnel, `save`→floppy, `export`→download,
+    `import`→upload). Removed the dead `flat-color-icons` dependency and `public/flat-color-icons/*`.
+  - Reworked the icon-button CSS in `globals.css`: toolbar/dialog/form buttons now show
+    icon **+ label** (the labels were already in the DOM, previously hidden), while compact
+    table-row actions stay icon-only with semantic color (delete=danger, enable=ok, edit=accent).
+  - Added a calm visual-refresh layer (markup-stable): active-nav accent rail, bordered KPI
+    icon chips, primary-CTA depth shadow, topbar blur, pill spacing — light + dark.
+  - Translated all remaining Chinese to English across `apps/console/src` (UI strings +
+    comments), the e2e/unit tests that assert those strings, `feature_list.json`, and this
+    file. Renamed the now-misnamed `formatProvider*ZhLabel` helpers (dropped `Zh`). Large
+    design docs (`docs/PRODUCT/ARCHITECTURE/PLAN.md`) intentionally deferred.
+  - Adjusted `feat-028` e2e to use `exact: true` for the "Virtual Model name" textbox
+    (the now-English search aria-label collided as a substring).
+  - Verification passed: `pnpm run verify` (lint, typecheck, 401 unit tests, build) and
+    `pnpm run verify:features` re-verified all 115 passing features. Visual before/after
+    confirmed via a throwaway Playwright screenshot pass (all 11 pages, light + dark).
+
+- [x] **feat-106 — Advanced Route Policy Rules and Preview (passing)**:
+  - Added migration `0030_advanced_route_rules_preview`: `route_policies.rules` and `provider_models.capability_metadata` JSONB object fields, schema version `0030`, and migration checksum registration.
+  - Added `@llmingress/domain` route-rule contracts, stdlib validation helpers, shared candidate eligibility filtering, and route decision explanations for selected/excluded candidates.
+  - Gateway snapshots now load route policy rules and provider model context/tool/capability metadata, and Gateway request paths pass `usesTools` into shared route selection while preserving existing empty-rule feat-032 behavior.
+  - Added authenticated Console backend preview API `POST /api/route-policies/preview`, backed by current DB config and shared routing logic, with no provider credential attachment or provider calls.
+  - Console import/export now round-trips route policy rules and provider model capability metadata.
+  - TDD red observed first: feat-106 unit/E2E failed on missing migration, missing normalization/route explanation behavior, and missing preview API.
+  - Verification passed: feat-106 unit and real PostgreSQL Console preview E2E; related feat-032/080 unit and E2E regressions; feat-044 activity E2E regression; `pnpm run db:migrate:check`; `pnpm run verify`; `pnpm run verify:features` re-verified all 105 previously passing features before marking; final `pnpm run verify:features` re-verified all 106 passing features after marking.
+
+- [x] **feat-105 — Overview, Usage, and Route Analytics Backend (passing)**:
+  - Added `apps/console/src/server/analytics.ts` for backend-only analytics snapshots: arbitrary start/end ranges, Agent/Provider/Virtual Model filters, previous equal-window KPIs, hour/day timeseries, top Agents/provider models/Virtual Models/routes, savings, failure rate, p95 latency, and route/fallback metrics.
+  - Added migration `0029_analytics_backend_indexes` with only request_activity lookup indexes for started_at, virtual_model+started_at, and route_policy+started_at; no tables or backfills.
+  - Added real PostgreSQL unit/E2E coverage and a shared analytics seed helper; no Console UI or API route was added.
+  - Updated feat-101's process_heartbeats E2E schema-version assertion to follow the latest migration id instead of hard-coding `0028`.
+  - TDD red observed first: feat-105 unit and E2E failed because the analytics helper did not exist.
+  - Verification passed: feat-105 unit and real PostgreSQL E2E; focused feat-101 unit/E2E regression; `pnpm run db:migrate:check`; `pnpm run verify`; `pnpm run verify:features` re-verified all 104 previously passing features before marking; final `pnpm run verify:features` re-verified all 105 passing features after marking.
 
 - [x] **feat-102 — Provider Operational Metadata and Key Management (passing)**:
   - Added migration `0026_provider_key_operational_metadata`: Provider default priority plus Provider API key label, enabled flag, priority, last-used time, last-tested time, last-test status, and last-test error fields.
@@ -155,11 +193,11 @@
   - Code review found and fixed P2+ issues in `price_sync` route-engine typing, scheduled-test altitude, and an over-eager default periodic `price_sync` task that changed existing smoke-test config versions and built-in price labels.
   - Verification passed: feat-073 unit tests (2), real PostgreSQL E2E (1), `pnpm run db:migrate:check`, related feat-014/015/022/054/057/072 regressions, `pnpm run verify`, full `pnpm run verify:features` across all 72 prior passing features before marking, and final `pnpm run verify:features` across all 73 passing features after marking.
 - [x] **feat-074 — Billing Reconciliation Job (passing)**:
-  - Added migration `0015_billing_reconciliation` with `billing_reconciliation_runs` and `billing_reconciliation_items`.
-  - Added a Worker `billing_reconciliation` handler that updates stored `request_costs` from provider actual cost payloads or effective price data, recomputes `request_savings` against the original baseline, and records reconciliation runs/items without changing original request activity/model attribution.
+  - `0015_billing_reconciliation` now only advances schema version; there are no separate reconciliation run/item tables.
+  - Worker `billing_reconciliation` updates stored `request_costs` from provider actual cost payloads or effective price data, recomputes `request_savings` against the original baseline, and returns aggregate counts through `jobs.result`.
   - Worker startup now registers `billing_reconciliation` with the default job runner.
   - Code review found and fixed the P2 Worker registration gap after the feature handler initially only ran in direct test runners.
-  - Verification passed: feat-074 unit tests (3), real PostgreSQL E2E (1), `pnpm run db:migrate:check`, related feat-045/071/073 unit and E2E regressions, `pnpm run verify`, full `pnpm run verify:features` across all 73 prior passing features before marking, and final `pnpm run verify:features` across all 74 passing features after marking.
+  - 2026-06-19 redesign removed `billing_reconciliation_runs` / `billing_reconciliation_items` from schema, Worker writes, backup artifacts, and docs; focused feat-074 unit tests (4), real PostgreSQL feat-074 E2E (1), feat-086 backup unit/E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and full `pnpm run verify:features` across all 108 passing features passed.
 - [x] **feat-075 — Provider Health Summary Runtime (passing)**:
   - Added shared provider health runtime helpers that write `provider_health_events`, maintain `provider_health_summary`, and emit `health_summary_changed` notifications without secret-bearing payloads.
   - Worker connectivity checks now record manual and scheduled/worker-probe health events; Gateway request-path candidate failures now record provider-level and provider-model-level health events.
@@ -1317,3 +1355,162 @@
   - Console backend activity queries now support filters, pagination, requestId/activity detail lookup, and ordered fallback timeline without frontend UI changes.
   - Updated legacy fallback/schema E2E contracts for final success events and schema_version 0028.
   - Verification passed: feat-104 unit, feat-104 real PostgreSQL/Gateway E2E, focused legacy regressions feat-033/041/044/053/070/101, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` across all 103 previously passing features before marking.
+
+- [x] 2026-06-18 feat-107 Concurrency Limits and Enforcement Policy:
+  - Red phase: `pnpm exec vitest run tests/features/feat-107-concurrency-limit-policy.unit.test.ts` failed because `getConcurrencyWindow` and limit policy defaults were missing, and warn_only/manual_bypass still blocked over-limit requests.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-107-concurrency-limit-policy.e2e.spec.ts --grep 'concurrency limits increment release and respect block or warn enforcement policy'` failed because `agent_limits.alert_threshold` did not exist.
+  - Added migration `0031_concurrency_limit_policy` for `agent_limits.limit_type = 'concurrency'`, `alert_threshold`, `enforcement_policy`, `manual_bypass`, concurrency period/unit validation, schema version `0031`, and migration-status checksum.
+  - Gateway rate-limit enforcement now reads RPM, TPM, and concurrency rules, uses `rate_limit_windows.active_count` with a fixed concurrency window, increments before provider calls, returns stable 429 for block policy, lets warn_only/manual_bypass pass while still counting, and releases active_count on JSON success/failure, budget early returns, stream end/error/close, and client cancellation.
+  - `/v1/embeddings` now uses the same rate/concurrency path; Console backend and config import/export round-trip the new fields with default policy values without Console UI changes.
+  - Verification passed: feat-107 unit (4) and real PostgreSQL/Gateway/fake-provider E2E (1), `pnpm run db:migrate:check`, related feat-031/041/042/053/080/087/096 regressions, `pnpm run verify`, `pnpm run verify:features` across all 106 previously passing features before marking, and final `pnpm run verify:features` across all 107 passing features after marking.
+
+- [x] 2026-06-18 feat-108 Agent-Owned Single API Key:
+  - Red phase: added feat-108 unit coverage for migration/schema/auth contracts and an E2E that creates an Agent, receives exactly one one-time plaintext key, configures allowed/default Virtual Models plus limits, and sends a Gateway request through Agent-owned auth.
+  - Added migration `0032_agent_owned_api_key`: `agents` now owns `key_prefix`, `key_hash`, and `default_virtual_model_id`; `agent_virtual_models` stores allowed Virtual Models; runtime/accounting tables use `agent_id` and `agent_key_prefix`; legacy `agent_api_keys` and `agent_api_key_virtual_models` are dropped.
+  - Console Agent creation now generates the single high-entropy key and returns plaintext only on the `Agent created` no-store page. Removed the `/api/agent-api-keys` route and Create/Rotate/Disable/Delete key UI; key loss or leak is handled by deleting and recreating the Agent.
+  - Gateway auth now checks `agents.key_hash`; `/v1/models`, default model resolution, Agent limits, budget/rate/concurrency accounting, backup/export/alerts/usage analytics, PRODUCT/ARCHITECTURE/PLAN docs, and regression tests now use Agent-owned credential semantics without Agent API Key breakdowns.
+  - Regression repair: updated legacy Console E2Es that still clicked Create Agent API key, backup assertions that expected `agent_api_keys`, alert payload assertions that expected `agentApiKeyId`, and the feat-101 partial migration helper that had been running historical migration SQL through the legacy seed adapter.
+  - 2026-06-19 simplification: removed the 326-line PostgreSQL fixture compatibility shim that rewrote old `agent_api_keys` SQL; baseline migrations 0002/0003 now directly model Agent-owned credentials for empty-database redesign, and old regression seeds now create one Agent per credential instead of preserving key-table compatibility.
+  - 2026-06-19 cleanup: deleted the leftover Console `agent-api-keys` module, moved Agent Virtual Model access onto `agents.ts`, changed Agents/Limits UI from per-key arrays to per-Agent state, changed config import/export from `agentApiKeys[]` to a single `apiKey` object, and renamed Agent limit / Virtual Model dependency code away from key-count shapes.
+  - Verification passed after the no-compatibility redesign: `pnpm exec vitest run tests/features/feat-108-agent-owned-api-key.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-108-agent-owned-api-key.e2e.spec.ts --grep 'agent creation returns one api key and gateway uses agent owned auth'`, `pnpm run db:migrate:check`, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`, `pnpm run verify`, focused regression E2Es for the updated schema/seed paths, and final `pnpm run verify:features` with all 108 passing features re-verified.
+  - Cleanup verification passed: focused unit tests for feat-026/028/030/031/058/077/080/096/107/108, focused E2Es for feat-030/031/080/108, `pnpm run verify`, and `pnpm run verify:features` with all 108 passing features re-verified.
+
+- [x] 2026-06-19 feat-109 Agent Management Dialogs and Integration Snippets Layout:
+  - Red phase: `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --grep 'agents page matches the designed list and detail layout'` failed because clicking `+ Create Agent` still rendered inline Agent management instead of a popup dialog.
+  - Console Agents now opens Agent creation and editing through query-driven popup dialogs. The edit dialog contains Integration snippets, and the right-side selected-Agent `Integration Guide` was removed.
+  - The Agent management surface no longer displays internal readout rows for integration platform, derived status, request logging, saved API key state, request attribution count, key prefix timestamps, allowed/default Virtual Model summaries, or limit summaries.
+  - Updated legacy Agent E2Es to assert persisted state through the dialog controls instead of the removed readout rows, and made the shared `openRow` helper return when the requested edit dialog is already open behind the modal scrim.
+  - Browser verification passed on desktop and mobile: no blank page, no framework overlay, no console errors, no horizontal overflow, visible create/edit dialogs, visible Integration snippets, and hidden internal readout labels.
+  - Verification passed: focused `console-ui-agents` E2E, focused Agent regressions for feat-026/027/030/031/050/058/077/096/108, `pnpm run verify`, and `pnpm run verify:features` with all 109 passing features re-verified.
+
+- [x] 2026-06-20 feat-110 Provider Model Synced Price Fields:
+  - Red phase: `pnpm exec vitest run tests/features/feat-110-provider-model-price-merge.unit.test.ts` failed because migration `0036` was missing and runtime code still referenced `provider_models_price`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-110-provider-model-price-merge.e2e.spec.ts --grep 'provider model synced prices live on provider_models without provider_models_price'` failed because `provider_models_price` still existed after migrations.
+  - Added migration `0036_merge_provider_model_prices`: synced current-price fields now live on `provider_models`, `provider_models_price` is dropped, and no historical rows are backfilled.
+  - Updated Worker `price_sync` to update matching `provider_models` rows and publish `provider_models` config changes; external price rows without a discovered provider model are ignored.
+  - Updated Gateway config reload, Console route policy/preview/budget validation, and Worker billing reconciliation to read synced prices directly from `provider_models`.
+  - Removed `provider_models_price` from backup coverage and architecture docs; updated old regression test seeds to write `provider_models.synced_*`.
+  - Verification passed: feat-110 unit, feat-110 real PostgreSQL E2E, related feat-057/073/096/100 unit checks, related feat-057/073/096/100 E2Es, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 110 passing features re-verified.
+
+- [x] 2026-06-20 feat-111 Request Costs Savings And Migration History Cleanup:
+  - Red phase: `pnpm exec vitest run tests/features/feat-111-request-costs-savings-schema-cleanup.unit.test.ts` failed because migration `0037` was missing, production code still referenced `request_savings`, and migration status still queried `schema_version`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-111-request-costs-savings-schema-cleanup.e2e.spec.ts` failed because `request_savings` still existed after migrations.
+  - Added migration `0037_merge_request_savings_and_schema_version`: `request_costs` now stores baseline provider model, actual cost, baseline cost, savings amount/percent, and savings price source/version; existing `request_savings` rows are backfilled before `request_savings` and `schema_version` are dropped.
+  - Gateway writes cost and savings fields into one `request_costs` row. Console usage/analytics and Worker cost report/billing reconciliation now aggregate and update savings from `request_costs`.
+  - Migration status now derives `currentSchemaVersion` from the latest applied `migration_history` id; backup coverage and architecture docs no longer list `request_savings` or `schema_version`.
+  - Verification passed: feat-111 unit, feat-111 real PostgreSQL/Gateway E2E, related feat-007/009/045/071/074/079/082/085/087/095/101 regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 111 passing features re-verified.
+
+- [x] 2026-06-20 feat-112 Config Soft Delete For Runtime History:
+  - Red phase: `pnpm exec vitest run tests/features/feat-112-config-soft-delete.unit.test.ts` failed because migration `0038`, soft-delete filters, and request snapshots were missing.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-112-config-soft-delete.e2e.spec.ts --grep 'config deletes are soft and runtime history remains intact'` failed because historical labels followed renamed config instead of request snapshots.
+  - Added migration `0038_config_soft_delete`: `deleted_at` now exists on Agents, Providers, Provider Models, Virtual Models, and Route Policies; `request_activity` stores minimal Agent / Virtual Model / Route Policy / Provider / Provider Model label snapshots.
+  - Console Agent, Virtual Model, and Route Policy deletes now soft-delete rows while preserving runtime FK history. Active Console/Gateway/Worker config reads filter deleted rows; history/report/export readers prefer request snapshots and fall back to joined config.
+  - Kept runtime FKs restrictive and did not reintroduce active Provider key uniqueness, because migration `0033_allow_duplicate_provider_keys` and feat-100 rely on duplicate active `provider_key` rows.
+  - Regression repair: feat-026 now verifies Agent delete with request attribution soft-deletes; feat-029 active route count filters `deleted_at`; feat-087 Runtime page remains loadable when the database is pending `0038`.
+  - Verification passed: feat-112 unit and real PostgreSQL E2E, related feat-012/016/025/026/028/029/080/087 unit and E2E regressions, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 112 passing features re-verified. The optimized E2E batch fell back after a transient feat-084 retry scenario, and the per-feature fallback passed all features.
+
+- [x] 2026-06-21 feat-113 Export Tasks Merged Into Jobs Result:
+  - Red phase: `pnpm exec vitest run tests/features/feat-113-export-tasks-cleanup.unit.test.ts` failed because migration `0039` was missing and export handlers still wrote `export_tasks`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-113-export-tasks-cleanup.e2e.spec.ts --grep 'export metadata lives in jobs result and retention cleanup is idempotent without export_tasks'` failed because `export_tasks` still existed after migrations.
+  - Added migration `0039_merge_export_tasks_into_jobs`: export rows with null `job_id` fail migration, rows with jobs are backfilled into `jobs.result`, and `export_tasks` is dropped.
+  - JSONL and cost report export handlers now return export metadata directly as job result; retention cleanup scans completed export jobs, deletes expired files, and marks `jobs.result.exportFileDeletedAt` so repeat cleanup is idempotent.
+  - Removed `export_tasks` from backup coverage and architecture docs; updated legacy feat-081/082/085/095 regressions.
+  - Verification passed: feat-113 unit, feat-113 real PostgreSQL E2E, related feat-081/082/085/086 unit checks, related feat-081/082/085/095 E2Es, `pnpm run db:migrate:check`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 114 passing features re-verified.
+
+- [x] 2026-06-21 feat-114 Config Change Events Merged Into Config Versions:
+  - Red phase: `pnpm exec vitest run tests/features/feat-114-config-changes-cleanup.unit.test.ts` failed because migration `0040` was missing and publisher still wrote `config_change_events`.
+  - Red phase: `pnpm test:e2e tests/e2e/feat-114-config-changes-cleanup.e2e.spec.ts` failed because `config_change_events` still existed after migrations.
+  - Added migration `0040_merge_config_changes_into_versions`: `config_versions.changes` is a checked JSON array, old change events are backfilled into it, and `config_change_events` is dropped.
+  - Config publisher now writes `changes` directly into `config_versions` in the same transaction as the config write, while keeping `ConfigPublishResult` and `NOTIFY config_changed` payload unchanged.
+  - Removed `config_change_events` from backup coverage and architecture docs; updated legacy feat-008/011/015/016/023/030/031/058/073/096/100/110 regressions to read `config_versions.changes`.
+  - Verification passed: feat-114 unit, feat-114 real PostgreSQL E2E, related feat-008/011/096 unit checks, related feat-008/011/015/016/023/030/031/058/073/096/100/110 E2Es, `pnpm run db:migrate:check`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 114 passing features re-verified.
+
+- [x] 2026-06-21 Provider model metadata filtering and flat-color icon UI polish:
+  - Model refresh now filters all-listed Provider models that have no context window and no synced token price before writing available rows; stale existing rows become `not_listed` through the existing refresh plan, and Console provider-model option reads hide non-available rows.
+  - Provider model-list parsing now accepts provider-supplied context metadata (`context_window`, `contextWindow`, `context_length`, `contextLength`) so real/fake provider metadata can keep otherwise unpriced models refreshable.
+  - Console action buttons now use `icons8/flat-color-icons` assets for add, edit, enable, disable, refresh, delete, save, view, import, export, login, logout, and filter actions while preserving existing form/action behavior. A follow-up pass made icon actions pure transparent icon buttons with visually hidden text for accessibility.
+  - Verification run: targeted feat-023/057/097/100 unit tests, targeted feat-023/025/056/057/097/100 real E2Es, `pnpm run lint`, `pnpm run typecheck`, and `pnpm --filter @llmingress/console run build` passed. Full `pnpm run verify:features` was intentionally stopped per user request; user will do page-level validation.
+
+- [x] 2026-06-21 Provider package boundary extraction:
+  - Added `@llmingress/provider` and moved Gateway provider adapters, provider model-list request parsing, provider connectivity probe logic, and external model price/registry source fetchers out of app directories into the package.
+  - Gateway now imports OpenAI, Anthropic, Gemini, OpenRouter, and Ollama provider request adapters from `@llmingress/provider/*`; Worker model refresh and price sync import model-list and price-source logic from the same package.
+  - Added `@llmingress/db/client` and `@llmingress/db/provider-jobs`; Console provider refresh/connectivity job enqueue paths and Worker provider model refresh / connectivity check flows now use shared DB package entry points instead of local `pg.Client` helpers. Existing broader Console/Gateway/Worker SQL modules still need a separate repository-layer migration if all DB queries must physically leave app directories.
+  - Verification run: `pnpm run typecheck`, `pnpm run lint`, and `pnpm test` (114 files / 345 tests) passed. Full E2E was not run per user request.
+  - UI follow-up: removed the Provider page model-library `Actions` column and verified `/providers` renders without that table header or model detail action links.
+
+- [x] 2026-06-21 Shared DB package boundary refactor:
+  - Added a boundary regression test that rejects production `pg` imports in Console, Gateway, Worker, `packages/config`, and `packages/provider`, and rejects `pg` package dependencies outside `@llmingress/db`.
+  - Moved config version publish/listen operations from `@llmingress/config` to `@llmingress/db/config-versions`; `@llmingress/config` now keeps a compatibility re-export for existing imports.
+  - Added domain-oriented `@llmingress/db` subpaths for providers, agents, routes, activity, jobs, health, notifications, and maintenance, and moved production app `pg` usage behind these db package entry points.
+  - Removed `pg` dependencies from Console, Gateway, Worker, and Config package manifests; `@llmingress/db` remains the only production package that depends on `pg`.
+  - Turbopack follow-up: new `@llmingress/db/*` domain re-export modules use package subpath imports such as `@llmingress/db/client` instead of relative `./client.js`, because Next dev consumes package source `.ts` files directly and does not resolve same-package `.js` specifiers to `.ts`.
+  - Verification passed: new boundary unit test, focused config/provider/gateway/worker unit tests, `pnpm run typecheck`, `pnpm run lint`, and full `pnpm test` (115 files / 347 tests). Full E2E was not run per user request.
+
+- [x] 2026-06-22 feat-115 Provider Subscription OAuth:
+  - Added migration `0045_provider_subscription_oauth`: `providers.provider_type` now accepts `subscription`, and new `provider_oauth` stores multiple enabled OAuth connections per subscription provider with label, priority, pending PKCE state, encrypted token blob, token expiry, and per-connection test status.
+  - Added subscription provider templates and Console create tabs for `Subscription / API Keys / Local`; OpenAI Codex and Claude Code can be created as subscription providers without creating a connection immediately.
+  - Added Console OAuth connection flow: label/priority validation, PKCE authorization URL generation, callback/code parsing, encrypted token storage, enable/disable/delete actions, and model refresh/connectivity enqueue after OAuth completion.
+  - Added provider package OAuth/subscription helpers for OpenAI Codex and Claude Code. OpenAI Codex model refresh uses `chatgpt.com/backend-api/codex/models?client_version=0.128.0` and requests use `/codex/responses`; Claude Code model refresh uses Anthropic `/v1/models?limit=100` and requests use `/v1/messages` with Claude Code bearer headers.
+  - Worker model refresh now selects the first enabled completed OAuth connection by `priority, created_at, id`, refreshes expired tokens, and writes refreshed token blobs back. Worker connectivity checks every enabled completed OAuth connection, writes `provider_oauth.last_test_status`, and aggregates provider health to `healthy` when any connection works.
+  - Gateway excludes subscription providers from Chat Completions and Embeddings, routes OpenAI Codex subscription candidates through Responses, and routes Claude Code subscription candidates through Messages.
+  - Follow-up E2E repair aligned legacy Console tests with the current Provider/Agent UI and health status taxonomy: segmented Provider create tabs, icon/text label changes, Key table `Label/Priority/Status` columns, Gemini OpenAI-compatible response shape, and `provider_health_events.status = unhealthy`.
+  - Verification passed: focused feat-115 unit/E2E checks, repaired focused E2Es for feat-028/050/056/057/062/064/066/080/095/103/109, `pnpm run verify:features` with all 115 passing features re-verified, and `pnpm run verify`.
+  - Interactive repair: fixed subscription template creation when the Console form submits the template's fixed base URL, added migration `0046_allow_subscription_provider_templates` so `openai_codex` and `claude_code` pass `providers_template_id_whitelisted`, migrated the local database to schema `0046`, and browser-verified OpenAI Codex creation from `/providers?providerDialog=new`.
+  - Repair verification passed: `pnpm exec vitest run tests/features/feat-115-provider-subscription-oauth.unit.test.ts tests/features/feat-062-provider-template-selector.unit.test.ts`, `pnpm exec biome check ...`, `pnpm --filter @llmingress/console typecheck`, `pnpm run db:migrate:check`, and `git diff --check`. Full regression/E2E was not run per interactive testing scope.
+  - Interactive OAuth dialog follow-up: `/api/provider-oauth` now returns the generated authorization URL to the Provider dialog instead of a standalone HTML page; the same dialog shows editable Label, Priority, and callback URL/code fields, and complete only updates OAuth metadata when the Console form explicitly sends it so Gateway/Worker token refreshes preserve existing metadata.
+  - Follow-up verification passed: `pnpm exec vitest run tests/features/feat-115-provider-subscription-oauth.unit.test.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm exec biome check ...`, and browser verification on `/providers` showing Authorization URL, editable Label/Priority, callback input, and visible authorization link text. Full regression/E2E was not run per interactive testing scope.
+  - Claude Code OAuth UI follow-up: OAuth dialog Start/Connect buttons now keep their text visible despite the global icon-only rule, and browser verification confirmed Claude Code shows a `claude.ai` authorization URL plus callback input after Start OAuth. Full regression/E2E was not run per interactive testing scope.
+  - Claude Code OAuth 400 repair: new Claude authorization flows use the PKCE verifier as `state`, matching the Claude Code / Anthropic token exchange expectation; browser verification confirmed the new Claude `code_challenge` matches `sha256(state)`. Existing failed pending Claude flows must be restarted.
+  - Claude Code token exchange 400 follow-up: Anthropic token POST now includes `state` in the JSON body for authorization-code exchange, matching the Claude Code token endpoint shape. Verification passed: feat-115 unit test, Console typecheck, and Biome check; full regression/E2E was not run per interactive testing scope.
+  - Claude Code model discovery follow-up: Worker model refresh maps subscription metadata lookups from `claude_code` to Anthropic so `/v1/models` rows receive context/capability metadata and survive the refreshable-model filter. Targeted verification passed: feat-023 unit test, Worker typecheck, Biome check, direct local refresh for provider `52043af4-c903-4858-817c-0eeb21e9d4ac` inserted 9 models, connectivity check returned healthy HTTP 200, and browser verification showed Claude Code as `available` with 9 models. Full regression/E2E was not run per interactive testing scope.
+  - OAuth add-entry follow-up: the Provider detail add button for subscription providers now posts `action=start` directly, so clicking Add OAuth connection redirects straight to the Authorization URL/callback dialog and no Start OAuth dialog is shown. Verification passed: feat-115 unit test, Console typecheck, Biome check, and browser DOM verification for Claude Code selected provider. Full regression/E2E was not run per interactive testing scope.
+  - OAuth pending visibility follow-up: Console OAuth management now lists only completed connections with encrypted tokens, so canceling/closing an authorization flow does not show a pending PKCE row as an added OAuth record. Verification passed: feat-115 unit test, DB and Console typecheck, Biome check, and local DB count check for the Claude Code provider. Full regression/E2E was not run per interactive testing scope.
+  - Local Provider public-network risk follow-up: removed the Console risk checkbox/prompt, removed the old risk-acceptance form/API field, removed local template create public/private URL gating, and removed local/private URL gating from config import. Verification passed: targeted feat-021/064/080 unit tests, Console typecheck, Biome check on touched files, and browser verification on `/providers?providerDialog=new` showing Local without a risk prompt/checkbox. Full regression/E2E was not run per interactive testing scope.
+  - Local Provider API-key follow-up: Local providers no longer require stored API keys in the Console detail card, Worker connectivity probes local providers directly, Gateway local candidates attach an empty credential instead of requiring `provider_api_keys`, and OpenAI-compatible local requests omit the Authorization header when no key is configured. Verification passed: targeted feat-024/036/064 unit tests, Console/Gateway/Worker/Provider typechecks, Biome check on touched files, and browser verification on the selected Ollama provider showing no API-key prompt and an enabled refresh button. Full regression/E2E was not run per interactive testing scope.
+  - Ollama local model refresh follow-up: local Provider model refresh now keeps local models without registry metadata or synced token prices by applying a conservative 4096 context default before filtering, and the refresh redirect preserves the selected Provider. Verification passed: feat-023 unit test, Console and Worker typechecks, Biome check on touched files, and browser refresh verification showing Ollama selected with `llama3.2:3b` in the model library. Full regression/E2E was not run per interactive testing scope.
+  - LM Studio model metadata follow-up: LM Studio refresh now reads `/api/v0/models` instead of the OpenAI-compatible `/v1/models` endpoint so local `tool_use` and context metadata are preserved. Verification passed: feat-023 unit test, Provider/Worker typechecks, Biome check on touched files, direct local refresh for provider `c8cbeeee-7dac-4b57-8107-d3bf91cae208`, DB check showing `qwen/qwen3-1.7b` with `supports_tools=true` and `context_window=40960`, and browser verification showing the model row as tools-supported. Full regression/E2E was not run per interactive testing scope.
+  - llama.cpp tools metadata follow-up: llama.cpp refresh now merges `/v1/models` with `/props` chat template capabilities, because the local server exposes `supports_tools` through `/props` even when the model list only says `completion`. Verification passed: feat-023 unit test, Provider/Worker typechecks, Biome check on touched files, direct local refresh for provider `94c88ed4-60b3-42dd-b737-320ad52901eb`, DB check showing `Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` with `supports_tools=true` and `context_window=8192`, and browser verification showing `TOOLS` as `supported`. Full regression/E2E was not run per interactive testing scope.
+  - Subscription provider price follow-up: price_sync now maps `openai_codex` to `openai` and `claude_code` to `anthropic` when writing synced prices, so OpenAI Codex and Claude Code rows receive matching base-provider prices from models.dev/LiteLLM. Verification passed: feat-073 unit test, Worker typecheck, direct local price sync (`syncedPriceCount=514`), DB check showing OpenAI Codex and Claude Code synced prices, and browser verification showing OpenAI Codex model rows with prices. Full regression/E2E was not run per interactive testing scope.
+  - Full regression repair: added migration `0046` to the shipped migration status manifest, and updated the feat-094 provider coverage E2E to assert local providers omit outbound Authorization headers after local API keys became optional. Verification passed: focused feat-087 unit test, focused feat-094 E2E, and `pnpm run verify:features` with all 115 passing features re-verified.
+  - CI E2E follow-up: Provider create form now synchronizes display name and base URL with explicit client state when the selected provider template changes, fixing the CI-only feat-063 failure where DeepSeek selection still showed OpenAI. Verification passed: Biome check for the form and focused feat-063 E2E. Full `pnpm test:e2e` is blocked locally by unrelated in-progress Console UI changes.
+  - Agent protocol follow-up: Gateway now logs detailed agent request bodies when request logging is enabled, accepts OpenAI Responses message-content parts and Anthropic array system prompts from real agents, caps oversized Anthropic `max_tokens`, maps provider 429s to `provider_rate_limited`, and routes subscription streaming through the Codex/Claude Code OAuth-specific URLs, headers, and body shaping. Playground now supports Responses, Anthropic Messages, and Chat Completions request protocols.
+  - Subscription OAuth follow-up: OpenAI OAuth delete now revokes the token remotely before local deletion, Claude Code revoke remains local-only, Codex Responses bodies are cleaned for the ChatGPT backend, Codex SSE text is normalized into Responses output text, and Claude Code OAuth requests inject the required Claude Agent SDK system identifier for JSON and streaming messages.
+  - Full E2E repair: `feat-048` seeds runtime heartbeat data inside the Console process lock so the heartbeat does not age into `Stale` while waiting for another Next dev server; `feat-061` waits for the Provider dialog and switches to the API Keys tab before asserting base-URL field layout because subscription providers are now the default create group.
+  - Verification passed: focused `feat-048`/`feat-061` E2E, focused `feat-038`/`feat-039` Gateway E2E and neighboring 5-worker Gateway subset, `pnpm lint`, `pnpm typecheck`, and full `pnpm test:e2e` with 131 passing tests. One earlier full E2E run showed transient Gateway startup exits for `feat-038`/`feat-039`; both targeted reruns and the final full run passed.
+
+- [x] 2026-06-23 feat-116 Activity Reference UI Alignment:
+  - Scope: align Console Activity with `docs/UI/06_activity.png` while keeping the current English Console UI direction.
+  - Started on branch `codex/feat-116-activity-reference-ui`.
+  - RED tests added first for server-side Activity filters/metadata formatting and real browser Activity layout/detail behavior.
+  - Implemented SQL-backed Agent/Virtual Model/Provider/Status/time-range/Request ID filters, 8-row request table, selected request detail, ordered fallback timeline, metric cards, conditional error info, safe request metadata, and Activity-only responsive CSS.
+  - Visual QA: compared `docs/UI/06_activity.png` with Playwright desktop/mobile screenshots through `view_image`; adjusted table column sizing and compact missing table values to avoid clipped headers or overlapping text; mobile `body` horizontal overflow was false.
+  - Verification passed: focused feat-116 unit/E2E, related feat-046/098/104 regressions, console-ui Activity smoke, `pnpm run verify`, and final `pnpm run verify:features` with all 116 passing features re-verified.
+  - Interactive follow-up: aligned the Activity request-detail panel top with the request-list table header, fixed metric-card long number overflow, and changed Responses runtime failures so unsupported provider/protocol routes persist the concrete error message for Activity Error info instead of the generic `Provider request failed.`.
+  - Follow-up verification passed: `pnpm exec vitest run tests/features/feat-037-responses-stateless.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, `git diff --check`, plus live browser checks for Activity alignment and metric overflow. Full E2E was not rerun during the active interactive dev-server session.
+
+- [x] 2026-06-23 Virtual Model metrics interactive fix:
+  - Root cause: `/models` Virtual Model KPI/list/detail metrics used deterministic placeholder values, so newly created unused models such as `mix` showed non-zero requests/cost/failure rates.
+  - Verified live DB state for `mix`: `request_activity` count 0, failed count 0, and no latest request.
+  - Replaced VM metrics with real `request_activity` + `request_costs` aggregates in `listVirtualModels`: Requests/Cost are rolling 24h with 8-decimal cost precision, Failure rate is all-time; removed fake VM metric deltas from the page.
+  - Added unit coverage for unused VM zero metrics and used VM non-zero metrics, plus a Console UI E2E regression spec for row/detail behavior.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-028-virtual-model-crud.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, `git diff --check`, and in-app browser verification on `http://localhost:3000/models` showing `mix` as `0 / $0.00 / 0.0%` with no console warnings/errors.
+  - Note: the focused Console UI E2E was not rerun during live testing because it starts a second Next dev server that conflicts with the intentionally running interactive dev server.
+
+- [x] 2026-06-23 Route strategy interactive fix:
+  - Changed Quality First semantics to pick the highest-priced eligible primary candidate. For Quality First fallbacks, Gateway now tries configured fallback candidates from highest price to lowest price after the selected candidate.
+  - Removed Balanced from current Console route-policy inputs, config import validation, and route-policy normalization; added Random strategy for testing, selecting a random eligible primary candidate per request.
+  - Added migration `0047_route_policy_random_strategy` to convert existing `balanced` rows to `random` and replace the `route_policies.strategy` check constraint. Applied the migration to the local dev database; `mix` now stores `strategy=random`, while `gpt55=cost_first` and `opus48=fixed` were unchanged.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-032-route-engine.unit.test.ts tests/features/feat-033-fallback-chain.unit.test.ts tests/features/feat-029-route-policy-crud.unit.test.ts`, `pnpm exec vitest run tests/features/feat-087-migration-status-check.unit.test.ts`, `pnpm run db:migrate:check`, `pnpm run typecheck`, and `pnpm run lint`.
+  - Lightweight HTTP check on `/models?selected=beb7a335-014b-479c-bd9a-2bab4ffcdbaf&virtualModelDialog=beb7a335-014b-479c-bd9a-2bab4ffcdbaf` showed `Random`, `Quality First`, `Cost First`, and `Fixed` text with no `Balanced` text; it did not reuse the signed-in in-app browser session.
+
+- [x] 2026-06-23 Hermes chat-completions tool-context fix:
+  - Root cause: Hermes' second turn included OpenAI Chat tool-call context, but Gateway only accepted messages with `content: string`, so valid assistant `tool_calls` / tool result messages were rejected before routing.
+  - Updated `/v1/chat/completions` normalization to accept text content parts, assistant `tool_calls` with null content, and tool result messages while preserving tool metadata in the provider payload. Request metadata now treats `tool_calls` as tool usage without assuming every message has string content.
+  - TDD red observed first: the new feat-036 unit test reproduced the `invalid_chat_request` response for a Hermes-style tool context.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts`, `pnpm exec vitest run tests/features/feat-036-chat-completions.unit.test.ts tests/features/feat-018-openai-adapter.unit.test.ts tests/features/feat-040-request-metadata.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`.
+
+- [x] 2026-06-23 Route policy Add Model health filter:
+  - Add Model provider/model options now filter out provider-level warning health statuses (`auth_failed`, `network_error`, `quota_limited`, `unhealthy`) so unhealthy Providers do not appear in the picker.
+  - Existing selected candidates still render in the route policy display; the filter only affects new selectable options.
+  - TDD red observed first in `tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`. Full E2E was not rerun during the active interactive dev-server session.

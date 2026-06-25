@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { AgentApiKeyVirtualModelAccess } from "../../apps/console/src/server/agent-api-keys";
 import {
   buildAgentIntegrationTemplates,
   formatDashboardAgentApiKeySnippetValue,
   resolveAgentIntegrationModelName,
 } from "../../apps/console/src/server/agent-integrations";
+import type { AgentVirtualModelAccess } from "../../apps/console/src/server/agents";
 
 describe("feat-077 agent integration templates", () => {
   it("builds codex claude code cursor and openclaw snippets with gateway url api key and model", () => {
@@ -73,11 +73,9 @@ describe("feat-077 agent integration templates", () => {
   });
 });
 
-function access(
-  input: Omit<AgentApiKeyVirtualModelAccess, "agentApiKeyId">,
-): AgentApiKeyVirtualModelAccess {
+function access(input: Omit<AgentVirtualModelAccess, "agentId">): AgentVirtualModelAccess {
   return {
-    agentApiKeyId: "agent-api-key-077",
+    agentId: "agent-077",
     ...input,
   };
 }

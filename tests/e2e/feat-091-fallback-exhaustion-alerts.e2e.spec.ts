@@ -181,7 +181,7 @@ async function seedFallbackExhaustionData(fixture: Fixture): Promise<FallbackExh
     ],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'fallback-alerts-fast', 'Fallback Alerts Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'fallback-alerts-fast', 'Fallback Alerts Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -190,8 +190,7 @@ async function seedFallbackExhaustionData(fixture: Fixture): Promise<FallbackExh
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_fb_091', 'sha256:v1:fallback-alert-091', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_fb_091', key_hash = 'sha256:v1:fallback-alert-091', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -249,9 +248,9 @@ async function insertFailedActivity(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,

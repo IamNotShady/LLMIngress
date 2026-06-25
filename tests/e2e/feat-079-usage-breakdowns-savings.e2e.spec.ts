@@ -5,7 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("usage page shows agent agent api key virtual model provider model cost failure and savings breakdowns", async ({
+test("usage page shows agent virtual model provider model cost failure and savings breakdowns", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -33,54 +33,39 @@ test("usage page shows agent agent api key virtual model provider model cost fai
           await page.goto(`${baseUrl}/usage`);
 
           const usageSection = page.getByRole("region", { name: "Usage & Cost" });
-          await expect(usageSection.getByText("Requests: 3")).toBeVisible();
-          await expect(usageSection.getByText("Failures: 1")).toBeVisible();
-          await expect(usageSection.getByText("Savings: $0.00400000")).toBeVisible();
-
+          // Counts + savings via the KPI cards and the savings panel.
           await expect(
-            usageSection.getByRole("heading", { name: "Agent breakdown" }),
-          ).toBeVisible();
+            usageSection
+              .locator(".stat-card", { hasText: "Total requests" })
+              .locator(".stat-card-value"),
+          ).toHaveText("3");
+          await expect(
+            usageSection.locator(".stat-card", { hasText: "Savings" }).locator(".stat-card-value"),
+          ).toHaveText("$0.00400000");
+
+          // Cost breakdown donuts surface agent / virtual model / provider names in their legends.
+          await expect(usageSection.getByRole("heading", { name: "Agent cost" })).toBeVisible();
           await expect(usageSection.getByText("Codex Usage", { exact: true })).toBeVisible();
           await expect(
-            usageSection.getByRole("heading", { name: "Agent API Key breakdown" }),
-          ).toBeVisible();
-          await expect(
-            usageSection.getByText("Codex Usage / llmi_usage79", { exact: true }),
-          ).toBeVisible();
-          await expect(
-            usageSection.getByRole("heading", { name: "Virtual Model breakdown" }),
+            usageSection.getByRole("heading", { name: "Virtual Model cost" }),
           ).toBeVisible();
           await expect(
             usageSection.getByText("Usage Fast (usage-fast)", { exact: true }),
           ).toBeVisible();
+          await expect(usageSection.getByRole("heading", { name: "Provider cost" })).toBeVisible();
           await expect(
-            usageSection.getByRole("heading", { name: "Provider breakdown" }),
-          ).toBeVisible();
-          await expect(usageSection.getByText("Usage OpenAI", { exact: true })).toBeVisible();
-          await expect(usageSection.getByText("Usage Anthropic", { exact: true })).toBeVisible();
-          await expect(
-            usageSection.getByRole("heading", { exact: true, name: "Model breakdown" }),
+            usageSection.getByText("Usage OpenAI", { exact: true }).first(),
           ).toBeVisible();
           await expect(
-            usageSection.getByText("GPT 4.1 Mini (gpt-4.1-mini)", { exact: true }),
+            usageSection.getByText("Usage Anthropic", { exact: true }).first(),
           ).toBeVisible();
+
+          // Provider / Model summary table lists each provider+model row.
           await expect(
-            usageSection.getByText("Claude Haiku (claude-haiku-4-5)", { exact: true }),
+            usageSection.getByRole("heading", { name: "Provider / Model summary" }),
           ).toBeVisible();
-          await expect(
-            usageSection
-              .getByText(
-                "3 requests - 1 failure - 450 tokens - cost $0.00150000 - savings $0.00400000",
-              )
-              .first(),
-          ).toBeVisible();
-          await expect(
-            usageSection
-              .getByText(
-                "1 request - 0 failures - 150 tokens - cost $0.00050000 - savings $0.00200000",
-              )
-              .first(),
-          ).toBeVisible();
+          await expect(usageSection.getByRole("cell", { name: /GPT 4\.1 Mini/ })).toBeVisible();
+          await expect(usageSection.getByRole("cell", { name: /Claude Haiku/ })).toBeVisible();
         } finally {
           await context.close();
         }
@@ -130,7 +115,7 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
     [ids.openaiModelId, ids.openaiProviderId, ids.anthropicModelId, ids.anthropicProviderId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'usage-fast', 'Usage Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'usage-fast', 'Usage Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -139,8 +124,7 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_usage79', 'hash-usage-079', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_usage79', key_hash = 'hash-usage-079', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -201,8 +185,8 @@ async function insertUsageBreakdownRequest(
   await fixture.query(
     `
       insert into request_activity (
-        id, request_id, agent_api_key_id, virtual_model_id, provider_id,
-        provider_model_id, agent_api_key_prefix, protocol, model, stream,
+        id, request_id, agent_id, virtual_model_id, provider_id,
+        provider_model_id, agent_key_prefix, protocol, model, stream,
         status, error_code, http_status, started_at, completed_at
       )
       values (
@@ -228,7 +212,7 @@ async function insertUsageBreakdownRequest(
   await fixture.query(
     `
       insert into request_usage (
-        id, request_activity_id, agent_api_key_id, virtual_model_id, provider_model_id,
+        id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
         input_tokens, output_tokens, total_tokens, token_source
       )
       values ($1, $2, $3, $4, $5, $6, $7, $8, 'estimated')
@@ -247,20 +231,19 @@ async function insertUsageBreakdownRequest(
   await fixture.query(
     `
       insert into request_costs (
-        id, request_activity_id, agent_api_key_id, provider_model_id, total_cost_usd, cost_source
+        id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source,
+        actual_cost_usd, baseline_cost_usd, savings_usd
       )
-      values ($1, $2, $3, $4, $5::numeric, 'estimated')
+      values ($1, $2, $3, $4, $5::numeric, 'estimated', $5::numeric, ($5::numeric + $6::numeric), $6::numeric)
     `,
-    [randomUUID(), activityId, input.agentApiKeyId, input.providerModelId, input.costUsd],
-  );
-  await fixture.query(
-    `
-      insert into request_savings (
-        id, request_activity_id, actual_cost_usd, baseline_cost_usd, savings_usd
-      )
-      values ($1, $2, $3::numeric, ($3::numeric + $4::numeric), $4::numeric)
-    `,
-    [randomUUID(), activityId, input.costUsd, input.savingsUsd],
+    [
+      randomUUID(),
+      activityId,
+      input.agentApiKeyId,
+      input.providerModelId,
+      input.costUsd,
+      input.savingsUsd,
+    ],
   );
 }
 

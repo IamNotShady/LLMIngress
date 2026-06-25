@@ -5,7 +5,7 @@ import { join } from "node:path";
 export async function withProcessLock<T>(
   lockName: string,
   operation: () => Promise<T>,
-  timeoutMs = 60_000,
+  timeoutMs = 180_000,
   settleMs = 250,
 ): Promise<T> {
   const lockPath = join(tmpdir(), `${lockName}.lock`);
@@ -30,6 +30,10 @@ export async function withProcessLock<T>(
       }
 
       const ownerPid = await readLockOwnerPid(lockPath);
+      if (ownerPid === 0) {
+        await sleep(25);
+        continue;
+      }
       if (!isProcessRunning(ownerPid)) {
         await unlink(lockPath).catch(() => {});
         continue;
@@ -62,6 +66,9 @@ async function readLockOwnerPid(lockPath: string): Promise<number> {
   }
 
   const value = raw.trim();
+  if (!value) {
+    return 0;
+  }
   if (!/^\d+$/.test(value)) {
     throw new Error(`Malformed process lock: ${lockPath} contains ${JSON.stringify(value)}`);
   }

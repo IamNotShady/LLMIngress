@@ -2,13 +2,13 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 import { openDisclosure } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
-test("local provider templates enforce local private urls template paths and public risk confirmation", async ({
+test("local provider templates accept configured urls and use template paths", async ({
   browser,
 }) => {
   const server = await createFakeProviderServer();
@@ -64,38 +64,21 @@ test("local provider templates enforce local private urls template paths and pub
           await page.goto(`${baseUrl}/providers`);
 
           await openDisclosure(page, "Add from template");
-          const localTemplates = page.getByRole("group", { name: "Local templates" });
-          for (const [displayName, placeholder] of [
-            ["LM Studio", "http://127.0.0.1:1234/v1"],
-            ["llama.cpp", "http://127.0.0.1:8080/v1"],
+          const dialog = page.getByRole("dialog", { name: "Add Provider" });
+          await dialog.getByRole("tab", { name: "Local" }).click();
+          const providerType = dialog.getByLabel("Provider type", { exact: true });
+          const displayNameInput = dialog.getByLabel("Provider display name");
+          const baseUrlInput = dialog.getByLabel("Provider base URL");
+          for (const [displayName, id, placeholder] of [
+            ["LM Studio", "lmstudio", "http://127.0.0.1:1234/v1"],
+            ["llama.cpp", "llama_cpp", "http://127.0.0.1:8080/v1"],
           ] as const) {
-            const templateCard = localTemplates.locator(".provider-template-card").filter({
-              has: page.getByRole("heading", { name: displayName }),
-            });
-            await expect(templateCard.getByRole("heading", { name: displayName })).toBeVisible();
-            await expect(
-              templateCard.getByText("Base URL: user-provided local/private URL"),
-            ).toBeVisible();
-            await expect(templateCard.getByText("Model list path: /models")).toBeVisible();
-            await expect(templateCard.getByText("Chat path: /chat/completions")).toBeVisible();
-            await expect(
-              templateCard.getByText("Capabilities: Chat completions, Streaming, Tools"),
-            ).toBeVisible();
-            await expect(page.getByLabel(`${displayName} base URL`)).toHaveAttribute(
-              "placeholder",
-              placeholder,
-            );
+            await expect(providerType).toContainText(displayName);
+            await providerType.selectOption(id);
+            await expect(displayNameInput).toHaveValue(displayName);
+            await expect(baseUrlInput).toHaveAttribute("placeholder", placeholder);
+            await expect(dialog.getByRole("checkbox")).toHaveCount(0);
           }
-
-          const publicCreate = await postProviderForm(page, {
-            action: "createFromTemplate",
-            baseUrl: "https://lmstudio.example.com/v1",
-            templateId: "lmstudio",
-          });
-          expect(publicCreate.status).toBe(400);
-          expect(publicCreate.body).toMatchObject({
-            error: expect.stringMatching(/public network.*risk confirmation/i),
-          });
 
           const loopbackCreate = await postProviderForm(page, {
             action: "createFromTemplate",
@@ -103,6 +86,7 @@ test("local provider templates enforce local private urls template paths and pub
             templateId: "lmstudio",
           });
           expect(loopbackCreate.status).toBe(200);
+          expect(loopbackCreate.url).toMatch(/\/providers$/);
 
           const privateCreate = await postProviderForm(page, {
             action: "createFromTemplate",
@@ -110,6 +94,7 @@ test("local provider templates enforce local private urls template paths and pub
             templateId: "llama_cpp",
           });
           expect(privateCreate.status).toBe(200);
+          expect(privateCreate.url).toMatch(/\/providers$/);
 
           const providers = await readLocalOpenAICompatibleProviders(fixture);
           expect(providers).toEqual([
@@ -173,7 +158,7 @@ async function readLocalOpenAICompatibleProviders(
 async function postProviderForm(
   page: Page,
   form: Record<string, string>,
-): Promise<{ body: unknown; status: number }> {
+): Promise<{ body: unknown; status: number; url: string }> {
   return page.evaluate(async (formInput) => {
     const response = await fetch("/api/providers", {
       body: new URLSearchParams(formInput),
@@ -187,6 +172,7 @@ async function postProviderForm(
           ? await response.json()
           : null,
       status: response.status,
+      url: response.url,
     };
   }, form);
 }

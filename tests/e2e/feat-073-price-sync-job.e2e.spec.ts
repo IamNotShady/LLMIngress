@@ -206,7 +206,7 @@ async function seedPriceSyncConfig(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'price-sync-coding', 'Price Sync Coding', true)
     `,
     [virtualModelId],
@@ -237,15 +237,7 @@ async function seedPriceSyncConfig(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_price_073', $3, $4, true)
+      update agents set id = $1, key_prefix = 'llmi_price_073', key_hash = $3, default_virtual_model_id = $4, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, `hash-${randomUUID()}`, virtualModelId],
   );
@@ -254,12 +246,12 @@ async function seedPriceSyncConfig(fixture: Fixture): Promise<void> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         route_policy_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -289,7 +281,7 @@ async function seedPriceSyncConfig(fixture: Fixture): Promise<void> {
       insert into request_costs (
         id,
         request_activity_id,
-        agent_api_key_id,
+        agent_id,
         provider_model_id,
         input_cost_usd,
         output_cost_usd,
@@ -394,13 +386,15 @@ async function readPriceSnapshots(fixture: Fixture): Promise<PriceSnapshotRow[]>
     `
       select provider_key,
              model_id,
-             input_usd_per_million_tokens::text,
-             cached_input_usd_per_million_tokens::text,
-             output_usd_per_million_tokens::text,
-             source,
-             source_url,
-             price_version
-      from provider_models_price
+             synced_input_usd_per_million_tokens::text as input_usd_per_million_tokens,
+             synced_cached_input_usd_per_million_tokens::text as cached_input_usd_per_million_tokens,
+             synced_output_usd_per_million_tokens::text as output_usd_per_million_tokens,
+             synced_price_source as source,
+             synced_price_source_url as source_url,
+             synced_price_version as price_version
+      from provider_models
+      join providers on providers.id = provider_models.provider_id
+      where synced_price_version is not null
       order by provider_key, model_id, source
     `,
   );
@@ -433,9 +427,10 @@ async function readConfigPublication(fixture: Fixture): Promise<{
     `
       select (
                select count(*)::text
-               from config_change_events
-               where source = 'worker'
-                 and changed_table = 'provider_models_price'
+               from config_versions
+               cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+               where change.value->>'source' = 'worker'
+                 and change.value->>'table' = 'provider_models'
              ) as price_registry_change_count,
              (
                select count(*)::text

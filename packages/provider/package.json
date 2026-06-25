@@ -1,0 +1,56 @@
+{
+  "name": "@llmingress/provider",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./anthropic": {
+      "types": "./src/adapters/anthropic.ts",
+      "default": "./src/adapters/anthropic.ts"
+    },
+    "./connectivity": {
+      "types": "./src/connectivity.ts",
+      "default": "./src/connectivity.ts"
+    },
+    "./model-list": {
+      "types": "./src/model-list.ts",
+      "default": "./src/model-list.ts"
+    },
+    "./oauth": {
+      "types": "./src/oauth.ts",
+      "default": "./src/oauth.ts"
+    },
+    "./ollama": {
+      "types": "./src/adapters/ollama.ts",
+      "default": "./src/adapters/ollama.ts"
+    },
+    "./openai": {
+      "types": "./src/adapters/openai.ts",
+      "default": "./src/adapters/openai.ts"
+    },
+    "./openrouter": {
+      "types": "./src/adapters/openrouter.ts",
+      "default": "./src/adapters/openrouter.ts"
+    },
+    "./subscription-adapters": {
+      "types": "./src/adapters/subscription.ts",
+      "default": "./src/adapters/subscription.ts"
+    },
+    "./price-source": {
+      "types": "./src/price-source.ts",
+      "default": "./src/price-source.ts"
+    },
+    "./subscription": {
+      "types": "./src/subscription.ts",
+      "default": "./src/subscription.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

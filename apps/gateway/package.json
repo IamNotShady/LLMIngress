@@ -13,9 +13,10 @@
     "@llmingress/billing": "workspace:*",
     "@llmingress/config": "workspace:*",
     "@llmingress/db": "workspace:*",
+    "@llmingress/domain": "workspace:*",
     "@llmingress/observability": "workspace:*",
+    "@llmingress/provider": "workspace:*",
     "@llmingress/security": "workspace:*",
-    "fastify": "^5.8.5",
-    "pg": "^8.21.0"
+    "fastify": "^5.8.5"
   }
 }

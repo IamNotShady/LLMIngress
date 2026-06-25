@@ -6,7 +6,7 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
-test("agent key limit form saves budget rpm tpm token rules without manual price fields", async ({
+test("agent limit form saves budget rpm tpm token rules without manual price fields", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -36,11 +36,7 @@ test("agent key limit form saves budget rpm tpm token rules without manual price
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
-          await expect(page.getByRole("heading", { name: "Codex" })).toBeVisible();
-
-          await openRow(page, "Codex");
-          await page.getByRole("button", { name: "Create Agent API key" }).click();
-          await expect(page.getByRole("heading", { name: "Agent API key created" })).toBeVisible();
+          await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
           await readOnlyAgentApiKeyId(fixture);
@@ -50,18 +46,21 @@ test("agent key limit form saves budget rpm tpm token rules without manual price
           await expect(page.getByLabel("Budget price provider key")).toHaveCount(0);
           await expect(page.getByLabel("Budget price model id")).toHaveCount(0);
 
+          const configChangeBaseline = await countAgentLimitConfigChanges(fixture);
+
           await page.getByLabel("Budget USD limit").fill("10");
           await page.getByLabel("Budget period").selectOption("month");
           await page.getByLabel("RPM limit").fill("60");
           await page.getByLabel("TPM limit").fill("120000");
           await page.getByLabel("Token limit").fill("8000");
-          await page.getByRole("button", { name: "Save Agent API key limits" }).click();
+          await page.getByRole("button", { exact: true, name: "Save" }).click();
 
           await openRow(page, "Codex");
-          await expect(page.getByText("Budget Limit: $10.00 / month")).toBeVisible();
-          await expect(page.getByText("RPM Limit: 60 requests / minute")).toBeVisible();
-          await expect(page.getByText("TPM Limit: 120000 tokens / minute")).toBeVisible();
-          await expect(page.getByText("Token Limit: 8000 tokens / request")).toBeVisible();
+          await expect(page.getByLabel("Budget USD limit")).toHaveValue("10");
+          await expect(page.getByLabel("Budget period")).toHaveValue("month");
+          await expect(page.getByLabel("RPM limit")).toHaveValue("60");
+          await expect(page.getByLabel("TPM limit")).toHaveValue("120000");
+          await expect(page.getByLabel("Token limit")).toHaveValue("8000");
           await expect
             .poll(() => readAgentLimits(fixture))
             .toEqual([
@@ -70,7 +69,9 @@ test("agent key limit form saves budget rpm tpm token rules without manual price
               { limitType: "token", limitValue: "8000.000000", period: "request", unit: "tokens" },
               { limitType: "tpm", limitValue: "120000.000000", period: "minute", unit: "tokens" },
             ]);
-          await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(1);
+          await expect
+            .poll(() => countAgentLimitConfigChanges(fixture))
+            .toBe(configChangeBaseline + 1);
         } finally {
           await context.close();
         }
@@ -100,7 +101,9 @@ type AgentLimitRow = {
 };
 
 async function readOnlyAgentApiKeyId(fixture: Fixture): Promise<string> {
-  const result = await fixture.query<{ id: string }>("select id::text from agent_api_keys");
+  const result = await fixture.query<{ id: string }>(
+    "select id::text from agents where key_hash is not null",
+  );
   const row = result.rows[0];
   if (!row || result.rows.length !== 1) {
     throw new Error("Expected exactly one Agent API key.");
@@ -131,9 +134,10 @@ async function countAgentLimitConfigChanges(fixture: Fixture): Promise<number> {
   const result = await fixture.query<{ count: number }>(
     `
       select count(*)::integer as count
-      from config_change_events
-      where source = 'console'
-        and changed_table = 'agent_limits'
+      from config_versions
+      cross join lateral jsonb_array_elements(config_versions.changes) as change(value)
+      where change.value->>'source' = 'console'
+        and change.value->>'table' = 'agent_limits'
     `,
   );
   return result.rows[0]?.count ?? 0;

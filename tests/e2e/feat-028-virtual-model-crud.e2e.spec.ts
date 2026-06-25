@@ -1,9 +1,8 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { expect, type Page, test } from "@playwright/test";
+import { type BrowserContext, expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { openDisclosure, openRow } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 test("virtual model crud rejects duplicate name and blocks referenced delete", async ({
@@ -32,44 +31,49 @@ test("virtual model crud rejects duplicate name and blocks referenced delete", a
           await signInFromFirstRun(page, baseUrl);
           await page.goto(`${baseUrl}/models`);
 
-          await openDisclosure(page, "New virtual model");
-          await page.getByRole("textbox", { name: "Virtual model name" }).fill("Coding Fast");
+          await page.getByRole("link", { name: "Create Virtual Model" }).click();
+          await expect(page.getByRole("dialog", { name: "Create Virtual Model" })).toBeVisible();
           await page
-            .getByRole("textbox", { name: "Virtual model display name" })
+            .getByRole("textbox", { name: "Virtual Model name", exact: true })
             .fill("Coding Fast");
-          await page.getByRole("button", { name: "Create virtual model" }).click();
+          await page.getByRole("textbox", { name: "Description" }).fill("Coding Fast");
+          await page.getByRole("button", { name: "Save" }).click();
 
-          await expect(page.getByRole("heading", { name: "Coding Fast" })).toBeVisible();
-          await expect(page.getByText("coding-fast")).toBeVisible();
+          await expect(page.getByRole("link", { name: "coding-fast" })).toBeVisible();
 
-          await expectVirtualModelActionError(page, {
+          await expectVirtualModelActionError(baseUrl, context, {
             action: "create",
-            displayName: "Duplicate",
+            description: "Duplicate",
             errorPattern: /duplicate|already exists/i,
             name: "coding-fast",
           });
 
-          await openRow(page, "Coding Fast");
           await page
-            .getByRole("textbox", { name: "Edit virtual model name" })
+            .getByRole("row", { name: /coding-fast/ })
+            .getByRole("link", { name: "Edit" })
+            .click();
+          await expect(page.getByRole("dialog", { name: /Edit Virtual Model/ })).toBeVisible();
+          await page
+            .getByRole("textbox", { name: "Virtual Model name", exact: true })
             .fill("coding-balanced");
-          await page
-            .getByRole("textbox", { name: "Edit virtual model display name" })
-            .fill("Coding Balanced");
-          await page.getByRole("button", { name: "Save virtual model" }).click();
+          await page.getByRole("textbox", { name: "Description" }).fill("Coding Balanced");
+          await page.getByRole("button", { name: "Save" }).click();
 
-          await expect(page.getByRole("heading", { name: "Coding Balanced" })).toBeVisible();
-          await expect(page.getByText("coding-balanced")).toBeVisible();
+          await expect(page.getByRole("link", { name: "coding-balanced" })).toBeVisible();
 
-          await openRow(page, "Coding Balanced");
-          await page.getByRole("button", { name: "Delete virtual model" }).click();
+          const balancedVirtualModelId = await readVirtualModelId(fixture, "coding-balanced");
+          await expectVirtualModelActionSuccess(baseUrl, context, {
+            action: "delete",
+            id: balancedVirtualModelId,
+          });
+          await page.reload();
           await expect(page.getByText("No virtual models configured.")).toBeVisible();
 
           const referencedVirtualModelId = await insertReferencedVirtualModel(fixture);
           await page.reload();
-          await expect(page.getByRole("heading", { name: "Referenced Model" })).toBeVisible();
+          await expect(page.getByRole("link", { name: "referenced-model" })).toBeVisible();
 
-          await expectVirtualModelActionError(page, {
+          await expectVirtualModelActionError(baseUrl, context, {
             action: "delete",
             errorPattern: /route policy/i,
             id: referencedVirtualModelId,
@@ -98,7 +102,7 @@ type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 type VirtualModelActionInput =
   | {
       action: "create";
-      displayName: string;
+      description: string;
       errorPattern: RegExp;
       name: string;
     }
@@ -108,11 +112,16 @@ type VirtualModelActionInput =
       id: string;
     };
 
+type SuccessfulVirtualModelActionInput = {
+  action: "delete";
+  id: string;
+};
+
 async function insertReferencedVirtualModel(fixture: Fixture): Promise<string> {
   const virtualModelId = randomUUID();
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'referenced-model', 'Referenced Model', true)
     `,
     [virtualModelId],
@@ -125,28 +134,64 @@ async function insertReferencedVirtualModel(fixture: Fixture): Promise<string> {
 }
 
 async function expectVirtualModelActionError(
-  page: Page,
+  baseUrl: string,
+  context: BrowserContext,
   input: VirtualModelActionInput,
 ): Promise<void> {
-  const result = await page.evaluate(async (actionInput) => {
-    const body = new FormData();
-    body.set("action", actionInput.action);
-    if (actionInput.action === "create") {
-      body.set("name", actionInput.name);
-      body.set("displayName", actionInput.displayName);
-    } else {
-      body.set("id", actionInput.id);
-    }
-
-    const response = await fetch("/api/virtual-models", { body, method: "POST" });
-    return {
-      body: await response.json(),
-      status: response.status,
-    };
-  }, input);
-
+  const result = await postVirtualModelAction(baseUrl, context, input);
   expect(result.status).toBe(400);
   expect(result.body).toEqual({ error: expect.stringMatching(input.errorPattern) });
+}
+
+async function expectVirtualModelActionSuccess(
+  baseUrl: string,
+  context: BrowserContext,
+  input: SuccessfulVirtualModelActionInput,
+): Promise<void> {
+  const result = await postVirtualModelAction(baseUrl, context, input);
+  expect(result.status).toBe(303);
+}
+
+async function postVirtualModelAction(
+  baseUrl: string,
+  context: BrowserContext,
+  input: VirtualModelActionInput | SuccessfulVirtualModelActionInput,
+): Promise<{ body: unknown; status: number }> {
+  const body = new URLSearchParams();
+  body.set("action", input.action);
+  if (input.action === "create") {
+    body.set("name", input.name);
+    body.set("description", input.description);
+  } else {
+    body.set("id", input.id);
+  }
+  const cookies = await context.cookies(baseUrl);
+  const response = await fetch(`${baseUrl}/api/virtual-models`, {
+    body,
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      cookie: cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; "),
+    },
+    method: "POST",
+    redirect: "manual",
+  });
+  const responseText = await response.text();
+  return {
+    body: responseText ? JSON.parse(responseText) : null,
+    status: response.status,
+  };
+}
+
+async function readVirtualModelId(fixture: Fixture, name: string): Promise<string> {
+  const result = await fixture.query<{ id: string }>(
+    "select id::text from virtual_models where name = $1",
+    [name],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error(`Virtual Model ${name} was not found.`);
+  }
+  return row.id;
 }
 
 async function signInFromFirstRun(page: Page, baseUrl: string) {

@@ -1,9 +1,21 @@
+import {
+  completeProviderOAuthConnection,
+  PostgresClient,
+  type PostgresQueryResultRow,
+  readEnabledCompletedProviderOAuthConnections,
+} from "@llmingress/db/providers";
+import { type ProviderOAuthTokenBlob, refreshProviderOAuthToken } from "@llmingress/provider/oauth";
+import type {
+  NormalizedOpenAIChatMessage,
+  NormalizedOpenAIChatRequest,
+  OpenAIProviderAdapter,
+} from "@llmingress/provider/openai";
+import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
-import { Client, type QueryResultRow } from "pg";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
 import {
   finalizeGatewayBudgetReservation,
@@ -24,12 +36,7 @@ import {
   type FallbackFailedAttempt,
   type FallbackProviderApiKey,
 } from "./fallback-chain.js";
-import type {
-  NormalizedOpenAIChatMessage,
-  NormalizedOpenAIChatRequest,
-  OpenAIProviderAdapter,
-} from "./provider-adapters/openai.js";
-import { enforceGatewayRateLimits } from "./rate-limits.js";
+import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./rate-limits.js";
 import {
   buildOpenAIChatCompletionRequestMetadata,
   type GatewayRequestMetadata,
@@ -80,7 +87,7 @@ export type GatewayChatCompletionRequestResult =
   | GatewayChatCompletionRequestFailure
   | GatewayChatCompletionRequestSuccess;
 
-type ProviderCredentialRow = QueryResultRow & {
+type ProviderCredentialRow = PostgresQueryResultRow & {
   base_url: string | null;
   encrypted_key: unknown;
   key_prefix: string;
@@ -88,10 +95,19 @@ type ProviderCredentialRow = QueryResultRow & {
   provider_id: string;
 };
 
+type ProviderCredentialProviderRow = PostgresQueryResultRow & {
+  base_url: string | null;
+  provider_id: string;
+  provider_key: string;
+  provider_type: "api_key" | "local" | "subscription";
+};
+
 type ProviderCredentials = {
   baseUrl: string;
   keys: FallbackProviderApiKey[];
 };
+
+const maxChatCompletionOutputTokens = 16_384;
 
 export function normalizeOpenAIChatCompletionRequest(
   body: unknown,
@@ -181,6 +197,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     };
   }
 
+  const concurrencyLease = rateLimit.concurrencyLease;
   let budgetReservation: GatewayBudgetReservation | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   let selectedActivityCandidate: GatewayRouteCandidateSnapshot | undefined;
@@ -190,6 +207,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
+      usesTools: requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
     const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
@@ -226,8 +244,14 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     }
     budgetReservation = budget.reservation;
 
+    const chatCompletionCandidates = attemptCandidates.filter(
+      (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
+    );
+    if (chatCompletionCandidates.length === 0) {
+      throw new Error("Provider credentials are missing for chat completions route.");
+    }
     const candidates = await attachGatewayProviderCredentials({
-      candidates: attemptCandidates,
+      candidates: chatCompletionCandidates,
       databaseUrl: input.databaseUrl,
       masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
     });
@@ -284,6 +308,11 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       requestMetadata,
       statusCode: mapGatewayErrorStatus(code),
     };
+  } finally {
+    await releaseGatewayConcurrency({
+      databaseUrl: input.databaseUrl,
+      lease: concurrencyLease,
+    });
   }
 }
 
@@ -379,22 +408,68 @@ function invalidChatRequest(requestId: string): GatewayChatCompletionRequestFail
 }
 
 function readOpenAIChatMessage(value: unknown): NormalizedOpenAIChatMessage | null {
-  if (!isRecord(value) || typeof value.content !== "string" || !value.content.trim()) {
+  if (!isRecord(value)) {
     return null;
   }
-  if (
-    value.role !== "system" &&
-    value.role !== "user" &&
-    value.role !== "assistant" &&
-    value.role !== "tool"
-  ) {
+  const role = value.role;
+  if (role !== "system" && role !== "user" && role !== "assistant" && role !== "tool") {
     return null;
   }
 
-  return {
-    content: value.content,
-    role: value.role,
-  };
+  const content = readOpenAIChatMessageContent(value.content);
+  const toolCalls = readOptionalObjectArray(value.tool_calls);
+  if (toolCalls === null) {
+    return null;
+  }
+  if (role === "assistant" && !content && (!toolCalls || toolCalls.length === 0)) {
+    return null;
+  }
+  if (role !== "assistant" && !content) {
+    return null;
+  }
+  if (role === "tool" && typeof value.tool_call_id !== "string") {
+    return null;
+  }
+  if (value.name !== undefined && typeof value.name !== "string") {
+    return null;
+  }
+
+  return omitUndefined({
+    content: content ?? null,
+    name: value.name,
+    role,
+    tool_call_id: role === "tool" ? value.tool_call_id : undefined,
+    tool_calls: toolCalls,
+  }) as NormalizedOpenAIChatMessage;
+}
+
+function readOpenAIChatMessageContent(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+
+  const textParts = value.map(readOpenAIChatTextContentPart);
+  if (textParts.some((part) => part === null)) {
+    return null;
+  }
+  const text = textParts.join("\n").trim();
+  return text || null;
+}
+
+function readOpenAIChatTextContentPart(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.text !== "string") {
+    return null;
+  }
+  if (value.type !== "text" && value.type !== "input_text" && value.type !== "output_text") {
+    return null;
+  }
+  return value.text;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {
@@ -404,7 +479,7 @@ function readOptionalPositiveInteger(value: unknown): number | null | undefined 
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return null;
   }
-  return value;
+  return Math.min(value, maxChatCompletionOutputTokens);
 }
 
 function readOptionalFiniteNumber(value: unknown): number | null | undefined {
@@ -464,10 +539,34 @@ async function readProviderCredentials(input: {
   }
 
   const encryption = createSecretEncryption(input.masterKeySource);
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
+    const providerResult = await client.query<ProviderCredentialProviderRow>(
+      `
+        select id::text as provider_id,
+               provider_type,
+               provider_key,
+               base_url
+        from providers
+        where id = any($1::uuid[])
+          and enabled = true
+          and deleted_at is null
+      `,
+      [input.providerIds],
+    );
+    const credentials = new Map<string, ProviderCredentials>();
+    for (const row of providerResult.rows) {
+      if (!row.base_url?.trim()) {
+        throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
+      }
+      credentials.set(row.provider_id, {
+        baseUrl: row.base_url,
+        keys: row.provider_type === "local" ? [{ apiKey: "" }] : [],
+      });
+    }
+
     const result = await client.query<ProviderCredentialRow>(
       `
         select providers.id::text as provider_id,
@@ -479,6 +578,8 @@ async function readProviderCredentials(input: {
         join provider_api_keys on provider_api_keys.provider_id = providers.id
         where providers.id = any($1::uuid[])
           and providers.enabled = true
+          and providers.deleted_at is null
+          and providers.provider_type = 'api_key'
           and provider_api_keys.enabled = true
         order by providers.default_priority asc,
                  providers.id,
@@ -488,26 +589,61 @@ async function readProviderCredentials(input: {
       `,
       [input.providerIds],
     );
-    const credentials = new Map<string, ProviderCredentials>();
     for (const row of result.rows) {
       if (!row.base_url?.trim()) {
         throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
       }
 
       const existing = credentials.get(row.provider_id);
-      const providerCredentials =
-        existing ??
-        ({
-          baseUrl: row.base_url,
-          keys: [],
-        } satisfies ProviderCredentials);
+      const providerCredentials = existing ?? { baseUrl: row.base_url, keys: [] };
       providerCredentials.keys.push({
         apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
+        credentialKind: "api_key",
         keyPrefix: row.key_prefix,
         providerApiKeyId: row.provider_api_key_id,
       });
       credentials.set(row.provider_id, providerCredentials);
     }
+
+    for (const provider of providerResult.rows) {
+      if (provider.provider_type !== "subscription") {
+        continue;
+      }
+      const providerCredentials = credentials.get(provider.provider_id);
+      if (!providerCredentials || !isSubscriptionProviderKey(provider.provider_key)) {
+        continue;
+      }
+      const connections = await readEnabledCompletedProviderOAuthConnections({
+        databaseUrl: input.databaseUrl,
+        providerId: provider.provider_id,
+      });
+      for (const connection of connections) {
+        let token = readProviderOAuthTokenBlob(
+          encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
+        );
+        if (isProviderOAuthTokenExpired(token)) {
+          if (!token.refreshToken) {
+            continue;
+          }
+          token = await refreshProviderOAuthToken({
+            providerKey: provider.provider_key,
+            refreshToken: token.refreshToken,
+          });
+          await completeProviderOAuthConnection({
+            databaseUrl: input.databaseUrl,
+            encryptedToken: encryption.encrypt(JSON.stringify(token)),
+            providerOAuthId: connection.id,
+            tokenExpiresAt: token.expiresAt === null ? null : new Date(token.expiresAt),
+          });
+        }
+        providerCredentials.keys.push({
+          apiKey: token.accessToken,
+          credentialKind: "oauth",
+          providerOAuthId: connection.id,
+        });
+      }
+    }
+
     return credentials;
   } finally {
     await client.end();
@@ -522,7 +658,7 @@ export async function recordGatewayProviderApiKeyLastUsed(input: {
     return;
   }
 
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(
@@ -552,7 +688,40 @@ function readEncryptedSecret(value: unknown): EncryptedSecret {
     return value as EncryptedSecret;
   }
 
-  throw new Error("Stored provider API key is not a valid encrypted secret.");
+  throw new Error("Stored provider credential is not a valid encrypted secret.");
+}
+
+function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
+  try {
+    const parsed = JSON.parse(value);
+    if (isRecord(parsed) && typeof parsed.accessToken === "string" && parsed.accessToken.trim()) {
+      return {
+        accessToken: parsed.accessToken,
+        expiresAt:
+          typeof parsed.expiresAt === "number" && Number.isFinite(parsed.expiresAt)
+            ? parsed.expiresAt
+            : null,
+        refreshToken:
+          typeof parsed.refreshToken === "string" && parsed.refreshToken.trim()
+            ? parsed.refreshToken
+            : null,
+        scopes: Array.isArray(parsed.scopes)
+          ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
+          : [],
+        tokenType:
+          typeof parsed.tokenType === "string" && parsed.tokenType.trim()
+            ? parsed.tokenType
+            : "Bearer",
+      };
+    }
+  } catch {
+    // handled by final throw
+  }
+  throw new Error("Stored provider OAuth token was not recognized.");
+}
+
+function isProviderOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
+  return token.expiresAt !== null && token.expiresAt <= Date.now() + 60_000;
 }
 
 function classifyChatCompletionError(message: string): GatewayChatCompletionErrorCode {

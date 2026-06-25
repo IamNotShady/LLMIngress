@@ -4,21 +4,22 @@ import {
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
-import { createOpenAIProviderAdapter } from "../../apps/gateway/src/provider-adapters/openai";
 import { loadSqlMigrations } from "../../packages/db/src/index";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 
 const localOpenAICompatibleTemplates = [
+  ["ollama", "Ollama", "http://127.0.0.1:11434/v1"],
   ["lmstudio", "LM Studio", "http://127.0.0.1:1234/v1"],
   ["llama_cpp", "llama.cpp", "http://127.0.0.1:8080/v1"],
 ] as const;
 
 describe("feat-064 local provider templates", () => {
-  it("lists LM Studio and llama.cpp local templates with fixed OpenAI-compatible paths", () => {
+  it("lists local templates with fixed OpenAI-compatible paths", () => {
     const localGroup = listProviderTemplateSelectorGroups().find((group) => group.id === "local");
 
     expect(localGroup).toMatchObject({
       id: "local",
-      label: "Local templates",
+      label: "Local",
     });
     expect(localGroup?.templates).toEqual(
       expect.arrayContaining(
@@ -37,7 +38,7 @@ describe("feat-064 local provider templates", () => {
     );
   });
 
-  it("accepts local and private URLs while public URLs require risk confirmation", () => {
+  it("accepts local, private, and public URLs", () => {
     for (const [id] of localOpenAICompatibleTemplates) {
       expect(
         normalizeProviderTemplateFormInput({
@@ -63,17 +64,9 @@ describe("feat-064 local provider templates", () => {
         providerType: "local",
       });
 
-      expect(() =>
-        normalizeProviderTemplateFormInput({
-          baseUrl: `https://${id}.example.com/v1`,
-          templateId: id,
-        }),
-      ).toThrow(/public network.*risk confirmation/i);
-
       expect(
         normalizeProviderTemplateFormInput({
           baseUrl: `https://${id}.example.com/v1`,
-          publicNetworkRiskAccepted: "true",
           templateId: id,
         }),
       ).toMatchObject({
@@ -148,6 +141,39 @@ describe("feat-064 local provider templates", () => {
       providerRequestId: "local-openai-compatible-response",
       statusCode: 200,
     });
+  });
+
+  it("does not send Authorization for local OpenAI-compatible requests without a key", async () => {
+    const calls: Array<{ headers: Headers }> = [];
+    const adapter = createOpenAIProviderAdapter({
+      fetch: async (_url, init) => {
+        calls.push({ headers: new Headers(init?.headers) });
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "local response", role: "assistant" } }],
+            id: "local-openai-compatible-response",
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      },
+    });
+
+    await adapter.chatCompletion({
+      request: {
+        messages: [{ role: "user", content: "hello local" }],
+        stream: false,
+      },
+      target: {
+        apiKey: null,
+        baseUrl: "http://127.0.0.1:1234/v1",
+        modelId: "local-model",
+      },
+    });
+
+    expect(calls[0]?.headers.get("authorization")).toBeNull();
   });
 
   it("declares LM Studio and llama.cpp template ids in a follow-up migration", () => {

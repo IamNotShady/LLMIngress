@@ -195,7 +195,7 @@ async function seedMetadataRoutes(
   for (const virtualModel of virtualModels) {
     const routePolicyId = randomUUID();
     await fixture.query(
-      "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+      "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
       [virtualModel.id, virtualModel.name, virtualModel.name],
     );
     await fixture.query(
@@ -223,15 +223,7 @@ async function seedMetadataRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -243,7 +235,7 @@ async function seedMetadataRoutes(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2),
              ($1, $3),
              ($1, $4)

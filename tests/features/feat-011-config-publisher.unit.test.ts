@@ -38,10 +38,21 @@ describe("feat-011 config publisher", () => {
       "begin",
       "select pg_advisory_xact_lock($1)",
       "insert into providers (id, provider_type, provider_key, display_name) values ($1, $2, $3, $4)",
-      "insert into config_versions (version, source, description) select coalesce(max(version), 0) + 1, $1, $2 from config_versions returning id::text, version",
-      "insert into config_change_events (id, config_version_id, source, changed_table, changed_record_id) values ($1, $2, $3, $4, $5)",
+      "insert into config_versions (version, source, description, changes) select coalesce(max(version), 0) + 1, $1, $2, $3::jsonb from config_versions returning id::text, version",
       "select pg_notify($1, $2)",
       "commit",
+    ]);
+    const version = connection.queries.find((query) =>
+      query.text.startsWith("insert into config_versions"),
+    );
+    expect(JSON.parse(String(version?.values?.[2]))).toEqual([
+      {
+        createdAt: expect.any(String),
+        id: result.changes[0]?.id,
+        recordId: providerId,
+        source: "console",
+        table: "providers",
+      },
     ]);
 
     const notify = connection.queries.find((query) => query.text === "select pg_notify($1, $2)");

@@ -51,12 +51,17 @@ test("playground uses pasted key in memory direct gateway call and usage increme
             await waitForConsole(consoleBaseUrl, consoleApp);
             await signInFromFirstRun(page, consoleBaseUrl);
             await page.goto(`${consoleBaseUrl}/usage`);
-            await expect(page.getByLabel("Usage").getByText("Requests: 0")).toBeVisible();
+            await expect(
+              page
+                .getByLabel("Usage")
+                .locator(".stat-card", { hasText: "Total requests" })
+                .locator(".stat-card-value"),
+            ).toHaveText("0");
 
             await page.goto(`${consoleBaseUrl}/playground`);
             const playgroundSection = page.getByLabel("Playground");
             await expect(
-              playgroundSection.getByRole("heading", { exact: true, name: "Playground" }),
+              playgroundSection.getByRole("heading", { exact: true, name: "Request config" }),
             ).toBeVisible();
             await expect(playgroundSection.getByLabel("Gateway base URL")).toHaveValue(
               gatewayBaseUrl,
@@ -73,12 +78,8 @@ test("playground uses pasted key in memory direct gateway call and usage increme
             await playgroundSection.getByLabel("Playground prompt").fill("hello from feat 049");
             await playgroundSection.getByRole("button", { name: "Send live request" }).click();
 
-            await expect(
-              playgroundSection.getByText("Playground response: fake provider response"),
-            ).toBeVisible();
-            await expect(
-              playgroundSection.getByText(/Playground request id: playground_/),
-            ).toBeVisible();
+            await expect(playgroundSection.getByText("fake provider response")).toBeVisible();
+            await expect(playgroundSection.getByText(/playground_/)).toBeVisible();
             await expect
               .poll(() => readPlaygroundUsageCount(fixture, seeded.virtualModelName))
               .toBe(1);
@@ -92,7 +93,12 @@ test("playground uses pasted key in memory direct gateway call and usage increme
             expect(JSON.stringify(browserStorage)).not.toContain(agentApiKey);
 
             await page.goto(`${consoleBaseUrl}/usage`);
-            await expect(page.getByLabel("Usage").getByText("Requests: 1")).toBeVisible();
+            await expect(
+              page
+                .getByLabel("Usage")
+                .locator(".stat-card", { hasText: "Total requests" })
+                .locator(".stat-card-value"),
+            ).toHaveText("1");
             await page.goto(`${consoleBaseUrl}/playground`);
             await expect(page.getByLabel("Playground").getByLabel("Agent API key")).toHaveValue("");
           } finally {
@@ -184,7 +190,7 @@ async function seedPlaygroundRoute(
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, $2, 'Playground Live', true)
     `,
     [virtualModelId, virtualModelName],
@@ -209,15 +215,7 @@ async function seedPlaygroundRoute(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, $3, $4, $5, true)
+      update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
       agentApiKeyId,
@@ -229,7 +227,7 @@ async function seedPlaygroundRoute(
   );
   await fixture.query(
     `
-      insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+      insert into agent_virtual_models (agent_id, virtual_model_id)
       values ($1, $2)
     `,
     [agentApiKeyId, virtualModelId],

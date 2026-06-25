@@ -23,6 +23,8 @@ If baseline verification is failing, repair that first before adding new scope.
 - **Feature review**: A passing feature's diff is reviewed before any feature that depends on it starts
 - **Verification required**: Don't claim done without running verification commands
 - **Coding Rule**: Before writing code for any feature, read `docs/CODING_GUIDE.md`.
+- **Shared module boundary**: Any code module that may be used by Console, Gateway,
+  and Worker must live under `packages/`, not inside a single app directory.
 - **Update artifacts**: Before ending session, update `progress.md` and `feature_list.json`
 - **Stay in scope**: Don't modify files unrelated to the current feature
 - **Leave clean state**: Next session must be able to run `./init.sh` immediately

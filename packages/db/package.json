@@ -8,9 +8,53 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./config-versions": {
+      "types": "./src/config-versions.ts",
+      "default": "./src/config-versions.ts"
+    },
+    "./providers": {
+      "types": "./src/providers.ts",
+      "default": "./src/providers.ts"
+    },
+    "./agents": {
+      "types": "./src/agents.ts",
+      "default": "./src/agents.ts"
+    },
+    "./routes": {
+      "types": "./src/routes.ts",
+      "default": "./src/routes.ts"
+    },
+    "./activity": {
+      "types": "./src/activity.ts",
+      "default": "./src/activity.ts"
+    },
+    "./jobs": {
+      "types": "./src/jobs.ts",
+      "default": "./src/jobs.ts"
+    },
+    "./health": {
+      "types": "./src/health.ts",
+      "default": "./src/health.ts"
+    },
+    "./notifications": {
+      "types": "./src/notifications.ts",
+      "default": "./src/notifications.ts"
+    },
+    "./maintenance": {
+      "types": "./src/maintenance.ts",
+      "default": "./src/maintenance.ts"
+    },
     "./provider-health": {
       "types": "./src/provider-health.ts",
       "default": "./src/provider-health.ts"
+    },
+    "./provider-jobs": {
+      "types": "./src/provider-jobs.ts",
+      "default": "./src/provider-jobs.ts"
     },
     "./migration-status": {
       "types": "./src/migration-status.ts",

@@ -1,4 +1,4 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 import { type JobHandler, JobHandlerError } from "./job-runner.js";
 import { queueNotificationEvent } from "./notification-dispatcher.js";
 
@@ -32,9 +32,8 @@ type EvaluateRateLimitAlertsOptions = CreateRateLimitAlertsJobHandlerOptions & {
   payload: unknown;
 };
 
-type RateLimitAlertCandidateRow = QueryResultRow & {
-  agent_api_key_id: string;
-  agent_api_key_prefix: string;
+type RateLimitAlertCandidateRow = PostgresQueryResultRow & {
+  agent_key_prefix: string;
   agent_id: string;
   agent_name: string;
   block_count: number;
@@ -45,7 +44,6 @@ type RateLimitAlertCandidateRow = QueryResultRow & {
 };
 
 type RateLimitAlertCandidate = {
-  agentApiKeyId: string;
   agentApiKeyPrefix: string;
   agentId: string;
   agentName: string;
@@ -173,11 +171,10 @@ function buildRateLimitAlertNotificationEvent(input: {
   windowStart: Date;
 }) {
   const payload = {
-    agentApiKeyId: input.candidate.agentApiKeyId,
     agentApiKeyPrefix: input.candidate.agentApiKeyPrefix,
     agentId: input.candidate.agentId,
     agentName: input.candidate.agentName,
-    alertKey: `rate_limit:${input.candidate.agentApiKeyId}:${input.candidate.limitType}:${input.candidate.lastBlockAt.toISOString()}:${input.payload.windowMs}:${input.payload.thresholdCount}`,
+    alertKey: `rate_limit:${input.candidate.agentId}:${input.candidate.limitType}:${input.candidate.lastBlockAt.toISOString()}:${input.payload.windowMs}:${input.payload.thresholdCount}`,
     blockCount: input.candidate.blockCount,
     firstBlockAt: input.candidate.firstBlockAt.toISOString(),
     lastBlockAt: input.candidate.lastBlockAt.toISOString(),
@@ -203,7 +200,7 @@ async function countRateLimitBlocks(input: {
   windowEnd: Date;
   windowStart: Date;
 }): Promise<number> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -234,15 +231,15 @@ async function readRateLimitAlertCandidates(input: {
   windowEnd: Date;
   windowStart: Date;
 }): Promise<RateLimitAlertCandidate[]> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
     const result = await client.query<RateLimitAlertCandidateRow>(
       `
         with blocked as (
-          select request_activity.agent_api_key_id,
-                 request_activity.agent_api_key_prefix,
+          select request_activity.agent_id,
+                 request_activity.agent_key_prefix as agent_key_prefix,
                  request_activity.request_id,
                  coalesce(
                    request_activity.completed_at,
@@ -268,8 +265,7 @@ async function readRateLimitAlertCandidates(input: {
               request_activity.created_at
             ) <= $2::timestamptz
         )
-        select blocked.agent_api_key_id::text,
-               blocked.agent_api_key_prefix,
+        select blocked.agent_key_prefix,
                agents.id::text as agent_id,
                agents.name as agent_name,
                blocked.limit_type,
@@ -278,18 +274,17 @@ async function readRateLimitAlertCandidates(input: {
                max(blocked.blocked_at) as last_block_at,
                array_agg(blocked.request_id order by blocked.blocked_at desc) as request_ids
         from blocked
-        join agent_api_keys on agent_api_keys.id = blocked.agent_api_key_id
-        join agents on agents.id = agent_api_keys.agent_id
+        join agents on agents.id = blocked.agent_id
         where blocked.limit_type is not null
-          and agent_api_keys.enabled = true
           and agents.enabled = true
-        group by blocked.agent_api_key_id,
-                 blocked.agent_api_key_prefix,
+          and agents.deleted_at is null
+        group by blocked.agent_id,
+                 blocked.agent_key_prefix,
                  agents.id,
                  agents.name,
                  blocked.limit_type
         having count(*) >= $3
-        order by agents.name, blocked.agent_api_key_prefix, blocked.limit_type
+        order by agents.name, blocked.agent_key_prefix, blocked.limit_type
       `,
       [input.windowStart.toISOString(), input.windowEnd.toISOString(), input.thresholdCount],
     );
@@ -301,8 +296,7 @@ async function readRateLimitAlertCandidates(input: {
 
 function rowToRateLimitAlertCandidate(row: RateLimitAlertCandidateRow): RateLimitAlertCandidate {
   return {
-    agentApiKeyId: row.agent_api_key_id,
-    agentApiKeyPrefix: row.agent_api_key_prefix,
+    agentApiKeyPrefix: row.agent_key_prefix,
     agentId: row.agent_id,
     agentName: row.agent_name,
     blockCount: Number(row.block_count),
@@ -314,7 +308,7 @@ function rowToRateLimitAlertCandidate(row: RateLimitAlertCandidateRow): RateLimi
 }
 
 async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -331,7 +325,7 @@ async function rateLimitAlertAlreadyQueued(
   databaseUrl: string,
   alertKey: string,
 ): Promise<boolean> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {

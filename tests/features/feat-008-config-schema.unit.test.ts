@@ -18,8 +18,9 @@ describe("feat-008 core configuration schema migration", () => {
     expect(sql).toContain("create table if not exists providers");
     expect(sql).toContain("create table if not exists provider_models");
     expect(sql).toContain("create table if not exists agents");
-    expect(sql).toContain("create table if not exists agent_api_keys");
+    expect(sql).not.toContain("create table if not exists agent_api_keys");
     expect(sql).toContain("create table if not exists virtual_models");
+    expect(sql).toContain("create table if not exists agent_virtual_models");
     expect(sql).toContain("create table if not exists route_policies");
     expect(sql).toContain("create table if not exists route_policy_candidates");
     expect(sql).toContain("create table if not exists agent_limits");
@@ -33,10 +34,9 @@ describe("feat-008 core configuration schema migration", () => {
     expect(readCreateTableSql(sql, "provider_models")).toContain(
       "provider_id uuid not null references providers (id) on delete restrict",
     );
-    expect(readCreateTableSql(sql, "agent_api_keys")).toContain(
-      "agent_id uuid not null references agents (id) on delete restrict",
-    );
-    expect(readCreateTableSql(sql, "agent_api_keys")).toContain(
+    expect(readCreateTableSql(sql, "agents")).toContain("key_prefix text unique");
+    expect(readCreateTableSql(sql, "agents")).toContain("key_hash text unique");
+    expect(readCreateTableSql(sql, "agents")).toContain(
       "default_virtual_model_id uuid references virtual_models (id) on delete restrict",
     );
     expect(readCreateTableSql(sql, "route_policies")).toContain(
@@ -48,14 +48,14 @@ describe("feat-008 core configuration schema migration", () => {
     expect(readCreateTableSql(sql, "route_policy_candidates")).toContain(
       "provider_model_id uuid not null references provider_models (id) on delete restrict",
     );
-    expect(readCreateTableSql(sql, "agent_api_key_virtual_models")).toContain(
-      "agent_api_key_id uuid not null references agent_api_keys (id) on delete cascade",
+    expect(readCreateTableSql(sql, "agent_virtual_models")).toContain(
+      "agent_id uuid not null references agents (id) on delete cascade",
     );
-    expect(readCreateTableSql(sql, "agent_api_key_virtual_models")).toContain(
+    expect(readCreateTableSql(sql, "agent_virtual_models")).toContain(
       "virtual_model_id uuid not null references virtual_models (id) on delete restrict",
     );
     expect(readCreateTableSql(sql, "agent_limits")).toContain(
-      "agent_api_key_id uuid not null references agent_api_keys (id) on delete cascade",
+      "agent_id uuid not null references agents (id) on delete cascade",
     );
     expect(readCreateTableSql(sql, "config_change_events")).toContain(
       "config_version_id bigint not null references config_versions (id) on delete cascade",

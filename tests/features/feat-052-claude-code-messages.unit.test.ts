@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAnthropicMessagesRequest } from "../../apps/gateway/src/messages";
-import { createAnthropicProviderAdapter } from "../../apps/gateway/src/provider-adapters/anthropic";
+import { createAnthropicProviderAdapter } from "../../packages/provider/src/adapters/anthropic";
 
 const claudeCodeMessages = [
   {

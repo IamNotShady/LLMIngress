@@ -16,7 +16,7 @@ describe("feat-079 usage breakdowns and savings", () => {
     await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
   });
 
-  it("aggregates agent agent api key virtual model provider model failures cost and savings", async () => {
+  it("aggregates agent virtual model provider model failures cost and savings", async () => {
     const fixture = await createTestPostgresFixture({
       databaseNamePrefix: `llmingress_usage_breakdowns_unit_${randomUUID().replaceAll("-", "_")}`,
     });
@@ -45,17 +45,6 @@ describe("feat-079 usage breakdowns and savings", () => {
         failureCount: 1,
         id: "00000000-0000-4000-8000-000000000079",
         label: "Codex Usage",
-        requestCount: 3,
-        totalCostUsd: "0.00150000",
-        totalSavingsUsd: "0.00400000",
-        totalTokens: 450,
-      },
-    ]);
-    expect(summary.agentApiKeyBreakdowns.map(selectBreakdownFields)).toEqual([
-      {
-        failureCount: 1,
-        id: "00000000-0000-4000-8000-000000000179",
-        label: "Codex Usage / llmi_usage79",
         requestCount: 3,
         totalCostUsd: "0.00150000",
         totalSavingsUsd: "0.00400000",
@@ -160,7 +149,7 @@ function selectBreakdownFields(input: {
 
 async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
   const ids = {
-    agentApiKeyId: "00000000-0000-4000-8000-000000000179",
+    agentApiKeyId: "00000000-0000-4000-8000-000000000079",
     agentId: "00000000-0000-4000-8000-000000000079",
     anthropicModelId: "00000000-0000-4000-8000-000000000679",
     anthropicProviderId: "00000000-0000-4000-8000-000000000479",
@@ -187,7 +176,7 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'usage-fast', 'Usage Fast', true)
     `,
     [ids.virtualModelId],
@@ -198,10 +187,13 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_usage79', 'hash-usage-079', $3, true)
+      update agents
+      set key_prefix = 'llmi_usage79',
+          key_hash = 'hash-usage-079',
+          default_virtual_model_id = $2
+      where id = $1
     `,
-    [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
+    [ids.agentId, ids.virtualModelId],
   );
 
   await insertUsageBreakdownRequest(fixture, {
@@ -262,11 +254,11 @@ async function insertUsageBreakdownRequest(
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,
@@ -301,7 +293,7 @@ async function insertUsageBreakdownRequest(
         insert into request_usage (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           virtual_model_id,
           provider_model_id,
           input_tokens,
@@ -327,27 +319,24 @@ async function insertUsageBreakdownRequest(
         insert into request_costs (
           id,
           request_activity_id,
-          agent_api_key_id,
+          agent_id,
           provider_model_id,
           total_cost_usd,
-          cost_source
-        )
-        values ($1, $2, $3, $4, $5::numeric, 'estimated')
-      `,
-      [randomUUID(), activityId, input.agentApiKeyId, input.providerModelId, input.costUsd],
-    );
-    await fixture.query(
-      `
-        insert into request_savings (
-          id,
-          request_activity_id,
+          cost_source,
           actual_cost_usd,
           baseline_cost_usd,
           savings_usd
         )
-        values ($1, $2, $3::numeric, ($3::numeric + $4::numeric), $4::numeric)
+        values ($1, $2, $3, $4, $5::numeric, 'estimated', $5::numeric, ($5::numeric + $6::numeric), $6::numeric)
       `,
-      [randomUUID(), activityId, input.costUsd, input.savingsUsd],
+      [
+        randomUUID(),
+        activityId,
+        input.agentApiKeyId,
+        input.providerModelId,
+        input.costUsd,
+        input.savingsUsd,
+      ],
     );
   }
 }

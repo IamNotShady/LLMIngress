@@ -199,7 +199,7 @@ async function seedWebhookExportRequestData(fixture: Fixture): Promise<string> {
     [ids.providerModelId, ids.providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'webhook-fast', 'Webhook Fast', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'webhook-fast', 'Webhook Fast', true)",
     [ids.virtualModelId],
   );
   await fixture.query(
@@ -208,8 +208,7 @@ async function seedWebhookExportRequestData(fixture: Fixture): Promise<string> {
   );
   await fixture.query(
     `
-      insert into agent_api_keys (id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled)
-      values ($1, $2, 'llmi_webhook84', 'sha256:v1:webhook-secret-hash', $3, true)
+      update agents set id = $1, key_prefix = 'llmi_webhook84', key_hash = 'sha256:v1:webhook-secret-hash', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
   );
@@ -218,11 +217,11 @@ async function seedWebhookExportRequestData(fixture: Fixture): Promise<string> {
       insert into request_activity (
         id,
         request_id,
-        agent_api_key_id,
+        agent_id,
         virtual_model_id,
         provider_id,
         provider_model_id,
-        agent_api_key_prefix,
+        agent_key_prefix,
         protocol,
         model,
         stream,

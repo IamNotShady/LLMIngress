@@ -1,15 +1,14 @@
 import { PageHeader } from "../_components/page-header";
-import { RuntimeSection } from "../_modules/sections";
+import { OverviewSection } from "../_modules/sections";
 
 export default function OverviewPage() {
   return (
-    <div className="page">
+    <div className="page overview-page">
       <PageHeader
-        eyebrow="Monitor"
         title="Overview"
-        description="Gateway runtime health, migration status, and recent errors."
+        description="Gateway status and today's key metrics at a glance."
       />
-      <RuntimeSection />
+      <OverviewSection />
     </div>
   );
 }

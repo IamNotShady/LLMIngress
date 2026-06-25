@@ -1,6 +1,9 @@
 export type NormalizedOpenAIChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  content?: string | null;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIChatRequest = {
@@ -13,12 +16,13 @@ export type NormalizedOpenAIChatRequest = {
 };
 
 export type NormalizedOpenAIResponsesInputMessage = {
-  role: "system" | "user" | "assistant";
+  role: "developer" | "system" | "user" | "assistant";
   content: string;
 };
 
 export type NormalizedOpenAIResponsesRequest = {
   input: string | NormalizedOpenAIResponsesInputMessage[];
+  instructions?: string;
   maxOutputTokens?: number;
   stream?: boolean;
   temperature?: number;
@@ -31,7 +35,7 @@ export type NormalizedOpenAIEmbeddingsRequest = {
 };
 
 export type OpenAIProviderTarget = {
-  apiKey: string;
+  apiKey?: string | null;
   baseUrl: string;
   modelId: string;
 };
@@ -87,6 +91,7 @@ type OpenAIChatCompletionsPayload = {
 
 type OpenAIResponsesPayload = {
   input: string | NormalizedOpenAIResponsesInputMessage[];
+  instructions?: string;
   max_output_tokens?: number;
   model: string;
   store: false;
@@ -202,13 +207,13 @@ export function createOpenAIProviderAdapter(
 }
 
 function buildProviderHeaders(
-  apiKey: string,
+  apiKey: string | null | undefined,
   extraHeaders: Record<string, string> | undefined,
 ): Record<string, string> {
   return {
     ...extraHeaders,
-    authorization: `Bearer ${apiKey}`,
     "content-type": "application/json",
+    ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
   };
 }
 
@@ -237,6 +242,7 @@ function buildResponsesPayload(
 ): OpenAIResponsesPayload {
   return omitUndefined({
     input: request.input,
+    instructions: request.instructions,
     max_output_tokens: request.maxOutputTokens,
     model: target.modelId,
     store: false,

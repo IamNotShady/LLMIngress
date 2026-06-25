@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, loadSqlMigrations } from "../../packages/db/src/index";
 
-test("migration runner creates schema version and rerun is idempotent", async () => {
+test("migration runner records migration history and rerun is idempotent", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_migrate_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -16,10 +16,10 @@ test("migration runner creates schema version and rerun is idempotent", async ()
     expect(firstRun.status, firstRun.stderr || firstRun.stdout).toBe(0);
     expect(firstRun.stdout).toContain(`Applied ${migrations.length} migrations`);
 
-    const schemaVersion = await fixture.query<{ version: string }>(
-      "select version from schema_version where id = 1",
+    const schemaVersion = await fixture.query<{ schema_version: string | null }>(
+      "select max(id) as schema_version from migration_history",
     );
-    expect(schemaVersion.rows).toEqual([{ version: latestMigration?.id }]);
+    expect(schemaVersion.rows).toEqual([{ schema_version: latestMigration?.id }]);
 
     const historyAfterFirstRun = await fixture.query<{ id: string; name: string; count: string }>(`
       select id, name, count(*) over ()::text as count

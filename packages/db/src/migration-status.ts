@@ -45,10 +45,6 @@ type AppliedMigrationRow = QueryResultRow & {
   name: string;
 };
 
-type SchemaVersionRow = QueryResultRow & {
-  version: string;
-};
-
 export const shippedSqlMigrations: MigrationStatusMigration[] = [
   {
     checksum: "793a079d4d978a49bbd50fce36e868dfa2a110c3e47d3cf554a8397c90070606",
@@ -56,12 +52,12 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "create_schema_version",
   },
   {
-    checksum: "b874655baab3e693783baa9ba34bab3cdcd7af2cab0ad73e9625a9ad64d31a53",
+    checksum: "2dc26fd292475ffa8b4e644e6e320815b232708684421e077ab42d5c200d67f9",
     id: "0002",
     name: "core_config_schema",
   },
   {
-    checksum: "1897fcdb0b25189e00f3456d80aef53993a7be5605c94c1d8185b5051ae1dfde",
+    checksum: "4895bcf4af76a2d5cd6108bf7acc8b11878177c3c324fa416ef9b8b26a1e9d15",
     id: "0003",
     name: "runtime_records_jobs_schema",
   },
@@ -121,7 +117,7 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "price_registry_snapshots",
   },
   {
-    checksum: "8a4a7d627fc704d64f7379a30c7dcf5fe4d8676fe0193c388d8009b4505b59ad",
+    checksum: "eedc6d995a2a318db24862be68ff9b9f5eec3c7307e40fabbde5e8384c020b11",
     id: "0015",
     name: "billing_reconciliation",
   },
@@ -186,9 +182,104 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "agent_platform_status_logging",
   },
   {
-    checksum: "f95f77c77c9d3a05b6b57656b4e958106581ac8c4218a7c4588f4e8b9592dd6a",
+    checksum: "d80ef98fea9a220107ed3cce14bf7aa0e9663dd12dc2c5e7929d5a26850cb32b",
     id: "0028",
     name: "activity_detail_metadata",
+  },
+  {
+    checksum: "44a2a8a3d47f0ad29f7d563e1ad21439de29088fcb7a029afb91734fbfe3b15d",
+    id: "0029",
+    name: "analytics_backend_indexes",
+  },
+  {
+    checksum: "824d5fa0b5dd07005b38c2a6d8ddcee33c69ec3fade3630f7026443b32cefdda",
+    id: "0030",
+    name: "advanced_route_rules_preview",
+  },
+  {
+    checksum: "aade4f0ce0fd5ba37b4cc2216a152cb2b51c4a0d953932ffb6a0b79e478d9a61",
+    id: "0031",
+    name: "concurrency_limit_policy",
+  },
+  {
+    checksum: "fee55665a009264ad29490823db64204cda0db46fe4fc70cd54b56974aa733b7",
+    id: "0032",
+    name: "agent_owned_api_key",
+  },
+  {
+    checksum: "d888af9f3c75fe615aed2525dc3518a7fd02d93906bb3f8b704c34ae1875f2fe",
+    id: "0033",
+    name: "allow_duplicate_provider_keys",
+  },
+  {
+    checksum: "f57e8961e6dfca28a843dcfdac6d4e3920e1e67d175af16d06a5a707a2270136",
+    id: "0034",
+    name: "virtual_model_description",
+  },
+  {
+    checksum: "fd0bf9211e00dc92ad691346ca63f0e7efe526ec48948a07addaa343d8c87e38",
+    id: "0035",
+    name: "virtual_model_description_schema_version",
+  },
+  {
+    checksum: "1a08ddf084191f6cdd0a2ef9bf3fd3683f766c3e2cedef2aabee4d96dfbbe43a",
+    id: "0036",
+    name: "merge_provider_model_prices",
+  },
+  {
+    checksum: "b7f753937c590a875d085a334a609cbd72bafd26e8d7e52c9dc096152faef573",
+    id: "0037",
+    name: "merge_request_savings_and_schema_version",
+  },
+  {
+    checksum: "a85ff3529f2bb3c3dfc4fe7c40f88ac1bc953ff9a0a2f119f3f33d20d04de494",
+    id: "0038",
+    name: "config_soft_delete",
+  },
+  {
+    checksum: "7ea8e078e801b5dd0e628a05988d39f470e02c08da839181067dd966b30a2966",
+    id: "0039",
+    name: "merge_export_tasks_into_jobs",
+  },
+  {
+    checksum: "d83b3e68defc31c996c3d843acb5949ace5f5a7e5871f14300a83894c6414a29",
+    id: "0040",
+    name: "merge_config_changes_into_versions",
+  },
+  {
+    checksum: "463e8fdf39b18da5da19d7a0f6e927fc57dcfd604bbcf98d348c6c533401412f",
+    id: "0041",
+    name: "provider_openai_compatible_urls",
+  },
+  {
+    checksum: "b6c2598d758b3b77a49e3457319f2aa19fc102369346d3cc43e0567049d35c0b",
+    id: "0042",
+    name: "remove_unsupported_remote_provider_templates",
+  },
+  {
+    checksum: "9a88ee5ad2a2347bfe4a6d58169d4a93e40fd24053205beddd9e69526110b78e",
+    id: "0043",
+    name: "provider_health_status_taxonomy",
+  },
+  {
+    checksum: "3053a00657302e0ee7e17547e39e4044c9b1b187a0f406acca841a63fd6c1595",
+    id: "0044",
+    name: "provider_api_key_test_status_taxonomy",
+  },
+  {
+    checksum: "db1a1a440cfc7985deb7b03ebe1bdcd41fe47b7f6d01c5f820e9249aacb764a9",
+    id: "0045",
+    name: "provider_subscription_oauth",
+  },
+  {
+    checksum: "88c92c6cab886c608176dd784ac4f8497d1c365ad49d40b6539016dcc7fa6a8a",
+    id: "0046",
+    name: "allow_subscription_provider_templates",
+  },
+  {
+    checksum: "928b876bdc2e3c4a052ba311d16319ba0394dc551bfa0455b706fc2679af525a",
+    id: "0047",
+    name: "route_policy_random_strategy",
   },
 ];
 
@@ -200,12 +291,9 @@ export async function getMigrationStatusFromDatabase(input: {
   await client.connect();
 
   try {
-    const [hasMigrationHistory, hasSchemaVersion] = await Promise.all([
-      tableExists(client, "migration_history"),
-      tableExists(client, "schema_version"),
-    ]);
+    const hasMigrationHistory = await tableExists(client, "migration_history");
     const appliedMigrations = hasMigrationHistory ? await readAppliedMigrations(client) : [];
-    const currentSchemaVersion = hasSchemaVersion ? await readCurrentSchemaVersion(client) : null;
+    const currentSchemaVersion = appliedMigrations.at(-1)?.id ?? null;
 
     return summarizeMigrationStatus({
       appliedMigrations,
@@ -361,15 +449,4 @@ async function readAppliedMigrations(client: Client): Promise<AppliedMigrationSt
     id: row.id,
     name: row.name,
   }));
-}
-
-async function readCurrentSchemaVersion(client: Client): Promise<string | null> {
-  const result = await client.query<SchemaVersionRow>(
-    `
-      select version
-      from schema_version
-      where id = 1
-    `,
-  );
-  return result.rows[0]?.version ?? null;
 }

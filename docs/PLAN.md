@@ -27,7 +27,7 @@ MVP 的目标不是覆盖全部 Provider、全部 Agent 体验或完整自动化
 部署 LLMIngress
   -> 登录 Console
   -> 配置至少一个 Provider 和价格来源
-  -> 创建 Agent 和 Agent API Key
+  -> 创建 Agent 并一次性获得该 Agent 的唯一 API key
   -> 创建 Virtual Model / Route Policy / Limit
   -> 将 Agent 请求发送到 Gateway
   -> Gateway 完成鉴权、路由、Provider 调用和 Fallback
@@ -50,10 +50,10 @@ MVP 开发前先完成最小工程底座，保证后续功能按 TDD 推进：
 - OpenAI-compatible `POST /v1/chat/completions`。
 - OpenAI-compatible `POST /v1/responses` stateless subset。
 - Anthropic-compatible `POST /v1/messages` 基本请求。
-- `GET /v1/models` 返回当前 Agent API Key 可用的 Virtual Model Name。
-- 请求未指定 `model` 时使用 Agent API Key 的默认 Virtual Model Name；未配置默认值时返回明确错误。
+- `GET /v1/models` 返回当前 Agent 可用的 Virtual Model Name。
+- 请求未指定 `model` 时使用 Agent 的默认 Virtual Model Name；未配置默认值时返回明确错误。
 - Streaming 响应转发。
-- Agent API Key 鉴权。
+- Agent-owned API key 鉴权。
 - Virtual Model 权限检查。
 - RPM / TPM / Budget / Token Limit 检查。
 - 固定模型路由、成本优先候选和 Fallback Chain。
@@ -77,16 +77,16 @@ MVP 开发前先完成最小工程底座，保证后续功能按 TDD 推进：
 - 首次初始化和 Console 登录。
 - Provider 创建、启用、禁用、连接测试。
 - Agent 创建。
-- Agent API Key 创建和轮换。
+- Agent 创建成功时生成唯一 API key，并只展示一次。
 - Allowed Virtual Model Names 配置。
-- Agent API Key 默认 Virtual Model Name 配置。
-- Agent API Key 的 Budget / RPM / TPM / Token Limit 配置。
+- Agent 默认 Virtual Model Name 配置。
+- Agent 的 Budget / RPM / TPM / Token / Concurrency Limit 配置。
 - Virtual Model / Route Policy 创建。
 - 模型价格查看和手动覆盖。
 - Activity 页面。
 - Usage / Cost 基础统计。
 - Gateway Runtime 基础状态。
-- Playground live 测试：用户手动粘贴 Agent API Key，通过 Gateway Public API 调用。
+- Playground live 测试：用户手动粘贴 Agent API key，通过 Gateway Public API 调用。
 
 ### 3.4 Worker
 
@@ -123,7 +123,7 @@ MVP 开发前先完成最小工程底座，保证后续功能按 TDD 推进：
 
 - 用户能在 15 分钟内完成首次本地部署和 Console 初始化。
 - 用户能配置 OpenAI、Anthropic 或 Ollama Provider。
-- 用户能创建 Agent API Key、Virtual Model、默认 Virtual Model 和 Limit。
+- 用户能创建 Agent 并一次性获得 API key，配置 Virtual Model、默认 Virtual Model 和 Limit。
 - 一个真实 Agent 或 curl 请求能通过 Gateway 成功返回模型响应。
 - Streaming 响应能完整转发给 Agent。
 - Claude Code 风格 `/v1/messages` 请求能通过 Anthropic Provider 完成一次真实调用。
@@ -148,7 +148,7 @@ V1 的目标是把 MVP 从“可跑通”提升到“个人日常可用”，覆
 
 - Google Gemini API Key Provider。
 - OpenRouter API Key Provider。
-- 长尾 OpenAI-compatible Provider template：DeepSeek、xAI、Mistral、Qwen、Moonshot / Kimi、MiniMax、Groq、Fireworks AI、Z.ai。
+- 长尾 OpenAI-compatible Provider template：DeepSeek、xAI、Qwen、Moonshot / Kimi、MiniMax、Z.ai。
 - Local Provider 增强：LM Studio、llama.cpp。
 - 模型价格同步。
 - Provider / Model health summary 展示。
@@ -158,7 +158,7 @@ V1 的目标是把 MVP 从“可跑通”提升到“个人日常可用”，覆
 - Provider 模板选择器。
 - Agent 专用接入模板：Codex、Claude Code、Cursor、OpenClaw。
 - Route Policy 编辑体验增强。
-- Usage / Cost breakdown：Agent、Agent API Key、Virtual Model、Provider、Model。
+- Usage / Cost breakdown：Agent、Virtual Model、Provider、Model。
 - Savings summary。
 - 配置导入导出。
 - JSONL request logs 导出。

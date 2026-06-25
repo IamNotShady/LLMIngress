@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { toProviderApiKeyMetadata } from "../../apps/console/src/server/provider-keys";
+import {
+  formatProviderApiKeyTestStatusLabel,
+  toProviderApiKeyMetadata,
+} from "../../apps/console/src/server/provider-keys";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-102 provider key operational metadata", () => {
@@ -21,6 +24,17 @@ describe("feat-102 provider key operational metadata", () => {
     expect(migration?.sql).toContain("last_test_error_code text");
     expect(migration?.sql).toContain("last_test_error_message text");
     expect(migration?.sql).toContain("idx_provider_api_keys_provider_enabled_priority");
+
+    const taxonomyMigration = loadSqlMigrations().find(
+      (candidate) =>
+        candidate.id === "0044" && candidate.name === "provider_api_key_test_status_taxonomy",
+    );
+    expect(taxonomyMigration?.sql).toContain("set default 'unknown'");
+    expect(taxonomyMigration?.sql).toContain("last_test_status = 'unknown'");
+    expect(taxonomyMigration?.sql).toContain("last_test_status = 'unhealthy'");
+    expect(taxonomyMigration?.sql).toContain(
+      "last_test_status in ('unknown', 'healthy', 'unhealthy', 'auth_failed', 'quota_limited', 'network_error')",
+    );
   });
 
   it("maps provider API key operational metadata without plaintext", () => {
@@ -36,7 +50,7 @@ describe("feat-102 provider key operational metadata", () => {
       label: "Primary subscription",
       last_test_error_code: "invalid_api_key",
       last_test_error_message: "Invalid API key",
-      last_test_status: "failed",
+      last_test_status: "auth_failed",
       last_tested_at: lastTestedAt,
       last_used_at: lastUsedAt,
       priority: 5,
@@ -54,7 +68,7 @@ describe("feat-102 provider key operational metadata", () => {
       label: "Primary subscription",
       lastTestErrorCode: "invalid_api_key",
       lastTestErrorMessage: "Invalid API key",
-      lastTestStatus: "failed",
+      lastTestStatus: "auth_failed",
       lastTestedAt,
       lastUsedAt,
       priority: 5,
@@ -64,5 +78,14 @@ describe("feat-102 provider key operational metadata", () => {
     });
     expect(metadata).not.toHaveProperty("plaintext");
     expect(metadata).not.toHaveProperty("encryptedKey");
+  });
+
+  it("formats provider API key status from last_test_status", () => {
+    expect(formatProviderApiKeyTestStatusLabel("unknown")).toBe("Unknown");
+    expect(formatProviderApiKeyTestStatusLabel("healthy")).toBe("Healthy");
+    expect(formatProviderApiKeyTestStatusLabel("unhealthy")).toBe("Unhealthy");
+    expect(formatProviderApiKeyTestStatusLabel("auth_failed")).toBe("Auth failed");
+    expect(formatProviderApiKeyTestStatusLabel("quota_limited")).toBe("Quota limited");
+    expect(formatProviderApiKeyTestStatusLabel("network_error")).toBe("Network error");
   });
 });

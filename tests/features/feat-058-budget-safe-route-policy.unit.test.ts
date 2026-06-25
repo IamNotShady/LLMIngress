@@ -15,7 +15,7 @@ describe("feat-058 budget-safe route policy validation", () => {
     await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
   });
 
-  it("blocks unknown-price candidates when a cost-budgeted Agent API key can use the Virtual Model", async () => {
+  it("blocks unknown-price candidates when a cost-budgeted Agent can use the Virtual Model", async () => {
     const fixture = await createTestPostgresFixture({
       databaseNamePrefix: `llmingress_budget_safe_route_unit_${randomUUID().replaceAll("-", "_")}`,
     });
@@ -76,7 +76,7 @@ async function seedBudgetedVirtualModelWithUnknownCandidate(fixture: Fixture): P
   const providerId = randomUUID();
   const providerModelId = randomUUID();
   const agentId = randomUUID();
-  const agentApiKeyId = randomUUID();
+  const agentApiKeyId = agentId;
   const virtualModelId = randomUUID();
 
   await fixture.query(
@@ -95,7 +95,7 @@ async function seedBudgetedVirtualModelWithUnknownCandidate(fixture: Fixture): P
   );
   await fixture.query(
     `
-      insert into virtual_models (id, name, display_name, enabled)
+      insert into virtual_models (id, name, description, enabled)
       values ($1, 'budget-safe-vm', 'Budget Safe VM', true)
     `,
     [virtualModelId],
@@ -109,25 +109,21 @@ async function seedBudgetedVirtualModelWithUnknownCandidate(fixture: Fixture): P
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi_budget', 'sha256:v1:budget-safe', $3, true)
+      update agents
+      set key_prefix = 'llmi_budget',
+          key_hash = 'sha256:v1:budget-safe',
+          default_virtual_model_id = $2
+      where id = $1
     `,
-    [agentApiKeyId, agentId, virtualModelId],
+    [agentId, virtualModelId],
   );
   await fixture.query(
-    "insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id) values ($1, $2)",
+    "insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)",
     [agentApiKeyId, virtualModelId],
   );
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'budget', 'month', 10, 'usd', true)
     `,
     [randomUUID(), agentApiKeyId],

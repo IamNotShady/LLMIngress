@@ -94,12 +94,29 @@ test("provider key management records label status priority usage and per key co
         workerId: "worker-102",
       }),
     ).resolves.toMatchObject({
+      apiKeyResults: [
+        {
+          errorCode: "invalid_api_key",
+          ok: false,
+          providerApiKeyId: seeded.goodProviderApiKeyId,
+          status: "auth_failed",
+        },
+        {
+          errorCode: "invalid_api_key",
+          ok: false,
+          providerApiKeyId: seeded.laterProviderApiKeyId,
+          status: "auth_failed",
+        },
+      ],
       errorCode: "invalid_api_key",
       ok: false,
-      providerApiKeyId: seeded.laterProviderApiKeyId,
-      status: "failed",
+      requestedProviderApiKeyId: seeded.laterProviderApiKeyId,
+      status: "unhealthy",
     });
-    expect(probeAuthorizations).toEqual([`Bearer ${laterProviderApiKey}`]);
+    expect(probeAuthorizations).toEqual([
+      `Bearer ${goodProviderApiKey}`,
+      `Bearer ${laterProviderApiKey}`,
+    ]);
     await expectProviderKeyTestResult(fixture, {
       goodProviderApiKeyId: seeded.goodProviderApiKeyId,
       laterProviderApiKeyId: seeded.laterProviderApiKeyId,
@@ -212,7 +229,7 @@ async function seedProviderKeyOperationalGateway(
     [providerModelId, providerId],
   );
   await fixture.query(
-    "insert into virtual_models (id, name, display_name, enabled) values ($1, 'provider-key-ops', 'Provider Key Ops', true)",
+    "insert into virtual_models (id, name, description, enabled) values ($1, 'provider-key-ops', 'Provider Key Ops', true)",
     [virtualModelId],
   );
   await fixture.query(
@@ -238,15 +255,7 @@ async function seedProviderKeyOperationalGateway(
   );
   await fixture.query(
     `
-      insert into agent_api_keys (
-        id,
-        agent_id,
-        key_prefix,
-        key_hash,
-        default_virtual_model_id,
-        enabled
-      )
-      values ($1, $2, 'llmi-pko-102', 'hash-not-used-102', $3, true)
+      update agents set id = $1, key_prefix = 'llmi-pko-102', key_hash = 'hash-not-used-102', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
     [agentApiKeyId, agentId, virtualModelId],
   );
@@ -336,15 +345,15 @@ async function expectProviderKeyTestResult(
   const rows = new Map(result.rows.map((row) => [row.id, row]));
 
   expect(rows.get(input.goodProviderApiKeyId)).toMatchObject({
-    last_test_error_code: null,
-    last_test_error_message: null,
-    last_test_status: "untested",
-    last_tested_at: null,
+    last_test_error_code: "invalid_api_key",
+    last_test_error_message: "Invalid API key",
+    last_test_status: "auth_failed",
   });
+  expect(rows.get(input.goodProviderApiKeyId)?.last_tested_at).toBeInstanceOf(Date);
   expect(rows.get(input.laterProviderApiKeyId)).toMatchObject({
     last_test_error_code: "invalid_api_key",
     last_test_error_message: "Invalid API key",
-    last_test_status: "failed",
+    last_test_status: "auth_failed",
   });
   expect(rows.get(input.laterProviderApiKeyId)?.last_tested_at).toBeInstanceOf(Date);
 }

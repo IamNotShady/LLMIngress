@@ -53,7 +53,7 @@ test("config publisher commits data and version in one transaction and sends one
       ]);
 
       const committed = await fixture.query<{
-        event_record_id: string;
+        changes: unknown;
         provider_count: string;
         version_count: string;
       }>(
@@ -61,15 +61,21 @@ test("config publisher commits data and version in one transaction and sends one
           select
             (select count(*)::text from providers where id = $1) as provider_count,
             (select count(*)::text from config_versions where version = $2 and source = 'console') as version_count,
-            (select changed_record_id::text from config_change_events where config_version_id = $3::bigint) as event_record_id
+            (select changes from config_versions where id = $3::bigint) as changes
         `,
         [providerId, result.version, result.configVersionId],
       );
-      expect(committed.rows).toEqual([
+      expect(committed.rows[0]).toMatchObject({
+        provider_count: "1",
+        version_count: "1",
+      });
+      expect(committed.rows[0]?.changes).toEqual([
         {
-          provider_count: "1",
-          version_count: "1",
-          event_record_id: providerId,
+          createdAt: expect.any(String),
+          id: result.changes[0]?.id,
+          recordId: providerId,
+          source: "console",
+          table: "providers",
         },
       ]);
 

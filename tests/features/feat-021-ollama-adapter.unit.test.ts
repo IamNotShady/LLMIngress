@@ -4,31 +4,31 @@ import {
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
-import { createOllamaProviderAdapter } from "../../apps/gateway/src/provider-adapters/ollama";
 import { loadSqlMigrations } from "../../packages/db/src/index";
+import { createOllamaProviderAdapter } from "../../packages/provider/src/adapters/ollama";
 
 describe("feat-021 Ollama local provider adapter", () => {
-  it("accepts loopback and private Ollama base URLs while public URLs need risk confirmation", () => {
+  it("accepts loopback, private, and public Ollama base URLs", () => {
     const template = getOllamaProviderTemplate("ollama");
 
     expect(template).toEqual({
-      baseUrlPlaceholder: "http://127.0.0.1:11434",
-      capabilities: ["chat_completions"],
-      chatPath: "/api/chat",
+      baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
+      capabilities: ["chat_completions", "streaming", "tools"],
+      chatPath: "/chat/completions",
       displayName: "Ollama",
       id: "ollama",
-      modelListPath: "/api/tags",
+      modelListPath: "/models",
       providerKey: "ollama",
       providerType: "local",
     });
 
     expect(
       normalizeProviderTemplateFormInput({
-        baseUrl: "http://127.0.0.1:11434",
+        baseUrl: "http://127.0.0.1:11434/v1",
         templateId: "ollama",
       }),
     ).toMatchObject({
-      baseUrl: "http://127.0.0.1:11434",
+      baseUrl: "http://127.0.0.1:11434/v1",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
@@ -36,11 +36,11 @@ describe("feat-021 Ollama local provider adapter", () => {
 
     expect(
       normalizeProviderTemplateFormInput({
-        baseUrl: "http://[::1]:11434",
+        baseUrl: "http://[::1]:11434/v1",
         templateId: "ollama",
       }),
     ).toMatchObject({
-      baseUrl: "http://[::1]:11434",
+      baseUrl: "http://[::1]:11434/v1",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
@@ -48,11 +48,11 @@ describe("feat-021 Ollama local provider adapter", () => {
 
     expect(
       normalizeProviderTemplateFormInput({
-        baseUrl: "http://[fd00::1]:11434",
+        baseUrl: "http://[fd00::1]:11434/v1",
         templateId: "ollama",
       }),
     ).toMatchObject({
-      baseUrl: "http://[fd00::1]:11434",
+      baseUrl: "http://[fd00::1]:11434/v1",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
@@ -60,38 +60,35 @@ describe("feat-021 Ollama local provider adapter", () => {
 
     expect(
       normalizeProviderTemplateFormInput({
-        baseUrl: "http://192.168.1.10:11434",
+        baseUrl: "http://192.168.1.10:11434/v1",
         templateId: "ollama",
       }),
     ).toMatchObject({
-      baseUrl: "http://192.168.1.10:11434",
+      baseUrl: "http://192.168.1.10:11434/v1",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
     });
 
-    expect(() =>
+    expect(
       normalizeProviderTemplateFormInput({
-        baseUrl: "https://ollama.example.com",
+        baseUrl: "https://ollama.example.com/v1",
         templateId: "ollama",
       }),
-    ).toThrow(/public network.*risk confirmation/i);
+    ).toMatchObject({
+      baseUrl: "https://ollama.example.com/v1",
+      providerKey: "ollama",
+      providerTemplateId: "ollama",
+      providerType: "local",
+    });
 
-    expect(() =>
+    expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "https://fd.example.com",
         templateId: "ollama",
       }),
-    ).toThrow(/public network.*risk confirmation/i);
-
-    expect(
-      normalizeProviderTemplateFormInput({
-        baseUrl: "https://ollama.example.com",
-        publicNetworkRiskAccepted: "true",
-        templateId: "ollama",
-      }),
     ).toMatchObject({
-      baseUrl: "https://ollama.example.com",
+      baseUrl: "https://fd.example.com",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
@@ -99,7 +96,7 @@ describe("feat-021 Ollama local provider adapter", () => {
 
     expect(() =>
       normalizeProviderFormInput({
-        baseUrl: "http://127.0.0.1:11434",
+        baseUrl: "http://127.0.0.1:11434/v1",
         displayName: "Ollama",
         providerKey: "ollama",
         providerType: "local",

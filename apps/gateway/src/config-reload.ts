@@ -7,8 +7,16 @@ import {
 import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
-} from "@llmingress/config";
-import { Client } from "pg";
+} from "@llmingress/db/config-versions";
+import { isRemovedProviderKey } from "@llmingress/db/providers";
+import { PostgresClient } from "@llmingress/db/routes";
+import {
+  normalizeProviderModelCapabilities,
+  normalizeRoutePolicyRules,
+  type ProviderModelCapabilities,
+  type RoutePolicyRules,
+  type RoutePolicyStrategy,
+} from "@llmingress/domain";
 import {
   createGatewayRuntimeStatusRecorder,
   type GatewayRuntimeStatusEvent,
@@ -22,10 +30,12 @@ export type GatewayProviderSnapshot = {
   displayName: string;
 };
 
-export type GatewayRoutePolicyStrategy = "fixed" | "cost_first" | "balanced" | "quality_first";
+export type GatewayRoutePolicyStrategy = RoutePolicyStrategy;
 
 export type GatewayRouteCandidateSnapshot = {
   candidateOrder: number;
+  capabilities?: ProviderModelCapabilities;
+  contextWindow?: number | null;
   displayName: string;
   isFallback: boolean;
   modelId: string;
@@ -33,11 +43,13 @@ export type GatewayRouteCandidateSnapshot = {
   providerId: string;
   providerKey: string;
   providerModelId: string;
+  supportsTools?: boolean;
 };
 
 export type GatewayRoutePolicySnapshot = {
   candidates: GatewayRouteCandidateSnapshot[];
   id: string;
+  rules?: RoutePolicyRules;
   strategy: GatewayRoutePolicyStrategy;
   virtualModelId: string;
   virtualModelName: string;
@@ -84,9 +96,11 @@ type ProviderRow = {
 
 type RoutePolicyCandidateRow = {
   candidateOrder: number;
+  capabilityMetadata: unknown;
   displayName: string;
   id: string;
   cachedInputUsdPerMillionTokens: string | null;
+  contextWindow: number | null;
   inputUsdPerMillionTokens: string | null;
   isFallback: boolean;
   modelId: string;
@@ -94,7 +108,9 @@ type RoutePolicyCandidateRow = {
   providerId: string;
   providerKey: string;
   providerModelId: string;
+  rules: unknown;
   strategy: GatewayRoutePolicyStrategy;
+  supportsTools: boolean;
   syncedAt: Date | null;
   syncedCachedInputUsdPerMillionTokens: string | null;
   syncedInputUsdPerMillionTokens: string | null;
@@ -243,7 +259,7 @@ export function createGatewayConfigRuntime(
 export async function loadGatewayConfigSnapshot(
   databaseUrl: string,
 ): Promise<GatewayConfigSnapshot> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
@@ -257,6 +273,7 @@ export async function loadGatewayConfigSnapshot(
                display_name as "displayName"
         from providers
         where enabled = true
+          and deleted_at is null
         order by provider_key
       `,
     );
@@ -264,6 +281,7 @@ export async function loadGatewayConfigSnapshot(
       `
         select route_policies.id::text as id,
                route_policies.strategy,
+               route_policies.rules,
                virtual_models.id::text as "virtualModelId",
                virtual_models.name as "virtualModelName",
                route_policy_candidates.provider_model_id::text as "providerModelId",
@@ -271,6 +289,9 @@ export async function loadGatewayConfigSnapshot(
                route_policy_candidates.is_fallback as "isFallback",
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
+               provider_models.context_window as "contextWindow",
+               provider_models.supports_tools as "supportsTools",
+               provider_models.capability_metadata as "capabilityMetadata",
                providers.id::text as "providerId",
                providers.provider_key as "providerKey",
                provider_models.manual_input_usd_per_million_tokens::text
@@ -280,17 +301,17 @@ export async function loadGatewayConfigSnapshot(
                provider_models.manual_output_usd_per_million_tokens::text
                  as "outputUsdPerMillionTokens",
                provider_models.manual_price_updated_at as "updatedAt",
-               latest_provider_model_price.input_usd_per_million_tokens::text
+               provider_models.synced_input_usd_per_million_tokens::text
                  as "syncedInputUsdPerMillionTokens",
-               latest_provider_model_price.cached_input_usd_per_million_tokens::text
+               provider_models.synced_cached_input_usd_per_million_tokens::text
                  as "syncedCachedInputUsdPerMillionTokens",
-               latest_provider_model_price.output_usd_per_million_tokens::text
+               provider_models.synced_output_usd_per_million_tokens::text
                  as "syncedOutputUsdPerMillionTokens",
-               latest_provider_model_price.price_version
+               provider_models.synced_price_version
                  as "syncedPriceVersion",
-               latest_provider_model_price.source_url
+               provider_models.synced_price_source_url
                  as "syncedSourceUrl",
-               latest_provider_model_price.synced_at
+               provider_models.synced_price_synced_at
                  as "syncedAt"
         from route_policies
         join virtual_models on virtual_models.id = route_policies.virtual_model_id
@@ -298,27 +319,12 @@ export async function loadGatewayConfigSnapshot(
           on route_policy_candidates.route_policy_id = route_policies.id
         join provider_models on provider_models.id = route_policy_candidates.provider_model_id
         join providers on providers.id = provider_models.provider_id
-        left join lateral (
-          select input_usd_per_million_tokens,
-                 cached_input_usd_per_million_tokens,
-                 output_usd_per_million_tokens,
-                 price_version,
-                 source_url,
-                 synced_at
-          from provider_models_price
-          where lower(provider_models_price.provider_key) = lower(providers.provider_key)
-            and provider_models_price.model_id = provider_models.model_id
-          order by case provider_models_price.source
-                     when 'models.dev' then 0
-                     when 'litellm' then 1
-                     else 2
-                   end,
-                   synced_at desc,
-                   updated_at desc
-          limit 1
-        ) latest_provider_model_price on true
         where virtual_models.enabled = true
+          and virtual_models.deleted_at is null
+          and route_policies.deleted_at is null
           and providers.enabled = true
+          and providers.deleted_at is null
+          and provider_models.deleted_at is null
           and provider_models.availability = 'available'
         order by virtual_models.name,
                  route_policies.id,
@@ -329,8 +335,12 @@ export async function loadGatewayConfigSnapshot(
 
     return {
       loadedAt: new Date(),
-      providers: providers.rows,
-      routePolicies: rowToRoutePolicySnapshots(routePolicyCandidates.rows),
+      providers: providers.rows.filter((provider) => !isRemovedProviderKey(provider.providerKey)),
+      routePolicies: rowToRoutePolicySnapshots(
+        routePolicyCandidates.rows.filter(
+          (candidate) => !isRemovedProviderKey(candidate.providerKey),
+        ),
+      ),
       version: version.rows[0]?.version ?? 0,
     };
   } finally {
@@ -347,6 +357,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
       routePolicy = {
         candidates: [],
         id: row.id,
+        rules: normalizeRoutePolicyRules(row.rules),
         strategy: row.strategy,
         virtualModelId: row.virtualModelId,
         virtualModelName: row.virtualModelName,
@@ -356,6 +367,8 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
 
     routePolicy.candidates.push({
       candidateOrder: row.candidateOrder,
+      capabilities: normalizeProviderModelCapabilities(row.capabilityMetadata),
+      contextWindow: row.contextWindow,
       displayName: row.displayName,
       isFallback: row.isFallback,
       modelId: row.modelId,
@@ -368,6 +381,7 @@ function rowToRoutePolicySnapshots(rows: RoutePolicyCandidateRow[]): GatewayRout
       providerId: row.providerId,
       providerKey: row.providerKey,
       providerModelId: row.providerModelId,
+      supportsTools: row.supportsTools,
     });
   }
 

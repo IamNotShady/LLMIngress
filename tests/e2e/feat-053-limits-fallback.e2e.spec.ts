@@ -209,21 +209,17 @@ async function seedLimitsFallbackGateway(
   );
   await fixture.query(
     `
-      insert into provider_models_price (
-        id,
-        provider_key,
-        model_id,
-        input_usd_per_million_tokens,
-        cached_input_usd_per_million_tokens,
-        output_usd_per_million_tokens,
-        source,
-        source_url,
-        price_version,
-        synced_at
-      )
-      values ($1, 'openai', 'gpt-4.1-mini', 0.4, null, 1.6, 'models.dev', 'test://prices/feat-053', 'test:feat-053', '2026-06-17T00:00:00.000Z')
+      update provider_models
+      set synced_input_usd_per_million_tokens = 0.4,
+          synced_cached_input_usd_per_million_tokens = null,
+          synced_output_usd_per_million_tokens = 1.6,
+          synced_price_source = 'models.dev',
+          synced_price_source_url = 'test://prices/feat-053',
+          synced_price_version = 'test:feat-053',
+          synced_price_synced_at = '2026-06-17T00:00:00.000Z',
+          synced_price_updated_at = '2026-06-17T00:00:00.000Z'
+      where model_id = 'gpt-4.1-mini'
     `,
-    [randomUUID()],
   );
   await fixture.query(
     "insert into agents (id, name, agent_type, enabled) values ($1, 'Limits Fallback Agent', 'coding', true)",
@@ -232,7 +228,7 @@ async function seedLimitsFallbackGateway(
 
   for (const [scenario, route] of Object.entries(routeRows)) {
     await fixture.query(
-      "insert into virtual_models (id, name, display_name, enabled) values ($1, $2, $3, true)",
+      "insert into virtual_models (id, name, description, enabled) values ($1, $2, $3, true)",
       [
         route.virtualModelId,
         limitsFallbackNames.virtualModels[
@@ -278,19 +274,19 @@ async function seedLimitsFallbackGateway(
     const route = routeRows[scenario as keyof typeof routeRows];
     await fixture.query(
       `
-        insert into agent_api_keys (
+        insert into agents (
           id,
-          agent_id,
+          name,
+          agent_type,
           key_prefix,
           key_hash,
           default_virtual_model_id,
           enabled
         )
-        values ($1, $2, $3, $4, $5, true)
+        values ($1, 'Limits Agent', 'coding', $2, $3, $4, true)
       `,
       [
         key.id,
-        agentId,
         key.apiKey.slice(0, 12),
         buildGatewayAgentApiKeyHash(key.apiKey),
         route.virtualModelId,
@@ -298,7 +294,7 @@ async function seedLimitsFallbackGateway(
     );
     await fixture.query(
       `
-        insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
+        insert into agent_virtual_models (agent_id, virtual_model_id)
         values ($1, $2)
       `,
       [key.id, route.virtualModelId],
@@ -307,7 +303,7 @@ async function seedLimitsFallbackGateway(
 
   await fixture.query(
     `
-      insert into agent_limits (id, agent_api_key_id, limit_type, period, limit_value, unit, enabled)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'rpm', 'minute', 1, 'requests', true),
              ($3, $4, 'tpm', 'minute', 10, 'tokens', true),
              ($5, $6, 'token', 'request', 20, 'tokens', true),

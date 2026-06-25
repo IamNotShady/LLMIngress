@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/config/config-publisher";
-import { Client, type QueryResultRow } from "pg";
+import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
+import {
+  normalizeProviderModelCapabilities,
+  normalizeRoutePolicyRules,
+  type ProviderModelCapabilities,
+  type RoutePolicyRules,
+} from "@llmingress/domain";
 import { listProviderTemplateSelectorGroups } from "./provider-templates";
 
 export type LlmIngressConfigExport = {
@@ -22,11 +28,12 @@ export type ExportedProvider = {
   providerApiKeys: ExportedProviderApiKey[];
   providerKey: string;
   providerTemplateId: string | null;
-  providerType: "api_key" | "local";
+  providerType: "api_key" | "local" | "subscription";
 };
 
 export type ExportedProviderModel = {
   availability: "available" | "deprecated" | "not_listed" | "unavailable";
+  capabilityMetadata: ProviderModelCapabilities;
   contextWindow: number | null;
   displayName: string;
   id: string;
@@ -51,13 +58,14 @@ export type ExportedRoutePolicy = {
   fallbackProviderModelIds: string[];
   id: string;
   primaryProviderModelIds: string[];
-  strategy: "balanced" | "cost_first" | "fixed" | "quality_first";
+  rules: RoutePolicyRules;
+  strategy: "cost_first" | "fixed" | "quality_first" | "random";
   virtualModelId: string;
 };
 
 export type ExportedAgent = {
-  agentApiKeys: ExportedAgentApiKey[];
   agentType: "coding" | "desktop" | "ide" | "other" | "terminal";
+  apiKey: ExportedAgentApiKey | null;
   enabled: boolean;
   id: string;
   name: string;
@@ -74,16 +82,19 @@ export type ExportedAgentApiKey = {
 };
 
 export type ExportedAgentLimit = {
+  alertThreshold: number | null;
   enabled: boolean;
-  limitType: "budget" | "rpm" | "token" | "tpm";
+  enforcementPolicy: "block" | "warn_only";
+  limitType: "budget" | "concurrency" | "rpm" | "token" | "tpm";
   limitValue: number;
+  manualBypass: boolean;
   period: "day" | "hour" | "minute" | "month" | "request" | "week";
   unit: "requests" | "tokens" | "usd";
 };
 
 export type ConfigImportResult = {
-  importedAgentApiKeyCount: number;
   importedAgentCount: number;
+  importedAgentKeyCount: number;
   importedProviderCount: number;
   importedProviderModelCount: number;
   importedRoutePolicyCount: number;
@@ -98,7 +109,7 @@ type QueryClient = {
   ) => Promise<{ rows: T[] }>;
 };
 
-type ProviderRow = QueryResultRow & {
+type ProviderRow = PostgresQueryResultRow & {
   base_url: string | null;
   display_name: string;
   enabled: boolean;
@@ -108,8 +119,9 @@ type ProviderRow = QueryResultRow & {
   provider_type: "api_key" | "local";
 };
 
-type ProviderModelRow = QueryResultRow & {
+type ProviderModelRow = PostgresQueryResultRow & {
   availability: ExportedProviderModel["availability"];
+  capability_metadata: unknown;
   context_window: number | null;
   display_name: string;
   id: string;
@@ -119,56 +131,54 @@ type ProviderModelRow = QueryResultRow & {
   supports_tools: boolean;
 };
 
-type ProviderApiKeyRow = QueryResultRow & {
+type ProviderApiKeyRow = PostgresQueryResultRow & {
   key_prefix: string;
   provider_id: string;
 };
 
-type VirtualModelRow = QueryResultRow & {
+type VirtualModelRow = PostgresQueryResultRow & {
   display_name: string;
   enabled: boolean;
   id: string;
   name: string;
 };
 
-type RoutePolicyRow = QueryResultRow & {
+type RoutePolicyRow = PostgresQueryResultRow & {
   id: string;
+  rules: unknown;
   strategy: ExportedRoutePolicy["strategy"];
   virtual_model_id: string;
 };
 
-type RoutePolicyCandidateRow = QueryResultRow & {
+type RoutePolicyCandidateRow = PostgresQueryResultRow & {
   candidate_order: number;
   is_fallback: boolean;
   provider_model_id: string;
   route_policy_id: string;
 };
 
-type AgentRow = QueryResultRow & {
+type AgentRow = PostgresQueryResultRow & {
   agent_type: ExportedAgent["agentType"];
-  enabled: boolean;
-  id: string;
-  name: string;
-};
-
-type AgentApiKeyRow = QueryResultRow & {
-  agent_id: string;
   default_virtual_model_id: string | null;
   enabled: boolean;
   id: string;
-  key_prefix: string;
+  key_prefix: string | null;
+  name: string;
 };
 
-type AgentApiKeyVirtualModelRow = QueryResultRow & {
-  agent_api_key_id: string;
+type AgentVirtualModelRow = PostgresQueryResultRow & {
+  agent_id: string;
   virtual_model_id: string;
 };
 
-type AgentLimitRow = QueryResultRow & {
-  agent_api_key_id: string;
+type AgentLimitRow = PostgresQueryResultRow & {
+  alert_threshold: string | null;
+  agent_id: string;
   enabled: boolean;
+  enforcement_policy: ExportedAgentLimit["enforcementPolicy"];
   limit_type: ExportedAgentLimit["limitType"];
   limit_value: string;
+  manual_bypass: boolean;
   period: ExportedAgentLimit["period"];
   unit: ExportedAgentLimit["unit"];
 };
@@ -223,7 +233,7 @@ export async function importConsoleConfig(input: {
       { table: "virtual_models" },
       { table: "route_policies" },
       { table: "agents" },
-      { table: "agent_api_keys" },
+      { table: "agents" },
       { table: "agent_limits" },
     ],
     write: async (client) => {
@@ -231,8 +241,7 @@ export async function importConsoleConfig(input: {
       await writeProviderModels(client, document.providers);
       await writeVirtualModels(client, document.virtualModels);
       await writeAgents(client, document.agents);
-      await writeAgentApiKeys(client, document.agents);
-      await writeAgentApiKeyAccess(client, document.agents);
+      await writeAgentAccess(client, document.agents);
       await writeAgentLimits(client, document.agents);
       await writeRoutePolicies(client, document.routePolicies);
       await writeRoutePolicyCandidates(client, document.routePolicies);
@@ -240,11 +249,8 @@ export async function importConsoleConfig(input: {
   });
 
   return {
-    importedAgentApiKeyCount: document.agents.reduce(
-      (count, agent) => count + agent.agentApiKeys.length,
-      0,
-    ),
     importedAgentCount: document.agents.length,
+    importedAgentKeyCount: document.agents.filter((agent) => agent.apiKey).length,
     importedProviderCount: document.providers.length,
     importedProviderModelCount: document.providers.reduce(
       (count, provider) => count + provider.models.length,
@@ -267,6 +273,7 @@ async function readProviders(client: QueryClient): Promise<Omit<ExportedProvider
              base_url,
              enabled
       from providers
+      where deleted_at is null
       order by provider_key
     `,
   );
@@ -294,8 +301,10 @@ async function readProviderModels(
              context_window,
              supports_streaming,
              supports_tools,
+             capability_metadata,
              availability
       from provider_models
+      where deleted_at is null
       order by provider_id, model_id
     `,
   );
@@ -304,6 +313,7 @@ async function readProviderModels(
     const models = grouped.get(row.provider_id) ?? [];
     models.push({
       availability: row.availability,
+      capabilityMetadata: normalizeProviderModelCapabilities(row.capability_metadata),
       contextWindow: row.context_window,
       displayName: row.display_name,
       id: row.id,
@@ -321,10 +331,14 @@ async function readProviderApiKeys(
 ): Promise<Map<string, ExportedProviderApiKey[]>> {
   const result = await client.query<ProviderApiKeyRow>(
     `
-      select provider_id::text,
-             key_prefix
+      select provider_api_keys.provider_id::text,
+             provider_api_keys.key_prefix
       from provider_api_keys
-      order by provider_id, created_at, id
+      join providers on providers.id = provider_api_keys.provider_id
+      where providers.deleted_at is null
+      order by provider_api_keys.provider_id,
+               provider_api_keys.created_at,
+               provider_api_keys.id
     `,
   );
   const grouped = new Map<string, ExportedProviderApiKey[]>();
@@ -344,9 +358,10 @@ async function readVirtualModels(client: QueryClient): Promise<ExportedVirtualMo
     `
       select id::text,
              name,
-             display_name,
+             description as display_name,
              enabled
       from virtual_models
+      where deleted_at is null
       order by name
     `,
   );
@@ -361,10 +376,14 @@ async function readVirtualModels(client: QueryClient): Promise<ExportedVirtualMo
 async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePolicy[]> {
   const policies = await client.query<RoutePolicyRow>(
     `
-      select id::text,
-             virtual_model_id::text,
-             strategy
+      select route_policies.id::text,
+             route_policies.virtual_model_id::text,
+             route_policies.rules,
+             route_policies.strategy
       from route_policies
+      join virtual_models on virtual_models.id = route_policies.virtual_model_id
+      where route_policies.deleted_at is null
+        and virtual_models.deleted_at is null
       order by id
     `,
   );
@@ -375,6 +394,12 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
              candidate_order,
              is_fallback
       from route_policy_candidates
+      join route_policies on route_policies.id = route_policy_candidates.route_policy_id
+      join provider_models on provider_models.id = route_policy_candidates.provider_model_id
+      join providers on providers.id = provider_models.provider_id
+      where route_policies.deleted_at is null
+        and provider_models.deleted_at is null
+        and providers.deleted_at is null
       order by route_policy_id, candidate_order
     `,
   );
@@ -395,6 +420,7 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
       primaryProviderModelIds: policyCandidates
         .filter((candidate) => !candidate.is_fallback)
         .map((candidate) => candidate.provider_model_id),
+      rules: normalizeRoutePolicyRules(policy.rules),
       strategy: policy.strategy,
       virtualModelId: policy.virtual_model_id,
     };
@@ -404,68 +430,76 @@ async function readRoutePolicies(client: QueryClient): Promise<ExportedRoutePoli
 async function readAgents(client: QueryClient): Promise<ExportedAgent[]> {
   const agents = await client.query<AgentRow>(
     `
-        select id::text,
-               name,
-               agent_type,
-               enabled
+        select agents.id::text,
+               agents.name,
+               agents.agent_type,
+               agents.key_prefix,
+               agents.default_virtual_model_id::text,
+               agents.enabled
         from agents
+        where deleted_at is null
         order by name
       `,
   );
-  const agentApiKeys = await client.query<AgentApiKeyRow>(
+  const access = await client.query<AgentVirtualModelRow>(
     `
-        select id::text,
-               agent_id::text,
-               key_prefix,
-               default_virtual_model_id::text,
-               enabled
-        from agent_api_keys
-        order by agent_id, created_at, id
-      `,
-  );
-  const access = await client.query<AgentApiKeyVirtualModelRow>(
-    `
-        select agent_api_key_id::text,
-               virtual_model_id::text
-        from agent_api_key_virtual_models
-        order by agent_api_key_id, virtual_model_id
+        select agent_virtual_models.agent_id::text as agent_id,
+               agent_virtual_models.virtual_model_id::text
+        from agent_virtual_models
+        join agents on agents.id = agent_virtual_models.agent_id
+        join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
+        where agents.deleted_at is null
+          and virtual_models.deleted_at is null
+        order by agent_virtual_models.agent_id,
+                 agent_virtual_models.virtual_model_id
       `,
   );
   const limits = await client.query<AgentLimitRow>(
     `
-        select agent_api_key_id::text,
-               limit_type,
-               period,
-               limit_value::text,
-               unit,
-               enabled
+        select agent_limits.agent_id::text as agent_id,
+               agent_limits.limit_type,
+               agent_limits.period,
+               agent_limits.limit_value::text,
+               agent_limits.unit,
+               agent_limits.enabled,
+               agent_limits.alert_threshold::text,
+               agent_limits.enforcement_policy,
+               agent_limits.manual_bypass
         from agent_limits
-        order by agent_api_key_id, limit_type, period
+        join agents on agents.id = agent_limits.agent_id
+        where agents.deleted_at is null
+        order by agent_limits.agent_id,
+                 agent_limits.limit_type,
+                 agent_limits.period
       `,
   );
-  const accessByKeyId = groupRows(access.rows, (row) => row.agent_api_key_id);
-  const limitsByKeyId = groupRows(limits.rows, (row) => row.agent_api_key_id);
-  const apiKeysByAgentId = groupRows(agentApiKeys.rows, (row) => row.agent_id);
+  const accessByAgentId = groupRows(access.rows, (row) => row.agent_id);
+  const limitsByAgentId = groupRows(limits.rows, (row) => row.agent_id);
 
   return agents.rows.map((agent) => ({
-    agentApiKeys: (apiKeysByAgentId.get(agent.id) ?? []).map((apiKey) => ({
-      allowedVirtualModelIds: (accessByKeyId.get(apiKey.id) ?? []).map(
-        (row) => row.virtual_model_id,
-      ),
-      defaultVirtualModelId: apiKey.default_virtual_model_id,
-      enabled: apiKey.enabled,
-      id: apiKey.id,
-      keyPrefix: apiKey.key_prefix,
-      limits: (limitsByKeyId.get(apiKey.id) ?? []).map((limit) => ({
-        enabled: limit.enabled,
-        limitType: limit.limit_type,
-        limitValue: Number(limit.limit_value),
-        period: limit.period,
-        unit: limit.unit,
-      })),
-      secret: "redacted",
-    })),
     agentType: agent.agent_type,
+    apiKey: agent.key_prefix
+      ? {
+          allowedVirtualModelIds: (accessByAgentId.get(agent.id) ?? []).map(
+            (row) => row.virtual_model_id,
+          ),
+          defaultVirtualModelId: agent.default_virtual_model_id,
+          enabled: agent.enabled,
+          id: agent.id,
+          keyPrefix: agent.key_prefix,
+          limits: (limitsByAgentId.get(agent.id) ?? []).map((limit) => ({
+            alertThreshold: limit.alert_threshold === null ? null : Number(limit.alert_threshold),
+            enabled: limit.enabled,
+            enforcementPolicy: limit.enforcement_policy,
+            limitType: limit.limit_type,
+            limitValue: Number(limit.limit_value),
+            manualBypass: limit.manual_bypass,
+            period: limit.period,
+            unit: limit.unit,
+          })),
+          secret: "redacted",
+        }
+      : null,
     enabled: agent.enabled,
     id: agent.id,
     name: agent.name,
@@ -480,9 +514,10 @@ async function writeProviders(
     await client.query(
       `
         insert into providers (
-          id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled
+          id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled,
+          deleted_at
         )
-        values ($1, $2, $3, $4, $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6, $7, null)
         on conflict (id) do update
         set provider_type = excluded.provider_type,
             provider_key = excluded.provider_key,
@@ -490,6 +525,7 @@ async function writeProviders(
             display_name = excluded.display_name,
             base_url = excluded.base_url,
             enabled = excluded.enabled,
+            deleted_at = null,
             updated_at = now()
       `,
       [
@@ -515,9 +551,9 @@ async function writeProviderModels(
         `
           insert into provider_models (
             id, provider_id, model_id, display_name, context_window, supports_streaming,
-            supports_tools, availability
+            supports_tools, availability, capability_metadata, deleted_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, null)
           on conflict (id) do update
           set provider_id = excluded.provider_id,
               model_id = excluded.model_id,
@@ -526,6 +562,8 @@ async function writeProviderModels(
               supports_streaming = excluded.supports_streaming,
               supports_tools = excluded.supports_tools,
               availability = excluded.availability,
+              capability_metadata = excluded.capability_metadata,
+              deleted_at = null,
               updated_at = now()
         `,
         [
@@ -537,6 +575,7 @@ async function writeProviderModels(
           model.supportsStreaming,
           model.supportsTools,
           model.availability,
+          JSON.stringify(model.capabilityMetadata),
         ],
       );
     }
@@ -550,12 +589,13 @@ async function writeVirtualModels(
   for (const virtualModel of virtualModels) {
     await client.query(
       `
-        insert into virtual_models (id, name, display_name, enabled)
-        values ($1, $2, $3, $4)
+        insert into virtual_models (id, name, description, enabled, deleted_at)
+        values ($1, $2, $3, $4, null)
         on conflict (id) do update
         set name = excluded.name,
-            display_name = excluded.display_name,
+            description = excluded.description,
             enabled = excluded.enabled,
+            deleted_at = null,
             updated_at = now()
       `,
       [virtualModel.id, virtualModel.name, virtualModel.displayName, virtualModel.enabled],
@@ -567,75 +607,50 @@ async function writeAgents(client: QueryClient, agents: readonly ExportedAgent[]
   for (const agent of agents) {
     await client.query(
       `
-        insert into agents (id, name, agent_type, enabled)
-        values ($1, $2, $3, $4)
+        insert into agents (
+          id, name, agent_type, key_prefix, key_hash, default_virtual_model_id, enabled, deleted_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, null)
         on conflict (id) do update
         set name = excluded.name,
             agent_type = excluded.agent_type,
+            key_prefix = coalesce(agents.key_prefix, excluded.key_prefix),
+            key_hash = coalesce(agents.key_hash, excluded.key_hash),
+            default_virtual_model_id = excluded.default_virtual_model_id,
             enabled = excluded.enabled,
+            deleted_at = null,
             updated_at = now()
       `,
-      [agent.id, agent.name, agent.agentType, agent.enabled],
+      [
+        agent.id,
+        agent.name,
+        agent.agentType,
+        agent.apiKey?.keyPrefix ?? null,
+        agent.apiKey ? buildRedactedImportAgentKeyHash(agent.id) : null,
+        agent.apiKey?.defaultVirtualModelId ?? null,
+        agent.enabled,
+      ],
     );
   }
 }
 
-async function writeAgentApiKeys(
+async function writeAgentAccess(
   client: QueryClient,
   agents: readonly ExportedAgent[],
 ): Promise<void> {
+  const agentIds = agents.map((agent) => agent.id);
+  await client.query("delete from agent_virtual_models where agent_id = any($1::uuid[])", [
+    agentIds,
+  ]);
   for (const agent of agents) {
-    for (const apiKey of agent.agentApiKeys) {
+    for (const virtualModelId of agent.apiKey?.allowedVirtualModelIds ?? []) {
       await client.query(
         `
-          insert into agent_api_keys (
-            id, agent_id, key_prefix, key_hash, default_virtual_model_id, enabled
-          )
-          values ($1, $2, $3, $4, $5, $6)
-          on conflict (id) do update
-          set agent_id = excluded.agent_id,
-              key_prefix = excluded.key_prefix,
-              default_virtual_model_id = excluded.default_virtual_model_id,
-              enabled = excluded.enabled,
-              updated_at = now()
+          insert into agent_virtual_models (agent_id, virtual_model_id)
+          values ($1, $2)
         `,
-        [
-          apiKey.id,
-          agent.id,
-          apiKey.keyPrefix,
-          buildRedactedImportAgentKeyHash(apiKey.id),
-          apiKey.defaultVirtualModelId,
-          apiKey.enabled,
-        ],
+        [agent.id, virtualModelId],
       );
-    }
-  }
-}
-
-async function writeAgentApiKeyAccess(
-  client: QueryClient,
-  agents: readonly ExportedAgent[],
-): Promise<void> {
-  const apiKeyIds = agents.flatMap((agent) => agent.agentApiKeys.map((apiKey) => apiKey.id));
-  if (apiKeyIds.length === 0) {
-    return;
-  }
-
-  await client.query(
-    "delete from agent_api_key_virtual_models where agent_api_key_id = any($1::uuid[])",
-    [apiKeyIds],
-  );
-  for (const agent of agents) {
-    for (const apiKey of agent.agentApiKeys) {
-      for (const virtualModelId of apiKey.allowedVirtualModelIds) {
-        await client.query(
-          `
-            insert into agent_api_key_virtual_models (agent_api_key_id, virtual_model_id)
-            values ($1, $2)
-          `,
-          [apiKey.id, virtualModelId],
-        );
-      }
     }
   }
 }
@@ -644,35 +659,39 @@ async function writeAgentLimits(
   client: QueryClient,
   agents: readonly ExportedAgent[],
 ): Promise<void> {
-  const apiKeyIds = agents.flatMap((agent) => agent.agentApiKeys.map((apiKey) => apiKey.id));
-  if (apiKeyIds.length === 0) {
-    return;
-  }
-
-  await client.query("delete from agent_limits where agent_api_key_id = any($1::uuid[])", [
-    apiKeyIds,
-  ]);
+  const agentIds = agents.map((agent) => agent.id);
+  await client.query("delete from agent_limits where agent_id = any($1::uuid[])", [agentIds]);
   for (const agent of agents) {
-    for (const apiKey of agent.agentApiKeys) {
-      for (const limit of apiKey.limits) {
-        await client.query(
-          `
-            insert into agent_limits (
-              id, agent_api_key_id, limit_type, period, limit_value, unit, enabled
-            )
-            values ($1, $2, $3, $4, $5, $6, $7)
-          `,
-          [
-            randomUUID(),
-            apiKey.id,
-            limit.limitType,
-            limit.period,
-            limit.limitValue,
-            limit.unit,
-            limit.enabled,
-          ],
-        );
-      }
+    for (const limit of agent.apiKey?.limits ?? []) {
+      await client.query(
+        `
+          insert into agent_limits (
+            id,
+            agent_id,
+            limit_type,
+            period,
+            limit_value,
+            unit,
+            enabled,
+            alert_threshold,
+            enforcement_policy,
+            manual_bypass
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `,
+        [
+          randomUUID(),
+          agent.id,
+          limit.limitType,
+          limit.period,
+          limit.limitValue,
+          limit.unit,
+          limit.enabled,
+          limit.alertThreshold,
+          limit.enforcementPolicy,
+          limit.manualBypass,
+        ],
+      );
     }
   }
 }
@@ -684,14 +703,21 @@ async function writeRoutePolicies(
   for (const routePolicy of routePolicies) {
     await client.query(
       `
-        insert into route_policies (id, virtual_model_id, strategy)
-        values ($1, $2, $3)
+        insert into route_policies (id, virtual_model_id, strategy, rules, deleted_at)
+        values ($1, $2, $3, $4::jsonb, null)
         on conflict (id) do update
         set virtual_model_id = excluded.virtual_model_id,
             strategy = excluded.strategy,
+            rules = excluded.rules,
+            deleted_at = null,
             updated_at = now()
       `,
-      [routePolicy.id, routePolicy.virtualModelId, routePolicy.strategy],
+      [
+        routePolicy.id,
+        routePolicy.virtualModelId,
+        routePolicy.strategy,
+        JSON.stringify(routePolicy.rules),
+      ],
     );
   }
 }
@@ -817,6 +843,7 @@ function normalizeProviderModels(value: unknown, path: string): ExportedProvider
         ["available", "deprecated", "not_listed", "unavailable"],
         `${path}[${index}].availability`,
       ),
+      capabilityMetadata: normalizeProviderModelCapabilities(input.capabilityMetadata ?? {}),
       contextWindow: normalizeNullablePositiveInteger(
         input.contextWindow,
         `${path}[${index}].contextWindow`,
@@ -877,9 +904,10 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
         input.primaryProviderModelIds,
         `routePolicies[${index}].primaryProviderModelIds`,
       ),
+      rules: normalizeRoutePolicyRules(input.rules ?? {}),
       strategy: normalizeEnum(
         input.strategy,
-        ["balanced", "cost_first", "fixed", "quality_first"],
+        ["cost_first", "fixed", "quality_first", "random"],
         `routePolicies[${index}].strategy`,
       ),
       virtualModelId: normalizeUuid(input.virtualModelId, `routePolicies[${index}].virtualModelId`),
@@ -893,12 +921,15 @@ function normalizeAgents(value: unknown): ExportedAgent[] {
       throw new Error(`agents[${index}] must be an object.`);
     }
     return {
-      agentApiKeys: normalizeAgentApiKeys(input.agentApiKeys, `agents[${index}].agentApiKeys`),
       agentType: normalizeEnum(
         input.agentType,
         ["coding", "desktop", "ide", "other", "terminal"],
         `agents[${index}].agentType`,
       ),
+      apiKey:
+        input.apiKey === null || input.apiKey === undefined
+          ? null
+          : normalizeAgentApiKey(input.apiKey, `agents[${index}].apiKey`),
       enabled: normalizeBoolean(input.enabled, `agents[${index}].enabled`),
       id: normalizeUuid(input.id, `agents[${index}].id`),
       name: normalizeText(input.name, `agents[${index}].name`),
@@ -906,30 +937,28 @@ function normalizeAgents(value: unknown): ExportedAgent[] {
   });
 }
 
-function normalizeAgentApiKeys(value: unknown, path: string): ExportedAgentApiKey[] {
-  return normalizeArray(value, path).map((input, index) => {
-    if (!isRecord(input)) {
-      throw new Error(`${path}[${index}] must be an object.`);
-    }
-    if (input.secret !== "redacted") {
-      throw new Error(`${path}[${index}].secret must be redacted.`);
-    }
-    return {
-      allowedVirtualModelIds: normalizeUuidArray(
-        input.allowedVirtualModelIds,
-        `${path}[${index}].allowedVirtualModelIds`,
-      ),
-      defaultVirtualModelId: normalizeNullableUuid(
-        input.defaultVirtualModelId,
-        `${path}[${index}].defaultVirtualModelId`,
-      ),
-      enabled: normalizeBoolean(input.enabled, `${path}[${index}].enabled`),
-      id: normalizeUuid(input.id, `${path}[${index}].id`),
-      keyPrefix: normalizeText(input.keyPrefix, `${path}[${index}].keyPrefix`),
-      limits: normalizeAgentLimits(input.limits, `${path}[${index}].limits`),
-      secret: "redacted",
-    };
-  });
+function normalizeAgentApiKey(value: unknown, path: string): ExportedAgentApiKey {
+  if (!isRecord(value)) {
+    throw new Error(`${path} must be an object.`);
+  }
+  if (value.secret !== "redacted") {
+    throw new Error(`${path}.secret must be redacted.`);
+  }
+  return {
+    allowedVirtualModelIds: normalizeUuidArray(
+      value.allowedVirtualModelIds,
+      `${path}.allowedVirtualModelIds`,
+    ),
+    defaultVirtualModelId: normalizeNullableUuid(
+      value.defaultVirtualModelId,
+      `${path}.defaultVirtualModelId`,
+    ),
+    enabled: normalizeBoolean(value.enabled, `${path}.enabled`),
+    id: normalizeUuid(value.id, `${path}.id`),
+    keyPrefix: normalizeText(value.keyPrefix, `${path}.keyPrefix`),
+    limits: normalizeAgentLimits(value.limits, `${path}.limits`),
+    secret: "redacted",
+  };
 }
 
 function normalizeAgentLimits(value: unknown, path: string): ExportedAgentLimit[] {
@@ -938,13 +967,32 @@ function normalizeAgentLimits(value: unknown, path: string): ExportedAgentLimit[
       throw new Error(`${path}[${index}] must be an object.`);
     }
     return {
+      alertThreshold:
+        input.alertThreshold === undefined
+          ? null
+          : normalizeNullablePositiveNumber(
+              input.alertThreshold,
+              `${path}[${index}].alertThreshold`,
+            ),
       enabled: normalizeBoolean(input.enabled, `${path}[${index}].enabled`),
+      enforcementPolicy:
+        input.enforcementPolicy === undefined
+          ? "block"
+          : normalizeEnum(
+              input.enforcementPolicy,
+              ["block", "warn_only"],
+              `${path}[${index}].enforcementPolicy`,
+            ),
       limitType: normalizeEnum(
         input.limitType,
-        ["budget", "rpm", "token", "tpm"],
+        ["budget", "concurrency", "rpm", "token", "tpm"],
         `${path}[${index}].limitType`,
       ),
       limitValue: normalizePositiveNumber(input.limitValue, `${path}[${index}].limitValue`),
+      manualBypass:
+        input.manualBypass === undefined
+          ? false
+          : normalizeBoolean(input.manualBypass, `${path}[${index}].manualBypass`),
       period: normalizeEnum(
         input.period,
         ["day", "hour", "minute", "month", "request", "week"],
@@ -963,7 +1011,7 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
   );
   const virtualModelIds = new Set(document.virtualModels.map((model) => model.id));
   const agentApiKeyIds = new Set(
-    document.agents.flatMap((agent) => agent.agentApiKeys.map((apiKey) => apiKey.id)),
+    document.agents.flatMap((agent) => (agent.apiKey ? [agent.apiKey.id] : [])),
   );
 
   assertUnique(
@@ -993,7 +1041,7 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
   );
   assertUnique([...agentApiKeyIds], "Agent API key ids");
   assertUnique(
-    document.agents.flatMap((agent) => agent.agentApiKeys.map((apiKey) => apiKey.keyPrefix)),
+    document.agents.flatMap((agent) => (agent.apiKey ? [agent.apiKey.keyPrefix] : [])),
     "Agent API key prefixes",
   );
 
@@ -1033,20 +1081,22 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
   }
 
   for (const agent of document.agents) {
-    for (const apiKey of agent.agentApiKeys) {
-      if (apiKey.defaultVirtualModelId && !virtualModelIds.has(apiKey.defaultVirtualModelId)) {
-        throw new Error("Agent API key default Virtual Model was not found.");
-      }
-      if (
-        apiKey.defaultVirtualModelId &&
-        !apiKey.allowedVirtualModelIds.includes(apiKey.defaultVirtualModelId)
-      ) {
-        throw new Error("Agent API key default Virtual Model must be allowed.");
-      }
-      for (const virtualModelId of apiKey.allowedVirtualModelIds) {
-        if (!virtualModelIds.has(virtualModelId)) {
-          throw new Error("Agent API key allowed Virtual Model was not found.");
-        }
+    const apiKey = agent.apiKey;
+    if (!apiKey) {
+      continue;
+    }
+    if (apiKey.defaultVirtualModelId && !virtualModelIds.has(apiKey.defaultVirtualModelId)) {
+      throw new Error("Agent default Virtual Model was not found.");
+    }
+    if (
+      apiKey.defaultVirtualModelId &&
+      !apiKey.allowedVirtualModelIds.includes(apiKey.defaultVirtualModelId)
+    ) {
+      throw new Error("Agent default Virtual Model must be allowed.");
+    }
+    for (const virtualModelId of apiKey.allowedVirtualModelIds) {
+      if (!virtualModelIds.has(virtualModelId)) {
+        throw new Error("Agent allowed Virtual Model was not found.");
       }
     }
   }
@@ -1075,9 +1125,6 @@ function validateTemplateProvider(
     normalizeUrl(provider.baseUrl) !== normalizeUrl(template.fixedBaseUrl)
   ) {
     throw new Error("Imported provider template base URL does not match the fixed template URL.");
-  }
-  if (template.baseUrlMode === "user_local_private" && !isLocalOrPrivateUrl(provider.baseUrl)) {
-    throw new Error("Imported local provider base URL must be local or private.");
   }
 }
 
@@ -1113,8 +1160,8 @@ function readKnownProviderTemplates() {
   return templates;
 }
 
-function buildRedactedImportAgentKeyHash(agentApiKeyId: string): string {
-  return `redacted-import:v1:${agentApiKeyId}`;
+function buildRedactedImportAgentKeyHash(agentId: string): string {
+  return `redacted-import:v1:${agentId}`;
 }
 
 function groupRows<T>(rows: readonly T[], readKey: (row: T) => string): Map<string, T[]> {
@@ -1132,7 +1179,7 @@ async function withClient<T>(
   databaseUrl: string,
   operation: (client: QueryClient) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
   try {
     return await operation(client);
@@ -1217,6 +1264,13 @@ function normalizeNullablePositiveInteger(value: unknown, path: string): number 
   return value;
 }
 
+function normalizeNullablePositiveNumber(value: unknown, path: string): number | null {
+  if (value === null) {
+    return null;
+  }
+  return normalizePositiveNumber(value, path);
+}
+
 function normalizePositiveNumber(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`${path} must be a positive number.`);
@@ -1248,24 +1302,4 @@ function normalizeUrl(value: string | null): string | null {
       ? url.pathname.slice(0, -1)
       : url.pathname;
   return `${url.origin}${pathname}`;
-}
-
-function isLocalOrPrivateUrl(value: string | null): boolean {
-  if (!value) {
-    return false;
-  }
-  const url = new URL(value);
-  const hostname = url.hostname.toLowerCase();
-  if (hostname === "localhost" || hostname === "::1" || hostname.endsWith(".local")) {
-    return true;
-  }
-  if (
-    hostname.startsWith("127.") ||
-    hostname.startsWith("10.") ||
-    hostname.startsWith("192.168.")
-  ) {
-    return true;
-  }
-  const match = /^172\.(\d{1,2})\./.exec(hostname);
-  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
 }

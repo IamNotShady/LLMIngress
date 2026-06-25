@@ -32,8 +32,11 @@ describe("feat-079 usage breakdowns and savings", () => {
     });
 
     expect(summary).toMatchObject({
+      avgLatencyMs: 240,
+      costedRequestCount: 2,
       failureCount: 1,
       inputTokens: 150,
+      lowCostRequestCount: 2,
       outputTokens: 300,
       requestCount: 3,
       totalCostUsd: "0.00150000",
@@ -46,6 +49,7 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "00000000-0000-4000-8000-000000000079",
         label: "Codex Usage",
         requestCount: 3,
+        avgLatencyMs: 240,
         totalCostUsd: "0.00150000",
         totalSavingsUsd: "0.00400000",
         totalTokens: 450,
@@ -57,6 +61,7 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "00000000-0000-4000-8000-000000000279",
         label: "Usage Fast (usage-fast)",
         requestCount: 3,
+        avgLatencyMs: 240,
         totalCostUsd: "0.00150000",
         totalSavingsUsd: "0.00400000",
         totalTokens: 450,
@@ -68,6 +73,7 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "00000000-0000-4000-8000-000000000379",
         label: "Usage OpenAI",
         requestCount: 1,
+        avgLatencyMs: 120,
         totalCostUsd: "0.00050000",
         totalSavingsUsd: "0.00200000",
         totalTokens: 150,
@@ -77,6 +83,7 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "00000000-0000-4000-8000-000000000479",
         label: "Usage Anthropic",
         requestCount: 1,
+        avgLatencyMs: 240,
         totalCostUsd: "0.00100000",
         totalSavingsUsd: "0.00200000",
         totalTokens: 300,
@@ -86,6 +93,7 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "unknown-provider",
         label: "Unknown provider",
         requestCount: 1,
+        avgLatencyMs: 360,
         totalCostUsd: "0.00000000",
         totalSavingsUsd: "0.00000000",
         totalTokens: 0,
@@ -97,6 +105,7 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "00000000-0000-4000-8000-000000000579",
         label: "GPT 4.1 Mini (gpt-4.1-mini)",
         requestCount: 1,
+        avgLatencyMs: 120,
         totalCostUsd: "0.00050000",
         totalSavingsUsd: "0.00200000",
         totalTokens: 150,
@@ -106,6 +115,7 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "00000000-0000-4000-8000-000000000679",
         label: "Claude Haiku (claude-haiku-4-5)",
         requestCount: 1,
+        avgLatencyMs: 240,
         totalCostUsd: "0.00100000",
         totalSavingsUsd: "0.00200000",
         totalTokens: 300,
@@ -115,10 +125,53 @@ describe("feat-079 usage breakdowns and savings", () => {
         id: "unknown-model",
         label: "Unknown model",
         requestCount: 1,
+        avgLatencyMs: 360,
         totalCostUsd: "0.00000000",
         totalSavingsUsd: "0.00000000",
         totalTokens: 0,
       },
+    ]);
+    expect(summary.breakdowns.map(selectProviderModelBreakdownFields)).toEqual([
+      {
+        avgLatencyMs: 240,
+        failureCount: 0,
+        modelLabel: "Claude Haiku",
+        providerLabel: "Usage Anthropic",
+        requestCount: 1,
+        totalCostUsd: "0.00100000",
+        totalSavingsUsd: "0.00200000",
+        totalTokens: 300,
+      },
+      {
+        avgLatencyMs: 120,
+        failureCount: 0,
+        modelLabel: "GPT 4.1 Mini",
+        providerLabel: "Usage OpenAI",
+        requestCount: 1,
+        totalCostUsd: "0.00050000",
+        totalSavingsUsd: "0.00200000",
+        totalTokens: 150,
+      },
+      {
+        avgLatencyMs: 360,
+        failureCount: 1,
+        modelLabel: "Unknown model",
+        providerLabel: "Unknown provider",
+        requestCount: 1,
+        totalCostUsd: "0.00000000",
+        totalSavingsUsd: "0.00000000",
+        totalTokens: 0,
+      },
+    ]);
+    expect(summary.trend).toEqual([
+      expect.objectContaining({
+        inputTokens: 150,
+        outputTokens: 300,
+        requestCount: 3,
+        totalCostUsd: "0.00150000",
+        totalSavingsUsd: "0.00400000",
+        totalTokens: 450,
+      }),
     ]);
     expect(formatConsoleUsageBreakdownStats(summary.agentBreakdowns[0])).toBe(
       "3 requests - 1 failure - 450 tokens - cost $0.00150000 - savings $0.00400000",
@@ -128,6 +181,7 @@ describe("feat-079 usage breakdowns and savings", () => {
 });
 
 function selectBreakdownFields(input: {
+  avgLatencyMs: number | null;
   failureCount: number;
   id: string;
   label: string;
@@ -137,9 +191,32 @@ function selectBreakdownFields(input: {
   totalTokens: number;
 }) {
   return {
+    avgLatencyMs: input.avgLatencyMs,
     failureCount: input.failureCount,
     id: input.id,
     label: input.label,
+    requestCount: input.requestCount,
+    totalCostUsd: input.totalCostUsd,
+    totalSavingsUsd: input.totalSavingsUsd,
+    totalTokens: input.totalTokens,
+  };
+}
+
+function selectProviderModelBreakdownFields(input: {
+  avgLatencyMs: number | null;
+  failureCount: number;
+  modelLabel: string;
+  providerLabel: string;
+  requestCount: number;
+  totalCostUsd: string | null;
+  totalSavingsUsd: string | null;
+  totalTokens: number;
+}) {
+  return {
+    avgLatencyMs: input.avgLatencyMs,
+    failureCount: input.failureCount,
+    modelLabel: input.modelLabel,
+    providerLabel: input.providerLabel,
     requestCount: input.requestCount,
     totalCostUsd: input.totalCostUsd,
     totalSavingsUsd: input.totalSavingsUsd,
@@ -200,6 +277,7 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
     ...ids,
     costUsd: "0.00050000",
     inputTokens: 50,
+    latencyMs: 120,
     outputTokens: 100,
     providerId: ids.openaiProviderId,
     providerModelId: ids.openaiModelId,
@@ -211,6 +289,7 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
     ...ids,
     costUsd: "0.00100000",
     inputTokens: 100,
+    latencyMs: 240,
     outputTokens: 200,
     providerId: ids.anthropicProviderId,
     providerModelId: ids.anthropicModelId,
@@ -222,6 +301,7 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
     ...ids,
     costUsd: null,
     inputTokens: 0,
+    latencyMs: 360,
     outputTokens: 0,
     providerId: null,
     providerModelId: null,
@@ -237,6 +317,7 @@ async function insertUsageBreakdownRequest(
     agentApiKeyId: string;
     costUsd: string | null;
     inputTokens: number;
+    latencyMs: number;
     outputTokens: number;
     providerId: string | null;
     providerModelId: string | null;
@@ -265,6 +346,7 @@ async function insertUsageBreakdownRequest(
         status,
         error_code,
         http_status,
+        latency_ms,
         started_at,
         completed_at
       )
@@ -272,6 +354,7 @@ async function insertUsageBreakdownRequest(
         $1, $2, $3, $4, $5, $6, 'llmi_usage79', 'chat_completions', 'usage-fast',
         false, $7, case when $7 = 'failed' then 'provider_error' else null end,
         case when $7 = 'failed' then 502 else 200 end,
+        $8,
         '2026-06-16T11:00:00.000Z'::timestamptz,
         '2026-06-16T11:00:01.000Z'::timestamptz
       )
@@ -284,6 +367,7 @@ async function insertUsageBreakdownRequest(
       input.providerId,
       input.providerModelId,
       input.status,
+      input.latencyMs,
     ],
   );
 

@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
 import { loadEnvFiles } from "./env-loader";
 
 const [, , command, ...rawArgs] = process.argv;
@@ -15,6 +17,13 @@ const args =
   separatorIndex === -1
     ? rawArgs
     : [...rawArgs.slice(0, separatorIndex), ...rawArgs.slice(separatorIndex + 1)];
+
+if (command === "playwright" && args[0] === "test") {
+  // Console E2E specs start Next dev. A previous next build leaves production
+  // artifacts in the same directory, which can make dev startup miss short
+  // readiness windows in the feature regression runner.
+  rmSync(resolve("apps/console/.next"), { force: true, recursive: true });
+}
 
 const child = spawn(command, args, {
   env: process.env,

@@ -2,13 +2,46 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-23 (console UI refresh + English i18n)
-**Active Feature:** none — console UI style refresh + full English translation complete
-**Branch:** `console-ui-refresh` (worktree off `dev`)
+**Last Updated:** 2026-06-24 (Usage Virtual Model filter label repair)
+**Active Feature:** none - Usage Virtual Model filter label repair complete
+**Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **Usage Virtual Model filter label repair (feat-047 follow-up)**:
+  - Root cause: the Usage filter's Virtual Model select still rendered options inline as `description (name)`, separate from the Agent form label helper fixed earlier.
+  - Changed `#usage-virtual-model` options to render only `virtualModel.name`, preserving option values and filter query behavior.
+  - Added focused Playwright coverage that seeds `gpt55`, `opus48`, and `random` with descriptions and asserts the Usage filter displays only names.
+  - TDD red observed first in `tests/e2e/console-ui-usage.e2e.spec.ts`; it failed on `openai codex (gpt55)` / `claude opus (opus48)` / `random open ai completion (random)` before the UI fix.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-usage.e2e.spec.ts --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and live in-app browser verification on `/usage` showing `All virtual models`, `gpt55`, `opus48`, and `random` only with zero console errors/warnings.
+  - Full `verify:features` was intentionally not run per user request.
+
+- [x] **Agent Virtual Model option label repair (feat-030 follow-up)**:
+  - Root cause: Agent create/edit forms used the shared select label helper that rendered Virtual Models as `description (name)`, so the Allowed virtual models and Default virtual model controls showed descriptive text such as `random open ai completion (random)`.
+  - Changed the Agent form option label helper to render only `virtualModel.name`, matching the current Agent detail/snippet behavior and keeping the submitted IDs unchanged.
+  - Updated affected E2E interactions to select Virtual Models by name instead of the old description/name combined label.
+  - TDD red observed first in `tests/e2e/console-ui-agents.e2e.spec.ts`; it failed on `Cheap (cheap)` / `Coding Balanced (coding-balanced)` before the UI fix.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --workers=1`, focused feat-030/077/108 E2Es, focused feat-050/058 E2Es, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, and live in-app browser verification on `/agents?agentDialog=e7358090-0b5a-4d42-8af4-6f4deb8817ab` showing `gpt55`, `opus48`, and `random` only with zero console errors/warnings.
+  - Full `verify:features` was intentionally not run per user request.
+
+- [x] **Usage date picker repair (feat-047 follow-up)**:
+  - Root cause: the in-app browser's Usage page `input[type=date]` does not expose `HTMLInputElement.showPicker`, so the reference UI date fields could focus/select text without showing a date selection window.
+  - Added `DatePickerInput`, which uses native `showPicker()` when available and falls back to an in-page calendar dialog when it is not available.
+  - Wired the Usage Start date and End date filters through the new component while preserving form field names, `dateFrom` / `dateTo` query behavior, and manual keyboard entry.
+  - Added Playwright coverage for both native picker invocation and the no-native-picker fallback calendar selection path.
+  - Browser verification passed in the live in-app browser: `#usage-date-from` reported no native `showPicker`, clicking it opened `Start date calendar` with 30 day buttons, selecting `2026-06-15` updated the input and closed the dialog, with zero console errors.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-usage.e2e.spec.ts --workers=1`, focused feat-047 E2E, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and `pnpm run verify:features` with all 116 passing features re-verified (E2E batch 525.5s).
+
+- [x] **Usage & Cost reference UI restoration (extends feat-047/feat-079)**:
+  - Reworked `/usage` body to match `docs/UI/07_usage_cost.png` structure while leaving global sidebar/topbar chrome unchanged: date range, Agent, Virtual Model, and Provider filters; six KPI cards; two dual-line trend charts; right-side savings overview; three cost-distribution donuts; and an expanded Provider / Model summary table.
+  - Extended `getConsoleUsageSummary` without schema changes: optional date range and Agent / Virtual Model / Provider filters, real average latency, costed request count, low-cost hit count, savings totals, per-provider/model latency/failure/savings fields, and real hour/day trend points from `request_activity`, `request_usage`, and `request_costs`.
+  - Removed Usage page placeholder latency/trend data; existing `usageWindow` query compatibility remains for old links.
+  - Visual comparison ledger against `docs/UI/07_usage_cost.png`: copy remains English to match the current Console shell; layout now follows filter -> 6 KPI -> two charts + savings side panel -> three donuts -> table; KPI/table coverage matches the reference fields; trend charts render real two-line series with deterministic dots; donut/table density and white-card styling now align with the reference; Usage-specific CSS avoids global sidebar/topbar rewrites.
+  - Screenshot and Chrome DevTools Protocol verification artifacts: `/tmp/llmingress-usage-cost-reference-ui/usage-desktop-1920x1400.png`, `/tmp/llmingress-usage-cost-reference-ui/usage-current-1440x900.png`, `/tmp/llmingress-usage-cost-reference-ui/usage-mobile-390x844.png`, and `/tmp/llmingress-usage-cost-reference-ui/chrome-devtools-computed.json`.
+  - Focused verification passed: feat-047/feat-079 unit tests, Usage structure E2E, feat-047 Usage E2E, feat-079 Usage breakdowns E2E, `pnpm run lint`, and `pnpm run typecheck`.
+  - Full regression follow-up: first `pnpm run verify:features` found stale E2E `--grep` strings for feat-063/066/097 and a real feat-082 export parity gap after Usage breakdowns gained `avgLatencyMs`; repaired those by aligning verification titles and adding avg-latency/costed/low-cost fields to cost report export. Final `pnpm run verify:features` re-verified all 116 passing features.
 
 - [x] **Console UI refresh + English i18n (style-only, no behavior change)**:
   - Replaced the multicolor `flat-color-icons` with an inline monochrome line-icon set
@@ -1525,3 +1558,15 @@
   - Migration 0048 (swap-safe two-phase renumber, drops `is_fallback`); domain `buildRouteAttemptCandidates` + `selectRouteAttempts` (single-build strategy-ordered, health-aware chain); gateway snapshot health join + `health_summary_changed` force-reload; `executeFallbackChain` retryable-gated advance + per-attempt budget (leak-free) + health split (persist only non-retryable); all 4 non-streaming protocols + streaming before-first-byte fallback (mid-stream persistent health); Console single `providerModelIds` pool (server, 2 API routes, draggable dialog, sections, import/export with legacy back-compat, route-preview, agent-limits); `ARCHITECTURE.md` synced.
   - Verification: `pnpm run verify` passed (lint, typecheck 10/10, 433 unit tests, build); full e2e suite 133/133 (incl. new `tests/e2e/feat-117-strategy-fallback-chain.e2e.spec.ts`); `pnpm run db:migrate:check` passed; feature verification command passed.
   - Regression: 6 unit fixtures + ~53 e2e fixtures updated to single-pool/retryable model; feat-075 re-baselined (health-aware routing excludes model-level-unhealthy candidates; retryable request-path failures no longer persist health); feat-070 multi-key failover preserved; feat-090 alerts unaffected.
+
+- [x] 2026-06-24 Usage & Cost reference UI merge to dev and full regression:
+  - Fast-forwarded `dev` through `codex/usage-cost-reference-ui` at `37964713`, bringing in the `/usage` reference-layout implementation and prior `.worktrees/` ignore setup.
+  - During post-merge full regression, reproduced a Console E2E startup failure after `pnpm run build`: build-produced `apps/console/.next` artifacts caused later `next dev` E2E runs to miss short readiness windows. `scripts/run-with-env.ts` now clears `apps/console/.next` before `playwright test` invocations so `pnpm test:e2e` and `verify:features` do not require manual cleanup after build.
+  - Stabilized `feat-084` webhook retry E2E by polling `runner.runOnce()` until the zero-backoff retry job is claimable, matching database timestamp scheduling granularity.
+  - Verification passed: `pnpm run build && pnpm test:e2e tests/e2e/feat-013-console-auth.e2e.spec.ts --grep 'first run creates admin protected pages require login valid login reaches dashboard' --workers=1`, `pnpm run verify`, full `pnpm test:e2e --workers=1` (133 passed, 10.8m), and `pnpm run verify:features` (all 116 passing features re-verified; E2E batch 528.5s).
+
+- [x] 2026-06-24 Console local startup hang repair:
+  - Reproduced the live issue on `http://127.0.0.1:3000/`: TCP connected to Console, but `/` returned zero bytes for 15s while `next-server (v16.2.9)` spun at roughly 660% CPU. `apps/console/.next` still contained production build artifacts from `pnpm run build`.
+  - Fixed `apps/console/src/main.ts` so `@llmingress/console dev` clears the Console package `.next` directory before spawning `next dev`; `start` production mode is unchanged.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-054-local-deployment-smoke.unit.test.ts`, `pnpm --filter @llmingress/console typecheck`, live curl returned `HTTP/1.1 200 OK`, in-app browser showed `LLMIngress Console` / `Overview` with no console errors, and `pnpm run verify` passed.
+  - Current local Console was restarted detached on port 3000; process tree includes `pnpm --filter @llmingress/console dev` PID 56642 and `next-server` PID 56684.

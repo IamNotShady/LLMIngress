@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildConsoleCommand } from "../../apps/console/src/main";
+import { buildConsoleCommand, clearConsoleDevArtifacts } from "../../apps/console/src/main";
 import {
   buildLocalDeploymentRequestId,
   localDeploymentSmokeComponents,
@@ -56,6 +57,22 @@ describe("feat-054 MVP local deployment smoke", () => {
         ]);
       },
     );
+  });
+
+  it("clears stale Console next artifacts before dev startup", () => {
+    const consoleRoot = mkdtempSync(join(tmpdir(), "llmingress-console-root-"));
+    const nextDir = resolve(consoleRoot, ".next");
+
+    try {
+      mkdirSync(nextDir, { recursive: true });
+      writeFileSync(resolve(nextDir, "BUILD_ID"), "stale-build");
+
+      clearConsoleDevArtifacts(consoleRoot);
+
+      expect(existsSync(nextDir)).toBe(false);
+    } finally {
+      rmSync(consoleRoot, { force: true, recursive: true });
+    }
   });
 });
 

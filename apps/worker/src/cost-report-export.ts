@@ -6,6 +6,7 @@ import { type JobHandler, JobHandlerError } from "./job-runner.js";
 export type CostReportWindow = "24h" | "7d" | "30d";
 
 export type CostReportUsageBreakdown = {
+  avgLatencyMs: number | null;
   failureCount: number;
   modelId: string;
   modelLabel: string;
@@ -18,6 +19,7 @@ export type CostReportUsageBreakdown = {
 };
 
 export type CostReportUsageDimensionBreakdown = {
+  avgLatencyMs: number | null;
   failureCount: number;
   id: string;
   label: string;
@@ -29,9 +31,12 @@ export type CostReportUsageDimensionBreakdown = {
 
 export type CostReportUsageSummary = {
   agentBreakdowns: CostReportUsageDimensionBreakdown[];
+  avgLatencyMs: number | null;
   breakdowns: CostReportUsageBreakdown[];
+  costedRequestCount: number;
   failureCount: number;
   inputTokens: number;
+  lowCostRequestCount: number;
   modelBreakdowns: CostReportUsageDimensionBreakdown[];
   outputTokens: number;
   providerBreakdowns: CostReportUsageDimensionBreakdown[];
@@ -54,8 +59,11 @@ export type CostReportExportDocument = {
   exportType: "cost_report";
   generatedAt: string;
   summary: {
+    avgLatencyMs: number | null;
+    costedRequestCount: number;
     failureCount: number;
     inputTokens: number;
+    lowCostRequestCount: number;
     outputTokens: number;
     requestCount: number;
     totalCostUsd: string | null;
@@ -80,8 +88,11 @@ type NormalizedCostReportPayload = {
 };
 
 type UsageSummaryRow = PostgresQueryResultRow & {
+  avg_latency_ms: number | string | null;
+  costed_request_count: number;
   failure_count: number;
   input_tokens: string | null;
+  low_cost_request_count: number;
   output_tokens: string | null;
   request_count: number;
   total_cost_usd: string | null;
@@ -90,6 +101,7 @@ type UsageSummaryRow = PostgresQueryResultRow & {
 };
 
 type UsageBreakdownRow = PostgresQueryResultRow & {
+  avg_latency_ms: number | string | null;
   failure_count: number;
   model_id: string | null;
   model_label: string | null;
@@ -102,6 +114,7 @@ type UsageBreakdownRow = PostgresQueryResultRow & {
 };
 
 type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
+  avg_latency_ms: number | string | null;
   failure_count: number;
   id: string | null;
   label: string | null;
@@ -170,8 +183,11 @@ export function buildCostReportExportDocument(input: {
     exportType,
     generatedAt: input.generatedAt.toISOString(),
     summary: {
+      avgLatencyMs: input.usageSummary.avgLatencyMs,
+      costedRequestCount: input.usageSummary.costedRequestCount,
       failureCount: input.usageSummary.failureCount,
       inputTokens: input.usageSummary.inputTokens,
+      lowCostRequestCount: input.usageSummary.lowCostRequestCount,
       outputTokens: input.usageSummary.outputTokens,
       requestCount: input.usageSummary.requestCount,
       totalCostUsd: input.usageSummary.totalCostUsd,
@@ -204,6 +220,15 @@ async function getCostReportUsageSummary(input: {
       select count(request_activity.id)::integer as request_count,
              count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                as failure_count,
+             avg(request_activity.latency_ms) filter (
+               where request_activity.latency_ms is not null
+             )::double precision as avg_latency_ms,
+             count(request_costs.id) filter (
+               where request_costs.total_cost_usd is not null
+             )::integer as costed_request_count,
+             count(request_costs.id) filter (
+               where coalesce(request_costs.savings_usd, 0) > 0
+             )::integer as low_cost_request_count,
              coalesce(sum(request_usage.input_tokens), 0)::text as input_tokens,
              coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
@@ -233,6 +258,9 @@ async function getCostReportUsageSummary(input: {
              count(request_activity.id)::integer as request_count,
              count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                as failure_count,
+             avg(request_activity.latency_ms) filter (
+               where request_activity.latency_ms is not null
+             )::double precision as avg_latency_ms,
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
@@ -264,6 +292,9 @@ async function getCostReportUsageSummary(input: {
              count(request_activity.id)::integer as request_count,
              count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                as failure_count,
+             avg(request_activity.latency_ms) filter (
+               where request_activity.latency_ms is not null
+             )::double precision as avg_latency_ms,
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
@@ -296,6 +327,9 @@ async function getCostReportUsageSummary(input: {
              count(request_activity.id)::integer as request_count,
              count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                as failure_count,
+             avg(request_activity.latency_ms) filter (
+               where request_activity.latency_ms is not null
+             )::double precision as avg_latency_ms,
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
@@ -326,6 +360,9 @@ async function getCostReportUsageSummary(input: {
              count(request_activity.id)::integer as request_count,
              count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                as failure_count,
+             avg(request_activity.latency_ms) filter (
+               where request_activity.latency_ms is not null
+             )::double precision as avg_latency_ms,
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
@@ -366,6 +403,9 @@ async function getCostReportUsageSummary(input: {
              count(request_activity.id)::integer as request_count,
              count(request_activity.id) filter (where request_activity.status = 'failed')::integer
                as failure_count,
+             avg(request_activity.latency_ms) filter (
+               where request_activity.latency_ms is not null
+             )::double precision as avg_latency_ms,
              coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
              coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
                as total_cost_usd,
@@ -390,9 +430,12 @@ async function getCostReportUsageSummary(input: {
 
   return {
     agentBreakdowns: agentBreakdownResult.rows.map(rowToCostReportUsageDimensionBreakdown),
+    avgLatencyMs: readOptionalNumber(summaryRow?.avg_latency_ms),
     breakdowns: breakdownResult.rows.map(rowToCostReportUsageBreakdown),
+    costedRequestCount: summaryRow?.costed_request_count ?? 0,
     failureCount: summaryRow?.failure_count ?? 0,
     inputTokens: readInteger(summaryRow?.input_tokens),
+    lowCostRequestCount: summaryRow?.low_cost_request_count ?? 0,
     modelBreakdowns: modelBreakdownResult.rows.map(rowToCostReportUsageDimensionBreakdown),
     outputTokens: readInteger(summaryRow?.output_tokens),
     providerBreakdowns: providerBreakdownResult.rows.map(rowToCostReportUsageDimensionBreakdown),
@@ -417,6 +460,7 @@ async function writeCostReportFile(
 
 function rowToCostReportUsageBreakdown(row: UsageBreakdownRow): CostReportUsageBreakdown {
   return {
+    avgLatencyMs: readOptionalNumber(row.avg_latency_ms),
     failureCount: row.failure_count,
     modelId: row.model_id ?? "unknown-model",
     modelLabel: row.model_label ?? "Unknown model",
@@ -433,6 +477,7 @@ function rowToCostReportUsageDimensionBreakdown(
   row: UsageDimensionBreakdownRow,
 ): CostReportUsageDimensionBreakdown {
   return {
+    avgLatencyMs: readOptionalNumber(row.avg_latency_ms),
     failureCount: row.failure_count,
     id: row.id ?? "unknown",
     label: row.label ?? "Unknown",
@@ -473,6 +518,15 @@ function readInteger(value: string | null | undefined): number {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function readOptionalNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function readObject(value: unknown): Record<string, unknown> {

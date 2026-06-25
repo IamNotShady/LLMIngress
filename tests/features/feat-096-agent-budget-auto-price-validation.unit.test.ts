@@ -29,7 +29,7 @@ describe("feat-096 Agent budget automatic price validation", () => {
       agentId: "agent-096",
       rules: [
         {
-          alertThreshold: null,
+          alertThreshold: 0.8,
           enforcementPolicy: "block",
           limitType: "budget",
           limitValue: 12.5,
@@ -38,7 +38,7 @@ describe("feat-096 Agent budget automatic price validation", () => {
           unit: "usd",
         },
         {
-          alertThreshold: null,
+          alertThreshold: 0.8,
           enforcementPolicy: "block",
           limitType: "rpm",
           limitValue: 90,
@@ -47,7 +47,7 @@ describe("feat-096 Agent budget automatic price validation", () => {
           unit: "requests",
         },
         {
-          alertThreshold: null,
+          alertThreshold: 0.8,
           enforcementPolicy: "block",
           limitType: "tpm",
           limitValue: 240000,
@@ -56,7 +56,16 @@ describe("feat-096 Agent budget automatic price validation", () => {
           unit: "tokens",
         },
         {
-          alertThreshold: null,
+          alertThreshold: 0.8,
+          enforcementPolicy: "block",
+          limitType: "concurrency",
+          limitValue: 10,
+          manualBypass: false,
+          period: "request",
+          unit: "requests",
+        },
+        {
+          alertThreshold: 0.8,
           enforcementPolicy: "block",
           limitType: "token",
           limitValue: 16000,
@@ -133,10 +142,11 @@ describe("feat-096 Agent budget automatic price validation", () => {
         expect.objectContaining({ limitType: "budget", limitValue: 12.5, unit: "usd" }),
         expect.objectContaining({ limitType: "rpm", limitValue: 90, unit: "requests" }),
         expect.objectContaining({ limitType: "tpm", limitValue: 240000, unit: "tokens" }),
+        expect.objectContaining({ limitType: "concurrency", limitValue: 10, unit: "requests" }),
         expect.objectContaining({ limitType: "token", limitValue: 16000, unit: "tokens" }),
       ]),
     );
-    await expect.poll(() => countAgentLimits(fixture, seeded.agentApiKeyId)).toBe(4);
+    await expect.poll(() => countAgentLimits(fixture, seeded.agentApiKeyId)).toBe(5);
     await expect.poll(() => countAgentLimitConfigChanges(fixture)).toBe(1);
   });
 });

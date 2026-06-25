@@ -47,6 +47,7 @@ test("agent creation returns one api key and gateway uses agent owned auth", asy
             .getByLabel("Allowed virtual models")
             .selectOption({ label: virtualModelLabel });
           await page.getByLabel("Default virtual model").selectOption({ label: virtualModelLabel });
+          await page.getByLabel("Enable limits").check();
           await page.getByLabel("RPM limit").fill("1");
           await page.getByLabel("Budget USD limit").fill("100");
           await page.getByLabel("Budget period").selectOption("month");

@@ -61,25 +61,25 @@ test("playground uses pasted key in memory direct gateway call and usage increme
             await page.goto(`${consoleBaseUrl}/playground`);
             const playgroundSection = page.getByLabel("Playground");
             await expect(
-              playgroundSection.getByRole("heading", { exact: true, name: "Request config" }),
+              playgroundSection.getByRole("heading", { exact: true, name: "请求配置" }),
             ).toBeVisible();
-            await expect(playgroundSection.getByLabel("Gateway base URL")).toHaveValue(
-              gatewayBaseUrl,
-            );
+            await expect(playgroundSection.getByLabel("Gateway base URL")).toHaveCount(0);
 
-            await playgroundSection.getByLabel("Agent API key").fill(agentApiKey);
-            await playgroundSection.getByRole("button", { name: "Load allowed models" }).click();
-            await expect(playgroundSection.getByLabel("Playground model")).toContainText(
-              seeded.virtualModelName,
-            );
-            await playgroundSection
-              .getByLabel("Playground model")
-              .selectOption(seeded.virtualModelName);
-            await playgroundSection.getByLabel("Playground prompt").fill("hello from feat 049");
-            await playgroundSection.getByRole("button", { name: "Send live request" }).click();
+            const apiKeyInput = playgroundSection.getByLabel(/Agent API Key/);
+            await apiKeyInput.fill(agentApiKey);
+            const virtualModelSelect = playgroundSection.getByLabel(/Virtual Model/);
+            await expect(virtualModelSelect).toContainText(seeded.virtualModelName);
+            await virtualModelSelect.selectOption(seeded.virtualModelName);
+            await expect(playgroundSection.getByLabel(/Endpoint/)).toHaveValue("chat_completions");
+            await playgroundSection.getByLabel(/Prompt$/).fill("hello from feat 049");
+            await playgroundSection.getByLabel(/System Prompt/).fill("answer as a test assistant");
+            await playgroundSection.getByRole("button", { name: "发送测试" }).click();
 
             await expect(playgroundSection.getByText("fake provider response")).toBeVisible();
             await expect(playgroundSection.getByText(/playground_/)).toBeVisible();
+            await expect(
+              playgroundSection.getByText("Playground OpenAI / GPT 4.1 Nano").first(),
+            ).toBeVisible();
             await expect
               .poll(() => readPlaygroundUsageCount(fixture, seeded.virtualModelName))
               .toBe(1);
@@ -100,7 +100,7 @@ test("playground uses pasted key in memory direct gateway call and usage increme
                 .locator(".stat-card-value"),
             ).toHaveText("1");
             await page.goto(`${consoleBaseUrl}/playground`);
-            await expect(page.getByLabel("Playground").getByLabel("Agent API key")).toHaveValue("");
+            await expect(page.getByLabel("Playground").getByLabel(/Agent API Key/)).toHaveValue("");
           } finally {
             await context.close();
           }

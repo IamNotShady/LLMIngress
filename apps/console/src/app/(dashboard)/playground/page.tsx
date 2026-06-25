@@ -7,11 +7,17 @@ function getPlaygroundGatewayBaseUrl(): string {
 
 export default function PlaygroundPage() {
   return (
-    <div className="page">
+    <div className="page playground-page">
       <PageHeader
-        eyebrow="Tools"
         title="Playground"
-        description="Send a live request through the gateway with an Agent API key."
+        description={
+          <>
+            <span>通过 Gateway Public API 进行实时测试</span>
+            <span className="playground-memory-note">
+              提示：Agent API Key 只保存在浏览器内存中，Console 后端不保存明文。
+            </span>
+          </>
+        }
       />
       <Playground defaultGatewayBaseUrl={getPlaygroundGatewayBaseUrl()} />
     </div>

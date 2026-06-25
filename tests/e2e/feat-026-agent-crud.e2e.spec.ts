@@ -35,16 +35,22 @@ test("agent crud works and delete with request attribution soft-deletes", async 
           await page.getByLabel("Agent type").selectOption("coding");
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
+          await expect.poll(() => readAgentLimitCount(fixture, "Codex")).toBe(0);
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
           await expect(page.getByRole("row", { name: /Codex CLI/ })).toBeVisible();
 
           await openRow(page, "Codex");
+          await expect(page.getByLabel("Enable limits")).not.toBeChecked();
+          await expect(page.getByLabel("Budget USD limit")).toBeHidden();
+          await expect(page.getByLabel("Alert threshold (%)")).toBeHidden();
+          await expect(page.getByLabel("Concurrency limit")).toBeHidden();
           await page.getByLabel("Edit agent name").fill("Codex CLI");
           await page.getByLabel("Edit agent type").selectOption("terminal");
           await page.getByRole("button", { exact: true, name: "Save" }).click();
 
           await expect(page.getByRole("row", { name: /Codex CLI Terminal/ })).toBeVisible();
+          await expect.poll(() => readAgentLimitCount(fixture, "Codex CLI")).toBe(0);
 
           await page
             .getByRole("row", { name: /Codex CLI Terminal/ })
@@ -114,6 +120,19 @@ async function insertProtectedAgents(fixture: Fixture): Promise<ProtectedAgents>
   );
 
   return { attributedAgentId };
+}
+
+async function readAgentLimitCount(fixture: Fixture, agentName: string): Promise<number> {
+  const result = await fixture.query<{ limit_count: string }>(
+    `
+      select count(agent_limits.id) as limit_count
+      from agents
+      left join agent_limits on agent_limits.agent_id = agents.id
+      where agents.name = $1
+    `,
+    [agentName],
+  );
+  return Number(result.rows[0]?.limit_count ?? 0);
 }
 
 async function deleteAgentByApi(page: Page, agentId: string): Promise<void> {

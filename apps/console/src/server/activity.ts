@@ -22,6 +22,7 @@ export type ConsoleActivity = {
   providerModelId: string | null;
   providerModelName: string | null;
   requestId: string;
+  routePolicyStrategy: string | null;
   routeReason: unknown;
   startedAt: Date;
   status: string;
@@ -115,6 +116,7 @@ type ActivityRow = PostgresQueryResultRow & {
   request_id: string;
   request_metadata?: unknown;
   response_metadata?: unknown;
+  route_policy_strategy: string | null;
   route_reason: unknown;
   started_at: Date;
   status: string;
@@ -187,6 +189,8 @@ export async function listConsoleActivities(
                request_activity.completed_at,
                request_activity.route_reason,
                request_activity.fallback_attempts,
+               coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
+                 as route_policy_strategy,
                request_activity.agent_key_prefix,
                coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
@@ -216,6 +220,7 @@ export async function listConsoleActivities(
         from request_activity
         left join agents on agents.id = request_activity.agent_id
         left join virtual_models on virtual_models.id = request_activity.virtual_model_id
+        left join route_policies on route_policies.id = request_activity.route_policy_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -293,6 +298,8 @@ export async function getConsoleActivityDetail(input: {
                request_activity.fallback_attempts,
                request_activity.request_metadata,
                request_activity.response_metadata,
+               coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
+                 as route_policy_strategy,
                request_activity.agent_key_prefix,
                coalesce(request_activity.agent_name_snapshot, agents.name) as agent_name,
                request_activity.provider_api_key_id::text as provider_api_key_id,
@@ -322,6 +329,7 @@ export async function getConsoleActivityDetail(input: {
         from request_activity
         left join agents on agents.id = request_activity.agent_id
         left join virtual_models on virtual_models.id = request_activity.virtual_model_id
+        left join route_policies on route_policies.id = request_activity.route_policy_id
         left join providers on providers.id = request_activity.provider_id
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -546,6 +554,7 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     providerModelId: row.provider_model_id,
     providerModelName: row.provider_model_name,
     requestId: row.request_id,
+    routePolicyStrategy: row.route_policy_strategy,
     routeReason: row.route_reason,
     startedAt: row.started_at,
     status: row.status,

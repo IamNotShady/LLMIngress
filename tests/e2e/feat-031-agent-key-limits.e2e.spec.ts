@@ -35,11 +35,12 @@ test("agent limit form saves budget rpm tpm token rules without manual price fie
           await openDisclosure(page, "New agent");
           await page.getByLabel("Agent name").fill("Codex");
           await page.getByLabel("Agent type").selectOption("coding");
+          await page.getByLabel("Enable limits").check();
           await page.getByRole("button", { name: "Create agent" }).click();
           await expect(page.getByRole("heading", { name: "Agent created" })).toBeVisible();
           await page.getByRole("link", { name: "Back to dashboard" }).click();
 
-          await readOnlyAgentApiKeyId(fixture);
+          const agentId = await readOnlyAgentApiKeyId(fixture);
 
           await openRow(page, "Codex");
           await expect(page.getByLabel("Budget USD limit")).toBeVisible({ timeout: 3_000 });
@@ -55,19 +56,53 @@ test("agent limit form saves budget rpm tpm token rules without manual price fie
           await page.getByLabel("Token limit").fill("8000");
           await page.getByRole("button", { exact: true, name: "Save" }).click();
 
+          await expect(page).toHaveURL(new RegExp(`/agents\\?selected=${agentId}$`));
           await openRow(page, "Codex");
           await expect(page.getByLabel("Budget USD limit")).toHaveValue("10");
           await expect(page.getByLabel("Budget period")).toHaveValue("month");
           await expect(page.getByLabel("RPM limit")).toHaveValue("60");
           await expect(page.getByLabel("TPM limit")).toHaveValue("120000");
           await expect(page.getByLabel("Token limit")).toHaveValue("8000");
+          await expect(page.getByLabel("Concurrency limit")).toHaveValue("10");
+          await expect(page.getByLabel("Alert threshold (%)")).toHaveValue("80");
           await expect
             .poll(() => readAgentLimits(fixture))
             .toEqual([
-              { limitType: "budget", limitValue: "10.000000", period: "month", unit: "usd" },
-              { limitType: "rpm", limitValue: "60.000000", period: "minute", unit: "requests" },
-              { limitType: "token", limitValue: "8000.000000", period: "request", unit: "tokens" },
-              { limitType: "tpm", limitValue: "120000.000000", period: "minute", unit: "tokens" },
+              {
+                alertThreshold: "0.800000",
+                limitType: "budget",
+                limitValue: "10.000000",
+                period: "month",
+                unit: "usd",
+              },
+              {
+                alertThreshold: "0.800000",
+                limitType: "concurrency",
+                limitValue: "10.000000",
+                period: "request",
+                unit: "requests",
+              },
+              {
+                alertThreshold: "0.800000",
+                limitType: "rpm",
+                limitValue: "60.000000",
+                period: "minute",
+                unit: "requests",
+              },
+              {
+                alertThreshold: "0.800000",
+                limitType: "token",
+                limitValue: "8000.000000",
+                period: "request",
+                unit: "tokens",
+              },
+              {
+                alertThreshold: "0.800000",
+                limitType: "tpm",
+                limitValue: "120000.000000",
+                period: "minute",
+                unit: "tokens",
+              },
             ]);
           await expect
             .poll(() => countAgentLimitConfigChanges(fixture))
@@ -94,6 +129,7 @@ type ConsoleProcess = {
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 type AgentLimitRow = {
+  alert_threshold: string | null;
   limit_type: string;
   limit_value: string;
   period: string;
@@ -117,12 +153,14 @@ async function readAgentLimits(fixture: Fixture) {
       select limit_type,
              period,
              limit_value::text,
-             unit
+             unit,
+             alert_threshold::text
       from agent_limits
       order by limit_type
     `,
   );
   return result.rows.map((row) => ({
+    alertThreshold: row.alert_threshold,
     limitType: row.limit_type,
     limitValue: row.limit_value,
     period: row.period,

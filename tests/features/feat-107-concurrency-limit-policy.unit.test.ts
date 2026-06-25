@@ -66,7 +66,7 @@ describe("feat-107 concurrency limits and enforcement policy", () => {
     ).toEqual({ ok: true });
   });
 
-  it("defaults new policy fields for existing Console limit form input", () => {
+  it("defaults new policy fields and concurrency for existing Console limit form input", () => {
     const normalized = normalizeAgentLimitFormInput({
       agentId: "00000000-0000-4000-8000-000000000107",
       budgetPeriod: "month",
@@ -79,13 +79,22 @@ describe("feat-107 concurrency limits and enforcement policy", () => {
     expect(normalized.rules).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          alertThreshold: null,
+          alertThreshold: 0.8,
           enforcementPolicy: "block",
           limitType: "rpm",
           manualBypass: false,
         }),
         expect.objectContaining({
-          alertThreshold: null,
+          alertThreshold: 0.8,
+          enforcementPolicy: "block",
+          limitType: "concurrency",
+          limitValue: 10,
+          manualBypass: false,
+          period: "request",
+          unit: "requests",
+        }),
+        expect.objectContaining({
+          alertThreshold: 0.8,
           enforcementPolicy: "block",
           limitType: "tpm",
           manualBypass: false,

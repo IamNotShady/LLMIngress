@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { attachConsoleChildLifecycle } from "../../apps/console/src/main";
+import { readConsolePort, shouldClearConsoleNextArtifacts } from "../../scripts/run-with-env";
 import {
   assertOptimizedPlanCoverage,
   buildOptimizedPlan,
@@ -112,6 +113,30 @@ describe("feat-060 optimized feature verification runner", () => {
       standardVerification,
     ]);
     expect(result.failures).toEqual([]);
+  });
+});
+
+describe("feat-060 e2e cache cleanup guard", () => {
+  it("does not clear the Console Next cache while the live Console port is occupied", () => {
+    expect(
+      shouldClearConsoleNextArtifacts({
+        args: ["test"],
+        command: "playwright",
+        consolePortListening: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldClearConsoleNextArtifacts({
+        args: ["test"],
+        command: "playwright",
+        consolePortListening: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("uses CONSOLE_PORT when checking for a live Console server", () => {
+    expect(readConsolePort({ CONSOLE_PORT: "3111" })).toBe(3111);
+    expect(readConsolePort({ CONSOLE_PORT: "not-a-port" })).toBe(3000);
   });
 });
 

@@ -33,13 +33,18 @@ test("dashboard form labels stay paired with their controls on desktop", async (
 
           await page.goto(`${baseUrl}/playground`);
           const playgroundFields = await readFieldLayout(page, [
-            "playground-gateway-base-url",
             "playground-agent-api-key",
+            "playground-endpoint",
             "playground-model",
             "playground-prompt",
+            "playground-system-prompt",
+            "playground-temperature",
+            "playground-top-p",
+            "playground-max-tokens",
+            "playground-stream",
           ]);
           for (const field of playgroundFields) {
-            expectFieldToBePaired(field);
+            expectFieldToBePaired(field, playgroundCompactFieldIds.has(field.id) ? 80 : 240);
           }
 
           await page.goto(`${baseUrl}/providers`);
@@ -95,7 +100,14 @@ type Rect = {
   y: number;
 };
 
-function expectFieldToBePaired(field: FieldLayout): void {
+const playgroundCompactFieldIds = new Set([
+  "playground-max-tokens",
+  "playground-stream",
+  "playground-temperature",
+  "playground-top-p",
+]);
+
+function expectFieldToBePaired(field: FieldLayout, minControlWidth = 240): void {
   expect(field.label, `${field.id} label`).not.toBeNull();
   expect(field.control, `${field.id} control`).not.toBeNull();
   const label = field.label as Rect;
@@ -104,7 +116,7 @@ function expectFieldToBePaired(field: FieldLayout): void {
   expect(Math.abs(label.x - control.x), `${field.id} horizontal alignment`).toBeLessThanOrEqual(2);
   expect(label.y, `${field.id} label vertical position`).toBeLessThan(control.y);
   expect(control.y - label.bottom, `${field.id} label/control gap`).toBeLessThanOrEqual(12);
-  expect(control.width, `${field.id} control width`).toBeGreaterThan(240);
+  expect(control.width, `${field.id} control width`).toBeGreaterThan(minControlWidth);
 }
 
 async function readFieldLayout(page: Page, ids: string[]): Promise<FieldLayout[]> {

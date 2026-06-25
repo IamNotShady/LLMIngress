@@ -21,8 +21,10 @@ export type AgentLimitRuleInput = {
 
 export type AgentLimitFormInput = {
   agentId?: string | null;
+  alertThresholdPercent?: string | number | null;
   budgetPeriod?: string | null;
   budgetUsd?: string | number | null;
+  concurrency?: string | number | null;
   rpm?: string | number | null;
   tokenLimit?: string | number | null;
   tpm?: string | number | null;
@@ -37,6 +39,17 @@ export type ConsoleAgentLimit = AgentLimitRuleInput & {
   agentId: string;
   enabled: boolean;
   id: string;
+};
+
+export type ConsoleAgentLimitRuntimeSnapshot = {
+  agentId: string;
+  budgetUsagePercent: number;
+  currentConcurrency: number;
+  currentRpm: number;
+  currentTpm: number;
+  overLimitTodayCount: number;
+  overLimitYesterdayCount: number;
+  rateLimitHits24h: number;
 };
 
 type AgentLimitRow = PostgresQueryResultRow & {
@@ -72,6 +85,25 @@ type AccessibleRouteCandidatePriceRow = PostgresQueryResultRow & {
   virtual_model_name: string;
 };
 
+type AgentLimitBudgetUsageRow = PostgresQueryResultRow & {
+  agent_id: string;
+  budget_usage_percent: string | null;
+};
+
+type AgentLimitRateWindowRow = PostgresQueryResultRow & {
+  agent_id: string;
+  current_concurrency: number | null;
+  current_rpm: number | null;
+  current_tpm: number | null;
+};
+
+type AgentLimitErrorCountRow = PostgresQueryResultRow & {
+  agent_id: string;
+  over_limit_today_count: number;
+  over_limit_yesterday_count: number;
+  rate_limit_hits_24h: number;
+};
+
 type QueryClient = {
   query: <T = Record<string, unknown>>(
     text: string,
@@ -82,8 +114,10 @@ type QueryClient = {
 const budgetPeriods = ["day", "week", "month"] as const;
 
 export const defaultAgentLimitFormValues = {
+  alertThresholdPercent: 80,
   budgetPeriod: "month",
   budgetUsd: 10,
+  concurrency: 10,
   rpm: 60,
   tokenLimit: 200_000,
   tpm: 1_000_000,
@@ -94,12 +128,13 @@ export function normalizeAgentLimitFormInput(
 ): NormalizedAgentLimitFormInput {
   const agentId = normalizeRequiredText(input.agentId, "Agent id");
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
+  const alertThreshold = normalizeAlertThresholdPercent(input.alertThresholdPercent);
 
   return {
     agentId,
     rules: [
       {
-        alertThreshold: null,
+        alertThreshold,
         enforcementPolicy: "block",
         limitType: "budget",
         limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
@@ -108,7 +143,7 @@ export function normalizeAgentLimitFormInput(
         unit: "usd",
       },
       {
-        alertThreshold: null,
+        alertThreshold,
         enforcementPolicy: "block",
         limitType: "rpm",
         limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
@@ -117,7 +152,7 @@ export function normalizeAgentLimitFormInput(
         unit: "requests",
       },
       {
-        alertThreshold: null,
+        alertThreshold,
         enforcementPolicy: "block",
         limitType: "tpm",
         limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
@@ -126,7 +161,19 @@ export function normalizeAgentLimitFormInput(
         unit: "tokens",
       },
       {
-        alertThreshold: null,
+        alertThreshold,
+        enforcementPolicy: "block",
+        limitType: "concurrency",
+        limitValue: normalizePositiveNumber(
+          input.concurrency ?? defaultAgentLimitFormValues.concurrency,
+          "Concurrency limit",
+        ),
+        manualBypass: false,
+        period: "request",
+        unit: "requests",
+      },
+      {
+        alertThreshold,
         enforcementPolicy: "block",
         limitType: "token",
         limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
@@ -140,9 +187,10 @@ export function normalizeAgentLimitFormInput(
 
 export function formatAgentLimitSummaries(
   limits: readonly ConsoleAgentLimit[],
-): Record<Exclude<AgentLimitType, "concurrency">, string> {
+): Record<AgentLimitType, string> {
   return {
     budget: formatLimitSummary(limits.find((limit) => limit.limitType === "budget")),
+    concurrency: formatLimitSummary(limits.find((limit) => limit.limitType === "concurrency")),
     rpm: formatLimitSummary(limits.find((limit) => limit.limitType === "rpm")),
     token: formatLimitSummary(limits.find((limit) => limit.limitType === "token")),
     tpm: formatLimitSummary(limits.find((limit) => limit.limitType === "tpm")),
@@ -151,6 +199,55 @@ export function formatAgentLimitSummaries(
 
 export async function listAgentLimits(databaseUrl: string): Promise<ConsoleAgentLimit[]> {
   return withClient(databaseUrl, (client) => readAgentLimits(client));
+}
+
+export async function listAgentLimitRuntimeSnapshots(
+  databaseUrl: string,
+): Promise<ConsoleAgentLimitRuntimeSnapshot[]> {
+  return withClient(databaseUrl, async (client) => {
+    const budgetUsage = await readAgentLimitBudgetUsage(client);
+    const rateWindows = await readAgentLimitRateWindows(client);
+    const errorCounts = await readAgentLimitErrorCounts(client);
+    const snapshotsByAgentId = new Map<string, ConsoleAgentLimitRuntimeSnapshot>();
+    const ensureSnapshot = (agentId: string) => {
+      const existing = snapshotsByAgentId.get(agentId);
+      if (existing) {
+        return existing;
+      }
+      const snapshot: ConsoleAgentLimitRuntimeSnapshot = {
+        agentId,
+        budgetUsagePercent: 0,
+        currentConcurrency: 0,
+        currentRpm: 0,
+        currentTpm: 0,
+        overLimitTodayCount: 0,
+        overLimitYesterdayCount: 0,
+        rateLimitHits24h: 0,
+      };
+      snapshotsByAgentId.set(agentId, snapshot);
+      return snapshot;
+    };
+
+    for (const row of budgetUsage) {
+      ensureSnapshot(row.agent_id).budgetUsagePercent = clampPercent(
+        Number(row.budget_usage_percent ?? 0),
+      );
+    }
+    for (const row of rateWindows) {
+      const snapshot = ensureSnapshot(row.agent_id);
+      snapshot.currentConcurrency = Number(row.current_concurrency ?? 0);
+      snapshot.currentRpm = Number(row.current_rpm ?? 0);
+      snapshot.currentTpm = Number(row.current_tpm ?? 0);
+    }
+    for (const row of errorCounts) {
+      const snapshot = ensureSnapshot(row.agent_id);
+      snapshot.overLimitTodayCount = Number(row.over_limit_today_count ?? 0);
+      snapshot.overLimitYesterdayCount = Number(row.over_limit_yesterday_count ?? 0);
+      snapshot.rateLimitHits24h = Number(row.rate_limit_hits_24h ?? 0);
+    }
+
+    return Array.from(snapshotsByAgentId.values());
+  });
 }
 
 export async function saveAgentLimitRules(input: {
@@ -218,6 +315,22 @@ export async function saveAgentLimitRules(input: {
     throw new Error("Agent limits were not saved.");
   }
   return savedLimits;
+}
+
+export async function deleteAgentLimitRules(input: {
+  agentId: string;
+  databaseUrl: string;
+}): Promise<void> {
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `Delete Agent limits ${input.agentId}`,
+    changes: [{ table: "agent_limits", recordId: input.agentId }],
+    write: async (client) => {
+      await assertAgentExists(client, input.agentId);
+      await client.query("delete from agent_limits where agent_id = $1", [input.agentId]);
+    },
+  });
 }
 
 async function assertAgentExists(client: QueryClient, id: string): Promise<void> {
@@ -406,6 +519,86 @@ async function readAgentLimits(
   }));
 }
 
+async function readAgentLimitBudgetUsage(client: QueryClient): Promise<AgentLimitBudgetUsageRow[]> {
+  const result = await client.query<AgentLimitBudgetUsageRow>(
+    `
+      select agent_limits.agent_id::text as agent_id,
+             max(
+               (
+                 (budget_periods.cost_used_usd + budget_periods.reserved_cost_usd)
+                 / nullif(agent_limits.limit_value, 0)
+               ) * 100
+             )::text as budget_usage_percent
+      from agent_limits
+      join budget_periods
+        on budget_periods.agent_id = agent_limits.agent_id
+       and budget_periods.period_type = agent_limits.period
+      where agent_limits.enabled = true
+        and agent_limits.limit_type = 'budget'
+        and now() >= budget_periods.period_start
+        and now() < budget_periods.period_end
+      group by agent_limits.agent_id
+    `,
+  );
+  return result.rows;
+}
+
+async function readAgentLimitRateWindows(client: QueryClient): Promise<AgentLimitRateWindowRow[]> {
+  const result = await client.query<AgentLimitRateWindowRow>(
+    `
+      select rate_limit_windows.agent_id::text as agent_id,
+             max(rate_limit_windows.request_count)
+               filter (where rate_limit_windows.limit_type = 'rpm') as current_rpm,
+             max(rate_limit_windows.token_count)
+               filter (where rate_limit_windows.limit_type = 'tpm') as current_tpm,
+             max(rate_limit_windows.active_count)
+               filter (where rate_limit_windows.limit_type = 'concurrency') as current_concurrency
+      from rate_limit_windows
+      where now() >= rate_limit_windows.window_start
+        and now() < rate_limit_windows.window_end
+      group by rate_limit_windows.agent_id
+    `,
+  );
+  return result.rows;
+}
+
+async function readAgentLimitErrorCounts(client: QueryClient): Promise<AgentLimitErrorCountRow[]> {
+  const result = await client.query<AgentLimitErrorCountRow>(
+    `
+      select request_activity.agent_id::text as agent_id,
+             count(*) filter (
+               where request_activity.error_code in (
+                 'rate_limit_exceeded',
+                 'cost_budget_exceeded',
+                 'token_budget_exceeded'
+               )
+               and request_activity.started_at >= date_trunc('day', now())
+             )::integer as over_limit_today_count,
+             count(*) filter (
+               where request_activity.error_code in (
+                 'rate_limit_exceeded',
+                 'cost_budget_exceeded',
+                 'token_budget_exceeded'
+               )
+               and request_activity.started_at >= date_trunc('day', now()) - interval '1 day'
+               and request_activity.started_at < date_trunc('day', now())
+             )::integer as over_limit_yesterday_count,
+             count(*) filter (
+               where request_activity.error_code = 'rate_limit_exceeded'
+                 and request_activity.started_at >= now() - interval '24 hours'
+             )::integer as rate_limit_hits_24h
+      from request_activity
+      where request_activity.error_code in (
+        'rate_limit_exceeded',
+        'cost_budget_exceeded',
+        'token_budget_exceeded'
+      )
+      group by request_activity.agent_id
+    `,
+  );
+  return result.rows;
+}
+
 function formatLimitSummary(limit: ConsoleAgentLimit | undefined): string {
   if (!limit?.enabled) {
     return "Not configured";
@@ -432,6 +625,15 @@ function normalizePositiveNumber(value: string | number | null | undefined, labe
   return numberValue;
 }
 
+function normalizeAlertThresholdPercent(value: string | number | null | undefined): number {
+  const rawValue = value ?? defaultAgentLimitFormValues.alertThresholdPercent;
+  const numberValue = typeof rawValue === "number" ? rawValue : Number(rawValue);
+  if (!Number.isFinite(numberValue) || numberValue <= 0 || numberValue > 100) {
+    throw new Error("Alert threshold must be greater than zero and no more than 100.");
+  }
+  return numberValue / 100;
+}
+
 function normalizeRequiredText(value: string | null | undefined, label: string): string {
   const normalized = value?.trim();
   if (!normalized) {
@@ -442,6 +644,13 @@ function normalizeRequiredText(value: string | null | undefined, label: string):
 
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(value);
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.min(999, value);
 }
 
 async function withClient<T>(

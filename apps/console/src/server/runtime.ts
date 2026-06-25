@@ -62,39 +62,37 @@ export async function getConsoleRuntimeSnapshot(
   await client.connect();
 
   try {
-    const [gatewayResult, errorResult] = await Promise.all([
-      client.query<GatewayRuntimeRow>(
-        `
-          select gateway_instance_id,
-                 status,
-                 applied_config_version,
-                 target_config_version,
-                 last_reload_status,
-                 last_reload_error,
-                 last_reload_at,
-                 heartbeat_at,
-                 started_at,
-                 updated_at
-          from gateway_runtime_status
-          order by heartbeat_at desc,
-                   updated_at desc
-          limit 5
-        `,
-      ),
-      client.query<RuntimeErrorRow>(
-        `
-          select process_type,
-                 process_id,
-                 severity,
-                 error_code,
-                 error_message,
-                 created_at
-          from runtime_errors
-          order by created_at desc
-          limit 10
-        `,
-      ),
-    ]);
+    const gatewayResult = await client.query<GatewayRuntimeRow>(
+      `
+        select gateway_instance_id,
+               status,
+               applied_config_version,
+               target_config_version,
+               last_reload_status,
+               last_reload_error,
+               last_reload_at,
+               heartbeat_at,
+               started_at,
+               updated_at
+        from gateway_runtime_status
+        order by heartbeat_at desc,
+                 updated_at desc
+        limit 5
+      `,
+    );
+    const errorResult = await client.query<RuntimeErrorRow>(
+      `
+        select process_type,
+               process_id,
+               severity,
+               error_code,
+               error_message,
+               created_at
+        from runtime_errors
+        order by created_at desc
+        limit 10
+      `,
+    );
 
     const migrations = await getMigrationStatusFromDatabase({
       databaseUrl,

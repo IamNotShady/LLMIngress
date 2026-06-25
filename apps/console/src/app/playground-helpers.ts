@@ -1,20 +1,43 @@
 export type PlaygroundChatRequest = {
   max_tokens: number;
-  messages: Array<{ content: string; role: "user" }>;
+  messages: Array<{ content: string; role: "system" | "user" }>;
   model: string;
-  stream: false;
+  stream: boolean;
+  temperature: number;
+  top_p: number;
 };
 
-export type PlaygroundMessagesRequest = PlaygroundChatRequest;
+export type PlaygroundMessagesRequest = {
+  max_tokens: number;
+  messages: Array<{ content: string; role: "user" }>;
+  model: string;
+  stream: boolean;
+  system?: string;
+  temperature: number;
+  top_p: number;
+};
 
 export type PlaygroundProtocol = "chat_completions" | "messages" | "responses";
 
 export type PlaygroundResponsesRequest = {
   input: string;
+  instructions?: string;
   max_output_tokens: number;
   model: string;
   store: false;
-  stream: false;
+  stream: boolean;
+  temperature: number;
+  top_p: number;
+};
+
+export type PlaygroundRequestInput = {
+  maxTokens: number;
+  model: string;
+  prompt: string;
+  stream?: boolean;
+  systemPrompt?: string;
+  temperature: number;
+  topP: number;
 };
 
 export function normalizePlaygroundGatewayBaseUrl(value: string): string {
@@ -30,35 +53,49 @@ export function isValidPlaygroundGatewayBaseUrl(value: string): boolean {
   }
 }
 
-export function buildPlaygroundChatRequest(input: {
-  model: string;
-  prompt: string;
-}): PlaygroundChatRequest {
+export function buildPlaygroundChatRequest(input: PlaygroundRequestInput): PlaygroundChatRequest {
+  const systemPrompt = input.systemPrompt?.trim();
   return {
-    max_tokens: 100,
-    messages: [{ content: input.prompt.trim(), role: "user" }],
+    max_tokens: input.maxTokens,
+    messages: [
+      ...(systemPrompt ? [{ content: systemPrompt, role: "system" as const }] : []),
+      { content: input.prompt.trim(), role: "user" },
+    ],
     model: input.model.trim(),
-    stream: false,
+    stream: input.stream ?? false,
+    temperature: input.temperature,
+    top_p: input.topP,
   };
 }
 
-export function buildPlaygroundMessagesRequest(input: {
-  model: string;
-  prompt: string;
-}): PlaygroundMessagesRequest {
-  return buildPlaygroundChatRequest(input);
+export function buildPlaygroundMessagesRequest(
+  input: PlaygroundRequestInput,
+): PlaygroundMessagesRequest {
+  const systemPrompt = input.systemPrompt?.trim();
+  return {
+    max_tokens: input.maxTokens,
+    messages: [{ content: input.prompt.trim(), role: "user" }],
+    model: input.model.trim(),
+    stream: input.stream ?? false,
+    ...(systemPrompt ? { system: systemPrompt } : {}),
+    temperature: input.temperature,
+    top_p: input.topP,
+  };
 }
 
-export function buildPlaygroundResponsesRequest(input: {
-  model: string;
-  prompt: string;
-}): PlaygroundResponsesRequest {
+export function buildPlaygroundResponsesRequest(
+  input: PlaygroundRequestInput,
+): PlaygroundResponsesRequest {
+  const systemPrompt = input.systemPrompt?.trim();
   return {
     input: input.prompt.trim(),
-    max_output_tokens: 100,
+    ...(systemPrompt ? { instructions: systemPrompt } : {}),
+    max_output_tokens: input.maxTokens,
     model: input.model.trim(),
     store: false,
-    stream: false,
+    stream: input.stream ?? false,
+    temperature: input.temperature,
+    top_p: input.topP,
   };
 }
 
@@ -102,6 +139,69 @@ export function readPlaygroundResponseText(body: unknown): string {
   }
 
   return "No response text";
+}
+
+export function readPlaygroundStreamResponseText(body: string): string {
+  const chunks: string[] = [];
+  for (const line of body.split(/\r?\n/)) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine.startsWith("data:")) {
+      continue;
+    }
+    const data = trimmedLine.slice("data:".length).trim();
+    if (!data || data === "[DONE]") {
+      continue;
+    }
+    const payload = readJsonRecord(data);
+    if (!payload) {
+      continue;
+    }
+    const text = readStreamPayloadText(payload);
+    if (text) {
+      chunks.push(text);
+    }
+  }
+
+  const text = chunks.join("").trim();
+  return text || "No response text";
+}
+
+function readStreamPayloadText(payload: Record<string, unknown>): string | null {
+  const delta = payload.delta;
+  if (typeof delta === "string") {
+    return delta;
+  }
+  if (isRecord(delta) && typeof delta.text === "string") {
+    return delta.text;
+  }
+  if (typeof payload.text === "string") {
+    return payload.text;
+  }
+
+  const choices = payload.choices;
+  if (!Array.isArray(choices)) {
+    return null;
+  }
+  const firstChoice = choices[0];
+  if (!isRecord(firstChoice)) {
+    return null;
+  }
+  if (isRecord(firstChoice.delta) && typeof firstChoice.delta.content === "string") {
+    return firstChoice.delta.content;
+  }
+  if (isRecord(firstChoice.delta) && typeof firstChoice.delta.reasoning_content === "string") {
+    return firstChoice.delta.reasoning_content;
+  }
+  return typeof firstChoice.text === "string" ? firstChoice.text : null;
+}
+
+function readJsonRecord(value: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

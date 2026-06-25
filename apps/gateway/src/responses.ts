@@ -31,6 +31,7 @@ import {
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
   readFallbackProviderApiKeys,
+  recordCandidateHealthFailure,
   recordFailedAttemptInDatabase,
   recordSucceededAttemptInDatabase,
 } from "./fallback-chain.js";
@@ -414,6 +415,12 @@ async function executeResponsesFallback(input: {
       await recordFailedAttemptInDatabase(input, failedAttempt);
       if (!failedAttempt.retryable) {
         await input.releaseAttempt(reservation);
+        // Persist provider/model health on hard (non-retryable) failures so
+        // health-aware routing excludes this model on later requests, matching
+        // the chat-completions path.
+        await recordCandidateHealthFailure({ databaseUrl: input.databaseUrl }, candidate, [
+          failedAttempt,
+        ]);
         return undefined;
       }
     }

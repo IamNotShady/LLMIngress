@@ -401,7 +401,64 @@ export async function executeGatewayStreamingRequest(input: {
         };
       }
 
-      // --- SUCCESS — first candidate with a streaming body wins ---
+      // --- 200 + body: read-ahead the first chunk before committing to the client (P1) ---
+      // getReader() locks the web stream, so the remainder is pumped via this reader below.
+      const reader = response.body.getReader();
+      let firstChunk: ReadableStreamReadResult<Uint8Array> | undefined;
+      let readaheadError: string | undefined;
+      try {
+        firstChunk = await readFirstChunkWithTimeout(reader, FIRST_CHUNK_TIMEOUT_MS);
+      } catch (streamError) {
+        readaheadError =
+          streamError instanceof Error
+            ? streamError.message
+            : "Provider stream failed before first byte.";
+      }
+
+      if (readaheadError !== undefined || !firstChunk || firstChunk.done) {
+        // Stream errored, timed out, or sent nothing before the first byte reached the
+        // client -> retryable failed attempt; we can still try the next candidate.
+        await reader.cancel().catch(() => undefined);
+        await recordGatewayProviderTrace({
+          errorCode: "provider_request_failed",
+          modelId: candidate.modelId,
+          providerKey: candidate.providerKey,
+          requestId: input.requestId,
+          startedAt: providerStartedAt,
+          status: "failed",
+        });
+        const failedAttempt = buildFallbackFailedAttempt({
+          attemptOrder,
+          providerApiKey: {
+            apiKey: candidate.apiKey,
+            ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
+            ...(candidate.providerApiKeyPrefix
+              ? { keyPrefix: candidate.providerApiKeyPrefix }
+              : {}),
+          },
+          providerModelId: candidate.providerModelId,
+          result: {
+            errorCode: "provider_request_failed",
+            errorMessage: readaheadError ?? "Provider returned an empty stream.",
+            statusCode: null, // before first byte -> null -> retryable
+          },
+        });
+        fallbackAttempts.push(failedAttempt);
+        await recordFailedAttemptInDatabase(
+          { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
+          failedAttempt,
+        );
+        await releaseGatewayBudgetReservation({
+          databaseUrl: input.databaseUrl,
+          reservation: currentReservation,
+        });
+        currentReservation = undefined;
+        lastFailureCode = "provider_request_failed";
+        continue; // retryable — advance to next candidate
+      }
+      const firstValue = firstChunk.value;
+
+      // --- SUCCESS — first chunk confirmed, this candidate wins ---
       await recordSucceededAttemptInDatabase(
         { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
         {
@@ -427,22 +484,19 @@ export async function executeGatewayStreamingRequest(input: {
       const body = wrapProviderStreamWithConcurrencyRelease(
         wrapProviderStreamWithBudgetFinalization(
           wrapProviderStreamWithMidStreamHealthRecording(
-            wrapProviderStreamWithErrorRecording(
-              Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
-              {
-                recordRuntimeError: (error) =>
-                  recordGatewayRuntimeError({
-                    databaseUrl: input.databaseUrl,
-                    error,
-                    metadata: {
-                      protocol: input.protocol,
-                      providerModelId: candidate.providerModelId,
-                      requestId: input.requestId,
-                      virtualModelId: input.virtualModel.id,
-                    },
-                  }),
-              },
-            ),
+            wrapProviderStreamWithErrorRecording(createReadaheadStream(reader, firstValue), {
+              recordRuntimeError: (error) =>
+                recordGatewayRuntimeError({
+                  databaseUrl: input.databaseUrl,
+                  error,
+                  metadata: {
+                    protocol: input.protocol,
+                    providerModelId: candidate.providerModelId,
+                    requestId: input.requestId,
+                    virtualModelId: input.virtualModel.id,
+                  },
+                }),
+            }),
             {
               databaseUrl: input.databaseUrl,
               candidate,
@@ -518,6 +572,58 @@ export async function executeGatewayStreamingRequest(input: {
       statusCode: mapGatewayErrorStatus(code),
     };
   }
+}
+
+const FIRST_CHUNK_TIMEOUT_MS = 30_000;
+
+// Read the provider stream's first chunk, racing a timeout so a provider that
+// 200s but never sends data falls back instead of hanging the request.
+async function readFirstChunkWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Provider stream timed out before first byte.")),
+      timeoutMs,
+    );
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([reader.read(), timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+// Re-emit the already-read first chunk, then pump the rest from the same reader
+// (the web stream is locked once getReader() is called, so Readable.fromWeb can
+// no longer be used). Backpressure-aware; cancels the reader if the consumer closes.
+function createReadaheadStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  firstValue: Uint8Array,
+): Readable {
+  async function* pump(): AsyncGenerator<Buffer> {
+    yield Buffer.from(firstValue);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          return;
+        }
+        if (value) {
+          yield Buffer.from(value);
+        }
+      }
+    } finally {
+      // Consumer closed/destroyed (or stream ended) — release the upstream reader.
+      await reader.cancel().catch(() => undefined);
+    }
+  }
+  return Readable.from(pump());
 }
 
 export function wrapProviderStreamWithActivityCompletion(

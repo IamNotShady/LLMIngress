@@ -300,8 +300,8 @@ export async function recordFailedAttemptInDatabase(
   }
 }
 
-async function recordCandidateHealthFailure(
-  input: ExecuteFallbackChainInput,
+export async function recordCandidateHealthFailure(
+  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "recordHealthEvent">,
   candidate: FallbackChainCandidate,
   failedAttempts: FallbackFailedAttempt[],
 ): Promise<void> {

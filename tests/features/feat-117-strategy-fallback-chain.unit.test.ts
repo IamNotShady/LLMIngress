@@ -418,6 +418,63 @@ describe("health force reload", () => {
     await runtime.stop();
     expect(healthListenerClose).toHaveBeenCalledTimes(1);
   });
+
+  it("reconcile() recovers a health change even when the config version is unchanged (P2b)", async () => {
+    const FIXED_VERSION = 7;
+    let callCount = 0;
+    const loadLatestSnapshot = vi.fn(async (): Promise<GatewayConfigSnapshot> => {
+      callCount++;
+      const healthStatus = callCount === 1 ? "healthy" : "unhealthy";
+      return {
+        loadedAt: new Date("2026-01-01T00:00:00.000Z"),
+        version: FIXED_VERSION,
+        providers: [],
+        routePolicies: [
+          {
+            id: "policy-1",
+            strategy: "fixed",
+            virtualModelId: "vm-1",
+            virtualModelName: "test-model",
+            candidates: [
+              {
+                candidateOrder: 1,
+                displayName: "test",
+                healthStatus,
+                modelId: "gpt-4",
+                price: {
+                  modelId: "gpt-4",
+                  priceVersion: "v1",
+                  providerKey: "openai",
+                  reason: "model_not_in_builtin_registry",
+                  status: "unknown_price",
+                },
+                providerId: "provider-1",
+                providerKey: "openai",
+                providerModelId: "model-1",
+              },
+            ],
+          },
+        ],
+      };
+    });
+
+    const runtime = createGatewayConfigRuntime({
+      enableNotifications: false,
+      loadLatestSnapshot,
+      reconcileIntervalMs: 0,
+    });
+
+    await runtime.start();
+    expect(runtime.getSnapshot().routePolicies[0]?.candidates[0]?.healthStatus).toBe("healthy");
+
+    // A dropped health_summary_changed notification is recovered by the periodic
+    // reconcile, which now force-reloads instead of gating on a newer config version.
+    await runtime.reconcile();
+    expect(runtime.getSnapshot().routePolicies[0]?.candidates[0]?.healthStatus).toBe("unhealthy");
+    expect(runtime.getSnapshot().version).toBe(FIXED_VERSION);
+
+    await runtime.stop();
+  });
 });
 
 // ---- fallback chain execution ----
@@ -1063,6 +1120,32 @@ function makeOkStreamResponse(): Response {
   });
 }
 
+function makeStreamErrorBeforeFirstChunkResponse(): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(new Error("stream broke before first byte"));
+    },
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: test helper
+  return new Response(body as any, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
+function makeEmptyStreamResponse(): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.close();
+    },
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: test helper
+  return new Response(body as any, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
 function drainStream(stream: Readable): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -1257,6 +1340,126 @@ describe("streaming fallback", () => {
       const bytes = await drainStream(result.body);
       expect(bytes.toString()).toContain("[DONE]");
     }
+
+    vi.clearAllMocks();
+  });
+
+  it("A returns 200 whose stream errors before the first chunk → falls back to B (P1)", async () => {
+    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
+    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../apps/gateway/src/chat-completions.js"
+    );
+    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
+
+    vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
+      concurrencyLease: {
+        agentApiKeyId: "key-1",
+        window: { windowEnd: new Date(), windowStart: new Date() },
+      },
+      ok: true,
+    });
+    vi.mocked(reserveGatewayBudget).mockResolvedValue({
+      ok: true,
+      reservation: {
+        budgetPeriodId: "bp",
+        id: "res-1",
+        reservedCostUsd: 0,
+        reservedInputTokens: 0,
+        reservedOutputTokens: 0,
+        reservedTotalTokens: 0,
+      },
+    });
+    vi.mocked(attachGatewayProviderCredentials)
+      .mockResolvedValueOnce([makeStreamingCandidate("model-a", 1)])
+      .mockResolvedValueOnce([makeStreamingCandidate("model-b", 2)]);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeStreamErrorBeforeFirstChunkResponse())
+      .mockResolvedValueOnce(makeOkStreamResponse());
+
+    const snapshot = makeStreamingSnapshot([
+      { providerModelId: "model-a", candidateOrder: 1 },
+      { providerModelId: "model-b", candidateOrder: 2 },
+    ]);
+
+    const result = await executeGatewayStreamingRequest({
+      agentApiKeyId: "key-1",
+      databaseUrl: "",
+      fetch: fetchMock,
+      protocol: "chat_completions",
+      requestBody: { messages: [{ role: "user", content: "hi" }], stream: true },
+      requestId: "req-1",
+      snapshot,
+      virtualModel: { id: "vm-1", name: "test-model" },
+    });
+
+    // Pre-first-chunk stream error on A must fall back to B (not commit A's 200).
+    expect(result.ok).toBe(true);
+    expect(result.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    if (result.ok) {
+      const bytes = await drainStream(result.body);
+      expect(bytes.toString()).toContain("[DONE]");
+    }
+
+    vi.clearAllMocks();
+  });
+
+  it("A returns 200 with an empty stream (no chunks) → falls back to B (P1)", async () => {
+    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
+    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../apps/gateway/src/chat-completions.js"
+    );
+    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
+
+    vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
+      concurrencyLease: {
+        agentApiKeyId: "key-1",
+        window: { windowEnd: new Date(), windowStart: new Date() },
+      },
+      ok: true,
+    });
+    vi.mocked(reserveGatewayBudget).mockResolvedValue({
+      ok: true,
+      reservation: {
+        budgetPeriodId: "bp",
+        id: "res-1",
+        reservedCostUsd: 0,
+        reservedInputTokens: 0,
+        reservedOutputTokens: 0,
+        reservedTotalTokens: 0,
+      },
+    });
+    vi.mocked(attachGatewayProviderCredentials)
+      .mockResolvedValueOnce([makeStreamingCandidate("model-a", 1)])
+      .mockResolvedValueOnce([makeStreamingCandidate("model-b", 2)]);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeEmptyStreamResponse())
+      .mockResolvedValueOnce(makeOkStreamResponse());
+
+    const snapshot = makeStreamingSnapshot([
+      { providerModelId: "model-a", candidateOrder: 1 },
+      { providerModelId: "model-b", candidateOrder: 2 },
+    ]);
+
+    const result = await executeGatewayStreamingRequest({
+      agentApiKeyId: "key-1",
+      databaseUrl: "",
+      fetch: fetchMock,
+      protocol: "chat_completions",
+      requestBody: { messages: [{ role: "user", content: "hi" }], stream: true },
+      requestId: "req-1",
+      snapshot,
+      virtualModel: { id: "vm-1", name: "test-model" },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     vi.clearAllMocks();
   });

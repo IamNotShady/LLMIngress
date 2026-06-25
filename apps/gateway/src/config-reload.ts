@@ -239,7 +239,16 @@ export function createGatewayConfigRuntime(
       }
 
       // Unconditional swap — health changes don't bump config version.
+      const previousVersion = currentSnapshot.version;
       currentSnapshot = nextSnapshot;
+      // Only a config-version bump is a "reload"; same-version health refreshes are silent.
+      if (nextSnapshot.version > previousVersion) {
+        await recordRuntimeStatusSafe({
+          type: "reload-succeeded",
+          appliedConfigVersion: nextSnapshot.version,
+          targetConfigVersion: nextSnapshot.version,
+        });
+      }
     })();
 
     try {
@@ -251,7 +260,10 @@ export function createGatewayConfigRuntime(
 
   return {
     getSnapshot: () => currentSnapshot,
-    reconcile: () => reloadIfNewer(),
+    // forceReload (not reloadIfNewer) so reconcile also recovers health-only
+    // changes whose config version is unchanged, including ones whose
+    // health_summary_changed LISTEN/NOTIFY was dropped.
+    reconcile: () => forceReload(),
     start: async () => {
       currentSnapshot = await loadLatestSnapshot();
       await recordRuntimeStatusSafe({
@@ -279,7 +291,7 @@ export function createGatewayConfigRuntime(
 
       if (reconcileIntervalMs > 0) {
         reconcileTimer = setInterval(() => {
-          void reloadIfNewer();
+          void forceReload();
         }, reconcileIntervalMs);
         reconcileTimer.unref?.();
       }

@@ -1681,3 +1681,8 @@
   - Fixed `feat-096` unit expectations to match the current Agent limit form semantics: default alert threshold persists as `0.8` and a default concurrency rule is saved alongside budget/RPM/TPM/token rules.
   - Updated `feat-075` tracker verification grep to the current provider health E2E title.
   - Verification passed: `pnpm exec vitest run tests/features/feat-096-agent-budget-auto-price-validation.unit.test.ts`, `pnpm exec vitest run tests/features/feat-075-provider-health-runtime.unit.test.ts && pnpm test:e2e tests/e2e/feat-075-provider-health-runtime.e2e.spec.ts --grep 'provider health summary updates notifications and scheduled checks and health-aware routing excludes unhealthy models'`, and `pnpm run verify:features` => all 117 passing feature(s) re-verified.
+
+- [x] 2026-06-25 Vitest timeout repair for optimized feature verification:
+  - Root cause: optimized `verify:features` unit batches run DB-heavy Vitest files together, and the default 5s per-test timeout intermittently killed valid fixture/migration tests.
+  - Raised Vitest `testTimeout` to 15s. The observed `feat-013` Console 500 was caused by overlapping orphaned verification processes sharing `.next`; after stopping the overlap, the focused auth E2E passed.
+  - Verification passed: `pnpm test`, focused `feat-013` E2E, and clean `pnpm run verify:features` => all 117 passing feature(s) re-verified.

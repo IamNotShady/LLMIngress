@@ -5,12 +5,14 @@ import {
 } from "../../apps/console/src/server/agent-limits";
 
 describe("feat-031 Agent limit configuration", () => {
-  it("normalizes budget rpm tpm and token limit form input", () => {
+  it("normalizes budget rpm tpm concurrency token and alert threshold form input", () => {
     expect(
       normalizeAgentLimitFormInput({
+        alertThresholdPercent: "75",
         agentId: " agent-031 ",
         budgetPeriod: " month ",
         budgetUsd: "10.50",
+        concurrency: "4",
         rpm: "60",
         tokenLimit: "8000",
         tpm: "120000",
@@ -19,7 +21,7 @@ describe("feat-031 Agent limit configuration", () => {
       agentId: "agent-031",
       rules: [
         {
-          alertThreshold: null,
+          alertThreshold: 0.75,
           enforcementPolicy: "block",
           limitType: "budget",
           limitValue: 10.5,
@@ -28,7 +30,7 @@ describe("feat-031 Agent limit configuration", () => {
           unit: "usd",
         },
         {
-          alertThreshold: null,
+          alertThreshold: 0.75,
           enforcementPolicy: "block",
           limitType: "rpm",
           limitValue: 60,
@@ -37,7 +39,7 @@ describe("feat-031 Agent limit configuration", () => {
           unit: "requests",
         },
         {
-          alertThreshold: null,
+          alertThreshold: 0.75,
           enforcementPolicy: "block",
           limitType: "tpm",
           limitValue: 120000,
@@ -46,7 +48,16 @@ describe("feat-031 Agent limit configuration", () => {
           unit: "tokens",
         },
         {
-          alertThreshold: null,
+          alertThreshold: 0.75,
+          enforcementPolicy: "block",
+          limitType: "concurrency",
+          limitValue: 4,
+          manualBypass: false,
+          period: "request",
+          unit: "requests",
+        },
+        {
+          alertThreshold: 0.75,
           enforcementPolicy: "block",
           limitType: "token",
           limitValue: 8000,
@@ -56,6 +67,33 @@ describe("feat-031 Agent limit configuration", () => {
         },
       ],
     });
+  });
+
+  it("defaults concurrency and alert threshold for older forms", () => {
+    expect(
+      normalizeAgentLimitFormInput({
+        agentId: "agent-031",
+        budgetPeriod: "month",
+        budgetUsd: "10",
+        rpm: "60",
+        tokenLimit: "8000",
+        tpm: "120000",
+      }).rules,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          alertThreshold: 0.8,
+          limitType: "budget",
+        }),
+        expect.objectContaining({
+          alertThreshold: 0.8,
+          limitType: "concurrency",
+          limitValue: 10,
+          period: "request",
+          unit: "requests",
+        }),
+      ]),
+    );
   });
 
   it("rejects non-positive values and invalid budget periods", () => {
@@ -103,9 +141,19 @@ describe("feat-031 Agent limit configuration", () => {
           period: "minute",
           unit: "requests",
         },
+        {
+          agentId: "agent-031",
+          enabled: true,
+          id: "concurrency-limit",
+          limitType: "concurrency",
+          limitValue: 4,
+          period: "request",
+          unit: "requests",
+        },
       ]),
     ).toEqual({
       budget: "$10.00 / month",
+      concurrency: "4 requests / request",
       rpm: "60 requests / minute",
       token: "Not configured",
       tpm: "Not configured",

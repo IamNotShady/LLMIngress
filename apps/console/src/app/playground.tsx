@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FlatIcon } from "./_components/flat-icon";
 import {
   buildPlaygroundChatRequest,
@@ -10,7 +10,9 @@ import {
   isValidPlaygroundGatewayBaseUrl,
   normalizePlaygroundGatewayBaseUrl,
   type PlaygroundProtocol,
+  type PlaygroundRequestInput,
   readPlaygroundResponseText,
+  readPlaygroundStreamResponseText,
 } from "./playground-helpers";
 
 type PlaygroundProps = {
@@ -21,139 +23,342 @@ type PlaygroundModel = {
   id: string;
 };
 
-type PlaygroundResult = {
+type PlaygroundRequestDetail = {
+  latencyMs: number | null;
+  providerDisplayName: string | null;
+  providerKey: string | null;
+  providerModelDisplayName: string | null;
+  providerModelName: string | null;
   requestId: string;
-  responseText: string;
+  routePolicyStrategy: string | null;
+  status: string | null;
+  totalCostUsd: string | null;
+  totalTokens: number | null;
+  virtualModelName: string | null;
 };
 
+type PlaygroundResult = {
+  detail: PlaygroundRequestDetail | null;
+  requestId: string;
+  responseText: string;
+  responseTokenCount: number | null;
+};
+
+const endpointOptions: Array<{ label: string; value: PlaygroundProtocol }> = [
+  { label: "/v1/chat/completions", value: "chat_completions" },
+  { label: "/v1/messages", value: "messages" },
+  { label: "/v1/responses", value: "responses" },
+];
+
 export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
+  const gatewayBaseUrl = defaultGatewayBaseUrl;
+  const agentApiKeyRef = useRef("");
+  const modelLoadTimerRef = useRef<number | null>(null);
   const [agentApiKey, setAgentApiKey] = useState("");
-  const [gatewayBaseUrl, setGatewayBaseUrl] = useState(defaultGatewayBaseUrl);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [maxTokens, setMaxTokens] = useState("1024");
   const [models, setModels] = useState<PlaygroundModel[]>([]);
-  const [prompt, setPrompt] = useState("hello from LLMIngress Playground");
-  const [protocol, setProtocol] = useState<PlaygroundProtocol>("responses");
+  const [prompt, setPrompt] = useState("请解释一下 LLMIngress 的核心优势。");
+  const [protocol, setProtocol] = useState<PlaygroundProtocol>("chat_completions");
   const [result, setResult] = useState<PlaygroundResult | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
-  const [status, setStatus] = useState("Paste an Agent API key to load models.");
+  const [status, setStatus] = useState("填写 Agent API Key 后发送测试。");
+  const [statusTone, setStatusTone] = useState<"error" | "idle" | "success">("idle");
+  const [streamMode, setStreamMode] = useState<"off" | "on">("off");
+  const [systemPrompt, setSystemPrompt] = useState("你是一个专业的技术助手，回答要准确、简洁。");
+  const [temperature, setTemperature] = useState("0.7");
+  const [topP, setTopP] = useState("0.9");
 
-  async function loadAllowedModels() {
-    setResult(null);
+  async function loadAllowedModels(
+    options: { agentApiKey?: string; announce?: boolean } = {},
+  ): Promise<PlaygroundModel[]> {
+    const apiKey = (options.agentApiKey ?? agentApiKey).trim();
+    if (!apiKey) {
+      if (options.announce !== false) {
+        setStatus("请先填写 Agent API Key。");
+        setStatusTone("error");
+      }
+      return [];
+    }
+
     const normalizedGatewayBaseUrl = readSafeGatewayBaseUrl(gatewayBaseUrl);
     if (!normalizedGatewayBaseUrl) {
       setStatus("Gateway base URL must be an absolute http(s) URL.");
-      return;
+      setStatusTone("error");
+      return [];
     }
 
-    let response: Response;
+    setIsLoadingModels(true);
     try {
-      response = await fetch(`${normalizedGatewayBaseUrl}/v1/models`, {
-        headers: {
-          authorization: `Bearer ${agentApiKey}`,
-        },
-      });
-    } catch (error) {
-      setStatus(formatPlaygroundFetchError("loading allowed models", error));
+      let response: Response;
+      try {
+        response = await fetch(`${normalizedGatewayBaseUrl}/v1/models`, {
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+          },
+        });
+      } catch (error) {
+        setStatus(formatPlaygroundFetchError("loading allowed models", error));
+        setStatusTone("error");
+        return [];
+      }
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setStatus(readGatewayErrorMessage(body, "Failed to load allowed models."));
+        setStatusTone("error");
+        return [];
+      }
+
+      const allowedModels = readGatewayModels(body);
+      if (apiKey !== agentApiKeyRef.current.trim()) {
+        return [];
+      }
+      setModels(allowedModels);
+      setSelectedModel((current) => current || allowedModels[0]?.id || "");
+      if (options.announce !== false) {
+        setStatus(
+          allowedModels.length === 0
+            ? "No allowed Virtual Models returned."
+            : "Allowed models loaded.",
+        );
+        setStatusTone("idle");
+      }
+      return allowedModels;
+    } finally {
+      setIsLoadingModels(false);
+    }
+  }
+
+  function scheduleAllowedModelsLoad(nextApiKey: string) {
+    if (modelLoadTimerRef.current !== null) {
+      window.clearTimeout(modelLoadTimerRef.current);
+    }
+    const apiKey = nextApiKey.trim();
+    if (!apiKey) {
+      modelLoadTimerRef.current = null;
       return;
     }
-    const body = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      setStatus(readGatewayErrorMessage(body, "Failed to load allowed models."));
-      return;
-    }
-
-    const allowedModels = readGatewayModels(body);
-    setModels(allowedModels);
-    setSelectedModel(allowedModels[0]?.id ?? "");
-    setStatus(
-      allowedModels.length === 0 ? "No allowed Virtual Models returned." : "Allowed models loaded.",
-    );
+    modelLoadTimerRef.current = window.setTimeout(() => {
+      modelLoadTimerRef.current = null;
+      void loadAllowedModels({ agentApiKey: apiKey, announce: false });
+    }, 350);
   }
 
   async function sendLiveRequest() {
     const normalizedGatewayBaseUrl = readSafeGatewayBaseUrl(gatewayBaseUrl);
     if (!normalizedGatewayBaseUrl) {
       setStatus("Gateway base URL must be an absolute http(s) URL.");
+      setStatusTone("error");
+      return;
+    }
+
+    const requestParams = readPlaygroundRequestParams({
+      maxTokens,
+      prompt,
+      stream: streamMode,
+      systemPrompt,
+      temperature,
+      topP,
+    });
+    if (!agentApiKey.trim()) {
+      setStatus("请先填写 Agent API Key。");
+      setStatusTone("error");
+      return;
+    }
+    if (!requestParams.prompt.trim()) {
+      setStatus("Prompt 不能为空。");
+      setStatusTone("error");
+      return;
+    }
+
+    let model = selectedModel;
+    if (!model) {
+      const loadedModels =
+        models.length > 0 ? models : await loadAllowedModels({ announce: false });
+      model = loadedModels[0]?.id ?? "";
+      if (model) {
+        setSelectedModel(model);
+      }
+    }
+    if (!model) {
+      setStatus("No allowed Virtual Models returned.");
+      setStatusTone("error");
       return;
     }
 
     const requestId = createPlaygroundRequestId();
     const endpointPath = readPlaygroundEndpointPath(protocol);
-    const requestBody =
-      protocol === "responses"
-        ? buildPlaygroundResponsesRequest({ model: selectedModel, prompt })
-        : protocol === "messages"
-          ? buildPlaygroundMessagesRequest({ model: selectedModel, prompt })
-          : buildPlaygroundChatRequest({ model: selectedModel, prompt });
-    let response: Response;
+    const requestBody = buildPlaygroundRequestBody(protocol, { ...requestParams, model });
+    setIsSending(true);
+    setResult(null);
+    setStatus("正在发送测试请求。");
+    setStatusTone("idle");
+
     try {
-      response = await fetch(`${normalizedGatewayBaseUrl}${endpointPath}`, {
-        body: JSON.stringify(requestBody),
-        headers: {
-          authorization: `Bearer ${agentApiKey}`,
-          "content-type": "application/json",
-          "x-request-id": requestId,
-        },
-        method: "POST",
-      });
-    } catch (error) {
-      setResult(null);
-      setStatus(formatPlaygroundFetchError("sending a live request", error));
-      return;
-    }
-    const body = await response.json().catch(() => null);
+      let response: Response;
+      try {
+        response = await fetch(`${normalizedGatewayBaseUrl}${endpointPath}`, {
+          body: JSON.stringify(requestBody),
+          headers: {
+            authorization: `Bearer ${agentApiKey}`,
+            "content-type": "application/json",
+            "x-request-id": requestId,
+          },
+          method: "POST",
+        });
+      } catch (error) {
+        setStatus(formatPlaygroundFetchError("sending a live request", error));
+        setStatusTone("error");
+        return;
+      }
+      const contentType = response.headers.get("content-type") ?? "";
+      const isStreamResponse = contentType.includes("text/event-stream");
+      const body = isStreamResponse
+        ? response.ok
+          ? null
+          : await response.text().catch(() => "")
+        : await response.json().catch(() => null);
 
-    if (!response.ok) {
-      setResult(null);
-      setStatus(readGatewayErrorMessage(body, "Playground request failed."));
-      return;
-    }
+      if (!response.ok) {
+        setStatus(readGatewayErrorMessage(body, "Playground request failed."));
+        setStatusTone("error");
+        return;
+      }
 
-    setStatus("Playground request completed.");
-    setResult({
-      requestId,
-      responseText: readPlaygroundResponseText(body),
-    });
+      const responseRequestId = response.headers.get("x-request-id")?.trim() || requestId;
+      if (isStreamResponse) {
+        const streamResult: PlaygroundResult = {
+          detail: null,
+          requestId: responseRequestId,
+          responseText: "",
+          responseTokenCount: null,
+        };
+        setResult(streamResult);
+        setStatus("正在接收流式响应。");
+        const responseText = await readPlaygroundStreamBody(response, (nextText) => {
+          setResult({ ...streamResult, responseText: nextText });
+        });
+        const nextResult = { ...streamResult, responseText };
+        setResult(nextResult);
+        setStatus("Playground request completed.");
+        setStatusTone("success");
+
+        const detail = await fetchPlaygroundRequestDetail(responseRequestId);
+        if (detail) {
+          setResult({ ...nextResult, detail });
+        }
+        return;
+      }
+
+      const nextResult: PlaygroundResult = {
+        detail: null,
+        requestId: responseRequestId,
+        responseText: readPlaygroundResponseText(body),
+        responseTokenCount: readPlaygroundResponseTokenCount(body),
+      };
+      setResult(nextResult);
+      setStatus("Playground request completed.");
+      setStatusTone("success");
+
+      const detail = await fetchPlaygroundRequestDetail(responseRequestId);
+      if (detail) {
+        setResult({ ...nextResult, detail });
+      }
+    } finally {
+      setIsSending(false);
+    }
   }
 
+  function clearPlayground() {
+    setPrompt("");
+    setResult(null);
+    setStatus("已清空请求内容。");
+    setStatusTone("idle");
+    setSystemPrompt("");
+  }
+
+  const providerModelLabel = readProviderModelLabel(result, selectedModel);
+  const statusLabel =
+    statusTone === "success"
+      ? "成功"
+      : statusTone === "error"
+        ? "失败"
+        : isSending
+          ? "发送中"
+          : "待发送";
+  const detail = result?.detail ?? null;
+  const displayTokens = detail?.totalTokens ?? result?.responseTokenCount ?? null;
+
   return (
-    <section className="providers-panel" id="playground" aria-label="Playground">
+    <section className="playground-dashboard" id="playground" aria-label="Playground">
       <div className="playground-layout">
-        <div className="chart-card">
-          <h2 className="chart-card-title">Request config</h2>
+        <form
+          className="playground-card playground-config-card"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void sendLiveRequest();
+          }}
+        >
+          <h2 className="playground-card-title">请求配置</h2>
           <div className="playground-config">
-            <div className="console-field">
-              <label htmlFor="playground-gateway-base-url">Gateway base URL</label>
-              <input
-                id="playground-gateway-base-url"
-                value={gatewayBaseUrl}
-                onChange={(event) => setGatewayBaseUrl(event.target.value)}
-              />
-            </div>
-            <div className="console-field">
-              <label htmlFor="playground-agent-api-key">Agent API key</label>
+            <div className="console-field playground-field">
+              <label htmlFor="playground-agent-api-key">1. Agent API Key</label>
               <input
                 id="playground-agent-api-key"
                 type="password"
                 autoComplete="off"
+                placeholder="sk-************************8fA7"
                 value={agentApiKey}
-                onChange={(event) => setAgentApiKey(event.target.value)}
+                onBlur={() => {
+                  if (agentApiKey.trim() && models.length === 0 && !isLoadingModels) {
+                    if (modelLoadTimerRef.current !== null) {
+                      window.clearTimeout(modelLoadTimerRef.current);
+                      modelLoadTimerRef.current = null;
+                    }
+                    void loadAllowedModels({ announce: false });
+                  }
+                }}
+                onChange={(event) => {
+                  const nextApiKey = event.target.value;
+                  agentApiKeyRef.current = nextApiKey;
+                  setAgentApiKey(nextApiKey);
+                  setModels([]);
+                  setSelectedModel("");
+                  scheduleAllowedModelsLoad(nextApiKey);
+                }}
               />
             </div>
-            <div className="console-actions">
-              <button type="button" onClick={() => void loadAllowedModels()}>
-                <FlatIcon name="refresh" />
-                <span>Load allowed models</span>
-              </button>
+
+            <div className="console-field playground-field">
+              <label htmlFor="playground-endpoint">2. Endpoint</label>
+              <select
+                id="playground-endpoint"
+                value={protocol}
+                onChange={(event) => setProtocol(event.target.value as PlaygroundProtocol)}
+              >
+                {endpointOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="console-field">
-              <label htmlFor="playground-model">Playground model</label>
+
+            <div className="console-field playground-field">
+              <label htmlFor="playground-model">3. Virtual Model</label>
               <select
                 id="playground-model"
                 value={selectedModel}
+                onFocus={() => {
+                  if (agentApiKey.trim() && models.length === 0 && !isLoadingModels) {
+                    void loadAllowedModels({ announce: false });
+                  }
+                }}
                 onChange={(event) => setSelectedModel(event.target.value)}
               >
-                <option value="">Select model</option>
+                <option value="">{isLoadingModels ? "Loading models" : "Select model"}</option>
                 {models.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.id}
@@ -161,20 +366,9 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 ))}
               </select>
             </div>
-            <div className="console-field">
-              <label htmlFor="playground-protocol">Request protocol</label>
-              <select
-                id="playground-protocol"
-                value={protocol}
-                onChange={(event) => setProtocol(event.target.value as PlaygroundProtocol)}
-              >
-                <option value="responses">Responses</option>
-                <option value="messages">Anthropic Messages</option>
-                <option value="chat_completions">Chat Completions</option>
-              </select>
-            </div>
-            <div className="console-field">
-              <label htmlFor="playground-prompt">Playground prompt</label>
+
+            <div className="console-field playground-field">
+              <label htmlFor="playground-prompt">4. Prompt</label>
               <textarea
                 id="playground-prompt"
                 rows={5}
@@ -182,56 +376,193 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 onChange={(event) => setPrompt(event.target.value)}
               />
             </div>
-            <div className="console-actions">
-              <button
-                type="button"
-                disabled={!agentApiKey || !selectedModel}
-                onClick={() => void sendLiveRequest()}
-              >
+
+            <div className="console-field playground-field">
+              <label htmlFor="playground-system-prompt">5. System Prompt（可选）</label>
+              <textarea
+                id="playground-system-prompt"
+                rows={3}
+                value={systemPrompt}
+                onChange={(event) => setSystemPrompt(event.target.value)}
+              />
+            </div>
+
+            <fieldset className="playground-params">
+              <legend>6. 基础参数</legend>
+              <div className="playground-param-grid">
+                <div className="console-field">
+                  <label htmlFor="playground-temperature">Temperature</label>
+                  <input
+                    id="playground-temperature"
+                    inputMode="decimal"
+                    max="2"
+                    min="0"
+                    step="0.1"
+                    type="number"
+                    value={temperature}
+                    onChange={(event) => setTemperature(event.target.value)}
+                  />
+                </div>
+                <div className="console-field">
+                  <label htmlFor="playground-top-p">Top P</label>
+                  <input
+                    id="playground-top-p"
+                    inputMode="decimal"
+                    max="1"
+                    min="0"
+                    step="0.1"
+                    type="number"
+                    value={topP}
+                    onChange={(event) => setTopP(event.target.value)}
+                  />
+                </div>
+                <div className="console-field">
+                  <label htmlFor="playground-max-tokens">Max Tokens</label>
+                  <input
+                    id="playground-max-tokens"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={maxTokens}
+                    onChange={(event) => setMaxTokens(event.target.value)}
+                  />
+                </div>
+                <div className="console-field">
+                  <label htmlFor="playground-stream">Stream</label>
+                  <select
+                    id="playground-stream"
+                    value={streamMode}
+                    onChange={(event) => setStreamMode(event.target.value === "on" ? "on" : "off")}
+                  >
+                    <option value="off">关闭</option>
+                    <option value="on">开启</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+
+            <div className="console-actions playground-actions">
+              <button type="submit" disabled={isSending}>
                 <FlatIcon name="confirm" />
-                <span>Send live request</span>
+                <span>{isSending ? "发送中" : "发送测试"}</span>
+              </button>
+              <button type="button" className="secondary-button" onClick={clearPlayground}>
+                <FlatIcon name="cancel" />
+                <span>清空</span>
               </button>
             </div>
           </div>
-        </div>
+        </form>
 
-        <div className="chart-card">
-          <h2 className="chart-card-title">Response preview</h2>
-          <div className="playground-result" role="status">
-            <p>{status}</p>
-            {result ? (
-              <>
-                <p className="detail-section-label">Request &amp; routing detail</p>
-                <dl className="detail-field-list">
-                  <div className="detail-field">
-                    <dt>Request ID</dt>
-                    <dd className="mono">{result.requestId}</dd>
-                  </div>
-                  <div className="detail-field">
-                    <dt>Model</dt>
-                    <dd>{selectedModel}</dd>
-                  </div>
-                </dl>
-                <p className="detail-section-label">Playground response</p>
-                <pre className="code-block">{result.responseText}</pre>
-              </>
-            ) : (
-              <p className="callout">
-                Send a request to preview the response and routing detail here.
-              </p>
-            )}
-          </div>
-          <p className="callout callout--info">
-            The Agent API key stays in your browser; the Console backend never stores it.
-          </p>
+        <div className="playground-result-column">
+          <section className="playground-card playground-response-card" aria-label="响应预览">
+            <div className="playground-card-head">
+              <h2 className="playground-card-title">响应预览</h2>
+              <span className={`playground-status-pill playground-status-pill--${statusTone}`}>
+                {statusLabel}
+              </span>
+            </div>
+            <div className="playground-response-box" role="status">
+              {result ? (
+                <>
+                  <p className="playground-response-provider">
+                    {providerModelLabel}（来自 Gateway）
+                  </p>
+                  <pre>{result.responseText}</pre>
+                </>
+              ) : (
+                <p>{status}</p>
+              )}
+            </div>
+          </section>
+
+          <section className="playground-card" aria-label="请求与路由详情">
+            <h2 className="playground-card-title">请求与路由详情</h2>
+            <dl className="playground-detail-grid">
+              <div>
+                <dt>Request ID</dt>
+                <dd className="mono">{result?.requestId ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Provider / Model</dt>
+                <dd>{providerModelLabel}</dd>
+              </div>
+              <div>
+                <dt>Strategy</dt>
+                <dd>{formatStrategy(detail?.routePolicyStrategy)}</dd>
+              </div>
+              <div>
+                <dt>Tokens</dt>
+                <dd>{formatTokens(displayTokens)}</dd>
+              </div>
+              <div>
+                <dt>Cost</dt>
+                <dd>{formatCost(detail?.totalCostUsd ?? null)}</dd>
+              </div>
+              <div>
+                <dt>Latency</dt>
+                <dd>{formatLatency(detail?.latencyMs ?? null)}</dd>
+              </div>
+            </dl>
+          </section>
         </div>
       </div>
     </section>
   );
 }
 
+function buildPlaygroundRequestBody(protocol: PlaygroundProtocol, input: PlaygroundRequestInput) {
+  if (protocol === "responses") {
+    return buildPlaygroundResponsesRequest(input);
+  }
+  if (protocol === "messages") {
+    return buildPlaygroundMessagesRequest(input);
+  }
+  return buildPlaygroundChatRequest(input);
+}
+
 function createPlaygroundRequestId(): string {
   return `playground_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+async function fetchPlaygroundRequestDetail(
+  requestId: string,
+): Promise<PlaygroundRequestDetail | null> {
+  const response = await fetch(
+    `/api/playground/result?requestId=${encodeURIComponent(requestId)}`,
+    {
+      cache: "no-store",
+    },
+  ).catch(() => null);
+  if (!response?.ok) {
+    return null;
+  }
+  const body = await response.json().catch(() => null);
+  return readPlaygroundRequestDetail(body);
+}
+
+function formatCost(value: string | null): string {
+  if (value === null) {
+    return "—";
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "—";
+  }
+  return `$${numeric.toFixed(numeric > 0 && numeric < 0.0001 ? 8 : 4)}`;
+}
+
+function formatLatency(value: number | null): string {
+  return value === null ? "—" : `${(value / 1000).toFixed(2)}s`;
+}
+
+function formatStrategy(value: string | null | undefined): string {
+  return value ? value.replaceAll("_", " ") : "—";
+}
+
+function formatTokens(value: number | null): string {
+  return value === null ? "—" : value.toLocaleString("en-US");
 }
 
 function readPlaygroundEndpointPath(protocol: PlaygroundProtocol): string {
@@ -244,11 +575,116 @@ function readPlaygroundEndpointPath(protocol: PlaygroundProtocol): string {
   return "/v1/chat/completions";
 }
 
+async function readPlaygroundStreamBody(
+  response: Response,
+  onText: (text: string) => void,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const body = await response.text().catch(() => "");
+    const text = readPlaygroundStreamResponseText(body);
+    onText(text);
+    return text;
+  }
+
+  const decoder = new TextDecoder();
+  let body = "";
+  let currentText = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    body += decoder.decode(value, { stream: true });
+    const nextText = readPlaygroundStreamResponseText(body);
+    if (nextText !== "No response text" && nextText !== currentText) {
+      currentText = nextText;
+      onText(nextText);
+    }
+  }
+
+  body += decoder.decode();
+  const finalText = readPlaygroundStreamResponseText(body);
+  onText(finalText);
+  return finalText;
+}
+
+function readPlaygroundRequestDetail(body: unknown): PlaygroundRequestDetail | null {
+  if (!isRecord(body) || !isRecord(body.detail)) {
+    return null;
+  }
+  const detail = body.detail;
+  const requestId = readString(detail.requestId);
+  if (!requestId) {
+    return null;
+  }
+  return {
+    latencyMs: readNumber(detail.latencyMs),
+    providerDisplayName: readString(detail.providerDisplayName),
+    providerKey: readString(detail.providerKey),
+    providerModelDisplayName: readString(detail.providerModelDisplayName),
+    providerModelName: readString(detail.providerModelName),
+    requestId,
+    routePolicyStrategy: readString(detail.routePolicyStrategy),
+    status: readString(detail.status),
+    totalCostUsd: readString(detail.totalCostUsd),
+    totalTokens: readNumber(detail.totalTokens),
+    virtualModelName: readString(detail.virtualModelName),
+  };
+}
+
+function readPlaygroundRequestParams(input: {
+  maxTokens: string;
+  prompt: string;
+  stream: "off" | "on";
+  systemPrompt: string;
+  temperature: string;
+  topP: string;
+}): Omit<PlaygroundRequestInput, "model"> {
+  return {
+    maxTokens: Math.max(1, Math.trunc(readFiniteNumber(input.maxTokens, 1024))),
+    prompt: input.prompt,
+    stream: input.stream === "on",
+    systemPrompt: input.systemPrompt,
+    temperature: readFiniteNumber(input.temperature, 0.7),
+    topP: readFiniteNumber(input.topP, 0.9),
+  };
+}
+
+function readPlaygroundResponseTokenCount(body: unknown): number | null {
+  if (!isRecord(body) || !isRecord(body.usage)) {
+    return null;
+  }
+  const totalTokens = readNumber(body.usage.total_tokens);
+  if (totalTokens !== null) {
+    return totalTokens;
+  }
+  const inputTokens = readNumber(body.usage.prompt_tokens) ?? readNumber(body.usage.input_tokens);
+  const outputTokens =
+    readNumber(body.usage.completion_tokens) ?? readNumber(body.usage.output_tokens);
+  return inputTokens !== null && outputTokens !== null ? inputTokens + outputTokens : null;
+}
+
+function readProviderModelLabel(result: PlaygroundResult | null, fallbackModel: string): string {
+  const detail = result?.detail;
+  const provider = detail?.providerDisplayName ?? detail?.providerKey;
+  const model = detail?.providerModelDisplayName ?? detail?.providerModelName ?? fallbackModel;
+  if (provider && model) {
+    return `${provider} / ${model}`;
+  }
+  return model || "—";
+}
+
 function readSafeGatewayBaseUrl(value: string): string | null {
   if (!isValidPlaygroundGatewayBaseUrl(value)) {
     return null;
   }
   return normalizePlaygroundGatewayBaseUrl(value);
+}
+
+function readFiniteNumber(value: string, fallback: number): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
 }
 
 function readGatewayModels(body: unknown): PlaygroundModel[] {
@@ -271,6 +707,14 @@ function readGatewayErrorMessage(body: unknown, fallback: string): string {
     return body.error.message;
   }
   return fallback;
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

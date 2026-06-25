@@ -1559,3 +1559,102 @@
   - Fixed `apps/console/src/main.ts` so `@llmingress/console dev` clears the Console package `.next` directory before spawning `next dev`; `start` production mode is unchanged.
   - Verification passed: `pnpm exec vitest run tests/features/feat-054-local-deployment-smoke.unit.test.ts`, `pnpm --filter @llmingress/console typecheck`, live curl returned `HTTP/1.1 200 OK`, in-app browser showed `LLMIngress Console` / `Overview` with no console errors, and `pnpm run verify` passed.
   - Current local Console was restarted detached on port 3000; process tree includes `pnpm --filter @llmingress/console dev` PID 56642 and `next-server` PID 56684.
+
+- [x] 2026-06-24 Limits reference UI alignment:
+  - Aligned the Console `/limits` page body to `docs/UI/08_limits.png` while preserving the existing global sidebar/topbar and real DB-backed data.
+  - Replaced placeholder Limits KPI/table values with real `budget_periods`, `rate_limit_windows`, and `request_activity.error_code` aggregation.
+  - Extended Agent limit saving to include `concurrency` plus UI `alertThresholdPercent`, persisted as decimal `agent_limits.alert_threshold`, and kept successful saves on `/limits?selected=<agentId>`.
+  - Added focused E2E coverage for the reference layout, table columns, right-side `规则配置` panel, Allowed Virtual Models chips, warning callout, and save flow with 5 persisted rules.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-031-agent-key-limits.unit.test.ts`, `pnpm exec vitest run tests/features/feat-107-concurrency-limit-policy.unit.test.ts`, `pnpm test:e2e tests/e2e/console-ui-limits.e2e.spec.ts --workers=1`, `pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent limit form saves budget rpm tpm token rules without manual price fields' --workers=1`, `pnpm run lint`, and `pnpm --filter @llmingress/console typecheck`.
+  - Full `pnpm run verify:features` was intentionally not run for this interactive UI task per the accepted plan.
+
+- [x] 2026-06-24 Limits config tab removal follow-up:
+  - Removed the non-interactive `Budget`, `Rate Limit`, and `Allowed Models` tab labels from the right-side Limits `规则配置` panel while keeping the underlying budget, rate-limit, and allowed-model fields visible.
+  - Updated the focused Limits UI E2E to assert those three exact tab labels are absent.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-limits.e2e.spec.ts --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, Browser/IAB DOM and console checks, and Browser screenshot `/tmp/llmingress-limits-tabs-removed.png`.
+
+- [x] 2026-06-24 Limits table note removal follow-up:
+  - Removed the extra Limit Rules table footer note `当前版本：超限后统一直接阻断请求，不支持人工绕过。`.
+  - Added focused E2E coverage asserting that exact note is absent.
+  - TDD red observed first with the new E2E assertion receiving the note count as 1; verification then passed with `pnpm test:e2e tests/e2e/console-ui-limits.e2e.spec.ts --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, Browser/IAB DOM and console checks, and Browser screenshot `/tmp/llmingress-limits-note-removed.png`.
+
+- [x] 2026-06-24 Limits policy warning removal follow-up:
+  - Removed the right-side Limits `规则配置` yellow `当前版本说明` warning callout and its dedicated CSS.
+  - Added focused E2E coverage asserting both `当前版本说明` and `不支持 per-rule 阻断策略或人工绕过；超限直接阻断。` are absent.
+  - TDD red observed first with the new E2E assertion receiving `当前版本说明` count as 1; verification then passed with `pnpm test:e2e tests/e2e/console-ui-limits.e2e.spec.ts --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, Browser/IAB DOM and console checks, and Browser screenshot `/tmp/llmingress-limits-warning-removed.png`.
+
+- [x] 2026-06-24 Agent create optional Limits follow-up:
+  - Added an `Enable limits` toggle above the New Agent limit fields. It is off by default; limit inputs are hidden until enabled.
+  - Updated `/api/agents` so create skips `saveAgentLimitRules` unless `enableLimits=true`, meaning a new Agent can be created with no `agent_limits` rows. Limits page saves still use `/api/agent-limits`.
+  - TDD red observed first: `console-ui-agents` could not find the toggle, and `feat-026` saw 5 default `agent_limits` rows after creating an Agent.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --workers=1`, `pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works' --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and Browser/IAB toggle interaction with no visible framework error or console issues. Full regression was not run for this interactive UI follow-up.
+
+- [x] 2026-06-24 Agent create Limits field completion follow-up:
+  - Added `Alert threshold (%)` and `Concurrency limit` inputs to the New Agent `Enable limits` field group, using the same defaults as the Agent limit server normalization (`80` and `10`).
+  - TDD red intent captured in `console-ui-agents` by asserting those fields hide when the toggle is off and render when enabled.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and Browser/IAB verification on `/agents?agentDialog=new` with no console errors. Full regression was not run for this interactive UI follow-up.
+
+- [x] 2026-06-24 Limits rule row selection/delete follow-up:
+  - Removed the Limit Rules table `编辑` action and replaced it with per-row `删除` buttons that post `deleteLimitRules` to `/api/agent-limits`.
+  - Made every non-action table cell link to `/limits?selected=<agentId>`, so clicking a rule row switches the right-side `规则配置` panel to that Agent's editable details.
+  - Added `deleteAgentLimitRules` with config-change publication and redirected deletes back to `/limits`. Agent edit `saveAll` now redirects to `/limits?selected=<agentId>` to match the Limits editing flow.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-limits.e2e.spec.ts --workers=1`, `pnpm test:e2e tests/e2e/feat-031-agent-key-limits.e2e.spec.ts --grep 'agent limit form saves budget rpm tpm token rules without manual price fields' --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, `git diff --check`, `jq empty feature_list.json`, and Browser/IAB row-selection plus DevTools console checks with screenshot `/tmp/llmingress-limits-delete-row-select.png`. Full regression was not run for this interactive UI follow-up.
+
+- [x] 2026-06-25 Agent edit optional Limits follow-up:
+  - Agent edit now uses existing `agent_limits` rows to decide whether `Enable limits` is on. Agents created with limits disabled reopen with the toggle off and limit fields hidden.
+  - Turning the edit toggle on reveals budget, period, RPM, TPM, token, alert-threshold, and concurrency inputs; saving with the toggle off clears/keeps no limit rules instead of writing defaults.
+  - Verification passed: `pnpm --filter @llmingress/console typecheck`, `pnpm test:e2e tests/e2e/feat-026-agent-crud.e2e.spec.ts --grep 'agent crud works and delete with request attribution soft-deletes' --workers=1`, `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --workers=1`, `pnpm run lint`, and Browser/IAB verification on `test4` with no visible framework overlay or console errors. Full regression was not run for this interactive UI follow-up.
+
+- [x] 2026-06-25 Limits rate current-value hint removal:
+  - Removed the three right-side `Rate Limit 限额` helper texts for current RPM, TPM, and concurrency values; the configured input values remain visible and editable.
+  - TDD red observed first in `console-ui-limits` with 3 `.limits-field-hint` nodes.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-limits.e2e.spec.ts --grep 'limits page renders the reference KPI, table, and rule configuration layout' --workers=1`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `git diff --check`, `jq empty feature_list.json`, and Browser/IAB screenshot `/tmp/llmingress-limits-rate-hints-removed.png`. Full regression was not run for this interactive UI follow-up.
+
+- [x] 2026-06-25 Limits add-rule button removal:
+  - Removed the Limits page `新增规则` toolbar button and its dedicated CSS; the toolbar now contains only search.
+  - TDD red observed first in `console-ui-limits` with 1 `新增规则` link.
+  - Verification passed: `pnpm test:e2e tests/e2e/console-ui-limits.e2e.spec.ts --grep 'limits page renders the reference KPI, table, and rule configuration layout' --workers=1`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `git diff --check`, `jq empty feature_list.json`, `curl -I 'http://localhost:3000/limits?selected=e7358090-0b5a-4d42-8af4-6f4deb8817ab'`, and Browser/IAB screenshot `/tmp/llmingress-limits-add-rule-removed.png`. Full regression was not run for this interactive UI follow-up.
+
+- [x] 2026-06-25 Playground reference UI alignment:
+  - Aligned the Console `/playground` page body to `docs/UI/09_playground.png` while leaving the global sidebar/topbar unchanged.
+  - Replaced the visible `Gateway base URL` and `Load allowed models` controls with the existing configured Gateway URL plus automatic model loading from the pasted Agent API key.
+  - Added Endpoint, Virtual Model, Prompt, System Prompt, Temperature, Top P, Max Tokens, and Stream controls; live requests still go directly from the browser to Gateway and keep the Agent API key only in React state.
+  - Added a read-only Console API for Playground request detail lookup by requestId, backed by existing `request_activity`, `request_usage`, and `request_costs` data through the existing activity detail query.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts tests/features/feat-061-console-interaction-layout.unit.test.ts`, `pnpm test:e2e tests/e2e/console-ui-playground.e2e.spec.ts --workers=1`, `pnpm test:e2e tests/e2e/feat-049-playground.e2e.spec.ts --workers=1`, `pnpm test:e2e tests/e2e/feat-061-console-interaction-layout.e2e.spec.ts --workers=1`, `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and `jq empty feature_list.json`.
+  - Visual verification used Playwright Chromium screenshots at `1920x1400`, `1619x1076`, and `390x844`: `/tmp/llmingress-playground-qa/playground-desktop.png`, `/tmp/llmingress-playground-qa/playground-current.png`, and `/tmp/llmingress-playground-qa/playground-mobile.png`. Browser console/pageerror messages were empty; `documentElement.scrollWidth` was 1920 at the 1920 desktop viewport. Full `verify:features` was intentionally not run per the accepted task plan.
+
+- [x] 2026-06-25 Agents live 500 / Turbopack cache guard:
+  - Root cause: `/agents` returned 500 because `apps/console/.next/dev` was missing Turbopack build manifests while the interactive Console dev server was still running. The trigger was `scripts/run-with-env.ts` deleting `apps/console/.next` before Playwright runs, which is safe for isolated E2E but unsafe during a live Console session.
+  - Fixed `scripts/run-with-env.ts` so Playwright pre-clean is skipped when the configured Console port is already listening, preserving the active dev server cache. Added focused unit coverage for the cache cleanup guard and `CONSOLE_PORT` parsing.
+  - Restarted the local Console on `http://localhost:3000`; `/agents` now returns 200 and `/api/agents` returns the expected 405 for GET-only probing of a POST route.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-060-verify-features-optimization.unit.test.ts`, `pnpm run lint`, `pnpm run typecheck`, `curl http://localhost:3000/agents` => 200, and Browser/IAB `/agents` smoke with `Agents` content, no Next overlay, and no console error/warn logs. Full regression/E2E was not run to avoid disrupting the active interactive dev server.
+
+- [x] 2026-06-25 Playground API key model auto-load follow-up:
+  - Playground now debounces `Agent API Key` input changes and loads allowed Virtual Models from Gateway `GET /v1/models` after typing or paste, without requiring the user to blur the input or focus the Virtual Model select.
+  - Kept the key browser-memory-only: it remains React state/ref only and is only sent to the Gateway Authorization header.
+  - The live failure message in the screenshot was also caused by Gateway not listening on `:4000`; started `llmingress-gateway` in a detached `screen` session and verified `/health`.
+  - Verification passed: `pnpm run lint`, `pnpm --filter @llmingress/console typecheck`, and `curl http://127.0.0.1:4000/health` => 200. Browser/IAB reload was blocked by the Browser URL policy, so no alternate browser workaround was used.
+
+- [x] 2026-06-25 Playground Stream option follow-up:
+  - Replaced the single-option Stream select with `关闭` and `开启`.
+  - Playground request helpers now pass the selected `stream` boolean into Chat Completions, Messages, and Responses request bodies instead of hardcoding `false`.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, and Browser/IAB DOM check showing `#playground-stream` options `关闭/off` and `开启/on` with no console error/warn logs.
+
+- [x] 2026-06-25 Playground Stream response text follow-up:
+  - Root cause: when Stream was enabled, Gateway returned `text/event-stream`, but Playground still tried `response.json()`. JSON parsing returned `null`, so the preview fell back to `No response text`.
+  - Fixed Playground to read SSE responses with `response.text()` and aggregate streamed text chunks from OpenAI/Qwen `choices[].delta.content`, Responses `delta`, Anthropic `delta.text`, `reasoning_content`, and top-level `delta`.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `curl http://localhost:3000/playground` => 200, and Browser/IAB `/playground` smoke with no runtime/internal error text and no console error/warn logs. Full regression was not run for this live UI follow-up.
+
+- [x] 2026-06-25 Playground progressive Stream follow-up:
+  - Root cause: `Stream=开启` sent a streaming request, but the browser used `response.text()`, so the UI waited for the whole SSE response before rendering.
+  - Fixed Playground to read `Response.body.getReader()` and update the response preview as chunks arrive, reusing the existing SSE text aggregator.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `git diff --check`, `jq empty feature_list.json`, and Browser/IAB `/playground` smoke with no console error/warn logs. Full regression was not run for this live UI follow-up.
+
+- [x] 2026-06-25 Playground comparison block removal:
+  - Removed the `对比结果（可选）` card because it only repeated the current request and did not provide a real comparison feature.
+  - Removed the now-unused comparison table CSS and updated the Playground UI E2E to assert the comparison heading and empty state are absent.
+  - Verification passed: `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, and source checks for removed comparison component/CSS. `console-ui-playground` E2E was attempted twice but blocked because Next 16 refuses to start a second dev server for `apps/console` while the live Console on `:3000` is running; the live service was left running for interactive testing.
+
+- [x] 2026-06-25 Playground API key memory note placement:
+  - Moved the `Agent API Key 只保存在浏览器内存中` notice from the bottom of the Playground body into the Playground title/description area.
+  - Verification passed: `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `git diff --check`, `jq empty feature_list.json`, and Browser/IAB DOM check confirming the note renders before `#playground` with no console error/warn logs.

@@ -8,11 +8,10 @@ export default async function LimitsPage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page limits-page">
       <PageHeader
-        eyebrow="Access"
         title="Limits"
-        description="Budgets, token caps, RPM / TPM, and concurrency per Agent."
+        description="管理 Agent API Key 的预算、Token、RPM、TPM 与并发限制"
       />
       <LimitsSection searchParams={resolved} />
     </div>

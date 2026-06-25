@@ -6,10 +6,15 @@ describe("feat-061 console interaction layout", () => {
     const source = readFileSync("apps/console/src/app/playground.tsx", "utf8");
 
     for (const id of [
-      "playground-gateway-base-url",
       "playground-agent-api-key",
+      "playground-endpoint",
       "playground-model",
       "playground-prompt",
+      "playground-system-prompt",
+      "playground-temperature",
+      "playground-top-p",
+      "playground-max-tokens",
+      "playground-stream",
     ]) {
       expect(source).toMatch(
         new RegExp(
@@ -18,6 +23,6 @@ describe("feat-061 console interaction layout", () => {
       );
     }
 
-    expect(source).toContain('className="console-actions"');
+    expect(source).toMatch(/className="[^"]*console-actions[^"]*"/);
   });
 });

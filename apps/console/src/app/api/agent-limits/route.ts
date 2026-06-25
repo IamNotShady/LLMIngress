@@ -1,5 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { normalizeAgentLimitFormInput, saveAgentLimitRules } from "../../../server/agent-limits";
+import {
+  deleteAgentLimitRules,
+  normalizeAgentLimitFormInput,
+  saveAgentLimitRules,
+} from "../../../server/agent-limits";
 import {
   getConsoleDatabaseUrl,
   sessionCookieName,
@@ -18,29 +22,41 @@ export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
     const action = readRequiredText(form, "action");
+    if (action === "deleteLimitRules") {
+      await deleteAgentLimitRules({
+        agentId: readRequiredText(form, "agentId", "agentApiKeyId"),
+        databaseUrl,
+      });
+      return NextResponse.redirect(new URL("/limits", request.url), { status: 303 });
+    }
     if (action !== "saveLimitRules") {
       return NextResponse.json({ error: "Unknown Agent limit action." }, { status: 400 });
     }
 
+    const agentId = readRequiredText(form, "agentId", "agentApiKeyId");
     await saveAgentLimitRules({
       databaseUrl,
       limits: normalizeAgentLimitFormInput({
-        agentId: readRequiredText(form, "agentId", "agentApiKeyId"),
+        agentId,
+        alertThresholdPercent: readOptionalText(form, "alertThresholdPercent"),
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
+        concurrency: readOptionalText(form, "concurrency"),
         rpm: readRequiredText(form, "rpm"),
         tokenLimit: readRequiredText(form, "tokenLimit"),
         tpm: readRequiredText(form, "tpm"),
       }),
     });
+    return NextResponse.redirect(
+      new URL(`/limits?selected=${encodeURIComponent(agentId)}`, request.url),
+      { status: 303 },
+    );
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Agent limit action failed." },
       { status: 400 },
     );
   }
-
-  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
 }
 
 function readRequiredText(form: FormData, name: string, fallbackName?: string): string {
@@ -49,4 +65,9 @@ function readRequiredText(form: FormData, name: string, fallbackName?: string): 
     throw new Error(`${name} is required.`);
   }
   return value.trim();
+}
+
+function readOptionalText(form: FormData, name: string): string | null {
+  const value = form.get(name);
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

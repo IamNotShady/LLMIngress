@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { buildAgentIntegrationTemplates } from "../../../server/agent-integrations";
-import { normalizeAgentLimitFormInput, saveAgentLimitRules } from "../../../server/agent-limits";
+import {
+  deleteAgentLimitRules,
+  normalizeAgentLimitFormInput,
+  saveAgentLimitRules,
+} from "../../../server/agent-limits";
 import {
   createAgent,
   deleteAgent,
@@ -38,7 +42,13 @@ export async function POST(request: NextRequest) {
         }),
         databaseUrl,
       });
-      await saveAgentRelatedSettings({ databaseUrl, form, id: result.id });
+      await saveAgentRelatedSettings({
+        clearLimitsWhenDisabled: false,
+        databaseUrl,
+        form,
+        id: result.id,
+        saveLimits: readText(form, "enableLimits") === "true",
+      });
       return renderOneTimeAgentResponse(result);
     } else if (action === "update") {
       await updateAgent({
@@ -63,7 +73,17 @@ export async function POST(request: NextRequest) {
         databaseUrl,
         id,
       });
-      await saveAgentRelatedSettings({ databaseUrl, form, id });
+      await saveAgentRelatedSettings({
+        clearLimitsWhenDisabled: true,
+        databaseUrl,
+        form,
+        id,
+        saveLimits: readText(form, "enableLimits") === "true",
+      });
+      return NextResponse.redirect(
+        new URL(`/agents?selected=${encodeURIComponent(id)}`, request.url),
+        { status: 303 },
+      );
     } else if (action === "delete") {
       await deleteAgent({
         databaseUrl,
@@ -92,9 +112,11 @@ export async function POST(request: NextRequest) {
 }
 
 async function saveAgentRelatedSettings(input: {
+  clearLimitsWhenDisabled: boolean;
   databaseUrl: string;
   form: FormData;
   id: string;
+  saveLimits: boolean;
 }): Promise<void> {
   await updateAgentVirtualModelAccess({
     access: normalizeAgentVirtualModelAccessFormInput({
@@ -104,12 +126,23 @@ async function saveAgentRelatedSettings(input: {
     }),
     databaseUrl: input.databaseUrl,
   });
+  if (!input.saveLimits) {
+    if (input.clearLimitsWhenDisabled) {
+      await deleteAgentLimitRules({
+        agentId: input.id,
+        databaseUrl: input.databaseUrl,
+      });
+    }
+    return;
+  }
   await saveAgentLimitRules({
     databaseUrl: input.databaseUrl,
     limits: normalizeAgentLimitFormInput({
       agentId: input.id,
+      alertThresholdPercent: readText(input.form, "alertThresholdPercent") ?? null,
       budgetPeriod: readRequiredText(input.form, "budgetPeriod"),
       budgetUsd: readRequiredText(input.form, "budgetUsd"),
+      concurrency: readText(input.form, "concurrency") ?? null,
       rpm: readRequiredText(input.form, "rpm"),
       tokenLimit: readRequiredText(input.form, "tokenLimit"),
       tpm: readRequiredText(input.form, "tpm"),

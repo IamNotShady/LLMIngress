@@ -17,8 +17,10 @@ import {
 } from "../../server/agent-integrations";
 import {
   type ConsoleAgentLimit,
+  type ConsoleAgentLimitRuntimeSnapshot,
   defaultAgentLimitFormValues,
   formatAgentLimitSummaries,
+  listAgentLimitRuntimeSnapshots,
   listAgentLimits,
 } from "../../server/agent-limits";
 import {
@@ -2422,57 +2424,77 @@ function AgentCreateDialog({
               </option>
             ))}
           </select>
-          <label htmlFor="agent-budget-usd">Budget USD limit</label>
-          <input
-            id="agent-budget-usd"
-            name="budgetUsd"
-            type="number"
-            min="0.000001"
-            step="0.000001"
-            defaultValue={defaultAgentLimitFormValues.budgetUsd}
-            required
-          />
-          <label htmlFor="agent-budget-period">Budget period</label>
-          <select
-            id="agent-budget-period"
-            name="budgetPeriod"
-            defaultValue={defaultAgentLimitFormValues.budgetPeriod}
-            required
-          >
-            <option value="day">day</option>
-            <option value="week">week</option>
-            <option value="month">month</option>
-          </select>
-          <label htmlFor="agent-rpm">RPM limit</label>
-          <input
-            id="agent-rpm"
-            name="rpm"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={defaultAgentLimitFormValues.rpm}
-            required
-          />
-          <label htmlFor="agent-tpm">TPM limit</label>
-          <input
-            id="agent-tpm"
-            name="tpm"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={defaultAgentLimitFormValues.tpm}
-            required
-          />
-          <label htmlFor="agent-token-limit">Token limit</label>
-          <input
-            id="agent-token-limit"
-            name="tokenLimit"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={defaultAgentLimitFormValues.tokenLimit}
-            required
-          />
+          <label className="checkbox-label agent-limit-toggle" htmlFor="agent-enable-limits">
+            <input id="agent-enable-limits" name="enableLimits" type="checkbox" value="true" />
+            <span>Enable limits</span>
+          </label>
+          <div className="agent-create-limit-fields">
+            <label htmlFor="agent-budget-usd">Budget USD limit</label>
+            <input
+              id="agent-budget-usd"
+              name="budgetUsd"
+              type="number"
+              min="0.000001"
+              step="0.000001"
+              defaultValue={defaultAgentLimitFormValues.budgetUsd}
+            />
+            <label htmlFor="agent-budget-period">Budget period</label>
+            <select
+              id="agent-budget-period"
+              name="budgetPeriod"
+              defaultValue={defaultAgentLimitFormValues.budgetPeriod}
+            >
+              <option value="day">day</option>
+              <option value="week">week</option>
+              <option value="month">month</option>
+            </select>
+            <label htmlFor="agent-alert-threshold">Alert threshold (%)</label>
+            <input
+              id="agent-alert-threshold"
+              name="alertThresholdPercent"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.alertThresholdPercent}
+            />
+            <label htmlFor="agent-rpm">RPM limit</label>
+            <input
+              id="agent-rpm"
+              name="rpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.rpm}
+            />
+            <label htmlFor="agent-tpm">TPM limit</label>
+            <input
+              id="agent-tpm"
+              name="tpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.tpm}
+            />
+            <label htmlFor="agent-concurrency">Concurrency limit</label>
+            <input
+              id="agent-concurrency"
+              name="concurrency"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.concurrency}
+            />
+            <label htmlFor="agent-token-limit">Token limit</label>
+            <input
+              id="agent-token-limit"
+              name="tokenLimit"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.tokenLimit}
+            />
+          </div>
           <button type="submit">
             <FlatIcon name="add" />
             <span>Create agent</span>
@@ -2497,9 +2519,12 @@ function AgentEditDialog({
   virtualModels: readonly ConsoleVirtualModel[];
 }) {
   const budgetLimit = findAgentLimit(limits, "budget");
+  const concurrencyLimit = findAgentLimit(limits, "concurrency");
   const rpmLimit = findAgentLimit(limits, "rpm");
   const tokenLimit = findAgentLimit(limits, "token");
   const tpmLimit = findAgentLimit(limits, "tpm");
+  const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
+  const limitsEnabled = limits.length > 0;
 
   return (
     <>
@@ -2583,57 +2608,93 @@ function AgentEditDialog({
               </option>
             ))}
           </select>
-          <label htmlFor={`agent-budget-usd-${agent.id}`}>Budget USD limit</label>
-          <input
-            id={`agent-budget-usd-${agent.id}`}
-            name="budgetUsd"
-            type="number"
-            min="0.000001"
-            step="0.000001"
-            defaultValue={budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd}
-            required
-          />
-          <label htmlFor={`agent-budget-period-${agent.id}`}>Budget period</label>
-          <select
-            id={`agent-budget-period-${agent.id}`}
-            name="budgetPeriod"
-            defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
-            required
+          <label
+            className="checkbox-label agent-limit-toggle"
+            htmlFor={`agent-enable-limits-${agent.id}`}
           >
-            <option value="day">day</option>
-            <option value="week">week</option>
-            <option value="month">month</option>
-          </select>
-          <label htmlFor={`agent-rpm-${agent.id}`}>RPM limit</label>
-          <input
-            id={`agent-rpm-${agent.id}`}
-            name="rpm"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
-            required
-          />
-          <label htmlFor={`agent-tpm-${agent.id}`}>TPM limit</label>
-          <input
-            id={`agent-tpm-${agent.id}`}
-            name="tpm"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
-            required
-          />
-          <label htmlFor={`agent-token-limit-${agent.id}`}>Token limit</label>
-          <input
-            id={`agent-token-limit-${agent.id}`}
-            name="tokenLimit"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
-            required
-          />
+            <input
+              id={`agent-enable-limits-${agent.id}`}
+              name="enableLimits"
+              type="checkbox"
+              value="true"
+              defaultChecked={limitsEnabled}
+            />
+            <span>Enable limits</span>
+          </label>
+          <div className="agent-limit-fields">
+            <label htmlFor={`agent-budget-usd-${agent.id}`}>Budget USD limit</label>
+            <input
+              id={`agent-budget-usd-${agent.id}`}
+              name="budgetUsd"
+              type="number"
+              min="0.000001"
+              step="0.000001"
+              defaultValue={budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd}
+              required
+            />
+            <label htmlFor={`agent-budget-period-${agent.id}`}>Budget period</label>
+            <select
+              id={`agent-budget-period-${agent.id}`}
+              name="budgetPeriod"
+              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+              required
+            >
+              <option value="day">day</option>
+              <option value="week">week</option>
+              <option value="month">month</option>
+            </select>
+            <label htmlFor={`agent-alert-threshold-${agent.id}`}>Alert threshold (%)</label>
+            <input
+              id={`agent-alert-threshold-${agent.id}`}
+              name="alertThresholdPercent"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              defaultValue={alertThresholdPercent}
+              required
+            />
+            <label htmlFor={`agent-rpm-${agent.id}`}>RPM limit</label>
+            <input
+              id={`agent-rpm-${agent.id}`}
+              name="rpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
+              required
+            />
+            <label htmlFor={`agent-tpm-${agent.id}`}>TPM limit</label>
+            <input
+              id={`agent-tpm-${agent.id}`}
+              name="tpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
+              required
+            />
+            <label htmlFor={`agent-concurrency-${agent.id}`}>Concurrency limit</label>
+            <input
+              id={`agent-concurrency-${agent.id}`}
+              name="concurrency"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency}
+              required
+            />
+            <label htmlFor={`agent-token-limit-${agent.id}`}>Token limit</label>
+            <input
+              id={`agent-token-limit-${agent.id}`}
+              name="tokenLimit"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
+              required
+            />
+          </div>
           <button type="submit">
             <FlatIcon name="save" />
             <span>Save</span>
@@ -2741,222 +2802,386 @@ function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
+  const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
   const agents = await listAgents(databaseUrl);
   const agentLimits = await listAgentLimits(databaseUrl);
+  const runtimeSnapshots = await listAgentLimitRuntimeSnapshots(databaseUrl);
   const agentVirtualModelAccess = await listAgentVirtualModelAccess(databaseUrl);
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
+  const runtimeByAgentId = new Map(
+    runtimeSnapshots.map((snapshot) => [snapshot.agentId, snapshot]),
+  );
   const accessById = new Map(agentVirtualModelAccess.map((access) => [access.agentId, access]));
 
   const ruleAgents = agents.filter(
     (agent) => (agentLimitsByAgentId.get(agent.id) ?? []).length > 0,
   );
   const selectedAgent =
-    ruleAgents.find((agent) => agent.id === selectedAgentId) ?? ruleAgents[0] ?? agents[0] ?? null;
+    agents.find((agent) => agent.id === selectedAgentId) ?? ruleAgents[0] ?? agents[0] ?? null;
 
   const rows = ruleAgents.map((agent) => {
     const limits = agentLimitsByAgentId.get(agent.id) ?? [];
     const summaries = formatAgentLimitSummaries(limits);
-    // Usage % and concurrency are not yet tracked by the backend; seeded so the
-    // value is stable across renders (real enforcement lands in feat-107).
-    const usagePercent = placeholderInt(agent.id, 0, 98, 1);
-    const concurrency = placeholderInt(agent.id, 2, 12, 2);
-    return { agent, limits, summaries, usagePercent, concurrency };
+    const runtime = getAgentLimitRuntimeSnapshot(agent.id, runtimeByAgentId);
+    const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
+    const budgetUsagePercent = runtime.budgetUsagePercent;
+    const status = getLimitRuleStatus({
+      alertThresholdPercent,
+      enabled: agent.enabled,
+      usagePercent: budgetUsagePercent,
+    });
+    return { agent, alertThresholdPercent, budgetUsagePercent, limits, runtime, status, summaries };
   });
+  const filteredRows = query
+    ? rows.filter((row) => {
+        const normalizedQuery = query.toLowerCase();
+        return (
+          row.agent.name.toLowerCase().includes(normalizedQuery) ||
+          (row.agent.keyPrefix?.toLowerCase().includes(normalizedQuery) ?? false)
+        );
+      })
+    : rows;
 
-  const nearBudgetCount = rows.filter((row) => row.usagePercent >= 80).length;
+  const overLimitTodayCount = runtimeSnapshots.reduce(
+    (sum, snapshot) => sum + snapshot.overLimitTodayCount,
+    0,
+  );
+  const overLimitYesterdayCount = runtimeSnapshots.reduce(
+    (sum, snapshot) => sum + snapshot.overLimitYesterdayCount,
+    0,
+  );
+  const rateLimitHits24h = runtimeSnapshots.reduce(
+    (sum, snapshot) => sum + snapshot.rateLimitHits24h,
+    0,
+  );
+  const nearBudgetCount = rows.filter(
+    (row) => row.budgetUsagePercent >= row.alertThresholdPercent,
+  ).length;
+  const selectedLimits = selectedAgent ? (agentLimitsByAgentId.get(selectedAgent.id) ?? []) : [];
+  const selectedRuntime = selectedAgent
+    ? getAgentLimitRuntimeSnapshot(selectedAgent.id, runtimeByAgentId)
+    : null;
 
   return (
-    <section className="providers-panel" aria-label="Limits">
-      <div className="stat-grid">
-        <StatCard icon="R" label="Configured rules" value={String(rows.length)} />
-        <StatCard
-          icon="O"
-          label="Over-limit today"
-          value={String(placeholderInt("limits-over", 0, 5))}
-          delta="placeholder"
-        />
-        <StatCard icon="B" label="Near budget" value={String(nearBudgetCount)} delta="≥ 80% used" />
-        <StatCard
-          icon="L"
-          label="Rate-limit hits 24h"
-          value={String(placeholderInt("limits-rate", 0, 40))}
-          delta="placeholder"
-        />
-      </div>
-      <div className="detail-layout">
-        <div className="data-table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Key prefix</th>
-                <th className="num">Budget</th>
-                <th className="num">Tokens</th>
-                <th className="num">RPM</th>
-                <th className="num">TPM</th>
-                <th className="num">Concurrency</th>
-                <th className="num">Usage</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={10}>No limit rules configured.</td>
-                </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr
-                    key={row.agent.id}
-                    className={selectedAgent?.id === row.agent.id ? "is-selected" : "is-clickable"}
-                  >
-                    <td>{row.agent.name}</td>
-                    <td className="mono">{row.agent.keyPrefix ?? "No key"}</td>
-                    <td className="num">{row.summaries.budget}</td>
-                    <td className="num">{row.summaries.token}</td>
-                    <td className="num">{row.summaries.rpm}</td>
-                    <td className="num">{row.summaries.tpm}</td>
-                    <td className="num">{row.concurrency}</td>
-                    <td className="num">{row.usagePercent}%</td>
-                    <td>
-                      <LimitUsagePill usagePercent={row.usagePercent} enabled={row.agent.enabled} />
-                    </td>
-                    <td>
-                      <a href={buildQueryHref(searchParams, { selected: row.agent.id })}>Edit</a>
-                    </td>
+    <section className="limits-dashboard" aria-label="Limits">
+      <div className="limits-main">
+        <div className="limits-left-column">
+          <div className="stat-grid limits-kpi-grid">
+            <StatCard
+              icon="R"
+              label="已配置规则"
+              value={String(rows.length)}
+              delta="Agent API Key"
+            />
+            <StatCard
+              icon="!"
+              label="今日超限次数"
+              value={String(overLimitTodayCount)}
+              delta={`较昨日 ${formatSignedInteger(overLimitTodayCount - overLimitYesterdayCount)}`}
+              deltaTone={overLimitTodayCount >= overLimitYesterdayCount ? "up" : "down"}
+            />
+            <StatCard
+              icon="B"
+              label="接近预算 Key"
+              value={String(nearBudgetCount)}
+              delta="达到 80%"
+            />
+            <StatCard
+              icon="L"
+              label="Rate Limit 触发"
+              value={String(rateLimitHits24h)}
+              delta="最近 24h"
+            />
+          </div>
+          <div className="limits-toolbar">
+            <form className="limits-search-form" action="/limits" method="get">
+              {selectedAgent ? (
+                <input type="hidden" name="selected" value={selectedAgent.id} />
+              ) : null}
+              <label className="sr-only" htmlFor="limits-search">
+                Search limit rules
+              </label>
+              <input
+                id="limits-search"
+                name="q"
+                type="search"
+                defaultValue={query}
+                placeholder="搜索 Agent 或 API Key Prefix"
+              />
+            </form>
+          </div>
+          <div className="limits-rule-card">
+            <h2 className="limits-section-title">Limit Rules</h2>
+            <div className="data-table-wrap limits-rule-table-wrap">
+              <table className="data-table limits-rule-table">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>API Key</th>
+                    <th className="num">成本上限</th>
+                    <th className="num">Token 上限</th>
+                    <th className="num">RPM</th>
+                    <th className="num">TPM</th>
+                    <th className="num">并发</th>
+                    <th className="num">使用率</th>
+                    <th>状态</th>
+                    <th>操作</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={10}>No limit rules configured.</td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((row) => {
+                      const selectedHref = buildQueryHref(searchParams, {
+                        selected: row.agent.id,
+                      });
+                      return (
+                        <tr
+                          key={row.agent.id}
+                          className={
+                            selectedAgent?.id === row.agent.id ? "is-selected" : "is-clickable"
+                          }
+                        >
+                          <td>
+                            <a className="table-row-link" href={selectedHref}>
+                              {row.agent.name}
+                            </a>
+                          </td>
+                          <td className="mono">
+                            <a className="table-row-link" href={selectedHref}>
+                              {formatLimitsKeyPrefix(row.agent.keyPrefix)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={selectedHref}>
+                              {formatLimitBudgetCell(row.limits)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={selectedHref}>
+                              {formatLimitNumericCell(row.limits, "token")}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={selectedHref}>
+                              {formatLimitNumericCell(row.limits, "rpm")}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={selectedHref}>
+                              {formatLimitNumericCell(row.limits, "tpm")}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={selectedHref}>
+                              {formatLimitNumericCell(row.limits, "concurrency")}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={selectedHref}>
+                              {formatUsagePercent(row.budgetUsagePercent)}
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={selectedHref}>
+                              <span className={`pill limits-status-pill ${row.status.className}`}>
+                                {row.status.label}
+                              </span>
+                            </a>
+                          </td>
+                          <td className="limits-rule-action-cell">
+                            <form
+                              action="/api/agent-limits"
+                              className="limits-rule-delete-form"
+                              method="post"
+                            >
+                              <input type="hidden" name="action" value="deleteLimitRules" />
+                              <input type="hidden" name="agentId" value={row.agent.id} />
+                              <button
+                                aria-label={`删除 ${row.agent.name}`}
+                                className="limits-rule-delete-button"
+                                type="submit"
+                              >
+                                删除
+                              </button>
+                            </form>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
         {selectedAgent ? (
           <LimitsConfigPanel
             agent={selectedAgent}
-            limits={agentLimitsByAgentId.get(selectedAgent.id) ?? []}
-            allowedVirtualModels={accessById.get(selectedAgent.id)?.allowedVirtualModels ?? []}
-            usagePercent={placeholderInt(selectedAgent.id, 0, 98, 1)}
+            limits={selectedLimits}
+            allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(selectedAgent.id))}
+            runtime={selectedRuntime ?? getEmptyAgentLimitRuntimeSnapshot(selectedAgent.id)}
           />
         ) : null}
       </div>
-      <p className="callout callout--warn">
-        Current version: requests over budget are throttled gateway-wide; per-rule throttle vs. hard
-        block and live concurrency enforcement are not yet supported.
-      </p>
     </section>
   );
-}
-
-function LimitUsagePill({ usagePercent, enabled }: { usagePercent: number; enabled: boolean }) {
-  if (!enabled) {
-    return <span className="pill">Disabled</span>;
-  }
-  if (usagePercent >= 95) {
-    return <span className="pill--danger pill">Exceeded</span>;
-  }
-  if (usagePercent >= 80) {
-    return <span className="pill--warn pill">Warning</span>;
-  }
-  return <span className="pill--ok pill">Normal</span>;
 }
 
 function LimitsConfigPanel({
   agent,
   limits,
   allowedVirtualModels,
-  usagePercent,
+  runtime,
 }: {
   agent: { id: string; keyPrefix: string | null; name: string };
   limits: readonly ConsoleAgentLimit[];
   allowedVirtualModels: ReadonlyArray<{ id: string; displayName: string; name: string }>;
-  usagePercent: number;
+  runtime: ConsoleAgentLimitRuntimeSnapshot;
 }) {
   const budgetLimit = findAgentLimit(limits, "budget");
   const rpmLimit = findAgentLimit(limits, "rpm");
   const tpmLimit = findAgentLimit(limits, "tpm");
+  const concurrencyLimit = findAgentLimit(limits, "concurrency");
   const tokenLimit = findAgentLimit(limits, "token");
+  const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
+  const usagePercent = runtime.budgetUsagePercent;
   const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
 
   return (
-    <div className="detail-panel">
-      <div className="detail-panel-head">
-        <h2 className="detail-panel-title">{agent.name}</h2>
-        <span className="mono">{agent.keyPrefix ?? "No key"}</span>
+    <aside className="limits-config-panel" aria-label="规则配置">
+      <div className="limits-config-head">
+        <div>
+          <h2 className="limits-config-title">规则配置</h2>
+          <p>{agent.name}</p>
+        </div>
+        <span className="mono">{formatLimitsKeyPrefix(agent.keyPrefix)}</span>
       </div>
-      <div className="panel-tabs" role="presentation">
-        <span className="panel-tab is-active">Budget</span>
-        <span className="panel-tab">Rate Limit</span>
-        <span className="panel-tab">Allowed Models</span>
-      </div>
-      <form className="provider-edit-form" action="/api/agent-limits" method="post">
+      <form className="limits-config-form" action="/api/agent-limits" method="post">
         <input type="hidden" name="action" value="saveLimitRules" />
         <input type="hidden" name="agentId" value={agent.id} />
-        <label htmlFor={`limits-budget-${agent.id}`}>Budget USD limit</label>
-        <input
-          id={`limits-budget-${agent.id}`}
-          name="budgetUsd"
-          type="number"
-          min="0.000001"
-          step="0.000001"
-          defaultValue={budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd}
-          required
-        />
-        <label htmlFor={`limits-budget-period-${agent.id}`}>Budget period</label>
-        <select
-          id={`limits-budget-period-${agent.id}`}
-          name="budgetPeriod"
-          defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
-          required
-        >
-          <option value="day">day</option>
-          <option value="week">week</option>
-          <option value="month">month</option>
-        </select>
-        <div className="usage-bar">
-          <div className="usage-bar-head">
-            <span>Current usage</span>
-            <span>{usagePercent}%</span>
+        <div className="limits-form-grid">
+          <div className="console-field">
+            <label htmlFor={`limits-budget-${agent.id}`}>成本上限 (USD)</label>
+            <input
+              id={`limits-budget-${agent.id}`}
+              name="budgetUsd"
+              type="number"
+              min="0.000001"
+              step="0.000001"
+              defaultValue={formatInputNumber(
+                budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
+              )}
+              required
+            />
           </div>
-          <div className="usage-bar-track">
-            <div
-              className={`usage-bar-fill ${usageTone}`.trim()}
-              style={{ width: `${usagePercent}%` }}
+          <div className="console-field">
+            <label htmlFor={`limits-token-${agent.id}`}>Token 上限</label>
+            <input
+              id={`limits-token-${agent.id}`}
+              name="tokenLimit"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={formatInputNumber(
+                tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
+              )}
+              required
+            />
+          </div>
+          <div className="console-field">
+            <label htmlFor={`limits-budget-period-${agent.id}`}>周期</label>
+            <select
+              id={`limits-budget-period-${agent.id}`}
+              name="budgetPeriod"
+              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+              required
+            >
+              <option value="day">日</option>
+              <option value="week">周</option>
+              <option value="month">月</option>
+            </select>
+          </div>
+          <div className="console-field">
+            <label htmlFor={`limits-alert-threshold-${agent.id}`}>告警阈值</label>
+            <input
+              id={`limits-alert-threshold-${agent.id}`}
+              name="alertThresholdPercent"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              defaultValue={formatInputNumber(alertThresholdPercent)}
+              required
             />
           </div>
         </div>
-        <label htmlFor={`limits-rpm-${agent.id}`}>RPM limit</label>
-        <input
-          id={`limits-rpm-${agent.id}`}
-          name="rpm"
-          type="number"
-          min="1"
-          step="1"
-          defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
-          required
-        />
-        <label htmlFor={`limits-tpm-${agent.id}`}>TPM limit</label>
-        <input
-          id={`limits-tpm-${agent.id}`}
-          name="tpm"
-          type="number"
-          min="1"
-          step="1"
-          defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
-          required
-        />
-        <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
-        <input
-          id={`limits-token-${agent.id}`}
-          name="tokenLimit"
-          type="number"
-          min="1"
-          step="1"
-          defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
-          required
-        />
+        <div className="limits-usage-block">
+          <div className="usage-bar">
+            <div className="usage-bar-head">
+              <span>当前使用率</span>
+              <span>{formatUsagePercent(usagePercent)}</span>
+            </div>
+            <div className="usage-bar-track">
+              <div
+                className={`usage-bar-fill ${usageTone}`.trim()}
+                style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
+              />
+            </div>
+          </div>
+        </div>
         <div>
-          <p className="detail-section-label">Allowed virtual models</p>
+          <h3 className="limits-config-subtitle">Rate Limit 限额</h3>
+          <div className="limits-rate-grid">
+            <div className="console-field">
+              <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
+              <input
+                id={`limits-rpm-${agent.id}`}
+                name="rpm"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
+                )}
+                required
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
+              <input
+                id={`limits-tpm-${agent.id}`}
+                name="tpm"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
+                )}
+                required
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-concurrency-${agent.id}`}>并发数</label>
+              <input
+                id={`limits-concurrency-${agent.id}`}
+                name="concurrency"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
+                )}
+                required
+              />
+            </div>
+          </div>
+        </div>
+        <div>
+          <h3 className="limits-config-subtitle">Allowed Virtual Models</h3>
           <div className="tag-row">
             {allowedVirtualModels.length === 0 ? (
               <span className="tag-chip">All virtual models</span>
@@ -2969,13 +3194,136 @@ function LimitsConfigPanel({
             )}
           </div>
         </div>
-        <button type="submit">
-          <FlatIcon name="save" />
-          <span>Save rule</span>
-        </button>
+        <div className="limits-config-actions">
+          <a className="secondary-button" href={buildQueryHref({}, { selected: agent.id })}>
+            取消
+          </a>
+          <button type="submit">
+            <FlatIcon name="save" />
+            <span>保存规则</span>
+          </button>
+        </div>
       </form>
-    </div>
+    </aside>
   );
+}
+
+function getAgentLimitRuntimeSnapshot(
+  agentId: string,
+  snapshotsByAgentId: Map<string, ConsoleAgentLimitRuntimeSnapshot>,
+): ConsoleAgentLimitRuntimeSnapshot {
+  return snapshotsByAgentId.get(agentId) ?? getEmptyAgentLimitRuntimeSnapshot(agentId);
+}
+
+function getLimitsVisibleVirtualModels(
+  access: AgentVirtualModelAccess | undefined,
+): ReadonlyArray<{ id: string; displayName: string; name: string }> {
+  if (!access) {
+    return [];
+  }
+  const models: Array<{ id: string; displayName: string; name: string }> = [];
+  const seen = new Set<string>();
+  if (access.defaultVirtualModel) {
+    models.push(access.defaultVirtualModel);
+    seen.add(access.defaultVirtualModel.id);
+  }
+  for (const virtualModel of access.allowedVirtualModels) {
+    if (!seen.has(virtualModel.id)) {
+      models.push(virtualModel);
+      seen.add(virtualModel.id);
+    }
+  }
+  return models;
+}
+
+function getEmptyAgentLimitRuntimeSnapshot(agentId: string): ConsoleAgentLimitRuntimeSnapshot {
+  return {
+    agentId,
+    budgetUsagePercent: 0,
+    currentConcurrency: 0,
+    currentRpm: 0,
+    currentTpm: 0,
+    overLimitTodayCount: 0,
+    overLimitYesterdayCount: 0,
+    rateLimitHits24h: 0,
+  };
+}
+
+function readAgentAlertThresholdPercent(limits: readonly ConsoleAgentLimit[]): number {
+  const configuredThreshold = limits.find((limit) => limit.alertThreshold !== null)?.alertThreshold;
+  return (configuredThreshold ?? defaultAgentLimitFormValues.alertThresholdPercent / 100) * 100;
+}
+
+function getLimitRuleStatus({
+  alertThresholdPercent,
+  enabled,
+  usagePercent,
+}: {
+  alertThresholdPercent: number;
+  enabled: boolean;
+  usagePercent: number;
+}): { className: string; label: string } {
+  if (!enabled) {
+    return { className: "", label: "已禁用" };
+  }
+  if (usagePercent >= 100) {
+    return { className: "pill--danger", label: "已阻断" };
+  }
+  if (usagePercent >= alertThresholdPercent) {
+    return { className: "pill--warn", label: "警告" };
+  }
+  return { className: "pill--ok", label: "正常" };
+}
+
+function formatSignedInteger(value: number): string {
+  if (value > 0) {
+    return `+${value}`;
+  }
+  return String(value);
+}
+
+function formatLimitsKeyPrefix(keyPrefix: string | null): string {
+  if (!keyPrefix) {
+    return "No key";
+  }
+  if (keyPrefix.length <= 8) {
+    return keyPrefix;
+  }
+  return `${keyPrefix.slice(0, 5)}...${keyPrefix.slice(-3)}`;
+}
+
+function formatLimitBudgetCell(limits: readonly ConsoleAgentLimit[]): string {
+  const limit = findAgentLimit(limits, "budget");
+  if (!limit?.enabled) {
+    return "未配置";
+  }
+  return `$${limit.limitValue.toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
+}
+
+function formatLimitNumericCell(
+  limits: readonly ConsoleAgentLimit[],
+  limitType: ConsoleAgentLimit["limitType"],
+): string {
+  const limit = findAgentLimit(limits, limitType);
+  if (!limit?.enabled) {
+    return "未配置";
+  }
+  return formatInteger(limit.limitValue);
+}
+
+function formatUsagePercent(value: number): string {
+  return `${Math.round(value)}%`;
+}
+
+function formatInputNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value);
+}
+
+function formatInteger(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
 }
 
 export async function ModelsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {

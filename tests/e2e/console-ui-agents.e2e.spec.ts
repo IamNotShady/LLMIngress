@@ -14,6 +14,20 @@ test("agents page matches the designed list and detail layout", async ({ browser
       const createDialog = page.getByRole("dialog", { name: "New agent" });
       await expect(createDialog.getByRole("heading", { name: "New agent" })).toBeVisible();
       await expect(createDialog.getByLabel("Agent name")).toBeVisible();
+      const createLimitsSwitch = createDialog.getByLabel("Enable limits");
+      await expect(createLimitsSwitch).not.toBeChecked();
+      await expect(createDialog.getByLabel("Budget USD limit")).toBeHidden();
+      await expect(createDialog.getByLabel("Alert threshold (%)")).toBeHidden();
+      await expect(createDialog.getByLabel("Concurrency limit")).toBeHidden();
+      await createLimitsSwitch.check();
+      await expect(createDialog.getByLabel("Budget USD limit")).toBeVisible();
+      await expect(createDialog.getByLabel("RPM limit")).toBeVisible();
+      await expect(createDialog.getByLabel("Alert threshold (%)")).toBeVisible();
+      await expect(createDialog.getByLabel("Concurrency limit")).toBeVisible();
+      await createLimitsSwitch.uncheck();
+      await expect(createDialog.getByLabel("Budget USD limit")).toBeHidden();
+      await expect(createDialog.getByLabel("Alert threshold (%)")).toBeHidden();
+      await expect(createDialog.getByLabel("Concurrency limit")).toBeHidden();
       await createDialog.getByRole("link", { name: "Close" }).click();
 
       for (const label of ["Agents", "Connected", "Requests today", "Cost this week"]) {
@@ -78,6 +92,27 @@ test("agents page matches the designed list and detail layout", async ({ browser
         throw new Error("Agent virtual model controls did not render with measurable bounds.");
       }
       expect(Math.abs(allowedToggleBox.height - defaultSelectBox.height)).toBeLessThanOrEqual(8);
+      await expect(editDialog.getByLabel("Enable limits")).toBeChecked();
+      await expect(editDialog.getByLabel("Budget USD limit")).toBeVisible();
+
+      await editDialog.getByRole("link", { name: "Close" }).click();
+      await page
+        .getByRole("row", { name: /OpenClaw/ })
+        .getByRole("link", { name: "Edit" })
+        .click();
+      const noLimitEditDialog = page.getByRole("dialog", { name: "Edit OpenClaw" });
+      await expect(noLimitEditDialog.getByRole("heading", { name: "Edit OpenClaw" })).toBeVisible();
+      await expect(noLimitEditDialog.getByLabel("Enable limits")).not.toBeChecked();
+      await expect(noLimitEditDialog.getByLabel("Budget USD limit")).toBeHidden();
+      await expect(noLimitEditDialog.getByLabel("Alert threshold (%)")).toBeHidden();
+      await expect(noLimitEditDialog.getByLabel("Concurrency limit")).toBeHidden();
+      await noLimitEditDialog.getByLabel("Enable limits").check();
+      await expect(noLimitEditDialog.getByLabel("Budget USD limit")).toBeVisible();
+      await expect(noLimitEditDialog.getByLabel("Alert threshold (%)")).toBeVisible();
+      await expect(noLimitEditDialog.getByLabel("Concurrency limit")).toBeVisible();
+      await noLimitEditDialog.getByLabel("Enable limits").uncheck();
+      await expect(noLimitEditDialog.getByLabel("Budget USD limit")).toBeHidden();
+      await noLimitEditDialog.getByRole("link", { name: "Close" }).click();
 
       for (const hiddenText of [
         /^Integration platform:/,
@@ -149,13 +184,15 @@ async function seedAgentsData(databaseUrl: string): Promise<void> {
           [keyId, virtualModel.id],
         );
       }
-      await client.query(
-        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
-         values
-           ($1, $2, 'budget', 'month', 500, 'usd'),
-           ($3, $2, 'token', 'request', 100000000, 'tokens')`,
-        [randomUUID(), keyId, randomUUID()],
-      );
+      if (name !== "OpenClaw") {
+        await client.query(
+          `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
+           values
+             ($1, $2, 'budget', 'month', 500, 'usd'),
+             ($3, $2, 'token', 'request', 100000000, 'tokens')`,
+          [randomUUID(), keyId, randomUUID()],
+        );
+      }
       if (requestCount > 0) {
         const requestActivityId = randomUUID();
         await client.query(

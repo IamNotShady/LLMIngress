@@ -67,7 +67,6 @@ type AgentLimitRow = PostgresQueryResultRow & {
 
 type AccessibleRouteCandidatePriceRow = PostgresQueryResultRow & {
   candidate_order: number;
-  is_fallback: boolean;
   model_display_name: string;
   model_id: string;
   price_override_cached_input_usd_per_million_tokens: string | null;
@@ -362,8 +361,7 @@ async function assertAccessibleRouteCandidatePricesKnown(
 
   const candidateLabels = missingPriceCandidates
     .map((candidate) => {
-      const routeRole = candidate.is_fallback ? "fallback" : "primary";
-      return `${candidate.virtual_model_display_name} (${candidate.virtual_model_name}) ${routeRole} candidate ${candidate.provider_display_name} - ${candidate.model_display_name} (${candidate.model_id})`;
+      return `${candidate.virtual_model_display_name} (${candidate.virtual_model_name}) candidate ${candidate.provider_display_name} - ${candidate.model_display_name} (${candidate.model_id})`;
     })
     .join("; ");
   throw new Error(
@@ -400,7 +398,6 @@ async function readAccessibleRouteCandidatePrices(
       select accessible_virtual_models.name as virtual_model_name,
              accessible_virtual_models.display_name as virtual_model_display_name,
              route_policy_candidates.candidate_order,
-             route_policy_candidates.is_fallback,
              providers.provider_key,
              providers.display_name as provider_display_name,
              provider_models.model_id,
@@ -426,7 +423,6 @@ async function readAccessibleRouteCandidatePrices(
         and route_policies.deleted_at is null
         and provider_models.availability = 'available'
       order by accessible_virtual_models.name,
-               route_policy_candidates.is_fallback,
                route_policy_candidates.candidate_order,
                providers.provider_key,
                provider_models.model_id

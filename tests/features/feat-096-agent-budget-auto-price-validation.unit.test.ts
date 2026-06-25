@@ -226,15 +226,14 @@ async function seedAgentBudgetValidationGraph(fixture: Fixture): Promise<{
         id,
         route_policy_id,
         provider_model_id,
-        candidate_order,
-        is_fallback
+        candidate_order
       )
-      values ($1, $7, $10, 1, false),
-             ($2, $7, $12, 2, true),
-             ($3, $8, $12, 1, false),
-             ($4, $8, $11, 2, true),
-             ($5, $9, $13, 1, false),
-             ($6, $9, $12, 2, true)
+      values ($1, $7, $10, 1),
+             ($2, $7, $12, 2),
+             ($3, $8, $12, 1),
+             ($4, $8, $11, 2),
+             ($5, $9, $13, 1),
+             ($6, $9, $12, 2)
     `,
     [
       randomUUID(),

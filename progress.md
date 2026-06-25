@@ -1548,6 +1548,17 @@
   - TDD red observed first in `tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`.
   - Verification passed: `pnpm exec vitest run tests/features/feat-078-route-policy-editor-enhancements.unit.test.ts`, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`. Full E2E was not rerun during the active interactive dev-server session.
 
+- [ ] 2026-06-23 feat-117 Strategy-Ordered Fallback Chains (started):
+  - Scope: replace primary/fallback split with one ordered candidate pool derived from strategy; add health-aware exclusion of unhealthy candidates; distinguish retryable (network/timeout/429/5xx) failures that advance the chain from hard failures (401/403) that persist health; apply same fallback logic to streaming (before first byte) and non-streaming requests; reserve and finalize budget per attempted candidate.
+  - Registered as `status: failing` in `feature_list.json`; pending TDD implementation and verification.
+  - Dependencies: `feat-032` (route engine strategy selection), `feat-033` (fallback chain execution), `feat-075` (provider health summary runtime), `feat-080` (config import export), `feat-087` (migration status check).
+
+- [x] 2026-06-24 feat-117 Strategy-Ordered Fallback Chains (completed, `status: passing`):
+  - Implemented in isolated git worktree `.claude/worktrees/feat-117` after an accidental branch switch was recovered (no committed work lost).
+  - Migration 0048 (swap-safe two-phase renumber, drops `is_fallback`); domain `buildRouteAttemptCandidates` + `selectRouteAttempts` (single-build strategy-ordered, health-aware chain); gateway snapshot health join + `health_summary_changed` force-reload; `executeFallbackChain` retryable-gated advance + per-attempt budget (leak-free) + health split (persist only non-retryable); all 4 non-streaming protocols + streaming before-first-byte fallback (mid-stream persistent health); Console single `providerModelIds` pool (server, 2 API routes, draggable dialog, sections, import/export with legacy back-compat, route-preview, agent-limits); `ARCHITECTURE.md` synced.
+  - Verification: `pnpm run verify` passed (lint, typecheck 10/10, 433 unit tests, build); full e2e suite 133/133 (incl. new `tests/e2e/feat-117-strategy-fallback-chain.e2e.spec.ts`); `pnpm run db:migrate:check` passed; feature verification command passed.
+  - Regression: 6 unit fixtures + ~53 e2e fixtures updated to single-pool/retryable model; feat-075 re-baselined (health-aware routing excludes model-level-unhealthy candidates; retryable request-path failures no longer persist health); feat-070 multi-key failover preserved; feat-090 alerts unaffected.
+
 - [x] 2026-06-24 Usage & Cost reference UI merge to dev and full regression:
   - Fast-forwarded `dev` through `codex/usage-cost-reference-ui` at `37964713`, bringing in the `/usage` reference-layout implementation and prior `.worktrees/` ignore setup.
   - During post-merge full regression, reproduced a Console E2E startup failure after `pnpm run build`: build-produced `apps/console/.next` artifacts caused later `next dev` E2E runs to miss short readiness windows. `scripts/run-with-env.ts` now clears `apps/console/.next` before `playwright test` invocations so `pnpm test:e2e` and `verify:features` do not require manual cleanup after build.

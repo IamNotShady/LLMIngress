@@ -220,11 +220,10 @@ async function seedAdvancedRoutePreview(
         id,
         route_policy_id,
         provider_model_id,
-        candidate_order,
-        is_fallback
+        candidate_order
       )
-      values ($1, $2, $3, 1, false),
-             ($4, $2, $5, 2, false)
+      values ($1, $2, $3, 1),
+             ($4, $2, $5, 2)
     `,
     [randomUUID(), routePolicyId, cheapProviderModelId, randomUUID(), advancedProviderModelId],
   );

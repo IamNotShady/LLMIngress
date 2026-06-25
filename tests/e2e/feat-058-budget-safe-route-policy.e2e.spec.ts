@@ -181,7 +181,7 @@ async function postRoutePolicy(
     body.set("action", "create");
     body.set("virtualModelId", payload.virtualModelId);
     body.set("strategy", "fixed");
-    body.append("primaryProviderModelIds", payload.primaryProviderModelId);
+    body.append("providerModelIds", payload.primaryProviderModelId);
 
     const response = await fetch("/api/route-policies", {
       body,

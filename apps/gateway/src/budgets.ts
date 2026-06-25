@@ -56,6 +56,15 @@ type PeriodWindow = {
   periodStart: Date;
 };
 
+export class GatewayBudgetRejectedError extends Error {
+  constructor(
+    readonly body: GatewayBudgetErrorBody,
+    readonly statusCode: 402,
+  ) {
+    super("Gateway budget rejected");
+  }
+}
+
 export async function reserveGatewayBudget(input: {
   agentApiKeyId: string;
   databaseUrl: string;

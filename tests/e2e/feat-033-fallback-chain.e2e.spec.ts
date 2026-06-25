@@ -2,11 +2,10 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
 import {
-  buildFallbackAttemptCandidates,
   executeFallbackChain,
   type FallbackChainCandidate,
 } from "../../apps/gateway/src/fallback-chain";
-import { selectRouteCandidate } from "../../apps/gateway/src/route-engine";
+import { buildRouteAttemptCandidates } from "../../apps/gateway/src/route-engine";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
 
@@ -30,15 +29,10 @@ test("first-byte failure falls back and records failed attempt", async () => {
       throw new Error("Fallback route policy was not loaded.");
     }
 
-    const routeDecision = selectRouteCandidate({
+    const attempts = buildRouteAttemptCandidates({
+      routePolicy,
       estimatedInputTokens: 1_000,
       estimatedOutputTokens: 1_000,
-      snapshot,
-      virtualModelName: "fallback-coding",
-    });
-    const attempts = buildFallbackAttemptCandidates({
-      routePolicy,
-      selectedProviderModelId: routeDecision.providerModelId,
     }).map((candidate): FallbackChainCandidate => {
       const provider = seeded.providersById.get(candidate.providerId);
       if (!provider) {
@@ -165,11 +159,10 @@ async function seedFallbackRoute(
         id,
         route_policy_id,
         provider_model_id,
-        candidate_order,
-        is_fallback
+        candidate_order
       )
-      values ($1, $2, $3, 1, false),
-             ($4, $2, $5, 2, true)
+      values ($1, $2, $3, 1),
+             ($4, $2, $5, 2)
     `,
     [randomUUID(), routePolicyId, failedProviderModelId, randomUUID(), successfulProviderModelId],
   );

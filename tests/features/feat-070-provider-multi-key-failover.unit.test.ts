@@ -87,6 +87,8 @@ describe("feat-070 provider multi-key failover", () => {
         providerApiKeyId: "key_bad_070",
         providerApiKeyPrefix: "bad-prov",
         providerModelId: "primary-provider-model",
+        retryable: false,
+        statusCode: 401,
       },
     ]);
   });
@@ -105,7 +107,7 @@ function buildCandidate(
     baseUrl: "https://provider.example/v1",
     candidateOrder: input.candidateOrder ?? 1,
     displayName: "Primary Model",
-    isFallback: input.isFallback ?? false,
+    healthStatus: "unknown" as const,
     modelId: input.modelId ?? "primary-model",
     price: {
       modelId: input.modelId ?? "primary-model",

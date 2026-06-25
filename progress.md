@@ -1677,6 +1677,16 @@
   - Final full E2E passed: `pnpm test:e2e --workers=1` => 138 passed in 12.0m.
   - Static checks passed: `pnpm run typecheck`; `pnpm run lint` exited 0 with two unrelated pre-existing warnings in `apps/gateway/src/streaming.ts` and `tests/features/feat-117-strategy-fallback-chain.unit.test.ts`.
 
+- [x] 2026-06-25 Feature verification drift repair:
+  - Fixed `feat-096` unit expectations to match the current Agent limit form semantics: default alert threshold persists as `0.8` and a default concurrency rule is saved alongside budget/RPM/TPM/token rules.
+  - Updated `feat-075` tracker verification grep to the current provider health E2E title.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-096-agent-budget-auto-price-validation.unit.test.ts`, `pnpm exec vitest run tests/features/feat-075-provider-health-runtime.unit.test.ts && pnpm test:e2e tests/e2e/feat-075-provider-health-runtime.e2e.spec.ts --grep 'provider health summary updates notifications and scheduled checks and health-aware routing excludes unhealthy models'`, and `pnpm run verify:features` => all 117 passing feature(s) re-verified.
+
+- [x] 2026-06-25 Vitest timeout repair for optimized feature verification:
+  - Root cause: optimized `verify:features` unit batches run DB-heavy Vitest files together, and the default 5s per-test timeout intermittently killed valid fixture/migration tests.
+  - Raised Vitest `testTimeout` to 15s. The observed `feat-013` Console 500 was caused by overlapping orphaned verification processes sharing `.next`; after stopping the overlap, the focused auth E2E passed.
+  - Verification passed: `pnpm test`, focused `feat-013` E2E, and clean `pnpm run verify:features` => all 117 passing feature(s) re-verified.
+
 - [x] 2026-06-25 feat-118 Stream Usage and Cost Accounting:
   - Created worktree `.worktrees/feat-118-stream-usage-cost` on `codex/feat-118-stream-usage-cost` and saved the implementation plan at `docs/superpowers/plans/2026-06-25-stream-usage-cost.md`.
   - Added stream usage accounting for `/v1/chat/completions`, `/v1/responses`, and `/v1/messages`: Gateway now collects SSE provider usage when emitted and records `request_usage`/`request_costs` on stream completion with estimated fallback when no final usage frame exists.

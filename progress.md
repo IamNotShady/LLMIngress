@@ -1686,3 +1686,16 @@
   - Root cause: optimized `verify:features` unit batches run DB-heavy Vitest files together, and the default 5s per-test timeout intermittently killed valid fixture/migration tests.
   - Raised Vitest `testTimeout` to 15s. The observed `feat-013` Console 500 was caused by overlapping orphaned verification processes sharing `.next`; after stopping the overlap, the focused auth E2E passed.
   - Verification passed: `pnpm test`, focused `feat-013` E2E, and clean `pnpm run verify:features` => all 117 passing feature(s) re-verified.
+
+- [x] 2026-06-25 feat-118 Stream Usage and Cost Accounting:
+  - Created worktree `.worktrees/feat-118-stream-usage-cost` on `codex/feat-118-stream-usage-cost` and saved the implementation plan at `docs/superpowers/plans/2026-06-25-stream-usage-cost.md`.
+  - Added stream usage accounting for `/v1/chat/completions`, `/v1/responses`, and `/v1/messages`: Gateway now collects SSE provider usage when emitted and records `request_usage`/`request_costs` on stream completion with estimated fallback when no final usage frame exists.
+  - Reused LLMIngress pricing and `recordGatewayUsageCostAndSavings`; provider raw cost fields, including OpenRouter usage cost, are ignored for authoritative USD accounting.
+  - Request shaping adds `stream_options.include_usage` only for supported OpenAI-compatible chat providers: `openai`, `google`, and `lmstudio`.
+  - TDD red observed first: feat-118 unit tests failed before the collector/request shaping existed, and feat-118 E2E observed 0 usage/cost rows before stream completion accounting.
+  - Focused verification passed: `pnpm exec vitest run tests/features/feat-118-stream-usage-cost.unit.test.ts && pnpm test:e2e tests/e2e/feat-118-stream-usage-cost.e2e.spec.ts --grep 'streaming requests record usage cost for chat responses and messages'`.
+  - Related regressions passed: `pnpm exec vitest run tests/features/feat-039-streaming.unit.test.ts tests/features/feat-051-mvp-streaming.unit.test.ts tests/features/feat-045-usage-cost-recorder.unit.test.ts tests/features/feat-071-prompt-caching-cost.unit.test.ts`, focused feat-039 E2E, and focused feat-045 E2E.
+  - Full verification passed: `pnpm run verify`.
+  - Full feature regression before marking passed: `pnpm run verify:features` re-verified all 117 prior passing features. During regression, repaired stale `feat-075` verification grep to the current health-aware routing E2E title and repaired the `feat-096` unit fixture expectation for current default limits.
+  - Final full feature regression after marking passed: `pnpm run verify:features` re-verified all 118 passing features.
+  - 2026-06-26 PR review follow-up: verified the OpenRouter stream usage comment against official docs and kept OpenRouter without `stream_options`; added an Anthropic `message_delta` fallback for output-only usage when `message_start` usage is unavailable; added debug logging for stream usage/cost recording failures. Verification passed: `pnpm exec vitest run tests/features/feat-118-stream-usage-cost.unit.test.ts`, `pnpm run lint`, `pnpm run typecheck`, and `pnpm test:e2e tests/e2e/feat-118-stream-usage-cost.e2e.spec.ts`.

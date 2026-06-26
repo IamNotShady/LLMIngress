@@ -31,6 +31,8 @@ import {
 } from "./streaming.js";
 import { recordGatewayRequestTrace } from "./tracing.js";
 import {
+  buildGatewayProviderUsageResponseBody,
+  createGatewayStreamingUsageCollector,
   type GatewayUsageCostDetails,
   recordGatewayUsageCostAndSavings,
 } from "./usage-recorder.js";
@@ -137,6 +139,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
             }),
+          logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: "chat_completions",
           requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
@@ -317,6 +320,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
             }),
+          logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: "responses",
           requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
@@ -408,6 +412,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
             }),
+          logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: "messages",
           requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
@@ -679,6 +684,7 @@ async function executeRecordedGatewayStreamingRequest(input: {
   agentApiKeyPrefix: string;
   databaseUrl: string;
   execute: (requestActivityId: string) => Promise<GatewayStreamingResult>;
+  logger: FastifyBaseLogger;
   model: string;
   protocol: GatewayRequestActivityProtocol;
   requestLoggingEnabled: boolean;
@@ -710,20 +716,44 @@ async function executeRecordedGatewayStreamingRequest(input: {
     return response;
   }
 
+  const usageCollector = createGatewayStreamingUsageCollector();
   return {
     ...response,
     body: wrapProviderStreamWithActivityCompletion(response.body, {
-      completeActivity: ({ statusCode }) =>
-        completeGatewayRequestActivity({
-          activityId: activity.id,
-          databaseUrl: input.databaseUrl,
-          requestLoggingEnabled: input.requestLoggingEnabled,
-          requestMetadata: response.requestMetadata,
-          responseBody: {},
-          route: response.activity,
-          startedAt: activity.startedAt,
-          statusCode,
-        }),
+      collectChunk: (chunk) => usageCollector.collect(chunk),
+      completeActivity: async ({ statusCode }) => {
+        const providerUsage = usageCollector.readUsage();
+        try {
+          if (response.usageCost) {
+            await recordGatewayUsageCostAndSavings({
+              activityId: activity.id,
+              agentApiKeyId: input.agentApiKeyId,
+              databaseUrl: input.databaseUrl,
+              usageCost: {
+                ...response.usageCost,
+                ...(providerUsage ? { providerUsage } : {}),
+              },
+              virtualModelId: input.virtualModelId,
+            });
+          }
+        } catch (error) {
+          input.logger.debug(
+            { activityId: activity.id, err: error, requestId: input.requestId },
+            "gateway stream usage accounting failed",
+          );
+        } finally {
+          await completeGatewayRequestActivity({
+            activityId: activity.id,
+            databaseUrl: input.databaseUrl,
+            requestLoggingEnabled: input.requestLoggingEnabled,
+            requestMetadata: response.requestMetadata,
+            responseBody: providerUsage ? buildGatewayProviderUsageResponseBody(providerUsage) : {},
+            route: response.activity,
+            startedAt: activity.startedAt,
+            statusCode,
+          });
+        }
+      },
       statusCode: response.statusCode,
     }),
   };

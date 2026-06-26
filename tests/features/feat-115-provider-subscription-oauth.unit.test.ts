@@ -394,6 +394,47 @@ describe("feat-115 provider subscription OAuth", () => {
     expect(requests[0]?.body).not.toHaveProperty("max_output_tokens");
   });
 
+  it("strips Claude Code unsupported sampling parameters before forwarding", async () => {
+    const requests: Array<{ body: Record<string, unknown>; url: string }> = [];
+    const adapter = createClaudeCodeProviderAdapter({
+      fetch: async (url, init) => {
+        requests.push({
+          body: JSON.parse(String(init?.body)),
+          url: String(url),
+        });
+        return jsonResponse(200, { content: [], id: "msg_1", type: "message" });
+      },
+    });
+
+    const result = await adapter.messages({
+      request: {
+        maxOutputTokens: 2048,
+        messages: [{ content: "hello", role: "user" }],
+        stream: false,
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.9,
+      },
+      target: {
+        apiKey: "oauth-token",
+        baseUrl: "https://api.anthropic.com",
+        modelId: "claude-opus-4-7",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(requests[0]?.url).toBe("https://api.anthropic.com/v1/messages");
+    expect(requests[0]?.body).toMatchObject({
+      max_tokens: 2048,
+      messages: [{ content: "hello", role: "user" }],
+      model: "claude-opus-4-7",
+      stream: false,
+    });
+    expect(requests[0]?.body).not.toHaveProperty("temperature");
+    expect(requests[0]?.body).not.toHaveProperty("top_k");
+    expect(requests[0]?.body).not.toHaveProperty("top_p");
+  });
+
   it("normalizes Codex SSE responses into response output text", async () => {
     const adapter = createCodexSubscriptionAdapter({
       fetch: async () =>

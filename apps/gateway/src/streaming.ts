@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { PostgresClient } from "@llmingress/db/providers";
+import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import { openRouterAttributionHeaders } from "@llmingress/provider/openrouter";
 import {
@@ -9,6 +10,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  normalizeCodexResponsesInput,
   withClaudeCodeSystemPrompt,
 } from "@llmingress/provider/subscription";
 import type { GatewayRequestActivityRoute } from "./activity-recorder.js";
@@ -990,9 +992,12 @@ export function buildStreamingProviderRequestBody(input: {
   payload: Record<string, unknown>;
   providerKey: string;
 }): Record<string, unknown> {
-  const body = buildProviderRequestBody(input.payload, input.modelId);
+  let body = buildProviderRequestBody(input.payload, input.modelId);
   if (input.providerKey === "openai_codex" && input.pathSuffix === "responses") {
     return buildCodexStreamingResponsesBody(body);
+  }
+  if (input.pathSuffix === "messages") {
+    body = omitUnsupportedAnthropicSamplingParameters(body, input.modelId);
   }
   if (input.providerKey === "claude_code" && input.pathSuffix === "messages") {
     return {
@@ -1047,6 +1052,9 @@ function buildCodexStreamingResponsesBody(body: Record<string, unknown>): Record
   for (const key of codexUnsupportedResponsesParameters) {
     delete cleaned[key];
   }
+  cleaned.input = normalizeCodexResponsesInput(
+    cleaned.input as Parameters<typeof normalizeCodexResponsesInput>[0],
+  );
   if (typeof cleaned.instructions !== "string" || !cleaned.instructions.trim()) {
     cleaned.instructions = "You are a helpful assistant.";
   }

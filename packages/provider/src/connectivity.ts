@@ -249,6 +249,26 @@ export function classifyProviderFailureStatus(input: {
   return "unhealthy";
 }
 
+export function shouldRecordProviderRequestPathHealthFailure(input: {
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  statusCode?: number | null;
+}): boolean {
+  if (input.statusCode !== 400) {
+    return true;
+  }
+
+  const errorCode = (input.errorCode ?? "").toLowerCase();
+  if (errorCode === "invalid_request" || errorCode === "invalid_request_error") {
+    return false;
+  }
+
+  const text = `${input.errorCode ?? ""} ${input.errorMessage ?? ""}`.toLowerCase();
+  return !/cannot both be specified|deprecated|unsupported[_ -]?(parameter|model)|unsupported (parameter|model)|not supported for this model|temperature|top[_ -]?p|top[_ -]?k|sampling/.test(
+    text,
+  );
+}
+
 type ProbeModelRank = {
   contextWindow: number;
   lightPenalty: number;

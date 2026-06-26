@@ -141,4 +141,88 @@ describe("feat-068 Anthropic messages parameter passthrough", () => {
     expect(calls[0]?.body).not.toHaveProperty("extra_headers");
     expect(calls[0]?.headers.get("x-api-key")).toBe("sk-ant-params-unit");
   });
+
+  it("drops top_p for Sonnet 4.6 when temperature is present", async () => {
+    const normalized = normalizeAnthropicMessagesRequest(
+      {
+        max_tokens: 2048,
+        messages: [{ content: "Use the requested decoding options.", role: "user" }],
+        model: "messages-params",
+        temperature: 0.3,
+        top_p: 0.8,
+      },
+      "req_sonnet_46_sampling_unit",
+    );
+
+    if (!normalized.ok) {
+      throw new Error("Messages params request should normalize.");
+    }
+
+    const calls: Array<{ body: Record<string, unknown> }> = [];
+    const adapter = createAnthropicProviderAdapter({
+      fetch: async (_url, init) => {
+        calls.push({ body: JSON.parse(String(init?.body)) });
+        return new Response(JSON.stringify({ content: [], id: "msg_sonnet", type: "message" }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      },
+    });
+
+    const result = await adapter.messages({
+      request: normalized.request,
+      target: {
+        apiKey: "sk-ant-params-unit",
+        baseUrl: "https://anthropic.example/v1",
+        modelId: "claude-sonnet-4-6",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.body).toMatchObject({ temperature: 0.3 });
+    expect(calls[0]?.body).not.toHaveProperty("top_p");
+  });
+
+  it("drops sampling parameters for Opus 4.7 and newer", async () => {
+    const normalized = normalizeAnthropicMessagesRequest(
+      {
+        max_tokens: 2048,
+        messages: [{ content: "Use the requested decoding options.", role: "user" }],
+        model: "messages-params",
+        temperature: 0.3,
+        top_k: 40,
+        top_p: 0.8,
+      },
+      "req_opus_sampling_unit",
+    );
+
+    if (!normalized.ok) {
+      throw new Error("Messages params request should normalize.");
+    }
+
+    const calls: Array<{ body: Record<string, unknown> }> = [];
+    const adapter = createAnthropicProviderAdapter({
+      fetch: async (_url, init) => {
+        calls.push({ body: JSON.parse(String(init?.body)) });
+        return new Response(JSON.stringify({ content: [], id: "msg_opus", type: "message" }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      },
+    });
+
+    const result = await adapter.messages({
+      request: normalized.request,
+      target: {
+        apiKey: "sk-ant-params-unit",
+        baseUrl: "https://anthropic.example/v1",
+        modelId: "claude-opus-4-7",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.body).not.toHaveProperty("temperature");
+    expect(calls[0]?.body).not.toHaveProperty("top_k");
+    expect(calls[0]?.body).not.toHaveProperty("top_p");
+  });
 });

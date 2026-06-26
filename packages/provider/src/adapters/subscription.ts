@@ -3,6 +3,8 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  type CodexResponsesInput,
+  normalizeCodexResponsesInput,
   withClaudeCodeSystemPrompt,
 } from "../subscription.js";
 import {
@@ -11,7 +13,6 @@ import {
   buildAnthropicMessagesPayload,
 } from "./anthropic.js";
 import type {
-  NormalizedOpenAIResponsesInputMessage,
   NormalizedOpenAIResponsesRequest,
   OpenAIAdapterResult,
   OpenAIProviderAdapter,
@@ -22,10 +23,7 @@ type CreateSubscriptionAdapterOptions = {
 };
 
 type CodexResponsesPayload = {
-  input: Array<{
-    content: Array<{ text: string; type: "input_text" }>;
-    role: "assistant" | "developer" | "system" | "user";
-  }>;
+  input: CodexResponsesInput;
   instructions: string;
   model: string;
   store: false;
@@ -103,24 +101,12 @@ function buildCodexResponsesPayload(
   modelId: string,
 ): CodexResponsesPayload {
   return {
-    input: normalizeCodexInput(request.input),
+    input: normalizeCodexResponsesInput(request.input),
     instructions: request.instructions ?? "You are a helpful assistant.",
     model: modelId,
     store: false,
     stream: true,
   };
-}
-
-function normalizeCodexInput(
-  input: string | NormalizedOpenAIResponsesInputMessage[],
-): CodexResponsesPayload["input"] {
-  if (typeof input === "string") {
-    return [{ content: [{ text: input, type: "input_text" }], role: "user" }];
-  }
-  return input.map((message) => ({
-    content: [{ text: message.content, type: "input_text" }],
-    role: message.role,
-  }));
 }
 
 function normalizeCodexResponseBody(body: unknown): unknown {

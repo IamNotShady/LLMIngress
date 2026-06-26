@@ -126,22 +126,46 @@ export function buildAnthropicMessagesPayload(
   request: NormalizedAnthropicMessagesRequest,
   target: AnthropicProviderTarget,
 ): AnthropicMessagesPayload {
-  return omitUndefined({
-    max_tokens: request.maxOutputTokens,
-    metadata: request.metadata,
-    messages: request.messages,
-    model: target.modelId,
-    service_tier: request.serviceTier,
-    stream: request.stream,
-    stop_sequences: request.stopSequences,
-    system: request.system,
-    temperature: request.temperature,
-    thinking: request.thinking,
-    tool_choice: request.toolChoice,
-    tools: request.tools,
-    top_k: request.topK,
-    top_p: request.topP,
-  });
+  return omitUnsupportedAnthropicSamplingParameters(
+    omitUndefined({
+      max_tokens: request.maxOutputTokens,
+      metadata: request.metadata,
+      messages: request.messages,
+      model: target.modelId,
+      service_tier: request.serviceTier,
+      stream: request.stream,
+      stop_sequences: request.stopSequences,
+      system: request.system,
+      temperature: request.temperature,
+      thinking: request.thinking,
+      tool_choice: request.toolChoice,
+      tools: request.tools,
+      top_k: request.topK,
+      top_p: request.topP,
+    }),
+    target.modelId,
+  ) as AnthropicMessagesPayload;
+}
+
+export function omitUnsupportedAnthropicSamplingParameters<T extends Record<string, unknown>>(
+  payload: T,
+  modelId: string,
+): T {
+  const normalizedModelId = modelId.toLowerCase();
+  const cleaned = { ...payload };
+
+  if (isOpus47OrNewer(normalizedModelId)) {
+    delete cleaned.temperature;
+    delete cleaned.top_k;
+    delete cleaned.top_p;
+    return cleaned;
+  }
+
+  if (normalizedModelId.includes("claude-sonnet-4-6") && cleaned.temperature !== undefined) {
+    delete cleaned.top_p;
+  }
+
+  return cleaned;
 }
 
 function buildMessagesUrl(baseUrl: string): string {
@@ -207,6 +231,11 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
   ) as T;
+}
+
+function isOpus47OrNewer(modelId: string): boolean {
+  const match = modelId.match(/\bclaude-opus-4[-.](\d+)/);
+  return match ? Number(match[1]) >= 7 : false;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

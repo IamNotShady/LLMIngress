@@ -98,7 +98,7 @@ describe("feat-060 optimized feature verification runner", () => {
     const result = runOptimizedPlan(plan, {
       execute: (command) => {
         executed.push(command);
-        if (command === "pnpm test:e2e tests/e2e/feat-999-example.e2e.spec.ts --workers=1") {
+        if (command === "pnpm test:e2e tests/e2e/feat-999-example.e2e.spec.ts --workers=50%") {
           return { output: "batch-only e2e failure", status: 1 };
         }
         return { output: "", status: 0 };
@@ -109,7 +109,7 @@ describe("feat-060 optimized feature verification runner", () => {
 
     expect(executed).toEqual([
       "pnpm exec vitest run tests/features/feat-999-example.unit.test.ts",
-      "pnpm test:e2e tests/e2e/feat-999-example.e2e.spec.ts --workers=1",
+      "pnpm test:e2e tests/e2e/feat-999-example.e2e.spec.ts --workers=50%",
       standardVerification,
     ]);
     expect(result.failures).toEqual([]);

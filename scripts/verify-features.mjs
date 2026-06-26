@@ -148,7 +148,11 @@ export function runOptimizedPlan(plan, options = {}) {
   }
 
   if (plan.e2eFiles.length > 0) {
-    const e2eCommand = `pnpm test:e2e ${plan.e2eFiles.map(shellQuote).join(" ")} --workers=1`;
+    // Run the E2E batch in parallel. Console specs share apps/console/.next and
+    // serialize themselves via the llmingress-console-next-dev process lock, so
+    // worker concurrency is safe; non-console specs use isolated DBs + free
+    // ports. 50% scales down on small CI runners and up on dev machines.
+    const e2eCommand = `pnpm test:e2e ${plan.e2eFiles.map(shellQuote).join(" ")} --workers=50%`;
     const e2eResult = runTimedCommand({
       command: e2eCommand,
       execute,

@@ -272,6 +272,10 @@ async function handleRequest(
         Math.min(300, streamEndMs),
       );
       const endTimer = setTimeout(() => {
+        const usageEvents = buildFakeStreamUsageEvents(url.searchParams.get("usage"));
+        if (usageEvents) {
+          response.write(usageEvents);
+        }
         response.end("data: [DONE]\n\n");
       }, streamEndMs);
       response.once("close", () => {
@@ -371,6 +375,40 @@ function readMode(url: URL): FakeProviderMode {
 function readPositiveIntegerQuery(url: URL, name: string, fallback: number): number {
   const value = Number(url.searchParams.get(name));
   return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function buildFakeStreamUsageEvents(usage: string | null): string {
+  if (usage === "chat") {
+    return [
+      'data: {"choices":[],"usage":{"prompt_tokens":1000,"prompt_tokens_details":{"cached_tokens":400},"completion_tokens":200,"completion_tokens_details":{"reasoning_tokens":25},"total_tokens":1200}}',
+      "",
+      "",
+    ].join("\n");
+  }
+  if (usage === "responses") {
+    return [
+      'data: {"type":"response.completed","response":{"id":"fake-stream-response","usage":{"input_tokens":50,"input_tokens_details":{"cached_tokens":10},"output_tokens":25,"output_tokens_details":{"reasoning_tokens":5}}}}',
+      "",
+      "",
+    ].join("\n");
+  }
+  if (usage === "messages") {
+    return [
+      'data: {"type":"message_start","message":{"id":"fake-stream-message","usage":{"input_tokens":60,"cache_read_input_tokens":5,"output_tokens":1}}}',
+      "",
+      'data: {"type":"message_delta","usage":{"output_tokens":30}}',
+      "",
+      "",
+    ].join("\n");
+  }
+  if (usage === "openrouter") {
+    return [
+      'data: {"choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":200,"total_tokens":1200,"cost":99}}',
+      "",
+      "",
+    ].join("\n");
+  }
+  return "";
 }
 
 function writeJson(response: ServerResponse<IncomingMessage>, status: number, body: unknown): void {

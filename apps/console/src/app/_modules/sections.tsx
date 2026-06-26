@@ -4345,9 +4345,8 @@ function ProviderKeyDeleteDialog({
   );
 }
 
-export async function SettingsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
+export async function SettingsSection() {
   const databaseUrl = getConsoleDatabaseUrl();
-  const configImportVersion = readSingleSearchParam(searchParams.configImportVersion);
   const notificationChannels = await listNotificationChannels(databaseUrl);
   return (
     <section className="providers-panel" id="settings" aria-label="Settings">
@@ -4355,9 +4354,7 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
         <nav className="settings-subnav" aria-label="Settings sections">
           <a href="#settings-general">General</a>
           <a href="#settings-security">Security</a>
-          <a href="#settings-data">Data</a>
           <a href="#notification-channels">Notifications</a>
-          <a href="#settings-danger">Danger Zone</a>
         </nav>
         <div className="settings-sections">
           <section
@@ -4415,53 +4412,6 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
             <p className="callout">
               Password change and session management are managed via deployment configuration.
             </p>
-          </section>
-
-          <section
-            className="settings-panel"
-            id="settings-data"
-            aria-labelledby="settings-data-title"
-          >
-            <h3 id="settings-data-title">Data</h3>
-            {configImportVersion ? (
-              <p className="status-enabled">
-                Config import published version v{configImportVersion}
-              </p>
-            ) : null}
-            <div className="settings-grid">
-              <article className="card">
-                <h4>Export config</h4>
-                <p>Providers, Models, Virtual Models, Agents, Limits.</p>
-                <a className="secondary-button" download href="/api/config-export">
-                  <FlatIcon name="export" />
-                  <span>Export redacted config</span>
-                </a>
-              </article>
-              <article className="card">
-                <h4>Export request metadata</h4>
-                <p>Metadata only — no prompt / response content.</p>
-                <button className="secondary-button" type="button" disabled>
-                  <FlatIcon name="export" />
-                  <span>Export CSV</span>
-                </button>
-              </article>
-              <article className="card">
-                <h4>Export cost report</h4>
-                <p>Aggregated by Agent, Provider, Model.</p>
-                <button className="secondary-button" type="button" disabled>
-                  <FlatIcon name="export" />
-                  <span>Export report</span>
-                </button>
-              </article>
-            </div>
-            <form className="provider-create-form" action="/api/config-import" method="post">
-              <label htmlFor="config-import-json">Config import JSON</label>
-              <textarea id="config-import-json" name="configJson" required rows={8} />
-              <button type="submit">
-                <FlatIcon name="import" />
-                <span>Import redacted config</span>
-              </button>
-            </form>
           </section>
 
           <section
@@ -4526,49 +4476,6 @@ export async function SettingsSection({ searchParams }: { searchParams: ConsoleS
                 </button>
               </form>
             </div>
-          </section>
-
-          <section
-            className="settings-panel settings-danger"
-            id="settings-danger"
-            aria-labelledby="settings-danger-title"
-          >
-            <h3 id="settings-danger-title">Danger Zone</h3>
-            <ul className="danger-list">
-              <li>
-                <div>
-                  <p className="danger-action">Delete Provider Key</p>
-                  <p>Irreversible.</p>
-                </div>
-                <button className="secondary-button" type="button" disabled>
-                  <FlatIcon name="delete" />
-                  <span>Delete</span>
-                </button>
-              </li>
-              <li>
-                <div>
-                  <p className="danger-action">Delete Agent</p>
-                  <p>Removes related API keys.</p>
-                </div>
-                <button className="secondary-button" type="button" disabled>
-                  <FlatIcon name="delete" />
-                  <span>Delete</span>
-                </button>
-              </li>
-              <li>
-                <div>
-                  <p className="danger-action">Clear request metadata</p>
-                  <p>Keeps configuration data.</p>
-                </div>
-                <button className="secondary-button" type="button" disabled>
-                  <FlatIcon name="delete" />
-                  <span>Delete</span>
-                </button>
-              </li>
-            </ul>
-            <p className="callout callout--warn">
-              Destructive actions are managed per-resource on their module pages.
-            </p>
           </section>
         </div>
       </div>

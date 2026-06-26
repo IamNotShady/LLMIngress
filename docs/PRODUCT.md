@@ -133,7 +133,7 @@ Console 包含以下一级模块：
 - Limits：配置 Agent 级 Token 上限、成本上限、小时 / 日 / 周 / 月预算、RPM、TPM、并发请求数和超限处理方式。
 - Gateway Runtime：查看 Gateway Service 的运行地址、版本、健康检查、配置加载状态和迁移状态；Provider 连通性在 Providers 页面集中查看。
 - Playground：使用 Gateway Public API 真实测试 Agent 请求，查看请求会被路由到哪个 Provider 和模型，并查看选择原因。
-- Settings：管理服务端口、数据目录、日志保留、安全设置、导入导出和部署相关配置。
+- Settings：管理 Console 偏好、安全提示和通知渠道；配置导入导出保留为受认证的 Console API 能力，不在 Settings 页面展示。
 
 ### 5.3 模块关系
 

@@ -266,6 +266,7 @@
   - Import validates template whitelist and references, rejects non-redacted secrets, preserves provider/Agent secret safety, round-trips supported configuration, and publishes a config version.
   - P2+ review found and fixed coverage for same-DB import preserving existing real Agent API key hashes instead of replacing them with redacted placeholders.
   - Verification passed: feat-080 unit tests (2), real Chromium/PostgreSQL Console E2E (1), `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, full `pnpm run verify:features` across all 79 prior passing features before marking, and final `pnpm run verify:features` across all 80 passing features after marking.
+  - 2026-06-26 follow-up: Settings no longer exposes the Data import/export panel; feat-080 E2E now verifies the same authenticated API routes directly.
 - [x] **feat-081 — JSONL Request Logs Export (passing)**:
   - Added migration `0016_jsonl_request_log_export` for `jsonl_export` jobs and `export_tasks` tracking.
   - Added a Worker `jsonl_export` handler that exports request metadata, Agent/API key prefix, Virtual Model, provider/model, usage, cost, fallback events, and errors as one JSON object per request in a JSONL artifact.

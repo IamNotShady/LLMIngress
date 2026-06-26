@@ -1,6 +1,5 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
@@ -32,19 +31,10 @@ test("config import export redacts secrets validates publishes config version an
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
-          await page.goto(`${baseUrl}/settings`);
 
-          const settingsSection = page.getByRole("region", { name: "Settings" });
-          await expect(
-            settingsSection.getByRole("heading", { name: "Data", exact: true }),
-          ).toBeVisible();
-
-          const downloadPromise = page.waitForEvent("download");
-          await settingsSection.getByRole("link", { name: "Export redacted config" }).click();
-          const download = await downloadPromise;
-          const downloadPath = await download.path();
-          expect(downloadPath).not.toBeNull();
-          const exportedRaw = await readFile(downloadPath ?? "", "utf8");
+          const exportResponse = await page.request.get(`${baseUrl}/api/config-export`);
+          expect(exportResponse.status()).toBe(200);
+          const exportedRaw = await exportResponse.text();
           expect(exportedRaw).toContain("redacted");
           expect(exportedRaw).toContain("Config Export DeepSeek");
           expect(exportedRaw).not.toContain("ciphertext-config-export-e2e-080");
@@ -61,12 +51,11 @@ test("config import export redacts secrets validates publishes config version an
             name: "Imported Config Agent",
           });
 
-          await settingsSection
-            .getByLabel("Config import JSON")
-            .fill(JSON.stringify(exported, null, 2));
-          await settingsSection.getByRole("button", { name: "Import redacted config" }).click();
+          const importResponse = await page.request.post(`${baseUrl}/api/config-import`, {
+            form: { configJson: JSON.stringify(exported, null, 2) },
+          });
+          expect([200, 303]).toContain(importResponse.status());
 
-          await expect(page.getByText(/Config import published version v\d+/)).toBeVisible();
           await page.goto(`${baseUrl}/agents`);
           await expect(page.locator("table.agents-table")).toContainText("Imported Config Agent");
           await page.goto(`${baseUrl}/providers`);

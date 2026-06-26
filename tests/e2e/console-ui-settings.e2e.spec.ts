@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { withConsoleDevServer } from "../support/console-dev-server";
 
-test("settings page renders the sub-nav and General / Data / Notifications / Danger Zone sections", async ({
+test("settings page renders only General, Security, and Notification channel settings", async ({
   browser,
 }) => {
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
@@ -11,16 +11,24 @@ test("settings page renders the sub-nav and General / Data / Notifications / Dan
 
     // Sub-nav links.
     const subnav = page.getByRole("navigation", { name: "Settings sections" });
-    for (const link of ["General", "Security", "Data", "Notifications", "Danger Zone"]) {
+    for (const link of ["General", "Security", "Notifications"]) {
       await expect(subnav.getByRole("link", { name: link, exact: true })).toBeVisible();
+    }
+    for (const removedLink of ["Data", "Danger Zone"]) {
+      await expect(subnav.getByRole("link", { name: removedLink, exact: true })).toHaveCount(0);
     }
 
     // Section headings.
-    for (const heading of ["General", "Security", "Data", "Notification channels", "Danger Zone"]) {
+    for (const heading of ["General", "Security", "Notification channels"]) {
       await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     }
+    for (const removedHeading of ["Data", "Danger Zone"]) {
+      await expect(page.getByRole("heading", { name: removedHeading, exact: true })).toHaveCount(0);
+    }
 
-    // The redacted config export remains available.
-    await expect(page.getByRole("link", { name: "Export redacted config" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Export redacted config" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Create email notification channel" }),
+    ).toBeVisible();
   });
 });

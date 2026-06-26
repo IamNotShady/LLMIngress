@@ -139,6 +139,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
             }),
+          logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: "chat_completions",
           requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
@@ -319,6 +320,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
             }),
+          logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: "responses",
           requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
@@ -410,6 +412,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
               snapshot: requireGatewayConfigSnapshot(options),
               virtualModel: virtualModelAccess.virtualModel,
             }),
+          logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: "messages",
           requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
@@ -681,6 +684,7 @@ async function executeRecordedGatewayStreamingRequest(input: {
   agentApiKeyPrefix: string;
   databaseUrl: string;
   execute: (requestActivityId: string) => Promise<GatewayStreamingResult>;
+  logger: FastifyBaseLogger;
   model: string;
   protocol: GatewayRequestActivityProtocol;
   requestLoggingEnabled: boolean;
@@ -732,6 +736,11 @@ async function executeRecordedGatewayStreamingRequest(input: {
               virtualModelId: input.virtualModelId,
             });
           }
+        } catch (error) {
+          input.logger.debug(
+            { activityId: activity.id, err: error, requestId: input.requestId },
+            "gateway stream usage accounting failed",
+          );
         } finally {
           await completeGatewayRequestActivity({
             activityId: activity.id,

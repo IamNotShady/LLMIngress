@@ -361,15 +361,17 @@ export function createGatewayStreamingUsageCollector(): GatewayStreamingUsageCol
       return;
     }
 
-    if (event.type === "message_delta" && isRecord(event.usage) && messagesUsage) {
+    if (event.type === "message_delta" && isRecord(event.usage)) {
       messagesUsage = {
-        ...messagesUsage,
+        cachedInputTokens: messagesUsage?.cachedInputTokens ?? 0,
+        inputTokens: messagesUsage?.inputTokens ?? 0,
         outputTokens:
-          readNonNegativeInteger(event.usage.output_tokens) ?? messagesUsage.outputTokens,
+          readNonNegativeInteger(event.usage.output_tokens) ?? messagesUsage?.outputTokens ?? 0,
         reasoningTokens:
           readNestedNonNegativeInteger(event.usage.output_tokens_details, "reasoning_tokens") ??
           readNonNegativeInteger(event.usage.reasoning_tokens) ??
-          messagesUsage.reasoningTokens,
+          messagesUsage?.reasoningTokens ??
+          0,
       };
     }
   }

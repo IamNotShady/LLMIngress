@@ -67,6 +67,25 @@ describe("feat-118 stream usage and cost accounting", () => {
     });
   });
 
+  it("keeps Anthropic message_delta output usage when message_start usage is unavailable", () => {
+    const collector = createGatewayStreamingUsageCollector();
+
+    collector.collect(
+      [
+        'data: {"type":"message_delta","usage":{"output_tokens":30,"output_tokens_details":{"reasoning_tokens":7}}}',
+        "",
+        "",
+      ].join("\n"),
+    );
+
+    expect(collector.readUsage()).toEqual({
+      cachedInputTokens: 0,
+      inputTokens: 0,
+      outputTokens: 30,
+      reasoningTokens: 7,
+    });
+  });
+
   it("ignores malformed frames and missing usage", () => {
     const collector = createGatewayStreamingUsageCollector();
 

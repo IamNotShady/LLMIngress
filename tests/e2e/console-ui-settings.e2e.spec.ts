@@ -29,6 +29,10 @@ test("settings page renders only General, Security, and Notification channel set
     await expect(page.getByRole("link", { name: "Export redacted config" })).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Create email notification channel" }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel("Email channel name")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Create webhook notification channel" }),
     ).toBeVisible();
   });
 });

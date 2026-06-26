@@ -1,26 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 
-export type NotificationChannelType = "email" | "webhook";
-
-export type EmailNotificationChannelConfig = {
-  from: string;
-  to: string;
-};
+export type NotificationChannelType = "webhook";
 
 export type WebhookNotificationChannelConfig = {
   url: string;
 };
 
-export type NotificationChannelConfig =
-  | EmailNotificationChannelConfig
-  | WebhookNotificationChannelConfig;
+export type NotificationChannelConfig = WebhookNotificationChannelConfig;
 
 export type NotificationChannelFormInput = {
   channelType?: string | null;
   displayName?: string | null;
-  emailFrom?: string | null;
-  emailTo?: string | null;
   enabled?: boolean | string | null;
   webhookUrl?: string | null;
 };
@@ -55,18 +46,6 @@ export function normalizeNotificationChannelFormInput(
   const displayName = normalizeRequiredText(input.displayName, "Notification channel name");
   const enabled = normalizeEnabled(input.enabled);
 
-  if (channelType === "email") {
-    return {
-      channelType,
-      config: {
-        from: normalizeEmail(input.emailFrom, "Email from"),
-        to: normalizeEmail(input.emailTo, "Email to"),
-      },
-      displayName,
-      enabled,
-    };
-  }
-
   return {
     channelType,
     config: {
@@ -91,6 +70,7 @@ export async function listNotificationChannels(
                created_at,
                updated_at
         from notification_channels
+        where channel_type = 'webhook'
         order by channel_type, display_name
       `,
     );
@@ -149,10 +129,10 @@ function rowToConsoleNotificationChannel(row: NotificationChannelRow): ConsoleNo
 
 function normalizeChannelType(value: string | null | undefined): NotificationChannelType {
   const normalized = value?.trim().toLowerCase();
-  if (normalized === "email" || normalized === "webhook") {
+  if (normalized === "webhook") {
     return normalized;
   }
-  throw new Error("Notification channel type must be email or webhook.");
+  throw new Error("Notification channel type must be webhook.");
 }
 
 function normalizeEnabled(value: boolean | string | null | undefined): boolean {
@@ -174,14 +154,6 @@ function normalizeRequiredText(value: string | null | undefined, label: string):
     throw new Error(`${label} is required.`);
   }
   return text;
-}
-
-function normalizeEmail(value: string | null | undefined, label: string): string {
-  const email = normalizeRequiredText(value, label).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error(`${label} must be a valid email address.`);
-  }
-  return email;
 }
 
 function normalizeWebhookUrl(value: string | null | undefined): string {

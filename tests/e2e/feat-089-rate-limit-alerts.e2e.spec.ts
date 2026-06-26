@@ -24,15 +24,6 @@ test("scheduled rate limit evaluator uses configurable window threshold detects 
     const ids = await seedRateLimitAlertData(fixture);
     await createNotificationChannel({
       channel: normalizeNotificationChannelFormInput({
-        channelType: "email",
-        displayName: "Rate Limit Email",
-        emailFrom: "alerts@llmingress.local",
-        emailTo: "owner@example.com",
-      }),
-      databaseUrl: fixture.databaseUrl,
-    });
-    await createNotificationChannel({
-      channel: normalizeNotificationChannelFormInput({
         channelType: "webhook",
         displayName: "Rate Limit Webhook",
         webhookUrl: webhook.url,
@@ -84,7 +75,7 @@ test("scheduled rate limit evaluator uses configurable window threshold detects 
     await expect(readRateLimitAlertJob(fixture)).resolves.toMatchObject({
       result: {
         evaluatedBlockCount: 6,
-        notificationEventCount: 4,
+        notificationEventCount: 2,
         queuedAlertCount: 2,
         thresholdCount: 3,
         windowMs: 15 * 60 * 1000,
@@ -93,16 +84,12 @@ test("scheduled rate limit evaluator uses configurable window threshold detects 
       trigger: "scheduled",
     });
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
-      { channel_type: "email", event_type: "rate_limit_high_frequency", status: "queued" },
-      { channel_type: "email", event_type: "rate_limit_high_frequency", status: "queued" },
       { channel_type: "webhook", event_type: "rate_limit_high_frequency", status: "queued" },
       { channel_type: "webhook", event_type: "rate_limit_high_frequency", status: "queued" },
     ]);
 
     await expect(runner.runOnce()).resolves.toBe(true);
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
-      { channel_type: "email", event_type: "rate_limit_high_frequency", status: "sent" },
-      { channel_type: "email", event_type: "rate_limit_high_frequency", status: "sent" },
       { channel_type: "webhook", event_type: "rate_limit_high_frequency", status: "sent" },
       { channel_type: "webhook", event_type: "rate_limit_high_frequency", status: "sent" },
     ]);
@@ -156,7 +143,7 @@ test("scheduled rate limit evaluator uses configurable window threshold detects 
       status: "succeeded",
       trigger: "scheduled",
     });
-    await expect(readNotificationEvents(fixture)).resolves.toHaveLength(4);
+    await expect(readNotificationEvents(fixture)).resolves.toHaveLength(2);
     expect(webhook.requests).toHaveLength(2);
   } finally {
     await webhook.stop();

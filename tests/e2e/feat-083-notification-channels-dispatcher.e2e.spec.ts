@@ -13,7 +13,7 @@ import {
 } from "../../apps/worker/src/notification-dispatcher";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-test("notification channels queue send retry and audit email webhook deliveries", async () => {
+test("notification channels queue send retry and audit webhook deliveries", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_notifications_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -22,15 +22,6 @@ test("notification channels queue send retry and audit email webhook deliveries"
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    const emailChannel = await createNotificationChannel({
-      channel: normalizeNotificationChannelFormInput({
-        channelType: "email",
-        displayName: "Ops Email",
-        emailFrom: "alerts@llmingress.local",
-        emailTo: "owner@example.com",
-      }),
-      databaseUrl: fixture.databaseUrl,
-    });
     const webhookChannel = await createNotificationChannel({
       channel: normalizeNotificationChannelFormInput({
         channelType: "webhook",
@@ -41,12 +32,6 @@ test("notification channels queue send retry and audit email webhook deliveries"
     });
 
     await expect(listNotificationChannels(fixture.databaseUrl)).resolves.toMatchObject([
-      {
-        channelType: "email",
-        displayName: "Ops Email",
-        enabled: true,
-        id: emailChannel.id,
-      },
       {
         channelType: "webhook",
         displayName: "Ops Webhook",
@@ -70,9 +55,8 @@ test("notification channels queue send retry and audit email webhook deliveries"
       now: () => now,
     });
 
-    expect(queued.eventIds).toHaveLength(2);
+    expect(queued.eventIds).toHaveLength(1);
     await expect(readNotificationStatuses(fixture)).resolves.toEqual([
-      { attempt_count: 0, channel_type: "email", status: "queued" },
       { attempt_count: 0, channel_type: "webhook", status: "queued" },
     ]);
 
@@ -90,24 +74,15 @@ test("notification channels queue send retry and audit email webhook deliveries"
 
     await expect(runner.runOnce()).resolves.toBe(true);
     await expect(readNotificationStatuses(fixture)).resolves.toEqual([
-      { attempt_count: 1, channel_type: "email", status: "sent" },
       { attempt_count: 1, channel_type: "webhook", status: "retrying" },
     ]);
 
     await expect(runner.runOnce()).resolves.toBe(true);
 
     await expect(readNotificationStatuses(fixture)).resolves.toEqual([
-      { attempt_count: 1, channel_type: "email", status: "sent" },
       { attempt_count: 2, channel_type: "webhook", status: "sent" },
     ]);
     await expect(readNotificationDeliveries(fixture)).resolves.toEqual([
-      {
-        attempt_number: 1,
-        channel_type: "email",
-        error_code: null,
-        response_status: null,
-        status: "sent",
-      },
       {
         attempt_number: 1,
         channel_type: "webhook",

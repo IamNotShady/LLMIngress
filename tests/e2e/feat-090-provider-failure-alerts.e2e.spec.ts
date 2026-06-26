@@ -23,15 +23,6 @@ test("scheduled provider failure evaluator detects consecutive health failures a
     const ids = await seedProviderFailureAlertData(fixture);
     await createNotificationChannel({
       channel: normalizeNotificationChannelFormInput({
-        channelType: "email",
-        displayName: "Provider Failure Email",
-        emailFrom: "alerts@llmingress.local",
-        emailTo: "owner@example.com",
-      }),
-      databaseUrl: fixture.databaseUrl,
-    });
-    await createNotificationChannel({
-      channel: normalizeNotificationChannelFormInput({
         channelType: "webhook",
         displayName: "Provider Failure Webhook",
         webhookUrl: webhook.url,
@@ -80,7 +71,7 @@ test("scheduled provider failure evaluator detects consecutive health failures a
     await expect(readProviderFailureAlertJob(fixture)).resolves.toMatchObject({
       result: {
         evaluatedSummaryCount: 3,
-        notificationEventCount: 4,
+        notificationEventCount: 2,
         queuedAlertCount: 2,
         thresholdCount: 3,
       },
@@ -88,16 +79,12 @@ test("scheduled provider failure evaluator detects consecutive health failures a
       trigger: "scheduled",
     });
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
-      { channel_type: "email", event_type: "provider_failure", status: "queued" },
-      { channel_type: "email", event_type: "provider_failure", status: "queued" },
       { channel_type: "webhook", event_type: "provider_failure", status: "queued" },
       { channel_type: "webhook", event_type: "provider_failure", status: "queued" },
     ]);
 
     await expect(runner.runOnce()).resolves.toBe(true);
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
-      { channel_type: "email", event_type: "provider_failure", status: "sent" },
-      { channel_type: "email", event_type: "provider_failure", status: "sent" },
       { channel_type: "webhook", event_type: "provider_failure", status: "sent" },
       { channel_type: "webhook", event_type: "provider_failure", status: "sent" },
     ]);

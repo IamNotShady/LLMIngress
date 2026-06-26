@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./job-runner.js";
 
-export type NotificationChannelType = "email" | "webhook";
+export type NotificationChannelType = "webhook";
 
 export type NotificationDeliveryPayload = {
   body: string;
@@ -32,7 +32,6 @@ export type QueueNotificationEventResult = {
 
 export type NotificationDispatchJobHandlerOptions = {
   databaseUrl: string;
-  deliverEmail?: (input: NotificationDeliveryTransportInput) => Promise<NotificationDeliveryResult>;
   deliverWebhook?: (
     input: NotificationDeliveryTransportInput,
   ) => Promise<NotificationDeliveryResult>;
@@ -181,7 +180,6 @@ export function createNotificationDispatchJobHandler(
   const now = options.now ?? (() => new Date());
   const maxBatchSize = options.maxBatchSize ?? defaultMaxBatchSize;
   const retryBackoffMs = options.retryBackoffMs ?? defaultRetryBackoffMs;
-  const deliverEmail = options.deliverEmail ?? defaultDeliverEmail;
   const deliverWebhook = options.deliverWebhook ?? defaultDeliverWebhook;
 
   return async (job) => {
@@ -211,7 +209,6 @@ export function createNotificationDispatchJobHandler(
         subject: event.subject,
       });
       const result = await deliverNotification({
-        deliverEmail,
         deliverWebhook,
         event,
         payload,
@@ -291,6 +288,7 @@ async function readEnabledNotificationChannels(
         select id::text, channel_type
         from notification_channels
         where enabled = true
+          and channel_type = 'webhook'
           and id = any($1::uuid[])
         order by channel_type, display_name
       `,
@@ -304,6 +302,7 @@ async function readEnabledNotificationChannels(
       select id::text, channel_type
       from notification_channels
       where enabled = true
+        and channel_type = 'webhook'
       order by channel_type, display_name
     `,
   );
@@ -357,6 +356,7 @@ async function claimDueNotificationEvents(input: {
           from notification_events
           join notification_channels on notification_channels.id = notification_events.channel_id
           where notification_channels.enabled = true
+            and notification_channels.channel_type = 'webhook'
             and notification_events.status in ('queued', 'retrying')
             and notification_events.next_attempt_at <= $1::timestamptz
           order by notification_events.next_attempt_at,
@@ -529,16 +529,7 @@ function defaultRetryBackoffMs(input: { attemptNumber: number }): number {
   return Math.min(300_000, 1_000 * 2 ** Math.max(0, input.attemptNumber - 1));
 }
 
-async function defaultDeliverEmail(): Promise<NotificationDeliveryResult> {
-  return {
-    responseBody: "local_outbox",
-    responseStatus: null,
-    status: "sent",
-  };
-}
-
 async function deliverNotification(input: {
-  deliverEmail: (input: NotificationDeliveryTransportInput) => Promise<NotificationDeliveryResult>;
   deliverWebhook: (
     input: NotificationDeliveryTransportInput,
   ) => Promise<NotificationDeliveryResult>;
@@ -551,9 +542,7 @@ async function deliverNotification(input: {
       channelType: input.event.channelType,
       payload: input.payload,
     };
-    return input.event.channelType === "email"
-      ? await input.deliverEmail(transportInput)
-      : await input.deliverWebhook(transportInput);
+    return await input.deliverWebhook(transportInput);
   } catch (error) {
     return {
       errorCode: "notification_transport_failed",
@@ -618,21 +607,10 @@ function buildNotificationDeliveryAuditPayload(
 ) {
   return {
     channel: {
-      destination:
-        event.channelType === "email"
-          ? readEmailDestination(event.channelConfig)
-          : readWebhookDestination(event.channelConfig),
+      destination: readWebhookDestination(event.channelConfig),
       type: event.channelType,
     },
     message: payload,
-  };
-}
-
-function readEmailDestination(config: unknown) {
-  const object = readObject(config);
-  return {
-    from: typeof object.from === "string" ? object.from : null,
-    to: typeof object.to === "string" ? object.to : null,
   };
 }
 

@@ -738,7 +738,6 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 
 V1 通知渠道支持：
 
-- Email。
 - Webhook。
 
 Desktop notification / 本机系统通知暂不纳入 V1；后续如需支持，再单独定义。

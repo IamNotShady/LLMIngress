@@ -30,8 +30,6 @@ export async function POST(request: NextRequest) {
       channel: normalizeNotificationChannelFormInput({
         channelType: readRequiredText(form, "channelType"),
         displayName: readRequiredText(form, "displayName"),
-        emailFrom: readText(form, "emailFrom"),
-        emailTo: readText(form, "emailTo"),
         webhookUrl: readText(form, "webhookUrl"),
       }),
       databaseUrl,

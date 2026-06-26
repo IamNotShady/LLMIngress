@@ -1709,3 +1709,11 @@
   - TDD red observed first in `feat-039`, `feat-068`, `feat-115`, and `feat-117` focused unit tests.
   - Verification passed: `pnpm test -- tests/features/feat-068-anthropic-messages-params.unit.test.ts tests/features/feat-039-streaming.unit.test.ts tests/features/feat-117-strategy-fallback-chain.unit.test.ts tests/features/feat-115-provider-subscription-oauth.unit.test.ts`, `pnpm --filter @llmingress/provider typecheck`, `pnpm --filter @llmingress/gateway typecheck`, and `pnpm run lint` (exit 0 with one pre-existing non-null assertion warning).
   - Live Gateway verification passed after clearing local polluted `provider_health_summary` rows for `anthropic` / `claude_code`: `/v1/messages` `anthropic` non-stream, `claude` non-stream, and `claude` stream succeeded with HTTP 200 and no new unhealthy summaries. `opus48` live retest was blocked by the current Agent allow-list (`virtual_model_not_allowed`), while unit coverage verifies the Opus sampling strip path. Full `verify:features` was not run for this interactive repair.
+
+- [x] 2026-06-26 Notification channel Email removal:
+  - Removed Email notification creation from Settings and `/api/notification-channels`; channel normalization now accepts only `webhook`.
+  - Worker notification queueing, dispatch claiming, and alert no-channel checks now use enabled webhook channels only, so legacy email rows are not queued or sent.
+  - Updated product/architecture/plan docs and feat-083/feat-088 tracker wording to Webhook-only notification support.
+  - TDD red observed first in `tests/features/feat-083-notification-channels-dispatcher.unit.test.ts`: complete `channelType=email` input was still accepted before the fix.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-083-notification-channels-dispatcher.unit.test.ts`; focused E2E for `feat-083`, `feat-088`, `feat-089`, `feat-090`, `feat-091`, `feat-095`, and `console-ui-settings`; `pnpm run typecheck`; `pnpm run lint` (exit 0 with the existing `feat-117` non-null assertion warning); Browser live check on `http://localhost:3000/settings#notification-channels` confirmed only Webhook fields/button and no console error/warn logs.
+  - Full `verify:features` was not run for this interactive UI/backend cleanup.

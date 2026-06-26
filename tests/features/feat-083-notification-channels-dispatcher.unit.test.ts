@@ -24,7 +24,6 @@ describe("feat-083 notification channels and dispatcher", () => {
     expect(migration?.sql).toContain("create table if not exists notification_deliveries");
     expect(migration?.sql).toContain("'notification_dispatch'");
     expect(migration?.sql).toContain("channel_type text not null check");
-    expect(migration?.sql).toContain("'email'");
     expect(migration?.sql).toContain("'webhook'");
   });
 
@@ -35,24 +34,7 @@ describe("feat-083 notification channels and dispatcher", () => {
     expect(workerMain).toContain("notification_dispatch:");
   });
 
-  it("normalizes email and webhook channel configuration", () => {
-    expect(
-      normalizeNotificationChannelFormInput({
-        channelType: "email",
-        displayName: "  Ops Email  ",
-        emailFrom: "alerts@llmingress.local",
-        emailTo: " owner@example.com ",
-      }),
-    ).toEqual({
-      channelType: "email",
-      config: {
-        from: "alerts@llmingress.local",
-        to: "owner@example.com",
-      },
-      displayName: "Ops Email",
-      enabled: true,
-    });
-
+  it("normalizes webhook channel configuration and rejects email channels", () => {
     expect(
       normalizeNotificationChannelFormInput({
         channelType: "webhook",
@@ -69,7 +51,12 @@ describe("feat-083 notification channels and dispatcher", () => {
     });
 
     const invalidInputs: NotificationChannelFormInput[] = [
-      { channelType: "email", displayName: "Missing email to", emailFrom: "from@example.com" },
+      {
+        channelType: "email",
+        displayName: "Unsupported email",
+        emailFrom: "alerts@llmingress.local",
+        emailTo: "owner@example.com",
+      },
       { channelType: "webhook", displayName: "Bad webhook", webhookUrl: "notaurl" },
       { channelType: "sms", displayName: "Unsupported" },
     ];
@@ -79,7 +66,7 @@ describe("feat-083 notification channels and dispatcher", () => {
     }
   });
 
-  it("builds a common delivery payload for email and webhook dispatchers", () => {
+  it("builds a common delivery payload for webhook dispatchers", () => {
     const payload = buildNotificationDeliveryPayload({
       body: "Budget is at 90%.",
       eventId: "event-083",

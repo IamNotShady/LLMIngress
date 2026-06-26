@@ -368,7 +368,6 @@ Background Worker / Scheduler
 │   ├── Budget threshold evaluator
 │   ├── Provider failure evaluator
 │   ├── Fallback exhaustion evaluator
-│   ├── Email dispatcher
 │   └── Webhook dispatcher
 │
 ├── Data Maintenance
@@ -861,7 +860,6 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   │       │   └── backup.job.ts
 │   │       └── dispatchers/ # 异步通知和外部投递实现
 │   │           ├── notification-event-writer.ts
-│   │           ├── email.ts
 │   │           └── webhook.ts
 │   │
 │   └── console/ # Console 控制面 Web 应用

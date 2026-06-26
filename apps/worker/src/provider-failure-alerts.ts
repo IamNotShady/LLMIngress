@@ -278,7 +278,7 @@ async function readEnabledNotificationChannelCount(databaseUrl: string): Promise
 
   try {
     const result = await client.query<{ count: string }>(
-      "select count(*)::text as count from notification_channels where enabled = true",
+      "select count(*)::text as count from notification_channels where enabled = true and channel_type = 'webhook'",
     );
     return Number(result.rows[0]?.count ?? 0);
   } finally {

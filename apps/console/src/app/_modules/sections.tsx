@@ -4447,24 +4447,6 @@ export async function SettingsSection() {
                 method="post"
               >
                 <input type="hidden" name="action" value="create" />
-                <input type="hidden" name="channelType" value="email" />
-                <label htmlFor="notification-email-name">Email channel name</label>
-                <input id="notification-email-name" name="displayName" required />
-                <label htmlFor="notification-email-to">Email to</label>
-                <input id="notification-email-to" name="emailTo" type="email" required />
-                <label htmlFor="notification-email-from">Email from</label>
-                <input id="notification-email-from" name="emailFrom" type="email" required />
-                <button type="submit">
-                  <FlatIcon name="add" />
-                  <span>Create email notification channel</span>
-                </button>
-              </form>
-              <form
-                className="provider-create-form"
-                action="/api/notification-channels"
-                method="post"
-              >
-                <input type="hidden" name="action" value="create" />
                 <input type="hidden" name="channelType" value="webhook" />
                 <label htmlFor="notification-webhook-name">Webhook channel name</label>
                 <input id="notification-webhook-name" name="displayName" required />
@@ -4484,11 +4466,6 @@ export async function SettingsSection() {
 }
 
 function formatNotificationChannelConfig(channel: ConsoleNotificationChannel): string {
-  if (channel.channelType === "email") {
-    const config = channel.config as { from?: string; to?: string };
-    return `Email: ${config.from ?? "unknown sender"} to ${config.to ?? "unknown recipient"}`;
-  }
-
   const config = channel.config as { url?: string };
   return `Webhook: ${formatWebhookUrlForDisplay(config.url)}`;
 }

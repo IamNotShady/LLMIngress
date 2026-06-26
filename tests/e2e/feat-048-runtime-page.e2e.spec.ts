@@ -5,7 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("runtime page shows heartbeat config version reload result and recent errors", async ({
+test("runtime page shows heartbeat config version reload result and gateway internal errors", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -55,7 +55,13 @@ test("runtime page shows heartbeat config version reload result and recent error
           await expect(
             runtimeSection.getByText(/Reload failed at .*provider key missing/),
           ).toBeVisible();
-          // Recent runtime errors table rows (source + code + message).
+          await expect(
+            runtimeSection.getByRole("heading", {
+              name: "Gateway internal errors",
+              exact: true,
+            }),
+          ).toBeVisible();
+          // Gateway internal error table rows (source + code + message).
           await expect(
             runtimeSection.getByRole("row", {
               name: /gateway.*config_reload_failed.*Provider key missing/,
@@ -66,6 +72,12 @@ test("runtime page shows heartbeat config version reload result and recent error
               name: /worker.*reservation_cleanup_delayed.*Cleanup lag high/,
             }),
           ).toBeVisible();
+          await expect(
+            runtimeSection.getByRole("heading", { name: "Provider connectivity", exact: true }),
+          ).toHaveCount(0);
+          await expect(
+            runtimeSection.getByRole("heading", { name: "Observability exports", exact: true }),
+          ).toHaveCount(0);
         } finally {
           await context.close();
         }

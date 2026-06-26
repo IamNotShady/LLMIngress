@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { withConsoleDevServer } from "../support/console-dev-server";
 
-test("gateway runtime page renders status cards, connectivity, errors, exports, and security", async ({
+test("gateway runtime page renders gateway process status without duplicated provider panels", async ({
   browser,
 }) => {
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
@@ -16,20 +16,21 @@ test("gateway runtime page renders status cards, connectivity, errors, exports, 
       ).toBeVisible();
     }
 
-    // Section panels.
-    for (const title of [
-      "Provider connectivity",
-      "Recent runtime errors",
-      "Observability exports",
-      "Migration status",
-      "Security",
-    ]) {
+    // Runtime-owned section panels.
+    for (const title of ["Gateway internal errors", "Migration status", "Security"]) {
       await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     }
 
-    // An observability export entry.
-    await expect(
-      page.locator(".stat-card-label", { hasText: /^Prometheus Metrics$/ }),
-    ).toBeVisible();
+    // Provider health lives on Providers, and observability exports are not actionable here.
+    for (const removedTitle of [
+      "Provider connectivity",
+      "Recent runtime errors",
+      "Observability exports",
+    ]) {
+      await expect(page.getByRole("heading", { name: removedTitle, exact: true })).toHaveCount(0);
+    }
+    await expect(page.locator(".stat-card-label", { hasText: /^Prometheus Metrics$/ })).toHaveCount(
+      0,
+    );
   });
 });

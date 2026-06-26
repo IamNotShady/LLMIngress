@@ -7,7 +7,7 @@ export default function GatewayRuntimePage() {
       <PageHeader
         eyebrow="Infrastructure"
         title="Gateway Runtime"
-        description="Read-only Gateway status, provider connectivity, and recent runtime errors."
+        description="Read-only Gateway process status, config reload state, and migration health."
       />
       <RuntimeSection />
     </div>

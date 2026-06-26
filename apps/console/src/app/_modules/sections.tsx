@@ -31,15 +31,13 @@ import {
   listAgentVirtualModelAccess,
 } from "../../server/agents";
 import { getConsoleDatabaseUrl } from "../../server/auth";
-import { placeholderFloat, placeholderInt, placeholderTrend } from "../../server/mock-data";
+import { placeholderFloat, placeholderTrend } from "../../server/mock-data";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
 } from "../../server/notification-channels";
 import {
   type ConsoleProviderHealthSummary,
-  formatProviderHealthLatestProbe,
-  formatProviderHealthStatus,
   listConsoleProviderHealthSummaries,
 } from "../../server/provider-health";
 import {
@@ -450,13 +448,6 @@ function ActivityStatusPill({ status }: { status: string }) {
   return <span className="pill">{status}</span>;
 }
 
-const runtimeObservabilityExports = [
-  { id: "prometheus", name: "Prometheus Metrics", detail: "/metrics" },
-  { id: "otel", name: "OpenTelemetry Traces", detail: "Enabled" },
-  { id: "webhook", name: "Webhook Events", detail: "Notification channels" },
-  { id: "jsonl", name: "JSONL Request Logs", detail: "Local file" },
-];
-
 const runtimeSecurityNotes = [
   "Provider API keys are encrypted with AES-256-GCM and decrypted only in memory.",
   "Agent API keys are stored as a hash; the full key is shown once at creation.",
@@ -467,7 +458,6 @@ const runtimeSecurityNotes = [
 export async function RuntimeSection() {
   const databaseUrl = getConsoleDatabaseUrl();
   const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const gateway = runtimeSnapshot.gateways[0] ?? null;
 
   return (
@@ -490,91 +480,36 @@ export async function RuntimeSection() {
         />
       </div>
 
-      <div className="chart-grid-2">
-        <div className="chart-card">
-          <h3 className="chart-card-title">Provider connectivity</h3>
-          {providerHealthSummaries.length === 0 ? (
-            <p>No providers configured.</p>
-          ) : (
-            <div className="data-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Provider</th>
-                    <th>Status</th>
-                    <th className="num">p95</th>
-                    <th>Last checked</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {providerHealthSummaries.map((summary) => (
-                    <tr key={summary.id}>
-                      <td>{summary.displayName}</td>
-                      <td>
-                        <ProviderHealthPill status={summary.status} />
-                      </td>
-                      <td className="num">{placeholderInt(summary.id, 18, 580, 3)}ms</td>
-                      <td>
-                        {formatProviderHealthLatestProbe({
-                          latestProbeAt: summary.latestProbeAt,
-                          trigger: summary.trigger,
-                        })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <div className="chart-card">
-          <h3 className="chart-card-title">Recent runtime errors</h3>
-          {runtimeSnapshot.errors.length === 0 ? (
-            <p>No runtime errors recorded.</p>
-          ) : (
-            <div className="data-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Source</th>
-                    <th>Code</th>
-                    <th>Message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runtimeSnapshot.errors.map((error) => (
-                    <tr
-                      key={`${error.processType}:${error.processId}:${error.errorCode}:${error.createdAt.toISOString()}`}
-                    >
-                      <td>{formatDateTime(error.createdAt)}</td>
-                      <td>{error.processType}</td>
-                      <td className="mono">{error.errorCode}</td>
-                      <td>{error.errorMessage}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="chart-card">
-        <h3 className="chart-card-title">Observability exports</h3>
-        <div className="stat-grid">
-          {runtimeObservabilityExports.map((entry) => (
-            <article className="stat-card" key={entry.id}>
-              <div className="stat-card-head">
-                <span className="stat-card-icon" aria-hidden="true">
-                  {entry.id.slice(0, 2).toUpperCase()}
-                </span>
-                <span className="stat-card-label">{entry.name}</span>
-              </div>
-              <span className="stat-card-delta">{entry.detail}</span>
-            </article>
-          ))}
-        </div>
+        <h3 className="chart-card-title">Gateway internal errors</h3>
+        {runtimeSnapshot.errors.length === 0 ? (
+          <p>No gateway internal errors recorded.</p>
+        ) : (
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Source</th>
+                  <th>Code</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runtimeSnapshot.errors.map((error) => (
+                  <tr
+                    key={`${error.processType}:${error.processId}:${error.errorCode}:${error.createdAt.toISOString()}`}
+                  >
+                    <td>{formatDateTime(error.createdAt)}</td>
+                    <td>{error.processType}</td>
+                    <td className="mono">{error.errorCode}</td>
+                    <td>{error.errorMessage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="chart-card">
@@ -636,15 +571,6 @@ export async function RuntimeSection() {
         </ul>
       </div>
     </section>
-  );
-}
-
-function ProviderHealthPill({ status }: { status: string }) {
-  return (
-    <ProviderStatusPill
-      label={formatProviderHealthStatus(status as Parameters<typeof formatProviderHealthStatus>[0])}
-      status={status}
-    />
   );
 }
 

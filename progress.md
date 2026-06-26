@@ -366,6 +366,7 @@
   - Added a protected Runtime section backed by `gateway_runtime_status` and `runtime_errors`.
   - Shows Gateway heartbeat health, Gateway status, applied/target config versions, reload result, last heartbeat timestamp, and recent runtime errors.
   - Verification passed: feat-048 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+  - 2026-06-26 follow-up: Runtime now keeps only Gateway process/config/migration/security state; Provider connectivity is shown on Providers, Observability exports were removed, and `runtime_errors` is labelled as Gateway internal errors so ordinary provider/request failures are not expected there.
 - [x] **feat-049 — Playground Live Public API Test (passing)**:
   - Added a protected browser-only Playground that accepts a user-pasted Agent API key, loads allowed Virtual Models from Gateway `GET /v1/models`, and sends a live `POST /v1/chat/completions` directly from the browser to Gateway.
   - Added Gateway CORS support for default local Console origins and explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.

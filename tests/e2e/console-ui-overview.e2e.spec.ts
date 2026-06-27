@@ -47,9 +47,12 @@ test("overview dashboard renders KPI cards, recent requests, gateway status, and
         await expect(page.getByRole("columnheader", { name: header })).toBeVisible();
       }
       await expect(page.getByRole("heading", { name: "Gateway status" })).toBeVisible();
-      await expect(page.getByText("Running normally")).toBeVisible();
-      await expect(page.getByText("Heartbeat healthy")).toBeVisible();
-      await expect(page.getByText("Config version")).toBeVisible();
+      const gatewayStatusPanel = page.locator(".detail-panel", {
+        has: page.getByRole("heading", { name: "Gateway status" }),
+      });
+      await expect(gatewayStatusPanel.getByText("Running normally")).toBeVisible();
+      await expect(gatewayStatusPanel.getByText("Heartbeat healthy")).toBeVisible();
+      await expect(gatewayStatusPanel.getByText("Config version", { exact: true })).toBeVisible();
       await expect(page.getByText("Gateway running")).toHaveCount(0);
       await expect(page.getByText("All systems normal")).toHaveCount(0);
       await expect(page.getByText("v0.1.0")).toHaveCount(0);

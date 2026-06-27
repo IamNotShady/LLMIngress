@@ -2,13 +2,21 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-27 (feat-119 Terminal Coverage Output)
-**Active Feature:** none - feat-119 complete
+**Last Updated:** 2026-06-27 (feat-120 E2E Frontend Page Coverage Command)
+**Active Feature:** none - feat-120 complete
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **E2E Frontend Page Coverage Command (feat-120)**:
+  - Added `pnpm run test:e2e:coverage`, routed through `scripts/run-with-env.ts`, for report-only browser-side Console frontend page coverage.
+  - Added `scripts/console-e2e-coverage.ts`: launches Chromium, reuses `withConsoleDevServer`, signs into an isolated Console/PostgreSQL fixture, starts Playwright JS coverage after sign-in, visits every `consoleNavItems` route, asserts each page heading, merges JS coverage ranges, and prints visited page count, JavaScript byte coverage, covered scripts, and visited page labels.
+  - Backend service coverage remains `pnpm test` / Vitest V8 coverage; Gateway, Worker, and Console server processes are not instrumented during E2E.
+  - TDD red observed first: feat-120 unit failed because the coverage script and package script were missing, and feat-120 E2E failed because `pnpm run test:e2e:coverage` did not exist.
+  - Focused verification passed: `pnpm exec vitest run tests/features/feat-120-e2e-frontend-coverage.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-120-e2e-frontend-coverage.e2e.spec.ts --grep 'prints Console frontend page coverage'`, and `pnpm run test:e2e:coverage` printed `Visited pages: 10/10 (100.00%)` plus `JavaScript bytes: 72224561/72224561 (100.00%)`.
+  - Full verification passed: `pnpm run verify` passed with 121 unit test files / 468 tests and printed Vitest coverage summary (Statements 48.43%, Branches 45.49%, Functions 55.84%, Lines 48.58%); pre-marking `pnpm run verify:features` re-verified all 119 prior passing features; final `pnpm run verify:features` re-verified all 120 passing features. The optimized E2E batch hit unrelated feat-030/feat-039 flakes on the final run, then fallback original feature verification passed including feat-030, feat-039, feat-076, and feat-120.
 
 - [x] **Terminal Coverage Output (feat-119)**:
   - Added report-only Vitest V8 coverage output to `pnpm test`, so `pnpm run verify` prints coverage rates during its test phase.

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { buildAgentIntegrationTemplates } from "../../../server/agent-integrations";
+import { buildAgentConnectionDetails } from "../../../server/agent-integrations";
 import {
   deleteAgentLimitRules,
   normalizeAgentLimitFormInput,
@@ -173,24 +173,11 @@ function renderOneTimeAgentResponse(input: {
   keyPrefix: string | null;
   plaintext: string;
 }): NextResponse {
-  const integrationTemplates = buildAgentIntegrationTemplates({
+  const connectionDetails = buildAgentConnectionDetails({
     apiKey: input.plaintext,
     gatewayBaseUrl: process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000",
     model: "<Virtual Model Name>",
   });
-  const integrationTemplateHtml = integrationTemplates
-    .map(
-      (template) => `
-        <div class="snippet">
-          <label for="${escapeHtml(template.id)}-setup-snippet">${escapeHtml(
-            template.displayName,
-          )} setup snippet</label>
-          <textarea id="${escapeHtml(template.id)}-setup-snippet" readonly rows="5">${escapeHtml(
-            template.snippet,
-          )}</textarea>
-        </div>`,
-    )
-    .join("");
 
   return new NextResponse(
     `<!doctype html>
@@ -205,32 +192,38 @@ function renderOneTimeAgentResponse(input: {
       body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px; }
       main { width: min(560px, 100%); border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; padding: 28px; }
       h1 { margin: 0 0 16px; font-size: 28px; line-height: 1.2; }
+      h2 { margin: 0 0 12px; font-size: 18px; line-height: 1.3; }
+      section { margin: 0 0 24px; }
       dl { display: grid; gap: 10px; margin: 0 0 24px; }
       dt { color: #667085; font-size: 13px; font-weight: 700; }
       dd { margin: 0; color: #101828; font-size: 16px; overflow-wrap: anywhere; }
       code { border: 1px solid #d0d5dd; border-radius: 6px; background: #f9fafb; display: block; padding: 12px; }
-      .snippets { display: grid; gap: 12px; margin: 0 0 24px; }
-      .snippet { display: grid; gap: 6px; }
-      label { color: #344054; font-size: 14px; font-weight: 700; }
-      textarea { width: 100%; min-height: 116px; border: 1px solid #98a2b3; border-radius: 6px; background: #f9fafb; color: #101828; font: inherit; padding: 10px 12px; resize: vertical; }
       a { display: inline-flex; min-height: 44px; align-items: center; border-radius: 6px; background: #175cd3; color: #fff; font-weight: 700; padding: 10px 14px; text-decoration: none; }
     </style>
   </head>
   <body>
     <main>
       <h1>Agent created</h1>
-      <dl>
-        <div>
-          <dt>Agent API key</dt>
-          <dd><code>${escapeHtml(input.plaintext)}</code></dd>
-        </div>
-        <div>
-          <dt>Agent API key prefix</dt>
-          <dd>${escapeHtml(input.keyPrefix ?? input.plaintext.slice(0, 12))}</dd>
-        </div>
-      </dl>
-      <section class="snippets" aria-label="Agent integration templates">
-        ${integrationTemplateHtml}
+      <section aria-label="Connection details">
+        <h2>Connection details</h2>
+        <dl>
+          <div>
+            <dt>Agent API key</dt>
+            <dd><code>${escapeHtml(connectionDetails.apiKey)}</code></dd>
+          </div>
+          <div>
+            <dt>Agent API key prefix</dt>
+            <dd>${escapeHtml(input.keyPrefix ?? connectionDetails.apiKey.slice(0, 12))}</dd>
+          </div>
+          <div>
+            <dt>Gateway URL</dt>
+            <dd>${escapeHtml(connectionDetails.gatewayBaseUrl)}</dd>
+          </div>
+          <div>
+            <dt>Virtual Model Name</dt>
+            <dd>${escapeHtml(connectionDetails.model)}</dd>
+          </div>
+        </dl>
       </section>
       <a href="/agents">Back to dashboard</a>
     </main>

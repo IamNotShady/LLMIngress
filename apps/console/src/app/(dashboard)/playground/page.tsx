@@ -12,9 +12,10 @@ export default function PlaygroundPage() {
         title="Playground"
         description={
           <>
-            <span>通过 Gateway Public API 进行实时测试</span>
+            <span>Test live requests through the Gateway Public API.</span>
             <span className="playground-memory-note">
-              提示：Agent API Key 只保存在浏览器内存中，Console 后端不保存明文。
+              Note: Agent API Key stays in browser memory only. The Console backend does not store
+              plaintext keys.
             </span>
           </>
         }

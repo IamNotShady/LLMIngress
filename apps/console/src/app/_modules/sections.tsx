@@ -11,11 +11,6 @@ import {
   listConsoleActivities,
 } from "../../server/activity";
 import {
-  buildAgentIntegrationTemplates,
-  formatDashboardAgentApiKeySnippetValue,
-  resolveAgentIntegrationModelName,
-} from "../../server/agent-integrations";
-import {
   type ConsoleAgentLimit,
   type ConsoleAgentLimitRuntimeSnapshot,
   defaultAgentLimitFormValues,
@@ -1954,7 +1949,6 @@ export async function RoutePoliciesSection({
 
 export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const databaseUrl = getConsoleDatabaseUrl();
-  const playgroundGatewayBaseUrl = getPlaygroundGatewayBaseUrl();
   const usageToday = await getConsoleUsageSummary({ databaseUrl, window: "24h" });
   const usageWeek = await getConsoleUsageSummary({ databaseUrl, window: "7d" });
   const agents = await listAgents(databaseUrl);
@@ -1990,21 +1984,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
   const selectedTokenLimit = findAgentLimit(selectedLimits, "token");
   const selectedRpmLimit = findAgentLimit(selectedLimits, "rpm");
   const selectedTpmLimit = findAgentLimit(selectedLimits, "tpm");
-  const selectedIntegrationAccess = selectedAgent
-    ? (selectedAccess ?? {
-        agentId: selectedAgent.id,
-        allowedVirtualModels: [],
-        defaultVirtualModel: null,
-      })
-    : null;
-  const selectedIntegrationTemplates =
-    selectedAgent?.keyPrefix && selectedIntegrationAccess
-      ? buildAgentIntegrationTemplates({
-          apiKey: formatDashboardAgentApiKeySnippetValue(selectedAgent.keyPrefix),
-          gatewayBaseUrl: playgroundGatewayBaseUrl,
-          model: resolveAgentIntegrationModelName(selectedIntegrationAccess),
-        })
-      : [];
   const agentDialog = readSingleSearchParam(searchParams.agentDialog);
   const editDialogAgent = agents.find((agent) => agent.id === agentDialog) ?? null;
   const agentDialogCloseHref = buildQueryHref(searchParams, { agentDialog: undefined });
@@ -2088,18 +2067,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                   <FlatIcon name="filter" />
                   <span>Apply filters</span>
                 </button>
-                <a
-                  className="secondary-button"
-                  href={buildQueryHref(searchParams, {
-                    agentPlatform: undefined,
-                    agentSearch: undefined,
-                    agentStatus: undefined,
-                    agentType: undefined,
-                    selected: undefined,
-                  })}
-                >
-                  Clear filters
-                </a>
               </div>
             </fieldset>
           </form>
@@ -2117,7 +2084,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                       <th>Agent</th>
                       <th>Type</th>
                       <th>API Key Prefix</th>
-                      <th>Default Virtual Model</th>
+                      <th>Default VM</th>
                       <th className="num">Available VM</th>
                       <th className="num">Requests 24h</th>
                       <th className="num">24h Cost</th>
@@ -2309,29 +2276,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                   <span>Token limit</span>
                   <strong>{formatAgentTokenLimit(selectedTokenLimit)}</strong>
                 </div>
-              </section>
-              <section className="agent-detail-section">
-                <h3>Integration snippets</h3>
-                {selectedIntegrationTemplates.length > 0 ? (
-                  <fieldset className="agent-integration-snippets">
-                    <legend>Agent integration snippets</legend>
-                    {selectedIntegrationTemplates.map((template) => (
-                      <div className="agent-integration-snippet" key={template.id}>
-                        <label htmlFor={`${template.id}-setup-snippet-${selectedAgent.id}`}>
-                          {template.displayName} setup snippet
-                        </label>
-                        <textarea
-                          id={`${template.id}-setup-snippet-${selectedAgent.id}`}
-                          readOnly
-                          rows={4}
-                          defaultValue={template.snippet}
-                        />
-                      </div>
-                    ))}
-                  </fieldset>
-                ) : (
-                  <p>No integration snippets available.</p>
-                )}
               </section>
             </>
           ) : (
@@ -2954,28 +2898,28 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
           <div className="stat-grid limits-kpi-grid">
             <StatCard
               icon="R"
-              label="已配置规则"
+              label="Configured rules"
               value={String(rows.length)}
               delta="Agent API Key"
             />
             <StatCard
               icon="!"
-              label="今日超限次数"
+              label="Over-limit today"
               value={String(overLimitTodayCount)}
-              delta={`较昨日 ${formatSignedInteger(overLimitTodayCount - overLimitYesterdayCount)}`}
+              delta={`vs yesterday ${formatSignedInteger(overLimitTodayCount - overLimitYesterdayCount)}`}
               deltaTone={overLimitTodayCount >= overLimitYesterdayCount ? "up" : "down"}
             />
             <StatCard
               icon="B"
-              label="接近预算 Key"
+              label="Keys near budget"
               value={String(nearBudgetCount)}
-              delta="达到告警阈值"
+              delta="At alert threshold"
             />
             <StatCard
               icon="L"
-              label="Rate Limit 触发"
+              label="Rate limit hits"
               value={String(rateLimitHits24h)}
-              delta="最近 24h"
+              delta="Last 24h"
             />
           </div>
           <div className="limits-toolbar">
@@ -2991,7 +2935,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                 name="q"
                 type="search"
                 defaultValue={query}
-                placeholder="搜索 Agent 或 API Key Prefix"
+                placeholder="Search Agent or API Key prefix"
               />
             </form>
           </div>
@@ -3003,14 +2947,14 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                   <tr>
                     <th>Agent</th>
                     <th>API Key</th>
-                    <th className="num">成本上限</th>
-                    <th className="num">Token 上限</th>
+                    <th className="num">Cost limit</th>
+                    <th className="num">Token limit</th>
                     <th className="num">RPM</th>
                     <th className="num">TPM</th>
-                    <th className="num">并发</th>
-                    <th className="num">使用率</th>
-                    <th>状态</th>
-                    <th>操作</th>
+                    <th className="num">Concurrency</th>
+                    <th className="num">Usage</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3086,11 +3030,11 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                               <input type="hidden" name="action" value="deleteLimitRules" />
                               <input type="hidden" name="agentId" value={row.agent.id} />
                               <button
-                                aria-label={`删除 ${row.agent.name}`}
+                                aria-label={`Delete ${row.agent.name}`}
                                 className="limits-rule-delete-button"
                                 type="submit"
                               >
-                                删除
+                                Delete
                               </button>
                             </form>
                           </td>
@@ -3137,10 +3081,10 @@ function LimitsConfigPanel({
   const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
 
   return (
-    <aside className="limits-config-panel" aria-label="规则配置">
+    <aside className="limits-config-panel" aria-label="Rule configuration">
       <div className="limits-config-head">
         <div>
-          <h2 className="limits-config-title">规则配置</h2>
+          <h2 className="limits-config-title">Rule configuration</h2>
           <p>{agent.name}</p>
         </div>
         <span className="mono">{formatLimitsKeyPrefix(agent.keyPrefix)}</span>
@@ -3150,7 +3094,7 @@ function LimitsConfigPanel({
         <input type="hidden" name="agentId" value={agent.id} />
         <div className="limits-form-grid">
           <div className="console-field">
-            <label htmlFor={`limits-budget-${agent.id}`}>成本上限 (USD)</label>
+            <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
             <input
               id={`limits-budget-${agent.id}`}
               name="budgetUsd"
@@ -3164,7 +3108,7 @@ function LimitsConfigPanel({
             />
           </div>
           <div className="console-field">
-            <label htmlFor={`limits-token-${agent.id}`}>Token 上限</label>
+            <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
             <input
               id={`limits-token-${agent.id}`}
               name="tokenLimit"
@@ -3178,20 +3122,20 @@ function LimitsConfigPanel({
             />
           </div>
           <div className="console-field">
-            <label htmlFor={`limits-budget-period-${agent.id}`}>周期</label>
+            <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
             <select
               id={`limits-budget-period-${agent.id}`}
               name="budgetPeriod"
               defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
               required
             >
-              <option value="day">日</option>
-              <option value="week">周</option>
-              <option value="month">月</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
             </select>
           </div>
           <div className="console-field">
-            <label htmlFor={`limits-alert-threshold-${agent.id}`}>告警阈值</label>
+            <label htmlFor={`limits-alert-threshold-${agent.id}`}>Alert threshold</label>
             <input
               id={`limits-alert-threshold-${agent.id}`}
               name="alertThresholdPercent"
@@ -3207,7 +3151,7 @@ function LimitsConfigPanel({
         <div className="limits-usage-block">
           <div className="usage-bar">
             <div className="usage-bar-head">
-              <span>当前使用率</span>
+              <span>Current usage</span>
               <span>{formatUsagePercent(usagePercent)}</span>
             </div>
             <div className="usage-bar-track">
@@ -3219,7 +3163,7 @@ function LimitsConfigPanel({
           </div>
         </div>
         <div>
-          <h3 className="limits-config-subtitle">Rate Limit 限额</h3>
+          <h3 className="limits-config-subtitle">Rate limit caps</h3>
           <div className="limits-rate-grid">
             <div className="console-field">
               <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
@@ -3250,7 +3194,7 @@ function LimitsConfigPanel({
               />
             </div>
             <div className="console-field">
-              <label htmlFor={`limits-concurrency-${agent.id}`}>并发数</label>
+              <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
               <input
                 id={`limits-concurrency-${agent.id}`}
                 name="concurrency"
@@ -3281,11 +3225,11 @@ function LimitsConfigPanel({
         </div>
         <div className="limits-config-actions">
           <a className="secondary-button" href={buildQueryHref({}, { selected: agent.id })}>
-            取消
+            Cancel
           </a>
           <button type="submit">
             <FlatIcon name="save" />
-            <span>保存规则</span>
+            <span>Save rules</span>
           </button>
         </div>
       </form>
@@ -3349,15 +3293,15 @@ function getLimitRuleStatus({
   usagePercent: number;
 }): { className: string; label: string } {
   if (!enabled) {
-    return { className: "", label: "已禁用" };
+    return { className: "", label: "Disabled" };
   }
   if (usagePercent >= 100) {
-    return { className: "pill--danger", label: "已阻断" };
+    return { className: "pill--danger", label: "Blocked" };
   }
   if (usagePercent >= alertThresholdPercent) {
-    return { className: "pill--warn", label: "警告" };
+    return { className: "pill--warn", label: "Warning" };
   }
-  return { className: "pill--ok", label: "正常" };
+  return { className: "pill--ok", label: "Normal" };
 }
 
 function formatSignedInteger(value: number): string {
@@ -3380,7 +3324,7 @@ function formatLimitsKeyPrefix(keyPrefix: string | null): string {
 function formatLimitBudgetCell(limits: readonly ConsoleAgentLimit[]): string {
   const limit = findAgentLimit(limits, "budget");
   if (!limit?.enabled) {
-    return "未配置";
+    return "Not configured";
   }
   return `$${limit.limitValue.toLocaleString("en-US", {
     maximumFractionDigits: 2,
@@ -3394,7 +3338,7 @@ function formatLimitNumericCell(
 ): string {
   const limit = findAgentLimit(limits, limitType);
   if (!limit?.enabled) {
-    return "未配置";
+    return "Not configured";
   }
   return formatInteger(limit.limitValue);
 }
@@ -4544,11 +4488,6 @@ export async function SettingsSection() {
   return (
     <section className="providers-panel" id="settings" aria-label="Settings">
       <div className="settings-layout">
-        <nav className="settings-subnav" aria-label="Settings sections">
-          <a href="#settings-general">General</a>
-          <a href="#settings-security">Security</a>
-          <a href="#notification-channels">Notifications</a>
-        </nav>
         <div className="settings-sections">
           <section
             className="settings-panel"
@@ -4813,7 +4752,7 @@ function parseUsd(value: number | string | null): number {
 }
 
 function formatVirtualModelCost(value: number | string | null): string {
-  return `$${parseUsd(value).toFixed(8)}`;
+  return formatOverviewMoney(String(parseUsd(value)));
 }
 
 function formatVirtualModelFailureRate(

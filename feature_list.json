@@ -762,9 +762,9 @@
     },
     {
       "id": "feat-077",
-      "name": "Agent Integration Templates",
-      "description": "Codex, Claude Code, Cursor, and OpenClaw show copyable Gateway URL, API key, and model setup snippets.",
-      "verification": "pnpm exec vitest run tests/features/feat-077-agent-integration-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts --grep 'agent integration templates show codex claude code cursor openclaw gateway url api key and model snippets'",
+      "name": "Agent Connection Details",
+      "description": "One-time Agent key responses show generic connection details with Gateway URL, Agent API key, Agent API key prefix, and Virtual Model Name placeholder.",
+      "verification": "pnpm exec vitest run tests/features/feat-077-agent-integration-templates.unit.test.ts && pnpm test:e2e tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts --grep 'agent created page shows generic gateway url api key and model connection details'",
       "dependencies": [
         "feat-026",
         "feat-027",
@@ -774,7 +774,7 @@
         "feat-059"
       ],
       "status": "passing",
-      "evidence": "2026-06-16: TDD red observed for feat-077 unit tests because apps/console/src/server/agent-integrations.ts did not exist, and E2E red because the one-time Agent API key page did not expose Codex setup snippets. Added shared Agent integration template generation for Codex, Claude Code, Cursor, and OpenClaw; one-time create/rotate pages now show copyable Gateway URL, API key, and model snippets with the plaintext key only in the no-store one-time response, while the Dashboard shows the same snippets using a prefix-based Agent API key placeholder plus resolved default/allowed Virtual Model name. Code review found no P2+ logic issues; lint found and fixed an accessibility issue by rendering the Dashboard snippet group as fieldset/legend. Verification passed: feat-077 unit tests (3), real Chromium/PostgreSQL Console E2E (1), pnpm run lint, pnpm run verify, full verify:features passed all 76 prior passing features before marking, and final verify:features passed all 77 passing features after marking."
+      "evidence": "2026-06-16: TDD red observed for feat-077 unit tests because apps/console/src/server/agent-integrations.ts did not exist, and E2E red because the one-time Agent API key page did not expose Codex setup snippets. Added shared Agent integration template generation for Codex, Claude Code, Cursor, and OpenClaw; one-time create/rotate pages showed Gateway URL, API key, and model snippets with plaintext only in the no-store response. Verification passed: feat-077 unit tests (3), real Chromium/PostgreSQL Console E2E (1), pnpm run lint, pnpm run verify, full verify:features passed all 76 prior passing features before marking, and final verify:features passed all 77 passing features after marking. 2026-06-27: Removed Dashboard Agent detail snippets by product request. 2026-06-28: Replaced tool-specific one-time setup snippets with one generic Connection details group by product request; focused unit test now verifies normalized Gateway URL, plaintext Agent API key, and Virtual Model Name."
     },
     {
       "id": "feat-078",
@@ -1153,8 +1153,8 @@
     },
     {
       "id": "feat-109",
-      "name": "Agent Management Dialogs and Integration Snippets Layout",
-      "description": "Console Agents opens Agent creation and editing in a popup dialog, keeps integration snippets in the edit dialog instead of the right-side Integration Guide, and hides internal Agent metadata/status/key/limit readout rows from the management surface.",
+      "name": "Agent Management Dialogs Layout",
+      "description": "Console Agents opens Agent creation and editing in a popup dialog, does not show tool-specific integration snippets in the dashboard management surface, and hides internal Agent metadata/status/key/limit readout rows from the management surface.",
       "verification": "pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --grep 'agents page matches the designed list and detail layout'",
       "dependencies": [
         "feat-026",
@@ -1166,7 +1166,7 @@
         "feat-108"
       ],
       "status": "passing",
-      "evidence": "2026-06-19: TDD red observed first: console-ui-agents E2E expected a New agent popup after clicking + Create Agent and failed because Agent creation/editing still rendered inline disclosure panels. Updated Console Agents so create and edit open query-driven popup dialogs, moved Integration snippets into the edit dialog, removed the right-side Integration Guide, and hid the internal management readout rows for integration platform, derived status, request logging, saved API key state, request attribution count, key prefix timestamps, virtual-model summaries, and limit summaries. Updated legacy Agent E2Es to use the dialog controls as the persisted-state surface, and fixed the shared openRow helper so repeated calls are idempotent when an edit dialog is already open behind the modal scrim. Browser verification passed on desktop and mobile with no blank screen, no framework overlay, no console errors, no horizontal overflow, visible create/edit dialogs, visible Integration snippets, and no hidden internal readout labels. Verification passed: focused console-ui-agents E2E, focused Agent regressions feat-026/027/030/031/050/058/077/096/108, pnpm run verify, and pnpm run verify:features re-verified all 109 passing features."
+      "evidence": "2026-06-19: TDD red observed first: console-ui-agents E2E expected a New agent popup after clicking + Create Agent and failed because Agent creation/editing still rendered inline disclosure panels. Updated Console Agents so create and edit open query-driven popup dialogs, moved Integration snippets into the edit dialog, removed the right-side Integration Guide, and hid the internal management readout rows for integration platform, derived status, request logging, saved API key state, request attribution count, key prefix timestamps, virtual-model summaries, and limit summaries. Updated legacy Agent E2Es to use the dialog controls as the persisted-state surface, and fixed the shared openRow helper so repeated calls are idempotent when an edit dialog is already open behind the modal scrim. Browser verification passed on desktop and mobile with no blank screen, no framework overlay, no console errors, no horizontal overflow, visible create/edit dialogs, visible Integration snippets, and no hidden internal readout labels. Verification passed: focused console-ui-agents E2E, focused Agent regressions feat-026/027/030/031/050/058/077/096/108, pnpm run verify, and pnpm run verify:features re-verified all 109 passing features. 2026-06-28: Full pnpm run verify:features regression first failed feat-109 because console-ui-agents timed out after the product-requested removal of dashboard snippets and Clear filters. Playwright API debug showed the right-side Selected agent details panel intercepting table Edit clicks at the regression viewport. Updated the feature wording to reflect no dashboard tool-specific snippets, kept create/edit dialog and hidden-internal-readout assertions, made the filtered-page reset wait for DOM content, constrained the Agents main column/list card overflow so the table cannot render underneath the detail panel, and reran the focused feat-109 E2E successfully."
     },
     {
       "id": "feat-110",

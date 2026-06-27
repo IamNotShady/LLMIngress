@@ -106,7 +106,7 @@ export async function listConsoleGatewayRuntimeStatuses(
 }
 
 export function formatGatewayConfigVersion(version: number | null): string {
-  return version === null ? "No config" : `v${version}`;
+  return version === null ? "No config" : String(version);
 }
 
 export function formatGatewayHeartbeatStatus(input: {

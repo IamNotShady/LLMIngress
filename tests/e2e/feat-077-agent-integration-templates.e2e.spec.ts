@@ -7,9 +7,7 @@ import { openDisclosure } from "../support/console-ui";
 import { withProcessLock } from "../support/process-lock";
 
 const gatewayBaseUrl = "http://127.0.0.1:4100";
-const integrationTemplateNames = ["Codex", "Claude Code", "Cursor", "OpenClaw"] as const;
-
-test("agent integration templates show codex claude code cursor openclaw gateway url api key and model snippets", async ({
+test("agent created page shows generic gateway url api key and model connection details", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -50,44 +48,31 @@ test("agent integration templates show codex claude code cursor openclaw gateway
           const plaintextKey = await page.locator("code").innerText();
           expect(plaintextKey).toMatch(/^llmi_[A-Za-z0-9_-]{32,}$/);
 
-          for (const templateName of integrationTemplateNames) {
-            const snippet = page.getByLabel(`${templateName} setup snippet`);
-            await expect(snippet).toBeVisible();
-            await expect(snippet).toHaveValue(
-              new RegExp(`Gateway URL: ${escapeRegExp(gatewayBaseUrl)}`),
-            );
-            await expect(snippet).toHaveValue(new RegExp(`API key: ${escapeRegExp(plaintextKey)}`));
-            await expect(snippet).toHaveValue(/Model: <Virtual Model Name>/);
-            expect(
-              await snippet.evaluate((element) => (element as HTMLTextAreaElement).readOnly),
-            ).toBe(true);
-          }
+          const connectionDetails = page.getByLabel("Connection details");
+          await expect(connectionDetails).toBeVisible();
+          await expect(connectionDetails).toContainText(plaintextKey);
+          await expect(connectionDetails).toContainText(plaintextKey.slice(0, 12));
+          await expect(connectionDetails).toContainText(`Gateway URL ${gatewayBaseUrl}`);
+          await expect(connectionDetails).toContainText("Virtual Model Name <Virtual Model Name>");
+          await expect(page.getByText("setup snippet")).toHaveCount(0);
+          await expect(page.getByText("Codex setup")).toHaveCount(0);
+          await expect(page.getByText("Claude Code setup")).toHaveCount(0);
+          await expect(page.getByText("Cursor setup")).toHaveCount(0);
+          await expect(page.getByText("OpenClaw setup")).toHaveCount(0);
 
           await page.getByRole("link", { name: "Back to dashboard" }).click();
           await expect(page.getByText(plaintextKey)).toHaveCount(0);
 
-          const dashboardPlaceholder = `paste one-time Agent API key for prefix ${plaintextKey.slice(
-            0,
-            12,
-          )}`;
           await expect(
             page.getByLabel("Selected agent details").getByRole("heading", { name: "Codex" }),
           ).toBeVisible();
           await expect(page.getByLabel("Selected agent details")).toContainText(virtualModel.name);
-          for (const templateName of integrationTemplateNames) {
-            const snippet = page.getByLabel(`${templateName} setup snippet`);
-            await expect(snippet).toBeVisible();
-            await expect(snippet).toHaveValue(
-              new RegExp(`Gateway URL: ${escapeRegExp(gatewayBaseUrl)}`),
-            );
-            await expect(snippet).toHaveValue(
-              new RegExp(`API key: ${escapeRegExp(dashboardPlaceholder)}`),
-            );
-            await expect(snippet).toHaveValue(new RegExp(`Model: ${virtualModel.name}`));
-            expect(
-              await snippet.evaluate((element) => (element as HTMLTextAreaElement).readOnly),
-            ).toBe(true);
-          }
+          await expect(page.getByText("setup snippet")).toHaveCount(0);
+          await expect(
+            page
+              .getByLabel("Selected agent details")
+              .getByRole("heading", { name: "Integration snippets" }),
+          ).toHaveCount(0);
           await expect(page.getByText(plaintextKey)).toHaveCount(0);
         } finally {
           await context.close();
@@ -230,8 +215,4 @@ async function stopConsoleProcess(consoleApp: ConsoleProcess): Promise<void> {
       resolve();
     }, 2_000);
   });
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

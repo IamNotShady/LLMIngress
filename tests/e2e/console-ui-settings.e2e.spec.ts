@@ -9,13 +9,12 @@ test("settings page renders only General, Security, and Notification channel set
 
     await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 
-    // Sub-nav links.
-    const subnav = page.getByRole("navigation", { name: "Settings sections" });
+    await expect(page.getByRole("navigation", { name: "Settings sections" })).toHaveCount(0);
     for (const link of ["General", "Security", "Notifications"]) {
-      await expect(subnav.getByRole("link", { name: link, exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: link, exact: true })).toHaveCount(0);
     }
     for (const removedLink of ["Data", "Danger Zone"]) {
-      await expect(subnav.getByRole("link", { name: removedLink, exact: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: removedLink, exact: true })).toHaveCount(0);
     }
 
     // Section headings.

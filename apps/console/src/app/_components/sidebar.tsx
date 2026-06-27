@@ -66,7 +66,7 @@ export function Sidebar({
           />
           <span>
             {gatewayStatusLabel}
-            <em>Config {gatewayConfigVersionLabel}</em>
+            <em>Config version {gatewayConfigVersionLabel}</em>
           </span>
         </div>
         <div className="sidebar-account">

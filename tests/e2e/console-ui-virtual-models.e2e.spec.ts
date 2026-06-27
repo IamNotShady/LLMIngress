@@ -44,12 +44,12 @@ test("virtual models page uses real usage metrics instead of placeholder values"
 
       const unusedRow = page.getByRole("row", { name: /mix-unused/ });
       await expect(unusedRow.locator("td").nth(4)).toHaveText("0");
-      await expect(unusedRow.locator("td").nth(5)).toHaveText("$0.00000000");
+      await expect(unusedRow.locator("td").nth(5)).toHaveText("$0.00");
       await expect(unusedRow.locator("td").nth(6)).toHaveText("0.0%");
 
       const usedRow = page.getByRole("row", { name: /used-balanced/ });
       await expect(usedRow.locator("td").nth(4)).toHaveText("2");
-      await expect(usedRow.locator("td").nth(5)).toHaveText("$0.04000000");
+      await expect(usedRow.locator("td").nth(5)).toHaveText("$0.04");
       await expect(usedRow.locator("td").nth(6)).toHaveText("50.0%");
       await page.getByRole("link", { name: "used-balanced" }).click();
       await expect(page.locator(".vm-detail-card")).toContainText("GPT-4.1 Mini");
@@ -58,7 +58,7 @@ test("virtual models page uses real usage metrics instead of placeholder values"
       const detail = page.locator(".vm-detail-card");
       await expect(detail.getByRole("heading", { name: "mix-unused" })).toBeVisible();
       await expect(detail).toContainText("Requests 24h");
-      await expect(detail).toContainText("$0.00000000");
+      await expect(detail).toContainText("$0.00");
       await expect(detail).toContainText("0.0%");
     },
     { seed: seedVirtualModelMetricData },

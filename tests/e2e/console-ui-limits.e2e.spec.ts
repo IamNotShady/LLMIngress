@@ -20,67 +20,78 @@ test("limits page renders the reference KPI, table, and rule configuration layou
 
       await expect(page.getByRole("heading", { level: 1, name: "Limits" })).toBeVisible();
       await expect(
-        page.getByText("管理 Agent API Key 的预算、Token、RPM、TPM 与并发限制"),
+        page.getByText("Manage Agent API Key budgets, tokens, RPM, TPM, and concurrency limits."),
       ).toBeVisible();
 
-      for (const label of ["已配置规则", "今日超限次数", "接近预算 Key", "Rate Limit 触发"]) {
+      for (const label of [
+        "Configured rules",
+        "Over-limit today",
+        "Keys near budget",
+        "Rate limit hits",
+      ]) {
         await expect(page.locator(".stat-card-label", { hasText: label })).toBeVisible();
       }
-      await expect(page.getByText("达到告警阈值", { exact: true })).toBeVisible();
-      await expect(page.getByText("达到 80%", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("At alert threshold", { exact: true })).toBeVisible();
+      await expect(page.getByText("At 80%", { exact: true })).toHaveCount(0);
 
-      await expect(page.getByPlaceholder("搜索 Agent 或 API Key Prefix")).toBeVisible();
-      await expect(page.getByRole("link", { name: "新增规则" })).toHaveCount(0);
+      await expect(page.getByPlaceholder("Search Agent or API Key prefix")).toBeVisible();
+      await expect(page.getByRole("link", { name: "Add rule" })).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Limit Rules" })).toBeVisible();
 
       const table = page.getByRole("table");
       for (const column of [
         "Agent",
         "API Key",
-        "成本上限",
-        "Token 上限",
+        "Cost limit",
+        "Token limit",
         "RPM",
         "TPM",
-        "并发",
-        "使用率",
-        "状态",
-        "操作",
+        "Concurrency",
+        "Usage",
+        "Status",
+        "Actions",
       ]) {
         await expect(table.getByRole("columnheader", { name: column, exact: true })).toBeVisible();
       }
 
       await expect(table.getByRole("cell", { exact: true, name: "Cursor" })).toBeVisible();
       await expect(table.getByRole("cell", { exact: true, name: "84%" })).toBeVisible();
-      await expect(table.getByText("警告", { exact: true })).toBeVisible();
-      await expect(table.getByRole("link", { name: "编辑" })).toHaveCount(0);
-      await expect(table.getByRole("button", { name: "删除 Cursor" })).toBeVisible();
-      await expect(table.getByRole("button", { name: "删除 Hermes" })).toBeVisible();
+      await expect(table.getByText("Warning", { exact: true })).toBeVisible();
+      await expect(table.getByRole("link", { name: "Edit" })).toHaveCount(0);
+      await expect(table.getByRole("button", { name: "Delete Cursor" })).toBeVisible();
+      await expect(table.getByRole("button", { name: "Delete Hermes" })).toBeVisible();
       await expect(
-        page.getByText("当前版本：超限后统一直接阻断请求，不支持人工绕过。", { exact: true }),
+        page.getByText(
+          "Current version: over-limit requests are blocked directly; manual overrides are not supported.",
+          { exact: true },
+        ),
       ).toHaveCount(0);
 
-      await expect(page.getByRole("heading", { name: "规则配置" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Rule configuration" })).toBeVisible();
       for (const removedOption of ["Budget", "Rate Limit", "Allowed Models"]) {
         await expect(page.getByText(removedOption, { exact: true })).toHaveCount(0);
       }
       for (const label of [
-        "成本上限 (USD)",
-        "Token 上限",
-        "周期",
-        "告警阈值",
+        "Cost limit (USD)",
+        "Token limit",
+        "Period",
+        "Alert threshold",
         "RPM",
         "TPM",
-        "并发数",
+        "Concurrency",
       ]) {
         await expect(page.getByLabel(label, { exact: true })).toBeVisible();
       }
       await expect(page.locator(".limits-field-hint")).toHaveCount(0);
-      await expect(page.getByText("当前使用率")).toBeVisible();
+      await expect(page.getByText("Current usage")).toBeVisible();
       await expect(page.getByText("coding-balanced", { exact: true })).toBeVisible();
       await expect(page.getByText("smart", { exact: true })).toBeVisible();
-      await expect(page.getByText("当前版本说明", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("Current version note", { exact: true })).toHaveCount(0);
       await expect(
-        page.getByText("不支持 per-rule 阻断策略或人工绕过；超限直接阻断。", { exact: true }),
+        page.getByText(
+          "Per-rule blocking policies or manual overrides are not supported; over-limit requests are blocked directly.",
+          { exact: true },
+        ),
       ).toHaveCount(0);
 
       await table
@@ -88,12 +99,12 @@ test("limits page renders the reference KPI, table, and rule configuration layou
         .getByRole("link", { name: "Hermes" })
         .click();
       await expect(page).toHaveURL(new RegExp(`/limits\\?selected=${LIMITS_SECONDARY_AGENT_ID}$`));
-      const configPanel = page.getByLabel("规则配置");
+      const configPanel = page.getByLabel("Rule configuration");
       await expect(configPanel.getByText("Hermes", { exact: true })).toBeVisible();
-      await expect(configPanel.getByLabel("成本上限 (USD)", { exact: true })).toHaveValue("25");
-      await expect(configPanel.getByLabel("并发数", { exact: true })).toHaveValue("3");
+      await expect(configPanel.getByLabel("Cost limit (USD)", { exact: true })).toHaveValue("25");
+      await expect(configPanel.getByLabel("Concurrency", { exact: true })).toHaveValue("3");
 
-      await table.getByRole("button", { name: "删除 Hermes" }).click();
+      await table.getByRole("button", { name: "Delete Hermes" }).click();
       await expect(page).toHaveURL(/\/limits$/);
       await expect(table.getByRole("cell", { name: "Hermes" })).toHaveCount(0);
       await expect.poll(() => readAgentLimitCount(databaseUrl, LIMITS_SECONDARY_AGENT_ID)).toBe(0);
@@ -110,14 +121,14 @@ test("limits save persists budget rate concurrency threshold rules and stays on 
     async ({ page, baseUrl, databaseUrl }) => {
       await page.goto(`${baseUrl}/limits?selected=${LIMITS_AGENT_ID}`);
 
-      await page.getByLabel("成本上限 (USD)", { exact: true }).fill("120");
-      await page.getByLabel("Token 上限", { exact: true }).fill("2500000");
-      await page.getByLabel("周期", { exact: true }).selectOption("month");
-      await page.getByLabel("告警阈值", { exact: true }).fill("75");
+      await page.getByLabel("Cost limit (USD)", { exact: true }).fill("120");
+      await page.getByLabel("Token limit", { exact: true }).fill("2500000");
+      await page.getByLabel("Period", { exact: true }).selectOption("month");
+      await page.getByLabel("Alert threshold", { exact: true }).fill("75");
       await page.getByLabel("RPM", { exact: true }).fill("150");
       await page.getByLabel("TPM", { exact: true }).fill("80000");
-      await page.getByLabel("并发数", { exact: true }).fill("12");
-      await page.getByRole("button", { name: "保存规则" }).click();
+      await page.getByLabel("Concurrency", { exact: true }).fill("12");
+      await page.getByRole("button", { name: "Save rules" }).click();
 
       await expect(page).toHaveURL(new RegExp(`/limits\\?selected=${LIMITS_AGENT_ID}$`));
       await expect(page.getByRole("heading", { level: 1, name: "Limits" })).toBeVisible();

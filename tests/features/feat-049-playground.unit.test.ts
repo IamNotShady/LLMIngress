@@ -124,13 +124,13 @@ describe("feat-049 Playground live public API test", () => {
     expect(
       readPlaygroundStreamResponseText(
         [
-          'data: {"type":"response.output_text.delta","delta":"你好"}',
-          'data: {"type":"response.output_text.delta","delta":"，LLMIngress"}',
+          'data: {"type":"response.output_text.delta","delta":"Response"}',
+          'data: {"type":"response.output_text.delta","delta":" from LLMIngress"}',
           "data: [DONE]",
           "",
         ].join("\n\n"),
       ),
-    ).toBe("你好，LLMIngress");
+    ).toBe("Response from LLMIngress");
 
     expect(
       readPlaygroundStreamResponseText(

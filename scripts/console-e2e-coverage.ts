@@ -27,7 +27,8 @@ export type CoverageReport = {
   summary: JsCoverageSummary;
 };
 
-type CoveredRange = {
+type CountedRange = {
+  count: number;
   end: number;
   start: number;
 };
@@ -51,10 +52,7 @@ export function summarizeJsCoverage(entries: JsCoverageEntry[]): JsCoverageSumma
       continue;
     }
 
-    const coveredBytes = mergeCoveredRanges(entry, totalBytes).reduce(
-      (total, range) => total + range.end - range.start,
-      0,
-    );
+    const coveredBytes = countCoveredBytes(entry, totalBytes);
 
     totalScriptBytes += totalBytes;
     totalScriptCount += 1;
@@ -128,27 +126,55 @@ function toCoveragePage(item: ConsoleNavItem): CoveragePage {
   };
 }
 
-function mergeCoveredRanges(entry: JsCoverageEntry, totalBytes: number): CoveredRange[] {
-  const ranges = entry.functions
+function countCoveredBytes(entry: JsCoverageEntry, totalBytes: number): number {
+  const ranges: CountedRange[] = entry.functions
     .flatMap((fn) => fn.ranges)
-    .filter((range) => range.count > 0)
     .map((range) => ({
+      count: range.count,
       end: Math.min(totalBytes, range.endOffset),
       start: Math.max(0, range.startOffset),
     }))
-    .filter((range) => range.end > range.start)
-    .sort((a, b) => a.start - b.start);
+    .filter((range) => range.end > range.start);
 
-  const merged: CoveredRange[] = [];
-  for (const range of ranges) {
-    const previous = merged.at(-1);
-    if (!previous || range.start > previous.end) {
-      merged.push({ ...range });
-      continue;
-    }
-    previous.end = Math.max(previous.end, range.end);
+  if (ranges.length === 0) {
+    return 0;
   }
-  return merged;
+
+  // V8 block coverage nests ranges: an unexecuted branch (count 0) sits inside
+  // its enclosing function's executed range (count 1). A byte is covered only
+  // if the innermost range over it has count > 0, so we walk every elementary
+  // segment between range boundaries and resolve the innermost enclosing range.
+  const boundaries = Array.from(
+    new Set(ranges.flatMap((range) => [range.start, range.end])),
+  ).sort((a, b) => a - b);
+
+  let coveredBytes = 0;
+  for (let i = 0; i < boundaries.length - 1; i += 1) {
+    const start = boundaries[i];
+    const end = boundaries[i + 1];
+
+    let innermost: CountedRange | undefined;
+    for (const range of ranges) {
+      if (range.start > start || range.end < end) {
+        continue;
+      }
+      // The innermost enclosing range has the greatest start, breaking ties on
+      // the smallest end.
+      if (
+        !innermost ||
+        range.start > innermost.start ||
+        (range.start === innermost.start && range.end < innermost.end)
+      ) {
+        innermost = range;
+      }
+    }
+
+    if (innermost && innermost.count > 0) {
+      coveredBytes += end - start;
+    }
+  }
+
+  return coveredBytes;
 }
 
 function formatPercent(numerator: number, denominator: number): string {

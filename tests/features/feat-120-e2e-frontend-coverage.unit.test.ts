@@ -56,4 +56,32 @@ describe("feat-120 E2E frontend coverage command", () => {
       coverage.formatCoverageReport({ pages: coverage.buildCoveragePages(), summary }),
     ).toContain("JavaScript bytes: 4/8 (50.00%)");
   });
+
+  it("excludes nested uncovered blocks inside an executed function", async () => {
+    const coverage = await import("../../scripts/console-e2e-coverage");
+    // V8 block coverage nests an unexecuted branch (count 0) inside the
+    // function's own executed range (count 1). Only the bytes outside the
+    // nested count-0 block are actually covered: [0,4) of an 8-byte source.
+    const summary = coverage.summarizeJsCoverage([
+      {
+        functions: [
+          {
+            functionName: "withBranch",
+            isBlockCoverage: true,
+            ranges: [
+              { count: 1, endOffset: 8, startOffset: 0 },
+              { count: 0, endOffset: 8, startOffset: 4 },
+            ],
+          },
+        ],
+        scriptId: "1",
+        source: "abcdefgh",
+        url: "http://localhost/_next/static/chunks/example.js",
+      },
+    ]);
+
+    expect(summary.coveredScriptBytes).toBe(4);
+    expect(summary.totalScriptBytes).toBe(8);
+    expect(summary.percent).toBeCloseTo(50, 5);
+  });
 });

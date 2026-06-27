@@ -2,13 +2,20 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-24 (Usage Virtual Model filter label repair)
-**Active Feature:** none - Usage Virtual Model filter label repair complete
+**Last Updated:** 2026-06-27 (feat-119 Terminal Coverage Output)
+**Active Feature:** none - feat-119 complete
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **Terminal Coverage Output (feat-119)**:
+  - Added report-only Vitest V8 coverage output to `pnpm test`, so `pnpm run verify` prints coverage rates during its test phase.
+  - TDD red observed first: feat-119 unit failed because `@vitest/coverage-v8` was missing, and feat-119 E2E failed because `pnpm test` did not print `Coverage report from v8`.
+  - Configured terminal-only `text-summary` coverage with no thresholds or HTML report, and excluded Console TSX pages from uncovered-file scanning to avoid parser noise in the terminal summary.
+  - Verification passed: focused feat-119 unit and E2E checks; `pnpm test` passed with 120 test files / 466 tests and printed coverage summary (Statements 48.33%, Branches 45.46%, Functions 55.67%, Lines 48.48%); `pnpm run verify` passed and showed the same coverage summary; pre-marking `pnpm run verify:features` re-verified all 118 prior passing features.
+  - Final `pnpm run verify:features` after marking feat-119 passing re-verified all 119 passing features; the optimized E2E batch initially timed out on feat-046, then fallback original feature verification passed including feat-046 and feat-119.
 
 - [x] **Usage Virtual Model filter label repair (feat-047 follow-up)**:
   - Root cause: the Usage filter's Virtual Model select still rendered options inline as `description (name)`, separate from the Agent form label helper fixed earlier.

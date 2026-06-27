@@ -26,6 +26,8 @@ test("limits page renders the reference KPI, table, and rule configuration layou
       for (const label of ["已配置规则", "今日超限次数", "接近预算 Key", "Rate Limit 触发"]) {
         await expect(page.locator(".stat-card-label", { hasText: label })).toBeVisible();
       }
+      await expect(page.getByText("达到告警阈值", { exact: true })).toBeVisible();
+      await expect(page.getByText("达到 80%", { exact: true })).toHaveCount(0);
 
       await expect(page.getByPlaceholder("搜索 Agent 或 API Key Prefix")).toBeVisible();
       await expect(page.getByRole("link", { name: "新增规则" })).toHaveCount(0);

@@ -422,6 +422,9 @@ pre,
   background: var(--ok);
   flex: none;
 }
+.sidebar-account-dot.is-warn {
+  background: var(--warn);
+}
 
 .sidebar-footer-row {
   display: flex;
@@ -1595,11 +1598,18 @@ details.disclosure[open] > .disclosure-summary {
   font-size: var(--text-xs);
   font-weight: 600;
 }
+.topbar-status.is-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
 .topbar-status-dot {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: var(--radius-pill);
   background: var(--ok);
+}
+.topbar-status.is-warn .topbar-status-dot {
+  background: var(--warn);
 }
 .topbar-link {
   font-size: var(--text-xs);
@@ -1713,10 +1723,7 @@ details.disclosure[open] > .disclosure-summary {
 }
 .agents-filter-bar {
   display: grid;
-  grid-template-columns: minmax(8rem, 0.9fr) minmax(8rem, 0.9fr) minmax(9rem, 1fr) minmax(
-      16rem,
-      2.7fr
-    );
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-sm);
   align-items: end;
   margin: 0;
@@ -1732,6 +1739,19 @@ details.disclosure[open] > .disclosure-summary {
 .agents-filter-bar label {
   font-size: var(--text-xs);
   color: var(--text-faint);
+}
+.agents-search-field {
+  grid-column: 1 / -1;
+}
+.agents-filter-actions {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: center;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+}
+.agents-filter-actions .secondary-button {
+  min-height: 2.25rem;
 }
 .agents-list-card {
   padding: var(--space-md);

@@ -34,5 +34,11 @@ test("settings page renders only General, Security, and Notification channel set
     await expect(
       page.getByRole("button", { name: "Create webhook notification channel" }),
     ).toBeVisible();
+    const security = page.locator("#settings-security");
+    await expect(security).toContainText("Admin password");
+    await expect(security).toContainText("Set");
+    await expect(security).toContainText("Active sessions");
+    await expect(security).toContainText("1");
+    await expect(security.getByText("Public access")).toHaveCount(0);
   });
 });

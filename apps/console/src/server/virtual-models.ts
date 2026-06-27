@@ -24,6 +24,11 @@ export type ConsoleVirtualModel = NormalizedVirtualModelFormInput & {
   routePolicyCount: number;
 };
 
+export type ConsoleVirtualModelFallbackBreakdown = {
+  name: string;
+  value: number;
+};
+
 type VirtualModelDependencyCounts = {
   allowedAgentCount: number;
   defaultAgentCount: number;
@@ -48,6 +53,11 @@ type VirtualModelDependencyRow = PostgresQueryResultRow & {
   allowed_agent_count: number;
   default_agent_count: number;
   route_policy_count: number;
+};
+
+type VirtualModelFallbackBreakdownRow = PostgresQueryResultRow & {
+  name: string;
+  value: number | string;
 };
 
 type QueryClient = {
@@ -97,6 +107,57 @@ export async function listVirtualModels(databaseUrl: string): Promise<ConsoleVir
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<VirtualModelRow>(buildVirtualModelListSql());
     return result.rows.map(rowToConsoleVirtualModel);
+  });
+}
+
+export async function listVirtualModelFallbackBreakdown(input: {
+  databaseUrl: string;
+  virtualModelId: string;
+}): Promise<ConsoleVirtualModelFallbackBreakdown[]> {
+  return withClient(input.databaseUrl, async (client) => {
+    const result = await client.query<VirtualModelFallbackBreakdownRow>(
+      `
+        with vm_requests as (
+          select request_activity.id
+          from request_activity
+          where request_activity.virtual_model_id = $1::uuid
+            and request_activity.started_at >= now() - interval '24 hours'
+        ),
+        fallback_request_counts as (
+          select fallback_events.request_activity_id,
+                 count(*)::integer as fallback_count
+          from fallback_events
+          join vm_requests on vm_requests.id = fallback_events.request_activity_id
+          group by fallback_events.request_activity_id
+        ),
+        no_fallback as (
+          select 'No fallback triggered'::text as name,
+                 count(vm_requests.id)::integer as value
+          from vm_requests
+          left join fallback_request_counts
+            on fallback_request_counts.request_activity_id = vm_requests.id
+          where fallback_request_counts.request_activity_id is null
+        ),
+        fallback_models as (
+          select coalesce(provider_models.display_name, provider_models.model_id, 'Unknown model')
+                   as name,
+                 count(fallback_events.id)::integer as value
+          from fallback_events
+          join vm_requests on vm_requests.id = fallback_events.request_activity_id
+          left join provider_models on provider_models.id = fallback_events.provider_model_id
+          group by name
+        )
+        select name, value from no_fallback where value > 0
+        union all
+        select name, value from fallback_models where value > 0
+        order by value desc, name asc
+      `,
+      [input.virtualModelId],
+    );
+    return result.rows.map((row) => ({
+      name: row.name,
+      value: Number(row.value),
+    }));
   });
 }
 

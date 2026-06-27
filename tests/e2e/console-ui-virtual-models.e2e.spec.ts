@@ -51,6 +51,8 @@ test("virtual models page uses real usage metrics instead of placeholder values"
       await expect(usedRow.locator("td").nth(4)).toHaveText("2");
       await expect(usedRow.locator("td").nth(5)).toHaveText("$0.04000000");
       await expect(usedRow.locator("td").nth(6)).toHaveText("50.0%");
+      await page.getByRole("link", { name: "used-balanced" }).click();
+      await expect(page.locator(".vm-detail-card")).toContainText("GPT-4.1 Mini");
 
       await page.getByRole("link", { name: "mix-unused" }).click();
       const detail = page.locator(".vm-detail-card");
@@ -146,6 +148,14 @@ async function seedVirtualModelMetricData(databaseUrl: string): Promise<void> {
                ($5, $6, $3, $4, 0.03, 'provider')
       `,
       [randomUUID(), succeededActivityId, agentId, providerModelId, randomUUID(), failedActivityId],
+    );
+    await client.query(
+      `
+        insert into fallback_events
+          (id, request_activity_id, provider_model_id, attempt_order, status, error_code)
+        values ($1, $2, $3, 1, 'failed', 'upstream_error')
+      `,
+      [randomUUID(), failedActivityId, providerModelId],
     );
   } finally {
     await client.end();

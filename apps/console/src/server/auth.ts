@@ -30,6 +30,11 @@ export type ConsoleSession = {
   token: string;
 };
 
+export type ConsoleSecuritySummary = {
+  activeSessionCount: number;
+  adminPasswordSet: boolean;
+};
+
 export function getConsoleDatabaseUrl(): string {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
@@ -85,6 +90,30 @@ export async function isConsoleInitialized(databaseUrl: string): Promise<boolean
       "select exists(select 1 from console_admins where id = 1) as exists",
     );
     return result.rows[0]?.exists ?? false;
+  });
+}
+
+export async function getConsoleSecuritySummary(
+  databaseUrl: string,
+): Promise<ConsoleSecuritySummary> {
+  return withClient(databaseUrl, async (client) => {
+    const result = await client.query<{
+      active_session_count: number;
+      admin_password_set: boolean;
+    }>(
+      `
+        select exists(select 1 from console_admins where id = 1) as admin_password_set,
+               (
+                 select count(*)::integer
+                 from console_sessions
+                 where expires_at > now()
+               ) as active_session_count
+      `,
+    );
+    return {
+      activeSessionCount: result.rows[0]?.active_session_count ?? 0,
+      adminPasswordSet: result.rows[0]?.admin_password_set ?? false,
+    };
   });
 }
 

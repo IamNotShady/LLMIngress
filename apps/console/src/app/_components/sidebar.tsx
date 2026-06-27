@@ -6,7 +6,17 @@ import { consoleNavItems, findActiveNavItem } from "../_lib/nav";
 import { FlatIcon } from "./flat-icon";
 import { ThemeToggle } from "./theme-toggle";
 
-export function Sidebar() {
+type SidebarProps = {
+  gatewayConfigVersionLabel: string;
+  gatewayStatusHealthy: boolean;
+  gatewayStatusLabel: string;
+};
+
+export function Sidebar({
+  gatewayConfigVersionLabel,
+  gatewayStatusHealthy,
+  gatewayStatusLabel,
+}: SidebarProps) {
   const pathname = usePathname() || "/";
   const active = findActiveNavItem(pathname);
 
@@ -50,10 +60,13 @@ export function Sidebar() {
 
       <div className="sidebar-footer">
         <div className="sidebar-runtime-card">
-          <span className="sidebar-account-dot" aria-hidden="true" />
+          <span
+            className={`sidebar-account-dot${gatewayStatusHealthy ? "" : " is-warn"}`}
+            aria-hidden="true"
+          />
           <span>
-            Gateway running
-            <em>v0.1.0</em>
+            {gatewayStatusLabel}
+            <em>Config {gatewayConfigVersionLabel}</em>
           </span>
         </div>
         <div className="sidebar-account">
@@ -69,7 +82,6 @@ export function Sidebar() {
             </button>
           </form>
         </div>
-        <p className="sidebar-version">v0.1.0</p>
       </div>
     </aside>
   );

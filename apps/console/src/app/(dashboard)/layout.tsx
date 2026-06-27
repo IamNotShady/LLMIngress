@@ -1,6 +1,12 @@
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../../server/auth";
+import {
+  formatGatewayConfigVersion,
+  formatGatewayShellStatus,
+  isGatewayRuntimeHealthy,
+  listConsoleGatewayRuntimeStatuses,
+} from "../../server/runtime";
 import { FirstRunSetup, Login } from "../_components/auth-screens";
 import { Sidebar } from "../_components/sidebar";
 import { Topbar } from "../_components/topbar";
@@ -23,11 +29,25 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     return <Login />;
   }
 
+  const gateway = (await listConsoleGatewayRuntimeStatuses(databaseUrl))[0] ?? null;
+  const gatewayStatusLabel = formatGatewayShellStatus({ gateway });
+  const gatewayStatusHealthy = isGatewayRuntimeHealthy({ gateway });
+  const gatewayConfigVersionLabel = formatGatewayConfigVersion(
+    gateway?.appliedConfigVersion ?? null,
+  );
+
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar
+        gatewayConfigVersionLabel={gatewayConfigVersionLabel}
+        gatewayStatusHealthy={gatewayStatusHealthy}
+        gatewayStatusLabel={gatewayStatusLabel}
+      />
       <div className="app-main">
-        <Topbar />
+        <Topbar
+          gatewayStatusHealthy={gatewayStatusHealthy}
+          gatewayStatusLabel={gatewayStatusLabel}
+        />
         {children}
       </div>
     </div>

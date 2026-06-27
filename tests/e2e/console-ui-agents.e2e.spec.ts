@@ -30,7 +30,7 @@ test("agents page matches the designed list and detail layout", async ({ browser
       await expect(createDialog.getByLabel("Concurrency limit")).toBeHidden();
       await createDialog.getByRole("link", { name: "Close" }).click();
 
-      for (const label of ["Agents", "Connected", "Requests today", "Cost this week"]) {
+      for (const label of ["Agents", "Connected", "Requests 24h", "Cost 7d"]) {
         await expect(page.locator(".stat-card-label", { hasText: label })).toBeVisible();
       }
 
@@ -38,6 +38,12 @@ test("agents page matches the designed list and detail layout", async ({ browser
         await expect(page.getByLabel(label, { exact: true })).toBeVisible();
       }
       await expect(page.getByPlaceholder("Search agent name or note")).toBeVisible();
+      await page.getByLabel("Status", { exact: true }).selectOption("offline");
+      await page.getByRole("button", { name: "Apply filters" }).click();
+      await expect(page).toHaveURL(/agentStatus=offline/);
+      await expect(page.getByRole("row", { name: /OpenClaw/ })).toBeVisible();
+      await expect(page.getByRole("row", { name: /Claude Code/ })).toHaveCount(0);
+      await page.getByRole("link", { name: "Clear filters" }).click();
 
       await expect(page.getByRole("heading", { name: "Agent list" })).toBeVisible();
       for (const header of [
@@ -46,13 +52,14 @@ test("agents page matches the designed list and detail layout", async ({ browser
         "API Key Prefix",
         "Default Virtual Model",
         "Available VM",
-        "Requests today",
-        "Today Cost",
+        "Requests 24h",
+        "24h Cost",
         "Status",
         "Action",
       ]) {
         await expect(page.getByRole("columnheader", { name: header })).toBeVisible();
       }
+      await expect(page.getByRole("row", { name: /OpenClaw/ })).toContainText("Offline");
 
       const details = page.getByLabel("Selected agent details");
       await expect(details.getByRole("heading", { name: "Claude Code" })).toBeVisible();

@@ -50,8 +50,15 @@ test("runtime page shows heartbeat config version reload result and gateway inte
               .locator(".stat-card-value"),
           ).toHaveText("Healthy");
           // Config versions + reload result.
-          await expect(runtimeSection.getByText("v7", { exact: true })).toBeVisible();
-          await expect(runtimeSection.getByText("v8", { exact: true })).toBeVisible();
+          const migrationStatus = runtimeSection.locator(".chart-card", {
+            hasText: "Migration status",
+          });
+          await expect(
+            migrationStatus.locator(".detail-field", { hasText: "Applied config" }).locator("dd"),
+          ).toHaveText("v7");
+          await expect(
+            migrationStatus.locator(".detail-field", { hasText: "Target config" }).locator("dd"),
+          ).toHaveText("v8");
           await expect(
             runtimeSection.getByText(/Reload failed at .*provider key missing/),
           ).toBeVisible();

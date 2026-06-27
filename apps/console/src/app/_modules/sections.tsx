@@ -24,14 +24,17 @@ import {
   listAgentLimits,
 } from "../../server/agent-limits";
 import {
+  type AgentDerivedStatus,
+  type AgentIntegrationPlatform,
+  type AgentType,
   type AgentVirtualModelAccess,
   agentIntegrationPlatforms,
   type ConsoleAgent,
   listAgents,
   listAgentVirtualModelAccess,
 } from "../../server/agents";
-import { getConsoleDatabaseUrl } from "../../server/auth";
-import { placeholderFloat, placeholderTrend } from "../../server/mock-data";
+import { getConsoleAnalyticsSnapshot } from "../../server/analytics";
+import { getConsoleDatabaseUrl, getConsoleSecuritySummary } from "../../server/auth";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
@@ -65,7 +68,9 @@ import {
 } from "../../server/route-policies";
 import {
   type ConsoleGatewayRuntimeStatus,
+  formatGatewayConfigVersion,
   formatGatewayHeartbeatStatus,
+  formatGatewayHeartbeatSummary,
   formatRuntimeReloadResult,
   getConsoleRuntimeSnapshot,
 } from "../../server/runtime";
@@ -77,7 +82,11 @@ import {
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
 } from "../../server/usage";
-import { type ConsoleVirtualModel, listVirtualModels } from "../../server/virtual-models";
+import {
+  type ConsoleVirtualModel,
+  listVirtualModelFallbackBreakdown,
+  listVirtualModels,
+} from "../../server/virtual-models";
 import { AgentVirtualModelMultiSelect } from "../_components/agent-virtual-model-multi-select";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
@@ -141,22 +150,30 @@ const providerCreateChoices = [
 
 export async function OverviewSection() {
   const databaseUrl = getConsoleDatabaseUrl();
+  const now = new Date();
+  const overviewStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: "24h" });
+  const overviewAnalytics = await getConsoleAnalyticsSnapshot({
+    bucket: "hour",
+    databaseUrl,
+    end: now,
+    start: overviewStart,
+    topLimit: 20,
+  });
   const activities = await listConsoleActivities(databaseUrl);
-  const agents = await listAgents(databaseUrl);
   const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
   const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
   const gateway = runtimeSnapshot.gateways[0] ?? null;
 
   const recentActivities = activities.slice(0, 8);
-  const activeAgentCount =
-    usageSummary.agentBreakdowns.filter((agent) => agent.requestCount > 0).length ||
-    agents.filter((agent) => agent.enabled).length;
+  const activeAgentCount = usageSummary.agentBreakdowns.filter(
+    (agent) => agent.requestCount > 0,
+  ).length;
   const failureRate =
     usageSummary.requestCount > 0
       ? `${((usageSummary.failureCount / usageSummary.requestCount) * 100).toFixed(2)}%`
       : "0.00%";
-  const trend = placeholderTrend("overview-trend", 14);
+  const trend = usageSummary.trend.map(formatOverviewTrendPoint);
   const topAgents = buildTopAgentsByCost(usageSummary.agentBreakdowns, recentActivities);
 
   return (
@@ -164,40 +181,74 @@ export async function OverviewSection() {
       <div className="stat-grid overview-stat-grid">
         <StatCard
           icon="RQ"
-          label="Requests today"
+          label="Requests 24h"
           value={formatCompactNumber(usageSummary.requestCount)}
-          delta={formatOverviewDelta("overview-requests", "up")}
-          deltaTone="up"
+          delta={formatPreviousWindowPercentDelta(
+            usageSummary.requestCount,
+            overviewAnalytics.previous.requestCount,
+          )}
+          deltaTone={formatDeltaTone(
+            usageSummary.requestCount,
+            overviewAnalytics.previous.requestCount,
+          )}
         />
         <StatCard
           icon="$"
-          label="Cost today"
+          label="Cost 24h"
           value={formatOverviewMoney(usageSummary.totalCostUsd)}
-          delta={formatOverviewDelta("overview-cost", "up")}
-          deltaTone="up"
+          delta={formatPreviousWindowPercentDelta(
+            Number(usageSummary.totalCostUsd ?? 0),
+            Number(overviewAnalytics.previous.totalCostUsd ?? 0),
+          )}
+          deltaTone={formatDeltaTone(
+            Number(usageSummary.totalCostUsd ?? 0),
+            Number(overviewAnalytics.previous.totalCostUsd ?? 0),
+          )}
         />
         <StatCard
           icon="TK"
-          label="Tokens today"
+          label="Tokens 24h"
           value={formatCompactNumber(usageSummary.totalTokens)}
-          delta={formatOverviewDelta("overview-tokens", "up")}
-          deltaTone="up"
+          delta={formatPreviousWindowPercentDelta(
+            usageSummary.totalTokens,
+            overviewAnalytics.previous.totalTokens,
+          )}
+          deltaTone={formatDeltaTone(
+            usageSummary.totalTokens,
+            overviewAnalytics.previous.totalTokens,
+          )}
         />
-        <StatCard icon="FR" label="Failure rate" value={failureRate} delta="vs yesterday -0.4%" />
+        <StatCard
+          icon="FR"
+          label="Failure rate"
+          value={failureRate}
+          delta={formatPreviousWindowPointDelta(
+            usageSummary.requestCount > 0
+              ? usageSummary.failureCount / usageSummary.requestCount
+              : 0,
+            overviewAnalytics.previous.failureRate,
+          )}
+          deltaTone={formatDeltaTone(
+            overviewAnalytics.previous.failureRate,
+            usageSummary.requestCount > 0
+              ? usageSummary.failureCount / usageSummary.requestCount
+              : 0,
+          )}
+        />
         <StatCard
           icon="SV"
           label="Savings"
           value={formatOverviewMoney(usageSummary.totalSavingsUsd)}
-          delta={formatOverviewDelta("overview-savings", "up")}
-          deltaTone="up"
+          delta={formatPreviousWindowPercentDelta(
+            Number(usageSummary.totalSavingsUsd ?? 0),
+            Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
+          )}
+          deltaTone={formatDeltaTone(
+            Number(usageSummary.totalSavingsUsd ?? 0),
+            Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
+          )}
         />
-        <StatCard
-          icon="AG"
-          label="Active agents"
-          value={String(activeAgentCount)}
-          delta="vs yesterday +1"
-          deltaTone="up"
-        />
+        <StatCard icon="AG" label="Active agents 24h" value={String(activeAgentCount)} />
       </div>
 
       <div className="detail-layout">
@@ -251,17 +302,17 @@ export async function OverviewSection() {
             <span aria-hidden="true">✓</span>
             <div>
               <strong>{formatGatewayOverviewStatus(gateway)}</strong>
-              <small>{gateway ? "All systems normal" : "No gateway heartbeat recorded"}</small>
+              <small>{formatGatewayHeartbeatSummary({ gateway })}</small>
             </div>
           </div>
           <dl className="detail-field-list">
             <div className="detail-field">
-              <dt>Runtime address</dt>
+              <dt>Configured Gateway URL</dt>
               <dd>{formatRuntimeAddress(getPlaygroundGatewayBaseUrl())}</dd>
             </div>
             <div className="detail-field">
-              <dt>Version</dt>
-              <dd>v0.1.0</dd>
+              <dt>Config version</dt>
+              <dd>{formatGatewayConfigVersion(gateway?.appliedConfigVersion ?? null)}</dd>
             </div>
             <div className="detail-field">
               <dt>Uptime</dt>
@@ -337,9 +388,34 @@ function formatOverviewActivityCost(totalCostUsd: string | null): string {
   return totalCostUsd === null ? "Unavailable" : formatOverviewMoney(totalCostUsd);
 }
 
-function formatOverviewDelta(seed: string, direction: "up" | "down"): string {
-  const sign = direction === "up" ? "+" : "-";
-  return `vs yesterday ${sign}${placeholderFloat(seed, 4, 22, 1)}%`;
+function formatOverviewTrendPoint(point: ConsoleUsageTrendPoint) {
+  return {
+    costUsd: Number(point.totalCostUsd ?? 0),
+    label: point.bucketStart.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      hour12: false,
+    }),
+    requests: point.requestCount,
+  };
+}
+
+function formatPreviousWindowPercentDelta(current: number, previous: number): string {
+  if (previous === 0) {
+    return current === 0 ? "vs previous 24h 0.0%" : "vs previous 24h new";
+  }
+  return `vs previous 24h ${formatSignedDecimal(((current - previous) / previous) * 100)}%`;
+}
+
+function formatPreviousWindowPointDelta(currentRate: number, previousRate: number): string {
+  return `vs previous 24h ${formatSignedDecimal((currentRate - previousRate) * 100)}pp`;
+}
+
+function formatSignedDecimal(value: number): string {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
+}
+
+function formatDeltaTone(current: number, previous: number): "up" | "down" {
+  return current >= previous ? "up" : "down";
 }
 
 function formatTime(value: Date): string {
@@ -471,8 +547,12 @@ export async function RuntimeSection() {
           label="Gateway status"
           value={gateway ? gateway.status : "No gateway"}
         />
-        <StatCard icon="URL" label="Runtime address" value={getPlaygroundGatewayBaseUrl()} />
-        <StatCard icon="V" label="Version" value="v0.1.0" />
+        <StatCard icon="URL" label="Configured Gateway URL" value={getPlaygroundGatewayBaseUrl()} />
+        <StatCard
+          icon="CV"
+          label="Config version"
+          value={formatGatewayConfigVersion(gateway?.appliedConfigVersion ?? null)}
+        />
         <StatCard
           icon="HB"
           label="Heartbeat"
@@ -1368,11 +1448,12 @@ export async function VirtualModelsSection({
     (total, virtualModel) => total + virtualModel.requestCountTotal,
     0,
   );
-  const fallbackOverview = [
-    { name: "No fallback triggered", value: 82 },
-    { name: "gpt-4o-mini", value: 12 },
-    { name: "Other", value: 6 },
-  ];
+  const fallbackOverview = selectedVirtualModel
+    ? await listVirtualModelFallbackBreakdown({
+        databaseUrl,
+        virtualModelId: selectedVirtualModel.id,
+      })
+    : [];
   return (
     <section className="vm-dashboard" aria-label="Virtual models and routes">
       <div className="stat-grid">
@@ -1595,11 +1676,15 @@ export async function VirtualModelsSection({
               </section>
               <section className="agent-detail-section">
                 <h3>Fallback overview</h3>
-                <DonutBreakdown
-                  ariaLabel="Fallback overview"
-                  data={fallbackOverview}
-                  valueFormat="percent"
-                />
+                {fallbackOverview.length > 0 ? (
+                  <DonutBreakdown
+                    ariaLabel="Fallback overview"
+                    data={fallbackOverview}
+                    valueFormat="percent"
+                  />
+                ) : (
+                  <p>No fallback data recorded in the last 24h.</p>
+                )}
               </section>
             </>
           ) : (
@@ -1882,8 +1967,21 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
   const connectedAgentCount = agents.filter((agent) => agent.hasApiKey).length;
   const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
+  const agentTypeFilter = readAgentTypeFilter(readSingleSearchParam(searchParams.agentType));
+  const agentStatusFilter = readAgentStatusFilter(readSingleSearchParam(searchParams.agentStatus));
+  const agentPlatformFilter = readAgentPlatformFilter(
+    readSingleSearchParam(searchParams.agentPlatform),
+  );
+  const agentSearch = readSingleSearchParam(searchParams.agentSearch)?.trim() ?? "";
+  const visibleAgents = filterAgents(agents, {
+    agentSearch,
+    agentStatusFilter,
+    agentTypeFilter,
+    agentPlatformFilter,
+  });
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
-  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
+  const selectedAgent =
+    visibleAgents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0] ?? null;
   const selectedAccess = selectedAgent
     ? (agentVirtualModelAccessByAgentId.get(selectedAgent.id) ?? null)
     : null;
@@ -1923,63 +2021,94 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             <StatCard icon="ON" label="Connected" value={String(connectedAgentCount)} />
             <StatCard
               icon="RQ"
-              label="Requests today"
+              label="Requests 24h"
               value={formatCompactNumber(usageToday.requestCount)}
-              delta={formatOverviewDelta("agents-requests", "up")}
-              deltaTone="up"
             />
             <StatCard
               icon="$"
-              label="Cost this week"
+              label="Cost 7d"
               value={formatOverviewMoney(usageWeek.totalCostUsd)}
-              delta={formatOverviewDelta("agents-cost", "up")}
-              deltaTone="up"
             />
           </div>
-          <fieldset className="agents-filter-bar">
-            <legend className="sr-only">Agent filters</legend>
-            <div className="console-field">
-              <label htmlFor="agent-filter-type">Type</label>
-              <select id="agent-filter-type" defaultValue="all">
-                <option value="all">All</option>
-                <option value="coding">Coding</option>
-                <option value="terminal">Terminal</option>
-                <option value="ide">IDE</option>
-                <option value="desktop">Desktop</option>
-              </select>
-            </div>
-            <div className="console-field">
-              <label htmlFor="agent-filter-status">Status</label>
-              <select id="agent-filter-status" defaultValue="all">
-                <option value="all">All</option>
-                <option value="online">Online</option>
-                <option value="offline">Offline</option>
-              </select>
-            </div>
-            <div className="console-field">
-              <label htmlFor="agent-filter-platform">Platform</label>
-              <select id="agent-filter-platform" defaultValue="all">
-                <option value="all">All</option>
-                <option value="claude-code">Claude Code</option>
-                <option value="codex">Codex</option>
-                <option value="cursor">Cursor</option>
-              </select>
-            </div>
-            <div className="console-field agents-search-field">
-              <label htmlFor="agent-filter-search" className="sr-only">
-                Search
-              </label>
-              <input
-                id="agent-filter-search"
-                name="agentSearch"
-                placeholder="Search agent name or note"
-              />
-            </div>
-          </fieldset>
+          <form action="/agents" method="get">
+            <fieldset className="agents-filter-bar">
+              <legend className="sr-only">Agent filters</legend>
+              <div className="console-field">
+                <label htmlFor="agent-filter-type">Type</label>
+                <select id="agent-filter-type" name="agentType" defaultValue={agentTypeFilter}>
+                  <option value="all">All</option>
+                  <option value="coding">Coding</option>
+                  <option value="terminal">Terminal</option>
+                  <option value="ide">IDE</option>
+                  <option value="desktop">Desktop</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="console-field">
+                <label htmlFor="agent-filter-status">Status</label>
+                <select
+                  id="agent-filter-status"
+                  name="agentStatus"
+                  defaultValue={agentStatusFilter}
+                >
+                  <option value="all">All</option>
+                  <option value="online">Online</option>
+                  <option value="offline">Offline</option>
+                  <option value="high-risk">High risk</option>
+                </select>
+              </div>
+              <div className="console-field">
+                <label htmlFor="agent-filter-platform">Platform</label>
+                <select
+                  id="agent-filter-platform"
+                  name="agentPlatform"
+                  defaultValue={agentPlatformFilter}
+                >
+                  <option value="all">All</option>
+                  {agentIntegrationPlatforms.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {formatAgentIntegrationPlatformLabel(platform)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="console-field agents-search-field">
+                <label htmlFor="agent-filter-search" className="sr-only">
+                  Search
+                </label>
+                <input
+                  id="agent-filter-search"
+                  name="agentSearch"
+                  defaultValue={agentSearch}
+                  placeholder="Search agent name or note"
+                />
+              </div>
+              <div className="agents-filter-actions">
+                <button type="submit">
+                  <FlatIcon name="filter" />
+                  <span>Apply filters</span>
+                </button>
+                <a
+                  className="secondary-button"
+                  href={buildQueryHref(searchParams, {
+                    agentPlatform: undefined,
+                    agentSearch: undefined,
+                    agentStatus: undefined,
+                    agentType: undefined,
+                    selected: undefined,
+                  })}
+                >
+                  Clear filters
+                </a>
+              </div>
+            </fieldset>
+          </form>
           <div className="chart-card agents-list-card">
             <h2 className="chart-card-title">Agent list</h2>
             {agents.length === 0 ? (
               <p>No agents yet — create one below.</p>
+            ) : visibleAgents.length === 0 ? (
+              <p>No agents match the selected filters.</p>
             ) : (
               <div className="data-table-wrap">
                 <table className="data-table agents-table">
@@ -1990,14 +2119,14 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                       <th>API Key Prefix</th>
                       <th>Default Virtual Model</th>
                       <th className="num">Available VM</th>
-                      <th className="num">Requests today</th>
-                      <th className="num">Today Cost</th>
+                      <th className="num">Requests 24h</th>
+                      <th className="num">24h Cost</th>
                       <th>Status</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {agents.map((agent) => {
+                    {visibleAgents.map((agent) => {
                       const access = agentVirtualModelAccessByAgentId.get(agent.id);
                       const usage = usageTodayByAgentId.get(agent.id);
                       return (
@@ -2094,11 +2223,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                                 selected: agent.id,
                               })}
                             >
-                              {agent.hasApiKey ? (
-                                <span className="pill--ok pill">Online</span>
-                              ) : (
-                                <span className="pill--warn pill">Offline</span>
-                              )}
+                              <AgentStatusPill status={agent.status} />
                             </a>
                           </td>
                           <td>
@@ -2136,7 +2261,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             <>
               <div className="agent-detail-head">
                 <h2>{selectedAgent.name}</h2>
-                <span className="pill--ok pill">Online</span>
+                <AgentStatusPill status={selectedAgent.status} />
               </div>
               <dl className="agent-detail-fields">
                 <div>
@@ -2145,7 +2270,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                 </div>
                 <div>
                   <dt>Platform</dt>
-                  <dd>{formatAgentPlatform(selectedAgent.name, selectedAgent.agentType)}</dd>
+                  <dd>{formatAgentIntegrationPlatformLabel(selectedAgent.integrationPlatform)}</dd>
                 </div>
                 <div>
                   <dt>Created</dt>
@@ -2640,18 +2765,87 @@ function formatAgentTypeLabel(agentType: string): string {
   return labels[agentType] ?? agentType;
 }
 
-function formatAgentPlatform(name: string, agentType: string): string {
-  const normalized = name.toLowerCase();
-  if (normalized.includes("claude")) {
-    return "Claude Code";
+type AgentTypeFilter = "all" | AgentType;
+type AgentStatusFilter = "all" | AgentDerivedStatus;
+type AgentPlatformFilter = "all" | AgentIntegrationPlatform;
+
+const agentTypeFilters: readonly AgentType[] = ["coding", "desktop", "terminal", "ide", "other"];
+const agentStatusFilters: readonly AgentDerivedStatus[] = ["online", "offline", "high-risk"];
+
+function readAgentTypeFilter(value: string | undefined): AgentTypeFilter {
+  return agentTypeFilters.includes(value as AgentType) ? (value as AgentType) : "all";
+}
+
+function readAgentStatusFilter(value: string | undefined): AgentStatusFilter {
+  return agentStatusFilters.includes(value as AgentDerivedStatus)
+    ? (value as AgentDerivedStatus)
+    : "all";
+}
+
+function readAgentPlatformFilter(value: string | undefined): AgentPlatformFilter {
+  return agentIntegrationPlatforms.includes(value as AgentIntegrationPlatform)
+    ? (value as AgentIntegrationPlatform)
+    : "all";
+}
+
+function filterAgents(
+  agents: ConsoleAgent[],
+  filters: {
+    agentPlatformFilter: AgentPlatformFilter;
+    agentSearch: string;
+    agentStatusFilter: AgentStatusFilter;
+    agentTypeFilter: AgentTypeFilter;
+  },
+): ConsoleAgent[] {
+  const normalizedSearch = filters.agentSearch.toLowerCase();
+  return agents.filter((agent) => {
+    if (filters.agentTypeFilter !== "all" && agent.agentType !== filters.agentTypeFilter) {
+      return false;
+    }
+    if (filters.agentStatusFilter !== "all" && agent.status !== filters.agentStatusFilter) {
+      return false;
+    }
+    if (
+      filters.agentPlatformFilter !== "all" &&
+      agent.integrationPlatform !== filters.agentPlatformFilter
+    ) {
+      return false;
+    }
+    if (!normalizedSearch) {
+      return true;
+    }
+    return [
+      agent.name,
+      agent.keyPrefix ?? "",
+      agent.agentType,
+      formatAgentTypeLabel(agent.agentType),
+      formatAgentIntegrationPlatformLabel(agent.integrationPlatform),
+    ].some((value) => value.toLowerCase().includes(normalizedSearch));
+  });
+}
+
+function formatAgentIntegrationPlatformLabel(platform: AgentIntegrationPlatform): string {
+  const labels: Record<AgentIntegrationPlatform, string> = {
+    "claude-code": "Claude Code",
+    codex: "Codex",
+    cursor: "Cursor",
+    "github-copilot": "GitHub Copilot",
+    hermes: "Hermes",
+    openclaw: "OpenClaw",
+    opencode: "OpenCode",
+    other: "Other",
+  };
+  return labels[platform];
+}
+
+function AgentStatusPill({ status }: { status: AgentDerivedStatus }) {
+  if (status === "online") {
+    return <span className="pill--ok pill">Online</span>;
   }
-  if (normalized.includes("codex")) {
-    return "Codex";
+  if (status === "high-risk") {
+    return <span className="pill--danger pill">High risk</span>;
   }
-  if (normalized.includes("cursor")) {
-    return "Cursor";
-  }
-  return formatAgentTypeLabel(agentType);
+  return <span className="pill--warn pill">Offline</span>;
 }
 
 function formatAgentKeyPrefixDisplay(keyPrefix: string): string {
@@ -2775,7 +2969,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
               icon="B"
               label="接近预算 Key"
               value={String(nearBudgetCount)}
-              delta="达到 80%"
+              delta="达到告警阈值"
             />
             <StatCard
               icon="L"
@@ -3310,9 +3504,7 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
   const inputLabel = input === null ? "Unknown input price" : `$${input.toFixed(2)} / 1M input`;
   const outputLabel =
     output === null ? "Unknown output price" : `$${output.toFixed(2)} / 1M output`;
-  const estimateLabel = isPriced
-    ? `Sample estimate: $${(input + output).toFixed(2)}`
-    : "Sample estimate: unavailable";
+  const estimateLabel = isPriced ? `$${(input + output).toFixed(2)}` : "Unavailable";
 
   return (
     <div className="detail-panel price-panel">
@@ -3333,7 +3525,7 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
           <dd>{outputLabel}</dd>
         </div>
         <div className="detail-field">
-          <dt>Estimate</dt>
+          <dt>1M input + 1M output</dt>
           <dd>{estimateLabel}</dd>
         </div>
       </dl>
@@ -4347,6 +4539,7 @@ function ProviderKeyDeleteDialog({
 
 export async function SettingsSection() {
   const databaseUrl = getConsoleDatabaseUrl();
+  const securitySummary = await getConsoleSecuritySummary(databaseUrl);
   const notificationChannels = await listNotificationChannels(databaseUrl);
   return (
     <section className="providers-panel" id="settings" aria-label="Settings">
@@ -4398,15 +4591,11 @@ export async function SettingsSection() {
             <dl className="detail-field-list">
               <div className="detail-field">
                 <dt>Admin password</dt>
-                <dd>Set</dd>
+                <dd>{securitySummary.adminPasswordSet ? "Set" : "Not set"}</dd>
               </div>
               <div className="detail-field">
-                <dt>Login</dt>
-                <dd>Enabled</dd>
-              </div>
-              <div className="detail-field">
-                <dt>Public access</dt>
-                <dd>Read-only reminder</dd>
+                <dt>Active sessions</dt>
+                <dd>{securitySummary.activeSessionCount}</dd>
               </div>
             </dl>
             <p className="callout">

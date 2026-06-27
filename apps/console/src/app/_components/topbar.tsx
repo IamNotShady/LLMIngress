@@ -3,10 +3,12 @@
 import { usePathname } from "next/navigation";
 import { findActiveNavItem } from "../_lib/nav";
 
-// Slim shell header shown above every console module (matches the prototype's
-// top-right status cluster). The Gateway status pill is a lightweight static
-// indicator here; live runtime detail lives on the Gateway Runtime page.
-export function Topbar() {
+type TopbarProps = {
+  gatewayStatusHealthy: boolean;
+  gatewayStatusLabel: string;
+};
+
+export function Topbar({ gatewayStatusHealthy, gatewayStatusLabel }: TopbarProps) {
   const pathname = usePathname() || "/";
   const active = findActiveNavItem(pathname);
 
@@ -14,9 +16,9 @@ export function Topbar() {
     <header className="topbar">
       <p className="topbar-title">{active?.pageTitle ?? active?.label ?? "Console"}</p>
       <div className="topbar-actions">
-        <span className="topbar-status">
+        <span className={`topbar-status${gatewayStatusHealthy ? "" : " is-warn"}`}>
           <span className="topbar-status-dot" aria-hidden="true" />
-          Gateway running
+          {gatewayStatusLabel}
         </span>
         <a className="topbar-link" href="/runtime">
           Help

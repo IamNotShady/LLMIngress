@@ -1043,16 +1043,22 @@ button,
   cursor: pointer;
   transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out),
     box-shadow 0.15s var(--ease-out), transform 0.05s var(--ease-out);
-  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--accent) 45%, transparent);
 }
 button:hover,
 .btn:hover {
   background: var(--accent-strong);
-  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--accent) 55%, transparent);
 }
 button:active,
 .btn:active {
   transform: translateY(1px);
+}
+.btn {
+  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--accent) 45%, transparent);
+}
+.btn:hover {
+  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--accent) 55%, transparent);
+}
+.btn:active {
   box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--accent) 40%, transparent);
 }
 
@@ -1427,6 +1433,10 @@ details.disclosure[open] > .disclosure-summary {
   background: color-mix(in srgb, var(--canvas) 78%, transparent);
   backdrop-filter: blur(3px) saturate(1.05);
   animation: scrim-in 0.16s var(--ease-out) both;
+}
+html:has(.console-dialog-scrim),
+body:has(.console-dialog-scrim) {
+  overflow-x: clip;
 }
 .console-dialog-head {
   display: flex;
@@ -3580,7 +3590,6 @@ details.disclosure[open] > .disclosure-summary {
     minmax(8rem, 0.65fr) minmax(9rem, 0.75fr) minmax(13rem, 1.2fr) auto;
   gap: var(--space-sm);
   align-items: end;
-  overflow-x: auto;
 }
 .activity-filter-grid .console-field {
   min-width: 0;
@@ -3969,6 +3978,9 @@ details.disclosure[open] > .disclosure-summary {
   .vm-shell,
   .vm-editor-grid {
     grid-template-columns: 1fr;
+  }
+  .activity-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .vm-policy-note {
     position: static;

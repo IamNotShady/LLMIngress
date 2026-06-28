@@ -29,6 +29,12 @@ describe("feat-121 console UI polish CSS", () => {
     expect(globalsCss.match(/var\(--shadow-md\)/g)?.length ?? 0).toBeGreaterThan(0);
   });
 
+  it("keeps overflow and neutral-control shadows scoped", () => {
+    expect(readRule(".activity-filter-grid")).not.toContain("overflow-x");
+    expect(readRule("button,\n.btn")).not.toContain("box-shadow:");
+    expect(globalsCss).toContain(".btn {\n  box-shadow:");
+  });
+
   it("removes hardcoded hex colors from the polished controls", () => {
     for (const hex of [
       "#dc2626",

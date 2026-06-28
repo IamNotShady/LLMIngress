@@ -50,7 +50,13 @@ test("console UI polish themes overlays and preserves layout", async ({ browser 
         { height: 844, width: 390 },
       ]) {
         await page.setViewportSize(viewport);
-        for (const path of ["/", "/providers", "/activity", "/limits"]) {
+        for (const path of [
+          "/",
+          "/providers",
+          "/activity",
+          "/limits",
+          "/models?virtualModelDialog=new",
+        ]) {
           await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded" });
           const scrollWidth = await readDocumentScrollWidth(page);
           if (scrollWidth > viewport.width) {
@@ -64,15 +70,33 @@ test("console UI polish themes overlays and preserves layout", async ({ browser 
       }
 
       await page.setViewportSize({ height: 720, width: 1280 });
+      await page.goto(`${baseUrl}/usage`, { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => {
+        Object.defineProperty(HTMLInputElement.prototype, "showPicker", {
+          configurable: true,
+          value: undefined,
+        });
+      });
+      await page.locator(".date-picker-input input").first().click();
+      await expect(page.getByRole("dialog", { name: "Start date calendar" })).toBeVisible();
+      expect(await readBoxShadow(page, ".date-picker-day")).toBe("none");
+
       await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
         waitUntil: "domcontentloaded",
       });
       await expect(page.getByRole("dialog", { name: "Create Virtual Model" })).toBeVisible();
       await page.waitForTimeout(200);
-      const before = await readSecondOptionCardRect(page);
-      await page.locator(".option-card").first().hover();
-      const after = await readSecondOptionCardRect(page);
-      expectStableRect(after, before);
+      const hoveredBefore = await readOptionCardRect(page, 0);
+      const siblingBefore = await readOptionCardRect(page, 1);
+      await page.mouse.move(
+        hoveredBefore.x + hoveredBefore.width / 2,
+        hoveredBefore.y + hoveredBefore.height / 2,
+      );
+      await page.waitForTimeout(200);
+      const hoverTransform = await readTransform(page, ".option-card");
+      const siblingAfter = await readOptionCardRect(page, 1);
+      expect(hoverTransform).not.toBe("none");
+      expectStableRect(siblingAfter, siblingBefore);
     },
     { seed: seedPolishAgent },
   );
@@ -80,6 +104,20 @@ test("console UI polish themes overlays and preserves layout", async ({ browser 
 
 async function readBackgroundColor(page: Page, selector: string): Promise<string> {
   return page.locator(selector).evaluate((element) => getComputedStyle(element).backgroundColor);
+}
+
+async function readBoxShadow(page: Page, selector: string): Promise<string> {
+  return page
+    .locator(selector)
+    .first()
+    .evaluate((element) => getComputedStyle(element).boxShadow);
+}
+
+async function readTransform(page: Page, selector: string): Promise<string> {
+  return page
+    .locator(selector)
+    .first()
+    .evaluate((element) => getComputedStyle(element).transform);
 }
 
 async function readDocumentScrollWidth(page: Page): Promise<number> {
@@ -113,17 +151,17 @@ type Rect = {
   y: number;
 };
 
-async function readSecondOptionCardRect(page: Page): Promise<Rect> {
+async function readOptionCardRect(page: Page, index: number): Promise<Rect> {
   return page
     .locator(".option-card")
-    .nth(1)
+    .nth(index)
     .evaluate((element) => {
-      const box = element as HTMLElement;
+      const box = element.getBoundingClientRect();
       return {
-        height: box.offsetHeight,
-        width: box.offsetWidth,
-        x: box.offsetLeft,
-        y: box.offsetTop,
+        height: box.height,
+        width: box.width,
+        x: box.x,
+        y: box.y,
       };
     });
 }

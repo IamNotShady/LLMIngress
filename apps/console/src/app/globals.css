@@ -39,6 +39,7 @@
   --leading-tight: 1.2;
   --leading-snug: 1.4;
   --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
 
   --font-display: var(--font-display), "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
   --font-body: var(--font-body), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -79,6 +80,8 @@
   --warn-soft: oklch(0.95 0.06 75);
   --danger: oklch(0.52 0.19 25);
   --danger-soft: oklch(0.95 0.045 25);
+  --danger-strong: oklch(0.46 0.2 25);
+  --danger-fg: oklch(0.99 0.012 25);
 
   --shadow-sm: 0 1px 2px oklch(0.2 0.03 var(--hue) / 0.06);
   --shadow-md: 0 10px 30px -14px oklch(0.2 0.03 var(--hue) / 0.22);
@@ -113,6 +116,8 @@
   --warn-soft: oklch(0.32 0.05 75);
   --danger: oklch(0.7 0.17 25);
   --danger-soft: oklch(0.32 0.06 25);
+  --danger-strong: oklch(0.76 0.16 25);
+  --danger-fg: oklch(0.99 0.012 25);
 
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
   --shadow-md: 0 12px 34px -16px oklch(0 0 0 / 0.6);
@@ -144,6 +149,8 @@
     --warn-soft: oklch(0.32 0.05 75);
     --danger: oklch(0.7 0.17 25);
     --danger-soft: oklch(0.32 0.06 25);
+    --danger-strong: oklch(0.76 0.16 25);
+    --danger-fg: oklch(0.99 0.012 25);
   }
 }
 
@@ -276,6 +283,34 @@ pre,
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -615,6 +650,7 @@ pre,
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-md);
+  box-shadow: var(--shadow-sm);
 }
 .status-band {
   display: none; /* superseded by the sidebar account row */
@@ -962,6 +998,8 @@ textarea {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-pop);
+  transform-origin: top;
+  animation: popover-in 0.14s var(--ease-out) both;
 }
 .agent-vm-multi-select-option {
   display: flex;
@@ -1004,15 +1042,18 @@ button,
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out),
-    transform 0.05s var(--ease-out);
+    box-shadow 0.15s var(--ease-out), transform 0.05s var(--ease-out);
+  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--accent) 45%, transparent);
 }
 button:hover,
 .btn:hover {
   background: var(--accent-strong);
+  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--accent) 55%, transparent);
 }
 button:active,
 .btn:active {
   transform: translateY(1px);
+  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--accent) 40%, transparent);
 }
 
 .flat-icon {
@@ -1044,11 +1085,17 @@ button .flat-icon,
   color: var(--text);
   background: var(--surface);
   border-color: var(--border-strong);
+  box-shadow: none;
 }
 .secondary-button:hover,
 .btn-ghost:hover {
   background: var(--surface-inset);
   border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+.secondary-button:active,
+.btn-ghost:active {
+  transform: translateY(1px);
 }
 
 /* ============================================================================
@@ -1114,10 +1161,12 @@ button .flat-icon,
   color: var(--text);
   /* request IDs are long unbroken strings — let them wrap inside the card */
   overflow-wrap: anywhere;
-  transition: border-color 0.15s var(--ease-out), background-color 0.15s var(--ease-out);
+  transition: border-color 0.15s var(--ease-out), background-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
 }
 .activity-list-item:hover {
   border-color: var(--accent-soft-border);
+  box-shadow: var(--shadow-sm);
   text-decoration: none;
 }
 .activity-list-item-selected {
@@ -1369,12 +1418,15 @@ details.disclosure[open] > .disclosure-summary {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-pop);
+  animation: dialog-in 0.16s var(--ease-out) both;
 }
 .console-dialog-scrim {
   position: fixed;
   inset: 0;
   z-index: 49;
-  background: color-mix(in srgb, var(--canvas) 72%, transparent);
+  background: color-mix(in srgb, var(--canvas) 78%, transparent);
+  backdrop-filter: blur(3px) saturate(1.05);
+  animation: scrim-in 0.16s var(--ease-out) both;
 }
 .console-dialog-head {
   display: flex;
@@ -1657,6 +1709,7 @@ details.disclosure[open] > .disclosure-summary {
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 .stat-card-head {
   display: flex;
@@ -1878,8 +1931,8 @@ details.disclosure[open] > .disclosure-summary {
   margin: 0;
   padding: var(--space-md);
   border-radius: var(--radius-sm);
-  color: #dbe7ff;
-  background: #0b1020;
+  color: var(--text);
+  background: var(--surface-sunken);
   font-size: var(--text-xs);
   line-height: var(--leading-relaxed);
   white-space: pre-wrap;
@@ -2082,6 +2135,7 @@ details.disclosure[open] > .disclosure-summary {
   border-radius: var(--radius-md);
   position: sticky;
   top: calc(var(--space-md) + 3rem);
+  box-shadow: var(--shadow-sm);
 }
 .overview-dashboard .detail-panel {
   position: static;
@@ -2318,13 +2372,15 @@ details.disclosure[open] > .disclosure-summary {
   border-color: var(--accent-strong) !important;
 }
 .agent-table-actions .agent-action-delete {
-  color: #fff !important;
-  background: #dc2626 !important;
-  border-color: #dc2626 !important;
+  color: var(--danger-fg) !important;
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--danger) 45%, transparent);
 }
 .agent-table-actions .agent-action-delete:hover {
-  background: #b91c1c !important;
-  border-color: #b91c1c !important;
+  background: var(--danger-strong) !important;
+  border-color: var(--danger-strong) !important;
+  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--danger) 55%, transparent);
 }
 
 /* Compact icon-only action buttons (table rows, section heads). Labeled
@@ -2350,6 +2406,7 @@ details.disclosure[open] > .disclosure-summary {
   color: var(--text-subtle);
   transition: background-color 0.15s var(--ease-out), color 0.15s var(--ease-out),
     border-color 0.15s var(--ease-out), transform 0.05s var(--ease-out);
+  box-shadow: none;
 }
 .provider-action-button:hover,
 .provider-key-delete-button:hover,
@@ -2384,11 +2441,13 @@ details.disclosure[open] > .disclosure-summary {
 .provider-action-delete,
 .provider-key-delete-button {
   color: var(--danger);
+  box-shadow: none;
 }
 .provider-action-delete:hover,
 .provider-key-delete-button:hover {
   color: var(--danger);
   background: var(--danger-soft);
+  box-shadow: var(--shadow-sm);
 }
 /* primary add affordance (API key / OAuth connection) */
 .provider-key-add-button {
@@ -2448,14 +2507,16 @@ details.disclosure[open] > .disclosure-summary {
   border-color: var(--accent-strong) !important;
 }
 .agent-delete-confirm {
-  color: #fff !important;
-  background: #dc2626 !important;
-  border-color: #dc2626 !important;
+  color: var(--danger-fg) !important;
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--danger) 45%, transparent);
 }
 .agent-delete-confirm:hover {
-  color: #fff !important;
-  background: #b91c1c !important;
-  border-color: #b91c1c !important;
+  color: var(--danger-fg) !important;
+  background: var(--danger-strong) !important;
+  border-color: var(--danger-strong) !important;
+  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--danger) 55%, transparent);
 }
 
 /* ---- Charts ---- */
@@ -2467,6 +2528,7 @@ details.disclosure[open] > .disclosure-summary {
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 .chart-card-title {
   font-size: var(--text-md);
@@ -2689,6 +2751,13 @@ details.disclosure[open] > .disclosure-summary {
   border-radius: var(--radius-md);
   background: var(--surface);
   cursor: pointer;
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out),
+    transform 0.15s var(--ease-out);
+}
+.option-card:hover {
+  border-color: var(--accent-soft-border);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 .option-card input[type="radio"] {
   position: absolute;
@@ -3052,10 +3121,12 @@ details.disclosure[open] > .disclosure-summary {
   z-index: 20;
   width: min(20rem, calc(100vw - 2rem));
   padding: var(--space-sm);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
   box-shadow: var(--shadow-pop);
+  transform-origin: top;
+  animation: popover-in 0.14s var(--ease-out) both;
 }
 .date-picker-header {
   display: grid;
@@ -3212,20 +3283,20 @@ details.disclosure[open] > .disclosure-summary {
   height: 2.75rem;
 }
 .limits-kpi-grid .stat-card:nth-child(1) .stat-card-icon {
-  color: #16a34a;
-  background: #dcfce7;
+  color: var(--ok);
+  background: var(--ok-soft);
 }
 .limits-kpi-grid .stat-card:nth-child(2) .stat-card-icon {
-  color: #ef4444;
-  background: #fee2e2;
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 .limits-kpi-grid .stat-card:nth-child(3) .stat-card-icon {
-  color: #f59e0b;
-  background: #fef3c7;
+  color: var(--warn);
+  background: var(--warn-soft);
 }
 .limits-kpi-grid .stat-card:nth-child(4) .stat-card-icon {
-  color: #7c3aed;
-  background: #ede9fe;
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .limits-kpi-grid .stat-card-label {
   letter-spacing: 0;
@@ -3325,20 +3396,22 @@ details.disclosure[open] > .disclosure-summary {
   justify-content: center;
   min-height: 2rem;
   padding: 0 var(--space-sm);
-  color: #b91c1c;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
   font: inherit;
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
   transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out),
-    transform 0.05s var(--ease-out);
+    box-shadow 0.15s var(--ease-out), transform 0.05s var(--ease-out);
+  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--danger) 45%, transparent);
 }
 .limits-rule-delete-button:hover {
-  background: #fecaca;
-  border-color: #fca5a5;
+  background: color-mix(in oklch, var(--danger-soft) 80%, var(--danger) 20%);
+  border-color: var(--danger-strong);
+  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--danger) 55%, transparent);
 }
 .limits-rule-delete-button:active {
   transform: translateY(1px);
@@ -3410,13 +3483,13 @@ details.disclosure[open] > .disclosure-summary {
   font-weight: 700;
 }
 .limits-usage-block .usage-bar-head span:last-child {
-  color: #f59e0b;
+  color: var(--warn);
 }
 .limits-usage-block .usage-bar-track {
   height: 0.65rem;
 }
 .limits-usage-block .usage-bar-fill {
-  background: #f59e0b;
+  background: var(--warn);
 }
 .limits-config-subtitle {
   margin: 0 0 var(--space-sm);
@@ -3507,6 +3580,7 @@ details.disclosure[open] > .disclosure-summary {
     minmax(8rem, 0.65fr) minmax(9rem, 0.75fr) minmax(13rem, 1.2fr) auto;
   gap: var(--space-sm);
   align-items: end;
+  overflow-x: auto;
 }
 .activity-filter-grid .console-field {
   min-width: 0;
@@ -3799,17 +3873,19 @@ details.disclosure[open] > .disclosure-summary {
   justify-content: center;
   min-height: 1.75rem;
   padding: 0 var(--space-sm);
-  color: #fff;
+  color: var(--danger-fg);
   font: inherit;
   font-weight: 700;
-  background: #dc2626;
-  border: 1px solid #dc2626;
+  background: var(--danger);
+  border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--danger) 45%, transparent);
 }
 .vm-candidate-remove:hover {
-  background: #b91c1c;
-  border-color: #b91c1c;
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--danger) 55%, transparent);
 }
 .vm-policy-note {
   position: sticky;
@@ -3901,6 +3977,7 @@ details.disclosure[open] > .disclosure-summary {
 
 @media (max-width: 56rem) {
   .detail-layout,
+  .overview-dashboard .detail-layout,
   .agents-shell,
   .wizard {
     grid-template-columns: 1fr;

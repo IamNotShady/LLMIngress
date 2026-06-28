@@ -178,6 +178,83 @@ describe("feat-079 usage breakdowns and savings", () => {
     );
     expect(formatConsoleUsageCost(summary.totalSavingsUsd)).toBe("$0.00400000");
   });
+
+  it("aggregates usage dimensions by stable ids when request snapshots differ", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_usage_snapshot_ids_unit_${randomUUID().replaceAll("-", "_")}`,
+    });
+    fixtures.push(fixture);
+
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedUsageSnapshotData(fixture);
+
+    const summary = await getConsoleUsageSummary({
+      databaseUrl: fixture.databaseUrl,
+      now: new Date("2026-06-16T12:00:00.000Z"),
+      window: "24h",
+    });
+
+    expect(summary.agentBreakdowns.map(selectBreakdownFields)).toEqual([
+      {
+        avgLatencyMs: 150,
+        failureCount: 0,
+        id: "00000000-0000-4000-8000-000000000879",
+        label: "Historical Agent",
+        requestCount: 2,
+        totalCostUsd: "0.00300000",
+        totalSavingsUsd: "0.00030000",
+        totalTokens: 300,
+      },
+    ]);
+    expect(summary.virtualModelBreakdowns.map(selectBreakdownFields)).toEqual([
+      {
+        avgLatencyMs: 150,
+        failureCount: 0,
+        id: "00000000-0000-4000-8000-000000000979",
+        label: "Historical VM",
+        requestCount: 2,
+        totalCostUsd: "0.00300000",
+        totalSavingsUsd: "0.00030000",
+        totalTokens: 300,
+      },
+    ]);
+    expect(summary.providerBreakdowns.map(selectBreakdownFields)).toEqual([
+      {
+        avgLatencyMs: 150,
+        failureCount: 0,
+        id: "00000000-0000-4000-8000-000000001079",
+        label: "Historical Provider",
+        requestCount: 2,
+        totalCostUsd: "0.00300000",
+        totalSavingsUsd: "0.00030000",
+        totalTokens: 300,
+      },
+    ]);
+    expect(summary.modelBreakdowns.map(selectBreakdownFields)).toEqual([
+      {
+        avgLatencyMs: 150,
+        failureCount: 0,
+        id: "00000000-0000-4000-8000-000000001179",
+        label: "Historical Model (historical-model)",
+        requestCount: 2,
+        totalCostUsd: "0.00300000",
+        totalSavingsUsd: "0.00030000",
+        totalTokens: 300,
+      },
+    ]);
+    expect(summary.breakdowns.map(selectProviderModelBreakdownFields)).toEqual([
+      {
+        avgLatencyMs: 150,
+        failureCount: 0,
+        modelLabel: "Historical Model",
+        providerLabel: "Historical Provider",
+        requestCount: 2,
+        totalCostUsd: "0.00300000",
+        totalSavingsUsd: "0.00030000",
+        totalTokens: 300,
+      },
+    ]);
+  });
 });
 
 function selectBreakdownFields(input: {
@@ -311,20 +388,101 @@ async function seedUsageBreakdownData(fixture: Fixture): Promise<void> {
   });
 }
 
+async function seedUsageSnapshotData(fixture: Fixture): Promise<void> {
+  const ids = {
+    agentApiKeyId: "00000000-0000-4000-8000-000000000879",
+    agentId: "00000000-0000-4000-8000-000000000879",
+    modelId: "00000000-0000-4000-8000-000000001179",
+    providerId: "00000000-0000-4000-8000-000000001079",
+    virtualModelId: "00000000-0000-4000-8000-000000000979",
+  };
+
+  await fixture.query(
+    `
+      insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+      values ($1, 'api_key', 'snapshot-provider', 'Current Provider', 'https://snapshot.example/v1', true)
+    `,
+    [ids.providerId],
+  );
+  await fixture.query(
+    `
+      insert into provider_models (id, provider_id, model_id, display_name, availability)
+      values ($1, $2, 'current-model', 'Current Model', 'available')
+    `,
+    [ids.modelId, ids.providerId],
+  );
+  await fixture.query(
+    `
+      insert into virtual_models (id, name, description, enabled)
+      values ($1, 'current-vm', 'Current VM', true)
+    `,
+    [ids.virtualModelId],
+  );
+  await fixture.query(
+    "insert into agents (id, name, agent_type, enabled) values ($1, 'Current Agent', 'coding', true)",
+    [ids.agentId],
+  );
+  await fixture.query(
+    `
+      update agents
+      set key_prefix = 'llmi_usage_snapshot',
+          key_hash = 'hash-usage-snapshot',
+          default_virtual_model_id = $2
+      where id = $1
+    `,
+    [ids.agentId, ids.virtualModelId],
+  );
+
+  await insertUsageBreakdownRequest(fixture, {
+    ...ids,
+    agentNameSnapshot: "Historical Agent",
+    costUsd: "0.00100000",
+    inputTokens: 50,
+    latencyMs: 100,
+    outputTokens: 50,
+    providerDisplayNameSnapshot: "Historical Provider",
+    providerId: ids.providerId,
+    providerModelDisplayNameSnapshot: "Historical Model",
+    providerModelId: ids.modelId,
+    providerModelNameSnapshot: "historical-model",
+    requestId: "req_usage_snapshot_historical_079",
+    savingsUsd: "0.00010000",
+    status: "succeeded",
+    virtualModelNameSnapshot: "Historical VM",
+  });
+  await insertUsageBreakdownRequest(fixture, {
+    ...ids,
+    costUsd: "0.00200000",
+    inputTokens: 100,
+    latencyMs: 200,
+    outputTokens: 100,
+    providerId: ids.providerId,
+    providerModelId: ids.modelId,
+    requestId: "req_usage_snapshot_current_079",
+    savingsUsd: "0.00020000",
+    status: "succeeded",
+  });
+}
+
 async function insertUsageBreakdownRequest(
   fixture: Fixture,
   input: {
     agentApiKeyId: string;
+    agentNameSnapshot?: string;
     costUsd: string | null;
     inputTokens: number;
     latencyMs: number;
     outputTokens: number;
+    providerDisplayNameSnapshot?: string;
     providerId: string | null;
+    providerModelDisplayNameSnapshot?: string;
     providerModelId: string | null;
+    providerModelNameSnapshot?: string;
     requestId: string;
     savingsUsd: string | null;
     status: "failed" | "succeeded";
     virtualModelId: string;
+    virtualModelNameSnapshot?: string;
   },
 ): Promise<void> {
   const activityId = randomUUID();
@@ -339,6 +497,11 @@ async function insertUsageBreakdownRequest(
         virtual_model_id,
         provider_id,
         provider_model_id,
+        agent_name_snapshot,
+        virtual_model_name_snapshot,
+        provider_display_name_snapshot,
+        provider_model_name_snapshot,
+        provider_model_display_name_snapshot,
         agent_key_prefix,
         protocol,
         model,
@@ -351,10 +514,11 @@ async function insertUsageBreakdownRequest(
         completed_at
       )
       values (
-        $1, $2, $3, $4, $5, $6, 'llmi_usage79', 'chat_completions', 'usage-fast',
-        false, $7, case when $7 = 'failed' then 'provider_error' else null end,
-        case when $7 = 'failed' then 502 else 200 end,
-        $8,
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        'llmi_usage79', 'chat_completions', 'usage-fast',
+        false, $12, case when $12 = 'failed' then 'provider_error' else null end,
+        case when $12 = 'failed' then 502 else 200 end,
+        $13,
         '2026-06-16T11:00:00.000Z'::timestamptz,
         '2026-06-16T11:00:01.000Z'::timestamptz
       )
@@ -366,6 +530,11 @@ async function insertUsageBreakdownRequest(
       input.virtualModelId,
       input.providerId,
       input.providerModelId,
+      input.agentNameSnapshot ?? null,
+      input.virtualModelNameSnapshot ?? null,
+      input.providerDisplayNameSnapshot ?? null,
+      input.providerModelNameSnapshot ?? null,
+      input.providerModelDisplayNameSnapshot ?? null,
       input.status,
       input.latencyMs,
     ],

@@ -981,7 +981,11 @@ function UsageCostDonut({
   label: string;
 }) {
   const slices = breakdowns
-    .map((breakdown) => ({ name: breakdown.label, value: Number(breakdown.totalCostUsd ?? 0) }))
+    .map((breakdown) => ({
+      id: breakdown.id,
+      name: breakdown.label,
+      value: Number(breakdown.totalCostUsd ?? 0),
+    }))
     .filter((slice) => slice.value > 0)
     .slice(0, 6);
   if (slices.length === 0) {

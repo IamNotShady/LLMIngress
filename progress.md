@@ -1816,3 +1816,9 @@
 - [x] 2026-06-28 Add Model picker column tweak (feat-121 follow-up):
   - Reduced the Add Model picker table's `Model ID` column from 500px to 402px on the live `/models?virtualModelDialog=new` dialog by giving the picker table fixed layout and a 42% second-column width.
   - Verification was intentionally light per user request: Browser/IAB reload + Add Model interaction confirmed no framework overlay, no new console error/warn logs, and the target column width reduction; `git diff --check` and `pnpm run lint` passed with only the existing feat-117 warning.
+
+- [x] 2026-06-28 Final full regression for console UI polish branch:
+  - Stopped the live dev stack before running full regression to avoid Console `.next` / process-lock interference.
+  - Full verification passed: `pnpm run verify` exited 0 with lint, typecheck, 122 unit files / 472 tests, coverage output, and Next build passing; the existing feat-117 Biome warning remained non-fatal.
+  - Full feature regression passed: `pnpm run verify:features` exited 0, including an E2E batch passing in 420.7s and `All 121 passing feature(s) re-verified.`
+  - Removed the generated worker backup JSON left by the live/verification run before committing.

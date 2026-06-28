@@ -3939,9 +3939,16 @@ body:has(.console-dialog-scrim) {
   font-size: 0.8rem;
   font-weight: 600;
 }
+.vm-model-picker-table {
+  table-layout: fixed;
+}
 .vm-model-picker-table td,
 .vm-model-picker-table th {
   white-space: nowrap;
+}
+.vm-model-picker-table th:nth-child(2),
+.vm-model-picker-table td:nth-child(2) {
+  width: 42%;
 }
 .vm-model-select-button {
   appearance: none;

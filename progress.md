@@ -1812,3 +1812,7 @@
   - Added a regression unit test that seeds mixed snapshot/current request rows for the same stable Agent / Virtual Model / Provider / Model IDs and expects one aggregated row per ID.
   - Updated `getConsoleUsageSummary` to group provider/model and dimension breakdowns by stable IDs, using latest non-null snapshot labels with current config names as fallback, and updated `DonutBreakdown` / Usage donuts to key legend rows by stable slice IDs.
   - Verification passed: `pnpm exec vitest run tests/features/feat-079-usage-breakdowns-savings.unit.test.ts`, touched-file `pnpm exec biome check ...`, `pnpm run typecheck`, `pnpm run lint` (exit 0 with the existing feat-117 warning), direct dev-DB duplicate scan for the reported `/usage` range, and Browser/IAB reload of `http://127.0.0.1:3000/usage?usageWindow=24h&dateFrom=2026-06-19&dateTo=2026-06-28&agentId=&virtualModelId=&providerId=` with zero error/warn logs.
+
+- [x] 2026-06-28 Add Model picker column tweak (feat-121 follow-up):
+  - Reduced the Add Model picker table's `Model ID` column from 500px to 402px on the live `/models?virtualModelDialog=new` dialog by giving the picker table fixed layout and a 42% second-column width.
+  - Verification was intentionally light per user request: Browser/IAB reload + Add Model interaction confirmed no framework overlay, no new console error/warn logs, and the target column width reduction; `git diff --check` and `pnpm run lint` passed with only the existing feat-117 warning.

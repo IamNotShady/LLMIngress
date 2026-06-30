@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGatewayConfigRuntime } from "../../apps/gateway/src/config-reload";
 import type { ConfigChangedNotification } from "../../packages/config/src/index";
+import { createGatewayConfigRuntime } from "../../packages/db/src/gateway-config-reload";
 
 describe("feat-012 gateway config snapshot reload", () => {
   it("starts from latest snapshot applies newer notifications and reconciles missed versions", async () => {

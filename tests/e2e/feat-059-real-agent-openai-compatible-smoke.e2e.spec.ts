@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { defaultAgentLimitFormValues } from "../../apps/console/src/server/agent-limits";
-import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
+import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
 import {

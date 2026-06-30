@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
-import { executeGatewayOpenAIChatCompletion } from "../../apps/gateway/src/chat-completions";
-import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
 import { createProviderConnectivityCheckJobHandler } from "../../apps/worker/src/provider-connectivity-check";
+import { executeGatewayOpenAIChatCompletion } from "../../packages/db/src/gateway-chat-completions";
+import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 const masterKey = "test-master-key";

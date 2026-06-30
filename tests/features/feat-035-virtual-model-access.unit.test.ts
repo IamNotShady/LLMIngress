@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createGatewayVirtualModelAccessErrorBody,
   resolveGatewayVirtualModelRequest,
-} from "../../apps/gateway/src/virtual-model-access";
+} from "../../packages/db/src/gateway-virtual-model-access";
 
 describe("feat-035 gateway virtual model access contract", () => {
   const allowedVirtualModels = [

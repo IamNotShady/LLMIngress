@@ -3,7 +3,7 @@ import {
   buildOpenAIEmbeddingsRequestMetadata,
   createGatewayEmbeddingsProviderAdapter,
   normalizeOpenAIEmbeddingsRequest,
-} from "../../apps/gateway/src/embeddings";
+} from "../../packages/db/src/gateway-embeddings";
 import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 
 describe("feat-067 embeddings endpoint", () => {

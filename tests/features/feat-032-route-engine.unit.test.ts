@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
-import { selectRouteCandidate } from "../../apps/gateway/src/route-engine";
+import type { GatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
+import { selectRouteCandidate } from "../../packages/domain/src/index";
 
 describe("feat-032 deterministic route engine", () => {
   afterEach(() => {

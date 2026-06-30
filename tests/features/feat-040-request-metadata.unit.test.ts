@@ -3,7 +3,7 @@ import {
   buildAnthropicMessagesRequestMetadata,
   buildOpenAIChatCompletionRequestMetadata,
   buildOpenAIResponsesRequestMetadata,
-} from "../../apps/gateway/src/request-metadata";
+} from "../../packages/db/src/gateway-request-metadata";
 
 describe("feat-040 request metadata and token estimation", () => {
   it("extracts chat completion model protocol stream messages tools and token estimates", () => {

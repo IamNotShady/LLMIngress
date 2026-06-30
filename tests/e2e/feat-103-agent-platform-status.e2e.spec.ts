@@ -9,7 +9,7 @@ import {
   normalizeAgentFormInput,
   updateAgent,
 } from "../../apps/console/src/server/agents";
-import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
+import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
 

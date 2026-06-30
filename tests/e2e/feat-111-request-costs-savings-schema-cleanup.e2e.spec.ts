@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
-import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
 import { createTestPostgresFixture, loadSqlMigrations, runMigrations } from "../../packages/db/src";
+import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createFakeProviderServer } from "../support/fake-provider";
 
 const masterKey = "test-master-key";

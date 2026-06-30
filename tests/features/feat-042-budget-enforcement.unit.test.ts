@@ -3,7 +3,7 @@ import {
   calculateBudgetReservation,
   createGatewayBudgetErrorBody,
   getBudgetPeriodWindow,
-} from "../../apps/gateway/src/budgets";
+} from "../../packages/db/src/gateway-budgets";
 
 describe("feat-042 token and cost budget enforcement", () => {
   it("calculates budget periods for day week and month", () => {

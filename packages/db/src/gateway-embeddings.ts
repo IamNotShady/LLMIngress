@@ -1,3 +1,4 @@
+import { selectRouteAttempts } from "@llmingress/domain";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIEmbeddingsRequest,
@@ -11,7 +12,6 @@ import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts
 import {
   finalizeGatewayBudgetReservation,
   GatewayBudgetRejectedError,
-  type GatewayBudgetReservation,
   releaseGatewayBudgetReservation,
   reserveGatewayBudget,
 } from "./gateway-budgets.ts";
@@ -20,24 +20,21 @@ import {
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-chat-completions.ts";
-import type {
-  GatewayConfigSnapshot,
-  GatewayRouteCandidateSnapshot,
-  GatewayRoutePolicySnapshot,
-} from "./gateway-config-reload.ts";
+import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
-  buildFallbackFailedAttempt,
-  type FallbackChainCandidate,
+  executeProviderFallbackAttempts,
   type FallbackFailedAttempt,
-  readFallbackProviderApiKeys,
-  recordCandidateHealthFailure,
-  recordFailedAttemptInDatabase,
-  recordSucceededAttemptInDatabase,
 } from "./gateway-fallback-chain.ts";
 import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
-import { type RouteDecision, selectRouteAttempts } from "./gateway-route-engine.ts";
+import {
+  buildGatewayRequestActivityRoute,
+  isRecord,
+  omitUndefined,
+  orderGatewayRouteCandidates,
+  requireGatewayRoutePolicy,
+} from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import {
   type GatewayUsageCostDetails,
@@ -210,7 +207,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       };
     }
     const routeDecision = routeResult.decision;
-    const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
 
     const headOrder = routeResult.chain[0]?.candidateOrder;
@@ -220,20 +217,13 @@ export async function executeGatewayOpenAIEmbeddings(input: {
     if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
     }
-    activity = buildRequestActivityRoute({
+    activity = buildGatewayRequestActivityRoute({
       candidate: selectedCandidate,
       fallbackAttempts,
       routeDecision,
     });
 
-    const chainOrderMap = new Map(routeResult.chain.map((c, idx) => [c.candidateOrder, idx]));
-    const gatewayChain = routePolicy.candidates
-      .filter((c) => chainOrderMap.has(c.candidateOrder))
-      .sort((a, b) => {
-        const ia = chainOrderMap.get(a.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-        const ib = chainOrderMap.get(b.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-        return ia - ib;
-      });
+    const gatewayChain = orderGatewayRouteCandidates(routePolicy, routeResult.chain);
 
     const embeddingsCandidates = gatewayChain.filter(
       (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
@@ -246,8 +236,34 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       databaseUrl: input.databaseUrl,
       masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
     });
-    const success = await executeEmbeddingsFallback({
-      adapter: input.adapter,
+    const success = await executeProviderFallbackAttempts<OpenAIAdapterSuccess>({
+      callProvider: async ({ candidate, providerApiKey }) => {
+        const adapter = createGatewayEmbeddingsProviderAdapter({
+          adapter: input.adapter,
+          providerKey: candidate.providerKey,
+        });
+        if (!adapter.embeddings) {
+          throw new Error("OpenAI embeddings provider adapter is not configured.");
+        }
+        const providerStartedAt = new Date();
+        const result = await adapter.embeddings({
+          request: normalized.request,
+          target: {
+            apiKey: providerApiKey.apiKey,
+            baseUrl: candidate.baseUrl,
+            modelId: candidate.modelId,
+          },
+        });
+        await recordGatewayProviderTrace({
+          errorCode: result.ok ? null : result.errorCode,
+          modelId: candidate.modelId,
+          providerKey: candidate.providerKey,
+          requestId: input.requestId,
+          startedAt: providerStartedAt,
+          status: result.ok ? "succeeded" : "failed",
+        });
+        return result;
+      },
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
@@ -268,7 +284,6 @@ export async function executeGatewayOpenAIEmbeddings(input: {
         }
         return d.reservation;
       },
-      request: normalized.request,
       requestActivityId: input.requestActivityId,
       requestId: input.requestId,
     });
@@ -279,7 +294,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       databaseUrl: input.databaseUrl,
       providerApiKeyId: success.candidate.providerApiKeyId,
     });
-    activity = buildRequestActivityRoute({
+    activity = buildGatewayRequestActivityRoute({
       candidate: success.candidate,
       fallbackAttempts,
       routeDecision,
@@ -323,137 +338,6 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       lease: concurrencyLease,
     });
   }
-}
-
-async function executeEmbeddingsFallback(input: {
-  adapter?: OpenAIProviderAdapter;
-  candidates: readonly FallbackChainCandidate[];
-  databaseUrl?: string;
-  fallbackAttempts: FallbackFailedAttempt[];
-  finalizeAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-  releaseAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-  reserveAttempt: (
-    candidate: FallbackChainCandidate,
-  ) => Promise<GatewayBudgetReservation | undefined>;
-  request: NormalizedOpenAIEmbeddingsRequest;
-  requestActivityId?: string;
-  requestId: string;
-}): Promise<
-  | {
-      candidate: FallbackChainCandidate & {
-        providerApiKeyId?: string;
-        providerApiKeyPrefix?: string;
-      };
-      result: OpenAIAdapterSuccess;
-    }
-  | undefined
-> {
-  let attemptOrder = 0;
-  for (const candidate of input.candidates) {
-    const adapter = createGatewayEmbeddingsProviderAdapter({
-      adapter: input.adapter,
-      providerKey: candidate.providerKey,
-    });
-    if (!adapter.embeddings) {
-      throw new Error("OpenAI embeddings provider adapter is not configured.");
-    }
-
-    const reservation = await input.reserveAttempt(candidate);
-    for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
-      attemptOrder += 1;
-      const providerStartedAt = new Date();
-      const result = await adapter.embeddings({
-        request: input.request,
-        target: {
-          apiKey: providerApiKey.apiKey,
-          baseUrl: candidate.baseUrl,
-          modelId: candidate.modelId,
-        },
-      });
-      await recordGatewayProviderTrace({
-        errorCode: result.ok ? null : result.errorCode,
-        modelId: candidate.modelId,
-        providerKey: candidate.providerKey,
-        requestId: input.requestId,
-        startedAt: providerStartedAt,
-        status: result.ok ? "succeeded" : "failed",
-      });
-
-      if (result.ok) {
-        await input.finalizeAttempt(reservation);
-        await recordSucceededAttemptInDatabase(input, {
-          attemptOrder,
-          ...(providerApiKey.providerApiKeyId
-            ? { providerApiKeyId: providerApiKey.providerApiKeyId }
-            : {}),
-          ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
-          providerModelId: candidate.providerModelId,
-        });
-        return {
-          candidate: {
-            ...candidate,
-            apiKey: providerApiKey.apiKey,
-            providerApiKeyId: providerApiKey.providerApiKeyId,
-            providerApiKeyPrefix: providerApiKey.keyPrefix,
-          },
-          result,
-        };
-      }
-
-      const failedAttempt = buildFallbackFailedAttempt({
-        attemptOrder,
-        providerApiKey,
-        providerModelId: candidate.providerModelId,
-        result,
-      });
-      input.fallbackAttempts.push(failedAttempt);
-      await recordFailedAttemptInDatabase(input, failedAttempt);
-      if (!failedAttempt.retryable) {
-        await input.releaseAttempt(reservation);
-        // Persist provider/model health on hard (non-retryable) failures so
-        // health-aware routing excludes this model on later requests, matching
-        // the chat-completions path.
-        await recordCandidateHealthFailure({ databaseUrl: input.databaseUrl }, candidate, [
-          failedAttempt,
-        ]);
-        return undefined;
-      }
-    }
-    await input.releaseAttempt(reservation);
-  }
-  return undefined;
-}
-
-function buildRequestActivityRoute(input: {
-  candidate: GatewayRouteCandidateSnapshot & {
-    providerApiKeyId?: string;
-    providerApiKeyPrefix?: string;
-  };
-  fallbackAttempts: FallbackFailedAttempt[];
-  routeDecision: RouteDecision;
-}): GatewayRequestActivityRoute {
-  return {
-    fallbackAttempts: input.fallbackAttempts,
-    modelId: input.candidate.modelId,
-    providerApiKeyId: input.candidate.providerApiKeyId,
-    providerApiKeyPrefix: input.candidate.providerApiKeyPrefix,
-    providerId: input.candidate.providerId,
-    providerKey: input.candidate.providerKey,
-    providerModelId: input.candidate.providerModelId,
-    routePolicyId: input.routeDecision.routePolicyId,
-    routeReason: input.routeDecision.routeReason,
-  };
-}
-
-function requireRoutePolicy(
-  snapshot: GatewayConfigSnapshot,
-  routePolicyId: string,
-): GatewayRoutePolicySnapshot {
-  const routePolicy = snapshot.routePolicies.find((candidate) => candidate.id === routePolicyId);
-  if (!routePolicy) {
-    throw new Error(`Route policy ${routePolicyId} was not found.`);
-  }
-  return routePolicy;
 }
 
 function invalidEmbeddingsRequest(requestId: string): GatewayEmbeddingsRequestFailure {
@@ -537,14 +421,4 @@ function readOptionalEncodingFormat(value: unknown): "base64" | "float" | null |
 function estimateTextTokens(parts: readonly string[]): number {
   const characterCount = parts.filter((part) => part.trim()).join("\n").length;
   return Math.max(1, Math.ceil(characterCount / 4));
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

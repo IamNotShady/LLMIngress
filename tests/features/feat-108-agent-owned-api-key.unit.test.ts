@@ -4,7 +4,7 @@ import {
   generateAgentApiKeyPlaintext,
   prepareAgentApiKeyForStorage,
 } from "../../apps/console/src/server/agents";
-import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
+import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-108 agent-owned single API key", () => {

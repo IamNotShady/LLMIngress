@@ -6,7 +6,7 @@ import {
   buildStreamingProviderUrl,
   isStreamingProtocolSupportedByProvider,
   wrapProviderStreamWithErrorRecording,
-} from "../../apps/gateway/src/streaming";
+} from "../../packages/db/src/gateway-streaming";
 
 describe("feat-039 streaming response passthrough", () => {
   it("uses codex subscription endpoint and headers for streaming responses", () => {

@@ -29,7 +29,7 @@ describe("feat-110 provider model price merge", () => {
 
   it("removes runtime provider_models_price reads and writes", () => {
     const files = [
-      "apps/gateway/src/config-reload.ts",
+      "packages/db/src/gateway-config-reload.ts",
       "apps/console/src/server/agent-limits.ts",
       "apps/console/src/server/route-preview.ts",
       "apps/console/src/server/route-policies.ts",

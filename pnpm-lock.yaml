@@ -78,27 +78,12 @@ importers:
 
   apps/gateway:
     dependencies:
-      '@llmingress/billing':
-        specifier: workspace:*
-        version: link:../../packages/billing
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@llmingress/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@llmingress/observability':
-        specifier: workspace:*
-        version: link:../../packages/observability
-      '@llmingress/provider':
-        specifier: workspace:*
-        version: link:../../packages/provider
-      '@llmingress/security':
-        specifier: workspace:*
-        version: link:../../packages/security
       fastify:
         specifier: ^5.8.5
         version: 5.8.5

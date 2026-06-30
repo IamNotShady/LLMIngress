@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { wrapProviderStreamWithActivityCompletion } from "../../apps/gateway/src/streaming";
+import { wrapProviderStreamWithActivityCompletion } from "../../packages/db/src/gateway-streaming";
 
 describe("feat-051 MVP streaming activity completion", () => {
   it("completes request activity after a successful stream ends", async () => {

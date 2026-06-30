@@ -2,13 +2,22 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-30 (feat-122 Database SQL Boundary Enforcement)
-**Active Feature:** none - feat-122 complete
-**Branch:** `dev`
+**Last Updated:** 2026-06-30 (feat-123 Gateway Ponytail Cleanup)
+**Active Feature:** none - feat-123 complete
+**Branch:** `codex/feat-123-gateway-ponytail-cleanup`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-123 — Gateway Ponytail Cleanup (passing)**:
+  - Removed Gateway app shim files under `apps/gateway/src` so the app shell keeps only `main.ts` and `cors.ts`; `main.ts` now imports db-owned Gateway modules directly.
+  - Removed direct Gateway app dependencies on billing/domain/observability/provider/security, and removed `@llmingress/db`'s `./gateway-route-engine` wrapper/export in favor of `@llmingress/domain`.
+  - Added internal `packages/db/src/gateway-runtime-helpers.ts` for repeated record/omit, route-policy, candidate-ordering, and activity-route helpers without publishing another package export.
+  - Added `executeProviderFallbackAttempts` in `gateway-fallback-chain.ts`; chat completions keeps `executeFallbackChain()` as a compatibility wrapper, while Responses, Messages, and Embeddings call the shared JSON fallback runner. Streaming fallback remains separate for first-byte and stream cleanup semantics.
+  - Shrunk `apps/gateway/src/main.ts` with `registerGatewayJsonEndpoint(...)` for `/v1/chat/completions`, `/v1/responses`, `/v1/messages`, and `/v1/embeddings`, while keeping health, metrics, models, CORS, activity completion, streaming wrapping, and startup logic in the file.
+  - TDD red observed first with feat-123 unit coverage; focused verification passed: feat-123 unit, feat-123 real Gateway/PostgreSQL/fake-provider E2E, and route/fallback/chat/responses/messages/embeddings/stream-usage regression unit tests.
+  - Full verification passed: `pnpm run verify` passed with lint, typecheck, 123 unit files / 480 tests, and build. Final `pnpm run verify:features` re-verified all 123 passing features; the optimized E2E batch timed out on feat-048, then fallback original feature verification passed including feat-048 and feat-123.
 
 - [x] **feat-122 — Database SQL Boundary Enforcement (passing)**:
   - Added a production boundary test that forbids direct SQL execution and low-level Postgres client primitives outside `@llmingress/db` for Console, Gateway, Worker, config, and provider source.

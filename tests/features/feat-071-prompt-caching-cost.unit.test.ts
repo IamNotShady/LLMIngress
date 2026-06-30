@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGatewayUsageCostRecords,
   readGatewayProviderTokenUsage,
-} from "../../apps/gateway/src/usage-recorder";
+} from "../../packages/db/src/gateway-usage-recorder";
 
 describe("feat-071 prompt caching cost accounting", () => {
   it("uses provider usage cached input tokens and cached-input pricing for actual and baseline cost", () => {

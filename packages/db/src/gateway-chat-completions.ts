@@ -4,6 +4,7 @@ import {
   type PostgresQueryResultRow,
   readEnabledCompletedProviderOAuthConnections,
 } from "@llmingress/db/providers";
+import { selectRouteAttempts } from "@llmingress/domain";
 import { type ProviderOAuthTokenBlob, refreshProviderOAuthToken } from "@llmingress/provider/oauth";
 import type {
   NormalizedOpenAIChatMessage,
@@ -26,7 +27,6 @@ import {
 import type {
   GatewayConfigSnapshot,
   GatewayRouteCandidateSnapshot,
-  GatewayRoutePolicySnapshot,
 } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
@@ -40,7 +40,13 @@ import {
   buildOpenAIChatCompletionRequestMetadata,
   type GatewayRequestMetadata,
 } from "./gateway-request-metadata.ts";
-import { type RouteDecision, selectRouteAttempts } from "./gateway-route-engine.ts";
+import {
+  buildGatewayRequestActivityRoute,
+  isRecord,
+  omitUndefined,
+  orderGatewayRouteCandidates,
+  requireGatewayRoutePolicy,
+} from "./gateway-runtime-helpers.ts";
 import {
   type GatewayUsageCostDetails,
   readGatewayProviderTokenUsage,
@@ -218,7 +224,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       };
     }
     const routeDecision = routeResult.decision;
-    const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
 
     // Look up the gateway-typed selected candidate from routePolicy.candidates
@@ -232,21 +238,13 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       throw new Error("Selected route candidate was not found in route policy.");
     }
     selectedActivityCandidate = selectedCandidate;
-    activity = buildRequestActivityRoute({
+    activity = buildGatewayRequestActivityRoute({
       candidate: selectedActivityCandidate,
       fallbackAttempts,
       routeDecision,
     });
 
-    // Build the full ordered chain of gateway-typed candidates in the same order as routeResult.chain
-    const chainOrderMap = new Map(routeResult.chain.map((c, idx) => [c.candidateOrder, idx]));
-    const gatewayChain = routePolicy.candidates
-      .filter((c) => chainOrderMap.has(c.candidateOrder))
-      .sort((a, b) => {
-        const ia = chainOrderMap.get(a.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-        const ib = chainOrderMap.get(b.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-        return ia - ib;
-      });
+    const gatewayChain = orderGatewayRouteCandidates(routePolicy, routeResult.chain);
     const chatCompletionCandidates = gatewayChain.filter(
       (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
     );
@@ -290,7 +288,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       databaseUrl: input.databaseUrl,
       providerApiKeyId: result.selectedCandidate.providerApiKeyId,
     });
-    activity = buildRequestActivityRoute({
+    activity = buildGatewayRequestActivityRoute({
       candidate: result.selectedCandidate,
       fallbackAttempts: result.failedAttempts,
       routeDecision,
@@ -334,27 +332,6 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       lease: concurrencyLease,
     });
   }
-}
-
-function buildRequestActivityRoute(input: {
-  candidate: GatewayRouteCandidateSnapshot & {
-    providerApiKeyId?: string;
-    providerApiKeyPrefix?: string;
-  };
-  fallbackAttempts: FallbackFailedAttempt[];
-  routeDecision: RouteDecision;
-}): GatewayRequestActivityRoute {
-  return {
-    fallbackAttempts: input.fallbackAttempts,
-    modelId: input.candidate.modelId,
-    providerApiKeyId: input.candidate.providerApiKeyId,
-    providerApiKeyPrefix: input.candidate.providerApiKeyPrefix,
-    providerId: input.candidate.providerId,
-    providerKey: input.candidate.providerKey,
-    providerModelId: input.candidate.providerModelId,
-    routePolicyId: input.routeDecision.routePolicyId,
-    routeReason: input.routeDecision.routeReason,
-  };
 }
 
 export async function attachGatewayProviderCredentials(input: {
@@ -536,17 +513,6 @@ function readOptionalOpenAIToolChoice(
     return value;
   }
   return null;
-}
-
-function requireRoutePolicy(
-  snapshot: GatewayConfigSnapshot,
-  routePolicyId: string,
-): GatewayRoutePolicySnapshot {
-  const routePolicy = snapshot.routePolicies.find((candidate) => candidate.id === routePolicyId);
-  if (!routePolicy) {
-    throw new Error(`Route policy ${routePolicyId} was not found.`);
-  }
-  return routePolicy;
 }
 
 async function readProviderCredentials(input: {
@@ -768,14 +734,4 @@ function chatCompletionErrorMessage(code: GatewayChatCompletionErrorCode): strin
     return "No eligible provider candidates are available for the selected route.";
   }
   return "Provider request failed.";
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

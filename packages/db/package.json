@@ -200,10 +200,6 @@
       "types": "./src/gateway-responses.ts",
       "default": "./src/gateway-responses.ts"
     },
-    "./gateway-route-engine": {
-      "types": "./src/gateway-route-engine.ts",
-      "default": "./src/gateway-route-engine.ts"
-    },
     "./gateway-streaming": {
       "types": "./src/gateway-streaming.ts",
       "default": "./src/gateway-streaming.ts"

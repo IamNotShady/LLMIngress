@@ -4,7 +4,7 @@ import {
   createGatewayRateLimitErrorBody,
   evaluateGatewayRateLimitWindow,
   getConcurrencyWindow,
-} from "../../apps/gateway/src/rate-limits";
+} from "../../packages/db/src/gateway-rate-limits";
 
 describe("feat-107 concurrency limits and enforcement policy", () => {
   it("uses one fixed window for in-flight concurrency", () => {

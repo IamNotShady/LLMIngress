@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGatewayUsageCostRecords } from "../../apps/gateway/src/usage-recorder";
+import { buildGatewayUsageCostRecords } from "../../packages/db/src/gateway-usage-recorder";
 
 describe("feat-045 usage cost baseline and savings recorder", () => {
   it("builds estimated usage actual cost baseline cost and savings", () => {

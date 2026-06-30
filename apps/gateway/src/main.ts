@@ -1,50 +1,81 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
-import Fastify, { type FastifyBaseLogger, type FastifyReply } from "fastify";
 import {
   completeGatewayRequestActivity,
   createGatewayRequestActivity,
   type GatewayRequestActivityProtocol,
   type GatewayRequestActivityRoute,
   readGatewayActivityError,
-} from "./activity-recorder.js";
-import { authenticateGatewayRequest } from "./auth.js";
-import { executeGatewayOpenAIChatCompletion } from "./chat-completions.js";
-import { createGatewayConfigRuntime, type GatewayConfigRuntime } from "./config-reload.js";
-import { gatewayCorsHeaders } from "./cors.js";
-import { executeGatewayOpenAIEmbeddings } from "./embeddings.js";
-import { gatewayRequestIdHeader } from "./error-mapping.js";
-import { executeGatewayAnthropicMessages } from "./messages.js";
-import { getPrometheusMetricsDocument } from "./metrics.js";
+} from "@llmingress/db/gateway-activity-recorder";
+import { authenticateGatewayRequest } from "@llmingress/db/gateway-auth";
+import { executeGatewayOpenAIChatCompletion } from "@llmingress/db/gateway-chat-completions";
+import {
+  createGatewayConfigRuntime,
+  type GatewayConfigRuntime,
+  type GatewayConfigSnapshot,
+} from "@llmingress/db/gateway-config-reload";
+import { executeGatewayOpenAIEmbeddings } from "@llmingress/db/gateway-embeddings";
+import { gatewayRequestIdHeader } from "@llmingress/db/gateway-error-mapping";
+import { executeGatewayAnthropicMessages } from "@llmingress/db/gateway-messages";
+import { getPrometheusMetricsDocument } from "@llmingress/db/gateway-metrics";
 import {
   type GatewayRequestMetadata,
   gatewayRequestMetadataHeader,
   serializeGatewayRequestMetadata,
   shouldExposeGatewayRequestMetadata,
-} from "./request-metadata.js";
-import { executeGatewayOpenAIResponse } from "./responses.js";
+} from "@llmingress/db/gateway-request-metadata";
+import { executeGatewayOpenAIResponse } from "@llmingress/db/gateway-responses";
 import {
   executeGatewayStreamingRequest,
+  type GatewayStreamingProtocol,
   type GatewayStreamingResult,
   readGatewayStreamingFlag,
   wrapProviderStreamWithActivityCompletion,
-} from "./streaming.js";
-import { recordGatewayRequestTrace } from "./tracing.js";
+} from "@llmingress/db/gateway-streaming";
+import { recordGatewayRequestTrace } from "@llmingress/db/gateway-tracing";
 import {
   buildGatewayProviderUsageResponseBody,
   createGatewayStreamingUsageCollector,
   type GatewayUsageCostDetails,
   recordGatewayUsageCostAndSavings,
-} from "./usage-recorder.js";
+} from "@llmingress/db/gateway-usage-recorder";
 import {
+  type GatewayVirtualModel,
   listAllowedGatewayVirtualModels,
   readRequestedModelName,
   resolveGatewayVirtualModelRequest,
-} from "./virtual-model-access.js";
+} from "@llmingress/db/gateway-virtual-model-access";
+import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply } from "fastify";
+import { gatewayCorsHeaders } from "./cors.js";
 
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
+};
+
+type GatewayJsonEndpointExecutionInput = {
+  agentApiKeyId: string;
+  requestActivityId: string;
+  requestBody: unknown;
+  requestId: string;
+  snapshot: GatewayConfigSnapshot;
+  virtualModel: GatewayVirtualModel;
+};
+
+type GatewayJsonEndpointResponse = {
+  activity?: GatewayRequestActivityRoute;
+  body: unknown;
+  headers?: Record<string, string>;
+  requestMetadata?: GatewayRequestMetadata;
+  statusCode: number;
+  usageCost?: GatewayUsageCostDetails;
+};
+
+type GatewayJsonEndpointDefinition = {
+  execute: (input: GatewayJsonEndpointExecutionInput) => Promise<GatewayJsonEndpointResponse>;
+  path: string;
+  protocol: GatewayRequestActivityProtocol;
+  streamingProtocol?: GatewayStreamingProtocol;
 };
 
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
@@ -79,89 +110,11 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     return reply.header("content-type", document.contentType).send(document.body);
   });
 
-  app.post("/v1/chat/completions", async (request, reply) => {
-    const auth = await authenticateGatewayRequest({
-      headers: request.headers,
-    });
-
-    if (!auth.ok) {
-      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
-    }
-
-    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
-    });
-    const virtualModelAccess = resolveGatewayVirtualModelRequest({
-      allowedVirtualModels,
-      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
-      requestedModelName: readRequestedModelName(request.body),
-      requestId: auth.requestId,
-    });
-    if (!virtualModelAccess.ok) {
-      return sendGatewayErrorResponse(
-        reply,
-        virtualModelAccess.statusCode,
-        virtualModelAccess.body,
-      );
-    }
-    logGatewayAgentRequest(request.log, {
-      agentId: auth.agentApiKey.agentId,
-      agentKeyPrefix: auth.agentApiKey.keyPrefix,
-      method: request.method,
-      protocol: "chat_completions",
-      requestBody: request.body,
-      requestId: auth.requestId,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      url: request.url,
-      virtualModelName: virtualModelAccess.virtualModel.name,
-    });
-
-    if (readGatewayStreamingFlag(request.body)) {
-      return sendGatewayStreamingResponse(
-        reply,
-        await executeRecordedGatewayStreamingRequest({
-          agentApiKeyId: auth.agentApiKey.id,
-          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          execute: (requestActivityId) =>
-            executeGatewayStreamingRequest({
-              agentApiKeyId: auth.agentApiKey.id,
-              protocol: "chat_completions",
-              requestActivityId,
-              requestBody: request.body,
-              requestId: auth.requestId,
-              snapshot: requireGatewayConfigSnapshot(options),
-              virtualModel: virtualModelAccess.virtualModel,
-            }),
-          logger: request.log,
-          model: virtualModelAccess.virtualModel.name,
-          protocol: "chat_completions",
-          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-          requestId: auth.requestId,
-          virtualModelId: virtualModelAccess.virtualModel.id,
-        }),
-        auth.requestId,
-      );
-    }
-
-    const chatCompletion = await executeRecordedGatewayJsonRequest({
-      agentApiKeyId: auth.agentApiKey.id,
-      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      execute: (requestActivityId) =>
-        executeGatewayOpenAIChatCompletion({
-          agentApiKeyId: auth.agentApiKey.id,
-          requestActivityId,
-          requestBody: request.body,
-          requestId: auth.requestId,
-          snapshot: requireGatewayConfigSnapshot(options),
-          virtualModel: virtualModelAccess.virtualModel,
-        }),
-      model: virtualModelAccess.virtualModel.name,
-      protocol: "chat_completions",
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      requestId: auth.requestId,
-      virtualModelId: virtualModelAccess.virtualModel.id,
-    });
-    return sendGatewayJsonResponse(reply, chatCompletion, auth.requestId);
+  registerGatewayJsonEndpoint(app, options, {
+    execute: (input) => executeGatewayOpenAIChatCompletion(input),
+    path: "/v1/chat/completions",
+    protocol: "chat_completions",
+    streamingProtocol: "chat_completions",
   });
 
   app.get("/v1/models", async (request, reply) => {
@@ -187,232 +140,24 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     });
   });
 
-  app.post("/v1/embeddings", async (request, reply) => {
-    const auth = await authenticateGatewayRequest({
-      headers: request.headers,
-    });
-
-    if (!auth.ok) {
-      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
-    }
-
-    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
-    });
-    const virtualModelAccess = resolveGatewayVirtualModelRequest({
-      allowedVirtualModels,
-      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
-      requestedModelName: readRequestedModelName(request.body),
-      requestId: auth.requestId,
-    });
-    if (!virtualModelAccess.ok) {
-      return sendGatewayErrorResponse(
-        reply,
-        virtualModelAccess.statusCode,
-        virtualModelAccess.body,
-      );
-    }
-    logGatewayAgentRequest(request.log, {
-      agentId: auth.agentApiKey.agentId,
-      agentKeyPrefix: auth.agentApiKey.keyPrefix,
-      method: request.method,
-      protocol: "embeddings",
-      requestBody: request.body,
-      requestId: auth.requestId,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      url: request.url,
-      virtualModelName: virtualModelAccess.virtualModel.name,
-    });
-
-    const embeddings = await executeRecordedGatewayJsonRequest({
-      agentApiKeyId: auth.agentApiKey.id,
-      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      execute: (requestActivityId) =>
-        executeGatewayOpenAIEmbeddings({
-          agentApiKeyId: auth.agentApiKey.id,
-          requestActivityId,
-          requestBody: request.body,
-          requestId: auth.requestId,
-          snapshot: requireGatewayConfigSnapshot(options),
-          virtualModel: virtualModelAccess.virtualModel,
-        }),
-      model: virtualModelAccess.virtualModel.name,
-      protocol: "embeddings",
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      requestId: auth.requestId,
-      virtualModelId: virtualModelAccess.virtualModel.id,
-    });
-    return sendGatewayJsonResponse(reply, embeddings, auth.requestId);
+  registerGatewayJsonEndpoint(app, options, {
+    execute: (input) => executeGatewayOpenAIEmbeddings(input),
+    path: "/v1/embeddings",
+    protocol: "embeddings",
   });
 
-  app.post("/v1/responses", async (request, reply) => {
-    const auth = await authenticateGatewayRequest({
-      headers: request.headers,
-    });
-
-    if (!auth.ok) {
-      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
-    }
-
-    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
-    });
-    const virtualModelAccess = resolveGatewayVirtualModelRequest({
-      allowedVirtualModels,
-      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
-      requestedModelName: readRequestedModelName(request.body),
-      requestId: auth.requestId,
-    });
-    if (!virtualModelAccess.ok) {
-      return sendGatewayErrorResponse(
-        reply,
-        virtualModelAccess.statusCode,
-        virtualModelAccess.body,
-      );
-    }
-    logGatewayAgentRequest(request.log, {
-      agentId: auth.agentApiKey.agentId,
-      agentKeyPrefix: auth.agentApiKey.keyPrefix,
-      method: request.method,
-      protocol: "responses",
-      requestBody: request.body,
-      requestId: auth.requestId,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      url: request.url,
-      virtualModelName: virtualModelAccess.virtualModel.name,
-    });
-
-    if (readGatewayStreamingFlag(request.body)) {
-      return sendGatewayStreamingResponse(
-        reply,
-        await executeRecordedGatewayStreamingRequest({
-          agentApiKeyId: auth.agentApiKey.id,
-          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          execute: (requestActivityId) =>
-            executeGatewayStreamingRequest({
-              agentApiKeyId: auth.agentApiKey.id,
-              protocol: "responses",
-              requestActivityId,
-              requestBody: request.body,
-              requestId: auth.requestId,
-              snapshot: requireGatewayConfigSnapshot(options),
-              virtualModel: virtualModelAccess.virtualModel,
-            }),
-          logger: request.log,
-          model: virtualModelAccess.virtualModel.name,
-          protocol: "responses",
-          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-          requestId: auth.requestId,
-          virtualModelId: virtualModelAccess.virtualModel.id,
-        }),
-        auth.requestId,
-      );
-    }
-
-    const response = await executeRecordedGatewayJsonRequest({
-      agentApiKeyId: auth.agentApiKey.id,
-      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      execute: (requestActivityId) =>
-        executeGatewayOpenAIResponse({
-          agentApiKeyId: auth.agentApiKey.id,
-          requestActivityId,
-          requestBody: request.body,
-          requestId: auth.requestId,
-          snapshot: requireGatewayConfigSnapshot(options),
-          virtualModel: virtualModelAccess.virtualModel,
-        }),
-      model: virtualModelAccess.virtualModel.name,
-      protocol: "responses",
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      requestId: auth.requestId,
-      virtualModelId: virtualModelAccess.virtualModel.id,
-    });
-    return sendGatewayJsonResponse(reply, response, auth.requestId);
+  registerGatewayJsonEndpoint(app, options, {
+    execute: (input) => executeGatewayOpenAIResponse(input),
+    path: "/v1/responses",
+    protocol: "responses",
+    streamingProtocol: "responses",
   });
 
-  app.post("/v1/messages", async (request, reply) => {
-    const auth = await authenticateGatewayRequest({
-      headers: request.headers,
-    });
-
-    if (!auth.ok) {
-      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
-    }
-
-    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
-    });
-    const virtualModelAccess = resolveGatewayVirtualModelRequest({
-      allowedVirtualModels,
-      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
-      requestedModelName: readRequestedModelName(request.body),
-      requestId: auth.requestId,
-    });
-    if (!virtualModelAccess.ok) {
-      return sendGatewayErrorResponse(
-        reply,
-        virtualModelAccess.statusCode,
-        virtualModelAccess.body,
-      );
-    }
-    logGatewayAgentRequest(request.log, {
-      agentId: auth.agentApiKey.agentId,
-      agentKeyPrefix: auth.agentApiKey.keyPrefix,
-      method: request.method,
-      protocol: "messages",
-      requestBody: request.body,
-      requestId: auth.requestId,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      url: request.url,
-      virtualModelName: virtualModelAccess.virtualModel.name,
-    });
-
-    if (readGatewayStreamingFlag(request.body)) {
-      return sendGatewayStreamingResponse(
-        reply,
-        await executeRecordedGatewayStreamingRequest({
-          agentApiKeyId: auth.agentApiKey.id,
-          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          execute: (requestActivityId) =>
-            executeGatewayStreamingRequest({
-              agentApiKeyId: auth.agentApiKey.id,
-              protocol: "messages",
-              requestActivityId,
-              requestBody: request.body,
-              requestId: auth.requestId,
-              snapshot: requireGatewayConfigSnapshot(options),
-              virtualModel: virtualModelAccess.virtualModel,
-            }),
-          logger: request.log,
-          model: virtualModelAccess.virtualModel.name,
-          protocol: "messages",
-          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-          requestId: auth.requestId,
-          virtualModelId: virtualModelAccess.virtualModel.id,
-        }),
-        auth.requestId,
-      );
-    }
-
-    const message = await executeRecordedGatewayJsonRequest({
-      agentApiKeyId: auth.agentApiKey.id,
-      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      execute: (requestActivityId) =>
-        executeGatewayAnthropicMessages({
-          agentApiKeyId: auth.agentApiKey.id,
-          requestActivityId,
-          requestBody: request.body,
-          requestId: auth.requestId,
-          snapshot: requireGatewayConfigSnapshot(options),
-          virtualModel: virtualModelAccess.virtualModel,
-        }),
-      model: virtualModelAccess.virtualModel.name,
-      protocol: "messages",
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
-      requestId: auth.requestId,
-      virtualModelId: virtualModelAccess.virtualModel.id,
-    });
-    return sendGatewayJsonResponse(reply, message, auth.requestId);
+  registerGatewayJsonEndpoint(app, options, {
+    execute: (input) => executeGatewayAnthropicMessages(input),
+    path: "/v1/messages",
+    protocol: "messages",
+    streamingProtocol: "messages",
   });
 
   app.addHook("onClose", async () => {
@@ -468,6 +213,99 @@ function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
     throw new Error("Gateway API endpoints require configRuntime.");
   }
   return snapshot;
+}
+
+function registerGatewayJsonEndpoint(
+  app: FastifyInstance,
+  options: CreateGatewayAppOptions,
+  endpoint: GatewayJsonEndpointDefinition,
+) {
+  app.post(endpoint.path, async (request, reply) => {
+    const auth = await authenticateGatewayRequest({
+      headers: request.headers,
+    });
+
+    if (!auth.ok) {
+      return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
+    }
+
+    const allowedVirtualModels = await listAllowedGatewayVirtualModels({
+      agentApiKeyId: auth.agentApiKey.id,
+    });
+    const virtualModelAccess = resolveGatewayVirtualModelRequest({
+      allowedVirtualModels,
+      defaultVirtualModelId: auth.agentApiKey.defaultVirtualModelId,
+      requestedModelName: readRequestedModelName(request.body),
+      requestId: auth.requestId,
+    });
+    if (!virtualModelAccess.ok) {
+      return sendGatewayErrorResponse(
+        reply,
+        virtualModelAccess.statusCode,
+        virtualModelAccess.body,
+      );
+    }
+
+    logGatewayAgentRequest(request.log, {
+      agentId: auth.agentApiKey.agentId,
+      agentKeyPrefix: auth.agentApiKey.keyPrefix,
+      method: request.method,
+      protocol: endpoint.protocol,
+      requestBody: request.body,
+      requestId: auth.requestId,
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+      url: request.url,
+      virtualModelName: virtualModelAccess.virtualModel.name,
+    });
+
+    const streamingProtocol = endpoint.streamingProtocol;
+    if (streamingProtocol && readGatewayStreamingFlag(request.body)) {
+      return sendGatewayStreamingResponse(
+        reply,
+        await executeRecordedGatewayStreamingRequest({
+          agentApiKeyId: auth.agentApiKey.id,
+          agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
+          execute: (requestActivityId) =>
+            executeGatewayStreamingRequest({
+              agentApiKeyId: auth.agentApiKey.id,
+              protocol: streamingProtocol,
+              requestActivityId,
+              requestBody: request.body,
+              requestId: auth.requestId,
+              snapshot: requireGatewayConfigSnapshot(options),
+              virtualModel: virtualModelAccess.virtualModel,
+            }),
+          logger: request.log,
+          model: virtualModelAccess.virtualModel.name,
+          protocol: endpoint.protocol,
+          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+          requestId: auth.requestId,
+          virtualModelId: virtualModelAccess.virtualModel.id,
+        }),
+        auth.requestId,
+      );
+    }
+
+    const response = await executeRecordedGatewayJsonRequest({
+      agentApiKeyId: auth.agentApiKey.id,
+      agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
+      execute: (requestActivityId) =>
+        endpoint.execute({
+          agentApiKeyId: auth.agentApiKey.id,
+          requestActivityId,
+          requestBody: request.body,
+          requestId: auth.requestId,
+          snapshot: requireGatewayConfigSnapshot(options),
+          virtualModel: virtualModelAccess.virtualModel,
+        }),
+      model: virtualModelAccess.virtualModel.name,
+      protocol: endpoint.protocol,
+      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
+      requestId: auth.requestId,
+      virtualModelId: virtualModelAccess.virtualModel.id,
+    });
+    return sendGatewayJsonResponse(reply, response, auth.requestId);
+  });
 }
 
 function sendGatewayStreamingResponse(

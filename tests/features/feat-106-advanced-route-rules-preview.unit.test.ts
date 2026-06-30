@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { GatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
-import { selectRouteCandidate } from "../../apps/gateway/src/route-engine";
+import type { GatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
+  selectRouteCandidate,
 } from "../../packages/domain/src/index";
 
 describe("feat-106 advanced route policy rules and preview", () => {

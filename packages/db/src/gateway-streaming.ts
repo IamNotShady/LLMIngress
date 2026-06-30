@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { PostgresClient } from "@llmingress/db/providers";
+import { selectRouteAttempts } from "@llmingress/domain";
 import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import { openRouterAttributionHeaders } from "@llmingress/provider/openrouter";
@@ -26,7 +27,7 @@ import {
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-chat-completions.ts";
-import type { GatewayConfigSnapshot, GatewayRoutePolicySnapshot } from "./gateway-config-reload.ts";
+import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
   buildFallbackFailedAttempt,
@@ -48,7 +49,13 @@ import {
   type GatewayRequestMetadata,
 } from "./gateway-request-metadata.ts";
 import { normalizeOpenAIResponsesRequest } from "./gateway-responses.ts";
-import { type RouteDecision, selectRouteAttempts } from "./gateway-route-engine.ts";
+import {
+  buildGatewayRequestActivityRoute,
+  isRecord,
+  omitUndefined,
+  orderGatewayRouteCandidates,
+  requireGatewayRoutePolicy,
+} from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import {
   type GatewayUsageCostDetails,
@@ -171,19 +178,9 @@ export async function executeGatewayStreamingRequest(input: {
     }
 
     const routeDecision = routeResult.decision;
-    const routePolicy = requireRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-
-    // Reconstruct ordered chain from routePolicy.candidates (preserving GatewayRouteCandidateSnapshot
-    // with healthStatus) using the same ordering as routeResult.chain.
-    const chainOrderMap = new Map(routeResult.chain.map((c, idx) => [c.candidateOrder, idx]));
-    const gatewayChain = routePolicy.candidates
-      .filter((c) => chainOrderMap.has(c.candidateOrder))
-      .sort((a, b) => {
-        const ia = chainOrderMap.get(a.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-        const ib = chainOrderMap.get(b.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-        return ia - ib;
-      });
+    const gatewayChain = orderGatewayRouteCandidates(routePolicy, routeResult.chain);
 
     if (gatewayChain.length === 0) {
       await releaseGatewayConcurrency({ databaseUrl: input.databaseUrl, lease: concurrencyLease });
@@ -479,7 +476,7 @@ export async function executeGatewayStreamingRequest(input: {
         providerApiKeyId: candidate.providerApiKeyId,
       });
 
-      const activity = buildStreamingActivityRoute({
+      const activity = buildGatewayRequestActivityRoute({
         candidate,
         fallbackAttempts,
         routeDecision,
@@ -1107,39 +1104,6 @@ async function readProviderErrorBody(response: Response): Promise<string | null>
   }
 }
 
-function requireRoutePolicy(
-  snapshot: GatewayConfigSnapshot,
-  routePolicyId: string,
-): GatewayRoutePolicySnapshot {
-  const routePolicy = snapshot.routePolicies.find((candidate) => candidate.id === routePolicyId);
-  if (!routePolicy) {
-    throw new Error(`Route policy ${routePolicyId} was not found.`);
-  }
-  return routePolicy;
-}
-
-function buildStreamingActivityRoute(input: {
-  candidate: FallbackChainCandidate;
-  fallbackAttempts: FallbackFailedAttempt[];
-  routeDecision: RouteDecision;
-}): GatewayRequestActivityRoute {
-  return {
-    fallbackAttempts: input.fallbackAttempts,
-    modelId: input.candidate.modelId,
-    providerId: input.candidate.providerId,
-    providerKey: input.candidate.providerKey,
-    providerModelId: input.candidate.providerModelId,
-    routePolicyId: input.routeDecision.routePolicyId,
-    routeReason: input.routeDecision.routeReason,
-    ...(input.candidate.providerApiKeyId
-      ? { providerApiKeyId: input.candidate.providerApiKeyId }
-      : {}),
-    ...(input.candidate.providerApiKeyPrefix
-      ? { providerApiKeyPrefix: input.candidate.providerApiKeyPrefix }
-      : {}),
-  };
-}
-
 function createGatewayStreamingErrorBody(
   code: GatewayStreamingErrorCode,
   requestId: string,
@@ -1181,14 +1145,4 @@ function streamingErrorMessage(code: GatewayStreamingErrorCode): string {
     return "No provider is available for the selected route.";
   }
   return "Provider request failed.";
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

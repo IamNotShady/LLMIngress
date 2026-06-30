@@ -7,7 +7,7 @@ import {
   normalizeProviderTemplateFormInput,
 } from "../../apps/console/src/server/provider-templates";
 import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
-import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
+import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import {
   createTestPostgresFixture,
   loadSqlMigrations,

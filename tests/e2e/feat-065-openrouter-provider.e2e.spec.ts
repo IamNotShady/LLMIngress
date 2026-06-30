@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
-import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
+import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
 

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
-import { selectRouteCandidate } from "../../apps/gateway/src/route-engine";
+import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { selectRouteCandidate } from "../../packages/domain/src/index";
 
 test("fixed routing and cost first routing are deterministic with route reason", async () => {
   const fixture = await createTestPostgresFixture({

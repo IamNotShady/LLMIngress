@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createGatewayResponsesErrorBody,
   normalizeOpenAIResponsesRequest,
-} from "../../apps/gateway/src/responses";
+} from "../../packages/db/src/gateway-responses";
 
 describe("feat-037 OpenAI responses stateless endpoint", () => {
   it("normalizes stateless Responses API payloads for provider adapters", () => {

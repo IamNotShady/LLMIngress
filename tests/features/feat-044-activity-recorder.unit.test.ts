@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGatewayActivityCompletion,
   readGatewayActivityError,
-} from "../../apps/gateway/src/activity-recorder";
+} from "../../packages/db/src/gateway-activity-recorder";
 
 describe("feat-044 request activity recorder", () => {
   it("builds successful activity completion metadata with latency", () => {

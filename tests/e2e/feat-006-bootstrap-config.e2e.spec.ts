@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { loadBootstrapRuntimeConfig } from "../../packages/config/src/index";
+import { readPostgresDatabaseUrl } from "../../packages/db/src/client";
 
-test("env and bootstrap config load ports database url master key and reject invalid config", () => {
+test("env and bootstrap config load app config while db reads database url", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "llmingress-bootstrap-"));
 
   try {
@@ -36,12 +37,19 @@ test("env and bootstrap config load ports database url master key and reject inv
       gatewayPort: 4201,
       consolePort: 3101,
       workerHeartbeatMs: 5000,
-      databaseUrl: "postgresql://postgres:postgres@127.0.0.1:55432/from-config",
       masterKeySource: { kind: "file", path: masterKeyFile },
     });
 
+    expect(
+      readPostgresDatabaseUrl({
+        env: {
+          LLMINGRESS_BOOTSTRAP_CONFIG: bootstrapConfig,
+        },
+      }),
+    ).toBe("postgresql://postgres:postgres@127.0.0.1:55432/from-config");
+
     expect(() =>
-      loadBootstrapRuntimeConfig({
+      readPostgresDatabaseUrl({
         env: {
           LLMINGRESS_BOOTSTRAP_CONFIG: bootstrapConfig,
           DATABASE_URL: "not-a-url",

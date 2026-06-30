@@ -77,7 +77,7 @@ export type ChainedConnectivityCheckJobPayload = {
 };
 
 type CreateModelRefreshJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   masterKeySource?: MasterKeySource;
   modelPriceSource?: () => Promise<ProviderModelSyncedPrice[]>;
@@ -639,7 +639,10 @@ async function notifyJobCreated(client: QueryClient, jobId: string): Promise<voi
 
 type QueryClient = PostgresQueryClient;
 
-async function readProvider(databaseUrl: string, providerId: string): Promise<ProviderRow> {
+async function readProvider(
+  databaseUrl: string | undefined,
+  providerId: string,
+): Promise<ProviderRow> {
   return withPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
@@ -666,7 +669,7 @@ async function readProvider(databaseUrl: string, providerId: string): Promise<Pr
 }
 
 async function readExistingProviderModels(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   providerId: string,
 ): Promise<ExistingProviderModel[]> {
   return withPostgresClient(databaseUrl, async (client) => {
@@ -829,7 +832,7 @@ function readProviderId(payload: unknown): string {
 }
 
 async function readProviderApiKey(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   masterKeySource: MasterKeySource;
   providerId: string;
 }): Promise<string> {
@@ -853,7 +856,7 @@ async function readProviderApiKey(input: {
 }
 
 async function readProviderOAuthAccessToken(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   fetch: typeof globalThis.fetch;
   masterKeySource: MasterKeySource;
   providerId: string;

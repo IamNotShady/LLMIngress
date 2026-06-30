@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
+import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
 import { createBackupJobHandler } from "./backup.js";
 import { createBillingReconciliationJobHandler } from "./billing-reconciliation.js";
 import { createBudgetThresholdAlertsJobHandler } from "./budget-threshold-alerts.js";
@@ -29,52 +30,26 @@ type StartWorkerOptions = {
 
 export async function startWorker(options: StartWorkerOptions = {}) {
   const config = loadBootstrapRuntimeConfig();
+  assertPostgresDatabaseConfigured();
   const jobRunner =
     options.jobRunner ??
     createPostgresJobRunner({
-      databaseUrl: config.databaseUrl,
       handlers: {
-        model_refresh: createModelRefreshJobHandler({ databaseUrl: config.databaseUrl }),
-        provider_connectivity_check: createProviderConnectivityCheckJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        provider_failure_alerts: createProviderFailureAlertsJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        billing_reconciliation: createBillingReconciliationJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        backup: createBackupJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        budget_threshold_alerts: createBudgetThresholdAlertsJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        price_sync: createPriceSyncJobHandler({ databaseUrl: config.databaseUrl }),
-        cost_report_export: createCostReportExportJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        fallback_exhaustion_alerts: createFallbackExhaustionAlertsJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        jsonl_export: createJsonlRequestLogExportJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        notification_dispatch: createNotificationDispatchJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        rate_limit_alerts: createRateLimitAlertsJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        webhook_export: createWebhookEventExportJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        retention_cleanup: createRetentionCleanupJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
-        stale_reservation_cleanup: createStaleReservationCleanupJobHandler({
-          databaseUrl: config.databaseUrl,
-        }),
+        model_refresh: createModelRefreshJobHandler({}),
+        provider_connectivity_check: createProviderConnectivityCheckJobHandler({}),
+        provider_failure_alerts: createProviderFailureAlertsJobHandler({}),
+        billing_reconciliation: createBillingReconciliationJobHandler({}),
+        backup: createBackupJobHandler({}),
+        budget_threshold_alerts: createBudgetThresholdAlertsJobHandler({}),
+        price_sync: createPriceSyncJobHandler({}),
+        cost_report_export: createCostReportExportJobHandler({}),
+        fallback_exhaustion_alerts: createFallbackExhaustionAlertsJobHandler({}),
+        jsonl_export: createJsonlRequestLogExportJobHandler({}),
+        notification_dispatch: createNotificationDispatchJobHandler({}),
+        rate_limit_alerts: createRateLimitAlertsJobHandler({}),
+        webhook_export: createWebhookEventExportJobHandler({}),
+        retention_cleanup: createRetentionCleanupJobHandler({}),
+        stale_reservation_cleanup: createStaleReservationCleanupJobHandler({}),
       },
       pollIntervalMs: config.workerHeartbeatMs,
       workerId: readWorkerId(),
@@ -82,7 +57,6 @@ export async function startWorker(options: StartWorkerOptions = {}) {
   const periodicScheduler =
     options.periodicScheduler ??
     createPostgresPeriodicScheduler({
-      databaseUrl: config.databaseUrl,
       tasks: createDefaultPeriodicTasks(),
       tickIntervalMs: config.workerHeartbeatMs,
     });

@@ -24,7 +24,7 @@ export type RetentionCleanupResult = {
 };
 
 type CreateRetentionCleanupJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 

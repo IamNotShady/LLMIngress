@@ -197,12 +197,12 @@ export function formatAgentLimitSummaries(
   };
 }
 
-export async function listAgentLimits(databaseUrl: string): Promise<ConsoleAgentLimit[]> {
+export async function listAgentLimits(databaseUrl?: string): Promise<ConsoleAgentLimit[]> {
   return withClient(databaseUrl, (client) => readAgentLimits(client));
 }
 
 export async function listAgentLimitRuntimeSnapshots(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<ConsoleAgentLimitRuntimeSnapshot[]> {
   return withClient(databaseUrl, async (client) => {
     const budgetUsage = await readAgentLimitBudgetUsage(client);
@@ -251,7 +251,7 @@ export async function listAgentLimitRuntimeSnapshots(
 }
 
 export async function saveAgentLimitRules(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   limits: NormalizedAgentLimitFormInput;
 }): Promise<ConsoleAgentLimit[]> {
   let savedLimits: ConsoleAgentLimit[] | undefined;
@@ -319,7 +319,7 @@ export async function saveAgentLimitRules(input: {
 
 export async function deleteAgentLimitRules(input: {
   agentId: string;
-  databaseUrl: string;
+  databaseUrl?: string;
 }): Promise<void> {
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
@@ -654,7 +654,7 @@ function clampPercent(value: number): number {
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

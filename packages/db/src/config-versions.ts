@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Client } from "pg";
+import { PostgresClient } from "@llmingress/db/client";
 
 export const CONFIG_CHANGED_CHANNEL = "config_changed";
 
@@ -75,7 +75,7 @@ type PreparedConfigChange = {
 };
 
 type ConfigChangedListenerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   onNotification: (notification: ConfigChangedNotification) => void;
 };
 
@@ -88,7 +88,7 @@ export function createConfigPublisher(options: CreateConfigPublisherOptions) {
 export async function createConfigChangedListener(options: ConfigChangedListenerOptions): Promise<{
   close: () => Promise<void>;
 }> {
-  const client = new Client({ connectionString: options.databaseUrl });
+  const client = new PostgresClient({ connectionString: options.databaseUrl });
   client.on("notification", (message) => {
     if (message.channel !== CONFIG_CHANGED_CHANNEL || !message.payload) {
       return;
@@ -174,11 +174,7 @@ async function connect(options: CreateConfigPublisherOptions): Promise<ConfigPub
     return options.connect();
   }
 
-  if (!options.databaseUrl) {
-    throw new Error("Config publisher requires databaseUrl or connect.");
-  }
-
-  const client = new Client({ connectionString: options.databaseUrl });
+  const client = new PostgresClient({ connectionString: options.databaseUrl });
   await client.connect();
   return {
     query: async <T = Record<string, unknown>>(text: string, values?: readonly unknown[]) => {

@@ -1,15 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  deleteConsoleSession,
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-} from "../../../../server/auth";
+import { deleteConsoleSession, sessionCookieName } from "../../../../server/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  await deleteConsoleSession(getConsoleDatabaseUrl(), sessionToken);
+  await deleteConsoleSession(sessionToken);
 
   const response = NextResponse.redirect(new URL("/", request.url), { status: 303 });
   response.cookies.delete(sessionCookieName);

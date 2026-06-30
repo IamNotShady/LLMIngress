@@ -1,9 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 import {
   createRoutePolicy,
   deleteRoutePolicy,
@@ -14,9 +10,8 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -26,7 +21,6 @@ export async function POST(request: NextRequest) {
   try {
     if (action === "create") {
       await createRoutePolicy({
-        databaseUrl,
         routePolicy: normalizeRoutePolicyFormInput({
           providerModelIds: readAllText(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
@@ -35,7 +29,6 @@ export async function POST(request: NextRequest) {
       });
     } else if (action === "update") {
       await updateRoutePolicy({
-        databaseUrl,
         id: readRequiredText(form, "id"),
         routePolicy: normalizeRoutePolicyFormInput({
           providerModelIds: readAllText(form, "providerModelIds"),
@@ -45,7 +38,6 @@ export async function POST(request: NextRequest) {
       });
     } else if (action === "delete") {
       await deleteRoutePolicy({
-        databaseUrl,
         id: readRequiredText(form, "id"),
       });
     } else {

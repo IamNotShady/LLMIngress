@@ -1,9 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 import {
   createRoutePolicy,
   normalizeRoutePolicyFormInput,
@@ -19,9 +15,8 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -31,7 +26,6 @@ export async function POST(request: NextRequest) {
   try {
     if (action === "create") {
       await createVirtualModel({
-        databaseUrl,
         virtualModel: normalizeVirtualModelFormInput({
           description: readText(form, "description"),
           name: readText(form, "name"),
@@ -39,7 +33,6 @@ export async function POST(request: NextRequest) {
       });
     } else if (action === "createWithRoute") {
       const virtualModel = await createVirtualModel({
-        databaseUrl,
         virtualModel: normalizeVirtualModelFormInput({
           description: readText(form, "description"),
           name: readText(form, "name"),
@@ -48,7 +41,6 @@ export async function POST(request: NextRequest) {
       const providerModelIds = readAllText(form, "providerModelIds");
       if (providerModelIds.length > 0) {
         await createRoutePolicy({
-          databaseUrl,
           routePolicy: normalizeRoutePolicyFormInput({
             providerModelIds,
             strategy: readText(form, "strategy"),
@@ -58,7 +50,6 @@ export async function POST(request: NextRequest) {
       }
     } else if (action === "update") {
       await updateVirtualModel({
-        databaseUrl,
         id: readRequiredText(form, "id"),
         virtualModel: normalizeVirtualModelFormInput({
           description: readText(form, "description"),
@@ -67,7 +58,6 @@ export async function POST(request: NextRequest) {
       });
     } else if (action === "updateWithRoute") {
       await updateVirtualModel({
-        databaseUrl,
         id: readRequiredText(form, "id"),
         virtualModel: normalizeVirtualModelFormInput({
           description: readText(form, "description"),
@@ -78,7 +68,6 @@ export async function POST(request: NextRequest) {
       const providerModelIds = readAllText(form, "providerModelIds");
       if (routePolicyId && providerModelIds.length > 0) {
         await updateRoutePolicy({
-          databaseUrl,
           id: routePolicyId,
           routePolicy: normalizeRoutePolicyFormInput({
             providerModelIds,
@@ -88,7 +77,6 @@ export async function POST(request: NextRequest) {
         });
       } else if (!routePolicyId && providerModelIds.length > 0) {
         await createRoutePolicy({
-          databaseUrl,
           routePolicy: normalizeRoutePolicyFormInput({
             providerModelIds,
             strategy: readText(form, "strategy"),
@@ -98,7 +86,6 @@ export async function POST(request: NextRequest) {
       }
     } else if (action === "delete") {
       await deleteVirtualModel({
-        databaseUrl,
         id: readRequiredText(form, "id"),
       });
     } else {

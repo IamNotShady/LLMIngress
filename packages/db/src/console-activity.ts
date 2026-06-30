@@ -47,7 +47,7 @@ export type ConsoleActivityFilters = {
 };
 
 export type ConsoleActivityListInput = {
-  databaseUrl: string;
+  databaseUrl?: string;
   filters?: ConsoleActivityFiltersInput;
   limit?: number;
   page?: number;
@@ -142,7 +142,7 @@ type FallbackEventRow = PostgresQueryResultRow & {
 };
 
 type NormalizedActivityListInput = {
-  databaseUrl: string;
+  databaseUrl?: string;
   filters: ConsoleActivityFilters;
   limit: number;
   page: number;
@@ -162,7 +162,7 @@ const activityProtocols = new Set<ConsoleActivityProtocol>([
 ]);
 
 export async function listConsoleActivities(
-  input: string | ConsoleActivityListInput,
+  input: string | ConsoleActivityListInput = {},
   limit = 20,
 ): Promise<ConsoleActivity[]> {
   const listInput =
@@ -241,7 +241,7 @@ export async function listConsoleActivities(
 }
 
 export async function countConsoleActivities(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   filters?: ConsoleActivityFiltersInput;
 }): Promise<number> {
   const {
@@ -270,7 +270,7 @@ export async function countConsoleActivities(input: {
 
 export async function getConsoleActivityDetail(input: {
   activityId?: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   requestId?: string;
 }): Promise<ConsoleActivityDetail | null> {
   if (!input.activityId && !input.requestId) {

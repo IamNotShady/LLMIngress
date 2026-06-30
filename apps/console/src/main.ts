@@ -3,6 +3,7 @@ import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
+import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
 
 type ConsoleMode = "dev" | "start";
 type ConsoleChildProcess = Pick<ChildProcess, "kill" | "on">;
@@ -30,6 +31,7 @@ const defaultConsoleRuntime: ConsoleRuntime = {
 
 export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
+  assertPostgresDatabaseConfigured();
   const consoleHost = process.env.CONSOLE_HOST?.trim() || "127.0.0.1";
   const masterKeyEnv =
     config.masterKeySource.kind === "inline"
@@ -41,7 +43,6 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
     args: [mode, "--hostname", consoleHost, "--port", String(config.consolePort)],
     env: {
       ...process.env,
-      DATABASE_URL: config.databaseUrl,
       ...masterKeyEnv,
     },
   };

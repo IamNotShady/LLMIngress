@@ -114,7 +114,7 @@ export async function getConsoleUsageSummary(input: {
   agentId?: string | null;
   dateFrom?: Date | null;
   dateTo?: Date | null;
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: Date;
   providerId?: string | null;
   virtualModelId?: string | null;

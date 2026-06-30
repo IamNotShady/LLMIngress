@@ -178,7 +178,7 @@ export function normalizeAnthropicMessagesRequest(
 export async function executeGatewayAnthropicMessages(input: {
   agentApiKeyId: string;
   adapter?: AnthropicProviderAdapter;
-  databaseUrl: string;
+  databaseUrl?: string;
   requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
@@ -347,7 +347,7 @@ export async function executeGatewayAnthropicMessages(input: {
 async function executeMessagesFallback(input: {
   adapter?: AnthropicProviderAdapter;
   candidates: readonly FallbackChainCandidate[];
-  databaseUrl: string;
+  databaseUrl?: string;
   fallbackAttempts: FallbackFailedAttempt[];
   finalizeAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
   releaseAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;

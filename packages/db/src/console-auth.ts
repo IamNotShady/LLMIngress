@@ -6,7 +6,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { promisify } from "node:util";
-import { PostgresClient } from "@llmingress/db/client";
+import { PostgresClient, readPostgresDatabaseUrl } from "@llmingress/db/client";
 
 export const sessionCookieName = "llmingress_console_session";
 
@@ -36,11 +36,7 @@ export type ConsoleSecuritySummary = {
 };
 
 export function getConsoleDatabaseUrl(): string {
-  const databaseUrl = process.env.DATABASE_URL?.trim();
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required for Console auth.");
-  }
-  return databaseUrl;
+  return readPostgresDatabaseUrl();
 }
 
 export async function hashAdminPassword(password: string): Promise<string> {
@@ -69,10 +65,19 @@ export async function verifyAdminPassword(
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+export async function readConsoleAuthState(sessionToken?: string): Promise<ConsoleAuthState>;
 export async function readConsoleAuthState(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   sessionToken?: string,
+): Promise<ConsoleAuthState>;
+export async function readConsoleAuthState(
+  databaseUrlOrSessionToken?: string,
+  maybeSessionToken?: string,
 ): Promise<ConsoleAuthState> {
+  const { databaseUrl, sessionToken } = resolveDatabaseUrlAndSessionToken(
+    databaseUrlOrSessionToken,
+    maybeSessionToken,
+  );
   if (!(await isConsoleInitialized(databaseUrl))) {
     return "setup";
   }
@@ -84,7 +89,7 @@ export async function readConsoleAuthState(
   return "login";
 }
 
-export async function isConsoleInitialized(databaseUrl: string): Promise<boolean> {
+export async function isConsoleInitialized(databaseUrl?: string): Promise<boolean> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<{ exists: boolean }>(
       "select exists(select 1 from console_admins where id = 1) as exists",
@@ -94,7 +99,7 @@ export async function isConsoleInitialized(databaseUrl: string): Promise<boolean
 }
 
 export async function getConsoleSecuritySummary(
-  databaseUrl: string,
+  databaseUrl = readPostgresDatabaseUrl(),
 ): Promise<ConsoleSecuritySummary> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<{
@@ -117,20 +122,43 @@ export async function getConsoleSecuritySummary(
   });
 }
 
-export async function createAdminPassword(databaseUrl: string, password: string): Promise<void> {
+export async function createAdminPassword(password: string): Promise<void>;
+export async function createAdminPassword(
+  databaseUrl: string | undefined,
+  password: string,
+): Promise<void>;
+export async function createAdminPassword(
+  databaseUrlOrPassword: string | undefined,
+  maybePassword?: string,
+): Promise<void> {
+  const databaseUrl = maybePassword ? databaseUrlOrPassword : undefined;
+  const password = maybePassword ?? databaseUrlOrPassword;
+  if (!password) {
+    throw new Error("Admin password is required.");
+  }
   const passwordHash = await hashAdminPassword(password);
 
-  await withClient(databaseUrl, async (client) => {
+  await withClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
     await client.query("insert into console_admins (id, password_hash) values (1, $1)", [
       passwordHash,
     ]);
   });
 }
 
+export async function loginConsoleAdmin(password: string): Promise<ConsoleSession | null>;
 export async function loginConsoleAdmin(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   password: string,
+): Promise<ConsoleSession | null>;
+export async function loginConsoleAdmin(
+  databaseUrlOrPassword: string | undefined,
+  maybePassword?: string,
 ): Promise<ConsoleSession | null> {
+  const databaseUrl = maybePassword ? databaseUrlOrPassword : undefined;
+  const password = maybePassword ?? databaseUrlOrPassword;
+  if (!password) {
+    throw new Error("Admin password is required.");
+  }
   const admin = await withClient(databaseUrl, async (client) => {
     const result = await client.query<AdminRow>(
       "select password_hash from console_admins where id = 1",
@@ -145,10 +173,19 @@ export async function loginConsoleAdmin(
   return createConsoleSession(databaseUrl);
 }
 
+export async function verifyConsoleSession(sessionToken?: string): Promise<boolean>;
 export async function verifyConsoleSession(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   sessionToken?: string,
+): Promise<boolean>;
+export async function verifyConsoleSession(
+  databaseUrlOrSessionToken?: string,
+  maybeSessionToken?: string,
 ): Promise<boolean> {
+  const { databaseUrl, sessionToken } = resolveDatabaseUrlAndSessionToken(
+    databaseUrlOrSessionToken,
+    maybeSessionToken,
+  );
   if (!sessionToken) {
     return false;
   }
@@ -169,10 +206,19 @@ export async function verifyConsoleSession(
   });
 }
 
+export async function deleteConsoleSession(sessionToken?: string): Promise<void>;
 export async function deleteConsoleSession(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   sessionToken?: string,
+): Promise<void>;
+export async function deleteConsoleSession(
+  databaseUrlOrSessionToken?: string,
+  maybeSessionToken?: string,
 ): Promise<void> {
+  const { databaseUrl, sessionToken } = resolveDatabaseUrlAndSessionToken(
+    databaseUrlOrSessionToken,
+    maybeSessionToken,
+  );
   if (!sessionToken) {
     return;
   }
@@ -200,7 +246,7 @@ function assertUsablePassword(password: string): void {
   }
 }
 
-async function createConsoleSession(databaseUrl: string): Promise<ConsoleSession> {
+async function createConsoleSession(databaseUrl: string | undefined): Promise<ConsoleSession> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionDurationMs);
 
@@ -222,10 +268,10 @@ function hashSessionToken(token: string): string {
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
+  const client = new PostgresClient(databaseUrl ? { connectionString: databaseUrl } : {});
   await client.connect();
 
   try {
@@ -233,4 +279,21 @@ async function withClient<T>(
   } finally {
     await client.end();
   }
+}
+
+function resolveDatabaseUrlAndSessionToken(
+  databaseUrlOrSessionToken?: string,
+  maybeSessionToken?: string,
+): { databaseUrl?: string; sessionToken?: string } {
+  if (maybeSessionToken !== undefined) {
+    return {
+      databaseUrl: databaseUrlOrSessionToken ?? readPostgresDatabaseUrl(),
+      sessionToken: maybeSessionToken,
+    };
+  }
+
+  return {
+    databaseUrl: readPostgresDatabaseUrl(),
+    sessionToken: databaseUrlOrSessionToken,
+  };
 }

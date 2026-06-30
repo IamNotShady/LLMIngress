@@ -14,7 +14,7 @@ export type StaleReservationCleanupResult = {
 };
 
 type CreateStaleReservationCleanupJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 

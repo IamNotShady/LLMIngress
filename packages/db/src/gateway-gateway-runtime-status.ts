@@ -12,7 +12,7 @@ export type RecordGatewayRuntimeStatus = (event: GatewayRuntimeStatusEvent) => P
 export const noopRuntimeStatusRecorder: RecordGatewayRuntimeStatus = async () => {};
 
 export function createGatewayRuntimeStatusRecorder(options: {
-  databaseUrl: string;
+  databaseUrl?: string;
   gatewayInstanceId: string;
 }): RecordGatewayRuntimeStatus {
   return async (event) => {

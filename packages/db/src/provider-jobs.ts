@@ -41,7 +41,7 @@ export function buildJobCreatedNotificationPayload(jobId: string): { jobId: stri
 }
 
 export async function enqueueProviderModelRefreshJob(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerId: string;
 }): Promise<QueuedProviderModelRefreshJob> {
   const { providerId } = normalizeProviderModelRefreshInput(input);
@@ -91,7 +91,7 @@ export async function enqueueProviderModelRefreshJob(input: {
 }
 
 export async function enqueueProviderConnectivityCheckJob(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerApiKeyId?: string;
   providerId: string;
 }): Promise<void> {

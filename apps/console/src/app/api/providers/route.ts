@@ -1,10 +1,6 @@
 import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 import { normalizeProviderTemplateFormInput } from "../../../server/provider-templates";
 import {
   createProvider,
@@ -18,9 +14,8 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -30,7 +25,6 @@ export async function POST(request: NextRequest) {
   try {
     if (action === "create") {
       const provider = await createProvider({
-        databaseUrl,
         provider: normalizeProviderFormInput({
           baseUrl: readText(form, "baseUrl"),
           displayName: readText(form, "displayName"),
@@ -38,40 +32,35 @@ export async function POST(request: NextRequest) {
           providerType: readText(form, "providerType"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: provider.id });
+      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
     } else if (action === "createFromTemplate") {
       const provider = await createProviderFromTemplate({
-        databaseUrl,
         template: normalizeProviderTemplateFormInput({
           baseUrl: readText(form, "baseUrl"),
           templateId: readText(form, "templateId"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: provider.id });
+      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
     } else if (action === "update") {
       const provider = await updateProvider({
         baseUrl: readText(form, "baseUrl"),
-        databaseUrl,
         displayName: readRequiredText(form, "displayName"),
         id: readRequiredText(form, "id"),
       });
-      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: provider.id });
+      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
     } else if (action === "enable" || action === "disable") {
       const providerId = readRequiredText(form, "id");
       await setProviderEnabled({
-        databaseUrl,
         enabled: action === "enable",
         id: providerId,
       });
       if (action === "enable") {
         await enqueueProviderConnectivityCheckJob({
-          databaseUrl,
           providerId,
         });
       }
     } else if (action === "delete") {
       await deleteProvider({
-        databaseUrl,
         id: readRequiredText(form, "id"),
       });
     } else {

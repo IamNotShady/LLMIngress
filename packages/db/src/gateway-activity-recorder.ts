@@ -49,7 +49,7 @@ export type GatewayResponseMetadata = {
 type CreateGatewayRequestActivityInput = {
   agentApiKeyId: string;
   agentApiKeyPrefix: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   model: string;
   protocol: GatewayRequestActivityProtocol;
   requestId: string;
@@ -61,7 +61,7 @@ type CreateGatewayRequestActivityInput = {
 type CompleteGatewayRequestActivityInput = {
   activityId: string;
   completedAt?: Date;
-  databaseUrl: string;
+  databaseUrl?: string;
   requestLoggingEnabled: boolean;
   requestMetadata?: GatewayRequestMetadata;
   responseBody: unknown;

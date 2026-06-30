@@ -85,7 +85,7 @@ export type WebhookEventExportRecord =
     };
 
 export type WebhookEventExportJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   deliverWebhook?: (input: WebhookEventDeliveryInput) => Promise<WebhookEventDeliveryResult>;
   now?: () => Date;
 };

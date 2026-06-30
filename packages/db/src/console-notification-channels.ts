@@ -57,7 +57,7 @@ export function normalizeNotificationChannelFormInput(
 }
 
 export async function listNotificationChannels(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<ConsoleNotificationChannel[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<NotificationChannelRow>(
@@ -80,7 +80,7 @@ export async function listNotificationChannels(
 
 export async function createNotificationChannel(input: {
   channel: NormalizedNotificationChannelFormInput;
-  databaseUrl: string;
+  databaseUrl?: string;
 }): Promise<ConsoleNotificationChannel> {
   const channelId = randomUUID();
 
@@ -181,7 +181,7 @@ function requireRow<T>(row: T | undefined): T {
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

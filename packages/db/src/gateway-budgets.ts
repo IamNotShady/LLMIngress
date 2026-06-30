@@ -67,7 +67,7 @@ export class GatewayBudgetRejectedError extends Error {
 
 export async function reserveGatewayBudget(input: {
   agentApiKeyId: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   price: ModelTokenPrice;
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
@@ -182,7 +182,7 @@ export async function reserveGatewayBudget(input: {
 }
 
 export async function finalizeGatewayBudgetReservation(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   reservation: GatewayBudgetReservation | undefined;
 }): Promise<void> {
   if (!input.reservation) {
@@ -193,7 +193,7 @@ export async function finalizeGatewayBudgetReservation(input: {
 }
 
 export async function releaseGatewayBudgetReservation(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   reservation: GatewayBudgetReservation | undefined;
 }): Promise<void> {
   if (!input.reservation) {
@@ -385,7 +385,7 @@ async function lockBudgetPeriod(
 }
 
 async function updateGatewayBudgetReservation(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   reservation: GatewayBudgetReservation,
   status: "finalized" | "released",
 ): Promise<void> {

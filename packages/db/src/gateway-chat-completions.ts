@@ -160,7 +160,7 @@ export function normalizeOpenAIChatCompletionRequest(
 export async function executeGatewayOpenAIChatCompletion(input: {
   agentApiKeyId: string;
   adapter?: OpenAIProviderAdapter;
-  databaseUrl: string;
+  databaseUrl?: string;
   masterKeySource?: MasterKeySource;
   requestActivityId?: string;
   requestBody: unknown;
@@ -359,7 +359,7 @@ function buildRequestActivityRoute(input: {
 
 export async function attachGatewayProviderCredentials(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
-  databaseUrl: string;
+  databaseUrl?: string;
   masterKeySource: MasterKeySource;
 }): Promise<FallbackChainCandidate[]> {
   const providerIds = [...new Set(input.candidates.map((candidate) => candidate.providerId))];
@@ -550,7 +550,7 @@ function requireRoutePolicy(
 }
 
 async function readProviderCredentials(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   masterKeySource: MasterKeySource;
   providerIds: string[];
 }): Promise<Map<string, ProviderCredentials>> {
@@ -671,7 +671,7 @@ async function readProviderCredentials(input: {
 }
 
 export async function recordGatewayProviderApiKeyLastUsed(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerApiKeyId?: string;
 }): Promise<void> {
   if (!input.providerApiKeyId) {

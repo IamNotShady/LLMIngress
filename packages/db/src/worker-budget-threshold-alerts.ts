@@ -21,7 +21,7 @@ export type BudgetThresholdAlertsResult = {
 };
 
 type CreateBudgetThresholdAlertsJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 
@@ -183,7 +183,7 @@ function buildBudgetThresholdNotificationEvent(input: {
 }
 
 async function readBudgetThresholdCandidates(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   now: Date,
 ): Promise<BudgetThresholdCandidate[]> {
   const client = new PostgresClient({ connectionString: databaseUrl });
@@ -238,7 +238,7 @@ function rowToBudgetThresholdCandidate(row: BudgetThresholdCandidateRow): Budget
   };
 }
 
-async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
+async function readEnabledNotificationChannelCount(databaseUrl?: string): Promise<number> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
@@ -253,7 +253,7 @@ async function readEnabledNotificationChannelCount(databaseUrl: string): Promise
 }
 
 async function budgetThresholdAlertAlreadyQueued(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   alertKey: string,
 ): Promise<boolean> {
   const client = new PostgresClient({ connectionString: databaseUrl });

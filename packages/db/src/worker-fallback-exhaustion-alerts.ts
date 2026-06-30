@@ -21,7 +21,7 @@ export type FallbackExhaustionAlertsResult = {
 };
 
 type CreateFallbackExhaustionAlertsJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 
@@ -191,7 +191,7 @@ function buildFallbackExhaustionNotificationEvent(
 }
 
 async function countFailedProviderRequests(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   windowEnd: Date;
   windowStart: Date;
 }): Promise<number> {
@@ -217,7 +217,7 @@ async function countFailedProviderRequests(input: {
 }
 
 async function readFallbackExhaustionCandidates(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   windowEnd: Date;
   windowStart: Date;
 }): Promise<FallbackExhaustionCandidate[]> {
@@ -288,7 +288,7 @@ function rowToFallbackExhaustionCandidate(
   };
 }
 
-async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
+async function readEnabledNotificationChannelCount(databaseUrl?: string): Promise<number> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
@@ -303,7 +303,7 @@ async function readEnabledNotificationChannelCount(databaseUrl: string): Promise
 }
 
 async function fallbackExhaustionAlertAlreadyQueued(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   alertKey: string,
 ): Promise<boolean> {
   const client = new PostgresClient({ connectionString: databaseUrl });

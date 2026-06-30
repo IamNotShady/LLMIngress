@@ -35,12 +35,12 @@ export type BackupArtifactResult = {
 };
 
 type CreateBackupJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 
 type CreateBackupArtifactOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   mode: BackupMode;
   now?: Date;
   outputPath: string;

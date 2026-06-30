@@ -7,7 +7,7 @@ import {
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type PriceSyncJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   now?: () => Date;
   priceSource?: () => Promise<ProviderModelSyncedPrice[]>;

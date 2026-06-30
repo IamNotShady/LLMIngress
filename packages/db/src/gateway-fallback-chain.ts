@@ -224,7 +224,7 @@ export async function recordSucceededAttemptInDatabase(
   input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
   attempt: FallbackSucceededAttempt,
 ): Promise<void> {
-  if (!input.databaseUrl || !input.requestActivityId) {
+  if (!input.requestActivityId) {
     return;
   }
 
@@ -263,7 +263,7 @@ export async function recordFailedAttemptInDatabase(
   input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
   attempt: FallbackFailedAttempt,
 ): Promise<void> {
-  if (!input.databaseUrl || !input.requestActivityId) {
+  if (!input.requestActivityId) {
     return;
   }
 
@@ -308,7 +308,7 @@ export async function recordCandidateHealthFailure(
   candidate: FallbackChainCandidate,
   failedAttempts: FallbackFailedAttempt[],
 ): Promise<void> {
-  if (!input.databaseUrl || failedAttempts.length === 0) {
+  if (failedAttempts.length === 0) {
     return;
   }
 
@@ -329,7 +329,7 @@ export async function recordCandidateHealthFailure(
   const healthRecorder = input.recordHealthEvent ?? recordProviderHealthEvent;
 
   const shared = {
-    databaseUrl: input.databaseUrl,
+    ...(input.databaseUrl ? { databaseUrl: input.databaseUrl } : {}),
     errorCode: latestAttempt.errorCode,
     errorMessage: latestAttempt.errorMessage,
     metadata: {

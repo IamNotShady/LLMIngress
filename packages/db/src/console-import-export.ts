@@ -186,10 +186,9 @@ const fixedUntemplatedProviderBaseUrls = new Map([
   ["openai", "https://api.openai.com/v1"],
 ]);
 
-export async function exportConsoleConfig(input: {
-  databaseUrl: string;
-  now?: Date;
-}): Promise<LlmIngressConfigExport> {
+export async function exportConsoleConfig(
+  input: { databaseUrl?: string; now?: Date } = {},
+): Promise<LlmIngressConfigExport> {
   return withClient(input.databaseUrl, async (client) => {
     const providers = await readProviders(client);
     const providerModels = await readProviderModels(client);
@@ -215,7 +214,7 @@ export async function exportConsoleConfig(input: {
 }
 
 export async function importConsoleConfig(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   document: unknown;
 }): Promise<ConfigImportResult> {
   const document = normalizeConfigDocument(input.document);
@@ -1163,7 +1162,7 @@ function groupRows<T>(rows: readonly T[], readKey: (row: T) => string): Map<stri
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: QueryClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

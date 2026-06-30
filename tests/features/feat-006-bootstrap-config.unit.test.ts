@@ -2,17 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadBootstrapRuntimeConfig } from "../../packages/config/src/index";
+import { readPostgresDatabaseUrl } from "../../packages/db/src/client";
 
 const root = resolve(import.meta.dirname, "../..");
 
 describe("feat-006 bootstrap runtime configuration", () => {
-  it("loads ports database url and inline master key from environment", () => {
+  it("loads ports and inline master key from environment", () => {
     const config = loadBootstrapRuntimeConfig({
       env: {
         GATEWAY_PORT: "4100",
         CONSOLE_PORT: "3100",
         WORKER_HEARTBEAT_MS: "1500",
-        DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
         MASTER_KEY: "test-master-key",
       },
     });
@@ -21,7 +21,6 @@ describe("feat-006 bootstrap runtime configuration", () => {
       gatewayPort: 4100,
       consolePort: 3100,
       workerHeartbeatMs: 1500,
-      databaseUrl: "postgresql://postgres:postgres@127.0.0.1:55432/app",
       masterKeySource: { kind: "inline", value: "test-master-key" },
     });
   });
@@ -29,7 +28,6 @@ describe("feat-006 bootstrap runtime configuration", () => {
   it("uses stable local defaults for optional ports and heartbeat", () => {
     const config = loadBootstrapRuntimeConfig({
       env: {
-        DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
         MASTER_KEY_FILE: "/tmp/llmingress-master-key",
       },
     });
@@ -48,21 +46,12 @@ describe("feat-006 bootstrap runtime configuration", () => {
       loadBootstrapRuntimeConfig({
         env: {
           GATEWAY_PORT: "not-a-port",
-          DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
           MASTER_KEY: "test-master-key",
         },
       }),
     ).toThrow(/GATEWAY_PORT/);
 
-    expect(() => loadBootstrapRuntimeConfig({ env: { MASTER_KEY: "test-master-key" } })).toThrow(
-      /DATABASE_URL/,
-    );
-
-    expect(() =>
-      loadBootstrapRuntimeConfig({
-        env: { DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app" },
-      }),
-    ).toThrow(/MASTER_KEY/);
+    expect(() => loadBootstrapRuntimeConfig({ env: {} })).toThrow(/MASTER_KEY/);
   });
 
   it("rejects integers with trailing garbage", () => {
@@ -70,7 +59,6 @@ describe("feat-006 bootstrap runtime configuration", () => {
       loadBootstrapRuntimeConfig({
         env: {
           GATEWAY_PORT: "4101abc",
-          DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
           MASTER_KEY: "test-master-key",
         },
       }),
@@ -80,11 +68,25 @@ describe("feat-006 bootstrap runtime configuration", () => {
       loadBootstrapRuntimeConfig({
         env: {
           WORKER_HEARTBEAT_MS: "1500ms",
-          DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
           MASTER_KEY: "test-master-key",
         },
       }),
     ).toThrow(/WORKER_HEARTBEAT_MS/);
+  });
+
+  it("lets the db layer read database url from env or bootstrap config", () => {
+    expect(
+      readPostgresDatabaseUrl({
+        env: {
+          DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:55432/app",
+        },
+      }),
+    ).toBe("postgresql://postgres:postgres@127.0.0.1:55432/app");
+
+    expect(() => readPostgresDatabaseUrl({ env: {} })).toThrow(/DATABASE_URL/);
+    expect(() => readPostgresDatabaseUrl({ env: { DATABASE_URL: "not-a-url" } })).toThrow(
+      /DATABASE_URL/,
+    );
   });
 
   it("wires the bootstrap loader into every app startup entrypoint", () => {

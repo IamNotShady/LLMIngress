@@ -14,7 +14,7 @@ export type NotificationDeliveryPayload = {
 
 export type QueueNotificationEventInput = {
   channelIds?: string[];
-  databaseUrl: string;
+  databaseUrl?: string;
   event: {
     body: string;
     eventType: string;
@@ -31,7 +31,7 @@ export type QueueNotificationEventResult = {
 };
 
 export type NotificationDispatchJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   deliverWebhook?: (
     input: NotificationDeliveryTransportInput,
   ) => Promise<NotificationDeliveryResult>;
@@ -344,7 +344,7 @@ async function enqueueNotificationDispatchJob(
 }
 
 async function claimDueNotificationEvents(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   limit: number;
   now: Date;
 }): Promise<ClaimedNotificationEvent[]> {
@@ -419,7 +419,7 @@ function rowToClaimedNotificationEvent(row: ClaimedNotificationEventRow): Claime
 async function recordNotificationDelivery(input: {
   auditPayload: unknown;
   completedAt: Date;
-  databaseUrl: string;
+  databaseUrl?: string;
   event: ClaimedNotificationEvent;
   result: NotificationDeliveryResult;
   retryAt: Date | null;
@@ -666,7 +666,7 @@ function stringifyJson(value: unknown): string {
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

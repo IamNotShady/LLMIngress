@@ -101,7 +101,7 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
   };
 }
 
-export async function listProviders(databaseUrl: string): Promise<ConsoleProvider[]> {
+export async function listProviders(databaseUrl?: string): Promise<ConsoleProvider[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
@@ -125,7 +125,7 @@ export async function listProviders(databaseUrl: string): Promise<ConsoleProvide
 }
 
 export async function createProvider(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   provider: NormalizedProviderFormInput;
 }): Promise<ConsoleProvider> {
   const providerId = randomUUID();
@@ -175,7 +175,7 @@ export async function createProvider(input: {
 }
 
 export async function createProviderFromTemplate(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   template: ProviderTemplateCreateInput;
 }): Promise<ConsoleProvider> {
   const providerId = randomUUID();
@@ -227,7 +227,7 @@ export async function createProviderFromTemplate(input: {
 
 export async function updateProvider(input: {
   baseUrl?: string | null;
-  databaseUrl: string;
+  databaseUrl?: string;
   defaultPriority?: number | string | null;
   displayName: string;
   id: string;
@@ -299,7 +299,7 @@ export async function updateProvider(input: {
 }
 
 export async function setProviderEnabled(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   enabled: boolean;
   id: string;
 }): Promise<ConsoleProvider> {
@@ -335,7 +335,7 @@ export async function setProviderEnabled(input: {
   return requireSavedProvider(provider);
 }
 
-export async function deleteProvider(input: { databaseUrl: string; id: string }): Promise<void> {
+export async function deleteProvider(input: { databaseUrl?: string; id: string }): Promise<void> {
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
@@ -468,7 +468,7 @@ function normalizeDefaultPriority(value: number | string | null | undefined): nu
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

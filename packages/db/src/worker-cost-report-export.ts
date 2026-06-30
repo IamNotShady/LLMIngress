@@ -78,7 +78,7 @@ export type CostReportExportDocument = {
 };
 
 export type CostReportExportJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 

@@ -3,18 +3,13 @@ import {
   normalizeProviderModelRefreshInput,
 } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -23,7 +18,7 @@ export async function POST(request: NextRequest) {
     const input = normalizeProviderModelRefreshInput({
       providerId: readText(form, "providerId"),
     });
-    await enqueueProviderModelRefreshJob({ databaseUrl, providerId: input.providerId });
+    await enqueueProviderModelRefreshJob({ providerId: input.providerId });
     return NextResponse.redirect(
       new URL(
         `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}&selected=${encodeURIComponent(input.providerId)}`,

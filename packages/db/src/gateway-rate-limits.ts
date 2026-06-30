@@ -53,7 +53,7 @@ type WindowBoundary = {
 
 export async function enforceGatewayRateLimits(input: {
   agentApiKeyId: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayRateLimitDecision> {
@@ -143,7 +143,7 @@ export async function enforceGatewayRateLimits(input: {
 }
 
 export async function releaseGatewayConcurrency(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   lease: GatewayConcurrencyLease | undefined;
 }): Promise<void> {
   if (!input.lease) {

@@ -99,7 +99,7 @@ export function readRequestedModelName(body: unknown): string | null {
 
 export async function listAllowedGatewayVirtualModels(input: {
   agentApiKeyId: string;
-  databaseUrl: string;
+  databaseUrl?: string;
 }): Promise<GatewayVirtualModel[]> {
   const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();

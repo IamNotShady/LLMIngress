@@ -70,7 +70,7 @@ type CreateJobRunnerOptions = {
 };
 
 type CreatePostgresJobRunnerOptions = Omit<CreateJobRunnerOptions, "store"> & {
-  databaseUrl: string;
+  databaseUrl?: string;
 };
 
 type JobFailure = {
@@ -322,7 +322,7 @@ function dateToUnixNano(value: Date): string {
 class PostgresJobStore implements JobStore {
   private listenerClient: PostgresClient | undefined;
 
-  constructor(private readonly databaseUrl: string) {}
+  constructor(private readonly databaseUrl?: string) {}
 
   async claimNextJob(input: ClaimNextJobInput): Promise<ClaimedJob | null> {
     return withClient(this.databaseUrl, async (client) => {
@@ -560,7 +560,7 @@ function stringifyJson(value: unknown): string {
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

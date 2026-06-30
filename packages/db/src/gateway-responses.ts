@@ -147,7 +147,7 @@ export function normalizeOpenAIResponsesRequest(
 export async function executeGatewayOpenAIResponse(input: {
   agentApiKeyId: string;
   adapter?: OpenAIProviderAdapter;
-  databaseUrl: string;
+  databaseUrl?: string;
   requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
@@ -322,7 +322,7 @@ export async function executeGatewayOpenAIResponse(input: {
 async function executeResponsesFallback(input: {
   adapter?: OpenAIProviderAdapter;
   candidates: readonly FallbackChainCandidate[];
-  databaseUrl: string;
+  databaseUrl?: string;
   fallbackAttempts: FallbackFailedAttempt[];
   finalizeAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
   releaseAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;

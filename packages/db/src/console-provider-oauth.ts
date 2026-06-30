@@ -25,7 +25,7 @@ import { listProviders } from "./console-providers.ts";
 export type ConsoleProviderOAuthConnection = ProviderOAuthMetadata;
 
 type StartProviderOAuthConnectionInput = {
-  databaseUrl: string;
+  databaseUrl?: string;
   label?: string | null;
   priority?: number;
   providerId: string;
@@ -38,7 +38,7 @@ type StartProviderOAuthConnectionResult = {
 
 type CompleteProviderOAuthConnectionInput = {
   callbackInput: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   label?: string | null;
   masterKeySource: MasterKeySource;
   priority?: number;
@@ -46,13 +46,13 @@ type CompleteProviderOAuthConnectionInput = {
 };
 
 type RevokeProviderOAuthConnectionInput = {
-  databaseUrl: string;
+  databaseUrl?: string;
   masterKeySource: MasterKeySource;
   providerOAuthId: string;
 };
 
 export function listConsoleProviderOAuthConnections(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<ConsoleProviderOAuthConnection[]> {
   return listProviderOAuthMetadata(databaseUrl);
 }

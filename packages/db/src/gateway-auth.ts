@@ -78,7 +78,7 @@ export function createGatewayAuthErrorBody(
 }
 
 export async function authenticateGatewayRequest(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   headers: GatewayAuthHeaders;
 }): Promise<GatewayAuthResult> {
   const requestId = readGatewayRequestId(input.headers);
@@ -124,7 +124,7 @@ function gatewayAuthFailure(code: GatewayAuthErrorCode, requestId: string): Gate
 }
 
 async function readAgentApiKeyByHash(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   keyHash: string,
 ): Promise<AgentApiKeyAuthRow | undefined> {
   const client = new PostgresClient({ connectionString: databaseUrl });

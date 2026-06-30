@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
-  getConsoleDatabaseUrl,
   getSessionCookieOptions,
   loginConsoleAdmin,
   sessionCookieName,
@@ -14,7 +13,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Admin password is required." }, { status: 400 });
   }
 
-  const session = await loginConsoleAdmin(getConsoleDatabaseUrl(), password);
+  const session = await loginConsoleAdmin(password);
   if (!session) {
     return NextResponse.json({ error: "Invalid admin password." }, { status: 401 });
   }

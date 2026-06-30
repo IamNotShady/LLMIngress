@@ -8,7 +8,7 @@ export type PrometheusMetricsDocument = {
 };
 
 type GetPrometheusMetricsDocumentInput = {
-  databaseUrl: string;
+  databaseUrl?: string;
 };
 
 type GatewayRequestMetricRow = PostgresQueryResultRow & {
@@ -70,7 +70,7 @@ export async function getPrometheusMetricsDocument(
   };
 }
 
-async function collectPrometheusMetricsSnapshot(databaseUrl: string): Promise<{
+async function collectPrometheusMetricsSnapshot(databaseUrl?: string): Promise<{
   fallbackEvents: GatewayFallbackMetricRow[];
   gatewayCosts: GatewayCostMetricRow[];
   gatewayLatency: GatewayLatencyMetricRow[];

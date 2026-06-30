@@ -35,7 +35,7 @@ export type ConsoleProviderHealthSummary = {
 };
 
 export type ListConsoleProviderHealthSummariesInput = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: Date;
   staleAfterMs?: number;
 };
@@ -68,7 +68,7 @@ type ProviderModelHealthSummaryRow = PostgresQueryResultRow & {
 const defaultHealthStaleAfterMs = 5 * 60 * 1000;
 
 export async function listConsoleProviderHealthSummaries(
-  input: ListConsoleProviderHealthSummariesInput,
+  input: ListConsoleProviderHealthSummariesInput = {},
 ): Promise<ConsoleProviderHealthSummary[]> {
   const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();

@@ -25,7 +25,6 @@ import {
 import {
   createGatewayRuntimeStatusRecorder,
   type GatewayRuntimeStatusEvent,
-  noopRuntimeStatusRecorder,
   type RecordGatewayRuntimeStatus,
 } from "./gateway-gateway-runtime-status.ts";
 
@@ -153,9 +152,7 @@ export function createGatewayConfigRuntime(
   const gatewayInstanceId = options.gatewayInstanceId ?? "gateway";
   const recordRuntimeStatus =
     options.recordRuntimeStatus ??
-    (options.databaseUrl
-      ? createGatewayRuntimeStatusRecorder({ databaseUrl: options.databaseUrl, gatewayInstanceId })
-      : noopRuntimeStatusRecorder);
+    createGatewayRuntimeStatusRecorder({ databaseUrl: options.databaseUrl, gatewayInstanceId });
 
   let currentSnapshot = emptySnapshot;
   let listener: ConfigChangedListener | undefined;
@@ -281,12 +278,10 @@ export function createGatewayConfigRuntime(
 
         const createHealthChangedListener =
           options.createHealthSummaryChangedListener ??
-          (options.databaseUrl ? createPostgresHealthNotificationListener(options) : undefined);
-        if (createHealthChangedListener) {
-          healthListener = await createHealthChangedListener((_payload) => {
-            void forceReload();
-          });
-        }
+          createPostgresHealthNotificationListener(options);
+        healthListener = await createHealthChangedListener((_payload) => {
+          void forceReload();
+        });
       }
 
       if (reconcileIntervalMs > 0) {
@@ -324,7 +319,7 @@ export function createGatewayConfigRuntime(
 }
 
 export async function loadGatewayConfigSnapshot(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
 ): Promise<GatewayConfigSnapshot> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
@@ -507,23 +502,15 @@ function rowToSyncedPriceSnapshot(row: RoutePolicyCandidateRow): SyncedPriceSnap
 }
 
 function createPostgresSnapshotLoader(options: GatewayConfigRuntimeOptions) {
-  if (!options.databaseUrl) {
-    throw new Error("Gateway config runtime requires databaseUrl or loadLatestSnapshot.");
-  }
-
-  return () => loadGatewayConfigSnapshot(options.databaseUrl as string);
+  return () => loadGatewayConfigSnapshot(options.databaseUrl);
 }
 
 function createPostgresNotificationListener(
   options: GatewayConfigRuntimeOptions,
 ): CreateConfigChangedListener {
-  if (!options.databaseUrl) {
-    throw new Error("Gateway config runtime requires databaseUrl or createConfigChangedListener.");
-  }
-
   return (onNotification) =>
     createPostgresConfigChangedListener({
-      databaseUrl: options.databaseUrl as string,
+      databaseUrl: options.databaseUrl,
       onNotification,
     });
 }
@@ -531,15 +518,9 @@ function createPostgresNotificationListener(
 function createPostgresHealthNotificationListener(
   options: GatewayConfigRuntimeOptions,
 ): CreateHealthSummaryChangedListener {
-  if (!options.databaseUrl) {
-    throw new Error(
-      "Gateway config runtime requires databaseUrl or createHealthSummaryChangedListener.",
-    );
-  }
-
   return (onNotification) =>
     createPostgresHealthSummaryChangedListener({
-      databaseUrl: options.databaseUrl as string,
+      databaseUrl: options.databaseUrl,
       onNotification,
     });
 }

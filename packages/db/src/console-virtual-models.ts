@@ -103,7 +103,7 @@ export function getVirtualModelDeleteDependencyError(
   return null;
 }
 
-export async function listVirtualModels(databaseUrl: string): Promise<ConsoleVirtualModel[]> {
+export async function listVirtualModels(databaseUrl?: string): Promise<ConsoleVirtualModel[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<VirtualModelRow>(buildVirtualModelListSql());
     return result.rows.map(rowToConsoleVirtualModel);
@@ -111,7 +111,7 @@ export async function listVirtualModels(databaseUrl: string): Promise<ConsoleVir
 }
 
 export async function listVirtualModelFallbackBreakdown(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   virtualModelId: string;
 }): Promise<ConsoleVirtualModelFallbackBreakdown[]> {
   return withClient(input.databaseUrl, async (client) => {
@@ -162,7 +162,7 @@ export async function listVirtualModelFallbackBreakdown(input: {
 }
 
 export async function createVirtualModel(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   virtualModel: NormalizedVirtualModelFormInput;
 }): Promise<ConsoleVirtualModel> {
   const virtualModelId = randomUUID();
@@ -201,7 +201,7 @@ export async function createVirtualModel(input: {
 }
 
 export async function updateVirtualModel(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   id: string;
   virtualModel: NormalizedVirtualModelFormInput;
 }): Promise<ConsoleVirtualModel> {
@@ -277,7 +277,7 @@ export async function updateVirtualModel(input: {
 }
 
 export async function deleteVirtualModel(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   id: string;
 }): Promise<void> {
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
@@ -469,7 +469,7 @@ function requireSavedVirtualModel(
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

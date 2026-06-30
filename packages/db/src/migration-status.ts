@@ -1,4 +1,5 @@
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient } from "@llmingress/db/client";
+import type { QueryResultRow } from "pg";
 
 export type MigrationStatusMigration = {
   checksum: string;
@@ -289,10 +290,12 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
 ];
 
 export async function getMigrationStatusFromDatabase(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   migrations: MigrationStatusMigration[];
 }): Promise<MigrationStatusSummary> {
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient(
+    input.databaseUrl ? { connectionString: input.databaseUrl } : {},
+  );
   await client.connect();
 
   try {
@@ -421,7 +424,7 @@ function formatMigrationLabel(id: string, name: string): string {
   return `${id}_${name}`;
 }
 
-async function tableExists(client: Client, tableName: string): Promise<boolean> {
+async function tableExists(client: PostgresClient, tableName: string): Promise<boolean> {
   const result = await client.query<{ exists: boolean }>(
     `
       select exists (
@@ -437,7 +440,7 @@ async function tableExists(client: Client, tableName: string): Promise<boolean> 
   return result.rows[0]?.exists ?? false;
 }
 
-async function readAppliedMigrations(client: Client): Promise<AppliedMigrationStatus[]> {
+async function readAppliedMigrations(client: PostgresClient): Promise<AppliedMigrationStatus[]> {
   const result = await client.query<AppliedMigrationRow>(
     `
       select id,

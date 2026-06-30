@@ -1,17 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 import { importConsoleConfig } from "../../../server/import-export";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -19,7 +14,6 @@ export async function POST(request: NextRequest) {
     const form = await request.formData();
     const configJson = readRequiredText(form, "configJson");
     const result = await importConsoleConfig({
-      databaseUrl,
       document: JSON.parse(configJson),
     });
     const redirectUrl = new URL("/settings", request.url);

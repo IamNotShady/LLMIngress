@@ -29,7 +29,7 @@ export type {
 export { checkProviderConnectivity } from "@llmingress/provider/connectivity";
 
 type CreateProviderConnectivityCheckJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   masterKeySource?: MasterKeySource;
   timeoutMs?: number;
@@ -246,7 +246,7 @@ function aggregateProviderConnectivityResults(input: {
 }
 
 async function readProvider(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   providerId: string,
 ): Promise<WorkerConnectivityProvider> {
   return withPostgresClient(databaseUrl, async (client) => {
@@ -342,7 +342,7 @@ function readConnectivityCheckPayload(payload: unknown): ConnectivityCheckPayloa
 }
 
 async function readEnabledProviderApiKeys(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   masterKeySource: MasterKeySource;
   providerId: string;
 }): Promise<Array<{ apiKey: string; id: string; keyPrefix: string }>> {
@@ -377,7 +377,7 @@ async function readEnabledProviderApiKeys(input: {
 }
 
 async function readEnabledProviderOAuthAccessTokens(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   fetch: typeof globalThis.fetch;
   masterKeySource: MasterKeySource;
   providerId: string;
@@ -419,7 +419,7 @@ async function readEnabledProviderOAuthAccessTokens(input: {
 }
 
 async function updateProviderApiKeyTestResult(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   result: ProviderConnectivityCheckResult & {
     providerApiKeyId: string;
     providerApiKeyPrefix: string;

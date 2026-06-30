@@ -73,7 +73,7 @@ export type ConsoleAnalyticsSnapshot = {
 };
 
 type AnalyticsQueryInput = NormalizedConsoleAnalyticsInput & {
-  databaseUrl: string;
+  databaseUrl?: string;
 };
 
 type AnalyticsRange = {
@@ -141,7 +141,7 @@ export function normalizeConsoleAnalyticsInput(
 }
 
 export async function getConsoleAnalyticsSnapshot(
-  input: ConsoleAnalyticsInput & { databaseUrl: string },
+  input: ConsoleAnalyticsInput & { databaseUrl?: string },
 ): Promise<ConsoleAnalyticsSnapshot> {
   const normalized = normalizeConsoleAnalyticsInput(input);
   const queryInput = { ...normalized, databaseUrl: input.databaseUrl };

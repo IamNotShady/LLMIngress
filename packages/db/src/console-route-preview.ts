@@ -58,7 +58,7 @@ type RoutePreviewRow = PostgresQueryResultRow & {
 };
 
 export async function previewRoutePolicy(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   request: unknown;
 }): Promise<RoutePreviewResult> {
   const normalized = normalizeRoutePreviewInput(input.request);
@@ -102,7 +102,7 @@ export function normalizeRoutePreviewInput(input: unknown): RoutePreviewInput {
   });
 }
 
-async function loadRoutePreviewPolicies(databaseUrl: string): Promise<RoutePolicy[]> {
+async function loadRoutePreviewPolicies(databaseUrl?: string): Promise<RoutePolicy[]> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 

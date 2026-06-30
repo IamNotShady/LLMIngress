@@ -72,7 +72,7 @@ type CreatePeriodicSchedulerOptions = {
 };
 
 type CreatePostgresPeriodicSchedulerOptions = Omit<CreatePeriodicSchedulerOptions, "store"> & {
-  databaseUrl: string;
+  databaseUrl?: string;
 };
 
 const defaultTickIntervalMs = 30_000;
@@ -272,7 +272,7 @@ function buildScheduledPayload(
 }
 
 class PostgresPeriodicSchedulerStore implements PeriodicSchedulerStore {
-  constructor(private readonly databaseUrl: string) {}
+  constructor(private readonly databaseUrl?: string) {}
 
   async enqueueScheduledJob(input: EnqueueScheduledJobInput): Promise<EnqueueScheduledJobResult> {
     const client = new PostgresClient({ connectionString: this.databaseUrl });

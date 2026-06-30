@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
+import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
 import Fastify, { type FastifyBaseLogger, type FastifyReply } from "fastify";
 import {
   completeGatewayRequestActivity,
@@ -44,7 +45,6 @@ import {
 
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
-  databaseUrl?: string;
 };
 
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
@@ -75,16 +75,12 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   });
 
   app.get("/metrics", async (_request, reply) => {
-    const document = await getPrometheusMetricsDocument({
-      databaseUrl: requireGatewayDatabaseUrl(options),
-    });
+    const document = await getPrometheusMetricsDocument({});
     return reply.header("content-type", document.contentType).send(document.body);
   });
 
   app.post("/v1/chat/completions", async (request, reply) => {
-    const databaseUrl = requireGatewayDatabaseUrl(options);
     const auth = await authenticateGatewayRequest({
-      databaseUrl,
       headers: request.headers,
     });
 
@@ -94,7 +90,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       agentApiKeyId: auth.agentApiKey.id,
-      databaseUrl,
     });
     const virtualModelAccess = resolveGatewayVirtualModelRequest({
       allowedVirtualModels,
@@ -127,11 +122,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         await executeRecordedGatewayStreamingRequest({
           agentApiKeyId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          databaseUrl,
           execute: (requestActivityId) =>
             executeGatewayStreamingRequest({
               agentApiKeyId: auth.agentApiKey.id,
-              databaseUrl,
               protocol: "chat_completions",
               requestActivityId,
               requestBody: request.body,
@@ -153,11 +146,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     const chatCompletion = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      databaseUrl,
       execute: (requestActivityId) =>
         executeGatewayOpenAIChatCompletion({
           agentApiKeyId: auth.agentApiKey.id,
-          databaseUrl,
           requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
@@ -174,9 +165,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   });
 
   app.get("/v1/models", async (request, reply) => {
-    const databaseUrl = requireGatewayDatabaseUrl(options);
     const auth = await authenticateGatewayRequest({
-      databaseUrl,
       headers: request.headers,
     });
 
@@ -186,7 +175,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       agentApiKeyId: auth.agentApiKey.id,
-      databaseUrl,
     });
 
     return reply.header(gatewayRequestIdHeader, auth.requestId).send({
@@ -200,9 +188,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   });
 
   app.post("/v1/embeddings", async (request, reply) => {
-    const databaseUrl = requireGatewayDatabaseUrl(options);
     const auth = await authenticateGatewayRequest({
-      databaseUrl,
       headers: request.headers,
     });
 
@@ -212,7 +198,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       agentApiKeyId: auth.agentApiKey.id,
-      databaseUrl,
     });
     const virtualModelAccess = resolveGatewayVirtualModelRequest({
       allowedVirtualModels,
@@ -242,11 +227,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     const embeddings = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      databaseUrl,
       execute: (requestActivityId) =>
         executeGatewayOpenAIEmbeddings({
           agentApiKeyId: auth.agentApiKey.id,
-          databaseUrl,
           requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
@@ -263,9 +246,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   });
 
   app.post("/v1/responses", async (request, reply) => {
-    const databaseUrl = requireGatewayDatabaseUrl(options);
     const auth = await authenticateGatewayRequest({
-      databaseUrl,
       headers: request.headers,
     });
 
@@ -275,7 +256,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       agentApiKeyId: auth.agentApiKey.id,
-      databaseUrl,
     });
     const virtualModelAccess = resolveGatewayVirtualModelRequest({
       allowedVirtualModels,
@@ -308,11 +288,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         await executeRecordedGatewayStreamingRequest({
           agentApiKeyId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          databaseUrl,
           execute: (requestActivityId) =>
             executeGatewayStreamingRequest({
               agentApiKeyId: auth.agentApiKey.id,
-              databaseUrl,
               protocol: "responses",
               requestActivityId,
               requestBody: request.body,
@@ -334,11 +312,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     const response = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      databaseUrl,
       execute: (requestActivityId) =>
         executeGatewayOpenAIResponse({
           agentApiKeyId: auth.agentApiKey.id,
-          databaseUrl,
           requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
@@ -355,9 +331,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   });
 
   app.post("/v1/messages", async (request, reply) => {
-    const databaseUrl = requireGatewayDatabaseUrl(options);
     const auth = await authenticateGatewayRequest({
-      databaseUrl,
       headers: request.headers,
     });
 
@@ -367,7 +341,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       agentApiKeyId: auth.agentApiKey.id,
-      databaseUrl,
     });
     const virtualModelAccess = resolveGatewayVirtualModelRequest({
       allowedVirtualModels,
@@ -400,11 +373,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
         await executeRecordedGatewayStreamingRequest({
           agentApiKeyId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          databaseUrl,
           execute: (requestActivityId) =>
             executeGatewayStreamingRequest({
               agentApiKeyId: auth.agentApiKey.id,
-              databaseUrl,
               protocol: "messages",
               requestActivityId,
               requestBody: request.body,
@@ -426,11 +397,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     const message = await executeRecordedGatewayJsonRequest({
       agentApiKeyId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      databaseUrl,
       execute: (requestActivityId) =>
         executeGatewayAnthropicMessages({
           agentApiKeyId: auth.agentApiKey.id,
-          databaseUrl,
           requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
@@ -455,8 +424,8 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
 export async function startGateway() {
   const config = loadBootstrapRuntimeConfig();
+  assertPostgresDatabaseConfigured();
   const configRuntime = createGatewayConfigRuntime({
-    databaseUrl: config.databaseUrl,
     enableNotifications: readBooleanEnv("GATEWAY_CONFIG_NOTIFICATIONS", true),
     gatewayInstanceId: process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
     heartbeatIntervalMs: readNonNegativeIntegerEnv("GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000),
@@ -464,7 +433,7 @@ export async function startGateway() {
   });
   await configRuntime.start();
 
-  const app = createGatewayApp({ configRuntime, databaseUrl: config.databaseUrl });
+  const app = createGatewayApp({ configRuntime });
 
   await app.listen({
     host: "0.0.0.0",
@@ -491,13 +460,6 @@ function readNonNegativeIntegerEnv(name: string, fallback: number): number {
     throw new Error(`${name} must be a non-negative integer.`);
   }
   return parsed;
-}
-
-function requireGatewayDatabaseUrl(options: CreateGatewayAppOptions): string {
-  if (!options.databaseUrl) {
-    throw new Error("Gateway API endpoints require databaseUrl.");
-  }
-  return options.databaseUrl;
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
@@ -621,7 +583,6 @@ function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRe
 async function executeRecordedGatewayJsonRequest(input: {
   agentApiKeyId: string;
   agentApiKeyPrefix: string;
-  databaseUrl: string;
   execute: (requestActivityId: string) => Promise<{
     activity?: GatewayRequestActivityRoute;
     body: unknown;
@@ -639,7 +600,6 @@ async function executeRecordedGatewayJsonRequest(input: {
   const activity = await createGatewayRequestActivity({
     agentApiKeyId: input.agentApiKeyId,
     agentApiKeyPrefix: input.agentApiKeyPrefix,
-    databaseUrl: input.databaseUrl,
     model: input.model,
     protocol: input.protocol,
     requestId: input.requestId,
@@ -649,7 +609,6 @@ async function executeRecordedGatewayJsonRequest(input: {
   const response = await input.execute(activity.id);
   await completeGatewayRequestActivity({
     activityId: activity.id,
-    databaseUrl: input.databaseUrl,
     requestLoggingEnabled: input.requestLoggingEnabled,
     requestMetadata: response.requestMetadata,
     responseBody: response.body,
@@ -661,7 +620,6 @@ async function executeRecordedGatewayJsonRequest(input: {
     await recordGatewayUsageCostAndSavings({
       activityId: activity.id,
       agentApiKeyId: input.agentApiKeyId,
-      databaseUrl: input.databaseUrl,
       usageCost: response.usageCost,
       virtualModelId: input.virtualModelId,
     });
@@ -682,7 +640,6 @@ async function executeRecordedGatewayJsonRequest(input: {
 async function executeRecordedGatewayStreamingRequest(input: {
   agentApiKeyId: string;
   agentApiKeyPrefix: string;
-  databaseUrl: string;
   execute: (requestActivityId: string) => Promise<GatewayStreamingResult>;
   logger: FastifyBaseLogger;
   model: string;
@@ -694,7 +651,6 @@ async function executeRecordedGatewayStreamingRequest(input: {
   const activity = await createGatewayRequestActivity({
     agentApiKeyId: input.agentApiKeyId,
     agentApiKeyPrefix: input.agentApiKeyPrefix,
-    databaseUrl: input.databaseUrl,
     model: input.model,
     protocol: input.protocol,
     requestId: input.requestId,
@@ -705,7 +661,6 @@ async function executeRecordedGatewayStreamingRequest(input: {
   if (!response.ok) {
     await completeGatewayRequestActivity({
       activityId: activity.id,
-      databaseUrl: input.databaseUrl,
       requestLoggingEnabled: input.requestLoggingEnabled,
       requestMetadata: response.requestMetadata,
       responseBody: response.body,
@@ -728,7 +683,6 @@ async function executeRecordedGatewayStreamingRequest(input: {
             await recordGatewayUsageCostAndSavings({
               activityId: activity.id,
               agentApiKeyId: input.agentApiKeyId,
-              databaseUrl: input.databaseUrl,
               usageCost: {
                 ...response.usageCost,
                 ...(providerUsage ? { providerUsage } : {}),
@@ -744,7 +698,6 @@ async function executeRecordedGatewayStreamingRequest(input: {
         } finally {
           await completeGatewayRequestActivity({
             activityId: activity.id,
-            databaseUrl: input.databaseUrl,
             requestLoggingEnabled: input.requestLoggingEnabled,
             requestMetadata: response.requestMetadata,
             responseBody: providerUsage ? buildGatewayProviderUsageResponseBody(providerUsage) : {},

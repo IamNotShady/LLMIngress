@@ -21,7 +21,7 @@ export type ProviderFailureAlertsResult = {
 };
 
 type CreateProviderFailureAlertsJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 
@@ -178,7 +178,7 @@ function buildProviderFailureNotificationEvent(input: {
   };
 }
 
-async function countProviderFailureSummaries(databaseUrl: string): Promise<number> {
+async function countProviderFailureSummaries(databaseUrl?: string): Promise<number> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
@@ -206,7 +206,7 @@ async function countProviderFailureSummaries(databaseUrl: string): Promise<numbe
 }
 
 async function readProviderFailureAlertCandidates(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   thresholdCount: number;
 }): Promise<ProviderFailureAlertCandidate[]> {
   const client = new PostgresClient({ connectionString: input.databaseUrl });
@@ -272,7 +272,7 @@ function rowToProviderFailureAlertCandidate(
   };
 }
 
-async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
+async function readEnabledNotificationChannelCount(databaseUrl?: string): Promise<number> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
@@ -287,7 +287,7 @@ async function readEnabledNotificationChannelCount(databaseUrl: string): Promise
 }
 
 async function providerFailureAlertAlreadyQueued(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   alertKey: string,
 ): Promise<boolean> {
   const client = new PostgresClient({ connectionString: databaseUrl });

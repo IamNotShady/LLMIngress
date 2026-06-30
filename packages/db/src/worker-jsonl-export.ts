@@ -4,7 +4,7 @@ import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/main
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type JsonlRequestLogExportJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 

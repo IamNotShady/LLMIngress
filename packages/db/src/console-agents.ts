@@ -210,7 +210,7 @@ export function getAgentDeleteDependencyError(_input: AgentDependencyCounts): st
   return null;
 }
 
-export async function listAgents(databaseUrl: string): Promise<ConsoleAgent[]> {
+export async function listAgents(databaseUrl?: string): Promise<ConsoleAgent[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<AgentRow>(
       `
@@ -400,14 +400,14 @@ export function formatAgentVirtualModelAccess(input: {
 }
 
 export async function listAgentVirtualModelAccess(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<AgentVirtualModelAccess[]> {
   return withClient(databaseUrl, async (client) => readAgentVirtualModelAccess(client));
 }
 
 export async function updateAgentVirtualModelAccess(input: {
   access: NormalizedAgentVirtualModelAccessInput;
-  databaseUrl: string;
+  databaseUrl?: string;
 }): Promise<AgentVirtualModelAccess> {
   let savedAccess: AgentVirtualModelAccess | undefined;
 
@@ -457,7 +457,7 @@ export async function updateAgentVirtualModelAccess(input: {
 
 export async function createAgent(input: {
   agent: NormalizedAgentFormInput;
-  databaseUrl: string;
+  databaseUrl?: string;
 }): Promise<ConsoleAgentCreateResult> {
   const agentId = randomUUID();
   const plaintext = generateAgentApiKeyPlaintext();
@@ -519,7 +519,7 @@ export async function createAgent(input: {
 
 export async function updateAgent(input: {
   agent: NormalizedAgentFormInput;
-  databaseUrl: string;
+  databaseUrl?: string;
   id: string;
 }): Promise<ConsoleAgent> {
   let agent: ConsoleAgent | undefined;
@@ -591,7 +591,7 @@ export async function updateAgent(input: {
   return requireSavedAgent(agent);
 }
 
-export async function deleteAgent(input: { databaseUrl: string; id: string }): Promise<void> {
+export async function deleteAgent(input: { databaseUrl?: string; id: string }): Promise<void> {
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
@@ -866,7 +866,7 @@ function requireAgentVirtualModelAccess(
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

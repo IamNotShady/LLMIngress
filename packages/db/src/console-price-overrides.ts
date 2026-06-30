@@ -13,7 +13,7 @@ type PriceOverrideRow = PostgresQueryResultRow & {
 };
 
 export async function getManualPriceOverride(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   modelId: string;
   providerKey: string;
 }): Promise<ManualPriceOverride | null> {
@@ -47,7 +47,7 @@ export async function getManualPriceOverride(input: {
 }
 
 export async function saveManualPriceOverride(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   inputUsdPerMillionTokens: number;
   modelId: string;
   outputUsdPerMillionTokens: number;
@@ -131,7 +131,7 @@ function normalizeProviderKey(providerKey: string): string {
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

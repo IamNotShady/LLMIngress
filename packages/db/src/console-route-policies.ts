@@ -349,7 +349,7 @@ export function formatPricedProviderModelOptionLabel(input: {
 }
 
 export async function listProviderModelOptions(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<ConsoleProviderModelOption[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderModelOptionRow>(providerModelOptionsSql());
@@ -359,7 +359,7 @@ export async function listProviderModelOptions(
   });
 }
 
-export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRoutePolicy[]> {
+export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRoutePolicy[]> {
   return withClient(databaseUrl, async (client) => {
     const policies = await client.query<RoutePolicyRow>(
       `
@@ -426,7 +426,7 @@ export async function listRoutePolicies(databaseUrl: string): Promise<ConsoleRou
 }
 
 export async function createRoutePolicy(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   routePolicy: NormalizedRoutePolicyFormInput;
 }): Promise<ConsoleRoutePolicy> {
   const routePolicyId = randomUUID();
@@ -476,7 +476,7 @@ export async function createRoutePolicy(input: {
 }
 
 export async function updateRoutePolicy(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   id: string;
   routePolicy: NormalizedRoutePolicyFormInput;
 }): Promise<ConsoleRoutePolicy> {
@@ -528,7 +528,10 @@ export async function updateRoutePolicy(input: {
   return requireSavedRoutePolicy(routePolicy);
 }
 
-export async function deleteRoutePolicy(input: { databaseUrl: string; id: string }): Promise<void> {
+export async function deleteRoutePolicy(input: {
+  databaseUrl?: string;
+  id: string;
+}): Promise<void> {
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
@@ -1002,7 +1005,7 @@ function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): C
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

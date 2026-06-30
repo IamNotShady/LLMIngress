@@ -56,7 +56,7 @@ type RuntimeErrorRow = PostgresQueryResultRow & {
 };
 
 export async function getConsoleRuntimeSnapshot(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<ConsoleRuntimeSnapshot> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
@@ -93,7 +93,7 @@ export async function getConsoleRuntimeSnapshot(
 }
 
 export async function listConsoleGatewayRuntimeStatuses(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<ConsoleGatewayRuntimeStatus[]> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();

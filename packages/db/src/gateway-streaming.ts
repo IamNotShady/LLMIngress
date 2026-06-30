@@ -106,7 +106,7 @@ export function readGatewayStreamingFlag(body: unknown): boolean {
 
 export async function executeGatewayStreamingRequest(input: {
   agentApiKeyId: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   protocol: GatewayStreamingProtocol;
   requestActivityId?: string;
@@ -724,7 +724,7 @@ function wrapProviderStreamWithMidStreamHealthRecording(
   source: Readable,
   input: {
     candidate: FallbackChainCandidate;
-    databaseUrl: string;
+    databaseUrl?: string;
   },
 ): Readable {
   let bytesSent = false;
@@ -766,7 +766,7 @@ function wrapProviderStreamWithMidStreamHealthRecording(
 function wrapProviderStreamWithBudgetFinalization(
   source: Readable,
   input: {
-    databaseUrl: string;
+    databaseUrl?: string;
     reservation: GatewayBudgetReservation | undefined;
   },
 ): Readable {
@@ -798,7 +798,7 @@ function wrapProviderStreamWithBudgetFinalization(
 function wrapProviderStreamWithConcurrencyRelease(
   source: Readable,
   input: {
-    databaseUrl: string;
+    databaseUrl?: string;
     lease: GatewayConcurrencyLease | undefined;
   },
 ): Readable {
@@ -935,7 +935,7 @@ function buildStreamingPayload(input: {
 }
 
 async function recordGatewayRuntimeError(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   error: GatewayRuntimeStreamError;
   metadata: Record<string, unknown>;
 }): Promise<void> {

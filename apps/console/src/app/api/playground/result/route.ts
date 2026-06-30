@@ -1,17 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getConsoleActivityDetail } from "../../../../server/activity";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../../server/auth";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -20,7 +15,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "requestId is required." }, { status: 400 });
   }
 
-  const detail = await getConsoleActivityDetail({ databaseUrl, requestId });
+  const detail = await getConsoleActivityDetail({ requestId });
   if (!detail) {
     return NextResponse.json({ detail: null }, { status: 404 });
   }

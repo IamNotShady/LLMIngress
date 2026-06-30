@@ -128,7 +128,7 @@ export function readConsoleMasterKeySource(
 }
 
 export async function listProviderApiKeyMetadata(
-  databaseUrl: string,
+  databaseUrl?: string,
 ): Promise<ProviderApiKeyMetadata[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderApiKeyStorageRow>(
@@ -160,7 +160,7 @@ export async function listProviderApiKeyMetadata(
 }
 
 export async function saveProviderApiKey(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   enabled?: boolean;
   label?: string | null;
   masterKeySource: MasterKeySource;
@@ -233,7 +233,7 @@ export async function saveProviderApiKey(input: {
 }
 
 export async function updateProviderApiKeyMetadata(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   enabled: boolean;
   label?: string | null;
   priority: number;
@@ -288,7 +288,7 @@ export async function updateProviderApiKeyMetadata(input: {
 }
 
 export async function deleteProviderApiKey(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerApiKeyId: string;
 }): Promise<{ providerId: string }> {
   let providerId: string | undefined;
@@ -359,7 +359,7 @@ function requireProviderApiKeyRow(
 }
 
 async function withClient<T>(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   operation: (client: PostgresClient) => Promise<T>,
 ): Promise<T> {
   const client = new PostgresClient({ connectionString: databaseUrl });

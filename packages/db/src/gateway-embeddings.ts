@@ -154,7 +154,7 @@ export function createGatewayEmbeddingsProviderAdapter(input: {
 export async function executeGatewayOpenAIEmbeddings(input: {
   agentApiKeyId: string;
   adapter?: OpenAIProviderAdapter;
-  databaseUrl: string;
+  databaseUrl?: string;
   masterKeySource?: MasterKeySource;
   requestActivityId?: string;
   requestBody: unknown;
@@ -328,7 +328,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
 async function executeEmbeddingsFallback(input: {
   adapter?: OpenAIProviderAdapter;
   candidates: readonly FallbackChainCandidate[];
-  databaseUrl: string;
+  databaseUrl?: string;
   fallbackAttempts: FallbackFailedAttempt[];
   finalizeAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
   releaseAttempt: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;

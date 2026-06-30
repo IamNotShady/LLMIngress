@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createAdminPassword, getConsoleDatabaseUrl } from "../../../../server/auth";
+import { createAdminPassword } from "../../../../server/auth";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await createAdminPassword(getConsoleDatabaseUrl(), password);
+    await createAdminPassword(password);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to create admin." },

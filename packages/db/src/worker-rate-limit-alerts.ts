@@ -24,7 +24,7 @@ export type RateLimitAlertsResult = {
 };
 
 type CreateRateLimitAlertsJobHandlerOptions = {
-  databaseUrl: string;
+  databaseUrl?: string;
   now?: () => Date;
 };
 
@@ -196,7 +196,7 @@ function buildRateLimitAlertNotificationEvent(input: {
 }
 
 async function countRateLimitBlocks(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   windowEnd: Date;
   windowStart: Date;
 }): Promise<number> {
@@ -226,7 +226,7 @@ async function countRateLimitBlocks(input: {
 }
 
 async function readRateLimitAlertCandidates(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   thresholdCount: number;
   windowEnd: Date;
   windowStart: Date;
@@ -307,7 +307,7 @@ function rowToRateLimitAlertCandidate(row: RateLimitAlertCandidateRow): RateLimi
   };
 }
 
-async function readEnabledNotificationChannelCount(databaseUrl: string): Promise<number> {
+async function readEnabledNotificationChannelCount(databaseUrl?: string): Promise<number> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
@@ -322,7 +322,7 @@ async function readEnabledNotificationChannelCount(databaseUrl: string): Promise
 }
 
 async function rateLimitAlertAlreadyQueued(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   alertKey: string,
 ): Promise<boolean> {
   const client = new PostgresClient({ connectionString: databaseUrl });

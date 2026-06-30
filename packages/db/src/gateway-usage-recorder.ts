@@ -59,7 +59,7 @@ export type GatewayUsageCostRecords = {
 type RecordGatewayUsageCostInput = {
   activityId: string;
   agentApiKeyId: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   usageCost: GatewayUsageCostDetails;
   virtualModelId: string;
 };

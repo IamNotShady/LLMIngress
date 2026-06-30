@@ -47,6 +47,16 @@ describe("shared package boundaries", () => {
 
     expect(offenders.map((file) => relative(repoRoot, file))).toEqual([]);
   });
+
+  it("keeps production database URL ownership inside @llmingress/db", () => {
+    const offenders = productionSourceRoots.flatMap((root) =>
+      listSourceFiles(join(repoRoot, root)).filter((file) =>
+        usesDatabaseUrl(readFileSync(file, "utf8")),
+      ),
+    );
+
+    expect(offenders.map((file) => relative(repoRoot, file))).toEqual([]);
+  });
 });
 
 function listSourceFiles(root: string): string[] {
@@ -78,4 +88,8 @@ function usesLowLevelDbClient(source: string): boolean {
   return /\b(PostgresClient|PostgresQueryClient|PostgresQueryResultRow|withPostgresClient)\b/.test(
     source,
   );
+}
+
+function usesDatabaseUrl(source: string): boolean {
+  return /\b(databaseUrl|DATABASE_URL)\b/.test(source);
 }

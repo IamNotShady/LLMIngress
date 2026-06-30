@@ -131,9 +131,9 @@ Console 包含以下一级模块：
 - Activity：查看每次请求的 Agent、Agent key prefix、Virtual Model Name、Provider、命中模型、延迟、Tokens、成本、失败原因和 Fallback 过程。
 - Usage & Cost：按 Agent、Virtual Model Name、Provider、Model 和时间维度分析 Tokens、成本、模型分布和节省效果。
 - Limits：配置 Agent 级 Token 上限、成本上限、小时 / 日 / 周 / 月预算、RPM、TPM、并发请求数和超限处理方式。
-- Gateway Runtime：查看 Gateway Service 的运行地址、版本、健康检查、Provider 连通性和最近运行错误。
+- Gateway Runtime：查看 Gateway Service 的运行地址、版本、健康检查、配置加载状态和迁移状态；Provider 连通性在 Providers 页面集中查看。
 - Playground：使用 Gateway Public API 真实测试 Agent 请求，查看请求会被路由到哪个 Provider 和模型，并查看选择原因。
-- Settings：管理服务端口、数据目录、日志保留、安全设置、导入导出和部署相关配置。
+- Settings：管理 Console 偏好、安全提示和通知渠道；配置导入导出保留为受认证的 Console API 能力，不在 Settings 页面展示。
 
 ### 5.3 模块关系
 
@@ -738,7 +738,6 @@ Fallback 只在首包前失败时自动切换备用模型。首包后 streaming 
 
 V1 通知渠道支持：
 
-- Email。
 - Webhook。
 
 Desktop notification / 本机系统通知暂不纳入 V1；后续如需支持，再单独定义。

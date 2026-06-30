@@ -73,6 +73,11 @@ pnpm run verify
 pnpm run verify:features
 ```
 
+For full feature/E2E regression, prefer `pnpm run verify:features`: it uses the
+optimized runner, batches E2E specs with `--workers=50%`, and falls back to
+per-feature verification when a batch flakes. Use `pnpm test:e2e --workers=1`
+only for stable pure-E2E troubleshooting or a slow serial fallback.
+
 Database-backed verifications require `TEST_DATABASE_URL` (local default:
 `postgresql://postgres:postgres@127.0.0.1:55432/postgres`); they fail loudly when it is missing.
 

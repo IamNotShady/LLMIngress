@@ -5,7 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 
-test("runtime page shows heartbeat config version reload result and recent errors", async ({
+test("runtime page shows heartbeat config version reload result and gateway internal errors", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -50,12 +50,25 @@ test("runtime page shows heartbeat config version reload result and recent error
               .locator(".stat-card-value"),
           ).toHaveText("Healthy");
           // Config versions + reload result.
-          await expect(runtimeSection.getByText("v7", { exact: true })).toBeVisible();
-          await expect(runtimeSection.getByText("v8", { exact: true })).toBeVisible();
+          const migrationStatus = runtimeSection.locator(".chart-card", {
+            hasText: "Migration status",
+          });
+          await expect(
+            migrationStatus.locator(".detail-field", { hasText: "Applied config" }).locator("dd"),
+          ).toHaveText("v7");
+          await expect(
+            migrationStatus.locator(".detail-field", { hasText: "Target config" }).locator("dd"),
+          ).toHaveText("v8");
           await expect(
             runtimeSection.getByText(/Reload failed at .*provider key missing/),
           ).toBeVisible();
-          // Recent runtime errors table rows (source + code + message).
+          await expect(
+            runtimeSection.getByRole("heading", {
+              name: "Gateway internal errors",
+              exact: true,
+            }),
+          ).toBeVisible();
+          // Gateway internal error table rows (source + code + message).
           await expect(
             runtimeSection.getByRole("row", {
               name: /gateway.*config_reload_failed.*Provider key missing/,
@@ -66,6 +79,12 @@ test("runtime page shows heartbeat config version reload result and recent error
               name: /worker.*reservation_cleanup_delayed.*Cleanup lag high/,
             }),
           ).toBeVisible();
+          await expect(
+            runtimeSection.getByRole("heading", { name: "Provider connectivity", exact: true }),
+          ).toHaveCount(0);
+          await expect(
+            runtimeSection.getByRole("heading", { name: "Observability exports", exact: true }),
+          ).toHaveCount(0);
         } finally {
           await context.close();
         }

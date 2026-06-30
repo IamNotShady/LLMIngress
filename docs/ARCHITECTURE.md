@@ -368,7 +368,6 @@ Background Worker / Scheduler
 │   ├── Budget threshold evaluator
 │   ├── Provider failure evaluator
 │   ├── Fallback exhaustion evaluator
-│   ├── Email dispatcher
 │   └── Webhook dispatcher
 │
 ├── Data Maintenance
@@ -551,7 +550,7 @@ Gateway Request Pipeline
       Console Activity / Usage / Runtime pages
 ```
 
-Console 从 Postgres 读取 Activity、Usage、Cost、Runtime 状态、Provider health summary 和 Worker job 状态。Gateway 周期性写入 `gateway_runtime_status.heartbeat_at`，Runtime 页面默认把超过 30 秒未更新的 Gateway 标记为 stale / down。
+Console 从 Postgres 读取 Activity、Usage、Cost、Runtime 状态、Provider health summary 和 Worker job 状态。Gateway 周期性写入 `gateway_runtime_status.heartbeat_at`，Runtime 页面默认把超过 30 秒未更新的 Gateway 标记为 stale / down；Provider health summary 的用户可见展示集中在 Providers 页面，避免 Gateway Runtime 重复展示 provider 维度状态。
 
 对于实时刷新页面，可以由 Console Web 使用 polling、SSE 或 WebSocket 拉取 Console API。Console API 如果要订阅 Postgres notification channel，必须运行在常驻 Node.js 进程中；不假设 edge runtime 或 serverless 短生命周期函数可以长期 `LISTEN`。如果部署环境不适合长连接 listener，Console 使用 polling 读取 Postgres 状态即可。
 
@@ -861,7 +860,6 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   │       │   └── backup.job.ts
 │   │       └── dispatchers/ # 异步通知和外部投递实现
 │   │           ├── notification-event-writer.ts
-│   │           ├── email.ts
 │   │           └── webhook.ts
 │   │
 │   └── console/ # Console 控制面 Web 应用

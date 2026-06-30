@@ -59,14 +59,16 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   const [isSending, setIsSending] = useState(false);
   const [maxTokens, setMaxTokens] = useState("1024");
   const [models, setModels] = useState<PlaygroundModel[]>([]);
-  const [prompt, setPrompt] = useState("请解释一下 LLMIngress 的核心优势。");
+  const [prompt, setPrompt] = useState("Explain the core benefits of LLMIngress.");
   const [protocol, setProtocol] = useState<PlaygroundProtocol>("chat_completions");
   const [result, setResult] = useState<PlaygroundResult | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
-  const [status, setStatus] = useState("填写 Agent API Key 后发送测试。");
+  const [status, setStatus] = useState("Enter an Agent API Key to send a test.");
   const [statusTone, setStatusTone] = useState<"error" | "idle" | "success">("idle");
   const [streamMode, setStreamMode] = useState<"off" | "on">("off");
-  const [systemPrompt, setSystemPrompt] = useState("你是一个专业的技术助手，回答要准确、简洁。");
+  const [systemPrompt, setSystemPrompt] = useState(
+    "You are a professional technical assistant. Answer accurately and concisely.",
+  );
   const [temperature, setTemperature] = useState("0.7");
   const [topP, setTopP] = useState("0.9");
 
@@ -76,7 +78,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
     const apiKey = (options.agentApiKey ?? agentApiKey).trim();
     if (!apiKey) {
       if (options.announce !== false) {
-        setStatus("请先填写 Agent API Key。");
+        setStatus("Enter an Agent API Key first.");
         setStatusTone("error");
       }
       return [];
@@ -163,12 +165,12 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
       topP,
     });
     if (!agentApiKey.trim()) {
-      setStatus("请先填写 Agent API Key。");
+      setStatus("Enter an Agent API Key first.");
       setStatusTone("error");
       return;
     }
     if (!requestParams.prompt.trim()) {
-      setStatus("Prompt 不能为空。");
+      setStatus("Prompt cannot be empty.");
       setStatusTone("error");
       return;
     }
@@ -193,7 +195,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
     const requestBody = buildPlaygroundRequestBody(protocol, { ...requestParams, model });
     setIsSending(true);
     setResult(null);
-    setStatus("正在发送测试请求。");
+    setStatus("Sending test request.");
     setStatusTone("idle");
 
     try {
@@ -236,7 +238,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
           responseTokenCount: null,
         };
         setResult(streamResult);
-        setStatus("正在接收流式响应。");
+        setStatus("Receiving streaming response.");
         const responseText = await readPlaygroundStreamBody(response, (nextText) => {
           setResult({ ...streamResult, responseText: nextText });
         });
@@ -274,7 +276,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   function clearPlayground() {
     setPrompt("");
     setResult(null);
-    setStatus("已清空请求内容。");
+    setStatus("Request content cleared.");
     setStatusTone("idle");
     setSystemPrompt("");
   }
@@ -282,12 +284,12 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
   const providerModelLabel = readProviderModelLabel(result, selectedModel);
   const statusLabel =
     statusTone === "success"
-      ? "成功"
+      ? "Success"
       : statusTone === "error"
-        ? "失败"
+        ? "Failed"
         : isSending
-          ? "发送中"
-          : "待发送";
+          ? "Sending"
+          : "Not sent";
   const detail = result?.detail ?? null;
   const displayTokens = detail?.totalTokens ?? result?.responseTokenCount ?? null;
 
@@ -301,7 +303,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
             void sendLiveRequest();
           }}
         >
-          <h2 className="playground-card-title">请求配置</h2>
+          <h2 className="playground-card-title">Request configuration</h2>
           <div className="playground-config">
             <div className="console-field playground-field">
               <label htmlFor="playground-agent-api-key">1. Agent API Key</label>
@@ -378,7 +380,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
             </div>
 
             <div className="console-field playground-field">
-              <label htmlFor="playground-system-prompt">5. System Prompt（可选）</label>
+              <label htmlFor="playground-system-prompt">5. System Prompt (optional)</label>
               <textarea
                 id="playground-system-prompt"
                 rows={3}
@@ -388,7 +390,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
             </div>
 
             <fieldset className="playground-params">
-              <legend>6. 基础参数</legend>
+              <legend>6. Basic parameters</legend>
               <div className="playground-param-grid">
                 <div className="console-field">
                   <label htmlFor="playground-temperature">Temperature</label>
@@ -435,8 +437,8 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                     value={streamMode}
                     onChange={(event) => setStreamMode(event.target.value === "on" ? "on" : "off")}
                   >
-                    <option value="off">关闭</option>
-                    <option value="on">开启</option>
+                    <option value="off">Off</option>
+                    <option value="on">On</option>
                   </select>
                 </div>
               </div>
@@ -445,20 +447,23 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
             <div className="console-actions playground-actions">
               <button type="submit" disabled={isSending}>
                 <FlatIcon name="confirm" />
-                <span>{isSending ? "发送中" : "发送测试"}</span>
+                <span>{isSending ? "Sending" : "Send test"}</span>
               </button>
               <button type="button" className="secondary-button" onClick={clearPlayground}>
                 <FlatIcon name="cancel" />
-                <span>清空</span>
+                <span>Clear</span>
               </button>
             </div>
           </div>
         </form>
 
         <div className="playground-result-column">
-          <section className="playground-card playground-response-card" aria-label="响应预览">
+          <section
+            className="playground-card playground-response-card"
+            aria-label="Response preview"
+          >
             <div className="playground-card-head">
-              <h2 className="playground-card-title">响应预览</h2>
+              <h2 className="playground-card-title">Response preview</h2>
               <span className={`playground-status-pill playground-status-pill--${statusTone}`}>
                 {statusLabel}
               </span>
@@ -467,7 +472,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
               {result ? (
                 <>
                   <p className="playground-response-provider">
-                    {providerModelLabel}（来自 Gateway）
+                    {providerModelLabel} (from Gateway)
                   </p>
                   <pre>{result.responseText}</pre>
                 </>
@@ -477,8 +482,8 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
             </div>
           </section>
 
-          <section className="playground-card" aria-label="请求与路由详情">
-            <h2 className="playground-card-title">请求与路由详情</h2>
+          <section className="playground-card" aria-label="Request and routing details">
+            <h2 className="playground-card-title">Request and routing details</h2>
             <dl className="playground-detail-grid">
               <div>
                 <dt>Request ID</dt>

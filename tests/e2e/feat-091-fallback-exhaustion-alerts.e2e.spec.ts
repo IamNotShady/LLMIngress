@@ -23,15 +23,6 @@ test("scheduled fallback exhaustion evaluator detects exhausted chains and notif
     const ids = await seedFallbackExhaustionData(fixture);
     await createNotificationChannel({
       channel: normalizeNotificationChannelFormInput({
-        channelType: "email",
-        displayName: "Fallback Email",
-        emailFrom: "alerts@llmingress.local",
-        emailTo: "owner@example.com",
-      }),
-      databaseUrl: fixture.databaseUrl,
-    });
-    await createNotificationChannel({
-      channel: normalizeNotificationChannelFormInput({
         channelType: "webhook",
         displayName: "Fallback Webhook",
         webhookUrl: webhook.url,
@@ -80,7 +71,7 @@ test("scheduled fallback exhaustion evaluator detects exhausted chains and notif
     await expect(readFallbackExhaustionAlertJob(fixture)).resolves.toMatchObject({
       result: {
         evaluatedFailedRequestCount: 2,
-        notificationEventCount: 2,
+        notificationEventCount: 1,
         queuedAlertCount: 1,
         windowMs: 15 * 60 * 1000,
       },
@@ -88,13 +79,11 @@ test("scheduled fallback exhaustion evaluator detects exhausted chains and notif
       trigger: "scheduled",
     });
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
-      { channel_type: "email", event_type: "fallback_exhaustion", status: "queued" },
       { channel_type: "webhook", event_type: "fallback_exhaustion", status: "queued" },
     ]);
 
     await expect(runner.runOnce()).resolves.toBe(true);
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
-      { channel_type: "email", event_type: "fallback_exhaustion", status: "sent" },
       { channel_type: "webhook", event_type: "fallback_exhaustion", status: "sent" },
     ]);
     expect(webhook.requests).toHaveLength(1);

@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { PostgresClient } from "@llmingress/db/providers";
-import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
+import {
+  classifyProviderFailureStatus,
+  shouldRecordProviderRequestPathHealthFailure,
+} from "@llmingress/provider/connectivity";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIChatRequest,
@@ -313,6 +316,15 @@ export async function recordCandidateHealthFailure(
   if (!latestAttempt) {
     return;
   }
+  if (
+    !shouldRecordProviderRequestPathHealthFailure({
+      errorCode: latestAttempt.errorCode,
+      errorMessage: latestAttempt.errorMessage,
+      statusCode: latestAttempt.statusCode,
+    })
+  ) {
+    return;
+  }
 
   const healthRecorder = input.recordHealthEvent ?? recordProviderHealthEvent;
 
@@ -328,7 +340,7 @@ export async function recordCandidateHealthFailure(
     status: classifyProviderFailureStatus({
       errorCode: latestAttempt.errorCode,
       errorMessage: latestAttempt.errorMessage,
-      statusCode: latestAttempt.failedBeforeFirstByte ? null : undefined,
+      statusCode: latestAttempt.statusCode,
     }),
     trigger: "request_path" as const,
   };

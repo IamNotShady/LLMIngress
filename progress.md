@@ -2,13 +2,28 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-24 (Usage Virtual Model filter label repair)
-**Active Feature:** none - Usage Virtual Model filter label repair complete
+**Last Updated:** 2026-06-27 (feat-120 E2E Frontend Page Coverage Command)
+**Active Feature:** none - feat-120 complete
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **E2E Frontend Page Coverage Command (feat-120)**:
+  - Added `pnpm run test:e2e:coverage`, routed through `scripts/run-with-env.ts`, for report-only browser-side Console frontend page coverage.
+  - Added `scripts/console-e2e-coverage.ts`: launches Chromium, reuses `withConsoleDevServer`, signs into an isolated Console/PostgreSQL fixture, starts Playwright JS coverage after sign-in, visits every `consoleNavItems` route, asserts each page heading, merges JS coverage ranges, and prints visited page count, JavaScript byte coverage, covered scripts, and visited page labels.
+  - Backend service coverage remains `pnpm test` / Vitest V8 coverage; Gateway, Worker, and Console server processes are not instrumented during E2E.
+  - TDD red observed first: feat-120 unit failed because the coverage script and package script were missing, and feat-120 E2E failed because `pnpm run test:e2e:coverage` did not exist.
+  - Focused verification passed: `pnpm exec vitest run tests/features/feat-120-e2e-frontend-coverage.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-120-e2e-frontend-coverage.e2e.spec.ts --grep 'prints Console frontend page coverage'`, and `pnpm run test:e2e:coverage` printed `Visited pages: 10/10 (100.00%)` plus `JavaScript bytes: 72224561/72224561 (100.00%)`.
+  - Full verification passed: `pnpm run verify` passed with 121 unit test files / 468 tests and printed Vitest coverage summary (Statements 48.43%, Branches 45.49%, Functions 55.84%, Lines 48.58%); pre-marking `pnpm run verify:features` re-verified all 119 prior passing features; final `pnpm run verify:features` re-verified all 120 passing features. The optimized E2E batch hit unrelated feat-030/feat-039 flakes on the final run, then fallback original feature verification passed including feat-030, feat-039, feat-076, and feat-120.
+
+- [x] **Terminal Coverage Output (feat-119)**:
+  - Added report-only Vitest V8 coverage output to `pnpm test`, so `pnpm run verify` prints coverage rates during its test phase.
+  - TDD red observed first: feat-119 unit failed because `@vitest/coverage-v8` was missing, and feat-119 E2E failed because `pnpm test` did not print `Coverage report from v8`.
+  - Configured terminal-only `text-summary` coverage with no thresholds or HTML report, and excluded Console TSX pages from uncovered-file scanning to avoid parser noise in the terminal summary.
+  - Verification passed: focused feat-119 unit and E2E checks; `pnpm test` passed with 120 test files / 466 tests and printed coverage summary (Statements 48.33%, Branches 45.46%, Functions 55.67%, Lines 48.48%); `pnpm run verify` passed and showed the same coverage summary; pre-marking `pnpm run verify:features` re-verified all 118 prior passing features.
+  - Final `pnpm run verify:features` after marking feat-119 passing re-verified all 119 passing features; the optimized E2E batch initially timed out on feat-046, then fallback original feature verification passed including feat-046 and feat-119.
 
 - [x] **Usage Virtual Model filter label repair (feat-047 follow-up)**:
   - Root cause: the Usage filter's Virtual Model select still rendered options inline as `description (name)`, separate from the Agent form label helper fixed earlier.
@@ -266,6 +281,7 @@
   - Import validates template whitelist and references, rejects non-redacted secrets, preserves provider/Agent secret safety, round-trips supported configuration, and publishes a config version.
   - P2+ review found and fixed coverage for same-DB import preserving existing real Agent API key hashes instead of replacing them with redacted placeholders.
   - Verification passed: feat-080 unit tests (2), real Chromium/PostgreSQL Console E2E (1), `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, full `pnpm run verify:features` across all 79 prior passing features before marking, and final `pnpm run verify:features` across all 80 passing features after marking.
+  - 2026-06-26 follow-up: Settings no longer exposes the Data import/export panel; feat-080 E2E now verifies the same authenticated API routes directly.
 - [x] **feat-081 — JSONL Request Logs Export (passing)**:
   - Added migration `0016_jsonl_request_log_export` for `jsonl_export` jobs and `export_tasks` tracking.
   - Added a Worker `jsonl_export` handler that exports request metadata, Agent/API key prefix, Virtual Model, provider/model, usage, cost, fallback events, and errors as one JSON object per request in a JSONL artifact.
@@ -366,6 +382,7 @@
   - Added a protected Runtime section backed by `gateway_runtime_status` and `runtime_errors`.
   - Shows Gateway heartbeat health, Gateway status, applied/target config versions, reload result, last heartbeat timestamp, and recent runtime errors.
   - Verification passed: feat-048 unit tests, real Chromium/PostgreSQL Console E2E, `pnpm run verify`, and full prior-feature regression before marking.
+  - 2026-06-26 follow-up: Runtime now keeps only Gateway process/config/migration/security state; Provider connectivity is shown on Providers, Observability exports were removed, and `runtime_errors` is labelled as Gateway internal errors so ordinary provider/request failures are not expected there.
 - [x] **feat-049 — Playground Live Public API Test (passing)**:
   - Added a protected browser-only Playground that accepts a user-pasted Agent API key, loads allowed Virtual Models from Gateway `GET /v1/models`, and sends a live `POST /v1/chat/completions` directly from the browser to Gateway.
   - Added Gateway CORS support for default local Console origins and explicit `GATEWAY_CORS_ALLOWED_ORIGINS`.
@@ -1699,3 +1716,84 @@
   - Full feature regression before marking passed: `pnpm run verify:features` re-verified all 117 prior passing features. During regression, repaired stale `feat-075` verification grep to the current health-aware routing E2E title and repaired the `feat-096` unit fixture expectation for current default limits.
   - Final full feature regression after marking passed: `pnpm run verify:features` re-verified all 118 passing features.
   - 2026-06-26 PR review follow-up: verified the OpenRouter stream usage comment against official docs and kept OpenRouter without `stream_options`; added an Anthropic `message_delta` fallback for output-only usage when `message_start` usage is unavailable; added debug logging for stream usage/cost recording failures. Verification passed: `pnpm exec vitest run tests/features/feat-118-stream-usage-cost.unit.test.ts`, `pnpm run lint`, `pnpm run typecheck`, and `pnpm test:e2e tests/e2e/feat-118-stream-usage-cost.e2e.spec.ts`.
+
+- [x] 2026-06-26 Playground provider payload compatibility fixes:
+  - Fixed OpenAI Codex Responses streaming payloads so `openai_codex` receives list-shaped `/codex/responses` `input` in both streaming and non-streaming adapter paths.
+  - Fixed Anthropic/Claude Messages payload shaping so `claude-sonnet-4-6` drops `top_p` when `temperature` is present, and `claude-opus-4-7+` drops `temperature`, `top_p`, and `top_k`.
+  - Request-path `400 invalid_request_error` payload mistakes now still record failed attempts but do not persist provider/model health as `unhealthy`; auth, quota, network, and stream failures keep existing health behavior.
+  - TDD red observed first in `feat-039`, `feat-068`, `feat-115`, and `feat-117` focused unit tests.
+  - Verification passed: `pnpm test -- tests/features/feat-068-anthropic-messages-params.unit.test.ts tests/features/feat-039-streaming.unit.test.ts tests/features/feat-117-strategy-fallback-chain.unit.test.ts tests/features/feat-115-provider-subscription-oauth.unit.test.ts`, `pnpm --filter @llmingress/provider typecheck`, `pnpm --filter @llmingress/gateway typecheck`, and `pnpm run lint` (exit 0 with one pre-existing non-null assertion warning).
+  - Live Gateway verification passed after clearing local polluted `provider_health_summary` rows for `anthropic` / `claude_code`: `/v1/messages` `anthropic` non-stream, `claude` non-stream, and `claude` stream succeeded with HTTP 200 and no new unhealthy summaries. `opus48` live retest was blocked by the current Agent allow-list (`virtual_model_not_allowed`), while unit coverage verifies the Opus sampling strip path. Full `verify:features` was not run for this interactive repair.
+
+- [x] 2026-06-26 Notification channel Email removal:
+  - Removed Email notification creation from Settings and `/api/notification-channels`; channel normalization now accepts only `webhook`.
+  - Worker notification queueing, dispatch claiming, and alert no-channel checks now use enabled webhook channels only, so legacy email rows are not queued or sent.
+  - Updated product/architecture/plan docs and feat-083/feat-088 tracker wording to Webhook-only notification support.
+  - TDD red observed first in `tests/features/feat-083-notification-channels-dispatcher.unit.test.ts`: complete `channelType=email` input was still accepted before the fix.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-083-notification-channels-dispatcher.unit.test.ts`; focused E2E for `feat-083`, `feat-088`, `feat-089`, `feat-090`, `feat-091`, `feat-095`, and `console-ui-settings`; `pnpm run typecheck`; `pnpm run lint` (exit 0 with the existing `feat-117` non-null assertion warning); Browser live check on `http://localhost:3000/settings#notification-channels` confirmed only Webhook fields/button and no console error/warn logs.
+  - Full `verify:features` was not run for this interactive UI/backend cleanup.
+
+- [x] 2026-06-26 Console real-data audit follow-up:
+  - Removed the stale Console mock data module and replaced Overview placeholder trend/delta data with DB-backed 24h usage plus previous-window analytics.
+  - Replaced hardcoded shell/Gateway status labels (`Gateway running`, `All systems normal`, `v0.1.0`) with `gateway_runtime_status`-backed status, heartbeat summary, and applied config version; relabeled configured Gateway URL so it is not presented as a self-reported runtime address.
+  - Replaced the Virtual Models fallback chart placeholder with DB-backed `fallback_events`/`request_activity` breakdown data.
+  - Made Agents filters real server-rendered GET filters, and changed Agent status/platform display to use DB-derived fields instead of key/name heuristics.
+  - Follow-up tightened remaining real-data edges: Overview now labels and counts `Active agents 24h` without falling back to enabled Agents, and Settings Security now reads `console_admins` / `console_sessions` instead of showing fixed `Login` / `Public access` text.
+  - Follow-up corrected remaining misleading copy found by the audit: Limits no longer claims the near-budget KPI is fixed at 80%, and Overview copy now matches the displayed rolling 24h metrics.
+  - TDD red observed first in focused Console E2E: old pages still rendered fake Gateway text/version, hardcoded fallback values, and non-functional Agent filters.
+  - Verification passed: `pnpm --filter @llmingress/console typecheck`, touched-file `biome check`, `pnpm run lint` (exit 0 with the existing `feat-117` non-null assertion warning), `git diff --check`, focused Limits E2E, focused E2E `pnpm test:e2e tests/e2e/console-ui-overview.e2e.spec.ts tests/e2e/console-ui-runtime.e2e.spec.ts tests/e2e/console-ui-agents.e2e.spec.ts tests/e2e/console-ui-virtual-models.e2e.spec.ts tests/e2e/console-ui-settings.e2e.spec.ts --workers=1`, and final Console UI focused suite `pnpm test:e2e tests/e2e/console-ui-*.e2e.spec.ts --workers=1` => 16 passed.
+  - Commit-prep full verification passed on 2026-06-27: `pnpm run verify` exited 0; focused `pnpm test:e2e tests/e2e/feat-048-runtime-page.e2e.spec.ts --workers=1` passed after tightening duplicate version text assertions; `pnpm run verify:features` exited 0 and re-verified all 118 passing features. The optimized E2E batch had one `feat-030` timeout, then the built-in per-feature fallback passed `feat-030` and all remaining features.
+  - Remaining product decision: Settings still has display-only Console preferences with no current DB/API persistence source; leave/remove needs product decision.
+
+- [x] 2026-06-27 Console UI English copy cleanup:
+  - Replaced remaining Chinese user-facing copy in the Console Playground and Limits pages with English, including headings, descriptions, table labels, status pills, buttons, placeholders, and default Playground prompts/status messages.
+  - Updated related Playground and Limits unit/E2E assertions to match the English UI copy; no `feature_list.json` status changed because this was a copy cleanup, not a new feature.
+  - Verification passed: `rg -n "[\\p{Han}]" apps/console/src/app tests/e2e tests/features --glob '*.ts' --glob '*.tsx'` returned no matches; `pnpm exec biome check ...` passed; `pnpm exec vitest run tests/features/feat-049-playground.unit.test.ts` passed; `pnpm test:e2e tests/e2e/console-ui-playground.e2e.spec.ts tests/e2e/console-ui-limits.e2e.spec.ts tests/e2e/feat-049-playground.e2e.spec.ts` passed 4/4; `git diff --check` passed.
+  - Browser/IAB follow-up reached the local Console but hit a Next dev overlay error (`Cannot assign to read only property 'stackTraceLimit'`) after interaction; the repo Playwright E2E path did not reproduce it and remains the verification source for this cleanup.
+
+- [x] 2026-06-27 Agents filter layout cleanup:
+  - Reworked the Agents filter bar grid so Type, Status, and Platform align as three equal desktop columns; Search spans the next row with Apply/Clear actions aligned to its right; the mobile breakpoint resets the filter area to one column.
+  - Added `console-ui-agents` layout assertions that measure filter control positions and guard against the orphan Platform/search/action layout regression.
+  - Verification passed: Browser/IAB live check on `http://localhost:3000/agents` confirmed aligned desktop filter rects, successful Status=Offline filtering, no current-page console warnings/errors, and no mobile horizontal overflow at 390px; `pnpm --filter @llmingress/console typecheck`, focused Biome check, `pnpm run lint`, and `git diff --check` passed. Focused isolated `console-ui-agents` E2E could not start a second Console dev server while the live `localhost:3000` Console was running against the same `.next` workspace.
+
+- [x] 2026-06-27 Agents table column width cleanup:
+  - Tightened the Agents table `Default VM` and `Available VM` columns so they no longer absorb excess blank space in the desktop table layout.
+  - Added `console-ui-agents` column-width assertions to keep those two columns compact.
+  - Verification passed: Browser/IAB live check on `http://localhost:3000/agents` measured the columns at 116px and 100px, confirmed zero page/table horizontal overflow, exercised the Status=Offline filter and Clear filters flow, and found no current-page console warnings/errors; `pnpm exec biome check apps/console/src/app/_modules/sections.tsx apps/console/src/app/globals.css tests/e2e/console-ui-agents.e2e.spec.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `pnpm exec playwright test tests/e2e/console-ui-agents.e2e.spec.ts --list`, `git diff --check`, and `jq empty feature_list.json` passed. Full isolated E2E was left unrun to avoid starting a second Console dev server while the live browser session is using `localhost:3000`.
+
+- [x] 2026-06-27 Settings subnav removal:
+  - Removed the Settings page's left-side General/Security/Notifications section links while keeping the three settings panels visible.
+  - Updated `console-ui-settings` to assert that the Settings sections navigation and those three links are absent.
+  - Verification passed: Browser/IAB live check on `http://localhost:3000/settings` confirmed no Settings subnav, no Settings-panel links, visible General/Security/Notification channels panels, zero horizontal overflow, and no current-page console warnings/errors; `pnpm exec biome check apps/console/src/app/_modules/sections.tsx apps/console/src/app/globals.css tests/e2e/console-ui-settings.e2e.spec.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `pnpm exec playwright test tests/e2e/console-ui-settings.e2e.spec.ts --list`, `git diff --check`, and `jq empty feature_list.json` passed. Full isolated E2E was left unrun to avoid starting a second Console dev server while the live browser session is using `localhost:3000`.
+
+- [x] 2026-06-27 Agents filter one-line layout:
+  - Reworked the Agents filter bar so Type, Status, Platform, Search, and Apply/Clear actions render on one desktop row; mobile remains single-column.
+  - Updated `console-ui-agents` layout assertions to check one-row ordering and bottom alignment.
+  - Verification passed: Browser/IAB live check on `http://localhost:3000/agents` confirmed one desktop row, successful Status=Offline filtering, zero desktop/mobile horizontal overflow, no visible framework overlay, and no current-page console warnings/errors; `pnpm exec biome check apps/console/src/app/globals.css tests/e2e/console-ui-agents.e2e.spec.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `pnpm exec playwright test tests/e2e/console-ui-agents.e2e.spec.ts --list`, `git diff --check`, and `jq empty feature_list.json` passed. Full isolated E2E was left unrun to avoid starting a second Console dev server while the live browser session is using `localhost:3000`.
+
+- [x] 2026-06-27 Runtime config and Virtual Model cost display cleanup:
+  - Clarified the sidebar runtime label from `Config vN` to `Config version N`; the value is the real Gateway `applied_config_version` from `gateway_runtime_status`.
+  - Shortened Virtual Models 24h cost formatting so zero values render as `$0.00` instead of `$0.00000000`, with existing short money formatting reused for non-zero values.
+  - Updated `console-ui-virtual-models` expectations for short cost labels.
+  - Verification passed: Browser/IAB live check on `http://localhost:3000/providers` confirmed `Config version 300` and no `Config v\\d+` text; Browser/IAB live check on `http://localhost:3000/models` confirmed KPI/table/detail costs render as `$0.00` and no `$0.00000000` remains; no visible framework overlay or current-page console warnings/errors; `pnpm exec biome check apps/console/src/server/runtime.ts apps/console/src/app/_components/sidebar.tsx apps/console/src/app/_modules/sections.tsx tests/e2e/console-ui-virtual-models.e2e.spec.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `pnpm exec playwright test tests/e2e/console-ui-virtual-models.e2e.spec.ts tests/e2e/console-ui-runtime.e2e.spec.ts --list`, `git diff --check`, and `jq empty feature_list.json` passed. Full isolated E2E was left unrun to avoid starting a second Console dev server while the live browser session is using `localhost:3000`.
+
+- [x] 2026-06-27 Agents clear-filter action removal:
+  - Removed the Agents filter bar `Clear filters` link, leaving only the Apply filters action in the one-line desktop filter row.
+  - Updated `console-ui-agents` to assert the clear link is absent and to reset the filtered test state by navigating back to `/agents`.
+  - Verification passed: Browser/IAB live check on `http://localhost:3000/agents` confirmed zero `Clear filters` links, one `Apply filters` button, successful Status=Offline filtering, no visible framework overlay, and page reset to the unfiltered `/agents` view; `pnpm exec biome check apps/console/src/app/_modules/sections.tsx apps/console/src/app/globals.css tests/e2e/console-ui-agents.e2e.spec.ts`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `pnpm exec playwright test tests/e2e/console-ui-agents.e2e.spec.ts --list`, `git diff --check`, and `jq empty feature_list.json` passed. The live browser console still contains the existing Next dev overlay `stackTraceLimit` error from `localhost:63383`, but it is not visible in the UI. Full isolated E2E was left unrun to avoid starting a second Console dev server while the live browser session is using `localhost:3000`.
+
+- [x] 2026-06-27 Agents detail snippets removal:
+  - Removed the Integration snippets section from the Agents selected-detail sidebar while keeping the one-time Agent key response templates intact.
+  - Updated `console-ui-agents` and `feat-077-agent-integration-templates` expectations so Dashboard details assert snippets are absent and feat-077 still verifies real setup snippets on the one-time key response.
+  - Verification passed: Browser/IAB live check on `http://localhost:3000/agents` confirmed selected Agent details show only `Allowed Virtual Models` and `Budget / Limit`, with zero `Integration snippets` headings, zero setup snippet labels, and zero `.agent-integration-snippets` fieldsets; `pnpm exec biome check apps/console/src/app/_modules/sections.tsx apps/console/src/app/globals.css tests/e2e/console-ui-agents.e2e.spec.ts tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts feature_list.json`, `pnpm --filter @llmingress/console typecheck`, `pnpm exec vitest run tests/features/feat-077-agent-integration-templates.unit.test.ts`, `pnpm run lint`, `pnpm exec playwright test tests/e2e/console-ui-agents.e2e.spec.ts tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts --list`, `git diff --check`, and `jq empty feature_list.json` passed. The live browser console still contains the existing Next dev overlay `stackTraceLimit` error from `localhost:63383`, but it is not visible in the UI. Full isolated E2E was left unrun to avoid starting a second Console dev server while the live browser session is using `localhost:3000`.
+
+- [x] 2026-06-28 Agent created connection details cleanup:
+  - Replaced the one-time Agent created page's Codex/Claude Code/Cursor/OpenClaw setup snippets with one generic `Connection details` group: Agent API key, Agent API key prefix, Gateway URL, and Virtual Model Name.
+  - Updated `feat-077` to describe Agent connection details instead of tool-specific setup snippets; focused unit and E2E assertions now require no setup snippet labels or tool setup text.
+  - TDD red observed first: the updated feat-077 unit test failed because `buildAgentConnectionDetails` did not exist.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-077-agent-integration-templates.unit.test.ts`, `pnpm exec biome check apps/console/src/server/agent-integrations.ts apps/console/src/app/api/agents/route.ts tests/features/feat-077-agent-integration-templates.unit.test.ts tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts feature_list.json`, `pnpm --filter @llmingress/console typecheck`, `pnpm run lint`, `pnpm exec playwright test tests/e2e/feat-077-agent-integration-templates.e2e.spec.ts --list`, `git diff --check`, and `jq empty feature_list.json` passed. Browser/IAB live check created a temporary Agent, confirmed the one-time page has `Connection details`, zero setup snippet labels, zero textareas, and no Codex/Claude Code/Cursor/OpenClaw setup text, then deleted the temporary Agent. The focused E2E run itself was attempted but Next refused to start a second dev server while the live `localhost:3000` Console was running in the same `.next` workspace.
+
+- [x] 2026-06-28 Commit-prep regression:
+  - Ran full regression before commit; the first `pnpm run verify:features` attempt failed only `feat-109` because `console-ui-agents` timed out in the Agents layout test after snippets/Clear filters removal.
+  - Playwright API debug showed the right-side Selected agent details panel intercepting table `Edit` clicks at the regression viewport. Added Agents main-column/list-card overflow constraints so the left table cannot render underneath the right detail panel, and updated `feat-109` tracker wording/evidence to match the current no-dashboard-snippets product behavior.
+  - Verification passed after the fix: focused `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --grep 'agents page matches the designed list and detail layout' --workers=1 --reporter=line`; `pnpm run verify` (exit 0 with the existing `feat-117` lint warning); final `pnpm run verify:features` re-verified all 120 passing features, including `feat-109 Agent Management Dialogs Layout`.

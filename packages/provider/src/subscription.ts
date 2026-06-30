@@ -2,6 +2,30 @@ import type { AnthropicContentBlock } from "./adapters/anthropic.js";
 
 export type SubscriptionProviderKey = "claude_code" | "openai_codex";
 
+type OpenAIResponsesInputMessage = {
+  content: string;
+  role: CodexResponsesInputMessage["role"];
+};
+
+export type CodexResponsesInputMessage = {
+  content: Array<{ text: string; type: "input_text" }>;
+  role: "assistant" | "developer" | "system" | "user";
+};
+
+export type CodexResponsesInput = CodexResponsesInputMessage[];
+
+export function normalizeCodexResponsesInput(
+  input: string | OpenAIResponsesInputMessage[],
+): CodexResponsesInput {
+  if (typeof input === "string") {
+    return [{ content: [{ text: input, type: "input_text" }], role: "user" }];
+  }
+  return input.map((message) => ({
+    content: [{ text: message.content, type: "input_text" }],
+    role: message.role,
+  }));
+}
+
 // Subscription (OAuth) /v1/messages requires an agent-identity string as the first
 // system block, or Anthropic rejects/limits the request (observed as a 429
 // rate_limit_error; per mnfst/manifest it also gates sonnet/opus vs haiku-only).

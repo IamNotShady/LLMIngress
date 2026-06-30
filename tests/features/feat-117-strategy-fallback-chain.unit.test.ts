@@ -753,6 +753,43 @@ describe("fallback chain", () => {
     expect(recordHealthEvent).toHaveBeenCalledTimes(2);
   });
 
+  it("health split: request payload 400 records failed attempt but not provider health", async () => {
+    const candidateA = fallbackCandidate({ providerModelId: "model-a" });
+    const recordFailedAttempt = vi.fn().mockResolvedValue(undefined);
+    const recordHealthEvent = vi.fn().mockResolvedValue(undefined);
+
+    const adapter = {
+      chatCompletion: vi.fn().mockResolvedValueOnce({
+        body: null,
+        errorCode: "invalid_request_error",
+        errorMessage: "`temperature` and `top_p` cannot both be specified for this model.",
+        ok: false,
+        retryable: false,
+        statusCode: 400,
+      }),
+    };
+
+    await expect(
+      executeFallbackChain({
+        adapter,
+        candidates: [candidateA],
+        databaseUrl: "postgresql://localhost/test",
+        recordFailedAttempt,
+        recordHealthEvent,
+        request: { messages: [{ content: "hello", role: "user" }], stream: false },
+      }),
+    ).rejects.toThrow("`temperature` and `top_p` cannot both be specified for this model.");
+
+    expect(recordFailedAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: "invalid_request_error",
+        retryable: false,
+        statusCode: 400,
+      }),
+    );
+    expect(recordHealthEvent).not.toHaveBeenCalled();
+  });
+
   it("health split: recordHealthEvent NOT called for 5xx that exhausts all candidates", async () => {
     const candidateA = fallbackCandidate({ providerModelId: "model-a" });
     const candidateB = fallbackCandidate({ providerModelId: "model-b" });

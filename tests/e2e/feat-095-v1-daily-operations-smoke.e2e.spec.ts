@@ -85,10 +85,6 @@ test("v1 daily operations smoke verifies breakdowns exports alerts metrics trace
         }),
         notification_dispatch: createNotificationDispatchJobHandler({
           databaseUrl: fixture.databaseUrl,
-          deliverEmail: async (input) => {
-            deliveredNotifications.push(input.payload);
-            return { status: "sent" };
-          },
           deliverWebhook: async (input) => {
             deliveredNotifications.push(input.payload);
             return { responseStatus: 204, status: "sent" };

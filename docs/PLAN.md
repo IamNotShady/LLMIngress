@@ -175,7 +175,7 @@ V1 的目标是把 MVP 从“可跑通”提升到“个人日常可用”，覆
 - Rate Limit 高频触发 alert evaluator。
 - Provider failure alert evaluator。
 - Fallback exhaustion alert evaluator。
-- Email / Webhook notification dispatcher。
+- Webhook notification dispatcher。
 
 ### 4.5 Observability / Operations
 
@@ -190,7 +190,7 @@ V1 的目标是把 MVP 从“可跑通”提升到“个人日常可用”，覆
 
 - 用户能稳定接入至少 OpenAI、Anthropic、Google Gemini、OpenRouter 四类远程 API Key Provider 和 2 类 Local Provider。
 - Usage 页面能展示成本、节省、失败率和模型分布。
-- Provider 连续失败、Budget 接近阈值、Rate Limit 高频触发、Fallback 耗尽能触发 Email / Webhook。
+- Provider 连续失败、Budget 接近阈值、Rate Limit 高频触发、Fallback 耗尽能触发 Webhook。
 - 用户能导出配置、请求记录和成本报表。
 - 系统能在单机自托管环境下长期运行并自动清理过期日志。
 

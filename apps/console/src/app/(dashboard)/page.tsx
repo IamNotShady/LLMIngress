@@ -6,7 +6,7 @@ export default function OverviewPage() {
     <div className="page overview-page">
       <PageHeader
         title="Overview"
-        description="Gateway status and today's key metrics at a glance."
+        description="Gateway status and last 24h key metrics at a glance."
       />
       <OverviewSection />
     </div>

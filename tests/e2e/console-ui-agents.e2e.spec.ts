@@ -7,7 +7,7 @@ test("agents page matches the designed list and detail layout", async ({ browser
   await withConsoleDevServer(
     browser,
     async ({ page, baseUrl }) => {
-      await page.goto(`${baseUrl}/agents`);
+      await page.goto(`${baseUrl}/agents`, { waitUntil: "domcontentloaded" });
 
       await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeVisible();
       await page.getByRole("link", { name: "Create Agent" }).click();
@@ -30,7 +30,7 @@ test("agents page matches the designed list and detail layout", async ({ browser
       await expect(createDialog.getByLabel("Concurrency limit")).toBeHidden();
       await createDialog.getByRole("link", { name: "Close" }).click();
 
-      for (const label of ["Agents", "Connected", "Requests today", "Cost this week"]) {
+      for (const label of ["Agents", "Connected", "Requests 24h", "Cost 7d"]) {
         await expect(page.locator(".stat-card-label", { hasText: label })).toBeVisible();
       }
 
@@ -38,27 +38,63 @@ test("agents page matches the designed list and detail layout", async ({ browser
         await expect(page.getByLabel(label, { exact: true })).toBeVisible();
       }
       await expect(page.getByPlaceholder("Search agent name or note")).toBeVisible();
+      await expect(page.getByRole("link", { name: "Clear filters" })).toHaveCount(0);
+      const filterLayout = await readAgentFilterLayout(page);
+      expect(Math.abs(filterLayout.type.y - filterLayout.status.y)).toBeLessThanOrEqual(2);
+      expect(Math.abs(filterLayout.type.y - filterLayout.platform.y)).toBeLessThanOrEqual(2);
+      expect(Math.abs(filterLayout.type.y - filterLayout.search.y)).toBeLessThanOrEqual(2);
+      expect(
+        Math.abs(
+          filterLayout.type.y +
+            filterLayout.type.height -
+            (filterLayout.actions.y + filterLayout.actions.height),
+        ),
+      ).toBeLessThanOrEqual(2);
+      expect(filterLayout.type.x).toBeLessThan(filterLayout.status.x);
+      expect(filterLayout.status.x).toBeLessThan(filterLayout.platform.x);
+      expect(filterLayout.platform.x).toBeLessThan(filterLayout.search.x);
+      expect(filterLayout.search.x).toBeLessThan(filterLayout.actions.x);
+      expect(filterLayout.search.width).toBeGreaterThan(filterLayout.type.width * 1.5);
+      expect(filterLayout.actions.x + filterLayout.actions.width).toBeLessThanOrEqual(
+        filterLayout.bar.x + filterLayout.bar.width + 1,
+      );
+      expect(filterLayout.bar.y + filterLayout.bar.height).toBeLessThanOrEqual(
+        filterLayout.list.y - 8,
+      );
+      await page.getByLabel("Status", { exact: true }).selectOption("offline");
+      await page.getByRole("button", { name: "Apply filters" }).click();
+      await expect(page).toHaveURL(/agentStatus=offline/);
+      await expect(page.getByRole("row", { name: /OpenClaw/ })).toBeVisible();
+      await expect(page.getByRole("row", { name: /Claude Code/ })).toHaveCount(0);
+      await page.goto(`${baseUrl}/agents`);
 
       await expect(page.getByRole("heading", { name: "Agent list" })).toBeVisible();
       for (const header of [
         "Agent",
         "Type",
         "API Key Prefix",
-        "Default Virtual Model",
+        "Default VM",
         "Available VM",
-        "Requests today",
-        "Today Cost",
+        "Requests 24h",
+        "24h Cost",
         "Status",
         "Action",
       ]) {
         await expect(page.getByRole("columnheader", { name: header })).toBeVisible();
       }
+      const tableColumnLayout = await readAgentTableColumnLayout(page);
+      expect(tableColumnLayout.defaultVirtualModel.width).toBeLessThanOrEqual(125);
+      expect(tableColumnLayout.availableVm.width).toBeLessThanOrEqual(105);
+      expect(
+        tableColumnLayout.defaultVirtualModel.width + tableColumnLayout.availableVm.width,
+      ).toBeLessThanOrEqual(225);
+      await expect(page.getByRole("row", { name: /OpenClaw/ })).toContainText("Offline");
 
       const details = page.getByLabel("Selected agent details");
       await expect(details.getByRole("heading", { name: "Claude Code" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Allowed Virtual Models" })).toBeVisible();
       await expect(details.getByRole("heading", { name: "Budget / Limit" })).toBeVisible();
-      await expect(details.getByRole("heading", { name: "Integration snippets" })).toBeVisible();
+      await expect(details.getByRole("heading", { name: "Integration snippets" })).toHaveCount(0);
       await expect(details.getByRole("heading", { name: "Integration guide" })).toHaveCount(0);
 
       await expect(page.locator(".agent-management-row")).toHaveCount(0);
@@ -136,6 +172,56 @@ test("agents page matches the designed list and detail layout", async ({ browser
     { seed: seedAgentsData },
   );
 });
+
+async function readAgentFilterLayout(page: import("@playwright/test").Page) {
+  const layout = await page.evaluate(() => {
+    const readRect = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!element) {
+        throw new Error(`Missing ${selector}`);
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        height: rect.height,
+        width: rect.width,
+        x: rect.x,
+        y: rect.y,
+      };
+    };
+    return {
+      actions: readRect(".agents-filter-actions"),
+      bar: readRect(".agents-filter-bar"),
+      list: readRect(".agents-list-card"),
+      platform: readRect("#agent-filter-platform"),
+      search: readRect("#agent-filter-search"),
+      status: readRect("#agent-filter-status"),
+      type: readRect("#agent-filter-type"),
+    };
+  });
+  return layout;
+}
+
+async function readAgentTableColumnLayout(page: import("@playwright/test").Page) {
+  const layout = await page.evaluate(() => {
+    const headers = Array.from(document.querySelectorAll(".agents-table thead th"));
+    const readHeader = (index: number) => {
+      const element = headers[index];
+      if (!element) {
+        throw new Error(`Missing agents table header ${index}`);
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        width: rect.width,
+        x: rect.x,
+      };
+    };
+    return {
+      availableVm: readHeader(4),
+      defaultVirtualModel: readHeader(3),
+    };
+  });
+  return layout;
+}
 
 async function seedAgentsData(databaseUrl: string): Promise<void> {
   const client = new Client({ connectionString: databaseUrl });

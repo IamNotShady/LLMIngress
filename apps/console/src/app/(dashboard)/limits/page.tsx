@@ -11,7 +11,7 @@ export default async function LimitsPage({
     <div className="page limits-page">
       <PageHeader
         title="Limits"
-        description="管理 Agent API Key 的预算、Token、RPM、TPM 与并发限制"
+        description="Manage Agent API Key budgets, tokens, RPM, TPM, and concurrency limits."
       />
       <LimitsSection searchParams={resolved} />
     </div>

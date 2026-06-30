@@ -13,18 +13,24 @@ test("overview dashboard renders KPI cards, recent requests, gateway status, and
 
       // Page heading.
       await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+      await expect(
+        page.getByText("Gateway status and last 24h key metrics at a glance."),
+      ).toBeVisible();
+      await expect(page.getByText("today's key metrics")).toHaveCount(0);
 
       // The six KPI metric tiles.
       for (const label of [
-        "Requests today",
-        "Cost today",
-        "Tokens today",
+        "Requests 24h",
+        "Cost 24h",
+        "Tokens 24h",
         "Failure rate",
         "Savings",
-        "Active agents",
+        "Active agents 24h",
       ]) {
         await expect(page.getByText(label, { exact: true })).toBeVisible();
       }
+      await expect(page.getByText("vs previous 24h +200.0%")).toBeVisible();
+      await expect(page.getByText("vs yesterday")).toHaveCount(0);
 
       // The dashboard panels and charts.
       await expect(page.getByRole("heading", { name: "Recent requests" })).toBeVisible();
@@ -41,8 +47,19 @@ test("overview dashboard renders KPI cards, recent requests, gateway status, and
         await expect(page.getByRole("columnheader", { name: header })).toBeVisible();
       }
       await expect(page.getByRole("heading", { name: "Gateway status" })).toBeVisible();
-      await expect(page.getByText("Running normally")).toBeVisible();
+      const gatewayStatusPanel = page.locator(".detail-panel", {
+        has: page.getByRole("heading", { name: "Gateway status" }),
+      });
+      await expect(gatewayStatusPanel.getByText("Running normally")).toBeVisible();
+      await expect(gatewayStatusPanel.getByText("Heartbeat healthy")).toBeVisible();
+      await expect(gatewayStatusPanel.getByText("Config version", { exact: true })).toBeVisible();
+      await expect(page.getByText("Gateway running")).toHaveCount(0);
+      await expect(page.getByText("All systems normal")).toHaveCount(0);
+      await expect(page.getByText("v0.1.0")).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Requests & cost trend" })).toBeVisible();
+      await expect(page.getByRole("img", { name: "Requests and cost trend" })).not.toContainText(
+        "2400",
+      );
       await expect(page.getByRole("heading", { name: "Top agents by cost" })).toBeVisible();
       await expect(page.getByRole("img", { name: "Top agents by cost" })).toBeVisible();
     },
@@ -60,6 +77,7 @@ async function seedOverviewData(databaseUrl: string): Promise<void> {
     const modelId = randomUUID();
     const virtualModelId = randomUUID();
     const requestId = randomUUID();
+    const previousRequestId = randomUUID();
 
     await client.query("insert into config_versions (version, source) values (1, 'console')");
     await client.query(
@@ -97,6 +115,15 @@ async function seedOverviewData(databaseUrl: string): Promise<void> {
       [requestId, keyId, virtualModelId, providerId, modelId],
     );
     await client.query(
+      `insert into request_activity
+         (id, request_id, agent_id, virtual_model_id, provider_id, provider_model_id,
+          agent_key_prefix, protocol, model, status, http_status, latency_ms, started_at, completed_at)
+       values ($1, 'req_overview_previous_seed', $2, $3, $4, $5, 'codex000',
+          'chat_completions', 'smart', 'succeeded', 200, 180,
+          now() - interval '25 hours', now() - interval '25 hours')`,
+      [previousRequestId, keyId, virtualModelId, providerId, modelId],
+    );
+    await client.query(
       `insert into request_usage
          (id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
           input_tokens, output_tokens, total_tokens, token_source)
@@ -104,11 +131,25 @@ async function seedOverviewData(databaseUrl: string): Promise<void> {
       [randomUUID(), requestId, keyId, virtualModelId, modelId],
     );
     await client.query(
+      `insert into request_usage
+         (id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
+          input_tokens, output_tokens, total_tokens, token_source)
+       values ($1, $2, $3, $4, $5, 800, 200, 1000, 'provider')`,
+      [randomUUID(), previousRequestId, keyId, virtualModelId, modelId],
+    );
+    await client.query(
       `insert into request_costs
          (id, request_activity_id, agent_id, provider_model_id,
           input_cost_usd, output_cost_usd, total_cost_usd, cost_source)
        values ($1, $2, $3, $4, 0.01, 0.02, 0.03, 'provider')`,
       [randomUUID(), requestId, keyId, modelId],
+    );
+    await client.query(
+      `insert into request_costs
+         (id, request_activity_id, agent_id, provider_model_id,
+          input_cost_usd, output_cost_usd, total_cost_usd, cost_source)
+       values ($1, $2, $3, $4, 0.004, 0.006, 0.01, 'provider')`,
+      [randomUUID(), previousRequestId, keyId, modelId],
     );
   } finally {
     await client.end();

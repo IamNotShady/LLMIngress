@@ -1,20 +1,15 @@
 import { PageHeader } from "../../_components/page-header";
-import { type ConsoleSearchParams, SettingsSection } from "../../_modules/sections";
+import { SettingsSection } from "../../_modules/sections";
 
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams?: Promise<ConsoleSearchParams>;
-}) {
-  const resolved = searchParams ? await searchParams : {};
+export default function SettingsPage() {
   return (
     <div className="page">
       <PageHeader
         eyebrow="System"
         title="Settings"
-        description="Console preferences, data export, notifications, and danger zone."
+        description="Console preferences, security reminders, and notification channels."
       />
-      <SettingsSection searchParams={resolved} />
+      <SettingsSection />
     </div>
   );
 }

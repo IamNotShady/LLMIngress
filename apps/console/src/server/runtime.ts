@@ -62,24 +62,7 @@ export async function getConsoleRuntimeSnapshot(
   await client.connect();
 
   try {
-    const gatewayResult = await client.query<GatewayRuntimeRow>(
-      `
-        select gateway_instance_id,
-               status,
-               applied_config_version,
-               target_config_version,
-               last_reload_status,
-               last_reload_error,
-               last_reload_at,
-               heartbeat_at,
-               started_at,
-               updated_at
-        from gateway_runtime_status
-        order by heartbeat_at desc,
-                 updated_at desc
-        limit 5
-      `,
-    );
+    const gateways = await queryConsoleGatewayRuntimeStatuses(client);
     const errorResult = await client.query<RuntimeErrorRow>(
       `
         select process_type,
@@ -101,12 +84,29 @@ export async function getConsoleRuntimeSnapshot(
 
     return {
       errors: errorResult.rows.map(rowToRuntimeError),
-      gateways: gatewayResult.rows.map(rowToGatewayRuntimeStatus),
+      gateways,
       migrations,
     };
   } finally {
     await client.end();
   }
+}
+
+export async function listConsoleGatewayRuntimeStatuses(
+  databaseUrl: string,
+): Promise<ConsoleGatewayRuntimeStatus[]> {
+  const client = new PostgresClient({ connectionString: databaseUrl });
+  await client.connect();
+
+  try {
+    return await queryConsoleGatewayRuntimeStatuses(client);
+  } finally {
+    await client.end();
+  }
+}
+
+export function formatGatewayConfigVersion(version: number | null): string {
+  return version === null ? "No config" : String(version);
 }
 
 export function formatGatewayHeartbeatStatus(input: {
@@ -123,6 +123,61 @@ export function formatGatewayHeartbeatStatus(input: {
   const ageMs = now.getTime() - input.heartbeatAt.getTime();
 
   return ageMs <= staleAfterMs ? "Healthy" : "Stale";
+}
+
+export function formatGatewayHeartbeatSummary(input: {
+  gateway: ConsoleGatewayRuntimeStatus | null;
+  now?: Date;
+  staleAfterMs?: number;
+}): string {
+  if (!input.gateway) {
+    return "No gateway heartbeat recorded";
+  }
+  const status = formatGatewayHeartbeatStatus({
+    heartbeatAt: input.gateway.heartbeatAt,
+    now: input.now,
+    staleAfterMs: input.staleAfterMs,
+  }).toLowerCase();
+  return `Heartbeat ${status}`;
+}
+
+export function formatGatewayShellStatus(input: {
+  gateway: ConsoleGatewayRuntimeStatus | null;
+  now?: Date;
+  staleAfterMs?: number;
+}): string {
+  if (!input.gateway) {
+    return "Gateway unknown";
+  }
+
+  const heartbeatStatus = formatGatewayHeartbeatStatus({
+    heartbeatAt: input.gateway.heartbeatAt,
+    now: input.now,
+    staleAfterMs: input.staleAfterMs,
+  });
+  if (heartbeatStatus !== "Healthy") {
+    return "Gateway stale";
+  }
+  if (input.gateway.status === "ready") {
+    return "Gateway ready";
+  }
+  return `Gateway ${input.gateway.status}`;
+}
+
+export function isGatewayRuntimeHealthy(input: {
+  gateway: ConsoleGatewayRuntimeStatus | null;
+  now?: Date;
+  staleAfterMs?: number;
+}): boolean {
+  return (
+    input.gateway !== null &&
+    input.gateway.status === "ready" &&
+    formatGatewayHeartbeatStatus({
+      heartbeatAt: input.gateway.heartbeatAt,
+      now: input.now,
+      staleAfterMs: input.staleAfterMs,
+    }) === "Healthy"
+  );
 }
 
 export function formatRuntimeReloadResult(input: {
@@ -147,6 +202,30 @@ export function formatRuntimeErrorEntry(input: ConsoleRuntimeError): string {
     ? `${input.processType}/${input.processId}`
     : input.processType;
   return `${input.severity} ${processLabel}: ${input.errorCode} - ${input.errorMessage} at ${input.createdAt.toISOString()}`;
+}
+
+async function queryConsoleGatewayRuntimeStatuses(
+  client: PostgresClient,
+): Promise<ConsoleGatewayRuntimeStatus[]> {
+  const result = await client.query<GatewayRuntimeRow>(
+    `
+      select gateway_instance_id,
+             status,
+             applied_config_version,
+             target_config_version,
+             last_reload_status,
+             last_reload_error,
+             last_reload_at,
+             heartbeat_at,
+             started_at,
+             updated_at
+      from gateway_runtime_status
+      order by heartbeat_at desc,
+               updated_at desc
+      limit 5
+    `,
+  );
+  return result.rows.map(rowToGatewayRuntimeStatus);
 }
 
 function rowToGatewayRuntimeStatus(row: GatewayRuntimeRow): ConsoleGatewayRuntimeStatus {

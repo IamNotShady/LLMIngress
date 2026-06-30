@@ -11,7 +11,7 @@ import { createNotificationDispatchJobHandler } from "../../apps/worker/src/noti
 import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-test("scheduled budget threshold evaluator uses configurable threshold and emits email webhook notifications near budget limit", async () => {
+test("scheduled budget threshold evaluator uses configurable threshold and emits webhook notifications near budget limit", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_budget_alerts_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -21,15 +21,6 @@ test("scheduled budget threshold evaluator uses configurable threshold and emits
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const ids = await seedBudgetAlertData(fixture);
-    await createNotificationChannel({
-      channel: normalizeNotificationChannelFormInput({
-        channelType: "email",
-        displayName: "Budget Email",
-        emailFrom: "alerts@llmingress.local",
-        emailTo: "owner@example.com",
-      }),
-      databaseUrl: fixture.databaseUrl,
-    });
     await createNotificationChannel({
       channel: normalizeNotificationChannelFormInput({
         channelType: "webhook",
@@ -90,11 +81,6 @@ test("scheduled budget threshold evaluator uses configurable threshold and emits
     });
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
       {
-        channel_type: "email",
-        event_type: "budget_threshold",
-        status: "queued",
-      },
-      {
         channel_type: "webhook",
         event_type: "budget_threshold",
         status: "queued",
@@ -103,11 +89,6 @@ test("scheduled budget threshold evaluator uses configurable threshold and emits
 
     await expect(runner.runOnce()).resolves.toBe(true);
     await expect(readNotificationEvents(fixture)).resolves.toEqual([
-      {
-        channel_type: "email",
-        event_type: "budget_threshold",
-        status: "sent",
-      },
       {
         channel_type: "webhook",
         event_type: "budget_threshold",
@@ -143,7 +124,7 @@ test("scheduled budget threshold evaluator uses configurable threshold and emits
       status: "succeeded",
       trigger: "scheduled",
     });
-    await expect(readNotificationEvents(fixture)).resolves.toHaveLength(2);
+    await expect(readNotificationEvents(fixture)).resolves.toHaveLength(1);
     expect(webhook.requests).toHaveLength(1);
   } finally {
     await webhook.stop();

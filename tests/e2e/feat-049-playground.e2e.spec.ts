@@ -61,7 +61,10 @@ test("playground uses pasted key in memory direct gateway call and usage increme
             await page.goto(`${consoleBaseUrl}/playground`);
             const playgroundSection = page.getByLabel("Playground");
             await expect(
-              playgroundSection.getByRole("heading", { exact: true, name: "请求配置" }),
+              playgroundSection.getByRole("heading", {
+                exact: true,
+                name: "Request configuration",
+              }),
             ).toBeVisible();
             await expect(playgroundSection.getByLabel("Gateway base URL")).toHaveCount(0);
 
@@ -73,7 +76,7 @@ test("playground uses pasted key in memory direct gateway call and usage increme
             await expect(playgroundSection.getByLabel(/Endpoint/)).toHaveValue("chat_completions");
             await playgroundSection.getByLabel(/Prompt$/).fill("hello from feat 049");
             await playgroundSection.getByLabel(/System Prompt/).fill("answer as a test assistant");
-            await playgroundSection.getByRole("button", { name: "发送测试" }).click();
+            await playgroundSection.getByRole("button", { name: "Send test" }).click();
 
             await expect(playgroundSection.getByText("fake provider response")).toBeVisible();
             await expect(playgroundSection.getByText(/playground_/)).toBeVisible();

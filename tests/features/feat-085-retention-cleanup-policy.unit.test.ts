@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
-import { createDefaultPeriodicTasks } from "../../apps/worker/src/periodic-scheduler";
+import { createDefaultPeriodicTasks } from "@llmingress/db/worker-periodic-scheduler";
 import {
   createRetentionCleanupJobHandler,
   readRetentionCleanupPayload,
   readRetentionCleanupSettings,
-} from "../../apps/worker/src/retention-cleanup";
+} from "@llmingress/db/worker-retention-cleanup";
+import { describe, expect, it } from "vitest";
 
 const root = resolve(__dirname, "../..");
 

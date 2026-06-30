@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
 import {
   buildJsonlRequestLogRecord,
   redactSecretsFromJsonlValue,
-} from "../../apps/worker/src/jsonl-export";
+} from "@llmingress/db/worker-jsonl-export";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");

@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
 import {
   type ClaimedJob,
   createJobRunner,
   JobHandlerError,
   type JobStore,
-} from "../../apps/worker/src/job-runner";
+} from "@llmingress/db/worker-job-runner";
+import { describe, expect, it } from "vitest";
 
 describe("feat-022 worker job runner", () => {
   it("claims one pending job with a lease and persists a success result once", async () => {

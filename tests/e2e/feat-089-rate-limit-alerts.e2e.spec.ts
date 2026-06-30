@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
+import { createPostgresPeriodicScheduler } from "@llmingress/db/worker-periodic-scheduler";
+import { createRateLimitAlertsJobHandler } from "@llmingress/db/worker-rate-limit-alerts";
 import { expect, test } from "@playwright/test";
 import {
   createNotificationChannel,
   normalizeNotificationChannelFormInput,
 } from "../../apps/console/src/server/notification-channels";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createNotificationDispatchJobHandler } from "../../apps/worker/src/notification-dispatcher";
-import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
-import { createRateLimitAlertsJobHandler } from "../../apps/worker/src/rate-limit-alerts";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("scheduled rate limit evaluator uses configurable window threshold detects repeated rpm tpm blocks and notifies", async () => {

@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
 import {
   buildCostReportExportDocument,
   type CostReportUsageSummary,
-} from "../../apps/worker/src/cost-report-export";
+} from "@llmingress/db/worker-cost-report-export";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");

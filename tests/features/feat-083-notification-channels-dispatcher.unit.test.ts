@@ -1,14 +1,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
 import { describe, expect, it } from "vitest";
 import {
   type NotificationChannelFormInput,
   normalizeNotificationChannelFormInput,
 } from "../../apps/console/src/server/notification-channels";
-import {
-  buildNotificationDeliveryPayload,
-  createNotificationDispatchJobHandler,
-} from "../../apps/worker/src/notification-dispatcher";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");
@@ -64,30 +61,6 @@ describe("feat-083 notification channels and dispatcher", () => {
     for (const input of invalidInputs) {
       expect(() => normalizeNotificationChannelFormInput(input)).toThrow();
     }
-  });
-
-  it("builds a common delivery payload for webhook dispatchers", () => {
-    const payload = buildNotificationDeliveryPayload({
-      body: "Budget is at 90%.",
-      eventId: "event-083",
-      eventType: "budget_threshold",
-      payload: {
-        agentId: "agent-083",
-        threshold: 0.9,
-      },
-      subject: "Budget warning",
-    });
-
-    expect(payload).toEqual({
-      body: "Budget is at 90%.",
-      eventId: "event-083",
-      eventType: "budget_threshold",
-      payload: {
-        agentId: "agent-083",
-        threshold: 0.9,
-      },
-      subject: "Budget warning",
-    });
   });
 
   it("exposes a notification dispatch job handler factory", () => {

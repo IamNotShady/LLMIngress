@@ -3,10 +3,10 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createBackupJobHandler } from "@llmingress/db/worker-backup";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createPostgresPeriodicScheduler } from "@llmingress/db/worker-periodic-scheduler";
 import { expect, test } from "@playwright/test";
-import { createBackupJobHandler } from "../../apps/worker/src/backup";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
 import {
   createTestPostgresFixture,
   loadSqlMigrations,

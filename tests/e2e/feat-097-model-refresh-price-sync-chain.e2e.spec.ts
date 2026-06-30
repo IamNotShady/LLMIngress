@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { createPostgresJobRunner, JOB_CREATED_CHANNEL } from "@llmingress/db/worker-job-runner";
+import { createModelRefreshJobHandler } from "@llmingress/db/worker-model-refresh";
+import { createPriceSyncJobHandler } from "@llmingress/db/worker-price-sync";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
-import { createPostgresJobRunner, JOB_CREATED_CHANNEL } from "../../apps/worker/src/job-runner";
-import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
-import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 import { createFakeProviderServer } from "../support/fake-provider";

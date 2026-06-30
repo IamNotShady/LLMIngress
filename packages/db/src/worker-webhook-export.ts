@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 import { redactSecretsFromJsonlValue } from "./worker-jsonl-export.ts";
 
@@ -249,7 +249,7 @@ export function buildWebhookEventExportRecords(input: {
         protocol: input.activity.protocol,
         providerKey: input.activity.providerKey,
         providerModelModelId: input.activity.providerModelModelId,
-        routeReason: redactWebhookExportValue(input.activity.routeReason),
+        routeReason: redactSecretsFromJsonlValue(input.activity.routeReason),
         status: input.activity.status,
         stream: input.activity.stream,
         virtualModelName: input.activity.virtualModelName,
@@ -265,7 +265,7 @@ export function buildWebhookEventExportRecords(input: {
       fallback: {
         attemptOrder: fallback.attemptOrder,
         errorCode: fallback.errorCode,
-        errorMessage: redactWebhookExportValue(fallback.errorMessage) as string | null,
+        errorMessage: redactSecretsFromJsonlValue(fallback.errorMessage) as string | null,
         failedBeforeFirstByte: fallback.failedBeforeFirstByte,
         id: fallback.id,
         providerKey: fallback.providerKey,
@@ -284,7 +284,7 @@ export function buildWebhookEventExportRecords(input: {
       error: {
         code: input.activity.errorCode,
         httpStatus: input.activity.httpStatus,
-        message: redactWebhookExportValue(input.activity.errorMessage) as string | null,
+        message: redactSecretsFromJsonlValue(input.activity.errorMessage) as string | null,
       },
       eventType: "error",
       occurredAt: (input.activity.completedAt ?? input.activity.startedAt).toISOString(),
@@ -294,10 +294,6 @@ export function buildWebhookEventExportRecords(input: {
   }
 
   return records;
-}
-
-export function redactWebhookExportValue(value: unknown): unknown {
-  return redactSecretsFromJsonlValue(value);
 }
 
 function normalizeWebhookEventExportPayload(

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export type NotificationChannelType = "webhook";
 

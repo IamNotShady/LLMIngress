@@ -1,4 +1,10 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import {
+  countEnabledWebhookNotificationChannels,
+  notificationAlertAlreadyQueued,
+  readObject,
+  readPositiveIntegerEnv,
+} from "./worker-alert-utils.ts";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 import { queueNotificationEvent } from "./worker-notification-dispatcher.ts";
 
@@ -74,7 +80,7 @@ export async function evaluateBudgetThresholdAlerts(
   const payload = readBudgetThresholdAlertPayload(options.payload);
   const now = options.now?.() ?? new Date();
   const candidates = await readBudgetThresholdCandidates(options.databaseUrl, now);
-  const enabledChannelCount = await readEnabledNotificationChannelCount(options.databaseUrl);
+  const enabledChannelCount = await countEnabledWebhookNotificationChannels(options.databaseUrl);
   const result: BudgetThresholdAlertsResult = {
     evaluatedBudgetCount: candidates.length,
     notificationEventCount: 0,
@@ -99,7 +105,13 @@ export async function evaluateBudgetThresholdAlerts(
         usageRatio,
         usedCostUsd,
       });
-      if (await budgetThresholdAlertAlreadyQueued(options.databaseUrl, event.payload.alertKey)) {
+      if (
+        await notificationAlertAlreadyQueued({
+          alertKey: event.payload.alertKey,
+          databaseUrl: options.databaseUrl,
+          eventType: "budget_threshold",
+        })
+      ) {
         result.skippedDuplicateAlertCount += 1;
         continue;
       }
@@ -238,45 +250,6 @@ function rowToBudgetThresholdCandidate(row: BudgetThresholdCandidateRow): Budget
   };
 }
 
-async function readEnabledNotificationChannelCount(databaseUrl?: string): Promise<number> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    const result = await client.query<{ count: string }>(
-      "select count(*)::text as count from notification_channels where enabled = true and channel_type = 'webhook'",
-    );
-    return Number(result.rows[0]?.count ?? 0);
-  } finally {
-    await client.end();
-  }
-}
-
-async function budgetThresholdAlertAlreadyQueued(
-  databaseUrl: string | undefined,
-  alertKey: string,
-): Promise<boolean> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    const result = await client.query<{ exists: boolean }>(
-      `
-        select exists (
-          select 1
-          from notification_events
-          where event_type = 'budget_threshold'
-            and payload ->> 'alertKey' = $1
-        ) as exists
-      `,
-      [alertKey],
-    );
-    return result.rows[0]?.exists ?? false;
-  } finally {
-    await client.end();
-  }
-}
-
 function readThresholdRatiosEnv(value: string | undefined, defaultValue: number[]): number[] {
   if (value === undefined) {
     return defaultValue;
@@ -323,29 +296,6 @@ function normalizeThresholdRatios(value: unknown, label: string): number[] {
   });
 
   return thresholds.sort((left, right) => left - right);
-}
-
-function readPositiveIntegerEnv(
-  value: string | undefined,
-  defaultValue: number,
-  name: string,
-): number {
-  if (value === undefined || value.trim() === "") {
-    return defaultValue;
-  }
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive integer.`);
-  }
-  return parsed;
-}
-
-function readObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return value as Record<string, unknown>;
 }
 
 function roundRatio(value: number): number {

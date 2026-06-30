@@ -1,15 +1,15 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { createSecretEncryption } from "@llmingress/security/secret-encryption";
-import { expect, test } from "@playwright/test";
-import { Client } from "pg";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
 import {
   createPeriodicScheduler,
   type PeriodicTaskDefinition,
-} from "../../apps/worker/src/periodic-scheduler";
-import { createProviderConnectivityCheckJobHandler } from "../../apps/worker/src/provider-connectivity-check";
+} from "@llmingress/db/worker-periodic-scheduler";
+import { createProviderConnectivityCheckJobHandler } from "@llmingress/db/worker-provider-connectivity-check";
+import { createSecretEncryption } from "@llmingress/security/secret-encryption";
+import { expect, test } from "@playwright/test";
+import { Client } from "pg";
 import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { HEALTH_SUMMARY_CHANGED_CHANNEL } from "../../packages/db/src/provider-health";

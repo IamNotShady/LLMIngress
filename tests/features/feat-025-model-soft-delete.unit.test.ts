@@ -1,6 +1,6 @@
+import { planProviderModelRefresh } from "@llmingress/db/worker-model-refresh";
 import { describe, expect, it } from "vitest";
 import { buildRoutePolicyWarnings } from "../../apps/console/src/server/route-policies";
-import { planProviderModelRefresh } from "../../apps/worker/src/model-refresh";
 
 describe("feat-025 model availability soft delete", () => {
   it("marks a missing referenced model unavailable and routing-visible", () => {

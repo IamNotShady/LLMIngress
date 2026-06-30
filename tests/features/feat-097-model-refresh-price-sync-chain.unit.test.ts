@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
 import {
   buildChainedConnectivityCheckJobPayload,
   buildChainedPriceSyncJobPayload,
   isUnfinishedChainedConnectivityCheckStatus,
   isUnfinishedChainedPriceSyncStatus,
-} from "../../apps/worker/src/model-refresh";
+} from "@llmingress/db/worker-model-refresh";
+import { describe, expect, it } from "vitest";
 
 describe("feat-097 model refresh price sync chain", () => {
   it("builds a stable provider-scoped price sync payload from refreshed models", () => {

@@ -5,7 +5,7 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type BillingReconciliationJobHandlerOptions = {

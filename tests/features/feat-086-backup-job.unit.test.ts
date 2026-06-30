@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readBackupJobPayload, readBackupSettings } from "@llmingress/db/worker-backup";
+import { createDefaultPeriodicTasks } from "@llmingress/db/worker-periodic-scheduler";
 import { describe, expect, it } from "vitest";
-import { readBackupJobPayload, readBackupSettings } from "../../apps/worker/src/backup";
-import { createDefaultPeriodicTasks } from "../../apps/worker/src/periodic-scheduler";
 
 const root = resolve(import.meta.dirname, "../..");
 

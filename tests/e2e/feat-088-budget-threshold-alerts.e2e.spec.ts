@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createBudgetThresholdAlertsJobHandler } from "@llmingress/db/worker-budget-threshold-alerts";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
+import { createPostgresPeriodicScheduler } from "@llmingress/db/worker-periodic-scheduler";
 import { expect, test } from "@playwright/test";
 import {
   createNotificationChannel,
   normalizeNotificationChannelFormInput,
 } from "../../apps/console/src/server/notification-channels";
-import { createBudgetThresholdAlertsJobHandler } from "../../apps/worker/src/budget-threshold-alerts";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createNotificationDispatchJobHandler } from "../../apps/worker/src/notification-dispatcher";
-import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("scheduled budget threshold evaluator uses configurable threshold and emits webhook notifications near budget limit", async () => {

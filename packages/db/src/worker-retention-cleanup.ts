@@ -1,6 +1,6 @@
 import { unlink } from "node:fs/promises";
 import { isAbsolute } from "node:path";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type RetentionCleanupPayload = {

@@ -32,21 +32,9 @@
       "types": "./src/activity.ts",
       "default": "./src/activity.ts"
     },
-    "./jobs": {
-      "types": "./src/jobs.ts",
-      "default": "./src/jobs.ts"
-    },
     "./health": {
       "types": "./src/health.ts",
       "default": "./src/health.ts"
-    },
-    "./notifications": {
-      "types": "./src/notifications.ts",
-      "default": "./src/notifications.ts"
-    },
-    "./maintenance": {
-      "types": "./src/maintenance.ts",
-      "default": "./src/maintenance.ts"
     },
     "./provider-health": {
       "types": "./src/provider-health.ts",

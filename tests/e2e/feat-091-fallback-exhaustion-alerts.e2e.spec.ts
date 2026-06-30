@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createFallbackExhaustionAlertsJobHandler } from "@llmingress/db/worker-fallback-exhaustion-alerts";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
+import { createPostgresPeriodicScheduler } from "@llmingress/db/worker-periodic-scheduler";
 import { expect, test } from "@playwright/test";
 import {
   createNotificationChannel,
   normalizeNotificationChannelFormInput,
 } from "../../apps/console/src/server/notification-channels";
-import { createFallbackExhaustionAlertsJobHandler } from "../../apps/worker/src/fallback-exhaustion-alerts";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createNotificationDispatchJobHandler } from "../../apps/worker/src/notification-dispatcher";
-import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("scheduled fallback exhaustion evaluator detects exhausted chains and notifies with activity context", async () => {

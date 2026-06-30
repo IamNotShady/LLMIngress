@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   enrichListedProviderModels,
   filterRefreshableListedProviderModels,
   planProviderModelRefresh,
-} from "../../apps/worker/src/model-refresh";
+} from "@llmingress/db/worker-model-refresh";
+import { describe, expect, it } from "vitest";
 import {
   buildProviderModelListRequest,
   fetchListedProviderModels,

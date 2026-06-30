@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
+import { createPostgresPeriodicScheduler } from "@llmingress/db/worker-periodic-scheduler";
+import { createProviderFailureAlertsJobHandler } from "@llmingress/db/worker-provider-failure-alerts";
 import { expect, test } from "@playwright/test";
 import {
   createNotificationChannel,
   normalizeNotificationChannelFormInput,
 } from "../../apps/console/src/server/notification-channels";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createNotificationDispatchJobHandler } from "../../apps/worker/src/notification-dispatcher";
-import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
-import { createProviderFailureAlertsJobHandler } from "../../apps/worker/src/provider-failure-alerts";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("scheduled provider failure evaluator detects consecutive health failures and notifies", async () => {

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createModelRefreshJobHandler } from "@llmingress/db/worker-model-refresh";
+import { createPriceSyncJobHandler } from "@llmingress/db/worker-price-sync";
 import { expect, test } from "@playwright/test";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
-import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
 import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { enqueueProviderModelRefreshJob } from "../../packages/db/src/provider-jobs";

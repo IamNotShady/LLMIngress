@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import {
+  createNotificationDispatchJobHandler,
+  queueNotificationEvent,
+} from "@llmingress/db/worker-notification-dispatcher";
 import { expect, test } from "@playwright/test";
 import {
   createNotificationChannel,
   listNotificationChannels,
   normalizeNotificationChannelFormInput,
 } from "../../apps/console/src/server/notification-channels";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import {
-  createNotificationDispatchJobHandler,
-  queueNotificationEvent,
-} from "../../apps/worker/src/notification-dispatcher";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("notification channels queue send retry and audit webhook deliveries", async () => {

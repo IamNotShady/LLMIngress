@@ -1,5 +1,12 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
-import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import {
+  countEnabledWebhookNotificationChannels,
+  notificationAlertAlreadyQueued,
+  readObject,
+  readPositiveIntegerEnv,
+  readPositiveIntegerPayload,
+} from "./worker-alert-utils.ts";
+import type { JobHandler } from "./worker-job-runner.ts";
 import { queueNotificationEvent } from "./worker-notification-dispatcher.ts";
 
 export type FallbackExhaustionAlertSettings = {
@@ -93,7 +100,7 @@ export async function evaluateFallbackExhaustionAlerts(
       windowEnd: now,
       windowStart,
     }),
-    readEnabledNotificationChannelCount(options.databaseUrl),
+    countEnabledWebhookNotificationChannels(options.databaseUrl),
   ]);
   const result: FallbackExhaustionAlertsResult = {
     evaluatedFailedRequestCount,
@@ -106,7 +113,13 @@ export async function evaluateFallbackExhaustionAlerts(
 
   for (const candidate of candidates) {
     const event = buildFallbackExhaustionNotificationEvent(candidate, payload.windowMs);
-    if (await fallbackExhaustionAlertAlreadyQueued(options.databaseUrl, event.payload.alertKey)) {
+    if (
+      await notificationAlertAlreadyQueued({
+        alertKey: event.payload.alertKey,
+        databaseUrl: options.databaseUrl,
+        eventType: "fallback_exhaustion",
+      })
+    ) {
       result.skippedDuplicateAlertCount += 1;
       continue;
     }
@@ -154,7 +167,12 @@ export function readFallbackExhaustionAlertPayload(
     windowMs:
       rawPayload.windowMs === undefined
         ? settings.windowMs
-        : readPositiveIntegerPayload(rawPayload.windowMs, "windowMs"),
+        : readPositiveIntegerPayload({
+            errorCode: "fallback_exhaustion_alerts_invalid_payload",
+            label: "Fallback exhaustion alert",
+            name: "windowMs",
+            value: rawPayload.windowMs,
+          }),
   };
 }
 
@@ -286,76 +304,4 @@ function rowToFallbackExhaustionCandidate(
     status: row.status,
     virtualModelId: row.virtual_model_id,
   };
-}
-
-async function readEnabledNotificationChannelCount(databaseUrl?: string): Promise<number> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    const result = await client.query<{ count: string }>(
-      "select count(*)::text as count from notification_channels where enabled = true and channel_type = 'webhook'",
-    );
-    return Number(result.rows[0]?.count ?? 0);
-  } finally {
-    await client.end();
-  }
-}
-
-async function fallbackExhaustionAlertAlreadyQueued(
-  databaseUrl: string | undefined,
-  alertKey: string,
-): Promise<boolean> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    const result = await client.query<{ exists: boolean }>(
-      `
-        select exists (
-          select 1
-          from notification_events
-          where event_type = 'fallback_exhaustion'
-            and payload ->> 'alertKey' = $1
-        ) as exists
-      `,
-      [alertKey],
-    );
-    return result.rows[0]?.exists ?? false;
-  } finally {
-    await client.end();
-  }
-}
-
-function readPositiveIntegerEnv(
-  value: string | undefined,
-  defaultValue: number,
-  name: string,
-): number {
-  if (value === undefined || value.trim() === "") {
-    return defaultValue;
-  }
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive integer.`);
-  }
-  return parsed;
-}
-
-function readPositiveIntegerPayload(value: unknown, name: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new JobHandlerError(
-      "fallback_exhaustion_alerts_invalid_payload",
-      `Fallback exhaustion alert payload ${name} must be a positive integer.`,
-    );
-  }
-  return value;
-}
-
-function readObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return value as Record<string, unknown>;
 }

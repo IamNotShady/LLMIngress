@@ -2,13 +2,21 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-30 (feat-123 Gateway Ponytail Cleanup)
-**Active Feature:** none - feat-123 complete
-**Branch:** `codex/feat-123-gateway-ponytail-cleanup`
+**Last Updated:** 2026-06-30 (feat-124 Worker Ponytail Cleanup)
+**Active Feature:** none - feat-124 complete
+**Branch:** `codex/feat-124-worker-ponytail-cleanup`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-124 — Worker Ponytail Cleanup (passing)**:
+  - Removed Worker app re-export shims so `apps/worker/src` keeps only `main.ts`, and the app process shell imports db-owned Worker modules directly from `@llmingress/db/worker-*`.
+  - Removed `@llmingress/db` alias subpaths `./jobs`, `./notifications`, and `./maintenance`; internal imports now target the owning db modules directly.
+  - Added internal `worker-alert-utils` and `worker-credential-utils` helpers for repeated Worker-only alert, payload, master-key, encrypted-secret, OAuth-token, and expiry parsing logic.
+  - Removed identity/test-only helpers (`buildNotificationDeliveryPayload`, `redactWebhookExportValue`, `summarizeExpiredBudgetReservationRelease`, `StartWorkerOptions`) plus app-level `[worker] heartbeat` logging while preserving `WORKER_HEARTBEAT_MS` for job runner/scheduler timing.
+  - TDD red observed first: feat-124 unit coverage failed on existing shims, alias exports/imports, and helper leftovers; feat-124 E2E failed because the real Worker process still logged `[worker] heartbeat`.
+  - Verification passed: focused feat-124 unit/E2E, targeted Worker unit regression (24 files / 101 tests), targeted Worker E2E regression (29 tests) across job runner, model refresh, connectivity, scheduler, notifications, alerts, backup, export, retention, price sync, and daily operations, `pnpm run verify`, and final `pnpm run verify:features` re-verifying all 124 passing features. First final `verify:features` attempt hit a feat-064 Console startup flake; the isolated feat-064 rerun passed, and the second full `verify:features` run passed.
 
 - [x] **feat-123 — Gateway Ponytail Cleanup (passing)**:
   - Removed Gateway app shim files under `apps/gateway/src` so the app shell keeps only `main.ts` and `cors.ts`; `main.ts` now imports db-owned Gateway modules directly.

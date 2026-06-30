@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createBackupArtifact } from "@llmingress/db/worker-backup";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
-import { createBackupArtifact } from "../../apps/worker/src/backup";
 import {
   createTestPostgresFixture,
   loadSqlMigrations,

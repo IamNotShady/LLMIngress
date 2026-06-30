@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { redactSecretsFromJsonlValue } from "@llmingress/db/worker-jsonl-export";
 import {
   buildWebhookEventExportRecords,
   createWebhookEventExportJobHandler,
-  redactWebhookExportValue,
-} from "../../apps/worker/src/webhook-export";
+} from "@llmingress/db/worker-webhook-export";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");
@@ -107,7 +107,7 @@ describe("feat-084 webhook event export", () => {
 
   it("redacts webhook export values using the request log redaction rules", () => {
     expect(
-      redactWebhookExportValue({
+      redactSecretsFromJsonlValue({
         apiKey: "sk-webhook-api-secret",
         keepPrefix: "llmi_keep84",
         nested: {

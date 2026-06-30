@@ -1,11 +1,5 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import type { JobHandler } from "./worker-job-runner.ts";
-
-export type ExpiredBudgetReservationRelease = {
-  reservedCostUsd: number;
-  reservedInputTokens: number;
-  reservedOutputTokens: number;
-};
 
 export type StaleReservationCleanupResult = {
   releasedReservationCount: number;
@@ -102,22 +96,6 @@ export async function cleanupStaleBudgetReservations(
   }
 }
 
-export function summarizeExpiredBudgetReservationRelease(
-  reservations: ExpiredBudgetReservationRelease[],
-): StaleReservationCleanupResult {
-  return {
-    releasedReservationCount: reservations.length,
-    releasedReservedCostUsd: roundUsd(
-      reservations.reduce((sum, reservation) => sum + reservation.reservedCostUsd, 0),
-    ),
-    releasedReservedTokens: reservations.reduce(
-      (sum, reservation) =>
-        sum + reservation.reservedInputTokens + reservation.reservedOutputTokens,
-      0,
-    ),
-  };
-}
-
 function cleanupRowToResult(row: CleanupResultRow | undefined): StaleReservationCleanupResult {
   if (!row) {
     return {
@@ -132,8 +110,4 @@ function cleanupRowToResult(row: CleanupResultRow | undefined): StaleReservation
     releasedReservedCostUsd: Number(row.released_reserved_cost_usd),
     releasedReservedTokens: Number(row.released_reserved_tokens),
   };
-}
-
-function roundUsd(value: number): number {
-  return Math.round(value * 100_000_000) / 100_000_000;
 }

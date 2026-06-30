@@ -51,7 +51,7 @@ describe("feat-115 provider subscription OAuth", () => {
   });
 
   it("adds provider_oauth to scheduled backup coverage", () => {
-    const backupSource = readFileSync(resolve(root, "apps/worker/src/backup.ts"), "utf8");
+    const backupSource = readFileSync(resolve(root, "packages/db/src/worker-backup.ts"), "utf8");
 
     expect(backupSource).toContain('"provider_oauth"');
   });
@@ -97,7 +97,7 @@ describe("feat-115 provider subscription OAuth", () => {
       "utf8",
     );
     const oauthServerSource = readFileSync(
-      resolve(root, "apps/console/src/server/provider-oauth.ts"),
+      resolve(root, "packages/db/src/console-provider-oauth.ts"),
       "utf8",
     );
     const dbProviderSource = readFileSync(resolve(root, "packages/db/src/providers.ts"), "utf8");

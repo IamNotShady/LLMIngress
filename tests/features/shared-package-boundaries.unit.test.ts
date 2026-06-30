@@ -36,6 +36,17 @@ describe("shared package boundaries", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("keeps production SQL execution inside @llmingress/db", () => {
+    const offenders = productionSourceRoots.flatMap((root) =>
+      listSourceFiles(join(repoRoot, root)).filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return executesSql(source) || usesLowLevelDbClient(source);
+      }),
+    );
+
+    expect(offenders.map((file) => relative(repoRoot, file))).toEqual([]);
+  });
 });
 
 function listSourceFiles(root: string): string[] {
@@ -57,4 +68,14 @@ function listSourceFiles(root: string): string[] {
 
 function importsPg(source: string): boolean {
   return /\bfrom\s+["']pg["']|\brequire\(["']pg["']\)/.test(source);
+}
+
+function executesSql(source: string): boolean {
+  return /\.query\s*\(/.test(source);
+}
+
+function usesLowLevelDbClient(source: string): boolean {
+  return /\b(PostgresClient|PostgresQueryClient|PostgresQueryResultRow|withPostgresClient)\b/.test(
+    source,
+  );
 }

@@ -65,9 +65,9 @@ describe("feat-112 config soft delete for runtime history", () => {
 
   it("uses soft deletes for Console config deletion", () => {
     const files = [
-      "apps/console/src/server/agents.ts",
-      "apps/console/src/server/virtual-models.ts",
-      "apps/console/src/server/route-policies.ts",
+      "packages/db/src/console-agents.ts",
+      "packages/db/src/console-virtual-models.ts",
+      "packages/db/src/console-route-policies.ts",
     ];
 
     for (const file of files) {
@@ -81,9 +81,9 @@ describe("feat-112 config soft delete for runtime history", () => {
   });
 
   it("filters deleted config from active Gateway reads", () => {
-    const authSource = readFileSync(resolve(root, "apps/gateway/src/auth.ts"), "utf8");
+    const authSource = readFileSync(resolve(root, "packages/db/src/gateway-auth.ts"), "utf8");
     const configReloadSource = readFileSync(
-      resolve(root, "apps/gateway/src/config-reload.ts"),
+      resolve(root, "packages/db/src/gateway-config-reload.ts"),
       "utf8",
     );
 
@@ -100,10 +100,10 @@ describe("feat-112 config soft delete for runtime history", () => {
 
   it("uses request snapshots before joined config labels in history readers", () => {
     for (const file of [
-      "apps/console/src/server/activity.ts",
-      "apps/console/src/server/usage.ts",
-      "apps/worker/src/cost-report-export.ts",
-      "apps/worker/src/jsonl-export.ts",
+      "packages/db/src/console-activity.ts",
+      "packages/db/src/console-usage.ts",
+      "packages/db/src/worker-cost-report-export.ts",
+      "packages/db/src/worker-jsonl-export.ts",
     ]) {
       const source = readFileSync(resolve(root, file), "utf8");
 
@@ -112,7 +112,10 @@ describe("feat-112 config soft delete for runtime history", () => {
       expect(source, file).toContain("provider_model_display_name_snapshot");
     }
 
-    const webhookSource = readFileSync(resolve(root, "apps/worker/src/webhook-export.ts"), "utf8");
+    const webhookSource = readFileSync(
+      resolve(root, "packages/db/src/worker-webhook-export.ts"),
+      "utf8",
+    );
     expect(webhookSource).toContain("virtual_model_name_snapshot");
     expect(webhookSource).toContain("provider_key_snapshot");
     expect(webhookSource).toContain("provider_model_name_snapshot");

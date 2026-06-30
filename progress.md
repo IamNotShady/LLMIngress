@@ -2,13 +2,20 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-27 (feat-120 E2E Frontend Page Coverage Command)
-**Active Feature:** none - feat-120 complete
+**Last Updated:** 2026-06-30 (feat-122 Database SQL Boundary Enforcement)
+**Active Feature:** none - feat-122 complete
 **Branch:** `dev`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-122 — Database SQL Boundary Enforcement (passing)**:
+  - Added a production boundary test that forbids direct SQL execution and low-level Postgres client primitives outside `@llmingress/db` for Console, Gateway, Worker, config, and provider source.
+  - TDD red observed first: `shared-package-boundaries` listed 44 production files using `.query(...)` or low-level Postgres primitives outside `packages/db`.
+  - Migrated DB-backed Console, Gateway, and Worker modules into `packages/db/src` as `console-*`, `gateway-*`, and `worker-*` modules; app source paths are now compatibility re-export shims.
+  - Updated `@llmingress/db` package exports/dependencies/TypeScript settings plus source-contract tests and mocks for the new package-owned SQL boundary.
+  - Verification passed: focused `shared-package-boundaries`; focused feat-112/115/117 regression unit tests; `pnpm run verify` with lint, typecheck, 122 unit files / 473 tests, and build; final `pnpm run verify:features` re-verified all 122 passing features after the optimized E2E batch hit a feat-046 startup failure and the built-in per-feature fallback passed it.
 
 - [x] **E2E Frontend Page Coverage Command (feat-120)**:
   - Added `pnpm run test:e2e:coverage`, routed through `scripts/run-with-env.ts`, for report-only browser-side Console frontend page coverage.

@@ -1,17 +1,17 @@
 import { PassThrough, Readable } from "node:stream";
 import type { ModelTokenPrice } from "@llmingress/billing/price-registry";
 import { describe, expect, it, vi } from "vitest";
-import type { GatewayBudgetReservation } from "../../apps/gateway/src/budgets.js";
+import type { GatewayBudgetReservation } from "../../packages/db/src/gateway-budgets.ts";
 import {
   createGatewayConfigRuntime,
   type GatewayConfigSnapshot,
   type RoutePolicyCandidateRow,
   rowToRoutePolicySnapshots,
-} from "../../apps/gateway/src/config-reload.js";
+} from "../../packages/db/src/gateway-config-reload.ts";
 import {
   executeFallbackChain,
   type FallbackChainCandidate,
-} from "../../apps/gateway/src/fallback-chain.js";
+} from "../../packages/db/src/gateway-fallback-chain.ts";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 import { shippedSqlMigrations } from "../../packages/db/src/migration-status";
 import type { HealthSummaryChangedPayload } from "../../packages/db/src/provider-health.js";
@@ -25,11 +25,11 @@ import {
 
 // ---- module-level mocks for streaming fallback tests ----
 // These are hoisted before any imports by vitest's vi.mock transform.
-vi.mock("../../apps/gateway/src/rate-limits.js", () => ({
+vi.mock("../../packages/db/src/gateway-rate-limits.ts", () => ({
   enforceGatewayRateLimits: vi.fn(),
   releaseGatewayConcurrency: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../apps/gateway/src/budgets.js", () => ({
+vi.mock("../../packages/db/src/gateway-budgets.ts", () => ({
   reserveGatewayBudget: vi.fn(),
   releaseGatewayBudgetReservation: vi.fn().mockResolvedValue(undefined),
   finalizeGatewayBudgetReservation: vi.fn().mockResolvedValue(undefined),
@@ -43,8 +43,9 @@ vi.mock("../../apps/gateway/src/budgets.js", () => ({
     }
   },
 }));
-vi.mock("../../apps/gateway/src/chat-completions.js", async (importActual) => {
-  const actual = await importActual<typeof import("../../apps/gateway/src/chat-completions.js")>();
+vi.mock("../../packages/db/src/gateway-chat-completions.ts", async (importActual) => {
+  const actual =
+    await importActual<typeof import("../../packages/db/src/gateway-chat-completions.ts")>();
   return {
     ...actual,
     attachGatewayProviderCredentials: vi.fn(),
@@ -52,11 +53,12 @@ vi.mock("../../apps/gateway/src/chat-completions.js", async (importActual) => {
     recordGatewayProviderApiKeyLastUsed: vi.fn().mockResolvedValue(undefined),
   };
 });
-vi.mock("../../apps/gateway/src/tracing.js", () => ({
+vi.mock("../../packages/db/src/gateway-tracing.ts", () => ({
   recordGatewayProviderTrace: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../apps/gateway/src/fallback-chain.js", async (importActual) => {
-  const actual = await importActual<typeof import("../../apps/gateway/src/fallback-chain.js")>();
+vi.mock("../../packages/db/src/gateway-fallback-chain.ts", async (importActual) => {
+  const actual =
+    await importActual<typeof import("../../packages/db/src/gateway-fallback-chain.ts")>();
   return {
     ...actual,
     recordFailedAttemptInDatabase: vi.fn().mockResolvedValue(undefined),
@@ -1200,12 +1202,16 @@ describe("streaming fallback", () => {
   // module resolution ordering issues.
 
   it("A returns 429, B returns 200 stream → result ok:true, streamed bytes from B; fetch called A then B", async () => {
-    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
-    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
-    const { attachGatewayProviderCredentials } = await import(
-      "../../apps/gateway/src/chat-completions.js"
+    const { enforceGatewayRateLimits } = await import(
+      "../../packages/db/src/gateway-rate-limits.ts"
     );
-    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
+    const { reserveGatewayBudget } = await import("../../packages/db/src/gateway-budgets.ts");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../packages/db/src/gateway-chat-completions.ts"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../packages/db/src/gateway-streaming.ts"
+    );
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
       concurrencyLease: {
@@ -1268,12 +1274,16 @@ describe("streaming fallback", () => {
   });
 
   it("A returns 400 → result ok:false with 502 statusCode; B not fetched", async () => {
-    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
-    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
-    const { attachGatewayProviderCredentials } = await import(
-      "../../apps/gateway/src/chat-completions.js"
+    const { enforceGatewayRateLimits } = await import(
+      "../../packages/db/src/gateway-rate-limits.ts"
     );
-    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
+    const { reserveGatewayBudget } = await import("../../packages/db/src/gateway-budgets.ts");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../packages/db/src/gateway-chat-completions.ts"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../packages/db/src/gateway-streaming.ts"
+    );
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
       concurrencyLease: {
@@ -1325,12 +1335,16 @@ describe("streaming fallback", () => {
   });
 
   it("single candidate 200 stream → streams normally", async () => {
-    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
-    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
-    const { attachGatewayProviderCredentials } = await import(
-      "../../apps/gateway/src/chat-completions.js"
+    const { enforceGatewayRateLimits } = await import(
+      "../../packages/db/src/gateway-rate-limits.ts"
     );
-    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
+    const { reserveGatewayBudget } = await import("../../packages/db/src/gateway-budgets.ts");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../packages/db/src/gateway-chat-completions.ts"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../packages/db/src/gateway-streaming.ts"
+    );
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
       concurrencyLease: {
@@ -1382,12 +1396,16 @@ describe("streaming fallback", () => {
   });
 
   it("A returns 200 whose stream errors before the first chunk → falls back to B (P1)", async () => {
-    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
-    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
-    const { attachGatewayProviderCredentials } = await import(
-      "../../apps/gateway/src/chat-completions.js"
+    const { enforceGatewayRateLimits } = await import(
+      "../../packages/db/src/gateway-rate-limits.ts"
     );
-    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
+    const { reserveGatewayBudget } = await import("../../packages/db/src/gateway-budgets.ts");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../packages/db/src/gateway-chat-completions.ts"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../packages/db/src/gateway-streaming.ts"
+    );
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
       concurrencyLease: {
@@ -1445,12 +1463,16 @@ describe("streaming fallback", () => {
   });
 
   it("A returns 200 with an empty stream (no chunks) → falls back to B (P1)", async () => {
-    const { enforceGatewayRateLimits } = await import("../../apps/gateway/src/rate-limits.js");
-    const { reserveGatewayBudget } = await import("../../apps/gateway/src/budgets.js");
-    const { attachGatewayProviderCredentials } = await import(
-      "../../apps/gateway/src/chat-completions.js"
+    const { enforceGatewayRateLimits } = await import(
+      "../../packages/db/src/gateway-rate-limits.ts"
     );
-    const { executeGatewayStreamingRequest } = await import("../../apps/gateway/src/streaming.js");
+    const { reserveGatewayBudget } = await import("../../packages/db/src/gateway-budgets.ts");
+    const { attachGatewayProviderCredentials } = await import(
+      "../../packages/db/src/gateway-chat-completions.ts"
+    );
+    const { executeGatewayStreamingRequest } = await import(
+      "../../packages/db/src/gateway-streaming.ts"
+    );
 
     vi.mocked(enforceGatewayRateLimits).mockResolvedValue({
       concurrencyLease: {

@@ -134,6 +134,21 @@ importers:
 
   packages/db:
     dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@llmingress/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@llmingress/provider':
+        specifier: workspace:*
+        version: link:../provider
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../security
       pg:
         specifier: ^8.21.0
         version: 8.21.0

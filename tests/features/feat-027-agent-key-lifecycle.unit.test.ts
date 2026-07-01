@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   buildAgentApiKeyHash,
   generateAgentApiKeyPlaintext,
   prepareAgentApiKeyForStorage,
-} from "../../apps/console/src/server/agents";
+} from "@llmingress/db/console-agents";
+import { describe, expect, it } from "vitest";
 
 describe("feat-027 agent-owned API key", () => {
   it("generates high-entropy Agent API keys and stores only prefix plus hash", () => {

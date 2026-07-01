@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest";
 import {
   buildRoutePolicyHealthWarnings,
   buildRoutePolicyWarnings,
@@ -6,7 +5,8 @@ import {
   filterRoutePolicyEditorProviderModelOptions,
   mergeRoutePolicyEditorProviderModelOptions,
   normalizeRoutePolicyEditorFilters,
-} from "../../apps/console/src/server/route-policies";
+} from "@llmingress/db/console-route-policies";
+import { describe, expect, it } from "vitest";
 
 describe("feat-078 route policy editor enhancements", () => {
   it("normalizes provider and model filters then keeps selected candidates in edit options", () => {

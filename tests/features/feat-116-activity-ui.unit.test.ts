@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import {
   formatConsoleActivityMetadata,
   normalizeConsoleActivityFilters,
-} from "../../apps/console/src/server/activity";
+} from "@llmingress/db/console-activity";
+import { describe, expect, it } from "vitest";
 
 describe("feat-116 activity reference UI", () => {
   it("normalizes reference Activity filters for server-side querying", () => {

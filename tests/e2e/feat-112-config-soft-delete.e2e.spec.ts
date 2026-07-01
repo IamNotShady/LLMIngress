@@ -1,12 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { getConsoleActivityDetail } from "@llmingress/db/console-activity";
+import { deleteAgent, listAgents } from "@llmingress/db/console-agents";
+import { deleteRoutePolicy } from "@llmingress/db/console-route-policies";
+import { deleteVirtualModel, listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { expect, test } from "@playwright/test";
-import { getConsoleActivityDetail } from "../../apps/console/src/server/activity";
-import { deleteAgent, listAgents } from "../../apps/console/src/server/agents";
-import { deleteRoutePolicy } from "../../apps/console/src/server/route-policies";
-import {
-  deleteVirtualModel,
-  listVirtualModels,
-} from "../../apps/console/src/server/virtual-models";
 import {
   completeGatewayRequestActivity,
   createGatewayRequestActivity,

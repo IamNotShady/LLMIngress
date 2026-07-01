@@ -10,11 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@llmingress/billing": "workspace:*",
     "@llmingress/config": "workspace:*",
-    "@llmingress/db": "workspace:*",
-    "@llmingress/observability": "workspace:*",
-    "@llmingress/provider": "workspace:*",
-    "@llmingress/security": "workspace:*"
+    "@llmingress/db": "workspace:*"
   }
 }

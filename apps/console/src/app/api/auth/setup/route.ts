@@ -1,5 +1,5 @@
+import { createAdminPassword } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
-import { createAdminPassword } from "../../../../server/auth";
 
 export const runtime = "nodejs";
 

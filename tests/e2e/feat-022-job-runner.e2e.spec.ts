@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createPostgresJobRunner, JobHandlerError } from "@llmingress/db/worker-job-runner";
 import { expect, test } from "@playwright/test";
-import { createPostgresJobRunner, JobHandlerError } from "../../apps/worker/src/job-runner";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("worker leases job wakes on notify retries with backoff and records result once", async () => {

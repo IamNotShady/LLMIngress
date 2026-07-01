@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
-import { createDefaultPeriodicTasks } from "../../apps/worker/src/periodic-scheduler";
+import { createDefaultPeriodicTasks } from "@llmingress/db/worker-periodic-scheduler";
 import {
   createProviderFailureAlertsJobHandler,
   readProviderFailureAlertPayload,
   readProviderFailureAlertSettings,
-} from "../../apps/worker/src/provider-failure-alerts";
+} from "@llmingress/db/worker-provider-failure-alerts";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");

@@ -1,10 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server";
 import {
   deleteAgentLimitRules,
   normalizeAgentLimitFormInput,
   saveAgentLimitRules,
-} from "../../../server/agent-limits";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
+} from "@llmingress/db/console-agent-limits";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
+import { type NextRequest, NextResponse } from "next/server";
+import { readRequiredText, readText } from "../_form";
 
 export const runtime = "nodejs";
 
@@ -31,10 +32,10 @@ export async function POST(request: NextRequest) {
     await saveAgentLimitRules({
       limits: normalizeAgentLimitFormInput({
         agentId,
-        alertThresholdPercent: readOptionalText(form, "alertThresholdPercent"),
+        alertThresholdPercent: readText(form, "alertThresholdPercent"),
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
-        concurrency: readOptionalText(form, "concurrency"),
+        concurrency: readText(form, "concurrency"),
         rpm: readRequiredText(form, "rpm"),
         tokenLimit: readRequiredText(form, "tokenLimit"),
         tpm: readRequiredText(form, "tpm"),
@@ -50,17 +51,4 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-}
-
-function readRequiredText(form: FormData, name: string, fallbackName?: string): string {
-  const value = form.get(name) ?? (fallbackName ? form.get(fallbackName) : null);
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${name} is required.`);
-  }
-  return value.trim();
-}
-
-function readOptionalText(form: FormData, name: string): string | null {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : null;
 }

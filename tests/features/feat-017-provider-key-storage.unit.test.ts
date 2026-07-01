@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
 import {
   deleteProviderApiKey,
   prepareProviderApiKeyForStorage,
   saveProviderApiKey,
   toProviderApiKeyMetadata,
-} from "../../apps/console/src/server/provider-keys";
+} from "@llmingress/db/console-provider-keys";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   createTestPostgresFixture,
   loadSqlMigrations,

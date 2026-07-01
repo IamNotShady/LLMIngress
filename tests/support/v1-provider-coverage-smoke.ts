@@ -1,4 +1,4 @@
-import { listOpenAICompatibleProviderTemplates } from "../../apps/console/src/server/provider-templates";
+import { listOpenAICompatibleProviderTemplates } from "@llmingress/db/console-provider-templates";
 
 export type V1ProviderCoverageScenarioId =
   | "anthropic"

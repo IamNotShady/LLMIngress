@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   hashAdminPassword,
   sessionCookieName,
   verifyAdminPassword,
-} from "../../apps/console/src/server/auth";
+} from "@llmingress/db/console-auth";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-013 console first run and login", () => {

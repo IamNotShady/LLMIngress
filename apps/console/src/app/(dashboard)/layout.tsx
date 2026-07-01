@@ -1,12 +1,12 @@
-import { cookies } from "next/headers";
-import type { ReactNode } from "react";
-import { readConsoleAuthState, sessionCookieName } from "../../server/auth";
+import { readConsoleAuthState, sessionCookieName } from "@llmingress/db/console-auth";
 import {
   formatGatewayConfigVersion,
   formatGatewayShellStatus,
   isGatewayRuntimeHealthy,
   listConsoleGatewayRuntimeStatuses,
-} from "../../server/runtime";
+} from "@llmingress/db/console-runtime";
+import { cookies } from "next/headers";
+import type { ReactNode } from "react";
 import { FirstRunSetup, Login } from "../_components/auth-screens";
 import { Sidebar } from "../_components/sidebar";
 import { Topbar } from "../_components/topbar";

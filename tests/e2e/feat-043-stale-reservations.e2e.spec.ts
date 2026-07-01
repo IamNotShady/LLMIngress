@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createStaleReservationCleanupJobHandler } from "@llmingress/db/worker-stale-reservations";
 import { expect, test } from "@playwright/test";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createStaleReservationCleanupJobHandler } from "../../apps/worker/src/stale-reservations";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("cleanup releases expired reservations keeps active reservations and reports count", async () => {

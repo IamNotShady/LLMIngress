@@ -2,19 +2,19 @@ import { randomUUID } from "node:crypto";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getConsoleUsageSummary } from "@llmingress/db/console-usage";
+import { createBackupJobHandler } from "@llmingress/db/worker-backup";
+import { evaluateBudgetThresholdAlerts } from "@llmingress/db/worker-budget-threshold-alerts";
+import { createCostReportExportJobHandler } from "@llmingress/db/worker-cost-report-export";
+import { evaluateFallbackExhaustionAlerts } from "@llmingress/db/worker-fallback-exhaustion-alerts";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createJsonlRequestLogExportJobHandler } from "@llmingress/db/worker-jsonl-export";
+import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
+import { evaluateProviderFailureAlerts } from "@llmingress/db/worker-provider-failure-alerts";
+import { evaluateRateLimitAlerts } from "@llmingress/db/worker-rate-limit-alerts";
+import { createRetentionCleanupJobHandler } from "@llmingress/db/worker-retention-cleanup";
+import { createWebhookEventExportJobHandler } from "@llmingress/db/worker-webhook-export";
 import { expect, test } from "@playwright/test";
-import { getConsoleUsageSummary } from "../../apps/console/src/server/usage";
-import { createBackupJobHandler } from "../../apps/worker/src/backup";
-import { evaluateBudgetThresholdAlerts } from "../../apps/worker/src/budget-threshold-alerts";
-import { createCostReportExportJobHandler } from "../../apps/worker/src/cost-report-export";
-import { evaluateFallbackExhaustionAlerts } from "../../apps/worker/src/fallback-exhaustion-alerts";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createJsonlRequestLogExportJobHandler } from "../../apps/worker/src/jsonl-export";
-import { createNotificationDispatchJobHandler } from "../../apps/worker/src/notification-dispatcher";
-import { evaluateProviderFailureAlerts } from "../../apps/worker/src/provider-failure-alerts";
-import { evaluateRateLimitAlerts } from "../../apps/worker/src/rate-limit-alerts";
-import { createRetentionCleanupJobHandler } from "../../apps/worker/src/retention-cleanup";
-import { createWebhookEventExportJobHandler } from "../../apps/worker/src/webhook-export";
 import { getPrometheusMetricsDocument } from "../../packages/db/src/gateway-metrics";
 import {
   createTestPostgresFixture,
@@ -22,7 +22,7 @@ import {
   shippedSqlMigrations,
 } from "../../packages/db/src/index";
 import { getMigrationStatusFromDatabase } from "../../packages/db/src/migration-status";
-import { buildOpenTelemetryTracePayload } from "../../packages/observability/src/traces";
+import { buildOpenTelemetryTracePayload } from "../../packages/db/src/traces";
 import { buildV1DailyOperationsSmokePlan } from "../support/v1-daily-operations-smoke";
 
 test("v1 daily operations smoke verifies breakdowns exports alerts metrics traces backup migration retention", async () => {

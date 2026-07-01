@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createPostgresPeriodicScheduler } from "@llmingress/db/worker-periodic-scheduler";
+import { createRetentionCleanupJobHandler } from "@llmingress/db/worker-retention-cleanup";
 import { expect, test } from "@playwright/test";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
-import { createRetentionCleanupJobHandler } from "../../apps/worker/src/retention-cleanup";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("scheduled retention cleanup uses configurable window deletes expired data skips unexpired data and preserves aggregates", async () => {

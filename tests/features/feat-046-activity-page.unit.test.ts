@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
 import {
   formatConsoleActivityCost,
   formatConsoleActivityFallbackAttempts,
   formatConsoleActivityRouteReason,
   formatConsoleActivityTokens,
-} from "../../apps/console/src/server/activity";
+} from "@llmingress/db/console-activity";
+import { describe, expect, it } from "vitest";
 
 describe("feat-046 activity console page", () => {
   it("formats token and cost labels for activity details", () => {

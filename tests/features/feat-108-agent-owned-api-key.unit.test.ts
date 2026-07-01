@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
 import {
   generateAgentApiKeyPlaintext,
   prepareAgentApiKeyForStorage,
-} from "../../apps/console/src/server/agents";
+} from "@llmingress/db/console-agents";
+import { describe, expect, it } from "vitest";
 import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
@@ -43,9 +43,9 @@ describe("feat-108 agent-owned single API key", () => {
 
   it("removes Console multi-key lifecycle surfaces for Agents", () => {
     const consoleSections = readFileSync("apps/console/src/app/_modules/sections.tsx", "utf8");
-    const importExport = readFileSync("apps/console/src/server/import-export.ts", "utf8");
+    const importExport = readFileSync("packages/db/src/console-import-export.ts", "utf8");
 
-    expect(existsSync("apps/console/src/server/agent-api-keys.ts")).toBe(false);
+    expect(existsSync("packages/db/src/console-agent-api-keys.ts")).toBe(false);
     expect(consoleSections).not.toContain("agentApiKeysByAgentId");
     expect(consoleSections).not.toContain("listAgentApiKeyMetadata");
     expect(consoleSections).not.toContain("groupByAgentApiKeyId");

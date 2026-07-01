@@ -149,6 +149,7 @@ vite.config.ts.timestamp-*
 .worktrees/
 .agents/
 .claude/
+.llmingress/
 
 # Playwright output
 test-results/

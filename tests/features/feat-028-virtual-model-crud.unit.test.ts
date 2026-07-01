@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
 import {
   getVirtualModelDeleteDependencyError,
   listVirtualModels,
   normalizeVirtualModelFormInput,
-} from "../../apps/console/src/server/virtual-models";
+} from "@llmingress/db/console-virtual-models";
+import { afterEach, describe, expect, it } from "vitest";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { getConsoleAnalyticsSnapshot } from "@llmingress/db/console-analytics";
 import { expect, test } from "@playwright/test";
-import { getConsoleAnalyticsSnapshot } from "../../apps/console/src/server/analytics";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { analyticsIds, seedAnalyticsBackendData } from "../support/analytics-backend";
 

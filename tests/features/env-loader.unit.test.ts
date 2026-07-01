@@ -71,9 +71,7 @@ describe("test environment file loader", () => {
 
     expect(packageJson.scripts.test).toBe("tsx scripts/run-with-env.ts vitest run --coverage");
     expect(packageJson.scripts["test:e2e"]).toBe("tsx scripts/run-with-env.ts playwright test");
-    expect(packageJson.scripts["test:e2e:coverage"]).toBe(
-      "tsx scripts/run-with-env.ts tsx scripts/console-e2e-coverage.ts",
-    );
+    expect(packageJson.scripts).not.toHaveProperty("test:e2e:coverage");
     expect(packageJson.scripts["verify:features"]).toBe(
       "tsx scripts/run-with-env.ts node scripts/verify-features.mjs",
     );

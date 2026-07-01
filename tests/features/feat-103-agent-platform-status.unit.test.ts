@@ -1,5 +1,5 @@
+import { deriveAgentStatus, normalizeAgentFormInput } from "@llmingress/db/console-agents";
 import { describe, expect, it } from "vitest";
-import { deriveAgentStatus, normalizeAgentFormInput } from "../../apps/console/src/server/agents";
 import { buildGatewayAgentRequestLog } from "../../apps/gateway/src/main";
 import { applyGatewayRequestLoggingPolicy } from "../../packages/db/src/gateway-activity-recorder";
 import { loadSqlMigrations } from "../../packages/db/src/index";

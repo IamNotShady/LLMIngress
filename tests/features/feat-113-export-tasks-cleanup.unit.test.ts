@@ -22,10 +22,10 @@ describe("feat-113 export task cleanup", () => {
 
   it("removes export_tasks production reads writes and backup coverage", () => {
     const files = [
-      "apps/worker/src/jsonl-export.ts",
-      "apps/worker/src/cost-report-export.ts",
-      "apps/worker/src/retention-cleanup.ts",
-      "apps/worker/src/backup.ts",
+      "packages/db/src/worker-jsonl-export.ts",
+      "packages/db/src/worker-cost-report-export.ts",
+      "packages/db/src/worker-retention-cleanup.ts",
+      "packages/db/src/worker-backup.ts",
     ];
 
     for (const file of files) {

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
 import {
   formatConsoleUsageBreakdownStats,
   formatConsoleUsageCost,
   getConsoleUsageSummary,
-} from "../../apps/console/src/server/usage";
+} from "@llmingress/db/console-usage";
+import { afterEach, describe, expect, it } from "vitest";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;

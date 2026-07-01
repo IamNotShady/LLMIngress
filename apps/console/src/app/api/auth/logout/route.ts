@@ -1,5 +1,5 @@
+import { deleteConsoleSession, sessionCookieName } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
-import { deleteConsoleSession, sessionCookieName } from "../../../../server/auth";
 
 export const runtime = "nodejs";
 

@@ -7,13 +7,6 @@ test("usage & cost page renders reference filters, KPI cards, charts, savings, a
   browser,
 }) => {
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
-    await page.addInitScript(() => {
-      const usageWindow = window as unknown as { __usageDatePickerCalls?: string[] };
-      usageWindow.__usageDatePickerCalls = [];
-      HTMLInputElement.prototype.showPicker = function showPickerSpy() {
-        usageWindow.__usageDatePickerCalls?.push(this.id);
-      };
-    });
     await page.goto(`${baseUrl}/usage`);
 
     await expect(page.getByRole("heading", { level: 1, name: "Usage & Cost" })).toBeVisible();
@@ -21,14 +14,8 @@ test("usage & cost page renders reference filters, KPI cards, charts, savings, a
     for (const label of ["Start date", "End date", "Agent", "Virtual Model", "Provider"]) {
       await expect(page.getByLabel(label, { exact: true })).toBeVisible();
     }
-    await page.getByLabel("Start date", { exact: true }).click();
-    await expect
-      .poll(async () =>
-        page.evaluate(
-          () => (window as unknown as { __usageDatePickerCalls?: string[] }).__usageDatePickerCalls,
-        ),
-      )
-      .toContain("usage-date-from");
+    await expect(page.getByLabel("Start date", { exact: true })).toHaveAttribute("type", "date");
+    await expect(page.getByLabel("End date", { exact: true })).toHaveAttribute("type", "date");
 
     // KPI tiles (scoped to stat-card labels — savings is also repeated in the side panel).
     for (const label of [
@@ -72,31 +59,21 @@ test("usage & cost page renders reference filters, KPI cards, charts, savings, a
   });
 });
 
-test("usage date filters show a calendar popover when native date picker is unavailable", async ({
-  browser,
-}) => {
+test("usage date filters use native date inputs", async ({ browser }) => {
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(HTMLInputElement.prototype, "showPicker", {
-        configurable: true,
-        value: undefined,
-      });
-    });
     await page.goto(`${baseUrl}/usage`);
 
     const startDateInput = page.getByLabel("Start date", { exact: true });
-    await startDateInput.click();
+    const endDateInput = page.getByLabel("End date", { exact: true });
+    await expect(startDateInput).toHaveAttribute("type", "date");
+    await expect(endDateInput).toHaveAttribute("type", "date");
 
-    const picker = page.getByRole("dialog", { name: "Start date calendar" });
-    await expect(picker).toBeVisible();
+    await startDateInput.fill("2026-06-01");
+    await endDateInput.fill("2026-06-30");
+    await page.getByRole("button", { name: "Apply" }).click();
 
-    const firstDateButton = picker.locator(".date-picker-day").first();
-    const selectedDate = await firstDateButton.getAttribute("data-date");
-    expect(selectedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    await firstDateButton.click();
-
-    await expect(startDateInput).toHaveValue(selectedDate ?? "");
-    await expect(picker).toBeHidden();
+    await expect(page).toHaveURL(/dateFrom=2026-06-01/);
+    await expect(page).toHaveURL(/dateTo=2026-06-30/);
   });
 });
 

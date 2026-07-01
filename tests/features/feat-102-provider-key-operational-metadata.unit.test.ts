@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import {
   formatProviderApiKeyTestStatusLabel,
   toProviderApiKeyMetadata,
-} from "../../apps/console/src/server/provider-keys";
+} from "@llmingress/db/console-provider-keys";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-102 provider key operational metadata", () => {

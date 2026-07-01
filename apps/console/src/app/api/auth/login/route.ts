@@ -1,9 +1,9 @@
-import { type NextRequest, NextResponse } from "next/server";
 import {
   getSessionCookieOptions,
   loginConsoleAdmin,
   sessionCookieName,
-} from "../../../../server/auth";
+} from "@llmingress/db/console-auth";
+import { type NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 

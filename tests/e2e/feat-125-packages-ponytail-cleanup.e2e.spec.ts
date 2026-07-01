@@ -42,7 +42,7 @@ test("package cleanup keeps supported subpaths and rejects removed private subpa
   `;
 
   await expect(
-    execFileAsync("pnpm", ["--filter", "@llmingress/console", "exec", "tsx", "-e", script], {
+    execFileAsync("pnpm", ["--filter", "@llmingress/db", "exec", "tsx", "-e", script], {
       cwd: process.cwd(),
     }),
   ).resolves.toEqual(expect.objectContaining({ stdout: "" }));

@@ -1,11 +1,12 @@
-import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   deleteProviderApiKey,
   readConsoleMasterKeySource,
   saveProviderApiKey,
-} from "../../../server/provider-keys";
+} from "@llmingress/db/console-provider-keys";
+import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
+import { type NextRequest, NextResponse } from "next/server";
+import { readNumber, readRequiredText, readText } from "../_form";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const form = await request.formData();
-    const action = readOptionalText(form, "action") ?? "save";
+    const action = readText(form, "action") ?? "save";
 
     if (action === "delete") {
       const providerApiKeyId = readRequiredText(form, "providerApiKeyId");
@@ -31,10 +32,10 @@ export async function POST(request: NextRequest) {
     const providerId = readRequiredText(form, "providerId");
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
-      label: readOptionalText(form, "label"),
+      label: readText(form, "label"),
       masterKeySource: readConsoleMasterKeySource(),
       plaintext,
-      priority: readOptionalNumber(form, "priority"),
+      priority: readNumber(form, "priority"),
       providerId,
     });
     await enqueueProviderConnectivityCheckJob({
@@ -62,27 +63,6 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-}
-
-function readOptionalText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  if (typeof value !== "string" || !value.trim()) {
-    return undefined;
-  }
-  return value.trim();
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = form.get(name);
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${name} is required.`);
-  }
-  return value.trim();
-}
-
-function readOptionalNumber(form: FormData, name: string): number | undefined {
-  const value = readOptionalText(form, name);
-  return value === undefined ? undefined : Number(value);
 }
 
 function renderOneTimeProviderKeyPage(input: {

@@ -30,11 +30,11 @@ describe("feat-111 request costs savings schema cleanup", () => {
   it("removes request_savings production reads and writes", () => {
     const files = [
       "packages/db/src/gateway-usage-recorder.ts",
-      "apps/console/src/server/analytics.ts",
-      "apps/console/src/server/usage.ts",
-      "apps/worker/src/billing-reconciliation.ts",
-      "apps/worker/src/cost-report-export.ts",
-      "apps/worker/src/backup.ts",
+      "packages/db/src/console-analytics.ts",
+      "packages/db/src/console-usage.ts",
+      "packages/db/src/worker-billing-reconciliation.ts",
+      "packages/db/src/worker-cost-report-export.ts",
+      "packages/db/src/worker-backup.ts",
     ];
 
     for (const file of files) {

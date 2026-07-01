@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
 import {
   getConsoleAnalyticsSnapshot,
   normalizeConsoleAnalyticsInput,
-} from "../../apps/console/src/server/analytics";
+} from "@llmingress/db/console-analytics";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   createTestPostgresFixture,
   loadSqlMigrations,

@@ -26,10 +26,10 @@ describe("feat-074 billing reconciliation job", () => {
 
   it("does not write reconciliation runs or item ledgers", () => {
     const handlerSource = readFileSync(
-      resolve(root, "apps/worker/src/billing-reconciliation.ts"),
+      resolve(root, "packages/db/src/worker-billing-reconciliation.ts"),
       "utf8",
     );
-    const backupSource = readFileSync(resolve(root, "apps/worker/src/backup.ts"), "utf8");
+    const backupSource = readFileSync(resolve(root, "packages/db/src/worker-backup.ts"), "utf8");
 
     expect(handlerSource).not.toContain("billing_reconciliation_runs");
     expect(handlerSource).not.toContain("billing_reconciliation_items");
@@ -39,7 +39,7 @@ describe("feat-074 billing reconciliation job", () => {
 
   it("builds provider and price-data reconciliation updates", async () => {
     const { buildBillingReconciliationUpdate } = await import(
-      "../../apps/worker/src/billing-reconciliation"
+      "@llmingress/db/worker-billing-reconciliation"
     );
 
     expect(

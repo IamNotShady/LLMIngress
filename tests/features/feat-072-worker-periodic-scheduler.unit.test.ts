@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   createPeriodicScheduler,
   type PeriodicSchedulerStore,
   type PeriodicTaskDefinition,
-} from "../../apps/worker/src/periodic-scheduler";
+} from "@llmingress/db/worker-periodic-scheduler";
+import { describe, expect, it } from "vitest";
 
 describe("feat-072 worker periodic scheduler", () => {
   it("enqueues due tasks and skips tasks before their first due time", async () => {

@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import {
   getAgentDeleteDependencyError,
   normalizeAgentFormInput,
-} from "../../apps/console/src/server/agents";
+} from "@llmingress/db/console-agents";
+import { describe, expect, it } from "vitest";
 
 describe("feat-026 agent CRUD", () => {
   it("normalizes agent form input for persistence", () => {

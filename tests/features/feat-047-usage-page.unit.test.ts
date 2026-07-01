@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   formatConsoleUsageCost,
   formatConsoleUsageTokens,
   parseConsoleUsageWindow,
-} from "../../apps/console/src/server/usage";
+} from "@llmingress/db/console-usage";
+import { describe, expect, it } from "vitest";
 
 describe("feat-047 usage and cost console page", () => {
   it("normalizes selected usage windows", () => {

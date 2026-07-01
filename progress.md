@@ -2,13 +2,23 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-30 (feat-123 Gateway Ponytail Cleanup)
-**Active Feature:** none - feat-123 complete
-**Branch:** `codex/feat-123-gateway-ponytail-cleanup`
+**Last Updated:** 2026-07-01 (feat-126 Safe Ponytail Cleanup)
+**Active Feature:** feat-126 safe cleanup complete
+**Branch:** `codex/feat-126-safe-ponytail-cleanup`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-126 — Safe Ponytail Cleanup (passing)**:
+  - Removed checked-in Worker backup JSON artifacts and added `.llmingress/` to `.gitignore` so new local backups stay local.
+  - Deleted stale one-off planning/handoff docs, the retired `test:e2e:coverage` command and script, the custom Usage `DatePickerInput`, Console/Worker app-layer re-export shims, the one-file `@llmingress/observability` package boundary, unused app direct deps, and unused private `@llmingress/db` gateway subpath exports.
+  - Replaced Usage date filters with native `input[type=date]`, moved tracing helpers into `packages/db`, moved callers/tests to direct `@llmingress/db/*` imports, and centralized Console API form readers in `apps/console/src/app/api/_form.ts`.
+  - Updated `feat-120` to explicitly retire the separate browser-side coverage command; normal coverage remains on `pnpm test` and therefore `pnpm run verify`.
+  - V1 artifact compression was intentionally deferred; no schema or migration changes were made.
+  - TDD red observed first: feat-126 unit failed on every cleanup target and feat-126 E2E failed because removed private package imports still resolved.
+  - Focused verification passed: `pnpm exec vitest run tests/features/feat-120-e2e-frontend-coverage.unit.test.ts tests/features/feat-121-console-ui-polish.unit.test.ts tests/features/feat-125-packages-ponytail-cleanup.unit.test.ts tests/features/shared-package-boundaries.unit.test.ts tests/features/env-loader.unit.test.ts tests/features/feat-126-safe-ponytail-cleanup.unit.test.ts` and focused E2E set for feat-120/121/125/126 plus `console-ui-usage`.
+  - Full verification passed: `pnpm run verify` passed with lint, typecheck, 126 unit files / 498 tests, and build; `pnpm run verify:features` re-verified all 126 passing features with the E2E batch passing in 489.3s.
 
 - [x] **feat-123 — Gateway Ponytail Cleanup (passing)**:
   - Removed Gateway app shim files under `apps/gateway/src` so the app shell keeps only `main.ts` and `cors.ts`; `main.ts` now imports db-owned Gateway modules directly.

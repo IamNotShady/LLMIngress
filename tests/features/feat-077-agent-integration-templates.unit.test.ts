@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentConnectionDetails } from "../../apps/console/src/server/agent-integrations";
+import { buildAgentConnectionDetails } from "../../apps/console/src/app/api/agents/connection-details";
 
 describe("feat-077 agent connection details", () => {
   it("builds one normalized connection details group with gateway url api key and model", () => {

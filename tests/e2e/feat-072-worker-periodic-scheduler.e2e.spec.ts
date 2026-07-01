@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { createPostgresPeriodicScheduler } from "@llmingress/db/worker-periodic-scheduler";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
-import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("worker scheduler enqueues due tasks skips not due tasks deduplicates notifies and schedules stale reservation cleanup", async () => {

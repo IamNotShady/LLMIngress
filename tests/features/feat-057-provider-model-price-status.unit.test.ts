@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { listProviderModelOptions } from "@llmingress/db/console-route-policies";
 import { afterEach, describe, expect, it } from "vitest";
-import { listProviderModelOptions } from "../../apps/console/src/server/route-policies";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;

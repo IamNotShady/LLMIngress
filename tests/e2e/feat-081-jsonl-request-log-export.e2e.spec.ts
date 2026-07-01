@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createJsonlRequestLogExportJobHandler } from "@llmingress/db/worker-jsonl-export";
 import { expect, test } from "@playwright/test";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createJsonlRequestLogExportJobHandler } from "../../apps/worker/src/jsonl-export";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("jsonl request log export writes metadata fallback errors without secrets", async () => {

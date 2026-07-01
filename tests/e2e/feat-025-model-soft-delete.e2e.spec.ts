@@ -1,9 +1,9 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createModelRefreshJobHandler } from "@llmingress/db/worker-model-refresh";
 import { expect, type Page, test } from "@playwright/test";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createModelRefreshJobHandler } from "../../apps/worker/src/model-refresh";
 import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { selectRouteCandidate } from "../../packages/domain/src/index";

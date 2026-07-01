@@ -1,5 +1,5 @@
+import { summarizeExpiredBudgetReservationRelease } from "@llmingress/db/worker-stale-reservations";
 import { describe, expect, it } from "vitest";
-import { summarizeExpiredBudgetReservationRelease } from "../../apps/worker/src/stale-reservations";
 
 describe("feat-043 stale reservation cleanup", () => {
   it("summarizes released expired budget reservations for the job result", () => {

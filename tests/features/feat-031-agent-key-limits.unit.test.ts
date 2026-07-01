@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import {
   formatAgentLimitSummaries,
   normalizeAgentLimitFormInput,
-} from "../../apps/console/src/server/agent-limits";
+} from "@llmingress/db/console-agent-limits";
+import { describe, expect, it } from "vitest";
 
 describe("feat-031 Agent limit configuration", () => {
   it("normalizes budget rpm tpm concurrency token and alert threshold form input", () => {

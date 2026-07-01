@@ -30,7 +30,7 @@ describe("feat-101 remove process heartbeats table", () => {
   });
 
   it("removes process_heartbeats from backup and current runtime contracts", () => {
-    const backupSource = readFileSync(resolve(root, "apps/worker/src/backup.ts"), "utf8");
+    const backupSource = readFileSync(resolve(root, "packages/db/src/worker-backup.ts"), "utf8");
     const feat009UnitSource = readFileSync(
       resolve(root, "tests/features/feat-009-runtime-schema.unit.test.ts"),
       "utf8",

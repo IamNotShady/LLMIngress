@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   formatGatewayHeartbeatStatus,
   formatRuntimeErrorEntry,
   formatRuntimeReloadResult,
-} from "../../apps/console/src/server/runtime";
+} from "@llmingress/db/console-runtime";
+import { describe, expect, it } from "vitest";
 
 describe("feat-048 gateway runtime console page", () => {
   it("labels fresh stale and missing gateway heartbeats", () => {

@@ -1,4 +1,4 @@
-import { buildBackupOutputPath, createBackupArtifact, readBackupSettings } from "../apps/worker/src/backup";
+import { buildBackupOutputPath, createBackupArtifact, readBackupSettings } from "@llmingress/db/worker-backup";
 
 type BackupCliOptions = {
   databaseUrl: string;

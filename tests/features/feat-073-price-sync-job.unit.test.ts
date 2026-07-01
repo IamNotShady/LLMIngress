@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createPriceSyncJobHandler } from "@llmingress/db/worker-price-sync";
 import { afterEach, describe, expect, it } from "vitest";
-import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
 import { resolveEffectiveModelTokenPrice } from "../../packages/billing/src/price-registry";
 import {
   createTestPostgresFixture,

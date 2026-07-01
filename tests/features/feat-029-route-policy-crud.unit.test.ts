@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
 import {
   buildRouteReasonMetadata,
   normalizeRoutePolicyFormInput,
-} from "../../apps/console/src/server/route-policies";
+} from "@llmingress/db/console-route-policies";
+import { describe, expect, it } from "vitest";
 
 describe("feat-029 route policy CRUD", () => {
   it("normalizes route policy form input into a single ordered candidate pool", () => {

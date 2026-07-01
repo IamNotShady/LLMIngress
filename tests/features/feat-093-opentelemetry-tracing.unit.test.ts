@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOpenTelemetryTracePayload } from "../../packages/observability/src/traces";
+import { buildOpenTelemetryTracePayload } from "../../packages/db/src/traces";
 
 describe("feat-093 opentelemetry tracing", () => {
   it("builds spans with request job provider model status and error code without prompt or key content", () => {

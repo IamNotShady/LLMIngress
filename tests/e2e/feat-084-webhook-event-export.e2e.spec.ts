@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createWebhookEventExportJobHandler } from "@llmingress/db/worker-webhook-export";
 import { expect, test } from "@playwright/test";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createWebhookEventExportJobHandler } from "../../apps/worker/src/webhook-export";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("webhook event export sends request fallback and error events separately from alerts", async () => {

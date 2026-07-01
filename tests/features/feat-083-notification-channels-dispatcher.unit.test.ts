@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
 import {
   type NotificationChannelFormInput,
   normalizeNotificationChannelFormInput,
-} from "../../apps/console/src/server/notification-channels";
+} from "@llmingress/db/console-notification-channels";
 import {
   buildNotificationDeliveryPayload,
   createNotificationDispatchJobHandler,
-} from "../../apps/worker/src/notification-dispatcher";
+} from "@llmingress/db/worker-notification-dispatcher";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");

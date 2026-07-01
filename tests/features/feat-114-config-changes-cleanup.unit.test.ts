@@ -26,7 +26,7 @@ describe("feat-114 config change cleanup", () => {
       resolve(root, "packages/db/src/config-versions.ts"),
       "utf8",
     );
-    const backupSource = readFileSync(resolve(root, "apps/worker/src/backup.ts"), "utf8");
+    const backupSource = readFileSync(resolve(root, "packages/db/src/worker-backup.ts"), "utf8");
 
     expect(publisherSource).toContain(
       "insert into config_versions (version, source, description, changes)",

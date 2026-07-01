@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
 import {
   createFallbackExhaustionAlertsJobHandler,
   readFallbackExhaustionAlertPayload,
   readFallbackExhaustionAlertSettings,
-} from "../../apps/worker/src/fallback-exhaustion-alerts";
-import { createDefaultPeriodicTasks } from "../../apps/worker/src/periodic-scheduler";
+} from "@llmingress/db/worker-fallback-exhaustion-alerts";
+import { createDefaultPeriodicTasks } from "@llmingress/db/worker-periodic-scheduler";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");

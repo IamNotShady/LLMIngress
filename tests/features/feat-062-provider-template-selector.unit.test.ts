@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   listProviderTemplateSelectorGroups,
   normalizeProviderTemplateFormInput,
-} from "../../apps/console/src/server/provider-templates";
-import { normalizeProviderFormInput } from "../../apps/console/src/server/providers";
+} from "@llmingress/db/console-provider-templates";
+import { normalizeProviderFormInput } from "@llmingress/db/console-providers";
+import { describe, expect, it } from "vitest";
 
 describe("feat-062 provider template selector", () => {
   it("lists subscription, remote API-key, and local template groups with fixed capabilities", () => {

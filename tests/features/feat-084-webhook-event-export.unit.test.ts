@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
 import {
   buildWebhookEventExportRecords,
   createWebhookEventExportJobHandler,
   redactWebhookExportValue,
-} from "../../apps/worker/src/webhook-export";
+} from "@llmingress/db/worker-webhook-export";
+import { describe, expect, it } from "vitest";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const root = resolve(__dirname, "../..");

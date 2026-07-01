@@ -1,14 +1,14 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { createSecretEncryption } from "@llmingress/security/secret-encryption";
-import { expect, test } from "@playwright/test";
 import {
   createAgent,
   listAgents,
   normalizeAgentFormInput,
   updateAgent,
-} from "../../apps/console/src/server/agents";
+} from "@llmingress/db/console-agents";
+import { createSecretEncryption } from "@llmingress/security/secret-encryption";
+import { expect, test } from "@playwright/test";
 import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";

@@ -1,5 +1,5 @@
+import { defaultAgentLimitFormValues } from "@llmingress/db/console-agent-limits";
 import { describe, expect, it } from "vitest";
-import { defaultAgentLimitFormValues } from "../../apps/console/src/server/agent-limits";
 import {
   buildLimitsFallbackRequestId,
   limitsFallbackNames,

@@ -1,5 +1,5 @@
+import { normalizeAgentLimitFormInput } from "@llmingress/db/console-agent-limits";
 import { describe, expect, it } from "vitest";
-import { normalizeAgentLimitFormInput } from "../../apps/console/src/server/agent-limits";
 import {
   createGatewayRateLimitErrorBody,
   evaluateGatewayRateLimitWindow,

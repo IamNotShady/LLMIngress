@@ -1,6 +1,7 @@
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
+import { saveManualPriceOverride } from "@llmingress/db/console-price-overrides";
 import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../../server/auth";
-import { saveManualPriceOverride } from "../../../../server/price-overrides";
+import { readNumber, readText } from "../../_form";
 
 export const runtime = "nodejs";
 
@@ -43,19 +44,4 @@ export async function POST(request: NextRequest) {
     redirectUrl.searchParams.set("model", redirectModel);
   }
   return NextResponse.redirect(redirectUrl, { status: 303 });
-}
-
-function readText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function readNumber(form: FormData, name: string): number | undefined {
-  const value = readText(form, name);
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }

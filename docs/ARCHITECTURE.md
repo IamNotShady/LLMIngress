@@ -954,15 +954,6 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   │       ├── console-auth.ts
 │   │       └── permissions.ts
 │   │
-│   ├── observability/ # 观测事件、指标和导出格式
-│   │   └── src/ # observability package 源码目录
-│   │       ├── activity-events.ts
-│   │       ├── usage-events.ts
-│   │       ├── metrics.ts
-│   │       ├── traces.ts
-│   │       ├── webhook-events.ts
-│   │       └── jsonl-logs.ts
-│   │
 │   ├── jobs/ # 后台任务通用模型和执行抽象
 │   │   └── src/ # jobs package 源码目录
 │   │       ├── job-types.ts
@@ -1005,8 +996,7 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │
 ├── docs/ # 产品、架构和设计文档
 │   ├── PRODUCT.md
-│   ├── ARCHITECTURE.md
-│   └── PLAN.md
+│   └── ARCHITECTURE.md
 │
 ├── scripts/ # 本地开发、迁移和维护脚本
 │   ├── dev.ts

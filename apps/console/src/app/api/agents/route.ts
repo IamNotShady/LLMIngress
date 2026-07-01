@@ -1,10 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { buildAgentConnectionDetails } from "../../../server/agent-integrations";
 import {
   deleteAgentLimitRules,
   normalizeAgentLimitFormInput,
   saveAgentLimitRules,
-} from "../../../server/agent-limits";
+} from "@llmingress/db/console-agent-limits";
 import {
   createAgent,
   deleteAgent,
@@ -12,8 +10,11 @@ import {
   normalizeAgentVirtualModelAccessFormInput,
   updateAgent,
   updateAgentVirtualModelAccess,
-} from "../../../server/agents";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
+} from "@llmingress/db/console-agents";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
+import { type NextRequest, NextResponse } from "next/server";
+import { readRequiredText, readText, readTextValues } from "../_form";
+import { buildAgentConnectionDetails } from "./connection-details";
 
 export const runtime = "nodejs";
 
@@ -132,25 +133,6 @@ async function saveAgentRelatedSettings(input: {
       tpm: readRequiredText(input.form, "tpm"),
     }),
   });
-}
-
-function readText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = readText(form, name);
-  if (!value) {
-    throw new Error(`${name} is required.`);
-  }
-  return value;
-}
-
-function readTextValues(form: FormData, name: string): string[] {
-  return form
-    .getAll(name)
-    .flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
 }
 
 function renderOneTimeAgentResponse(input: {

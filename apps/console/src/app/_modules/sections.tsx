@@ -9,7 +9,7 @@ import {
   formatConsoleActivityRouteReason,
   getConsoleActivityDetail,
   listConsoleActivities,
-} from "../../server/activity";
+} from "@llmingress/db/console-activity";
 import {
   type ConsoleAgentLimit,
   type ConsoleAgentLimitRuntimeSnapshot,
@@ -17,7 +17,7 @@ import {
   formatAgentLimitSummaries,
   listAgentLimitRuntimeSnapshots,
   listAgentLimits,
-} from "../../server/agent-limits";
+} from "@llmingress/db/console-agent-limits";
 import {
   type AgentDerivedStatus,
   type AgentIntegrationPlatform,
@@ -27,28 +27,28 @@ import {
   type ConsoleAgent,
   listAgents,
   listAgentVirtualModelAccess,
-} from "../../server/agents";
-import { getConsoleAnalyticsSnapshot } from "../../server/analytics";
-import { getConsoleSecuritySummary } from "../../server/auth";
+} from "@llmingress/db/console-agents";
+import { getConsoleAnalyticsSnapshot } from "@llmingress/db/console-analytics";
+import { getConsoleSecuritySummary } from "@llmingress/db/console-auth";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
-} from "../../server/notification-channels";
+} from "@llmingress/db/console-notification-channels";
 import {
   type ConsoleProviderHealthSummary,
   listConsoleProviderHealthSummaries,
-} from "../../server/provider-health";
+} from "@llmingress/db/console-provider-health";
 import {
   formatProviderApiKeyTestStatusLabel,
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
-} from "../../server/provider-keys";
+} from "@llmingress/db/console-provider-keys";
 import {
   type ConsoleProviderOAuthConnection,
   listConsoleProviderOAuthConnections,
-} from "../../server/provider-oauth";
-import { listProviderTemplateSelectorGroups } from "../../server/provider-templates";
-import { type ConsoleProvider, listProviders } from "../../server/providers";
+} from "@llmingress/db/console-provider-oauth";
+import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
+import { type ConsoleProvider, listProviders } from "@llmingress/db/console-providers";
 import {
   buildRoutePolicyHealthWarnings,
   type ConsoleProviderModelOption,
@@ -60,7 +60,7 @@ import {
   mergeRoutePolicyEditorProviderModelOptions,
   normalizeRoutePolicyEditorFilters,
   routePolicyStrategies,
-} from "../../server/route-policies";
+} from "@llmingress/db/console-route-policies";
 import {
   type ConsoleGatewayRuntimeStatus,
   formatGatewayConfigVersion,
@@ -68,7 +68,7 @@ import {
   formatGatewayHeartbeatSummary,
   formatRuntimeReloadResult,
   getConsoleRuntimeSnapshot,
-} from "../../server/runtime";
+} from "@llmingress/db/console-runtime";
 import {
   type ConsoleUsageDimensionBreakdown,
   type ConsoleUsageTrendPoint,
@@ -76,17 +76,16 @@ import {
   formatConsoleUsageCost,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
-} from "../../server/usage";
+} from "@llmingress/db/console-usage";
 import {
   type ConsoleVirtualModel,
   listVirtualModelFallbackBreakdown,
   listVirtualModels,
-} from "../../server/virtual-models";
+} from "@llmingress/db/console-virtual-models";
 import { AgentVirtualModelMultiSelect } from "../_components/agent-virtual-model-multi-select";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
-import { DatePickerInput } from "../_components/date-picker-input";
 import { FlatIcon } from "../_components/flat-icon";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
@@ -774,21 +773,16 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <div className="usage-date-range-fields">
             <div className="console-field">
               <label htmlFor="usage-date-from">Start date</label>
-              <DatePickerInput
+              <input
                 id="usage-date-from"
                 name="dateFrom"
                 defaultValue={dateFromValue}
-                pickerLabel="Start date"
+                type="date"
               />
             </div>
             <div className="console-field">
               <label htmlFor="usage-date-to">End date</label>
-              <DatePickerInput
-                id="usage-date-to"
-                name="dateTo"
-                defaultValue={dateToValue}
-                pickerLabel="End date"
-              />
+              <input id="usage-date-to" name="dateTo" defaultValue={dateToValue} type="date" />
             </div>
           </div>
         </fieldset>

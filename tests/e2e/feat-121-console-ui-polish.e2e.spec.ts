@@ -71,15 +71,7 @@ test("console UI polish themes overlays and preserves layout", async ({ browser 
 
       await page.setViewportSize({ height: 720, width: 1280 });
       await page.goto(`${baseUrl}/usage`, { waitUntil: "domcontentloaded" });
-      await page.evaluate(() => {
-        Object.defineProperty(HTMLInputElement.prototype, "showPicker", {
-          configurable: true,
-          value: undefined,
-        });
-      });
-      await page.locator(".date-picker-input input").first().click();
-      await expect(page.getByRole("dialog", { name: "Start date calendar" })).toBeVisible();
-      expect(await readBoxShadow(page, ".date-picker-day")).toBe("none");
+      await expect(page.getByLabel("Start date", { exact: true })).toHaveAttribute("type", "date");
 
       await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
         waitUntil: "domcontentloaded",
@@ -104,13 +96,6 @@ test("console UI polish themes overlays and preserves layout", async ({ browser 
 
 async function readBackgroundColor(page: Page, selector: string): Promise<string> {
   return page.locator(selector).evaluate((element) => getComputedStyle(element).backgroundColor);
-}
-
-async function readBoxShadow(page: Page, selector: string): Promise<string> {
-  return page
-    .locator(selector)
-    .first()
-    .evaluate((element) => getComputedStyle(element).boxShadow);
 }
 
 async function readTransform(page: Page, selector: string): Promise<string> {

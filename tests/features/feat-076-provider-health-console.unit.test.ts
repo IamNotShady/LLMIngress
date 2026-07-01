@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
 import {
   formatProviderHealthFailureCount,
   formatProviderHealthLatestProbe,
   formatProviderHealthStaleStatus,
   formatProviderHealthStatus,
   listConsoleProviderHealthSummaries,
-} from "../../apps/console/src/server/provider-health";
+} from "@llmingress/db/console-provider-health";
+import { afterEach, describe, expect, it } from "vitest";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;

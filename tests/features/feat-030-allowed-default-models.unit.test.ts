@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
 import {
   formatAgentVirtualModelAccess,
   normalizeAgentVirtualModelAccessFormInput,
   normalizeAgentVirtualModelAccessInput,
-} from "../../apps/console/src/server/agents";
+} from "@llmingress/db/console-agents";
+import { describe, expect, it } from "vitest";
 
 describe("feat-030 allowed and default virtual models", () => {
   it("normalizes allowed virtual models and default virtual model form input", () => {

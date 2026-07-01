@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { OpenTelemetrySpanInput } from "../../packages/observability/src/traces";
+import type { OpenTelemetrySpanInput } from "../../packages/db/src/traces";
 
 export type V1DailyOperationsCoverage =
   | "backup"

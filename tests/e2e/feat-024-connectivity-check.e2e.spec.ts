@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
+import { createProviderConnectivityCheckJobHandler } from "@llmingress/db/worker-provider-connectivity-check";
 import { expect, test } from "@playwright/test";
-import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
-import { createProviderConnectivityCheckJobHandler } from "../../apps/worker/src/provider-connectivity-check";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import type { MasterKeySource } from "../../packages/security/src/master-key";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";

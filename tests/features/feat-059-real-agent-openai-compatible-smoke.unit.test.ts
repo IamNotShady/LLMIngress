@@ -1,5 +1,5 @@
+import { defaultAgentLimitFormValues } from "@llmingress/db/console-agent-limits";
 import { describe, expect, it } from "vitest";
-import { defaultAgentLimitFormValues } from "../../apps/console/src/server/agent-limits";
 import { normalizeOpenAIChatCompletionRequest } from "../../packages/db/src/gateway-chat-completions";
 import { buildOpenAIChatCompletionRequestMetadata } from "../../packages/db/src/gateway-request-metadata";
 import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";

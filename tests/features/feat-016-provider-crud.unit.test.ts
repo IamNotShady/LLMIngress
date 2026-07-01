@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
 import {
   createProvider,
   deleteProvider,
   listProviders,
   normalizeProviderFormInput,
-} from "../../apps/console/src/server/providers";
+} from "@llmingress/db/console-providers";
+import { describe, expect, it } from "vitest";
 import {
   createTestPostgresFixture,
   loadSqlMigrations,

@@ -1,5 +1,5 @@
+import { normalizeConsoleActivityFilters } from "@llmingress/db/console-activity";
 import { describe, expect, it } from "vitest";
-import { normalizeConsoleActivityFilters } from "../../apps/console/src/server/activity";
 import {
   buildGatewayResponseMetadata,
   type GatewayActivityCompletion,

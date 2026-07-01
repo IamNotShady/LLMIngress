@@ -11,6 +11,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.16
         version: 2.4.16
+      '@llmingress/db':
+        specifier: workspace:*
+        version: link:packages/db
       '@playwright/test':
         specifier: ^1.60.0
         version: 1.60.0
@@ -38,24 +41,12 @@ importers:
 
   apps/console:
     dependencies:
-      '@llmingress/billing':
-        specifier: workspace:*
-        version: link:../../packages/billing
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@llmingress/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@llmingress/provider':
-        specifier: workspace:*
-        version: link:../../packages/provider
-      '@llmingress/security':
-        specifier: workspace:*
-        version: link:../../packages/security
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -90,24 +81,12 @@ importers:
 
   apps/worker:
     dependencies:
-      '@llmingress/billing':
-        specifier: workspace:*
-        version: link:../../packages/billing
       '@llmingress/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@llmingress/observability':
-        specifier: workspace:*
-        version: link:../../packages/observability
-      '@llmingress/provider':
-        specifier: workspace:*
-        version: link:../../packages/provider
-      '@llmingress/security':
-        specifier: workspace:*
-        version: link:../../packages/security
 
   packages/billing: {}
 
@@ -121,9 +100,6 @@ importers:
       '@llmingress/domain':
         specifier: workspace:*
         version: link:../domain
-      '@llmingress/observability':
-        specifier: workspace:*
-        version: link:../observability
       '@llmingress/provider':
         specifier: workspace:*
         version: link:../provider
@@ -139,8 +115,6 @@ importers:
       '@llmingress/billing':
         specifier: workspace:*
         version: link:../billing
-
-  packages/observability: {}
 
   packages/provider: {}
 

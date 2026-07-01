@@ -1,9 +1,10 @@
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   enqueueProviderModelRefreshJob,
   normalizeProviderModelRefreshInput,
 } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
+import { readText } from "../_form";
 
 export const runtime = "nodejs";
 
@@ -32,9 +33,4 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-}
-
-function readText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }

@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { CONFIG_CHANGED_CHANNEL, createConfigPublisher } from "../../packages/config/src/index";
+import {
+  CONFIG_CHANGED_CHANNEL,
+  createConfigPublisher,
+} from "../../packages/db/src/config-versions";
 
 describe("feat-011 config publisher", () => {
   it("wraps config writes versioning change events and notify in one transaction", async () => {

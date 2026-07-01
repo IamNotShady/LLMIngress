@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildStreamingProviderRequestBody } from "../../apps/gateway/src/streaming";
+import { buildStreamingProviderRequestBody } from "../../packages/db/src/gateway-streaming";
 import {
   buildGatewayUsageCostRecords,
   createGatewayStreamingUsageCollector,
-} from "../../apps/gateway/src/usage-recorder";
+} from "../../packages/db/src/gateway-usage-recorder";
 
 describe("feat-118 stream usage and cost accounting", () => {
   it("parses OpenAI-compatible chat stream final usage", () => {

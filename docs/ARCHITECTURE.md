@@ -986,7 +986,6 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 │   ├── config/ # 配置发布、校验和 runtime settings
 │   │   └── src/ # config package 源码目录
 │   │       ├── config-version.ts
-│   │       ├── config-publisher.ts
 │   │       ├── config-validation.ts
 │   │       ├── dependency-check.ts
 │   │       └── runtime-settings.ts
@@ -1072,7 +1071,7 @@ Agent 协议、Provider 协议、Route Policy、配置发布、配置校验、Po
 - Console 使用 Next.js，优先满足本地管理控制台、表单配置、数据展示和鉴权引导。
 - Background Worker 承载模型发现、价格同步、账单对账、告警通知、日志保留、JSONL / webhook export 和周期性备份任务。
 - PostgreSQL 作为 V1 默认 canonical database，并作为 Gateway、Console、Worker 之间的通信媒介。
-- `packages/config` 提供共享 config publisher；Console 和 Worker 都通过它发布 routing-visible config version。
+- `packages/db/config-versions` 提供共享 config publisher；Console 和 Worker 都通过它发布 routing-visible config version。
 - Config publisher 通过 Postgres `LISTEN/NOTIFY` 唤醒 Gateway 是 fast path，Gateway 周期 reconcile 是 safety path。
 - Gateway 只暴露 Public API；Console 和 Worker 不调用 Gateway 私有控制接口。
 - Console 对 Gateway 的控制反馈是异步最终一致的，以 Postgres 中的 applied config version、heartbeat 和 failure event 为准。

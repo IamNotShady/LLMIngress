@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { categoricalColor } from "./palette";
 
 export type DonutSlice = {
+  id?: string;
   name: string;
   value: number;
   /** Optional explicit color; falls back to the categorical palette. */
@@ -56,10 +57,10 @@ export function DonutBreakdown({
         <span className="donut-ring-graphic" aria-hidden />
       </div>
       <ul className="donut-legend">
-        {colored.map((slice) => {
+        {colored.map((slice, index) => {
           const share = total > 0 ? Math.round((slice.value / total) * 100) : 0;
           return (
-            <li key={slice.name}>
+            <li key={slice.id ?? `${slice.name}:${index}`}>
               <span className="donut-legend-dot" style={{ background: slice.color }} aria-hidden />
               <span className="donut-legend-name">{slice.name}</span>
               <span className="donut-legend-value">

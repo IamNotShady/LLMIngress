@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   executeFallbackChain,
   type FallbackChainCandidate,
-} from "../../apps/gateway/src/fallback-chain";
+} from "../../packages/db/src/gateway-fallback-chain";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-070 provider multi-key failover", () => {

@@ -3,11 +3,7 @@ import {
   enqueueProviderModelRefreshJob,
 } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 import { readConsoleMasterKeySource } from "../../../server/provider-keys";
 import {
   completeProviderOAuthAuthorization,
@@ -19,9 +15,8 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -32,20 +27,18 @@ export async function POST(request: NextRequest) {
     if (action === "complete") {
       const result = await completeProviderOAuthAuthorization({
         callbackInput: readRequiredText(form, "callbackInput"),
-        databaseUrl,
         label: readNullableText(form, "label"),
         masterKeySource: readConsoleMasterKeySource(),
         priority: readOptionalNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      await enqueueProviderModelRefreshJob({ databaseUrl, providerId: result.providerId });
-      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: result.providerId });
+      await enqueueProviderModelRefreshJob({ providerId: result.providerId });
+      await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
       return redirectToProvider(request, result.providerId);
     }
 
     if (action === "delete") {
       const result = await revokeProviderOAuthConnection({
-        databaseUrl,
         masterKeySource: readConsoleMasterKeySource(),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
@@ -54,16 +47,14 @@ export async function POST(request: NextRequest) {
 
     if (action === "enable" || action === "disable") {
       const result = await setProviderOAuthConnectionEnabled({
-        databaseUrl,
         enabled: action === "enable",
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      await enqueueProviderConnectivityCheckJob({ databaseUrl, providerId: result.providerId });
+      await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
       return redirectToProvider(request, result.providerId);
     }
 
     const result = await startProviderOAuthConnection({
-      databaseUrl,
       label: readOptionalText(form, "label"),
       priority: readOptionalNumber(form, "priority"),
       providerId: readRequiredText(form, "providerId"),

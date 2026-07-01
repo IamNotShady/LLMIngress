@@ -3,7 +3,7 @@ import {
   gatewayRequestIdHeader,
   mapGatewayErrorStatus,
   readGatewayErrorCode,
-} from "../../apps/gateway/src/error-mapping";
+} from "../../packages/db/src/gateway-error-mapping";
 
 describe("feat-069 Gateway error mapping and request id trace", () => {
   it("maps auth routing limit and provider errors to stable HTTP statuses", () => {

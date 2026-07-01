@@ -1,3 +1,10 @@
+import {
+  isRecord,
+  isRetryableHttpStatus,
+  joinProviderUrl,
+  readResponseBody,
+} from "./adapter-http.js";
+
 export type NormalizedOllamaChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
@@ -100,10 +107,7 @@ function buildChatPayload(
 }
 
 function buildTemplatePathUrl(baseUrl: string, templatePath: string): string {
-  const url = new URL(baseUrl);
-  const basePath = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${basePath}${templatePath}`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
+  return joinProviderUrl(baseUrl, templatePath);
 }
 
 async function readAdapterResult(response: Response): Promise<OllamaAdapterResult> {
@@ -121,19 +125,6 @@ async function readAdapterResult(response: Response): Promise<OllamaAdapterResul
   };
 }
 
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
-}
-
 function mapProviderError(statusCode: number, body: unknown): OllamaAdapterError {
   const providerError = readProviderError(body);
 
@@ -142,7 +133,7 @@ function mapProviderError(statusCode: number, body: unknown): OllamaAdapterError
     errorCode: providerError.code,
     errorMessage: providerError.message,
     ok: false,
-    retryable: statusCode === 429 || statusCode >= 500,
+    retryable: isRetryableHttpStatus(statusCode),
     statusCode,
   };
 }
@@ -183,8 +174,4 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
   ) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

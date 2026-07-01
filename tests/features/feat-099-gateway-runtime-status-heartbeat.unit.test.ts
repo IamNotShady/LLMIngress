@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createGatewayConfigRuntime } from "../../apps/gateway/src/config-reload";
-import type { GatewayRuntimeStatusEvent } from "../../apps/gateway/src/gateway-runtime-status";
-import type { ConfigChangedNotification } from "../../packages/config/src/index";
+import type { ConfigChangedNotification } from "../../packages/db/src/config-versions";
+import { createGatewayConfigRuntime } from "../../packages/db/src/gateway-config-reload";
+import type { GatewayRuntimeStatusEvent } from "../../packages/db/src/gateway-gateway-runtime-status";
 
 describe("feat-099 gateway runtime status heartbeat", () => {
   it("records a startup event and a reload-succeeded event for each applied config version", async () => {
@@ -25,6 +25,7 @@ describe("feat-099 gateway runtime status heartbeat", () => {
         notify = onNotification;
         return { close: async () => {} };
       },
+      createHealthSummaryChangedListener: async () => ({ close: async () => {} }),
       recordRuntimeStatus: async (event) => {
         events.push(event);
       },

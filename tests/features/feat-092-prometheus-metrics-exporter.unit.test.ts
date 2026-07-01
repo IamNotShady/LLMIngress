@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { getPrometheusMetricsDocument } from "../../apps/gateway/src/metrics";
+import { getPrometheusMetricsDocument } from "../../packages/db/src/gateway-metrics";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;

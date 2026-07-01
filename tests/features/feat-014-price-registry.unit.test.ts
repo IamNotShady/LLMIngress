@@ -3,7 +3,7 @@ import {
   BUILT_IN_PRICE_REGISTRY_VERSION,
   calculateTokenCostUsd,
   resolveModelTokenPrice,
-} from "../../packages/billing/src/index";
+} from "../../packages/billing/src/price-registry";
 
 describe("feat-014 static price registry", () => {
   it("resolves known MVP model input and output token prices from the built-in snapshot", () => {

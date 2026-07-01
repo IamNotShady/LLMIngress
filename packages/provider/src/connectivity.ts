@@ -259,7 +259,12 @@ export function shouldRecordProviderRequestPathHealthFailure(input: {
   }
 
   const errorCode = (input.errorCode ?? "").toLowerCase();
-  if (errorCode === "invalid_request" || errorCode === "invalid_request_error") {
+  if (
+    errorCode === "bad_request" ||
+    errorCode === "bad_request_error" ||
+    errorCode === "invalid_request" ||
+    errorCode === "invalid_request_error"
+  ) {
     return false;
   }
 

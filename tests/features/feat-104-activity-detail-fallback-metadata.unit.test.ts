@@ -3,7 +3,7 @@ import { normalizeConsoleActivityFilters } from "../../apps/console/src/server/a
 import {
   buildGatewayResponseMetadata,
   type GatewayActivityCompletion,
-} from "../../apps/gateway/src/activity-recorder";
+} from "../../packages/db/src/gateway-activity-recorder";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-104 activity detail fallback metadata", () => {

@@ -29,7 +29,7 @@ import {
   listAgentVirtualModelAccess,
 } from "../../server/agents";
 import { getConsoleAnalyticsSnapshot } from "../../server/analytics";
-import { getConsoleDatabaseUrl, getConsoleSecuritySummary } from "../../server/auth";
+import { getConsoleSecuritySummary } from "../../server/auth";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
@@ -144,20 +144,18 @@ const providerCreateChoices = [
 ];
 
 export async function OverviewSection() {
-  const databaseUrl = getConsoleDatabaseUrl();
   const now = new Date();
   const overviewStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const usageSummary = await getConsoleUsageSummary({ databaseUrl, window: "24h" });
+  const usageSummary = await getConsoleUsageSummary({ window: "24h" });
   const overviewAnalytics = await getConsoleAnalyticsSnapshot({
     bucket: "hour",
-    databaseUrl,
     end: now,
     start: overviewStart,
     topLimit: 20,
   });
-  const activities = await listConsoleActivities(databaseUrl);
-  const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
+  const activities = await listConsoleActivities();
+  const runtimeSnapshot = await getConsoleRuntimeSnapshot();
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
   const gateway = runtimeSnapshot.gateways[0] ?? null;
 
   const recentActivities = activities.slice(0, 8);
@@ -527,8 +525,7 @@ const runtimeSecurityNotes = [
 ];
 
 export async function RuntimeSection() {
-  const databaseUrl = getConsoleDatabaseUrl();
-  const runtimeSnapshot = await getConsoleRuntimeSnapshot(databaseUrl);
+  const runtimeSnapshot = await getConsoleRuntimeSnapshot();
   const gateway = runtimeSnapshot.gateways[0] ?? null;
 
   return (
@@ -721,7 +718,6 @@ function formatProviderHealthStatusLabel(status: string): string {
 }
 
 export async function UsageSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const usageWindow = parseConsoleUsageWindow(readSingleSearchParam(searchParams.usageWindow));
   const dateFromParam = readSingleSearchParam(searchParams.dateFrom);
   const dateToParam = readSingleSearchParam(searchParams.dateTo);
@@ -738,7 +734,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
   const [usageSummary, agents, virtualModels, providers] = await Promise.all([
     getConsoleUsageSummary({
       agentId: selectedAgentId,
-      databaseUrl,
       dateFrom: parseUsageDateStart(dateFromValue),
       dateTo: parseUsageDateEndExclusive(dateToValue),
       now,
@@ -746,9 +741,9 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
       virtualModelId: selectedVirtualModelId,
       window: usageWindow,
     }),
-    listAgents(databaseUrl),
-    listVirtualModels(databaseUrl),
-    listProviders(databaseUrl),
+    listAgents(),
+    listVirtualModels(),
+    listProviders(),
   ]);
 
   const failureRate =
@@ -981,7 +976,11 @@ function UsageCostDonut({
   label: string;
 }) {
   const slices = breakdowns
-    .map((breakdown) => ({ name: breakdown.label, value: Number(breakdown.totalCostUsd ?? 0) }))
+    .map((breakdown) => ({
+      id: breakdown.id,
+      name: breakdown.label,
+      value: Number(breakdown.totalCostUsd ?? 0),
+    }))
     .filter((slice) => slice.value > 0)
     .slice(0, 6);
   if (slices.length === 0) {
@@ -1084,7 +1083,6 @@ function formatFailureRate(failureCount: number, requestCount: number): string {
 }
 
 export async function ActivitySection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const page = readPageParam(searchParams);
   const selectedActivityId = readSingleSearchParam(searchParams.activityId);
   const activityRange = parseActivityRange(readSingleSearchParam(searchParams.activityRange));
@@ -1097,16 +1095,16 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
     virtualModelId: readSingleSearchParam(searchParams.virtualModelId),
   };
   const [agents, virtualModels, providers, total, activities] = await Promise.all([
-    listAgents(databaseUrl),
-    listVirtualModels(databaseUrl),
-    listProviders(databaseUrl),
-    countConsoleActivities({ databaseUrl, filters }),
-    listConsoleActivities({ databaseUrl, filters, limit: PAGE_SIZE, page }),
+    listAgents(),
+    listVirtualModels(),
+    listProviders(),
+    countConsoleActivities({ filters }),
+    listConsoleActivities({ filters, limit: PAGE_SIZE, page }),
   ]);
   const selectedListActivity =
     activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
   const selectedDetail = selectedListActivity
-    ? await getConsoleActivityDetail({ activityId: selectedListActivity.id, databaseUrl })
+    ? await getConsoleActivityDetail({ activityId: selectedListActivity.id })
     : null;
   const selectedActivity = selectedDetail?.activity ?? selectedListActivity;
   const view = {
@@ -1375,13 +1373,12 @@ export async function VirtualModelsSection({
 }: {
   searchParams: ConsoleSearchParams;
 }) {
-  const databaseUrl = getConsoleDatabaseUrl();
-  const virtualModels = await listVirtualModels(databaseUrl);
-  const routePolicies = await listRoutePolicies(databaseUrl);
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
+  const virtualModels = await listVirtualModels();
+  const routePolicies = await listRoutePolicies();
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
   const providerModelOptions = orderProviderModelsForConsole(
     filterRoutePolicyEditorHealthyProviderModelOptions(
-      await listProviderModelOptions(databaseUrl),
+      await listProviderModelOptions(),
       providerHealthSummaries,
     ),
   );
@@ -1445,7 +1442,6 @@ export async function VirtualModelsSection({
   );
   const fallbackOverview = selectedVirtualModel
     ? await listVirtualModelFallbackBreakdown({
-        databaseUrl,
         virtualModelId: selectedVirtualModel.id,
       })
     : [];
@@ -1737,15 +1733,14 @@ export async function RoutePoliciesSection({
 }: {
   searchParams: ConsoleSearchParams;
 }) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const routePolicyEditorFilters = normalizeRoutePolicyEditorFilters({
     modelQuery: readSingleSearchParam(searchParams.routeModelFilter),
     providerKey: readSingleSearchParam(searchParams.routeProviderFilter),
   });
-  const virtualModels = await listVirtualModels(databaseUrl);
-  const routePolicies = await listRoutePolicies(databaseUrl);
-  const providerModelOptions = await listProviderModelOptions(databaseUrl);
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
+  const virtualModels = await listVirtualModels();
+  const routePolicies = await listRoutePolicies();
+  const providerModelOptions = await listProviderModelOptions();
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
   const providerHealthByProviderId = new Map(
     providerHealthSummaries.map((summary) => [summary.id, summary]),
   );
@@ -1948,13 +1943,12 @@ export async function RoutePoliciesSection({
 }
 
 export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const databaseUrl = getConsoleDatabaseUrl();
-  const usageToday = await getConsoleUsageSummary({ databaseUrl, window: "24h" });
-  const usageWeek = await getConsoleUsageSummary({ databaseUrl, window: "7d" });
-  const agents = await listAgents(databaseUrl);
-  const agentVirtualModelAccess = await listAgentVirtualModelAccess(databaseUrl);
-  const agentLimits = await listAgentLimits(databaseUrl);
-  const virtualModels = await listVirtualModels(databaseUrl);
+  const usageToday = await getConsoleUsageSummary({ window: "24h" });
+  const usageWeek = await getConsoleUsageSummary({ window: "7d" });
+  const agents = await listAgents();
+  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
+  const agentLimits = await listAgentLimits();
+  const virtualModels = await listVirtualModels();
   const agentVirtualModelAccessByAgentId = new Map(
     agentVirtualModelAccess.map((access) => [access.agentId, access]),
   );
@@ -2829,13 +2823,12 @@ function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
 }
 
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
   const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
-  const agents = await listAgents(databaseUrl);
-  const agentLimits = await listAgentLimits(databaseUrl);
-  const runtimeSnapshots = await listAgentLimitRuntimeSnapshots(databaseUrl);
-  const agentVirtualModelAccess = await listAgentVirtualModelAccess(databaseUrl);
+  const agents = await listAgents();
+  const agentLimits = await listAgentLimits();
+  const runtimeSnapshots = await listAgentLimitRuntimeSnapshots();
+  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
   const runtimeByAgentId = new Map(
     runtimeSnapshots.map((snapshot) => [snapshot.agentId, snapshot]),
@@ -3356,8 +3349,7 @@ function formatInteger(value: number): string {
 }
 
 export async function ModelsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const databaseUrl = getConsoleDatabaseUrl();
-  const providerModelOptions = await listProviderModelOptions(databaseUrl);
+  const providerModelOptions = await listProviderModelOptions();
   const providers = new Set(providerModelOptions.map((option) => option.providerKey));
   const pricedCount = providerModelOptions.filter(
     (option) => option.priceStatus !== "unknown_price",
@@ -3507,14 +3499,11 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
 }
 
 export async function ProvidersSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const databaseUrl = getConsoleDatabaseUrl();
-  const providers = orderProvidersForConsole(await listProviders(databaseUrl));
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries({ databaseUrl });
-  const providerKeys = await listProviderApiKeyMetadata(databaseUrl);
-  const providerOAuthConnections = await listConsoleProviderOAuthConnections(databaseUrl);
-  const providerModelOptions = orderProviderModelsForConsole(
-    await listProviderModelOptions(databaseUrl),
-  );
+  const providers = orderProvidersForConsole(await listProviders());
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
+  const providerKeys = await listProviderApiKeyMetadata();
+  const providerOAuthConnections = await listConsoleProviderOAuthConnections();
+  const providerModelOptions = orderProviderModelsForConsole(await listProviderModelOptions());
   const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
   const providerOAuthByProviderId = groupProviderOAuthByProviderId(providerOAuthConnections);
   const providerHealthByProviderId = new Map(
@@ -4482,9 +4471,8 @@ function ProviderKeyDeleteDialog({
 }
 
 export async function SettingsSection() {
-  const databaseUrl = getConsoleDatabaseUrl();
-  const securitySummary = await getConsoleSecuritySummary(databaseUrl);
-  const notificationChannels = await listNotificationChannels(databaseUrl);
+  const securitySummary = await getConsoleSecuritySummary();
+  const notificationChannels = await listNotificationChannels();
   return (
     <section className="providers-panel" id="settings" aria-label="Settings">
       <div className="settings-layout">

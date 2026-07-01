@@ -20,34 +20,6 @@
       "types": "./src/providers.ts",
       "default": "./src/providers.ts"
     },
-    "./agents": {
-      "types": "./src/agents.ts",
-      "default": "./src/agents.ts"
-    },
-    "./routes": {
-      "types": "./src/routes.ts",
-      "default": "./src/routes.ts"
-    },
-    "./activity": {
-      "types": "./src/activity.ts",
-      "default": "./src/activity.ts"
-    },
-    "./jobs": {
-      "types": "./src/jobs.ts",
-      "default": "./src/jobs.ts"
-    },
-    "./health": {
-      "types": "./src/health.ts",
-      "default": "./src/health.ts"
-    },
-    "./notifications": {
-      "types": "./src/notifications.ts",
-      "default": "./src/notifications.ts"
-    },
-    "./maintenance": {
-      "types": "./src/maintenance.ts",
-      "default": "./src/maintenance.ts"
-    },
     "./provider-health": {
       "types": "./src/provider-health.ts",
       "default": "./src/provider-health.ts"
@@ -59,6 +31,218 @@
     "./migration-status": {
       "types": "./src/migration-status.ts",
       "default": "./src/migration-status.ts"
+    },
+    "./console-activity": {
+      "types": "./src/console-activity.ts",
+      "default": "./src/console-activity.ts"
+    },
+    "./console-agent-limits": {
+      "types": "./src/console-agent-limits.ts",
+      "default": "./src/console-agent-limits.ts"
+    },
+    "./console-agents": {
+      "types": "./src/console-agents.ts",
+      "default": "./src/console-agents.ts"
+    },
+    "./console-analytics": {
+      "types": "./src/console-analytics.ts",
+      "default": "./src/console-analytics.ts"
+    },
+    "./console-auth": {
+      "types": "./src/console-auth.ts",
+      "default": "./src/console-auth.ts"
+    },
+    "./console-import-export": {
+      "types": "./src/console-import-export.ts",
+      "default": "./src/console-import-export.ts"
+    },
+    "./console-notification-channels": {
+      "types": "./src/console-notification-channels.ts",
+      "default": "./src/console-notification-channels.ts"
+    },
+    "./console-price-overrides": {
+      "types": "./src/console-price-overrides.ts",
+      "default": "./src/console-price-overrides.ts"
+    },
+    "./console-provider-health": {
+      "types": "./src/console-provider-health.ts",
+      "default": "./src/console-provider-health.ts"
+    },
+    "./console-provider-keys": {
+      "types": "./src/console-provider-keys.ts",
+      "default": "./src/console-provider-keys.ts"
+    },
+    "./console-provider-oauth": {
+      "types": "./src/console-provider-oauth.ts",
+      "default": "./src/console-provider-oauth.ts"
+    },
+    "./console-provider-templates": {
+      "types": "./src/console-provider-templates.ts",
+      "default": "./src/console-provider-templates.ts"
+    },
+    "./console-providers": {
+      "types": "./src/console-providers.ts",
+      "default": "./src/console-providers.ts"
+    },
+    "./console-route-policies": {
+      "types": "./src/console-route-policies.ts",
+      "default": "./src/console-route-policies.ts"
+    },
+    "./console-route-preview": {
+      "types": "./src/console-route-preview.ts",
+      "default": "./src/console-route-preview.ts"
+    },
+    "./console-runtime": {
+      "types": "./src/console-runtime.ts",
+      "default": "./src/console-runtime.ts"
+    },
+    "./console-usage": {
+      "types": "./src/console-usage.ts",
+      "default": "./src/console-usage.ts"
+    },
+    "./console-virtual-models": {
+      "types": "./src/console-virtual-models.ts",
+      "default": "./src/console-virtual-models.ts"
+    },
+    "./gateway-activity-recorder": {
+      "types": "./src/gateway-activity-recorder.ts",
+      "default": "./src/gateway-activity-recorder.ts"
+    },
+    "./gateway-auth": {
+      "types": "./src/gateway-auth.ts",
+      "default": "./src/gateway-auth.ts"
+    },
+    "./gateway-budgets": {
+      "types": "./src/gateway-budgets.ts",
+      "default": "./src/gateway-budgets.ts"
+    },
+    "./gateway-chat-completions": {
+      "types": "./src/gateway-chat-completions.ts",
+      "default": "./src/gateway-chat-completions.ts"
+    },
+    "./gateway-config-reload": {
+      "types": "./src/gateway-config-reload.ts",
+      "default": "./src/gateway-config-reload.ts"
+    },
+    "./gateway-embeddings": {
+      "types": "./src/gateway-embeddings.ts",
+      "default": "./src/gateway-embeddings.ts"
+    },
+    "./gateway-error-mapping": {
+      "types": "./src/gateway-error-mapping.ts",
+      "default": "./src/gateway-error-mapping.ts"
+    },
+    "./gateway-fallback-chain": {
+      "types": "./src/gateway-fallback-chain.ts",
+      "default": "./src/gateway-fallback-chain.ts"
+    },
+    "./gateway-gateway-runtime-status": {
+      "types": "./src/gateway-gateway-runtime-status.ts",
+      "default": "./src/gateway-gateway-runtime-status.ts"
+    },
+    "./gateway-messages": {
+      "types": "./src/gateway-messages.ts",
+      "default": "./src/gateway-messages.ts"
+    },
+    "./gateway-metrics": {
+      "types": "./src/gateway-metrics.ts",
+      "default": "./src/gateway-metrics.ts"
+    },
+    "./gateway-rate-limits": {
+      "types": "./src/gateway-rate-limits.ts",
+      "default": "./src/gateway-rate-limits.ts"
+    },
+    "./gateway-request-metadata": {
+      "types": "./src/gateway-request-metadata.ts",
+      "default": "./src/gateway-request-metadata.ts"
+    },
+    "./gateway-responses": {
+      "types": "./src/gateway-responses.ts",
+      "default": "./src/gateway-responses.ts"
+    },
+    "./gateway-streaming": {
+      "types": "./src/gateway-streaming.ts",
+      "default": "./src/gateway-streaming.ts"
+    },
+    "./gateway-tracing": {
+      "types": "./src/gateway-tracing.ts",
+      "default": "./src/gateway-tracing.ts"
+    },
+    "./gateway-usage-recorder": {
+      "types": "./src/gateway-usage-recorder.ts",
+      "default": "./src/gateway-usage-recorder.ts"
+    },
+    "./gateway-virtual-model-access": {
+      "types": "./src/gateway-virtual-model-access.ts",
+      "default": "./src/gateway-virtual-model-access.ts"
+    },
+    "./worker-backup": {
+      "types": "./src/worker-backup.ts",
+      "default": "./src/worker-backup.ts"
+    },
+    "./worker-billing-reconciliation": {
+      "types": "./src/worker-billing-reconciliation.ts",
+      "default": "./src/worker-billing-reconciliation.ts"
+    },
+    "./worker-budget-threshold-alerts": {
+      "types": "./src/worker-budget-threshold-alerts.ts",
+      "default": "./src/worker-budget-threshold-alerts.ts"
+    },
+    "./worker-cost-report-export": {
+      "types": "./src/worker-cost-report-export.ts",
+      "default": "./src/worker-cost-report-export.ts"
+    },
+    "./worker-fallback-exhaustion-alerts": {
+      "types": "./src/worker-fallback-exhaustion-alerts.ts",
+      "default": "./src/worker-fallback-exhaustion-alerts.ts"
+    },
+    "./worker-job-runner": {
+      "types": "./src/worker-job-runner.ts",
+      "default": "./src/worker-job-runner.ts"
+    },
+    "./worker-jsonl-export": {
+      "types": "./src/worker-jsonl-export.ts",
+      "default": "./src/worker-jsonl-export.ts"
+    },
+    "./worker-model-refresh": {
+      "types": "./src/worker-model-refresh.ts",
+      "default": "./src/worker-model-refresh.ts"
+    },
+    "./worker-notification-dispatcher": {
+      "types": "./src/worker-notification-dispatcher.ts",
+      "default": "./src/worker-notification-dispatcher.ts"
+    },
+    "./worker-periodic-scheduler": {
+      "types": "./src/worker-periodic-scheduler.ts",
+      "default": "./src/worker-periodic-scheduler.ts"
+    },
+    "./worker-price-sync": {
+      "types": "./src/worker-price-sync.ts",
+      "default": "./src/worker-price-sync.ts"
+    },
+    "./worker-provider-connectivity-check": {
+      "types": "./src/worker-provider-connectivity-check.ts",
+      "default": "./src/worker-provider-connectivity-check.ts"
+    },
+    "./worker-provider-failure-alerts": {
+      "types": "./src/worker-provider-failure-alerts.ts",
+      "default": "./src/worker-provider-failure-alerts.ts"
+    },
+    "./worker-rate-limit-alerts": {
+      "types": "./src/worker-rate-limit-alerts.ts",
+      "default": "./src/worker-rate-limit-alerts.ts"
+    },
+    "./worker-retention-cleanup": {
+      "types": "./src/worker-retention-cleanup.ts",
+      "default": "./src/worker-retention-cleanup.ts"
+    },
+    "./worker-stale-reservations": {
+      "types": "./src/worker-stale-reservations.ts",
+      "default": "./src/worker-stale-reservations.ts"
+    },
+    "./worker-webhook-export": {
+      "types": "./src/worker-webhook-export.ts",
+      "default": "./src/worker-webhook-export.ts"
     }
   },
   "scripts": {
@@ -66,6 +250,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "pg": "^8.21.0"
+    "pg": "^8.21.0",
+    "@llmingress/billing": "workspace:*",
+    "@llmingress/domain": "workspace:*",
+    "@llmingress/observability": "workspace:*",
+    "@llmingress/provider": "workspace:*",
+    "@llmingress/security": "workspace:*"
   }
 }

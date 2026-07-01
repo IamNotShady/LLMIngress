@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
+import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import {
   executeFallbackChain,
   type FallbackChainCandidate,
-} from "../../apps/gateway/src/fallback-chain";
-import { buildRouteAttemptCandidates } from "../../apps/gateway/src/route-engine";
+} from "../../packages/db/src/gateway-fallback-chain";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { buildRouteAttemptCandidates } from "../../packages/domain/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
 
 test("first-byte failure falls back and records failed attempt", async () => {

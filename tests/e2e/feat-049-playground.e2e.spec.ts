@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, type Page, test } from "@playwright/test";
-import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
+import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";

@@ -1,10 +1,6 @@
 import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 import {
   deleteProviderApiKey,
   readConsoleMasterKeySource,
@@ -14,9 +10,8 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -26,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     if (action === "delete") {
       const providerApiKeyId = readRequiredText(form, "providerApiKeyId");
-      const result = await deleteProviderApiKey({ databaseUrl, providerApiKeyId });
+      const result = await deleteProviderApiKey({ providerApiKeyId });
       return NextResponse.redirect(
         new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
         303,
@@ -36,7 +31,6 @@ export async function POST(request: NextRequest) {
     const providerId = readRequiredText(form, "providerId");
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
-      databaseUrl,
       label: readOptionalText(form, "label"),
       masterKeySource: readConsoleMasterKeySource(),
       plaintext,
@@ -44,7 +38,6 @@ export async function POST(request: NextRequest) {
       providerId,
     });
     await enqueueProviderConnectivityCheckJob({
-      databaseUrl,
       providerApiKeyId: result.metadata.id,
       providerId,
     });

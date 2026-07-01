@@ -3,7 +3,7 @@ import {
   createGatewayRateLimitErrorBody,
   evaluateGatewayRateLimitWindow,
   getMinuteWindow,
-} from "../../apps/gateway/src/rate-limits";
+} from "../../packages/db/src/gateway-rate-limits";
 
 describe("feat-041 RPM and TPM enforcement", () => {
   it("calculates stable minute windows for rate limit counters", () => {

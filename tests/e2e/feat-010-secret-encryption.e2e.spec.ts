@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { loadBootstrapRuntimeConfig } from "../../packages/config/src/index";
-import { createSecretEncryption } from "../../packages/security/src/index";
+import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 test("provider secret encrypts decrypts rejects wrong key and hides plaintext", () => {
   const tempDir = mkdtempSync(join(tmpdir(), "llmingress-secret-e2e-"));

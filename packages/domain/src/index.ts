@@ -57,8 +57,8 @@ export type RouteCandidate = {
   supportsTools?: boolean;
 };
 
-export type RoutePolicy = {
-  candidates: RouteCandidate[];
+export type RoutePolicy<TCandidate extends RouteCandidate = RouteCandidate> = {
+  candidates: TCandidate[];
   id: string;
   rules?: RoutePolicyRules;
   strategy: RoutePolicyStrategy;
@@ -66,14 +66,14 @@ export type RoutePolicy = {
   virtualModelName: string;
 };
 
-export type RouteSelectionSnapshot = {
-  routePolicies: RoutePolicy[];
+export type RouteSelectionSnapshot<TCandidate extends RouteCandidate = RouteCandidate> = {
+  routePolicies: RoutePolicy<TCandidate>[];
 };
 
-export type RouteSelectionRequest = {
+export type RouteSelectionRequest<TCandidate extends RouteCandidate = RouteCandidate> = {
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
-  snapshot: RouteSelectionSnapshot;
+  snapshot: RouteSelectionSnapshot<TCandidate>;
   taskType?: RouteTaskType;
   usesTools?: boolean;
   virtualModelId?: string;
@@ -109,14 +109,14 @@ export type RouteDecision = {
   virtualModelName: string;
 };
 
-type CostCandidate = {
-  candidate: RouteCandidate;
+type CostCandidate<TCandidate extends RouteCandidate = RouteCandidate> = {
+  candidate: TCandidate;
   estimatedCostUsd: number;
   priceSource: PricedModelTokenPrice["source"];
 };
 
-type CandidateEligibility = {
-  candidate: RouteCandidate;
+type CandidateEligibility<TCandidate extends RouteCandidate = RouteCandidate> = {
+  candidate: TCandidate;
   eligible: boolean;
   reasons: string[];
 };
@@ -128,16 +128,16 @@ const INELIGIBLE_HEALTH: ReadonlySet<string> = new Set([
   "network_error",
 ]);
 
-export function buildRouteAttemptCandidates(input: {
-  routePolicy: RoutePolicy;
+export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(input: {
+  routePolicy: RoutePolicy<TCandidate>;
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
   taskType?: RouteTaskType;
   usesTools?: boolean;
   random?: () => number;
-}): RouteCandidate[] {
+}): TCandidate[] {
   const { routePolicy, random } = input;
-  const selectionRequest = {
+  const selectionRequest: RouteSelectionRequest<TCandidate> = {
     estimatedInputTokens: input.estimatedInputTokens,
     estimatedOutputTokens: input.estimatedOutputTokens,
     snapshot: { routePolicies: [routePolicy] },
@@ -232,9 +232,11 @@ export function normalizeProviderModelCapabilities(value: unknown): ProviderMode
   });
 }
 
-export function selectRouteAttempts(input: RouteSelectionRequest & { random?: () => number }): {
+export function selectRouteAttempts<TCandidate extends RouteCandidate>(
+  input: RouteSelectionRequest<TCandidate> & { random?: () => number },
+): {
   decision: RouteDecision | undefined;
-  chain: RouteCandidate[];
+  chain: TCandidate[];
 } {
   assertTokenEstimate(input.estimatedInputTokens, "estimatedInputTokens");
   assertTokenEstimate(input.estimatedOutputTokens, "estimatedOutputTokens");
@@ -338,7 +340,9 @@ export function selectRouteAttempts(input: RouteSelectionRequest & { random?: ()
   };
 }
 
-export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecision {
+export function selectRouteCandidate<TCandidate extends RouteCandidate>(
+  input: RouteSelectionRequest<TCandidate>,
+): RouteDecision {
   const r = selectRouteAttempts(input);
   if (!r.decision) {
     const routePolicy = findRoutePolicy(input.snapshot, input);
@@ -347,10 +351,10 @@ export function selectRouteCandidate(input: RouteSelectionRequest): RouteDecisio
   return r.decision;
 }
 
-function findRoutePolicy(
-  snapshot: RouteSelectionSnapshot,
-  input: RouteSelectionRequest,
-): RoutePolicy {
+function findRoutePolicy<TCandidate extends RouteCandidate>(
+  snapshot: RouteSelectionSnapshot<TCandidate>,
+  input: RouteSelectionRequest<TCandidate>,
+): RoutePolicy<TCandidate> {
   const routePolicy = snapshot.routePolicies.find((candidate) => {
     if (input.virtualModelId) {
       return candidate.virtualModelId === input.virtualModelId;
@@ -366,11 +370,11 @@ function findRoutePolicy(
   return routePolicy;
 }
 
-function evaluateCandidate(input: {
-  candidate: RouteCandidate;
-  input: RouteSelectionRequest;
-  routePolicy: RoutePolicy;
-}): CandidateEligibility {
+function evaluateCandidate<TCandidate extends RouteCandidate>(input: {
+  candidate: TCandidate;
+  input: RouteSelectionRequest<TCandidate>;
+  routePolicy: RoutePolicy<TCandidate>;
+}): CandidateEligibility<TCandidate> {
   const totalEstimatedTokens = input.input.estimatedInputTokens + input.input.estimatedOutputTokens;
   const rules = input.routePolicy.rules ?? {};
   const reasons: string[] = [];
@@ -440,11 +444,11 @@ function candidateHasCapability(candidate: RouteCandidate, capability: RouteCapa
   return candidate.capabilities?.[capability] === true;
 }
 
-function buildCostCandidates(
-  candidates: RouteCandidate[],
+function buildCostCandidates<TCandidate extends RouteCandidate>(
+  candidates: TCandidate[],
   input: { estimatedInputTokens: number; estimatedOutputTokens: number },
-): CostCandidate[] {
-  const result: CostCandidate[] = [];
+): CostCandidate<TCandidate>[] {
+  const result: CostCandidate<TCandidate>[] = [];
   for (const candidate of candidates) {
     if (candidate.price.status === "unknown_price") {
       continue;
@@ -465,13 +469,13 @@ function buildCostCandidates(
   return result;
 }
 
-function createDecision(input: {
-  candidate: RouteCandidate;
+function createDecision<TCandidate extends RouteCandidate>(input: {
+  candidate: TCandidate;
   estimatedCostUsd?: number;
-  evaluated: CandidateEligibility[];
+  evaluated: CandidateEligibility<TCandidate>[];
   message: string;
   priceSource?: PricedModelTokenPrice["source"];
-  routePolicy: RoutePolicy;
+  routePolicy: RoutePolicy<TCandidate>;
 }): RouteDecision {
   return {
     modelId: input.candidate.modelId,

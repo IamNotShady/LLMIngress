@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveAgentStatus, normalizeAgentFormInput } from "../../apps/console/src/server/agents";
-import { applyGatewayRequestLoggingPolicy } from "../../apps/gateway/src/activity-recorder";
 import { buildGatewayAgentRequestLog } from "../../apps/gateway/src/main";
+import { applyGatewayRequestLoggingPolicy } from "../../packages/db/src/gateway-activity-recorder";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-103 agent platform status and request logging", () => {

@@ -4,18 +4,13 @@ import {
   normalizeAgentLimitFormInput,
   saveAgentLimitRules,
 } from "../../../server/agent-limits";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -25,7 +20,6 @@ export async function POST(request: NextRequest) {
     if (action === "deleteLimitRules") {
       await deleteAgentLimitRules({
         agentId: readRequiredText(form, "agentId", "agentApiKeyId"),
-        databaseUrl,
       });
       return NextResponse.redirect(new URL("/limits", request.url), { status: 303 });
     }
@@ -35,7 +29,6 @@ export async function POST(request: NextRequest) {
 
     const agentId = readRequiredText(form, "agentId", "agentApiKeyId");
     await saveAgentLimitRules({
-      databaseUrl,
       limits: normalizeAgentLimitFormInput({
         agentId,
         alertThresholdPercent: readOptionalText(form, "alertThresholdPercent"),

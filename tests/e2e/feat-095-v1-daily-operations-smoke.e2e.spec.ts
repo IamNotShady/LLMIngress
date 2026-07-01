@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { getConsoleUsageSummary } from "../../apps/console/src/server/usage";
-import { getPrometheusMetricsDocument } from "../../apps/gateway/src/metrics";
 import { createBackupJobHandler } from "../../apps/worker/src/backup";
 import { evaluateBudgetThresholdAlerts } from "../../apps/worker/src/budget-threshold-alerts";
 import { createCostReportExportJobHandler } from "../../apps/worker/src/cost-report-export";
@@ -16,6 +15,7 @@ import { evaluateProviderFailureAlerts } from "../../apps/worker/src/provider-fa
 import { evaluateRateLimitAlerts } from "../../apps/worker/src/rate-limit-alerts";
 import { createRetentionCleanupJobHandler } from "../../apps/worker/src/retention-cleanup";
 import { createWebhookEventExportJobHandler } from "../../apps/worker/src/webhook-export";
+import { getPrometheusMetricsDocument } from "../../packages/db/src/gateway-metrics";
 import {
   createTestPostgresFixture,
   runMigrations,

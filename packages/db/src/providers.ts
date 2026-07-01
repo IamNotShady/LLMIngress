@@ -84,7 +84,7 @@ type ProviderOAuthRuntimeRow = ProviderOAuthRow & {
 };
 
 export async function listProviderOAuthMetadata(
-  databaseUrl: string,
+  databaseUrl: string | undefined,
 ): Promise<ProviderOAuthMetadata[]> {
   return withPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
@@ -116,7 +116,7 @@ export async function listProviderOAuthMetadata(
 }
 
 export async function createProviderOAuthPendingConnection(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   label?: string | null;
   pendingCodeChallenge: string;
   pendingCodeVerifier: string;
@@ -170,7 +170,7 @@ export async function createProviderOAuthPendingConnection(input: {
 }
 
 export async function readProviderOAuthPendingConnection(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<ProviderOAuthPendingConnection> {
   return withPostgresClient(input.databaseUrl, async (client) => {
@@ -206,7 +206,7 @@ export async function readProviderOAuthPendingConnection(input: {
 }
 
 export async function completeProviderOAuthConnection(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   encryptedToken: Record<string, unknown>;
   label?: string | null;
   priority?: number;
@@ -260,7 +260,7 @@ export async function completeProviderOAuthConnection(input: {
 }
 
 export async function setProviderOAuthConnectionEnabled(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   enabled: boolean;
   providerOAuthId: string;
 }): Promise<ProviderOAuthMetadata> {
@@ -292,7 +292,7 @@ export async function setProviderOAuthConnectionEnabled(input: {
 }
 
 export async function deleteProviderOAuthConnection(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<{ providerId: string }> {
   return withPostgresClient(input.databaseUrl, async (client) => {
@@ -313,7 +313,7 @@ export async function deleteProviderOAuthConnection(input: {
 }
 
 export async function readProviderOAuthRuntimeConnection(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<ProviderOAuthRuntimeConnection> {
   return withPostgresClient(input.databaseUrl, async (client) => {
@@ -348,7 +348,7 @@ export async function readProviderOAuthRuntimeConnection(input: {
 }
 
 export async function readEnabledCompletedProviderOAuthConnections(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   providerId: string;
 }): Promise<ProviderOAuthRuntimeConnection[]> {
   return withPostgresClient(input.databaseUrl, async (client) => {
@@ -386,7 +386,7 @@ export async function readEnabledCompletedProviderOAuthConnections(input: {
 }
 
 export async function updateProviderOAuthTestResult(input: {
-  databaseUrl: string;
+  databaseUrl?: string;
   errorCode: string | null;
   errorMessage: string | null;
   providerOAuthId: string;
@@ -495,16 +495,3 @@ function requireProviderOAuthRow<T extends ProviderOAuthRow>(row: T | undefined)
 function cryptoRandomUUID(): string {
   return randomUUID();
 }
-
-export type {
-  NormalizedProviderModelRefreshInput,
-  ProviderModelRefreshInput,
-  QueuedProviderModelRefreshJob,
-} from "@llmingress/db/provider-jobs";
-export {
-  buildJobCreatedNotificationPayload,
-  buildModelRefreshJobPayload,
-  enqueueProviderConnectivityCheckJob,
-  enqueueProviderModelRefreshJob,
-  normalizeProviderModelRefreshInput,
-} from "@llmingress/db/provider-jobs";

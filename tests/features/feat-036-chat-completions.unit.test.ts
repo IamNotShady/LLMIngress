@@ -5,7 +5,7 @@ import {
   createGatewayChatCompletionErrorBody,
   normalizeOpenAIChatCompletionRequest,
   readGatewayMasterKeySource,
-} from "../../apps/gateway/src/chat-completions";
+} from "../../packages/db/src/gateway-chat-completions";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 describe("feat-036 OpenAI chat completions endpoint", () => {

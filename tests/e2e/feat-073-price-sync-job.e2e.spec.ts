@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import { createPostgresPeriodicScheduler } from "../../apps/worker/src/periodic-scheduler";
 import { createPriceSyncJobHandler } from "../../apps/worker/src/price-sync";
+import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("manual and scheduled price sync writes current provider model prices without historical rewrite", async () => {

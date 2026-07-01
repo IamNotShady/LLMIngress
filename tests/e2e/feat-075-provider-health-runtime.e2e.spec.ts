@@ -4,13 +4,13 @@ import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
-import { buildGatewayAgentApiKeyHash } from "../../apps/gateway/src/auth";
 import { createPostgresJobRunner } from "../../apps/worker/src/job-runner";
 import {
   createPeriodicScheduler,
   type PeriodicTaskDefinition,
 } from "../../apps/worker/src/periodic-scheduler";
 import { createProviderConnectivityCheckJobHandler } from "../../apps/worker/src/provider-connectivity-check";
+import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { HEALTH_SUMMARY_CHANGED_CHANNEL } from "../../packages/db/src/provider-health";
 import type { MasterKeySource } from "../../packages/security/src/master-key";

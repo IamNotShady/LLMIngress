@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
-import { getConsoleDatabaseUrl, readConsoleAuthState, sessionCookieName } from "../../server/auth";
+import { readConsoleAuthState, sessionCookieName } from "../../server/auth";
 import {
   formatGatewayConfigVersion,
   formatGatewayShellStatus,
@@ -16,11 +16,7 @@ import { Topbar } from "../_components/topbar";
 // rendered for any module URL (so deep links still land on setup/login).
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
-  const databaseUrl = getConsoleDatabaseUrl();
-  const authState = await readConsoleAuthState(
-    databaseUrl,
-    cookieStore.get(sessionCookieName)?.value,
-  );
+  const authState = await readConsoleAuthState(cookieStore.get(sessionCookieName)?.value);
 
   if (authState === "setup") {
     return <FirstRunSetup />;
@@ -29,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     return <Login />;
   }
 
-  const gateway = (await listConsoleGatewayRuntimeStatuses(databaseUrl))[0] ?? null;
+  const gateway = (await listConsoleGatewayRuntimeStatuses())[0] ?? null;
   const gatewayStatusLabel = formatGatewayShellStatus({ gateway });
   const gatewayStatusHealthy = isGatewayRuntimeHealthy({ gateway });
   const gatewayConfigVersionLabel = formatGatewayConfigVersion(

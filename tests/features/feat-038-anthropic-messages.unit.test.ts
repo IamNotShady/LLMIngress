@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createGatewayAnthropicMessagesErrorBody,
   normalizeAnthropicMessagesRequest,
-} from "../../apps/gateway/src/messages";
+} from "../../packages/db/src/gateway-messages";
 
 describe("feat-038 Anthropic messages endpoint", () => {
   it("normalizes Anthropic messages payloads for provider adapters", () => {

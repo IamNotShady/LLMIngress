@@ -2,7 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, type Page, test } from "@playwright/test";
-import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
+import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { withProcessLock } from "../support/process-lock";
 

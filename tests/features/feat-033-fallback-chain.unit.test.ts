@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { GatewayRoutePolicySnapshot } from "../../apps/gateway/src/config-reload";
+import type { GatewayRoutePolicySnapshot } from "../../packages/db/src/gateway-config-reload";
 import {
   executeFallbackChain,
   type FallbackChainCandidate,
-} from "../../apps/gateway/src/fallback-chain";
-import { buildRouteAttemptCandidates } from "../../apps/gateway/src/route-engine";
+} from "../../packages/db/src/gateway-fallback-chain";
+import { buildRouteAttemptCandidates } from "../../packages/domain/src/index";
 
 describe("feat-033 fallback chain execution", () => {
   it("falls back after a first-byte failure and records the failed provider attempt", async () => {

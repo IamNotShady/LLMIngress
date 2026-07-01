@@ -2,13 +2,29 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-27 (feat-120 E2E Frontend Page Coverage Command)
-**Active Feature:** none - feat-120 complete
-**Branch:** `dev`
+**Last Updated:** 2026-06-30 (feat-123 Gateway Ponytail Cleanup)
+**Active Feature:** none - feat-123 complete
+**Branch:** `codex/feat-123-gateway-ponytail-cleanup`
 
 ## Status
 
 ### What's Done
+
+- [x] **feat-123 — Gateway Ponytail Cleanup (passing)**:
+  - Removed Gateway app shim files under `apps/gateway/src` so the app shell keeps only `main.ts` and `cors.ts`; `main.ts` now imports db-owned Gateway modules directly.
+  - Removed direct Gateway app dependencies on billing/domain/observability/provider/security, and removed `@llmingress/db`'s `./gateway-route-engine` wrapper/export in favor of `@llmingress/domain`.
+  - Added internal `packages/db/src/gateway-runtime-helpers.ts` for repeated record/omit, route-policy, candidate-ordering, and activity-route helpers without publishing another package export.
+  - Added `executeProviderFallbackAttempts` in `gateway-fallback-chain.ts`; chat completions keeps `executeFallbackChain()` as a compatibility wrapper, while Responses, Messages, and Embeddings call the shared JSON fallback runner. Streaming fallback remains separate for first-byte and stream cleanup semantics.
+  - Shrunk `apps/gateway/src/main.ts` with `registerGatewayJsonEndpoint(...)` for `/v1/chat/completions`, `/v1/responses`, `/v1/messages`, and `/v1/embeddings`, while keeping health, metrics, models, CORS, activity completion, streaming wrapping, and startup logic in the file.
+  - TDD red observed first with feat-123 unit coverage; focused verification passed: feat-123 unit, feat-123 real Gateway/PostgreSQL/fake-provider E2E, and route/fallback/chat/responses/messages/embeddings/stream-usage regression unit tests.
+  - Full verification passed: `pnpm run verify` passed with lint, typecheck, 123 unit files / 480 tests, and build. Final `pnpm run verify:features` re-verified all 123 passing features; the optimized E2E batch timed out on feat-048, then fallback original feature verification passed including feat-048 and feat-123.
+
+- [x] **feat-122 — Database SQL Boundary Enforcement (passing)**:
+  - Added a production boundary test that forbids direct SQL execution and low-level Postgres client primitives outside `@llmingress/db` for Console, Gateway, Worker, config, and provider source.
+  - TDD red observed first: `shared-package-boundaries` listed 44 production files using `.query(...)` or low-level Postgres primitives outside `packages/db`.
+  - Migrated DB-backed Console, Gateway, and Worker modules into `packages/db/src` as `console-*`, `gateway-*`, and `worker-*` modules; app source paths are now compatibility re-export shims.
+  - Updated `@llmingress/db` package exports/dependencies/TypeScript settings plus source-contract tests and mocks for the new package-owned SQL boundary.
+  - Verification passed: focused `shared-package-boundaries`; focused feat-112/115/117 regression unit tests; `pnpm run verify` with lint, typecheck, 122 unit files / 473 tests, and build; final `pnpm run verify:features` re-verified all 122 passing features after the optimized E2E batch hit a feat-046 startup failure and the built-in per-feature fallback passed it.
 
 - [x] **E2E Frontend Page Coverage Command (feat-120)**:
   - Added `pnpm run test:e2e:coverage`, routed through `scripts/run-with-env.ts`, for report-only browser-side Console frontend page coverage.
@@ -1797,3 +1813,53 @@
   - Ran full regression before commit; the first `pnpm run verify:features` attempt failed only `feat-109` because `console-ui-agents` timed out in the Agents layout test after snippets/Clear filters removal.
   - Playwright API debug showed the right-side Selected agent details panel intercepting table `Edit` clicks at the regression viewport. Added Agents main-column/list-card overflow constraints so the left table cannot render underneath the right detail panel, and updated `feat-109` tracker wording/evidence to match the current no-dashboard-snippets product behavior.
   - Verification passed after the fix: focused `pnpm test:e2e tests/e2e/console-ui-agents.e2e.spec.ts --grep 'agents page matches the designed list and detail layout' --workers=1 --reporter=line`; `pnpm run verify` (exit 0 with the existing `feat-117` lint warning); final `pnpm run verify:features` re-verified all 120 passing features, including `feat-109 Agent Management Dialogs Layout`.
+
+- [x] 2026-06-28 Console UI quality polish (feat-121):
+  - Added CSS-only visual polish in `apps/console/src/app/globals.css`: missing relaxed leading/danger tokens, dialog/scrim/popover entrance keyframes, modal scrim blur, card/list/button elevation, option-card hover lift, and tokenized danger/snippet/limits colors.
+  - Added feat-121 unit and E2E coverage for CSS token/keyframe invariants, hardcoded hex removal, rendered overlay motion/scrim blur, light/dark danger colors, page horizontal-overflow guardrails, and option-card hover no-reflow behavior.
+  - TDD red observed first: the unit test failed on missing tokens/keyframes/scrim blur/shadow use and hardcoded hex colors; the E2E failed because the Add Provider dialog animation was `none` instead of `dialog-in`.
+  - Browser/IAB screenshot QA passed on an isolated Console at `http://127.0.0.1:51375`: captured 21 screenshots under `/tmp/llmingress-feat121-qa`, checked Overview/Providers/Activity/Limits in light/dark at 1280x720 and 390x844 with no document horizontal overflow, confirmed Add Provider `dialog-in` plus blur scrim, date picker `popover-in`, dark-mode danger color delta, option-card hover no sibling movement, and no browser console error/warn logs.
+  - Verification passed: focused feat-121 verification command; `pnpm run verify` (exit 0 with the existing feat-117 Biome non-null assertion warning); pre-marking `pnpm run verify:features` re-verified 120 prior passing features; final `pnpm run verify:features` re-verified all 121 passing features with the E2E batch passing in 370.7s.
+  - Review follow-up fixed the activity filter scroll-container regression by removing `overflow-x: auto` and using a responsive two-column grid below 84rem; scoped accent button shadows to `.btn` primary links so neutral buttons/date-picker cells do not inherit blue shadows; clipped page-level horizontal overflow while modal scrims are open; and strengthened feat-121 E2E to cover `/models?virtualModelDialog=new`, fallback date-picker neutral shadows, and rendered option-card hover transform/no-sibling-movement.
+  - Review follow-up verification passed: focused feat-121 verification command; `pnpm run verify` (122 unit files / 471 tests passed, build passed, existing feat-117 Biome warning remained non-fatal); final `pnpm run verify:features` re-verified all 121 passing features with the E2E batch passing in 399.6s.
+
+- [x] 2026-06-28 Usage duplicate React key repair (feat-079 follow-up):
+  - Root cause: Usage breakdown SQL grouped dimensions by stable IDs plus request snapshot labels, so the same provider/model ID could split into duplicate rows when historical snapshot columns differed. Donut legend items were also keyed by display label, which collided for two distinct agents named `test5`.
+  - Added a regression unit test that seeds mixed snapshot/current request rows for the same stable Agent / Virtual Model / Provider / Model IDs and expects one aggregated row per ID.
+  - Updated `getConsoleUsageSummary` to group provider/model and dimension breakdowns by stable IDs, using latest non-null snapshot labels with current config names as fallback, and updated `DonutBreakdown` / Usage donuts to key legend rows by stable slice IDs.
+  - Verification passed: `pnpm exec vitest run tests/features/feat-079-usage-breakdowns-savings.unit.test.ts`, touched-file `pnpm exec biome check ...`, `pnpm run typecheck`, `pnpm run lint` (exit 0 with the existing feat-117 warning), direct dev-DB duplicate scan for the reported `/usage` range, and Browser/IAB reload of `http://127.0.0.1:3000/usage?usageWindow=24h&dateFrom=2026-06-19&dateTo=2026-06-28&agentId=&virtualModelId=&providerId=` with zero error/warn logs.
+
+- [x] 2026-06-28 Add Model picker column tweak (feat-121 follow-up):
+  - Reduced the Add Model picker table's `Model ID` column from 500px to 402px on the live `/models?virtualModelDialog=new` dialog by giving the picker table fixed layout and a 42% second-column width.
+  - Verification was intentionally light per user request: Browser/IAB reload + Add Model interaction confirmed no framework overlay, no new console error/warn logs, and the target column width reduction; `git diff --check` and `pnpm run lint` passed with only the existing feat-117 warning.
+
+- [x] 2026-06-28 Final full regression for console UI polish branch:
+  - Stopped the live dev stack before running full regression to avoid Console `.next` / process-lock interference.
+  - Full verification passed: `pnpm run verify` exited 0 with lint, typecheck, 122 unit files / 472 tests, coverage output, and Next build passing; the existing feat-117 Biome warning remained non-fatal.
+  - Full feature regression passed: `pnpm run verify:features` exited 0, including an E2E batch passing in 420.7s and `All 121 passing feature(s) re-verified.`
+  - Removed the generated worker backup JSON left by the live/verification run before committing.
+
+- [x] 2026-06-30 Database URL boundary cleanup (feat-122 follow-up):
+  - Moved production database URL ownership into `@llmingress/db`: default clients now resolve from `DATABASE_URL` or `LLMINGRESS_BOOTSTRAP_CONFIG.databaseUrl`, while explicit URLs remain supported for migrations, tests, fixtures, and CLI overrides.
+  - Removed runtime `databaseUrl` plumbing from Console/Gateway/Worker app entry points, Console API routes/pages, Gateway endpoints, Worker job factories, and production db API call chains. Gateway config reload, LISTEN/NOTIFY listeners, fallback event recording, config publishing, provider health, and worker stores now use db-layer defaults.
+  - Strengthened shared package boundary tests so production app/config/provider source cannot mention `databaseUrl`, `DATABASE_URL`, or `getConsoleDatabaseUrl`; adjusted bootstrap config tests so app config no longer exposes `databaseUrl` and db client covers env/bootstrap/missing/invalid URL cases.
+  - Repaired regressions exposed by full feature verification: default Gateway config runtime startup without an explicit URL, fallback activity/health recording without URL plumbing, request-path 400 `bad_request` not being treated as provider-health failure, and date-drifted Activity E2E fixtures that had slipped outside the default 7-day filter window.
+  - Verification passed: focused boundary/bootstrap unit tests, feat-054 local deployment smoke, feat-044 activity recorder, feat-046 activity page, feat-116 activity UI, feat-117 fallback-chain unit, feat-120 frontend coverage, `pnpm run verify`, and `pnpm run verify:features`. The final `verify:features` run hit an optimized E2E batch Next/font startup flake in feat-017, then fallback original feature verification passed and ended with `All 122 passing feature(s) re-verified.`
+
+- [x] 2026-07-01 PR #13 CI unit-test repair:
+  - Root cause: `createGatewayConfigRuntime` now starts both config-change and provider-health listeners when notifications are enabled, but the pure unit tests only stubbed the config listener. CI therefore tried to create a real provider-health Postgres listener with no `DATABASE_URL` during `pnpm test`.
+  - Fixed the affected unit tests by stubbing a no-op health-summary listener instead of widening production `PostgresClient` defaults to read `TEST_DATABASE_URL`.
+  - Verification passed: focused failing unit specs, `pnpm test`, `pnpm run lint`, `pnpm typecheck`, and `TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55432/postgres pnpm run verify`.
+
+- [x] 2026-07-01 Docker Compose local runtime (feat-124):
+  - Added `Dockerfile`, `.dockerignore`, and `docker-compose.yml` so Compose builds one shared `llmingress:local` app image, runs Postgres separately, applies migrations once, and starts Gateway, Console, and Worker against the Compose database.
+  - Kept Postgres as its own container instead of putting it inside the app image; `POSTGRES_PORT` can override the default host `55432` when the existing local `llmingress-postgres` container is running.
+  - TDD red observed first: focused unit/E2E failed because the Docker artifacts did not exist. Verification passed after implementation: `pnpm exec vitest run tests/features/feat-124-docker-compose.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-124-docker-compose.e2e.spec.ts --reporter=line`, and `docker compose build`.
+  - Runtime smoke passed with `POSTGRES_PORT=55433 docker compose -p llmingress_docker_smoke up -d --no-build`: migrations applied 48 files, Gateway `/health` returned ok, Console returned HTTP 200, Gateway/Postgres became healthy, and Worker logged started. Cleaned up with `docker compose -p llmingress_docker_smoke down -v`.
+  - Full verification passed after the final Dockerfile CMD update: `pnpm run verify`; `pnpm run verify:features` re-verified all 124 passing features with the E2E batch passing in 399.2s.
+
+- [x] 2026-07-01 Package API surface cleanup (feat-125):
+  - Removed unused private DB/config subpath exports and source shims, unused root package barrels for billing/provider/security, provider-job re-export fan-out, and dead DB APIs with no callers.
+  - Moved the Console-only Agent connection details helper back into Console, kept SQL-backed ownership in `packages/db`, centralized shared provider adapter HTTP helper code, and compacted Gateway error status mapping into a lookup table.
+  - TDD red observed first with feat-125 unit/E2E tests for removed files/exports/imports and package resolution behavior.
+  - Verification passed: focused feat-125 unit/E2E, focused config/model-refresh/error-mapping/agent/gateway regression specs, `pnpm run verify` with 125 unit files / 492 tests and build, and `pnpm run verify:features` re-verified all 125 passing features with the E2E batch passing in 443.5s.

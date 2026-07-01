@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveEffectiveModelTokenPrice } from "../../packages/billing/src/index";
+import { resolveEffectiveModelTokenPrice } from "../../packages/billing/src/price-registry";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-100 provider model price source", () => {

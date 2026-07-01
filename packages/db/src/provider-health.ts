@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { Client, type QueryResultRow } from "pg";
+import { PostgresClient } from "@llmingress/db/client";
+import type { QueryResultRow } from "pg";
 
 export const HEALTH_SUMMARY_CHANGED_CHANNEL = "health_summary_changed";
 
@@ -29,7 +30,7 @@ export type HealthSummaryChangedPayload = {
 };
 
 export type RecordProviderHealthEventInput = {
-  databaseUrl: string;
+  databaseUrl?: string;
   errorCode?: string | null;
   errorMessage?: string | null;
   jobId?: string | null;
@@ -92,10 +93,10 @@ export function buildHealthSummaryChangedPayload(
 }
 
 export async function createHealthSummaryChangedListener(options: {
-  databaseUrl: string;
+  databaseUrl?: string;
   onNotification: (payload: HealthSummaryChangedPayload) => void;
 }): Promise<{ close: () => Promise<void> }> {
-  const client = new Client({ connectionString: options.databaseUrl });
+  const client = new PostgresClient({ connectionString: options.databaseUrl });
   client.on("notification", (message) => {
     if (message.channel !== HEALTH_SUMMARY_CHANGED_CHANNEL || !message.payload) {
       return;
@@ -126,7 +127,7 @@ export async function recordProviderHealthEvent(
   const observedAt = input.observedAt ?? new Date();
   const providerModelId = input.providerModelId ?? null;
   const eventId = randomUUID();
-  const client = new Client({ connectionString: input.databaseUrl });
+  const client = new PostgresClient({ connectionString: input.databaseUrl });
   await client.connect();
 
   try {
@@ -196,7 +197,7 @@ export async function recordProviderHealthEvent(
 }
 
 async function readProviderHealthSummaryForUpdate(
-  client: Client,
+  client: PostgresClient,
   input: { providerId: string; providerModelId: string | null },
 ): Promise<ProviderHealthSummaryRow | null> {
   const result = await client.query<ProviderHealthSummaryRow>(
@@ -220,7 +221,7 @@ async function readProviderHealthSummaryForUpdate(
 }
 
 async function insertProviderHealthEvent(
-  client: Client,
+  client: PostgresClient,
   input: Omit<RecordProviderHealthEventInput, "databaseUrl"> & {
     eventId: string;
     observedAt: Date;
@@ -261,7 +262,7 @@ async function insertProviderHealthEvent(
 }
 
 async function upsertProviderHealthSummary(
-  client: Client,
+  client: PostgresClient,
   input: {
     eventId: string;
     providerId: string;

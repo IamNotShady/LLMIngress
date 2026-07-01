@@ -13,18 +13,13 @@ import {
   updateAgent,
   updateAgentVirtualModelAccess,
 } from "../../../server/agents";
-import {
-  getConsoleDatabaseUrl,
-  sessionCookieName,
-  verifyConsoleSession,
-} from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const databaseUrl = getConsoleDatabaseUrl();
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(databaseUrl, sessionToken))) {
+  if (!(await verifyConsoleSession(sessionToken))) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -40,11 +35,9 @@ export async function POST(request: NextRequest) {
           name: readText(form, "name"),
           requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
-        databaseUrl,
       });
       await saveAgentRelatedSettings({
         clearLimitsWhenDisabled: false,
-        databaseUrl,
         form,
         id: result.id,
         saveLimits: readText(form, "enableLimits") === "true",
@@ -58,7 +51,6 @@ export async function POST(request: NextRequest) {
           name: readText(form, "name"),
           requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
-        databaseUrl,
         id: readRequiredText(form, "id"),
       });
     } else if (action === "saveAll") {
@@ -70,12 +62,10 @@ export async function POST(request: NextRequest) {
           name: readText(form, "name"),
           requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
-        databaseUrl,
         id,
       });
       await saveAgentRelatedSettings({
         clearLimitsWhenDisabled: true,
-        databaseUrl,
         form,
         id,
         saveLimits: readText(form, "enableLimits") === "true",
@@ -86,7 +76,6 @@ export async function POST(request: NextRequest) {
       );
     } else if (action === "delete") {
       await deleteAgent({
-        databaseUrl,
         id: readRequiredText(form, "id"),
       });
     } else if (action === "updateVirtualModelAccess") {
@@ -96,7 +85,6 @@ export async function POST(request: NextRequest) {
           defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
           id: readRequiredText(form, "id"),
         }),
-        databaseUrl,
       });
     } else {
       return NextResponse.json({ error: "Unknown agent action." }, { status: 400 });
@@ -113,7 +101,6 @@ export async function POST(request: NextRequest) {
 
 async function saveAgentRelatedSettings(input: {
   clearLimitsWhenDisabled: boolean;
-  databaseUrl: string;
   form: FormData;
   id: string;
   saveLimits: boolean;
@@ -124,19 +111,16 @@ async function saveAgentRelatedSettings(input: {
       defaultVirtualModelId: readText(input.form, "defaultVirtualModelId") ?? null,
       id: input.id,
     }),
-    databaseUrl: input.databaseUrl,
   });
   if (!input.saveLimits) {
     if (input.clearLimitsWhenDisabled) {
       await deleteAgentLimitRules({
         agentId: input.id,
-        databaseUrl: input.databaseUrl,
       });
     }
     return;
   }
   await saveAgentLimitRules({
-    databaseUrl: input.databaseUrl,
     limits: normalizeAgentLimitFormInput({
       agentId: input.id,
       alertThresholdPercent: readText(input.form, "alertThresholdPercent") ?? null,

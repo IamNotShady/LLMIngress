@@ -3,7 +3,7 @@ import {
   buildGatewayAgentApiKeyHash,
   createGatewayAuthErrorBody,
   readGatewayApiKeyCredential,
-} from "../../apps/gateway/src/auth";
+} from "../../packages/db/src/gateway-auth";
 
 describe("feat-034 gateway API key authentication", () => {
   it("reads Agent API keys from bearer auth or x-api-key headers", () => {

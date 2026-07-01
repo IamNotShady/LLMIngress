@@ -93,6 +93,10 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
   const agentApiKeyId = randomUUID();
   const successActivityId = randomUUID();
   const failureActivityId = randomUUID();
+  const successStartedAt = new Date(Date.now() - 2 * 60 * 1000);
+  const successCompletedAt = new Date(successStartedAt.getTime() + 37);
+  const failureStartedAt = new Date(Date.now() - 60 * 1000);
+  const failureCompletedAt = new Date(failureStartedAt.getTime() + 12);
 
   await fixture.query(
     `
@@ -194,8 +198,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'succeeded',
         200,
         37,
-        '2026-06-23T10:00:00.000Z',
-        '2026-06-23T10:00:00.037Z'
+        $10,
+        $11
       ),
       (
         $9,
@@ -214,8 +218,8 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         'failed',
         502,
         12,
-        '2026-06-23T10:01:00.000Z',
-        '2026-06-23T10:01:00.012Z'
+        $12,
+        $13
       )
     `,
     [
@@ -240,6 +244,10 @@ async function seedActivityPageData(fixture: Fixture): Promise<SeededActivityPag
         },
       ]),
       failureActivityId,
+      successStartedAt.toISOString(),
+      successCompletedAt.toISOString(),
+      failureStartedAt.toISOString(),
+      failureCompletedAt.toISOString(),
     ],
   );
   await fixture.query(

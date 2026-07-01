@@ -10,8 +10,8 @@ import {
 import {
   completeGatewayRequestActivity,
   createGatewayRequestActivity,
-} from "../../apps/gateway/src/activity-recorder";
-import { loadGatewayConfigSnapshot } from "../../apps/gateway/src/config-reload";
+} from "../../packages/db/src/gateway-activity-recorder";
+import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("config deletes are soft and runtime history remains intact", async () => {

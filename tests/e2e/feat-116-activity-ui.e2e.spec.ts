@@ -78,6 +78,10 @@ async function seedActivityReferenceData(databaseUrl: string): Promise<void> {
     const routePolicyId = randomUUID();
     const failureActivityId = randomUUID();
     const successActivityId = randomUUID();
+    const failureStartedAt = new Date(Date.now() - 2 * 60 * 1000);
+    const failureCompletedAt = new Date(failureStartedAt.getTime() + 420);
+    const successStartedAt = new Date(Date.now() - 60 * 1000);
+    const successCompletedAt = new Date(successStartedAt.getTime() + 910);
 
     await client.query(
       `
@@ -186,8 +190,8 @@ async function seedActivityReferenceData(databaseUrl: string): Promise<void> {
           'All providers failed: connection_error, rate_limit',
           502,
           420,
-          '2026-06-23T10:23:22.000Z',
-          '2026-06-23T10:23:22.420Z'
+          $11,
+          $12
         ),
         (
           $9,
@@ -216,8 +220,8 @@ async function seedActivityReferenceData(databaseUrl: string): Promise<void> {
           null,
           200,
           910,
-          '2026-06-23T10:23:41.000Z',
-          '2026-06-23T10:23:41.910Z'
+          $13,
+          $14
         )
       `,
       [
@@ -238,6 +242,10 @@ async function seedActivityReferenceData(databaseUrl: string): Promise<void> {
         }),
         successActivityId,
         finalModelId,
+        failureStartedAt.toISOString(),
+        failureCompletedAt.toISOString(),
+        successStartedAt.toISOString(),
+        successCompletedAt.toISOString(),
       ],
     );
     await client.query(

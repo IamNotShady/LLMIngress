@@ -1,27 +1,11 @@
 import { readFileSync } from "node:fs";
 
-export type {
-  ConfigChange,
-  ConfigChangedNotification,
-  ConfigChangedPayload,
-  ConfigChangeSource,
-  ConfigPublishClient,
-  ConfigPublishResult,
-  PublishedConfigChange,
-} from "./config-publisher.js";
-export {
-  CONFIG_CHANGED_CHANNEL,
-  createConfigChangedListener,
-  createConfigPublisher,
-} from "./config-publisher.js";
-
 type BootstrapEnvironment = Record<string, string | undefined>;
 
 type BootstrapConfigFile = {
   gatewayPort?: number;
   consolePort?: number;
   workerHeartbeatMs?: number;
-  databaseUrl?: string;
   masterKey?: string;
   masterKeyFile?: string;
 };
@@ -45,7 +29,6 @@ export type BootstrapRuntimeConfig = {
   gatewayPort: number;
   consolePort: number;
   workerHeartbeatMs: number;
-  databaseUrl: string;
   masterKeySource: MasterKeySource;
 };
 
@@ -65,7 +48,6 @@ export function loadBootstrapRuntimeConfig(
       fileConfig.workerHeartbeatMs,
       30_000,
     ),
-    databaseUrl: readDatabaseUrl(env.DATABASE_URL ?? fileConfig.databaseUrl),
     masterKeySource: readMasterKeySource(env, fileConfig),
   };
 }
@@ -111,23 +93,6 @@ function readPositiveInteger(
   }
 
   return value;
-}
-
-function readDatabaseUrl(value: string | undefined): string {
-  if (!value?.trim()) {
-    throw new Error("DATABASE_URL is required.");
-  }
-
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "postgresql:" && url.protocol !== "postgres:") {
-      throw new Error("protocol must be postgresql:");
-    }
-    return value;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`DATABASE_URL is invalid: ${message}`);
-  }
 }
 
 function readMasterKeySource(

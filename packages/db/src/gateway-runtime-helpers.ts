@@ -33,20 +33,6 @@ export function requireGatewayRoutePolicy(
   return routePolicy;
 }
 
-export function orderGatewayRouteCandidates(
-  routePolicy: GatewayRoutePolicySnapshot,
-  chain: readonly { candidateOrder: number }[],
-): GatewayRouteCandidateSnapshot[] {
-  const chainOrderMap = new Map(chain.map((candidate, index) => [candidate.candidateOrder, index]));
-  return routePolicy.candidates
-    .filter((candidate) => chainOrderMap.has(candidate.candidateOrder))
-    .sort((left, right) => {
-      const leftIndex = chainOrderMap.get(left.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-      const rightIndex = chainOrderMap.get(right.candidateOrder) ?? Number.MAX_SAFE_INTEGER;
-      return leftIndex - rightIndex;
-    });
-}
-
 export function buildGatewayRequestActivityRoute(input: {
   candidate: GatewayActivityRouteCandidate;
   fallbackAttempts: FallbackFailedAttempt[];

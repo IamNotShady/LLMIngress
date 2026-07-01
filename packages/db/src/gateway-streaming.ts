@@ -53,7 +53,6 @@ import {
   buildGatewayRequestActivityRoute,
   isRecord,
   omitUndefined,
-  orderGatewayRouteCandidates,
   requireGatewayRoutePolicy,
 } from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
@@ -180,7 +179,7 @@ export async function executeGatewayStreamingRequest(input: {
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const gatewayChain = orderGatewayRouteCandidates(routePolicy, routeResult.chain);
+    const gatewayChain = routeResult.chain;
 
     if (gatewayChain.length === 0) {
       await releaseGatewayConcurrency({ databaseUrl: input.databaseUrl, lease: concurrencyLease });

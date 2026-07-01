@@ -44,7 +44,6 @@ import {
   buildGatewayRequestActivityRoute,
   isRecord,
   omitUndefined,
-  orderGatewayRouteCandidates,
   requireGatewayRoutePolicy,
 } from "./gateway-runtime-helpers.ts";
 import {
@@ -205,7 +204,6 @@ export async function executeGatewayOpenAIChatCompletion(input: {
 
   const concurrencyLease = rateLimit.concurrencyLease;
   let activity: GatewayRequestActivityRoute | undefined;
-  let selectedActivityCandidate: GatewayRouteCandidateSnapshot | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
   try {
     const routeResult = selectRouteAttempts({
@@ -226,25 +224,18 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
+    const gatewayChain = routeResult.chain;
 
-    // Look up the gateway-typed selected candidate from routePolicy.candidates
-    // (preserves the required healthStatus from GatewayRouteCandidateSnapshot).
-    // chain[0].candidateOrder identifies the head; fall back to providerModelId match.
-    const headOrder = routeResult.chain[0]?.candidateOrder;
-    const selectedCandidate =
-      routePolicy.candidates.find((c) => c.candidateOrder === headOrder) ??
-      routePolicy.candidates.find((c) => c.providerModelId === routeDecision.providerModelId);
+    const selectedCandidate = gatewayChain[0];
     if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
     }
-    selectedActivityCandidate = selectedCandidate;
     activity = buildGatewayRequestActivityRoute({
-      candidate: selectedActivityCandidate,
+      candidate: selectedCandidate,
       fallbackAttempts,
       routeDecision,
     });
 
-    const gatewayChain = orderGatewayRouteCandidates(routePolicy, routeResult.chain);
     const chatCompletionCandidates = gatewayChain.filter(
       (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
     );

@@ -32,7 +32,6 @@ import {
   buildGatewayRequestActivityRoute,
   isRecord,
   omitUndefined,
-  orderGatewayRouteCandidates,
   requireGatewayRoutePolicy,
 } from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
@@ -209,11 +208,9 @@ export async function executeGatewayOpenAIEmbeddings(input: {
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
+    const gatewayChain = routeResult.chain;
 
-    const headOrder = routeResult.chain[0]?.candidateOrder;
-    const selectedCandidate =
-      routePolicy.candidates.find((c) => c.candidateOrder === headOrder) ??
-      routePolicy.candidates.find((c) => c.providerModelId === routeDecision.providerModelId);
+    const selectedCandidate = gatewayChain[0];
     if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
     }
@@ -222,8 +219,6 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       fallbackAttempts,
       routeDecision,
     });
-
-    const gatewayChain = orderGatewayRouteCandidates(routePolicy, routeResult.chain);
 
     const embeddingsCandidates = gatewayChain.filter(
       (candidate) => !isSubscriptionProviderKey(candidate.providerKey),

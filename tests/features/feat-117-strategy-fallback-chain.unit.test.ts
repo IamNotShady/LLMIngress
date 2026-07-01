@@ -5,6 +5,7 @@ import type { GatewayBudgetReservation } from "../../packages/db/src/gateway-bud
 import {
   createGatewayConfigRuntime,
   type GatewayConfigSnapshot,
+  type GatewayRouteCandidateSnapshot,
   type RoutePolicyCandidateRow,
   rowToRoutePolicySnapshots,
 } from "../../packages/db/src/gateway-config-reload.ts";
@@ -898,9 +899,8 @@ describe("selectRouteAttempts", () => {
     expect(result.decision).toBeDefined();
     expect(result.chain.length).toBeGreaterThan(0);
     // Single-shuffle consistency: decision head must match chain head
-    // biome-ignore lint/style/noNonNullAssertion: checked above
-    expect(result.decision!.routeReason.selectedCandidateOrder).toBe(
-      result.chain[0]!.candidateOrder,
+    expect(result.decision?.routeReason.selectedCandidateOrder).toBe(
+      result.chain[0]?.candidateOrder,
     );
     // All eligible candidates are in the chain
     expect(result.chain).toHaveLength(3);
@@ -977,6 +977,38 @@ describe("selectRouteAttempts", () => {
     expect(result.decision!.routeReason.selectedCandidateOrder).toBe(1);
     // biome-ignore lint/style/noNonNullAssertion: checked above
     expect(result.decision!.providerModelId).toBe("model-a");
+  });
+
+  it("preserves gateway candidate type fields in the returned chain", () => {
+    const policy: GatewayConfigSnapshot["routePolicies"][number] = {
+      ...makePolicy("fixed", [
+        makeCandidate({
+          candidateOrder: 1,
+          healthStatus: "healthy",
+          providerModelId: "model-a",
+        }),
+      ]),
+      candidates: [
+        {
+          ...makeCandidate({
+            candidateOrder: 1,
+            healthStatus: "healthy",
+            providerModelId: "model-a",
+          }),
+          healthStatus: "healthy",
+        },
+      ],
+    };
+
+    const result = selectRouteAttempts({
+      estimatedInputTokens: 100,
+      estimatedOutputTokens: 100,
+      snapshot: { routePolicies: [policy] },
+      virtualModelId: "vm-1",
+    });
+
+    const chain: GatewayRouteCandidateSnapshot[] = result.chain;
+    expect(chain[0]?.healthStatus).toBe("healthy");
   });
 });
 

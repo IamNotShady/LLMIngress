@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/health";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import {
   getMigrationStatusFromDatabase,
   type MigrationStatusSummary,

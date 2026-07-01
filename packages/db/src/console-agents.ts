@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 
 export type AgentType = "coding" | "desktop" | "terminal" | "ide" | "other";

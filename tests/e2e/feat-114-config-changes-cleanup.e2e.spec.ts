@@ -4,7 +4,7 @@ import {
   CONFIG_CHANGED_CHANNEL,
   createConfigChangedListener,
   createConfigPublisher,
-} from "../../packages/config/src/index";
+} from "../../packages/db/src/config-versions";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("config changes live on config_versions changes and notify stays transactional", async () => {

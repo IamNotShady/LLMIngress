@@ -1,3 +1,11 @@
+import {
+  isRecord,
+  isRetryableHttpStatus,
+  joinProviderUrl,
+  readProviderRequestId,
+  readResponseBody,
+} from "./adapter-http.js";
+
 export type AnthropicContentBlock = Record<string, unknown> & {
   type: string;
 };
@@ -169,23 +177,7 @@ export function omitUnsupportedAnthropicSamplingParameters<T extends Record<stri
 }
 
 function buildMessagesUrl(baseUrl: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/messages`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
-}
-
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
+  return joinProviderUrl(baseUrl, "messages");
 }
 
 function mapProviderError(statusCode: number, body: unknown): AnthropicAdapterError {
@@ -196,7 +188,7 @@ function mapProviderError(statusCode: number, body: unknown): AnthropicAdapterEr
     errorCode: providerError.code,
     errorMessage: providerError.message,
     ok: false,
-    retryable: statusCode === 429 || statusCode >= 500,
+    retryable: isRetryableHttpStatus(statusCode),
     statusCode,
   };
 }
@@ -220,13 +212,6 @@ function readProviderError(body: unknown): { code: string; message: string } {
   };
 }
 
-function readProviderRequestId(body: unknown): string | null {
-  if (isRecord(body) && typeof body.id === "string") {
-    return body.id;
-  }
-  return null;
-}
-
 function omitUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
@@ -236,8 +221,4 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): T {
 function isOpus47OrNewer(modelId: string): boolean {
   const match = modelId.match(/\bclaude-opus-4[-.](\d+)/);
   return match ? Number(match[1]) >= 7 : false;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

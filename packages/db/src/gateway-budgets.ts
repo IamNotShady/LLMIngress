@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 
 export type GatewayBudgetErrorCode =

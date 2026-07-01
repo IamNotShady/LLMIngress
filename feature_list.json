@@ -1323,6 +1323,15 @@
       "dependencies": ["feat-054", "feat-122"],
       "status": "passing",
       "evidence": "2026-07-01: TDD red observed first for missing Dockerfile, docker-compose.yml, and .dockerignore. Added one shared llmingress:local app image, Compose services for postgres/migrate/gateway/console/worker, Postgres health gating, migration completion gating, Gateway healthcheck, host-overridable POSTGRES_PORT, and README Docker commands. Focused verification passed: pnpm exec vitest run tests/features/feat-124-docker-compose.unit.test.ts and pnpm test:e2e tests/e2e/feat-124-docker-compose.e2e.spec.ts --reporter=line. Docker verification passed: docker compose build built llmingress:local after reducing build context to about 7MB; POSTGRES_PORT=55433 docker compose -p llmingress_docker_smoke up -d --no-build applied 48 migrations, started Gateway/Console/Worker, returned Gateway /health ok, returned Console HTTP 200, and showed Gateway/Postgres healthy plus Worker started. Smoke containers and volume were removed with docker compose down -v. Full verification passed after the final Dockerfile CMD update: pnpm run verify; pnpm run verify:features re-verified all 124 passing features with the E2E batch passing in 399.2s."
+    },
+    {
+      "id": "feat-125",
+      "name": "Package API Surface Cleanup",
+      "description": "Package cleanup removes unused private subpath exports, package root barrels, dead APIs, and duplicated provider adapter helpers while preserving supported Gateway, Console, Worker, and provider subpath behavior.",
+      "verification": "pnpm exec vitest run tests/features/feat-125-packages-ponytail-cleanup.unit.test.ts && pnpm test:e2e tests/e2e/feat-125-packages-ponytail-cleanup.e2e.spec.ts --grep 'package cleanup keeps supported subpaths and rejects removed private subpaths'",
+      "dependencies": ["feat-122", "feat-123"],
+      "status": "passing",
+      "evidence": "2026-07-01: TDD red observed first for obsolete package shims/barrels, private subpath exports, config-publisher bridge, dead APIs, duplicated provider adapter helpers, and stale docs. Removed unused DB/config package export surfaces and source files, updated imports to owning modules, moved the Console-only Agent connection helper back into Console, centralized provider adapter HTTP helpers, compacted gateway error status mapping, and kept supported package subpaths resolving while removed subpaths fail. Focused verification passed: pnpm exec vitest run tests/features/feat-125-packages-ponytail-cleanup.unit.test.ts; pnpm test:e2e tests/e2e/feat-125-packages-ponytail-cleanup.e2e.spec.ts; focused config/model-refresh/error-mapping/agent/gateway regression unit and E2E specs. Full health passed: pnpm run verify with 125 unit files / 492 tests and build. Full feature regression passed: pnpm run verify:features re-verified all 125 passing features with the E2E batch passing in 443.5s."
     }
   ]
 }

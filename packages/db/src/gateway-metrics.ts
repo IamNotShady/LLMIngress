@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/health";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export const prometheusMetricsContentType = "text/plain; version=0.0.4; charset=utf-8";
 

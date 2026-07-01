@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/activity";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export type ConsoleActivity = {
   agentKeyPrefix: string | null;

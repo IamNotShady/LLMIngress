@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export type GatewayVirtualModel = {
   displayName: string;

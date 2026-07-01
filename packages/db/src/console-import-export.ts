@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,

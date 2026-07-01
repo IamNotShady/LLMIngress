@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateTokenCostUsd,
   resolveEffectiveModelTokenPrice,
-} from "../../packages/billing/src/index";
+} from "../../packages/billing/src/price-registry";
 import { loadSqlMigrations } from "../../packages/db/src/index";
 
 describe("feat-015 model price override management", () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { PostgresClient } from "@llmingress/db/client";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
-import { PostgresClient } from "@llmingress/db/providers";
 import {
   classifyProviderFailureStatus,
   shouldRecordProviderRequestPathHealthFailure,

@@ -5,9 +5,9 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { isRemovedProviderKey } from "@llmingress/db/providers";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
 
 export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
 

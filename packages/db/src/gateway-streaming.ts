@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
+import { PostgresClient } from "@llmingress/db/client";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
-import { PostgresClient } from "@llmingress/db/providers";
 import { selectRouteAttempts } from "@llmingress/domain";
 import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";

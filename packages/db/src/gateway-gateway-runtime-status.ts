@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/health";
+import { PostgresClient } from "@llmingress/db/client";
 
 export type GatewayRuntimeStatusEvent =
   | { type: "startup"; appliedConfigVersion: number; startedAt: Date }

@@ -1,1 +1,1 @@
-export * from "@llmingress/db/console-provider-connectivity-jobs";
+export { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ConfigChangedNotification } from "../../packages/config/src/index";
+import type { ConfigChangedNotification } from "../../packages/db/src/config-versions";
 import { createGatewayConfigRuntime } from "../../packages/db/src/gateway-config-reload";
 
 describe("feat-012 gateway config snapshot reload", () => {

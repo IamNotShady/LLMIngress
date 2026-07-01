@@ -2,12 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { loadMasterKey } from "../../packages/security/src/master-key";
 import {
   createSecretEncryption,
   decryptSecret,
   encryptSecret,
-  loadMasterKey,
-} from "../../packages/security/src/index";
+} from "../../packages/security/src/secret-encryption";
 
 describe("feat-010 master key and secret encryption", () => {
   it("encrypts to non-plaintext ciphertext and decrypts with the same master key", () => {

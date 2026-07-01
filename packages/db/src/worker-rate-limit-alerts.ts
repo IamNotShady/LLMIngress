@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 import { queueNotificationEvent } from "./worker-notification-dispatcher.ts";
 

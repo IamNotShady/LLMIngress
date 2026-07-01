@@ -4,6 +4,7 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
+import { PostgresClient } from "@llmingress/db/client";
 import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
@@ -13,7 +14,6 @@ import {
   type HealthSummaryChangedPayload,
 } from "@llmingress/db/provider-health";
 import { isRemovedProviderKey } from "@llmingress/db/providers";
-import { PostgresClient } from "@llmingress/db/routes";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,

@@ -3,7 +3,7 @@ import {
   resolveEffectiveModelTokenPrice,
   type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/routes";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,

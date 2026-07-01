@@ -11,7 +11,8 @@ import {
   loadSqlMigrations,
   runMigrations,
 } from "../../packages/db/src/index";
-import { decryptSecret, loadMasterKey } from "../../packages/security/src/index";
+import { loadMasterKey } from "../../packages/security/src/master-key";
+import { decryptSecret } from "../../packages/security/src/secret-encryption";
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 

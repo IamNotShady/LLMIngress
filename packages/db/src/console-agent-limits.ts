@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ManualPriceOverride, SyncedPriceSnapshot } from "@llmingress/billing/price-registry";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 
 export type AgentLimitType = "budget" | "concurrency" | "rpm" | "token" | "tpm";

@@ -1,1 +1,1 @@
-export * from "@llmingress/db/console-model-refresh-jobs";
+export * from "@llmingress/db/provider-jobs";

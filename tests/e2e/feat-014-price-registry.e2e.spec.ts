@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { calculateTokenCostUsd, resolveModelTokenPrice } from "../../packages/billing/src/index";
+import {
+  calculateTokenCostUsd,
+  resolveModelTokenPrice,
+} from "../../packages/billing/src/price-registry";
 
 test("known model returns token prices unknown model returns unknown price", () => {
   const sonnet = resolveModelTokenPrice({

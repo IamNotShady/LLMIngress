@@ -1,20 +1,5 @@
 import { readFileSync } from "node:fs";
 
-export type {
-  ConfigChange,
-  ConfigChangedNotification,
-  ConfigChangedPayload,
-  ConfigChangeSource,
-  ConfigPublishClient,
-  ConfigPublishResult,
-  PublishedConfigChange,
-} from "./config-publisher.js";
-export {
-  CONFIG_CHANGED_CHANNEL,
-  createConfigChangedListener,
-  createConfigPublisher,
-} from "./config-publisher.js";
-
 type BootstrapEnvironment = Record<string, string | undefined>;
 
 type BootstrapConfigFile = {

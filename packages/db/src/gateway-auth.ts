@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export type GatewayAuthErrorCode =
   | "disabled_agent_api_key"

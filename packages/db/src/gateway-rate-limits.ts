@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/agents";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 
 export type GatewayRateLimitType = "concurrency" | "rpm" | "tpm";

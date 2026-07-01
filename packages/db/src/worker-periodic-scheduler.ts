@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/jobs";
+import { PostgresClient } from "@llmingress/db/client";
 import { readBackupSettings } from "./worker-backup.ts";
 import { readBudgetThresholdAlertSettings } from "./worker-budget-threshold-alerts.ts";
 import { readFallbackExhaustionAlertSettings } from "./worker-fallback-exhaustion-alerts.ts";

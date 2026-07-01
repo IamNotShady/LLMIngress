@@ -2,7 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
-import { createConfigPublisher } from "../../packages/config/src/index";
+import { createConfigPublisher } from "../../packages/db/src/config-versions";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 test("gateway starts from latest snapshot applies notified config and reconcile catches missed version", async () => {

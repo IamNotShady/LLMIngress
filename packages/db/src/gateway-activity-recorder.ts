@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/activity";
+import { PostgresClient } from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-recorder.ts";
 

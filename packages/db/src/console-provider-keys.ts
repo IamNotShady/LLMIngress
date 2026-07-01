@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
@@ -230,61 +230,6 @@ export async function saveProviderApiKey(input: {
   }
 
   return { action: "created", metadata };
-}
-
-export async function updateProviderApiKeyMetadata(input: {
-  databaseUrl?: string;
-  enabled: boolean;
-  label?: string | null;
-  priority: number;
-  providerApiKeyId: string;
-}): Promise<ProviderApiKeyMetadata> {
-  let metadata: ProviderApiKeyMetadata | undefined;
-  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
-  await publisher.publish({
-    source: "console",
-    description: `Update provider API key ${input.providerApiKeyId}`,
-    changes: [{ table: "provider_api_keys", recordId: input.providerApiKeyId }],
-    write: async (client) => {
-      const result = await client.query<ProviderApiKeyStorageRow>(
-        `
-          update provider_api_keys
-          set label = $2,
-              enabled = $3,
-              priority = $4,
-              updated_at = now()
-          where id = $1
-          returning id::text,
-                    provider_id::text,
-                    key_prefix,
-                    key_id,
-                    label,
-                    enabled,
-                    priority,
-                    last_used_at,
-                    last_tested_at,
-                    last_test_status,
-                    last_test_error_code,
-                    last_test_error_message,
-                    created_at,
-                    rotated_at,
-                    updated_at
-        `,
-        [
-          input.providerApiKeyId,
-          normalizeOptionalLabel(input.label),
-          input.enabled,
-          normalizePriority(input.priority),
-        ],
-      );
-      metadata = toProviderApiKeyMetadata(requireProviderApiKeyRow(result.rows[0]));
-    },
-  });
-
-  if (!metadata) {
-    throw new Error("Provider API key metadata was not updated.");
-  }
-  return metadata;
 }
 
 export async function deleteProviderApiKey(input: {

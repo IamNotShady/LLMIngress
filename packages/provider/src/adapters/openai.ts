@@ -1,3 +1,11 @@
+import {
+  isRecord,
+  isRetryableHttpStatus,
+  joinProviderUrl,
+  readProviderRequestId,
+  readResponseBody,
+} from "./adapter-http.js";
+
 export type NormalizedOpenAIChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content?: string | null;
@@ -272,23 +280,7 @@ function buildEmbeddingsUrl(baseUrl: string): string {
 }
 
 function buildProviderUrl(baseUrl: string, suffix: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/${suffix}`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
-}
-
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
+  return joinProviderUrl(baseUrl, suffix);
 }
 
 function mapProviderError(statusCode: number, body: unknown): OpenAIAdapterError {
@@ -299,7 +291,7 @@ function mapProviderError(statusCode: number, body: unknown): OpenAIAdapterError
     errorCode: providerError.code,
     errorMessage: providerError.message,
     ok: false,
-    retryable: statusCode === 429 || statusCode >= 500,
+    retryable: isRetryableHttpStatus(statusCode),
     statusCode,
   };
 }
@@ -318,19 +310,8 @@ function readProviderError(body: unknown): { code: string; message: string } {
   };
 }
 
-function readProviderRequestId(body: unknown): string | null {
-  if (isRecord(body) && typeof body.id === "string") {
-    return body.id;
-  }
-  return null;
-}
-
 function omitUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
   ) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

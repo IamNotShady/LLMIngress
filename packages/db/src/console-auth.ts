@@ -35,10 +35,6 @@ export type ConsoleSecuritySummary = {
   adminPasswordSet: boolean;
 };
 
-export function getConsoleDatabaseUrl(): string {
-  return readPostgresDatabaseUrl();
-}
-
 export async function hashAdminPassword(password: string): Promise<string> {
   assertUsablePassword(password);
   const salt = randomBytes(16).toString("base64url");

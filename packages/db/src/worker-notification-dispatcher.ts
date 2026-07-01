@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/notifications";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./worker-job-runner.ts";
 
 export type NotificationChannelType = "webhook";

@@ -8,6 +8,12 @@ import {
   withClaudeCodeSystemPrompt,
 } from "../subscription.js";
 import {
+  isRecord,
+  isRetryableHttpStatus,
+  readProviderRequestId,
+  readResponseBody,
+} from "./adapter-http.js";
+import {
   type AnthropicAdapterResult,
   type AnthropicProviderAdapter,
   buildAnthropicMessagesPayload,
@@ -210,21 +216,9 @@ function mapOpenAIProviderError(statusCode: number, body: unknown): OpenAIAdapte
     errorCode: providerError.code,
     errorMessage: providerError.message,
     ok: false,
-    retryable: statusCode === 429 || statusCode >= 500,
+    retryable: isRetryableHttpStatus(statusCode),
     statusCode,
   };
-}
-
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
 }
 
 function readProviderError(body: unknown): { code: string; message: string } {
@@ -237,15 +231,4 @@ function readProviderError(body: unknown): { code: string; message: string } {
     };
   }
   return { code: "provider_http_error", message: "Provider request failed." };
-}
-
-function readProviderRequestId(body: unknown): string | null {
-  if (isRecord(body) && typeof body.id === "string") {
-    return body.id;
-  }
-  return null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient } from "@llmingress/db/activity";
+import { PostgresClient } from "@llmingress/db/client";
 import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,

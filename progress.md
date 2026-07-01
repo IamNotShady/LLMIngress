@@ -1857,3 +1857,9 @@
   - TDD red observed first: focused unit/E2E failed because the Docker artifacts did not exist. Verification passed after implementation: `pnpm exec vitest run tests/features/feat-124-docker-compose.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-124-docker-compose.e2e.spec.ts --reporter=line`, and `docker compose build`.
   - Runtime smoke passed with `POSTGRES_PORT=55433 docker compose -p llmingress_docker_smoke up -d --no-build`: migrations applied 48 files, Gateway `/health` returned ok, Console returned HTTP 200, Gateway/Postgres became healthy, and Worker logged started. Cleaned up with `docker compose -p llmingress_docker_smoke down -v`.
   - Full verification passed after the final Dockerfile CMD update: `pnpm run verify`; `pnpm run verify:features` re-verified all 124 passing features with the E2E batch passing in 399.2s.
+
+- [x] 2026-07-01 Package API surface cleanup (feat-125):
+  - Removed unused private DB/config subpath exports and source shims, unused root package barrels for billing/provider/security, provider-job re-export fan-out, and dead DB APIs with no callers.
+  - Moved the Console-only Agent connection details helper back into Console, kept SQL-backed ownership in `packages/db`, centralized shared provider adapter HTTP helper code, and compacted Gateway error status mapping into a lookup table.
+  - TDD red observed first with feat-125 unit/E2E tests for removed files/exports/imports and package resolution behavior.
+  - Verification passed: focused feat-125 unit/E2E, focused config/model-refresh/error-mapping/agent/gateway regression specs, `pnpm run verify` with 125 unit files / 492 tests and build, and `pnpm run verify:features` re-verified all 125 passing features with the E2E batch passing in 443.5s.

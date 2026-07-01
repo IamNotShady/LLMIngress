@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 import { redactSecretsFromJsonlValue } from "./worker-jsonl-export.ts";
 

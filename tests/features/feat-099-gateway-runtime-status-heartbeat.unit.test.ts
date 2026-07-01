@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConfigChangedNotification } from "../../packages/config/src/index";
+import type { ConfigChangedNotification } from "../../packages/db/src/config-versions";
 import { createGatewayConfigRuntime } from "../../packages/db/src/gateway-config-reload";
 import type { GatewayRuntimeStatusEvent } from "../../packages/db/src/gateway-gateway-runtime-status";
 

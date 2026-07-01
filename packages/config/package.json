@@ -7,17 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
-    },
-    "./config-publisher": {
-      "types": "./src/config-publisher.ts",
-      "default": "./src/config-publisher.ts"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false",
     "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@llmingress/db": "workspace:*"
   }
 }

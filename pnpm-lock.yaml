@@ -111,11 +111,7 @@ importers:
 
   packages/billing: {}
 
-  packages/config:
-    dependencies:
-      '@llmingress/db':
-        specifier: workspace:*
-        version: link:../db
+  packages/config: {}
 
   packages/db:
     dependencies:

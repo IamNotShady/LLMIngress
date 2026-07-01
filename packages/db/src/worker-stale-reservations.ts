@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/maintenance";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import type { JobHandler } from "./worker-job-runner.ts";
 
 export type ExpiredBudgetReservationRelease = {

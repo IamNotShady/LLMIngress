@@ -1,6 +1,6 @@
 import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
+import type { PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
 
 type PriceOverrideRow = PostgresQueryResultRow & {
   id: string;
@@ -11,40 +11,6 @@ type PriceOverrideRow = PostgresQueryResultRow & {
   provider_key: string;
   manual_price_updated_at: Date;
 };
-
-export async function getManualPriceOverride(input: {
-  databaseUrl?: string;
-  modelId: string;
-  providerKey: string;
-}): Promise<ManualPriceOverride | null> {
-  return withClient(input.databaseUrl, async (client) => {
-    const result = await client.query<PriceOverrideRow>(
-      `
-        select provider_key,
-               provider_models.id::text as id,
-               model_id,
-               manual_input_usd_per_million_tokens::text as input_usd_per_million_tokens,
-               manual_cached_input_usd_per_million_tokens::text
-                 as cached_input_usd_per_million_tokens,
-               manual_output_usd_per_million_tokens::text as output_usd_per_million_tokens,
-               manual_price_updated_at
-        from provider_models
-        join providers on providers.id = provider_models.provider_id
-        where lower(providers.provider_key) = lower($1)
-          and provider_models.model_id = $2
-          and providers.deleted_at is null
-          and provider_models.deleted_at is null
-          and provider_models.manual_input_usd_per_million_tokens is not null
-          and provider_models.manual_output_usd_per_million_tokens is not null
-          and provider_models.manual_price_updated_at is not null
-      `,
-      [normalizeProviderKey(input.providerKey), input.modelId.trim()],
-    );
-
-    const row = result.rows[0];
-    return row ? rowToManualPriceOverride(row) : null;
-  });
-}
 
 export async function saveManualPriceOverride(input: {
   databaseUrl?: string;
@@ -128,18 +94,4 @@ function assertPrice(price: number): void {
 
 function normalizeProviderKey(providerKey: string): string {
   return providerKey.trim().toLowerCase();
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

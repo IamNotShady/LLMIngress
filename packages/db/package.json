@@ -20,34 +20,6 @@
       "types": "./src/providers.ts",
       "default": "./src/providers.ts"
     },
-    "./agents": {
-      "types": "./src/agents.ts",
-      "default": "./src/agents.ts"
-    },
-    "./routes": {
-      "types": "./src/routes.ts",
-      "default": "./src/routes.ts"
-    },
-    "./activity": {
-      "types": "./src/activity.ts",
-      "default": "./src/activity.ts"
-    },
-    "./jobs": {
-      "types": "./src/jobs.ts",
-      "default": "./src/jobs.ts"
-    },
-    "./health": {
-      "types": "./src/health.ts",
-      "default": "./src/health.ts"
-    },
-    "./notifications": {
-      "types": "./src/notifications.ts",
-      "default": "./src/notifications.ts"
-    },
-    "./maintenance": {
-      "types": "./src/maintenance.ts",
-      "default": "./src/maintenance.ts"
-    },
     "./provider-health": {
       "types": "./src/provider-health.ts",
       "default": "./src/provider-health.ts"
@@ -63,10 +35,6 @@
     "./console-activity": {
       "types": "./src/console-activity.ts",
       "default": "./src/console-activity.ts"
-    },
-    "./console-agent-integrations": {
-      "types": "./src/console-agent-integrations.ts",
-      "default": "./src/console-agent-integrations.ts"
     },
     "./console-agent-limits": {
       "types": "./src/console-agent-limits.ts",
@@ -88,10 +56,6 @@
       "types": "./src/console-import-export.ts",
       "default": "./src/console-import-export.ts"
     },
-    "./console-model-refresh-jobs": {
-      "types": "./src/console-model-refresh-jobs.ts",
-      "default": "./src/console-model-refresh-jobs.ts"
-    },
     "./console-notification-channels": {
       "types": "./src/console-notification-channels.ts",
       "default": "./src/console-notification-channels.ts"
@@ -99,10 +63,6 @@
     "./console-price-overrides": {
       "types": "./src/console-price-overrides.ts",
       "default": "./src/console-price-overrides.ts"
-    },
-    "./console-provider-connectivity-jobs": {
-      "types": "./src/console-provider-connectivity-jobs.ts",
-      "default": "./src/console-provider-connectivity-jobs.ts"
     },
     "./console-provider-health": {
       "types": "./src/console-provider-health.ts",

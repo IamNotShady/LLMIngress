@@ -41,18 +41,6 @@ export {
   shippedSqlMigrations,
   summarizeMigrationStatus,
 } from "./migration-status.js";
-export type {
-  NormalizedProviderModelRefreshInput,
-  ProviderModelRefreshInput,
-  QueuedProviderModelRefreshJob,
-} from "./provider-jobs.js";
-export {
-  buildJobCreatedNotificationPayload,
-  buildModelRefreshJobPayload,
-  enqueueProviderConnectivityCheckJob,
-  enqueueProviderModelRefreshJob,
-  normalizeProviderModelRefreshInput,
-} from "./provider-jobs.js";
 
 type TestPostgresEnvironment = Record<string, string | undefined>;
 

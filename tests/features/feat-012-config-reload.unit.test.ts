@@ -23,6 +23,7 @@ describe("feat-012 gateway config snapshot reload", () => {
         notify = onNotification;
         return { close };
       },
+      createHealthSummaryChangedListener: async () => ({ close: async () => {} }),
       reconcileIntervalMs: 0,
     });
 
@@ -87,6 +88,7 @@ describe("feat-012 gateway config snapshot reload", () => {
         notify = onNotification;
         return { close: async () => {} };
       },
+      createHealthSummaryChangedListener: async () => ({ close: async () => {} }),
       reconcileIntervalMs: 0,
     });
 

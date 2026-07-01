@@ -25,6 +25,7 @@ describe("feat-099 gateway runtime status heartbeat", () => {
         notify = onNotification;
         return { close: async () => {} };
       },
+      createHealthSummaryChangedListener: async () => ({ close: async () => {} }),
       recordRuntimeStatus: async (event) => {
         events.push(event);
       },

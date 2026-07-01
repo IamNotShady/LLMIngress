@@ -1,0 +1,16 @@
+.git
+.claude
+.pnpm-store
+.turbo
+.worktrees
+node_modules
+**/node_modules
+coverage
+test-results
+playwright-report
+
+.env
+.env.local
+
+**/.next
+**/dist

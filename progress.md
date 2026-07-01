@@ -1850,3 +1850,10 @@
   - Root cause: `createGatewayConfigRuntime` now starts both config-change and provider-health listeners when notifications are enabled, but the pure unit tests only stubbed the config listener. CI therefore tried to create a real provider-health Postgres listener with no `DATABASE_URL` during `pnpm test`.
   - Fixed the affected unit tests by stubbing a no-op health-summary listener instead of widening production `PostgresClient` defaults to read `TEST_DATABASE_URL`.
   - Verification passed: focused failing unit specs, `pnpm test`, `pnpm run lint`, `pnpm typecheck`, and `TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55432/postgres pnpm run verify`.
+
+- [x] 2026-07-01 Docker Compose local runtime (feat-124):
+  - Added `Dockerfile`, `.dockerignore`, and `docker-compose.yml` so Compose builds one shared `llmingress:local` app image, runs Postgres separately, applies migrations once, and starts Gateway, Console, and Worker against the Compose database.
+  - Kept Postgres as its own container instead of putting it inside the app image; `POSTGRES_PORT` can override the default host `55432` when the existing local `llmingress-postgres` container is running.
+  - TDD red observed first: focused unit/E2E failed because the Docker artifacts did not exist. Verification passed after implementation: `pnpm exec vitest run tests/features/feat-124-docker-compose.unit.test.ts`, `pnpm test:e2e tests/e2e/feat-124-docker-compose.e2e.spec.ts --reporter=line`, and `docker compose build`.
+  - Runtime smoke passed with `POSTGRES_PORT=55433 docker compose -p llmingress_docker_smoke up -d --no-build`: migrations applied 48 files, Gateway `/health` returned ok, Console returned HTTP 200, Gateway/Postgres became healthy, and Worker logged started. Cleaned up with `docker compose -p llmingress_docker_smoke down -v`.
+  - Full verification passed after the final Dockerfile CMD update: `pnpm run verify`; `pnpm run verify:features` re-verified all 124 passing features with the E2E batch passing in 399.2s.

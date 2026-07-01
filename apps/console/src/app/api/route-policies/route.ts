@@ -7,8 +7,6 @@ import {
   updateRoutePolicy,
 } from "../../../server/route-policies";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   if (!(await verifyConsoleSession(sessionToken))) {

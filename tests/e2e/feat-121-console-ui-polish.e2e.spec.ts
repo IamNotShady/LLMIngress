@@ -71,15 +71,8 @@ test("console UI polish themes overlays and preserves layout", async ({ browser 
 
       await page.setViewportSize({ height: 720, width: 1280 });
       await page.goto(`${baseUrl}/usage`, { waitUntil: "domcontentloaded" });
-      await page.evaluate(() => {
-        Object.defineProperty(HTMLInputElement.prototype, "showPicker", {
-          configurable: true,
-          value: undefined,
-        });
-      });
-      await page.locator(".date-picker-input input").first().click();
-      await expect(page.getByRole("dialog", { name: "Start date calendar" })).toBeVisible();
-      expect(await readBoxShadow(page, ".date-picker-day")).toBe("none");
+      await expect(page.getByLabel("Start date", { exact: true })).toHaveAttribute("type", "date");
+      expect(await readBoxShadow(page, "#usage-date-from")).toBe("none");
 
       await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
         waitUntil: "domcontentloaded",

@@ -5,8 +5,6 @@ import {
 import { type NextRequest, NextResponse } from "next/server";
 import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   if (!(await verifyConsoleSession(sessionToken))) {

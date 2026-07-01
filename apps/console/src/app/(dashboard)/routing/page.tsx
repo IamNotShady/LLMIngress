@@ -1,20 +1,5 @@
-import { PageHeader } from "../../_components/page-header";
-import { type ConsoleSearchParams, RoutePoliciesSection } from "../../_modules/sections";
+import { redirect } from "next/navigation";
 
-export default async function RoutingPage({
-  searchParams,
-}: {
-  searchParams?: Promise<ConsoleSearchParams>;
-}) {
-  const resolved = searchParams ? await searchParams : {};
-  return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Routing"
-        title="Route Policies"
-        description="Map virtual models to primary and fallback provider models."
-      />
-      <RoutePoliciesSection searchParams={resolved} />
-    </div>
-  );
+export default function RoutingPage() {
+  redirect("/models");
 }

@@ -5,8 +5,6 @@ import {
   sessionCookieName,
 } from "../../../../server/auth";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const password = await readPassword(request);
   if (!password) {

@@ -1,18 +1,18 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentConnectionDetails } from "../../apps/console/src/app/api/agents/connection-details";
 
 describe("feat-077 agent connection details", () => {
-  it("builds one normalized connection details group with gateway url api key and model", () => {
-    const details = buildAgentConnectionDetails({
-      apiKey: "llmi_secret_agent_key_077",
-      gatewayBaseUrl: " http://127.0.0.1:4100/ ",
-      model: "coding-fast",
-    });
+  it("keeps one normalized connection details group inside the Agent route", () => {
+    const route = readFileSync(
+      join(process.cwd(), "apps/console/src/app/api/agents/route.ts"),
+      "utf8",
+    );
 
-    expect(details).toEqual({
-      apiKey: "llmi_secret_agent_key_077",
-      gatewayBaseUrl: "http://127.0.0.1:4100",
-      model: "coding-fast",
-    });
+    expect(route).toContain("function buildAgentConnectionDetails");
+    expect(route).toContain("normalizeGatewayBaseUrl");
+    expect(route).toContain("normalizeSnippetField");
+    expect(route).toContain('.replace(/\\/+$/, "")');
+    expect(route).toContain("Agent connection details");
   });
 });

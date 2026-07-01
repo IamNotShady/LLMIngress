@@ -14,7 +14,6 @@ import {
 import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText, readText, readTextValues } from "../_form";
-import { buildAgentConnectionDetails } from "./connection-details";
 
 export const runtime = "nodejs";
 
@@ -212,4 +211,34 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+type AgentConnectionDetails = {
+  apiKey: string;
+  gatewayBaseUrl: string;
+  model: string;
+};
+
+function buildAgentConnectionDetails(input: {
+  apiKey: string;
+  gatewayBaseUrl: string;
+  model: string;
+}): AgentConnectionDetails {
+  return {
+    apiKey: normalizeSnippetField(input.apiKey, "API key"),
+    gatewayBaseUrl: normalizeGatewayBaseUrl(input.gatewayBaseUrl),
+    model: normalizeSnippetField(input.model || "<Virtual Model Name>", "model"),
+  };
+}
+
+function normalizeGatewayBaseUrl(value: string): string {
+  return normalizeSnippetField(value, "Gateway URL").replace(/\/+$/, "");
+}
+
+function normalizeSnippetField(value: string, label: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${label} is required for Agent connection details.`);
+  }
+  return normalized;
 }

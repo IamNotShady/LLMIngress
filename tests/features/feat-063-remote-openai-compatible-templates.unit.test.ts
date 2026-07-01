@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   getOpenAICompatibleProviderTemplate,
   listOpenAICompatibleProviderTemplates,
@@ -7,12 +8,7 @@ import {
 } from "@llmingress/db/console-provider-templates";
 import { normalizeProviderFormInput } from "@llmingress/db/console-providers";
 import { describe, expect, it } from "vitest";
-import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-reload";
-import {
-  createTestPostgresFixture,
-  loadSqlMigrations,
-  runMigrations,
-} from "../../packages/db/src/index";
+import { loadSqlMigrations } from "../../packages/db/src/index";
 
 const remoteTemplateExpectations = [
   ["deepseek", "DeepSeek", "https://api.deepseek.com"],
@@ -135,74 +131,27 @@ describe("feat-063 remote OpenAI-compatible templates", () => {
     }
   });
 
-  it("excludes legacy removed provider keys from the Gateway config snapshot", async () => {
-    const fixture = await createTestPostgresFixture({
-      databaseNamePrefix: `llmingress_removed_provider_${randomUUID().replaceAll("-", "_")}`,
+  it("uses current-schema migration cleanup instead of a runtime removed-provider blacklist", () => {
+    const migration = loadSqlMigrations().find((candidate) => candidate.id === "0049");
+    const providersSource = readFileSync(
+      join(process.cwd(), "packages/db/src/providers.ts"),
+      "utf8",
+    );
+    const gatewaySource = readFileSync(
+      join(process.cwd(), "packages/db/src/gateway-config-reload.ts"),
+      "utf8",
+    );
+
+    expect(migration).toMatchObject({
+      id: "0049",
+      name: "remove_legacy_provider_keys",
     });
-
-    try {
-      await runMigrations({ databaseUrl: fixture.databaseUrl });
-
-      const providerId = randomUUID();
-      const providerModelId = randomUUID();
-      const virtualModelId = randomUUID();
-      const routePolicyId = randomUUID();
-      await fixture.query(
-        `
-          insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
-          values ($1, 'api_key', 'groq', 'Legacy Groq', 'https://api.groq.com/openai/v1', true)
-        `,
-        [providerId],
-      );
-      await fixture.query(
-        `
-          insert into provider_models (
-            id,
-            provider_id,
-            model_id,
-            display_name,
-            context_window,
-            supports_streaming,
-            supports_tools,
-            availability
-          )
-          values ($1, $2, 'llama-3.1', 'Llama 3.1', 128000, true, true, 'available')
-        `,
-        [providerModelId, providerId],
-      );
-      await fixture.query(
-        `
-          insert into virtual_models (id, name, description, enabled)
-          values ($1, 'removed-provider-vm', 'Removed provider VM', true)
-        `,
-        [virtualModelId],
-      );
-      await fixture.query(
-        `
-          insert into route_policies (id, virtual_model_id, strategy)
-          values ($1, $2, 'fixed')
-        `,
-        [routePolicyId, virtualModelId],
-      );
-      await fixture.query(
-        `
-          insert into route_policy_candidates (
-            id,
-            route_policy_id,
-            provider_model_id,
-            candidate_order
-          )
-          values ($1, $2, $3, 1)
-        `,
-        [randomUUID(), routePolicyId, providerModelId],
-      );
-
-      const snapshot = await loadGatewayConfigSnapshot(fixture.databaseUrl);
-
-      expect(snapshot.providers.map((provider) => provider.providerKey)).not.toContain("groq");
-      expect(snapshot.routePolicies).toEqual([]);
-    } finally {
-      await fixture.dispose();
-    }
+    expect(
+      existsSync(
+        join(process.cwd(), "packages/db/migrations/0049_remove_legacy_provider_keys.sql"),
+      ),
+    ).toBe(true);
+    expect(providersSource).not.toContain("isRemovedProviderKey");
+    expect(gatewaySource).not.toContain("isRemovedProviderKey");
   });
 });

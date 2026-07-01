@@ -8,15 +8,6 @@ export type {
 } from "@llmingress/db/client";
 export { PostgresClient, withPostgresClient } from "@llmingress/db/client";
 
-export const removedProviderKeys = ["fireworks", "groq", "mistral"] as const;
-
-const removedProviderKeySet = new Set<string>(removedProviderKeys);
-
-export function isRemovedProviderKey(providerKey: string | null | undefined): boolean {
-  const normalized = providerKey?.trim().toLowerCase();
-  return normalized ? removedProviderKeySet.has(normalized) : false;
-}
-
 export type ProviderOAuthTestStatus =
   | "auth_failed"
   | "healthy"

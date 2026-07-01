@@ -287,6 +287,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0048",
     name: "remove_route_policy_candidate_fallback",
   },
+  {
+    checksum: "6c77730d35b31a8ffdba046e34fc9d458d785e0192cff8bc76d769ff6836c7c4",
+    id: "0049",
+    name: "remove_legacy_provider_keys",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

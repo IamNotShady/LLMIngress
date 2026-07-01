@@ -95,7 +95,7 @@ describe("feat-080 config import export", () => {
     ]);
   });
 
-  it("imports legacy primary+fallback route policies into one ordered candidate pool", async () => {
+  it("rejects legacy primary+fallback route policy import shape", async () => {
     const source = await createFixture("legacy_source");
     const target = await createFixture("legacy_target");
     fixtures.push(source, target);
@@ -133,30 +133,17 @@ describe("feat-080 config import export", () => {
       }),
     };
 
-    await importConsoleConfig({
-      databaseUrl: target.databaseUrl,
-      document: legacyDocument,
-    });
+    await expect(
+      importConsoleConfig({
+        databaseUrl: target.databaseUrl,
+        document: legacyDocument,
+      }),
+    ).rejects.toThrow(/providerModelIds/);
 
-    const targetExport = await exportConsoleConfig({
-      databaseUrl: target.databaseUrl,
-      now: new Date("2026-06-16T12:05:00.000Z"),
-    });
-    expect(targetExport.routePolicies[0]?.providerModelIds).toEqual([
-      primaryModelId,
-      fallbackModelId,
-    ]);
-    expect(targetExport.routePolicies[0]).not.toHaveProperty("primaryProviderModelIds");
-    expect(targetExport.routePolicies[0]).not.toHaveProperty("fallbackProviderModelIds");
-
-    const candidateOrder = await target.query<{ candidate_order: number }>(
-      `
-        select candidate_order
-        from route_policy_candidates
-        order by candidate_order
-      `,
+    const configVersions = await target.query<{ count: string }>(
+      "select count(*)::text from config_versions",
     );
-    expect(candidateOrder.rows.map((row) => row.candidate_order)).toEqual([1, 2]);
+    expect(configVersions.rows[0]?.count).toBe("0");
   });
 
   it("rejects imported providers with unknown templates before publishing a config version", async () => {

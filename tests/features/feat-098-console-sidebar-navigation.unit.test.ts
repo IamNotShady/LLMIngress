@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
   type ConsoleNavItem,
-  consoleNavGroups,
   consoleNavItems,
   findActiveNavItem,
 } from "../../apps/console/src/app/_lib/nav";
@@ -20,14 +19,6 @@ const expectedRoutes = [
 ];
 
 describe("console module navigation config", () => {
-  test("groups each contain at least one item and a label", () => {
-    expect(consoleNavGroups.length).toBeGreaterThan(0);
-    for (const group of consoleNavGroups) {
-      expect(group.label.trim().length).toBeGreaterThan(0);
-      expect(group.items.length).toBeGreaterThan(0);
-    }
-  });
-
   test("flattened items cover exactly the expected module routes", () => {
     const hrefs = consoleNavItems.map((item) => item.href);
     expect(new Set(hrefs).size).toBe(hrefs.length); // unique

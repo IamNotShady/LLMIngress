@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { type ConfigChange, createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   completeProviderOAuthConnection,
-  isRemovedProviderKey,
   type PostgresQueryClient,
   readEnabledCompletedProviderOAuthConnections,
   withPostgresClient,
@@ -657,9 +656,6 @@ async function readProvider(
     const provider = result.rows[0];
     if (!provider) {
       throw new Error("Provider was not found.");
-    }
-    if (isRemovedProviderKey(provider.provider_key)) {
-      throw new Error("Provider is no longer supported.");
     }
     if (!provider.base_url) {
       throw new Error("Provider base URL is required for model refresh.");

@@ -1,7 +1,6 @@
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import {
   completeProviderOAuthConnection,
-  isRemovedProviderKey,
   readEnabledCompletedProviderOAuthConnections,
   updateProviderOAuthTestResult,
   withPostgresClient,
@@ -270,9 +269,6 @@ async function readProvider(
     }
     if (!row.base_url) {
       throw new Error("Provider base URL is required for connectivity check.");
-    }
-    if (isRemovedProviderKey(row.provider_key)) {
-      throw new Error("Provider is no longer supported.");
     }
 
     const modelResult = await client.query<ProviderModelRow>(

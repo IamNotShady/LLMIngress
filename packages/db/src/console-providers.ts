@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
-import {
-  isRemovedProviderKey,
-  PostgresClient,
-  type PostgresQueryResultRow,
-} from "@llmingress/db/providers";
+import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
 import {
   isKnownProviderTemplateKey,
   type ProviderTemplateCreateInput,
@@ -69,10 +65,6 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
     throw new Error("Provider display name is required.");
   }
 
-  if (isRemovedProviderKey(providerKey)) {
-    throw new Error(`${displayName} provider is no longer supported.`);
-  }
-
   if (isKnownProviderTemplateKey(providerKey)) {
     throw new Error(`${displayName} providers must be created from their provider template.`);
   }
@@ -118,9 +110,7 @@ export async function listProviders(databaseUrl?: string): Promise<ConsoleProvid
         order by provider_key
       `,
     );
-    return result.rows
-      .filter((row) => !isRemovedProviderKey(row.provider_key))
-      .map(rowToConsoleProvider);
+    return result.rows.map(rowToConsoleProvider);
   });
 }
 

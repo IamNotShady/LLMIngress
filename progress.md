@@ -1873,3 +1873,10 @@
   - Moved the Console-only Agent connection details helper back into Console, kept SQL-backed ownership in `packages/db`, centralized shared provider adapter HTTP helper code, and compacted Gateway error status mapping into a lookup table.
   - TDD red observed first with feat-125 unit/E2E tests for removed files/exports/imports and package resolution behavior.
   - Verification passed: focused feat-125 unit/E2E, focused config/model-refresh/error-mapping/agent/gateway regression specs, `pnpm run verify` with 125 unit files / 492 tests and build, and `pnpm run verify:features` re-verified all 125 passing features with the E2E batch passing in 443.5s.
+
+- [x] 2026-07-01 Safe ponytail follow-up cleanup (feat-127):
+  - Deleted the unused Console screenshot script, removed the obsolete `consoleNavGroups` export, and inlined the small Agent connection-details helper into the Agent route.
+  - Removed config-import support for legacy `primaryProviderModelIds` / `fallbackProviderModelIds`; import now requires the current `providerModelIds` shape.
+  - Added `0049_remove_legacy_provider_keys.sql` to soft-delete legacy `fireworks`, `groq`, and `mistral` provider rows and provider models, then removed runtime removed-provider blacklist exports and filters.
+  - TDD red observed first: focused feat-127/affected unit tests failed on the still-present old surfaces and missing migration; feat-127 E2E failed on the still-exported grouped navigation contract.
+  - Verification passed: focused feat-127/feat-063/feat-077/feat-080/feat-087/feat-098 unit set, focused feat-127 E2E, `pnpm run db:migrate:check`, focused feat-016 provider CRUD regression, `pnpm run verify`, pre-marking `pnpm run verify:features` for 126 passing features, and final `pnpm run verify:features` for all 127 passing features with the E2E batch passing in 351.9s.

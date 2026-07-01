@@ -47,7 +47,7 @@ describe("feat-016 provider CRUD and enablement", () => {
     ).toThrow(/provider type/i);
   });
 
-  it("rejects removed provider keys", () => {
+  it("rejects unsupported remote provider endpoints through custom endpoint gating", () => {
     for (const providerKey of ["fireworks", "groq", "mistral"]) {
       expect(() =>
         normalizeProviderFormInput({
@@ -56,7 +56,7 @@ describe("feat-016 provider CRUD and enablement", () => {
           providerKey,
           providerType: "api_key",
         }),
-      ).toThrow(/no longer supported/i);
+      ).toThrow(/custom OpenAI-compatible endpoints are not allowed/i);
     }
   });
 

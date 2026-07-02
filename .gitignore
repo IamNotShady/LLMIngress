@@ -158,3 +158,6 @@ playwright-report/
 # Next.js generated types entry (rewritten by next dev/build)
 next-env.d.ts
 .impeccable.md
+
+# Superpowers brainstorm sessions
+.superpowers/

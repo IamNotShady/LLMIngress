@@ -99,6 +99,10 @@ async function readBackgroundColor(page: Page, selector: string): Promise<string
   return page.locator(selector).evaluate((element) => getComputedStyle(element).backgroundColor);
 }
 
+async function readBoxShadow(page: Page, selector: string): Promise<string> {
+  return page.locator(selector).evaluate((element) => getComputedStyle(element).boxShadow);
+}
+
 async function readTransform(page: Page, selector: string): Promise<string> {
   return page
     .locator(selector)

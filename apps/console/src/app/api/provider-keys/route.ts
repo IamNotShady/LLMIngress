@@ -8,8 +8,6 @@ import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-job
 import { type NextRequest, NextResponse } from "next/server";
 import { readNumber, readRequiredText, readText } from "../_form";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   if (!(await verifyConsoleSession(sessionToken))) {

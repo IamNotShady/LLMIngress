@@ -2,8 +2,6 @@ import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-
 import { exportConsoleConfig } from "@llmingress/db/console-import-export";
 import { type NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-
 export async function GET(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   if (!(await verifyConsoleSession(sessionToken))) {

@@ -14,6 +14,11 @@ test("agents page matches the designed list and detail layout", async ({ browser
       const createDialog = page.getByRole("dialog", { name: "New agent" });
       await expect(createDialog.getByRole("heading", { name: "New agent" })).toBeVisible();
       await expect(createDialog.getByLabel("Agent name")).toBeVisible();
+      await expect(createDialog.getByLabel("Allowed virtual models")).toBeVisible();
+      await expect(createDialog.getByLabel("Allowed virtual models")).toHaveJSProperty(
+        "multiple",
+        true,
+      );
       const createLimitsSwitch = createDialog.getByLabel("Enable limits");
       await expect(createLimitsSwitch).not.toBeChecked();
       await expect(createDialog.getByLabel("Budget USD limit")).toBeHidden();
@@ -120,14 +125,22 @@ test("agents page matches the designed list and detail layout", async ({ browser
         "long-context",
         "smart",
       ]);
-      const allowedToggle = editDialog.locator(".agent-vm-multi-select-button");
-      await expect(allowedToggle).toBeVisible();
-      const allowedToggleBox = await allowedToggle.boundingBox();
+      const allowedSelect = editDialog.getByLabel("Allowed virtual models");
+      await expect(allowedSelect).toBeVisible();
+      await expect(allowedSelect).toHaveJSProperty("multiple", true);
+      await expect(editDialog.locator(".agent-vm-multi-select-button")).toHaveCount(0);
+      const selectedAllowedLabels = await allowedSelect.evaluate((select) =>
+        Array.from((select as HTMLSelectElement).selectedOptions).map((option) =>
+          option.textContent?.trim(),
+        ),
+      );
+      expect(selectedAllowedLabels).toEqual(["cheap", "coding-balanced", "long-context", "smart"]);
       const defaultSelectBox = await editDialog.getByLabel("Default virtual model").boundingBox();
-      if (!allowedToggleBox || !defaultSelectBox) {
+      const allowedSelectBox = await allowedSelect.boundingBox();
+      if (!allowedSelectBox || !defaultSelectBox) {
         throw new Error("Agent virtual model controls did not render with measurable bounds.");
       }
-      expect(Math.abs(allowedToggleBox.height - defaultSelectBox.height)).toBeLessThanOrEqual(8);
+      expect(allowedSelectBox.height).toBeGreaterThan(defaultSelectBox.height);
       await expect(editDialog.getByLabel("Enable limits")).toBeChecked();
       await expect(editDialog.getByLabel("Budget USD limit")).toBeVisible();
 

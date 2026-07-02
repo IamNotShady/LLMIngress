@@ -59,7 +59,7 @@ test("usage & cost page renders reference filters, KPI cards, charts, savings, a
   });
 });
 
-test("usage date filters use native date inputs", async ({ browser }) => {
+test("usage date filters submit native date input values", async ({ browser }) => {
   await withConsoleDevServer(browser, async ({ page, baseUrl }) => {
     await page.goto(`${baseUrl}/usage`);
 
@@ -69,11 +69,12 @@ test("usage date filters use native date inputs", async ({ browser }) => {
     await expect(endDateInput).toHaveAttribute("type", "date");
 
     await startDateInput.fill("2026-06-01");
-    await endDateInput.fill("2026-06-30");
+    await endDateInput.fill("2026-06-15");
     await page.getByRole("button", { name: "Apply" }).click();
 
     await expect(page).toHaveURL(/dateFrom=2026-06-01/);
-    await expect(page).toHaveURL(/dateTo=2026-06-30/);
+    await expect(page).toHaveURL(/dateTo=2026-06-15/);
+    await expect(page.getByRole("dialog", { name: /calendar/i })).toHaveCount(0);
   });
 });
 

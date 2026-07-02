@@ -82,7 +82,6 @@ import {
   listVirtualModelFallbackBreakdown,
   listVirtualModels,
 } from "@llmingress/db/console-virtual-models";
-import { AgentVirtualModelMultiSelect } from "../_components/agent-virtual-model-multi-select";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
@@ -774,15 +773,15 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
             <div className="console-field">
               <label htmlFor="usage-date-from">Start date</label>
               <input
+                type="date"
                 id="usage-date-from"
                 name="dateFrom"
                 defaultValue={dateFromValue}
-                type="date"
               />
             </div>
             <div className="console-field">
               <label htmlFor="usage-date-to">End date</label>
-              <input id="usage-date-to" name="dateTo" defaultValue={dateToValue} type="date" />
+              <input type="date" id="usage-date-to" name="dateTo" defaultValue={dateToValue} />
             </div>
           </div>
         </fieldset>
@@ -1370,6 +1369,9 @@ export async function VirtualModelsSection({
   const virtualModels = await listVirtualModels();
   const routePolicies = await listRoutePolicies();
   const providerHealthSummaries = await listConsoleProviderHealthSummaries();
+  const providerHealthByProviderId = new Map(
+    providerHealthSummaries.map((summary) => [summary.id, summary]),
+  );
   const providerModelOptions = orderProviderModelsForConsole(
     filterRoutePolicyEditorHealthyProviderModelOptions(
       await listProviderModelOptions(),
@@ -1409,6 +1411,14 @@ export async function VirtualModelsSection({
   const selectedRoutePolicy = selectedVirtualModel
     ? (routePolicyByVmId.get(selectedVirtualModel.id) ?? null)
     : null;
+  const selectedRoutePolicyWarnings = selectedRoutePolicy
+    ? [
+        ...selectedRoutePolicy.routeWarnings,
+        ...buildRoutePolicyHealthWarnings(
+          buildRoutePolicyHealthWarningCandidates(selectedRoutePolicy, providerHealthByProviderId),
+        ),
+      ]
+    : [];
   const dialogTarget = readSingleSearchParam(searchParams.virtualModelDialog);
   const dialogVirtualModel =
     dialogTarget && dialogTarget !== "new"
@@ -1659,6 +1669,16 @@ export async function VirtualModelsSection({
                   <p>No candidates configured.</p>
                 )}
               </section>
+              {selectedRoutePolicyWarnings.length > 0 ? (
+                <section className="agent-detail-section" aria-label="Route warnings">
+                  <h3>Route warnings</h3>
+                  {selectedRoutePolicyWarnings.map((warning) => (
+                    <p className="route-warning" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+                </section>
+              ) : null}
               <section className="agent-detail-section">
                 <h3>Fallback overview</h3>
                 {fallbackOverview.length > 0 ? (
@@ -2355,14 +2375,18 @@ function AgentCreateDialog({
             <option value="false">disabled</option>
           </select>
           <label htmlFor="agent-allowed-virtual-models">Allowed virtual models</label>
-          <AgentVirtualModelMultiSelect
+          <select
             id="agent-allowed-virtual-models"
             name="allowedVirtualModelIds"
-            options={virtualModels.map((virtualModel) => ({
-              id: virtualModel.id,
-              label: formatVirtualModelOptionLabel(virtualModel),
-            }))}
-          />
+            multiple
+            size={virtualModelSelectSize(virtualModels.length)}
+          >
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
           <label htmlFor="agent-default-virtual-model">Default virtual model</label>
           <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
             <option value="">No default virtual model</option>
@@ -2534,15 +2558,19 @@ function AgentEditDialog({
             <option value="false">disabled</option>
           </select>
           <label htmlFor={`agent-allowed-virtual-models-${agent.id}`}>Allowed virtual models</label>
-          <AgentVirtualModelMultiSelect
+          <select
             defaultValue={access.allowedVirtualModels.map((virtualModel) => virtualModel.id)}
             id={`agent-allowed-virtual-models-${agent.id}`}
             name="allowedVirtualModelIds"
-            options={virtualModels.map((virtualModel) => ({
-              id: virtualModel.id,
-              label: formatVirtualModelOptionLabel(virtualModel),
-            }))}
-          />
+            multiple
+            size={virtualModelSelectSize(virtualModels.length)}
+          >
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
           <label htmlFor={`agent-default-virtual-model-${agent.id}`}>Default virtual model</label>
           <select
             id={`agent-default-virtual-model-${agent.id}`}
@@ -4769,6 +4797,10 @@ function formatRoutePolicyCandidateOrder(candidates: Array<{ optionLabel: string
 
 function providerModelSelectSize(optionCount: number): number {
   return Math.min(6, Math.max(2, optionCount));
+}
+
+function virtualModelSelectSize(optionCount: number): number {
+  return Math.min(8, Math.max(2, optionCount));
 }
 
 function listRoutePolicyProviderFilterOptions(

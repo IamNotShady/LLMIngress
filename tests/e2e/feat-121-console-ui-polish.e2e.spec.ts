@@ -72,6 +72,7 @@ test("console UI polish themes overlays and preserves layout", async ({ browser 
       await page.setViewportSize({ height: 720, width: 1280 });
       await page.goto(`${baseUrl}/usage`, { waitUntil: "domcontentloaded" });
       await expect(page.getByLabel("Start date", { exact: true })).toHaveAttribute("type", "date");
+      expect(await readBoxShadow(page, "#usage-date-from")).toBe("none");
 
       await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
         waitUntil: "domcontentloaded",

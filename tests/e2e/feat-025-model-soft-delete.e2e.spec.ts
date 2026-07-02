@@ -8,7 +8,6 @@ import { loadGatewayConfigSnapshot } from "../../packages/db/src/gateway-config-
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { selectRouteCandidate } from "../../packages/domain/src/index";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
-import { openRow } from "../support/console-ui";
 import { createFakeProviderServer } from "../support/fake-provider";
 import { withProcessLock } from "../support/process-lock";
 
@@ -81,8 +80,7 @@ test("missing referenced model marked unavailable excluded from routing and warn
         try {
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
-          await page.goto(`${baseUrl}/routing`);
-          await openRow(page, "Soft Delete Coding");
+          await page.goto(`${baseUrl}/models?vmQuery=soft-delete-coding`);
 
           await expect(
             page.getByText(

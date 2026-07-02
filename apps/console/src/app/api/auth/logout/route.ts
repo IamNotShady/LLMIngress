@@ -1,8 +1,6 @@
 import { deleteConsoleSession, sessionCookieName } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   await deleteConsoleSession(sessionToken);

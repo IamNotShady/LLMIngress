@@ -13,8 +13,6 @@ import {
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText, readText, readTextValues } from "../_form";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   if (!(await verifyConsoleSession(sessionToken))) {

@@ -3,8 +3,6 @@ import { saveManualPriceOverride } from "@llmingress/db/console-price-overrides"
 import { type NextRequest, NextResponse } from "next/server";
 import { readNumber, readText } from "../../_form";
 
-export const runtime = "nodejs";
-
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   if (!(await verifyConsoleSession(sessionToken))) {
@@ -39,7 +37,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const redirectUrl = new URL("/pricing", request.url);
+  const redirectUrl = new URL("/providers", request.url);
   if (redirectModel) {
     redirectUrl.searchParams.set("model", redirectModel);
   }

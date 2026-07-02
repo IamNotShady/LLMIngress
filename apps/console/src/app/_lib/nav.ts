@@ -15,12 +15,6 @@ export type ConsoleNavItem = {
   icon: string;
 };
 
-export type ConsoleNavGroup = {
-  /** Section label shown above the group in the sidebar. */
-  label: string;
-  items: ConsoleNavItem[];
-};
-
 // Flat, ordered module list matching the redesigned console prototype
 // (docs/UI/*). The sidebar renders this as a single icon-chip list.
 export const consoleNavItems: ConsoleNavItem[] = [
@@ -47,11 +41,6 @@ export const consoleNavItems: ConsoleNavItem[] = [
   { label: "Gateway Runtime", href: "/runtime", hint: "Status & migrations", icon: "GW" },
   { label: "Settings", href: "/settings", hint: "Preferences & alerts", icon: "ST" },
 ];
-
-// Back-compat single group so existing imports resolve. The redesigned sidebar
-// renders the flat `consoleNavItems` list (no visible group labels), matching
-// the prototype.
-export const consoleNavGroups: ConsoleNavGroup[] = [{ label: "Console", items: consoleNavItems }];
 
 /** Resolve the active nav item for a given pathname (longest matching href wins). */
 export function findActiveNavItem(pathname: string): ConsoleNavItem | undefined {

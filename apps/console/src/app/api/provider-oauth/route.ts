@@ -1,18 +1,17 @@
-import {
-  enqueueProviderConnectivityCheckJob,
-  enqueueProviderModelRefreshJob,
-} from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
-import { readConsoleMasterKeySource } from "../../../server/provider-keys";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
+import { readConsoleMasterKeySource } from "@llmingress/db/console-provider-keys";
 import {
   completeProviderOAuthAuthorization,
   revokeProviderOAuthConnection,
   setProviderOAuthConnectionEnabled,
   startProviderOAuthConnection,
-} from "../../../server/provider-oauth";
-
-export const runtime = "nodejs";
+} from "@llmingress/db/console-provider-oauth";
+import {
+  enqueueProviderConnectivityCheckJob,
+  enqueueProviderModelRefreshJob,
+} from "@llmingress/db/provider-jobs";
+import { type NextRequest, NextResponse } from "next/server";
+import { readNullableText, readNumber, readRequiredText, readText } from "../_form";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest) {
   }
 
   const form = await request.formData();
-  const action = readOptionalText(form, "action") ?? "start";
+  const action = readText(form, "action") ?? "start";
 
   try {
     if (action === "complete") {
@@ -29,7 +28,7 @@ export async function POST(request: NextRequest) {
         callbackInput: readRequiredText(form, "callbackInput"),
         label: readNullableText(form, "label"),
         masterKeySource: readConsoleMasterKeySource(),
-        priority: readOptionalNumber(form, "priority"),
+        priority: readNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
       await enqueueProviderModelRefreshJob({ providerId: result.providerId });
@@ -55,8 +54,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await startProviderOAuthConnection({
-      label: readOptionalText(form, "label"),
-      priority: readOptionalNumber(form, "priority"),
+      label: readText(form, "label"),
+      priority: readNumber(form, "priority"),
       providerId: readRequiredText(form, "providerId"),
     });
 
@@ -69,15 +68,15 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Provider OAuth operation failed.";
-    const providerId = readOptionalText(form, "providerId");
+    const providerId = readText(form, "providerId");
     if (providerId && (action === "start" || action === "complete")) {
       return redirectToProviderOAuthDialog(request, {
-        authorizeUrl: readOptionalText(form, "providerAuthorizeUrl"),
+        authorizeUrl: readText(form, "providerAuthorizeUrl"),
         error: message,
         label: readNullableText(form, "label"),
-        priority: readOptionalNumber(form, "priority"),
+        priority: readNumber(form, "priority"),
         providerId,
-        providerOAuthId: readOptionalText(form, "providerOAuthId"),
+        providerOAuthId: readText(form, "providerOAuthId"),
       });
     }
 
@@ -122,33 +121,4 @@ function redirectToProviderOAuthDialog(
     url.searchParams.set("providerOAuthPriorityValue", String(input.priority));
   }
   return NextResponse.redirect(url, 303);
-}
-
-function readOptionalText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  if (typeof value !== "string" || !value.trim()) {
-    return undefined;
-  }
-  return value.trim();
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = form.get(name);
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${name} is required.`);
-  }
-  return value.trim();
-}
-
-function readNullableText(form: FormData, name: string): string | null | undefined {
-  const value = form.get(name);
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  return value.trim() || null;
-}
-
-function readOptionalNumber(form: FormData, name: string): number | undefined {
-  const value = readOptionalText(form, name);
-  return value === undefined ? undefined : Number(value);
 }

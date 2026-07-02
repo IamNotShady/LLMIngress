@@ -1,8 +1,6 @@
+import { getConsoleActivityDetail } from "@llmingress/db/console-activity";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
-import { getConsoleActivityDetail } from "../../../../server/activity";
-import { sessionCookieName, verifyConsoleSession } from "../../../../server/auth";
-
-export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;

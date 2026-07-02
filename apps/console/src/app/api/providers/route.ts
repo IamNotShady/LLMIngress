@@ -1,7 +1,5 @@
-import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
-import { normalizeProviderTemplateFormInput } from "../../../server/provider-templates";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
+import { normalizeProviderTemplateFormInput } from "@llmingress/db/console-provider-templates";
 import {
   createProvider,
   createProviderFromTemplate,
@@ -9,9 +7,10 @@ import {
   normalizeProviderFormInput,
   setProviderEnabled,
   updateProvider,
-} from "../../../server/providers";
-
-export const runtime = "nodejs";
+} from "@llmingress/db/console-providers";
+import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
+import { type NextRequest, NextResponse } from "next/server";
+import { readRequiredText, readText } from "../_form";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -93,19 +92,6 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
-}
-
-function readText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = readText(form, name);
-  if (!value) {
-    throw new Error(`${name} is required.`);
-  }
-  return value;
 }
 
 function setSearchParam(url: URL, name: string, value: string | undefined): void {

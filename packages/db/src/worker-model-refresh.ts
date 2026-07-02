@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { type ConfigChange, createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   completeProviderOAuthConnection,
-  isRemovedProviderKey,
   type PostgresQueryClient,
   readEnabledCompletedProviderOAuthConnections,
   withPostgresClient,
@@ -11,7 +10,7 @@ import {
   fetchListedProviderModels as fetchProviderModelList,
   type ListedProviderModel,
 } from "@llmingress/provider/model-list";
-import { type ProviderOAuthTokenBlob, refreshProviderOAuthToken } from "@llmingress/provider/oauth";
+import { refreshProviderOAuthToken } from "@llmingress/provider/oauth";
 import {
   fetchProviderModelPrices,
   fetchProviderModelRegistryEntries,
@@ -21,10 +20,14 @@ import {
 } from "@llmingress/provider/price-source";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
+import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import {
-  createSecretEncryption,
-  type EncryptedSecret,
-} from "@llmingress/security/secret-encryption";
+  isProviderOAuthTokenExpired,
+  isRecord,
+  readEncryptedSecret,
+  readProviderOAuthTokenBlob,
+  readWorkerMasterKeySource,
+} from "./worker-credential-utils.ts";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./worker-job-runner.ts";
 
 export type ProviderModelAvailability = "available" | "unavailable" | "not_listed" | "deprecated";
@@ -420,14 +423,18 @@ export async function refreshProviderModels(
     provider.provider_type === "api_key"
       ? await readProviderApiKey({
           databaseUrl: options.databaseUrl,
-          masterKeySource: options.masterKeySource ?? readWorkerMasterKeySource(),
+          masterKeySource:
+            options.masterKeySource ??
+            readWorkerMasterKeySource(process.env, "provider model refresh"),
           providerId: provider.id,
         })
       : provider.provider_type === "subscription"
         ? await readProviderOAuthAccessToken({
             databaseUrl: options.databaseUrl,
             fetch: fetchImpl,
-            masterKeySource: options.masterKeySource ?? readWorkerMasterKeySource(),
+            masterKeySource:
+              options.masterKeySource ??
+              readWorkerMasterKeySource(process.env, "provider model refresh"),
             providerId: provider.id,
             providerKey: provider.provider_key,
           })
@@ -657,9 +664,6 @@ async function readProvider(
     const provider = result.rows[0];
     if (!provider) {
       throw new Error("Provider was not found.");
-    }
-    if (isRemovedProviderKey(provider.provider_key)) {
-      throw new Error("Provider is no longer supported.");
     }
     if (!provider.base_url) {
       throw new Error("Provider base URL is required for model refresh.");
@@ -897,75 +901,6 @@ async function readProviderOAuthAccessToken(input: {
     tokenExpiresAt: refreshed.expiresAt === null ? null : new Date(refreshed.expiresAt),
   });
   return refreshed.accessToken;
-}
-
-function readWorkerMasterKeySource(
-  env: Record<string, string | undefined> = process.env,
-): MasterKeySource {
-  const inlineKey = env.MASTER_KEY;
-  if (inlineKey?.trim()) {
-    return { kind: "inline", value: inlineKey };
-  }
-
-  const keyFile = env.MASTER_KEY_FILE;
-  if (keyFile?.trim()) {
-    return { kind: "file", path: keyFile };
-  }
-
-  throw new Error("MASTER_KEY or MASTER_KEY_FILE is required for provider model refresh.");
-}
-
-function readEncryptedSecret(value: unknown): EncryptedSecret {
-  if (
-    isRecord(value) &&
-    value.version === 1 &&
-    value.algorithm === "aes-256-gcm" &&
-    typeof value.keyId === "string" &&
-    typeof value.iv === "string" &&
-    typeof value.ciphertext === "string" &&
-    typeof value.authTag === "string"
-  ) {
-    return value as EncryptedSecret;
-  }
-
-  throw new Error("Stored provider credential is not a valid encrypted secret.");
-}
-
-function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
-  try {
-    const parsed = JSON.parse(value);
-    if (isRecord(parsed) && typeof parsed.accessToken === "string" && parsed.accessToken.trim()) {
-      return {
-        accessToken: parsed.accessToken,
-        expiresAt:
-          typeof parsed.expiresAt === "number" && Number.isFinite(parsed.expiresAt)
-            ? parsed.expiresAt
-            : null,
-        refreshToken:
-          typeof parsed.refreshToken === "string" && parsed.refreshToken.trim()
-            ? parsed.refreshToken
-            : null,
-        scopes: Array.isArray(parsed.scopes)
-          ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
-          : [],
-        tokenType:
-          typeof parsed.tokenType === "string" && parsed.tokenType.trim()
-            ? parsed.tokenType
-            : "Bearer",
-      };
-    }
-  } catch {
-    // handled by final throw
-  }
-  throw new Error("Stored provider OAuth token was not recognized.");
-}
-
-function isProviderOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
-  return token.expiresAt !== null && token.expiresAt <= Date.now() + 60_000;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readJsonRecord(value: unknown): Record<string, unknown> {

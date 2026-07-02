@@ -1,10 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { buildAgentConnectionDetails } from "../../../server/agent-integrations";
 import {
   deleteAgentLimitRules,
   normalizeAgentLimitFormInput,
   saveAgentLimitRules,
-} from "../../../server/agent-limits";
+} from "@llmingress/db/console-agent-limits";
 import {
   createAgent,
   deleteAgent,
@@ -12,10 +10,10 @@ import {
   normalizeAgentVirtualModelAccessFormInput,
   updateAgent,
   updateAgentVirtualModelAccess,
-} from "../../../server/agents";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
-
-export const runtime = "nodejs";
+} from "@llmingress/db/console-agents";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
+import { type NextRequest, NextResponse } from "next/server";
+import { readRequiredText, readText, readTextValues } from "../_form";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -134,25 +132,6 @@ async function saveAgentRelatedSettings(input: {
   });
 }
 
-function readText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = readText(form, name);
-  if (!value) {
-    throw new Error(`${name} is required.`);
-  }
-  return value;
-}
-
-function readTextValues(form: FormData, name: string): string[] {
-  return form
-    .getAll(name)
-    .flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
-}
-
 function renderOneTimeAgentResponse(input: {
   keyPrefix: string | null;
   plaintext: string;
@@ -230,4 +209,34 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+type AgentConnectionDetails = {
+  apiKey: string;
+  gatewayBaseUrl: string;
+  model: string;
+};
+
+function buildAgentConnectionDetails(input: {
+  apiKey: string;
+  gatewayBaseUrl: string;
+  model: string;
+}): AgentConnectionDetails {
+  return {
+    apiKey: normalizeSnippetField(input.apiKey, "API key"),
+    gatewayBaseUrl: normalizeGatewayBaseUrl(input.gatewayBaseUrl),
+    model: normalizeSnippetField(input.model || "<Virtual Model Name>", "model"),
+  };
+}
+
+function normalizeGatewayBaseUrl(value: string): string {
+  return normalizeSnippetField(value, "Gateway URL").replace(/\/+$/, "");
+}
+
+function normalizeSnippetField(value: string, label: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${label} is required for Agent connection details.`);
+  }
+  return normalized;
 }

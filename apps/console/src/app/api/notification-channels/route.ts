@@ -1,11 +1,10 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   createNotificationChannel,
   normalizeNotificationChannelFormInput,
-} from "../../../server/notification-channels";
-
-export const runtime = "nodejs";
+} from "@llmingress/db/console-notification-channels";
+import { type NextRequest, NextResponse } from "next/server";
+import { readRequiredText, readText } from "../_form";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -38,17 +37,4 @@ export async function POST(request: NextRequest) {
   return NextResponse.redirect(new URL("/settings#notification-channels", request.url), {
     status: 303,
   });
-}
-
-function readText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = readText(form, name);
-  if (!value) {
-    throw new Error(`${name} is required.`);
-  }
-  return value;
 }

@@ -7,7 +7,6 @@ import {
 } from "@llmingress/billing/price-registry";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
-import { isRemovedProviderKey } from "@llmingress/db/providers";
 
 export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
 
@@ -353,9 +352,7 @@ export async function listProviderModelOptions(
 ): Promise<ConsoleProviderModelOption[]> {
   return withClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderModelOptionRow>(providerModelOptionsSql());
-    return result.rows
-      .filter((row) => !isRemovedProviderKey(row.provider_key))
-      .map(rowToProviderModelOption);
+    return result.rows.map(rowToProviderModelOption);
   });
 }
 
@@ -416,9 +413,7 @@ export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRo
               [policyIds],
             )
           ).rows;
-    const candidatesByPolicyId = groupCandidatesByPolicyId(
-      candidateRows.filter((row) => !isRemovedProviderKey(row.provider_key)),
-    );
+    const candidatesByPolicyId = groupCandidatesByPolicyId(candidateRows);
     return policies.rows.map((policy) =>
       rowToConsoleRoutePolicy(policy, candidatesByPolicyId.get(policy.id) ?? []),
     );

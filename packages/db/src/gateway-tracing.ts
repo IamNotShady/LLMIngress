@@ -1,4 +1,4 @@
-import { recordOpenTelemetrySpan } from "@llmingress/observability/traces";
+import { recordOpenTelemetrySpan } from "./traces.ts";
 
 export async function recordGatewayRequestTrace(input: {
   errorCode?: string | null;

@@ -1,13 +1,12 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   createRoutePolicy,
   deleteRoutePolicy,
   normalizeRoutePolicyFormInput,
   updateRoutePolicy,
-} from "../../../server/route-policies";
-
-export const runtime = "nodejs";
+} from "@llmingress/db/console-route-policies";
+import { type NextRequest, NextResponse } from "next/server";
+import { readRequiredText, readText, readTextValues } from "../_form";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (action === "create") {
       await createRoutePolicy({
         routePolicy: normalizeRoutePolicyFormInput({
-          providerModelIds: readAllText(form, "providerModelIds"),
+          providerModelIds: readTextValues(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
           virtualModelId: readText(form, "virtualModelId"),
         }),
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest) {
       await updateRoutePolicy({
         id: readRequiredText(form, "id"),
         routePolicy: normalizeRoutePolicyFormInput({
-          providerModelIds: readAllText(form, "providerModelIds"),
+          providerModelIds: readTextValues(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
           virtualModelId: readText(form, "virtualModelId"),
         }),
@@ -51,24 +50,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.redirect(new URL("/routing", request.url), { status: 303 });
-}
-
-function readText(form: FormData, name: string): string | undefined {
-  const value = form.get(name);
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function readAllText(form: FormData, name: string): string[] {
-  return form
-    .getAll(name)
-    .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
-    .map((value) => value.trim());
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = readText(form, name);
-  if (!value) {
-    throw new Error(`${name} is required.`);
-  }
-  return value;
 }

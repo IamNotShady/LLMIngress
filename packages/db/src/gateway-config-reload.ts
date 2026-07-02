@@ -13,7 +13,6 @@ import {
   createHealthSummaryChangedListener as createPostgresHealthSummaryChangedListener,
   type HealthSummaryChangedPayload,
 } from "@llmingress/db/provider-health";
-import { isRemovedProviderKey } from "@llmingress/db/providers";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
@@ -399,12 +398,8 @@ export async function loadGatewayConfigSnapshot(
 
     return {
       loadedAt: new Date(),
-      providers: providers.rows.filter((provider) => !isRemovedProviderKey(provider.providerKey)),
-      routePolicies: rowToRoutePolicySnapshots(
-        routePolicyCandidates.rows.filter(
-          (candidate) => !isRemovedProviderKey(candidate.providerKey),
-        ),
-      ),
+      providers: providers.rows,
+      routePolicies: rowToRoutePolicySnapshots(routePolicyCandidates.rows),
       version: version.rows[0]?.version ?? 0,
     };
   } finally {

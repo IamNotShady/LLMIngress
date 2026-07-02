@@ -870,7 +870,10 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
     }
     return {
       id: normalizeUuid(input.id, `routePolicies[${index}].id`),
-      providerModelIds: normalizeRoutePolicyProviderModelIds(input, index),
+      providerModelIds: normalizeUuidArray(
+        input.providerModelIds,
+        `routePolicies[${index}].providerModelIds`,
+      ),
       rules: normalizeRoutePolicyRules(input.rules ?? {}),
       strategy: normalizeEnum(
         input.strategy,
@@ -880,28 +883,6 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
       virtualModelId: normalizeUuid(input.virtualModelId, `routePolicies[${index}].virtualModelId`),
     };
   });
-}
-
-// Accepts the new single ordered `providerModelIds`, or the legacy
-// `primaryProviderModelIds` + `fallbackProviderModelIds` pair (concatenated
-// primary-then-fallback) for backward-compatible imports.
-function normalizeRoutePolicyProviderModelIds(
-  input: Record<string, unknown>,
-  index: number,
-): string[] {
-  if (input.providerModelIds !== undefined) {
-    return normalizeUuidArray(input.providerModelIds, `routePolicies[${index}].providerModelIds`);
-  }
-  return [
-    ...normalizeUuidArray(
-      input.primaryProviderModelIds,
-      `routePolicies[${index}].primaryProviderModelIds`,
-    ),
-    ...normalizeUuidArray(
-      input.fallbackProviderModelIds,
-      `routePolicies[${index}].fallbackProviderModelIds`,
-    ),
-  ];
 }
 
 function normalizeAgents(value: unknown): ExportedAgent[] {

@@ -1,8 +1,7 @@
+import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
+import { importConsoleConfig } from "@llmingress/db/console-import-export";
 import { type NextRequest, NextResponse } from "next/server";
-import { sessionCookieName, verifyConsoleSession } from "../../../server/auth";
-import { importConsoleConfig } from "../../../server/import-export";
-
-export const runtime = "nodejs";
+import { readRequiredText } from "../_form";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -25,12 +24,4 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-}
-
-function readRequiredText(form: FormData, name: string): string {
-  const value = form.get(name);
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${name} is required.`);
-  }
-  return value.trim();
 }

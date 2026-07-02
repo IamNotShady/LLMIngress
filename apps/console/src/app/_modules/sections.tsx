@@ -9,7 +9,7 @@ import {
   formatConsoleActivityRouteReason,
   getConsoleActivityDetail,
   listConsoleActivities,
-} from "../../server/activity";
+} from "@llmingress/db/console-activity";
 import {
   type ConsoleAgentLimit,
   type ConsoleAgentLimitRuntimeSnapshot,
@@ -17,7 +17,7 @@ import {
   formatAgentLimitSummaries,
   listAgentLimitRuntimeSnapshots,
   listAgentLimits,
-} from "../../server/agent-limits";
+} from "@llmingress/db/console-agent-limits";
 import {
   type AgentDerivedStatus,
   type AgentIntegrationPlatform,
@@ -27,28 +27,28 @@ import {
   type ConsoleAgent,
   listAgents,
   listAgentVirtualModelAccess,
-} from "../../server/agents";
-import { getConsoleAnalyticsSnapshot } from "../../server/analytics";
-import { getConsoleSecuritySummary } from "../../server/auth";
+} from "@llmingress/db/console-agents";
+import { getConsoleAnalyticsSnapshot } from "@llmingress/db/console-analytics";
+import { getConsoleSecuritySummary } from "@llmingress/db/console-auth";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
-} from "../../server/notification-channels";
+} from "@llmingress/db/console-notification-channels";
 import {
   type ConsoleProviderHealthSummary,
   listConsoleProviderHealthSummaries,
-} from "../../server/provider-health";
+} from "@llmingress/db/console-provider-health";
 import {
   formatProviderApiKeyTestStatusLabel,
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
-} from "../../server/provider-keys";
+} from "@llmingress/db/console-provider-keys";
 import {
   type ConsoleProviderOAuthConnection,
   listConsoleProviderOAuthConnections,
-} from "../../server/provider-oauth";
-import { listProviderTemplateSelectorGroups } from "../../server/provider-templates";
-import { type ConsoleProvider, listProviders } from "../../server/providers";
+} from "@llmingress/db/console-provider-oauth";
+import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
+import { type ConsoleProvider, listProviders } from "@llmingress/db/console-providers";
 import {
   buildRoutePolicyHealthWarnings,
   type ConsoleProviderModelOption,
@@ -60,7 +60,7 @@ import {
   mergeRoutePolicyEditorProviderModelOptions,
   normalizeRoutePolicyEditorFilters,
   routePolicyStrategies,
-} from "../../server/route-policies";
+} from "@llmingress/db/console-route-policies";
 import {
   type ConsoleGatewayRuntimeStatus,
   formatGatewayConfigVersion,
@@ -68,7 +68,7 @@ import {
   formatGatewayHeartbeatSummary,
   formatRuntimeReloadResult,
   getConsoleRuntimeSnapshot,
-} from "../../server/runtime";
+} from "@llmingress/db/console-runtime";
 import {
   type ConsoleUsageDimensionBreakdown,
   type ConsoleUsageTrendPoint,
@@ -76,17 +76,15 @@ import {
   formatConsoleUsageCost,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
-} from "../../server/usage";
+} from "@llmingress/db/console-usage";
 import {
   type ConsoleVirtualModel,
   listVirtualModelFallbackBreakdown,
   listVirtualModels,
-} from "../../server/virtual-models";
-import { AgentVirtualModelMultiSelect } from "../_components/agent-virtual-model-multi-select";
+} from "@llmingress/db/console-virtual-models";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
-import { DatePickerInput } from "../_components/date-picker-input";
 import { FlatIcon } from "../_components/flat-icon";
 import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
@@ -774,21 +772,16 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <div className="usage-date-range-fields">
             <div className="console-field">
               <label htmlFor="usage-date-from">Start date</label>
-              <DatePickerInput
+              <input
+                type="date"
                 id="usage-date-from"
                 name="dateFrom"
                 defaultValue={dateFromValue}
-                pickerLabel="Start date"
               />
             </div>
             <div className="console-field">
               <label htmlFor="usage-date-to">End date</label>
-              <DatePickerInput
-                id="usage-date-to"
-                name="dateTo"
-                defaultValue={dateToValue}
-                pickerLabel="End date"
-              />
+              <input type="date" id="usage-date-to" name="dateTo" defaultValue={dateToValue} />
             </div>
           </div>
         </fieldset>
@@ -1376,6 +1369,9 @@ export async function VirtualModelsSection({
   const virtualModels = await listVirtualModels();
   const routePolicies = await listRoutePolicies();
   const providerHealthSummaries = await listConsoleProviderHealthSummaries();
+  const providerHealthByProviderId = new Map(
+    providerHealthSummaries.map((summary) => [summary.id, summary]),
+  );
   const providerModelOptions = orderProviderModelsForConsole(
     filterRoutePolicyEditorHealthyProviderModelOptions(
       await listProviderModelOptions(),
@@ -1415,6 +1411,14 @@ export async function VirtualModelsSection({
   const selectedRoutePolicy = selectedVirtualModel
     ? (routePolicyByVmId.get(selectedVirtualModel.id) ?? null)
     : null;
+  const selectedRoutePolicyWarnings = selectedRoutePolicy
+    ? [
+        ...selectedRoutePolicy.routeWarnings,
+        ...buildRoutePolicyHealthWarnings(
+          buildRoutePolicyHealthWarningCandidates(selectedRoutePolicy, providerHealthByProviderId),
+        ),
+      ]
+    : [];
   const dialogTarget = readSingleSearchParam(searchParams.virtualModelDialog);
   const dialogVirtualModel =
     dialogTarget && dialogTarget !== "new"
@@ -1665,6 +1669,16 @@ export async function VirtualModelsSection({
                   <p>No candidates configured.</p>
                 )}
               </section>
+              {selectedRoutePolicyWarnings.length > 0 ? (
+                <section className="agent-detail-section" aria-label="Route warnings">
+                  <h3>Route warnings</h3>
+                  {selectedRoutePolicyWarnings.map((warning) => (
+                    <p className="route-warning" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+                </section>
+              ) : null}
               <section className="agent-detail-section">
                 <h3>Fallback overview</h3>
                 {fallbackOverview.length > 0 ? (
@@ -2361,14 +2375,18 @@ function AgentCreateDialog({
             <option value="false">disabled</option>
           </select>
           <label htmlFor="agent-allowed-virtual-models">Allowed virtual models</label>
-          <AgentVirtualModelMultiSelect
+          <select
             id="agent-allowed-virtual-models"
             name="allowedVirtualModelIds"
-            options={virtualModels.map((virtualModel) => ({
-              id: virtualModel.id,
-              label: formatVirtualModelOptionLabel(virtualModel),
-            }))}
-          />
+            multiple
+            size={virtualModelSelectSize(virtualModels.length)}
+          >
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
           <label htmlFor="agent-default-virtual-model">Default virtual model</label>
           <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
             <option value="">No default virtual model</option>
@@ -2540,15 +2558,19 @@ function AgentEditDialog({
             <option value="false">disabled</option>
           </select>
           <label htmlFor={`agent-allowed-virtual-models-${agent.id}`}>Allowed virtual models</label>
-          <AgentVirtualModelMultiSelect
+          <select
             defaultValue={access.allowedVirtualModels.map((virtualModel) => virtualModel.id)}
             id={`agent-allowed-virtual-models-${agent.id}`}
             name="allowedVirtualModelIds"
-            options={virtualModels.map((virtualModel) => ({
-              id: virtualModel.id,
-              label: formatVirtualModelOptionLabel(virtualModel),
-            }))}
-          />
+            multiple
+            size={virtualModelSelectSize(virtualModels.length)}
+          >
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
           <label htmlFor={`agent-default-virtual-model-${agent.id}`}>Default virtual model</label>
           <select
             id={`agent-default-virtual-model-${agent.id}`}
@@ -4775,6 +4797,10 @@ function formatRoutePolicyCandidateOrder(candidates: Array<{ optionLabel: string
 
 function providerModelSelectSize(optionCount: number): number {
   return Math.min(6, Math.max(2, optionCount));
+}
+
+function virtualModelSelectSize(optionCount: number): number {
+  return Math.min(8, Math.max(2, optionCount));
 }
 
 function listRoutePolicyProviderFilterOptions(

@@ -112,10 +112,6 @@
       "types": "./src/gateway-auth.ts",
       "default": "./src/gateway-auth.ts"
     },
-    "./gateway-budgets": {
-      "types": "./src/gateway-budgets.ts",
-      "default": "./src/gateway-budgets.ts"
-    },
     "./gateway-chat-completions": {
       "types": "./src/gateway-chat-completions.ts",
       "default": "./src/gateway-chat-completions.ts"
@@ -132,14 +128,6 @@
       "types": "./src/gateway-error-mapping.ts",
       "default": "./src/gateway-error-mapping.ts"
     },
-    "./gateway-fallback-chain": {
-      "types": "./src/gateway-fallback-chain.ts",
-      "default": "./src/gateway-fallback-chain.ts"
-    },
-    "./gateway-gateway-runtime-status": {
-      "types": "./src/gateway-gateway-runtime-status.ts",
-      "default": "./src/gateway-gateway-runtime-status.ts"
-    },
     "./gateway-messages": {
       "types": "./src/gateway-messages.ts",
       "default": "./src/gateway-messages.ts"
@@ -147,10 +135,6 @@
     "./gateway-metrics": {
       "types": "./src/gateway-metrics.ts",
       "default": "./src/gateway-metrics.ts"
-    },
-    "./gateway-rate-limits": {
-      "types": "./src/gateway-rate-limits.ts",
-      "default": "./src/gateway-rate-limits.ts"
     },
     "./gateway-request-metadata": {
       "types": "./src/gateway-request-metadata.ts",
@@ -253,7 +237,6 @@
     "pg": "^8.21.0",
     "@llmingress/billing": "workspace:*",
     "@llmingress/domain": "workspace:*",
-    "@llmingress/observability": "workspace:*",
     "@llmingress/provider": "workspace:*",
     "@llmingress/security": "workspace:*"
   }

@@ -1,11 +1,9 @@
-import { type NextRequest, NextResponse } from "next/server";
 import {
   getSessionCookieOptions,
   loginConsoleAdmin,
   sessionCookieName,
-} from "../../../../server/auth";
-
-export const runtime = "nodejs";
+} from "@llmingress/db/console-auth";
+import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   const password = await readPassword(request);

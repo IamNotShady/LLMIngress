@@ -1,5 +1,12 @@
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
-import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
+import {
+  countEnabledWebhookNotificationChannels,
+  notificationAlertAlreadyQueued,
+  readObject,
+  readPositiveIntegerEnv,
+  readPositiveIntegerPayload,
+} from "./worker-alert-utils.ts";
+import type { JobHandler } from "./worker-job-runner.ts";
 import { queueNotificationEvent } from "./worker-notification-dispatcher.ts";
 
 export type ProviderFailureAlertSettings = {
@@ -81,7 +88,7 @@ export async function evaluateProviderFailureAlerts(
       databaseUrl: options.databaseUrl,
       thresholdCount: payload.thresholdCount,
     }),
-    readEnabledNotificationChannelCount(options.databaseUrl),
+    countEnabledWebhookNotificationChannels(options.databaseUrl),
   ]);
   const result: ProviderFailureAlertsResult = {
     evaluatedSummaryCount,
@@ -97,7 +104,13 @@ export async function evaluateProviderFailureAlerts(
       candidate,
       thresholdCount: payload.thresholdCount,
     });
-    if (await providerFailureAlertAlreadyQueued(options.databaseUrl, event.payload.alertKey)) {
+    if (
+      await notificationAlertAlreadyQueued({
+        alertKey: event.payload.alertKey,
+        databaseUrl: options.databaseUrl,
+        eventType: "provider_failure",
+      })
+    ) {
       result.skippedDuplicateAlertCount += 1;
       continue;
     }
@@ -143,7 +156,12 @@ export function readProviderFailureAlertPayload(payload: unknown): ProviderFailu
     thresholdCount:
       rawPayload.thresholdCount === undefined
         ? settings.thresholdCount
-        : readPositiveIntegerPayload(rawPayload.thresholdCount, "thresholdCount"),
+        : readPositiveIntegerPayload({
+            errorCode: "provider_failure_alerts_invalid_payload",
+            label: "Provider failure alert",
+            name: "thresholdCount",
+            value: rawPayload.thresholdCount,
+          }),
   };
 }
 
@@ -270,76 +288,4 @@ function rowToProviderFailureAlertCandidate(
     summaryId: row.summary_id,
     updatedAt: row.updated_at,
   };
-}
-
-async function readEnabledNotificationChannelCount(databaseUrl?: string): Promise<number> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    const result = await client.query<{ count: string }>(
-      "select count(*)::text as count from notification_channels where enabled = true and channel_type = 'webhook'",
-    );
-    return Number(result.rows[0]?.count ?? 0);
-  } finally {
-    await client.end();
-  }
-}
-
-async function providerFailureAlertAlreadyQueued(
-  databaseUrl: string | undefined,
-  alertKey: string,
-): Promise<boolean> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    const result = await client.query<{ exists: boolean }>(
-      `
-        select exists (
-          select 1
-          from notification_events
-          where event_type = 'provider_failure'
-            and payload ->> 'alertKey' = $1
-        ) as exists
-      `,
-      [alertKey],
-    );
-    return result.rows[0]?.exists ?? false;
-  } finally {
-    await client.end();
-  }
-}
-
-function readPositiveIntegerEnv(
-  value: string | undefined,
-  defaultValue: number,
-  name: string,
-): number {
-  if (value === undefined || value.trim() === "") {
-    return defaultValue;
-  }
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive integer.`);
-  }
-  return parsed;
-}
-
-function readPositiveIntegerPayload(value: unknown, name: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new JobHandlerError(
-      "provider_failure_alerts_invalid_payload",
-      `Provider failure alert payload ${name} must be a positive integer.`,
-    );
-  }
-  return value;
-}
-
-function readObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return value as Record<string, unknown>;
 }

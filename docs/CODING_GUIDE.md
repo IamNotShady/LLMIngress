@@ -1,9 +1,3 @@
-# Karpathy Guidelines
-
-Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**

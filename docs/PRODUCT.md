@@ -363,7 +363,7 @@ DeepSeek、xAI、Qwen、Moonshot、MiniMax、Z.ai 等 OpenAI-compatible Provider
 - GLM Coding Plan。
 - OpenCode Go。
 
-Subscription Provider 属于 V2 高风险探索能力，不进入 MVP / V1 范围。涉及 ChatGPT Plus / Pro、Claude Pro / Max、GitHub Copilot 等消费级订阅时，必须明确标注 ToS、封号和协议变更风险。若 Provider 不允许 API 转发，系统应禁用该 Provider 类型，并降级使用官方 API Key Provider 或 Local Provider。
+Subscription Provider / OAuth 接入保留在 V1 范围内，但按高风险能力处理：默认只通过内置白名单 Provider 模板开放，并且必须在 Console 中明确标注 ToS、封号和协议变更风险。涉及 ChatGPT Plus / Pro、Claude Pro / Max、GitHub Copilot 等消费级订阅时，如果 Provider 不允许 API 转发或协议不可稳定维护，系统应禁用对应 Provider 模板，并降级使用官方 API Key Provider 或 Local Provider。
 
 ### 8.4 Local Provider
 

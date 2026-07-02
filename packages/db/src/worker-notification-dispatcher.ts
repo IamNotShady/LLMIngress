@@ -93,18 +93,6 @@ type ClaimedNotificationEvent = {
 
 const defaultMaxBatchSize = 50;
 
-export function buildNotificationDeliveryPayload(
-  input: NotificationDeliveryPayload,
-): NotificationDeliveryPayload {
-  return {
-    body: input.body,
-    eventId: input.eventId,
-    eventType: input.eventType,
-    payload: input.payload,
-    subject: input.subject,
-  };
-}
-
 export async function queueNotificationEvent(
   input: QueueNotificationEventInput,
 ): Promise<QueueNotificationEventResult> {
@@ -201,13 +189,13 @@ export function createNotificationDispatchJobHandler(
     for (const event of events) {
       summary.processed += 1;
       const startedAt = now();
-      const payload = buildNotificationDeliveryPayload({
+      const payload: NotificationDeliveryPayload = {
         body: event.body,
         eventId: event.id,
         eventType: event.eventType,
         payload: event.payload,
         subject: event.subject,
-      });
+      };
       const result = await deliverNotification({
         deliverWebhook,
         event,

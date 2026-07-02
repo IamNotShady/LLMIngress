@@ -6,14 +6,13 @@ import { createBillingReconciliationJobHandler } from "@llmingress/db/worker-bil
 import { createBudgetThresholdAlertsJobHandler } from "@llmingress/db/worker-budget-threshold-alerts";
 import { createCostReportExportJobHandler } from "@llmingress/db/worker-cost-report-export";
 import { createFallbackExhaustionAlertsJobHandler } from "@llmingress/db/worker-fallback-exhaustion-alerts";
-import { createPostgresJobRunner, type JobRunner } from "@llmingress/db/worker-job-runner";
+import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
 import { createJsonlRequestLogExportJobHandler } from "@llmingress/db/worker-jsonl-export";
 import { createModelRefreshJobHandler } from "@llmingress/db/worker-model-refresh";
 import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
 import {
   createDefaultPeriodicTasks,
   createPostgresPeriodicScheduler,
-  type PeriodicScheduler,
 } from "@llmingress/db/worker-periodic-scheduler";
 import { createPriceSyncJobHandler } from "@llmingress/db/worker-price-sync";
 import { createProviderConnectivityCheckJobHandler } from "@llmingress/db/worker-provider-connectivity-check";
@@ -23,55 +22,41 @@ import { createRetentionCleanupJobHandler } from "@llmingress/db/worker-retentio
 import { createStaleReservationCleanupJobHandler } from "@llmingress/db/worker-stale-reservations";
 import { createWebhookEventExportJobHandler } from "@llmingress/db/worker-webhook-export";
 
-type StartWorkerOptions = {
-  jobRunner?: JobRunner;
-  periodicScheduler?: PeriodicScheduler;
-};
-
-export async function startWorker(options: StartWorkerOptions = {}) {
+export async function startWorker() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
-  const jobRunner =
-    options.jobRunner ??
-    createPostgresJobRunner({
-      handlers: {
-        model_refresh: createModelRefreshJobHandler({}),
-        provider_connectivity_check: createProviderConnectivityCheckJobHandler({}),
-        provider_failure_alerts: createProviderFailureAlertsJobHandler({}),
-        billing_reconciliation: createBillingReconciliationJobHandler({}),
-        backup: createBackupJobHandler({}),
-        budget_threshold_alerts: createBudgetThresholdAlertsJobHandler({}),
-        price_sync: createPriceSyncJobHandler({}),
-        cost_report_export: createCostReportExportJobHandler({}),
-        fallback_exhaustion_alerts: createFallbackExhaustionAlertsJobHandler({}),
-        jsonl_export: createJsonlRequestLogExportJobHandler({}),
-        notification_dispatch: createNotificationDispatchJobHandler({}),
-        rate_limit_alerts: createRateLimitAlertsJobHandler({}),
-        webhook_export: createWebhookEventExportJobHandler({}),
-        retention_cleanup: createRetentionCleanupJobHandler({}),
-        stale_reservation_cleanup: createStaleReservationCleanupJobHandler({}),
-      },
-      pollIntervalMs: config.workerHeartbeatMs,
-      workerId: readWorkerId(),
-    });
-  const periodicScheduler =
-    options.periodicScheduler ??
-    createPostgresPeriodicScheduler({
-      tasks: createDefaultPeriodicTasks(),
-      tickIntervalMs: config.workerHeartbeatMs,
-    });
+  const jobRunner = createPostgresJobRunner({
+    handlers: {
+      model_refresh: createModelRefreshJobHandler({}),
+      provider_connectivity_check: createProviderConnectivityCheckJobHandler({}),
+      provider_failure_alerts: createProviderFailureAlertsJobHandler({}),
+      billing_reconciliation: createBillingReconciliationJobHandler({}),
+      backup: createBackupJobHandler({}),
+      budget_threshold_alerts: createBudgetThresholdAlertsJobHandler({}),
+      price_sync: createPriceSyncJobHandler({}),
+      cost_report_export: createCostReportExportJobHandler({}),
+      fallback_exhaustion_alerts: createFallbackExhaustionAlertsJobHandler({}),
+      jsonl_export: createJsonlRequestLogExportJobHandler({}),
+      notification_dispatch: createNotificationDispatchJobHandler({}),
+      rate_limit_alerts: createRateLimitAlertsJobHandler({}),
+      webhook_export: createWebhookEventExportJobHandler({}),
+      retention_cleanup: createRetentionCleanupJobHandler({}),
+      stale_reservation_cleanup: createStaleReservationCleanupJobHandler({}),
+    },
+    pollIntervalMs: config.workerHeartbeatMs,
+    workerId: readWorkerId(),
+  });
+  const periodicScheduler = createPostgresPeriodicScheduler({
+    tasks: createDefaultPeriodicTasks(),
+    tickIntervalMs: config.workerHeartbeatMs,
+  });
   await jobRunner.start();
   await periodicScheduler.start();
-
-  const timer = setInterval(() => {
-    console.log("[worker] heartbeat");
-  }, config.workerHeartbeatMs);
 
   console.log("[worker] started");
 
   return {
     async stop() {
-      clearInterval(timer);
       await periodicScheduler.stop();
       await jobRunner.stop();
       console.log("[worker] stopped");

@@ -161,4 +161,18 @@ describe("console dark restyle static contract", () => {
     expect(providersClientSection).toContain('type="button"');
     expect(providersClientSection).not.toContain("href={providerHref}");
   });
+
+  test("provider details expand inline inside the provider list", () => {
+    const providersClientSection = readFileSync(
+      join(appDir, "_modules/providers-client-section.tsx"),
+      "utf8",
+    );
+    const stylesheet = css();
+
+    expect(providersClientSection).not.toContain("provider-detail-card");
+    expect(providersClientSection).toContain("provider-inline-detail-row");
+    expect(providersClientSection).toContain("provider-inline-detail");
+    expect(stylesheet).toContain(".provider-inline-detail");
+    expect(stylesheet).not.toContain(".provider-detail-card");
+  });
 });

@@ -134,6 +134,23 @@ describe("console dark restyle static contract", () => {
     );
   });
 
+  test("activity filters use a compact text-only query button aligned with the controls", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+    const activityFilterForm = sections.slice(
+      sections.indexOf('<form className="activity-filter-grid"'),
+      sections.indexOf('<div className="activity-shell">'),
+    );
+
+    expect(activityFilterForm).toContain("<span>Query</span>");
+    expect(activityFilterForm).not.toContain("FlatIcon");
+    expect(activityFilterForm).not.toContain("<span>Apply</span>");
+    expect(stylesheet).toMatch(/\.activity-filter-grid button\s*\{[^}]*min-height:\s*2\.25rem/s);
+    expect(stylesheet).toMatch(
+      /\.activity-filter-grid button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+    );
+  });
+
   test("virtual model details open in a read-only dialog instead of a side card", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

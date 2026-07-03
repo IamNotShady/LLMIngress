@@ -1071,8 +1071,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
         </div>
         <div className="console-actions">
           <button type="submit">
-            <FlatIcon name="filter" />
-            <span>Apply</span>
+            <span>Query</span>
           </button>
         </div>
       </form>

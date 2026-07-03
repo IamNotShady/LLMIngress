@@ -3100,6 +3100,10 @@ button.table-row-link {
 .activity-filter-grid .console-field {
   min-width: 0;
 }
+.activity-filter-grid button {
+  min-height: 2.25rem;
+  padding-block: var(--space-xs);
+}
 .activity-request-filter input {
   font-family: var(--font-mono);
 }

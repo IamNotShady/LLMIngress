@@ -324,7 +324,7 @@ describe("console dark restyle static contract", () => {
     expect(routeDialog).not.toContain("Current strategy");
     expect(stylesheet).toMatch(/\.vm-route-dialog\s*\{[^}]*width:\s*min\(56rem/s);
     expect(stylesheet).toMatch(/\.vm-route-dialog\s*\{[^}]*overflow-x:\s*hidden/s);
-    expect(stylesheet).toMatch(/\.vm-dialog-actions\s*\{[^}]*justify-content:\s*center/s);
+    expect(stylesheet).toMatch(/\.vm-dialog-actions\s*\{[^}]*justify-content:\s*flex-end/s);
     expect(stylesheet).toMatch(/\.vm-editor-grid\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).not.toContain(".vm-policy-note");
   });

@@ -101,6 +101,7 @@
 - Follow-up Settings notification button polish: shortened the webhook notification submit button to `Save`, removed the icon, and centered it at normal button width.
 - Follow-up Console UI consistency sweep: fixed the remaining Usage query height mismatch and compacted text-only submit buttons in Agent/Provider dialogs plus the Virtual Model Add Model action.
 - Follow-up Agent create action alignment: right-aligned compact single-submit dialog actions while leaving centered multi-action rows unchanged.
+- Follow-up Virtual Models action alignment: right-aligned the route editor dialog `Cancel` / submit action row.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -147,6 +148,7 @@
   - Follow-up Settings notification button check: targeted unit, Console typecheck, lint, and SSR/source checks passed; markup and CSS confirm the webhook notification submit button renders as text-only `Save`, uses normal centered button width, has zero icons, and no old long label remains. In-app Browser control timed out during navigation/DOM reads, so full visual browser validation was not completed. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Console UI consistency sweep check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser swept the 10 main Console routes with zero horizontal overflow, zero persistent right-side detail panels, text-only Query buttons with `0px` height delta, no console warnings/errors, and confirmed Agent/Provider create plus Virtual Model Add Model dialog actions are compact and icon-free. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Agent create action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the New agent `Create` action is text-only, has zero icons, has `0px` right delta against the form, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Virtual Models action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Virtual Model route editor actions render as `Cancel` / `Create`, use `flex-end`, have zero icons, have `0px` right delta, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

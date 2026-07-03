@@ -144,6 +144,14 @@ describe("console dark restyle static contract", () => {
     expect(sections).toContain('className="console-dialog agent-view-dialog vm-view-dialog"');
     expect(stylesheet).toMatch(/\.vm-shell\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).not.toContain(".vm-detail-card");
+    expect(stylesheet).toMatch(/\.vm-view-dialog\s*\{[^}]*width:\s*min\(64rem/s);
+    expect(stylesheet).toMatch(/\.vm-view-dialog\s*\{[^}]*display:\s*grid/s);
+    expect(stylesheet).toMatch(
+      /\.vm-view-dialog\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.vm-view-dialog \.console-dialog-head\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s,
+    );
   });
 
   test("virtual model edit dialog uses the full dialog width", () => {

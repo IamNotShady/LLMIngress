@@ -40,6 +40,7 @@
 - Follow-up Virtual Models button polish: removed the leading icon from `Create Virtual Model`, changed the filter submit button to text-only `Query`, and aligned it with the search input.
 - Follow-up Virtual Models detail dialog: removed the right-side Virtual Model detail card and moved read-only model details into a row-click dialog, letting the Virtual Model list span the page width.
 - Follow-up Virtual Models route editor layout: removed the right-side current-strategy note from the route editor dialog and let the editor form occupy the full dialog width.
+- Follow-up Virtual Models detail dialog layout: widened the read-only detail dialog and arranged its cards in a two-column grid.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -68,6 +69,7 @@
   - Follow-up Virtual Models button polish check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `Create Virtual Model` and `Query` have no icons, `Query` matches the search input height at `38.8px`, no horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Virtual Models detail dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed clicking a Virtual Model row opens one `.vm-view-dialog`, removes `.vm-detail-card`, keeps `.vm-shell` as `block`, expands the list card to `1100.73px`, close returns to `/models`, no horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Virtual Models route editor layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the route editor dialog has no `.vm-policy-note`, no `Current strategy` text, `.vm-editor-grid` is `display: block`, form/dialog width ratio is `0.957`, Add Model opens and closes normally, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Virtual Models detail dialog layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the read-only `.vm-view-dialog` is `1024px` wide, uses `display: grid` with `479px 479px` columns, places Summary/Candidates and Warnings/Fallback as two cards per row, Close returns to `/models`, no horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

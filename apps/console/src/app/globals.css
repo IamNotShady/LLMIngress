@@ -1522,6 +1522,15 @@ body:has(.console-dialog-scrim) {
   gap: var(--space-md);
   width: min(42rem, calc(100vw - 2rem));
 }
+.vm-view-dialog {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  width: min(64rem, calc(100vw - 2rem));
+}
+.vm-view-dialog .console-dialog-head {
+  grid-column: 1 / -1;
+}
 .agent-view-dialog .console-dialog-head {
   align-items: flex-start;
   margin-bottom: 0;
@@ -3495,6 +3504,7 @@ button.table-row-link {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .vm-filter-bar,
+  .vm-view-dialog,
   .vm-editor-fields,
   .vm-dialog-actions,
   .vm-model-filter-bar {

@@ -5,7 +5,17 @@
 - Date: 2026-07-03
 - Branch: `worktree-console-dark-restyle`
 - Base: `dev` at `d28e21ac`
-- Status: Console dark restyle implemented and verified.
+- Status: Console dark restyle verified; UI/UX review batch 1 (`console-p0-layout`) implemented and verified.
+
+## 2026-07-03 UI/UX Review → console-p0-layout (batch 1 of 4)
+
+- Ran a designer review of the live console (11 pages, 1280/390 screenshots, dialogs, focus states). Fix plan has 4 batches: P0 layout → semantic colors/destructive actions → shared formatters → filters/forms polish. Batches 2–4 are not started.
+- Implemented `console-p0-layout` (TDD red→green, E2E seeds request + limit data because a fresh DB hides all four defects):
+  - `.chart-card` gets `min-width: 0` and the 56rem `.detail-layout` override uses `minmax(0, 1fr)`, so the Overview recent-requests table scrolls inside its card instead of widening the page by 458px at 390.
+  - Limits rules table now fits the 1280 content column with row actions fully visible: cell `padding-inline` md→sm, actions gap sm→xs, headers `Cost limit`→`Budget` and `Token limit`→`Tokens`, table `min-width` 64rem→56rem.
+  - `TrendLineChart` renders a `.chart-empty` message (per-call-site copy) instead of a blank card when the window has no data points.
+  - Sidebar collapses behind a text `Menu` toggle at ≤56rem (aria-expanded/aria-controls, drawer closes after navigation); desktop layout unchanged.
+- Release guards now accept 7 feature contracts (added `console-p0-layout`).
 
 ## Compression Summary
 

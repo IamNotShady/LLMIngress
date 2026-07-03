@@ -285,6 +285,11 @@ pre,
   padding: var(--space-2xs) var(--space-xs) var(--space-sm);
 }
 
+/* Mobile-only nav drawer toggle; hidden on desktop where the sidebar is fixed. */
+.sidebar-menu-toggle {
+  display: none;
+}
+
 .sidebar-mark {
   display: grid;
   place-items: center;
@@ -1137,6 +1142,15 @@ body:has(.console-dialog-scrim) {
     flex-direction: column;
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+  .sidebar-menu-toggle {
+    display: inline-flex;
+    margin-left: auto;
+  }
+  /* Collapsed by default: only the brand bar + menu toggle stay visible. */
+  .sidebar:not(.is-menu-open) .sidebar-nav,
+  .sidebar:not(.is-menu-open) .sidebar-footer {
+    display: none;
   }
   .sidebar-nav {
     flex-direction: row;
@@ -2193,11 +2207,21 @@ button.table-row-link {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  /* Grid/flex items default to min-width:auto; nowrap tables inside would
+     otherwise widen the track past the container. */
+  min-width: 0;
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
+}
+.chart-empty {
+  display: grid;
+  place-items: center;
+  min-height: 15rem;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
 }
 .chart-card-title {
   font-size: var(--text-md);
@@ -2875,12 +2899,14 @@ button.table-row-link {
   background: var(--surface);
 }
 .limits-rule-table {
-  min-width: 64rem;
+  min-width: 56rem;
 }
 .limits-rule-table th,
 .limits-rule-table td {
   height: 3.25rem;
-  padding-inline: var(--space-md);
+  /* Compact enough that all ten columns (actions included) fit the 1280
+     content column without clipping. */
+  padding-inline: var(--space-sm);
 }
 .limits-rule-table thead th {
   letter-spacing: 0;
@@ -2909,7 +2935,7 @@ button.table-row-link {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
 }
 .limits-rule-delete-form {
   margin: 0;
@@ -3490,7 +3516,7 @@ button.table-row-link {
   .detail-layout,
   .overview-dashboard .detail-layout,
   .agents-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .agents-filter-bar {
     grid-template-columns: 1fr;

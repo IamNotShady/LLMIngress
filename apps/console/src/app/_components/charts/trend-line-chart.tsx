@@ -28,12 +28,22 @@ export function TrendLineChart({
   series,
   height = 240,
   ariaLabel,
+  emptyMessage = "No data in this window.",
 }: {
   data: TrendPoint[];
   series: TrendSeries[];
   height?: number;
   ariaLabel?: string;
+  emptyMessage?: string;
 }) {
+  if (data.length === 0) {
+    return (
+      <div className="chart-empty" style={{ minHeight: height }} role="status">
+        {emptyMessage}
+      </div>
+    );
+  }
+
   return (
     <div className="chart-surface" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height={height}>

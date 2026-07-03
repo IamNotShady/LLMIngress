@@ -10,6 +10,7 @@ const allowedFeatureIds = [
   "v1-worker-ops",
   "v1-release-guards",
   "console-dark-restyle",
+  "console-p0-layout",
 ];
 
 describe("v1 release guards milestone", () => {

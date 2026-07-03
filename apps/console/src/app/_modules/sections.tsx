@@ -284,6 +284,7 @@ export async function OverviewSection() {
           <h2 className="chart-card-title">Requests &amp; cost trend</h2>
           <TrendLineChart
             ariaLabel="Requests and cost trend"
+            emptyMessage="No requests in the last 24h."
             data={trend}
             series={[
               { key: "requests", name: "Requests", color: chartAccent },
@@ -750,6 +751,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <h2 className="chart-card-title">Cost trend</h2>
           <TrendLineChart
             ariaLabel="Cost trend"
+            emptyMessage="No cost recorded in this range."
             data={costTrend}
             series={[
               { key: "baselineCostUsd", name: "Baseline (USD)", color: usageTrendBaselineColor },
@@ -761,6 +763,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <h2 className="chart-card-title">Tokens trend</h2>
           <TrendLineChart
             ariaLabel="Tokens trend"
+            emptyMessage="No tokens recorded in this range."
             data={tokenTrend}
             series={[
               { key: "inputTokens", name: "Input tokens", color: usageTrendBaselineColor },
@@ -2929,8 +2932,8 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                   <tr>
                     <th>Agent</th>
                     <th>API Key</th>
-                    <th className="num">Cost limit</th>
-                    <th className="num">Token limit</th>
+                    <th className="num">Budget</th>
+                    <th className="num">Tokens</th>
                     <th className="num">RPM</th>
                     <th className="num">TPM</th>
                     <th className="num">Concurrency</th>

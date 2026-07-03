@@ -212,6 +212,9 @@ describe("console dark restyle static contract", () => {
 
     expect(limitsSection).toContain("limitDialog: row.agent.id");
     expect(limitsSection).toContain("<span>Edit</span>");
+    expect(limitsSection).toContain('className="agent-table-actions"');
+    expect(limitsSection).toContain('className="link-button agent-action-edit"');
+    expect(limitsSection).not.toContain('className="table-action-link"');
     expect(limitsSection).not.toContain("<LimitsConfigPanel");
     expect(limitsSection).not.toContain('className="table-row-link"');
     expect(limitsSection).not.toContain("is-clickable");

@@ -2974,14 +2974,16 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                           </td>
                           <td className="limits-rule-action-cell">
                             <span className="limits-rule-actions">
-                              <a
-                                aria-label={`Edit ${row.agent.name}`}
-                                className="table-action-link"
-                                href={editHref}
-                              >
-                                <FlatIcon name="edit" />
-                                <span>Edit</span>
-                              </a>
+                              <span className="agent-table-actions">
+                                <a
+                                  aria-label={`Edit ${row.agent.name}`}
+                                  className="link-button agent-action-edit"
+                                  href={editHref}
+                                >
+                                  <FlatIcon name="edit" />
+                                  <span>Edit</span>
+                                </a>
+                              </span>
                               <form
                                 action="/api/agent-limits"
                                 className="limits-rule-delete-form"

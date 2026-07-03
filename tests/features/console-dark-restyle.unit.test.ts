@@ -169,6 +169,21 @@ describe("console dark restyle static contract", () => {
     );
   });
 
+  test("playground actions show Clear before Send", () => {
+    const playground = readFileSync(join(appDir, "playground.tsx"), "utf8");
+    const actions = playground.slice(
+      playground.indexOf('<div className="console-actions playground-actions">'),
+      playground.indexOf(
+        "</div>",
+        playground.indexOf('<div className="console-actions playground-actions">'),
+      ),
+    );
+
+    expect(actions.indexOf("<span>Clear</span>")).toBeLessThan(actions.indexOf('"Send"'));
+    expect(actions).toContain('"Send"');
+    expect(actions).not.toContain("Send test");
+  });
+
   test("limit rules open configuration in a dialog from row edit actions", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

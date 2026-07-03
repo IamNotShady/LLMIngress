@@ -3289,6 +3289,10 @@ button.table-row-link {
   font-size: 0.8rem;
   font-weight: 600;
 }
+.vm-filter-bar button {
+  min-height: 2.25rem;
+  padding-block: var(--space-xs);
+}
 .vm-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.44fr);

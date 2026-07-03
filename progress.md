@@ -37,6 +37,7 @@
 - Follow-up Provider row toggle: clicking an already-expanded Provider row now collapses its inline credential detail instead of keeping it open.
 - Follow-up Provider local refresh: Provider row refresh now submits through a local client fetch and the existing endpoint returns JSON for that path, so clicking refresh no longer navigates or reloads the page.
 - Follow-up Provider header/runtime polish: aligned the sidebar gateway status dot with its status label and removed the leading icon from the `Add Provider` button.
+- Follow-up Virtual Models button polish: removed the leading icon from `Create Virtual Model`, changed the filter submit button to text-only `Query`, and aligned it with the search input.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -62,6 +63,7 @@
   - Follow-up Provider row toggle check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed an expanded Provider row has one inline detail row, clicking the same row collapses to zero inline detail rows and zero expanded buttons, clicking it again restores one inline detail row, with no horizontal overflow and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Provider local refresh check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed clicking `Refresh models for OPEN AI1` from clean `/providers` keeps the URL unchanged at `/providers`, preserves the selected row and inline detail, keeps the page nonblank, has no horizontal overflow, and produces no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Provider header/runtime polish check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `Add Provider` has no icon, the button remains 30px tall, the sidebar gateway status dot/title center delta is `0px`, no horizontal overflow, and no console errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Virtual Models button polish check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `Create Virtual Model` and `Query` have no icons, `Query` matches the search input height at `38.8px`, no horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

@@ -114,6 +114,26 @@ describe("console dark restyle static contract", () => {
     expect(providersPage).toContain("<span>Add Provider</span>");
   });
 
+  test("virtual model actions use centered text without leading icons", () => {
+    const modelsPage = readFileSync(join(appDir, "(dashboard)/models/page.tsx"), "utf8");
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+    const vmFilterForm = sections.slice(
+      sections.indexOf('<form className="vm-filter-bar"'),
+      sections.indexOf('<div className="vm-shell">'),
+    );
+
+    expect(modelsPage).not.toContain("FlatIcon");
+    expect(modelsPage).toContain("<span>Create Virtual Model</span>");
+    expect(vmFilterForm).toContain("<span>Query</span>");
+    expect(vmFilterForm).not.toContain("FlatIcon");
+    expect(vmFilterForm).not.toContain("<span>Apply</span>");
+    expect(stylesheet).toMatch(/\.vm-filter-bar button\s*\{[^}]*min-height:\s*2\.25rem/s);
+    expect(stylesheet).toMatch(
+      /\.vm-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+    );
+  });
+
   test("agents list opens read-only details in a dialog instead of a side card", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

@@ -1391,8 +1391,7 @@ export async function VirtualModelsSection({
           defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}
         />
         <button type="submit">
-          <FlatIcon name="filter" />
-          <span>Apply</span>
+          <span>Query</span>
         </button>
       </form>
       <div className="vm-shell">

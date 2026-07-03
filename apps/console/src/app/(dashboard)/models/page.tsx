@@ -1,4 +1,3 @@
-import { FlatIcon } from "../../_components/flat-icon";
 import { PageHeader } from "../../_components/page-header";
 import { type ConsoleSearchParams, VirtualModelsSection } from "../../_modules/sections";
 
@@ -15,7 +14,6 @@ export default async function VirtualModelsPage({
         description="Expose simple routing policies under a Virtual Model name: strategy + candidates."
         actions={
           <a className="btn" href="/models?virtualModelDialog=new">
-            <FlatIcon name="add" />
             <span>Create Virtual Model</span>
           </a>
         }

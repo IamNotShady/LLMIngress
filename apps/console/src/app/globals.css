@@ -3338,7 +3338,7 @@ button.table-row-link {
   white-space: nowrap;
 }
 .vm-route-dialog {
-  width: min(48rem, calc(100vw - 3rem));
+  width: min(56rem, calc(100vw - 3rem));
   max-height: calc(100vh - 4rem);
   overflow-x: hidden;
   overflow-y: auto;
@@ -3402,7 +3402,7 @@ button.table-row-link {
 }
 .vm-dialog-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: var(--space-sm);
 }
 .vm-dialog-actions > * {

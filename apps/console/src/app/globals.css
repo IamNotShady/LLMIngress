@@ -2713,6 +2713,11 @@ button.table-row-link {
 .usage-filter-bar .console-actions {
   align-self: end;
 }
+.usage-filter-bar button {
+  height: 2.35rem;
+  min-height: 2.35rem;
+  padding-block: var(--space-xs);
+}
 .usage-filter-bar input,
 .usage-filter-bar select {
   min-height: 2.35rem;

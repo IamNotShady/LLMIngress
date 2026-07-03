@@ -715,8 +715,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
         </div>
         <div className="console-actions">
           <button type="submit">
-            <FlatIcon name="filter" />
-            <span>Apply</span>
+            <span>Query</span>
           </button>
         </div>
       </form>

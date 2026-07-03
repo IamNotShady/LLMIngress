@@ -151,6 +151,24 @@ describe("console dark restyle static contract", () => {
     );
   });
 
+  test("usage filters use a compact text-only query button aligned with the controls", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+    const usageFilterForm = sections.slice(
+      sections.indexOf('<form className="usage-filter-bar"'),
+      sections.indexOf('<div className="stat-grid usage-kpi-grid">'),
+    );
+
+    expect(usageFilterForm).toContain("<span>Query</span>");
+    expect(usageFilterForm).not.toContain("FlatIcon");
+    expect(usageFilterForm).not.toContain("<span>Apply</span>");
+    expect(stylesheet).toMatch(/\.usage-filter-bar button\s*\{[^}]*height:\s*2\.35rem/s);
+    expect(stylesheet).toMatch(/\.usage-filter-bar button\s*\{[^}]*min-height:\s*2\.35rem/s);
+    expect(stylesheet).toMatch(
+      /\.usage-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+    );
+  });
+
   test("virtual model details open in a read-only dialog instead of a side card", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

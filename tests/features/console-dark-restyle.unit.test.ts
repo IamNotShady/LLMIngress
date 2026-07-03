@@ -287,6 +287,7 @@ describe("console dark restyle static contract", () => {
     expect(limitsDialog).toContain('aria-modal="true"');
     expect(limitsDialog).toContain("<span>Save</span>");
     expect(limitsDialog).not.toContain("Save rules");
+    expect(limitsDialog).not.toContain("formatLimitsKeyPrefix(agent.keyPrefix)");
     expect(limitsActions).not.toContain("FlatIcon");
     expect(limitsDialog).not.toContain("<aside");
     expect(stylesheet).toMatch(/\.limits-main\s*\{[^}]*display:\s*block/s);

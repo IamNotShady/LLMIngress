@@ -3037,7 +3037,6 @@ function LimitsConfigDialog({
             </h2>
             <p>{agent.name}</p>
           </div>
-          <span className="mono">{formatLimitsKeyPrefix(agent.keyPrefix)}</span>
           <a className="secondary-button" href={closeHref}>
             Close
           </a>

@@ -1505,16 +1505,18 @@ export async function VirtualModelsSection({
                             </a>
                           </td>
                           <td>
-                            <a
-                              className="table-action-link"
-                              href={buildQueryHref(searchParams, {
-                                virtualModelView: undefined,
-                                virtualModelDialog: virtualModel.id,
-                              })}
-                            >
-                              <FlatIcon name="edit" />
-                              <span>Edit</span>
-                            </a>
+                            <span className="agent-table-actions">
+                              <a
+                                className="link-button agent-action-edit"
+                                href={buildQueryHref(searchParams, {
+                                  virtualModelView: undefined,
+                                  virtualModelDialog: virtualModel.id,
+                                })}
+                              >
+                                <FlatIcon name="edit" />
+                                <span>Edit</span>
+                              </a>
+                            </span>
                           </td>
                         </tr>
                       );

@@ -122,12 +122,19 @@ describe("console dark restyle static contract", () => {
       sections.indexOf('<form className="vm-filter-bar"'),
       sections.indexOf('<div className="vm-shell">'),
     );
+    const vmTable = sections.slice(
+      sections.indexOf('<table className="data-table vm-table">'),
+      sections.indexOf("</table>", sections.indexOf('<table className="data-table vm-table">')),
+    );
 
     expect(modelsPage).not.toContain("FlatIcon");
     expect(modelsPage).toContain("<span>Create Virtual Model</span>");
     expect(vmFilterForm).toContain("<span>Query</span>");
     expect(vmFilterForm).not.toContain("FlatIcon");
     expect(vmFilterForm).not.toContain("<span>Apply</span>");
+    expect(vmTable).toContain('className="agent-table-actions"');
+    expect(vmTable).toContain('className="link-button agent-action-edit"');
+    expect(vmTable).not.toContain('className="table-action-link"');
     expect(stylesheet).toMatch(/\.vm-filter-bar button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
       /\.vm-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,

@@ -121,6 +121,8 @@ export function ProvidersClientSection({
                       );
                       const isSelected = provider.id === selectedProvider?.id;
                       const isRefreshing = provider.id === refreshingProviderId;
+                      const isRefreshDisabled =
+                        !provider.enabled || providerKeyCount === 0 || isRefreshing;
 
                       return (
                         <Fragment key={provider.id}>
@@ -201,10 +203,14 @@ export function ProvidersClientSection({
                                   <input type="hidden" name="providerId" value={provider.id} />
                                   <button
                                     className="provider-refresh-button"
-                                    disabled={providerKeyCount === 0 || isRefreshing}
+                                    disabled={isRefreshDisabled}
                                     aria-busy={isRefreshing}
                                     aria-label={`Refresh models for ${provider.displayName}`}
-                                    title="Refresh models"
+                                    title={
+                                      provider.enabled
+                                        ? "Refresh models"
+                                        : "Enable provider to refresh models"
+                                    }
                                     type="submit"
                                   >
                                     <FlatIcon name="refresh" />

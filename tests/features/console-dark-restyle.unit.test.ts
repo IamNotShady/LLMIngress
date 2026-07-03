@@ -341,6 +341,7 @@ describe("console dark restyle static contract", () => {
       join(appDir, "api/provider-model-refresh/route.ts"),
       "utf8",
     );
+    const providerJobs = readFileSync(join(rootDir, "packages/db/src/provider-jobs.ts"), "utf8");
     const stylesheet = css();
 
     expect(providersClientSection).not.toContain("provider-detail-card");
@@ -353,7 +354,12 @@ describe("console dark restyle static contract", () => {
     expect(providersClientSection).toContain('headers: { accept: "application/json" }');
     expect(providersClientSection).toContain("provider-refresh-button");
     expect(providersClientSection).toContain("Refresh models for");
+    expect(providersClientSection).toContain(
+      "!provider.enabled || providerKeyCount === 0 || isRefreshing",
+    );
+    expect(providersClientSection).toContain("Enable provider to refresh models");
     expect(providerModelRefreshRoute).toContain('includes("application/json")');
+    expect(providerJobs).toContain("Provider must be enabled before refreshing models.");
     expect(providersClientSection).toContain("provider-inline-detail-row");
     expect(providersClientSection).toContain("provider-inline-detail");
     expect(stylesheet).toContain(".provider-inline-detail");

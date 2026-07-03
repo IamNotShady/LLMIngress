@@ -103,6 +103,7 @@
 - Follow-up Agent create action alignment: right-aligned compact single-submit dialog actions while leaving centered multi-action rows unchanged.
 - Follow-up Virtual Models action alignment: right-aligned the route editor dialog `Cancel` / submit action row.
 - Follow-up filter button wording: renamed all Console filter-submit buttons from `Query` to `Filter`.
+- Follow-up Limits action realignment: right-aligned the rule dialog `Cancel` / `Save` action row while preserving equal button widths.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -151,6 +152,7 @@
   - Follow-up Agent create action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the New agent `Create` action is text-only, has zero icons, has `0px` right delta against the form, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Virtual Models action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Virtual Model route editor actions render as `Cancel` / `Create`, use `flex-end`, have zero icons, have `0px` right delta, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up filter button wording check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed Agents, Virtual Models, Activity, and Usage filter buttons all render `Filter`, have zero icons, have no remaining visible `Query` buttons, have no horizontal overflow, and have no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Limits action realignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog actions render as `Cancel` / `Save`, use `flex-end`, keep equal `116px` widths, have zero icons, have `0px` right delta, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

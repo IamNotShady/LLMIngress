@@ -290,7 +290,7 @@ describe("console dark restyle static contract", () => {
     expect(limitsActions).not.toContain("FlatIcon");
     expect(limitsDialog).not.toContain("<aside");
     expect(stylesheet).toMatch(/\.limits-main\s*\{[^}]*display:\s*block/s);
-    expect(stylesheet).toMatch(/\.limits-config-actions\s*\{[^}]*justify-content:\s*center/s);
+    expect(stylesheet).toMatch(/\.limits-config-actions\s*\{[^}]*justify-content:\s*flex-end/s);
     expect(stylesheet).toMatch(
       /\.limits-config-actions :is\(button, \.secondary-button\)\s*\{[^}]*width:\s*7\.25rem/s,
     );

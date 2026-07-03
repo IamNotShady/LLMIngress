@@ -1982,6 +1982,17 @@ body:has(.console-dialog-scrim) {
   min-height: 1.5rem;
   text-decoration: none;
 }
+button.table-row-link {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  background: transparent;
+  cursor: pointer;
+}
 .agent-table-actions {
   display: flex;
   align-items: center;

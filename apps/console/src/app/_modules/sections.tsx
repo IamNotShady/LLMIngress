@@ -39,7 +39,6 @@ import {
   listConsoleProviderHealthSummaries,
 } from "@llmingress/db/console-provider-health";
 import {
-  formatProviderApiKeyTestStatusLabel,
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
 } from "@llmingress/db/console-provider-keys";
@@ -88,6 +87,7 @@ import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref, PAGE_SIZE, paginate, readPageParam } from "../_lib/pagination";
 import { ProviderCreateForm } from "./provider-create-form";
+import { ProvidersClientSection } from "./providers-client-section";
 import { VirtualModelRouteDialogClient } from "./virtual-model-route-dialog";
 
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
@@ -564,33 +564,6 @@ export async function RuntimeSection() {
 
 function ProviderHealthDetailPill({ status }: { status: string }) {
   return <ProviderStatusPill label={formatProviderHealthStatusLabel(status)} status={status} />;
-}
-
-function ProviderApiKeyTestStatusPill({
-  status,
-}: {
-  status: ProviderApiKeyMetadata["lastTestStatus"];
-}) {
-  return <ProviderStatusPill label={formatProviderApiKeyTestStatusLabel(status)} status={status} />;
-}
-
-function ProviderOAuthTestStatusPill({
-  status,
-}: {
-  status: ConsoleProviderOAuthConnection["lastTestStatus"];
-}) {
-  return <ProviderStatusPill label={formatProviderApiKeyTestStatusLabel(status)} status={status} />;
-}
-
-function ModelAvailabilityPill({ value }: { value: string }) {
-  const normalized = value.toLowerCase();
-  if (normalized === "available") {
-    return <span className="pill--ok pill">Enabled</span>;
-  }
-  if (normalized === "disabled") {
-    return <span className="pill--danger pill">Disabled</span>;
-  }
-  return <span className="pill">{formatModelAvailability(value)}</span>;
 }
 
 function ProviderStatusPill({ label, status }: { label: string; status: string }) {
@@ -3499,27 +3472,12 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     providers.find((provider) => provider.providerKey === "openai") ??
     providers[0] ??
     null;
-  const selectedProviderHealth = selectedProvider
-    ? providerHealthByProviderId.get(selectedProvider.id)
-    : undefined;
   const selectedProviderKeys = selectedProvider
     ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
     : [];
-  const selectedProviderOAuthConnections = selectedProvider
-    ? (providerOAuthByProviderId.get(selectedProvider.id) ?? [])
-    : [];
-  const selectedProviderCredentialCount =
-    selectedProvider?.providerType === "local"
-      ? 1
-      : selectedProvider?.providerType === "subscription"
-        ? selectedProviderOAuthConnections.length
-        : selectedProviderKeys.length;
   const deleteProviderKey = selectedProviderKeys.find(
     (providerKey) => providerKey.id === providerKeyDelete,
   );
-  const selectedProviderModels = selectedProvider
-    ? (providerModelsByProviderId.get(selectedProvider.id) ?? [])
-    : [];
 
   return (
     <section className="providers-dashboard" aria-label="Providers & Models">
@@ -3575,421 +3533,15 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
         )}
       </div>
 
-      <div className="providers-content-grid">
-        <div className="providers-main-column">
-          <div className="chart-card providers-list-card">
-            <h2 className="chart-card-title">Provider list</h2>
-            {providers.length === 0 ? (
-              <p>No providers configured.</p>
-            ) : (
-              <div className="data-table-wrap">
-                <table className="data-table providers-table">
-                  <thead>
-                    <tr>
-                      <th>Provider</th>
-                      <th>Status</th>
-                      <th>Type</th>
-                      <th className="num">Keys</th>
-                      <th className="num">Models</th>
-                      <th>Last connected</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {providers.map((provider) => {
-                      const providerHealth = providerHealthByProviderId.get(provider.id);
-                      const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-                      const providerKeyCount = readProviderCredentialCount(
-                        provider,
-                        providerKeysByProviderId,
-                        providerOAuthByProviderId,
-                      );
-                      const providerHref = buildQueryHref(searchParams, {
-                        providerDialog: undefined,
-                        selected: provider.id,
-                      });
-                      return (
-                        <tr
-                          className={
-                            provider.id === selectedProvider?.id ? "is-selected" : "is-clickable"
-                          }
-                          key={provider.id}
-                        >
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              <strong>{provider.displayName}</strong>
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              <ProviderHealthDetailPill
-                                status={
-                                  provider.enabled
-                                    ? (providerHealth?.status ?? "unknown")
-                                    : "disabled"
-                                }
-                              />
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              {formatProviderType(provider)}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={providerHref}>
-                              {providerKeyCount}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={providerHref}>
-                              {providerModels.length}
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              {formatProviderLastConnection(providerHealth)}
-                            </a>
-                          </td>
-                          <td>
-                            <span className="provider-table-actions">
-                              {provider.enabled ? (
-                                <>
-                                  <a
-                                    className="provider-action-button provider-action-edit"
-                                    href={buildQueryHref(searchParams, {
-                                      providerDialog: provider.id,
-                                      selected: provider.id,
-                                    })}
-                                    aria-label={`Edit ${provider.displayName}`}
-                                    title="Edit"
-                                  >
-                                    <FlatIcon name="edit" />
-                                  </a>
-                                  <form action="/api/providers" method="post">
-                                    <input type="hidden" name="action" value="disable" />
-                                    <input type="hidden" name="id" value={provider.id} />
-                                    <button
-                                      className="provider-action-button provider-action-delete"
-                                      aria-label={`Disable ${provider.displayName}`}
-                                      title="Disable"
-                                      type="submit"
-                                    >
-                                      <FlatIcon name="disable" />
-                                    </button>
-                                  </form>
-                                  <a
-                                    className="provider-action-button provider-action-delete"
-                                    href={buildQueryHref(searchParams, {
-                                      providerDelete: provider.id,
-                                      selected: provider.id,
-                                    })}
-                                    aria-label={`Delete ${provider.displayName}`}
-                                    title="Delete"
-                                  >
-                                    <FlatIcon name="delete" />
-                                  </a>
-                                </>
-                              ) : (
-                                <>
-                                  <form action="/api/providers" method="post">
-                                    <input type="hidden" name="action" value="enable" />
-                                    <input type="hidden" name="id" value={provider.id} />
-                                    <button
-                                      className="provider-action-button provider-action-enable"
-                                      aria-label={`Enable ${provider.displayName}`}
-                                      title="Enable"
-                                      type="submit"
-                                    >
-                                      <FlatIcon name="enable" />
-                                    </button>
-                                  </form>
-                                  <a
-                                    className="provider-action-button provider-action-delete"
-                                    href={buildQueryHref(searchParams, {
-                                      providerDelete: provider.id,
-                                      selected: provider.id,
-                                    })}
-                                    aria-label={`Delete ${provider.displayName}`}
-                                    title="Delete"
-                                  >
-                                    <FlatIcon name="delete" />
-                                  </a>
-                                </>
-                              )}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <aside className="provider-detail-card" aria-label="Selected provider details">
-          {selectedProvider ? (
-            <>
-              <header className="provider-detail-head">
-                <div>
-                  <h2>Provider details - {selectedProvider.displayName}</h2>
-                </div>
-                <form
-                  className="provider-refresh-form"
-                  action="/api/provider-model-refresh"
-                  method="post"
-                >
-                  <input type="hidden" name="providerId" value={selectedProvider.id} />
-                  <button
-                    className="provider-refresh-button"
-                    disabled={selectedProviderCredentialCount === 0}
-                    aria-label="Refresh models"
-                    title="Refresh models"
-                    type="submit"
-                  >
-                    <FlatIcon name="refresh" />
-                  </button>
-                  {selectedProviderCredentialCount === 0 ? (
-                    <p className="field-error is-visible">
-                      {selectedProvider.providerType === "subscription"
-                        ? "Add an OAuth connection first"
-                        : "Add an API key first"}
-                    </p>
-                  ) : null}
-                </form>
-              </header>
-
-              <dl className="provider-detail-stats">
-                <div>
-                  <dt>Status</dt>
-                  <dd>
-                    {formatProviderHealthStatusLabel(
-                      selectedProvider.enabled
-                        ? (selectedProviderHealth?.status ?? "unknown")
-                        : "disabled",
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Available models</dt>
-                  <dd>{selectedProviderModels.length}</dd>
-                </div>
-                <div>
-                  <dt>Last connected</dt>
-                  <dd>{formatProviderLastConnection(selectedProviderHealth)}</dd>
-                </div>
-              </dl>
-
-              <section className="provider-detail-section">
-                <div className="provider-detail-section-head">
-                  <h3>
-                    {selectedProvider.providerType === "subscription"
-                      ? "OAuth connections"
-                      : selectedProvider.providerType === "local"
-                        ? "Local connection"
-                        : "API keys"}
-                  </h3>
-                  {selectedProvider.providerType === "subscription" ? (
-                    <form
-                      action="/api/provider-oauth"
-                      className="provider-oauth-add-form"
-                      method="post"
-                    >
-                      <input type="hidden" name="action" value="start" />
-                      <input type="hidden" name="providerId" value={selectedProvider.id} />
-                      <input type="hidden" name="priority" value="100" />
-                      <button
-                        aria-label="Add OAuth connection"
-                        className="provider-key-add-button"
-                        title="Add OAuth connection"
-                        type="submit"
-                      >
-                        <FlatIcon name="key" />
-                      </button>
-                    </form>
-                  ) : selectedProvider.providerType === "local" ? null : (
-                    <a
-                      className="provider-key-add-button"
-                      href={buildQueryHref(searchParams, {
-                        providerKeyDialog: selectedProvider.id,
-                      })}
-                      aria-label="Add API key"
-                      title="Add API key"
-                    >
-                      <FlatIcon name="key" />
-                    </a>
-                  )}
-                </div>
-                {selectedProvider.providerType === "local" ? (
-                  <p>Local providers do not require API keys.</p>
-                ) : (
-                  <div className="data-table-wrap">
-                    <table className="data-table provider-key-table">
-                      <thead>
-                        <tr>
-                          <th>Label</th>
-                          <th>Priority</th>
-                          <th>Status</th>
-                          <th>Last tested</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedProvider.providerType === "subscription" ? (
-                          selectedProviderOAuthConnections.length === 0 ? (
-                            <tr>
-                              <td colSpan={5}>No OAuth connection stored.</td>
-                            </tr>
-                          ) : (
-                            selectedProviderOAuthConnections.map((connection) => (
-                              <tr key={connection.id}>
-                                <td>{connection.label ?? "-"}</td>
-                                <td>{connection.priority}</td>
-                                <td>
-                                  <ProviderOAuthTestStatusPill status={connection.lastTestStatus} />
-                                </td>
-                                <td>{formatProviderOAuthLastTest(connection)}</td>
-                                <td>
-                                  <span className="provider-table-actions">
-                                    <form action="/api/provider-oauth" method="post">
-                                      <input
-                                        type="hidden"
-                                        name="action"
-                                        value={connection.enabled ? "disable" : "enable"}
-                                      />
-                                      <input
-                                        type="hidden"
-                                        name="providerOAuthId"
-                                        value={connection.id}
-                                      />
-                                      <button
-                                        className={
-                                          connection.enabled
-                                            ? "provider-key-delete-button"
-                                            : "provider-action-button provider-action-enable"
-                                        }
-                                        aria-label={
-                                          connection.enabled
-                                            ? "Disable OAuth connection"
-                                            : "Enable OAuth connection"
-                                        }
-                                        title={connection.enabled ? "Disable" : "Enable"}
-                                        type="submit"
-                                      >
-                                        <FlatIcon
-                                          name={connection.enabled ? "disable" : "enable"}
-                                        />
-                                      </button>
-                                    </form>
-                                    <form action="/api/provider-oauth" method="post">
-                                      <input type="hidden" name="action" value="delete" />
-                                      <input
-                                        type="hidden"
-                                        name="providerOAuthId"
-                                        value={connection.id}
-                                      />
-                                      <button
-                                        className="provider-key-delete-button"
-                                        aria-label="Delete OAuth connection"
-                                        title="Delete OAuth connection"
-                                        type="submit"
-                                      >
-                                        <FlatIcon name="delete" />
-                                      </button>
-                                    </form>
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
-                          )
-                        ) : selectedProviderKeys.length === 0 ? (
-                          <tr>
-                            <td colSpan={5}>No provider key stored.</td>
-                          </tr>
-                        ) : (
-                          selectedProviderKeys.map((providerKey) => (
-                            <tr key={providerKey.id}>
-                              <td>{providerKey.label ?? "-"}</td>
-                              <td>{providerKey.priority}</td>
-                              <td>
-                                <ProviderApiKeyTestStatusPill status={providerKey.lastTestStatus} />
-                              </td>
-                              <td>{formatProviderApiKeyLastTest(providerKey)}</td>
-                              <td>
-                                <a
-                                  className="provider-key-delete-button"
-                                  href={buildQueryHref(searchParams, {
-                                    providerKeyDelete: providerKey.id,
-                                  })}
-                                  aria-label="Delete API key"
-                                  title="Delete API key"
-                                >
-                                  <FlatIcon name="delete" />
-                                </a>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-            </>
-          ) : (
-            <p>No provider selected.</p>
-          )}
-        </aside>
-      </div>
-
-      <div className="chart-card model-library-card">
-        <h2 className="chart-card-title">
-          Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
-        </h2>
-        {selectedProviderModels.length === 0 ? (
-          <p>No provider models discovered yet.</p>
-        ) : (
-          <div className="data-table-wrap">
-            <table className="data-table model-library-table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Model ID</th>
-                  <th>Context</th>
-                  <th>Input price</th>
-                  <th>Output price</th>
-                  <th>Tools</th>
-                  <th>Streaming</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedProviderModels.map((model) => (
-                  <tr key={model.id}>
-                    <td>{model.providerDisplayName}</td>
-                    <td>
-                      <span className="model-id-cell">
-                        <strong>{model.modelDisplayName}</strong>
-                        <small className="mono">{model.modelId}</small>
-                      </span>
-                    </td>
-                    <td>{formatModelContext(model.contextWindow)}</td>
-                    <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
-                    <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
-                    <td>{formatBooleanFeature(model.supportsTools)}</td>
-                    <td>{formatBooleanFeature(model.supportsStreaming)}</td>
-                    <td>
-                      <ModelAvailabilityPill value={model.availability} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <ProvidersClientSection
+        initialSelectedProviderId={selectedProviderId ?? undefined}
+        providerHealthSummaries={providerHealthSummaries}
+        providerKeys={providerKeys}
+        providerModelOptions={providerModelOptions}
+        providerOAuthConnections={providerOAuthConnections}
+        providers={providers}
+        searchParams={searchParams}
+      />
       {providerDialog === "new" ? (
         <ProviderCreateDialog
           closeHref={providerDialogCloseHref}
@@ -4851,66 +4403,11 @@ function formatProviderInitials(displayName: string): string {
   return initials || displayName.slice(0, 2).toUpperCase();
 }
 
-function formatProviderType(provider: ConsoleProvider): string {
-  if (provider.providerType === "local") {
-    return "Local";
-  }
-  if (provider.providerType === "subscription") {
-    return "Subscription";
-  }
-  return provider.providerTemplateId ? "Template" : "API Key";
-}
-
 function formatProviderKeyCount(count: number): string {
   if (count === 0) {
     return "-";
   }
   return count === 1 ? "1 Key" : `${count} Keys`;
-}
-
-function formatProviderLastConnection(
-  providerHealth: ConsoleProviderHealthSummary | undefined,
-): string {
-  if (!providerHealth?.latestProbeAt) {
-    return "-";
-  }
-
-  return formatRelativeDateTime(providerHealth.latestProbeAt);
-}
-
-function formatProviderApiKeyLastTest(providerKey: ProviderApiKeyMetadata): string {
-  return providerKey.lastTestedAt ? formatRelativeDateTime(providerKey.lastTestedAt) : "-";
-}
-
-function formatProviderOAuthLastTest(connection: ConsoleProviderOAuthConnection): string {
-  return connection.lastTestedAt ? formatRelativeDateTime(connection.lastTestedAt) : "-";
-}
-
-function formatRelativeDateTime(value: Date): string {
-  const elapsedMs = Date.now() - value.getTime();
-  if (elapsedMs < 60_000) {
-    return "just now";
-  }
-  if (elapsedMs < 3_600_000) {
-    return `${Math.floor(elapsedMs / 60_000)} min ago`;
-  }
-  if (elapsedMs < 86_400_000) {
-    return `${Math.floor(elapsedMs / 3_600_000)} h ago`;
-  }
-  return value.toISOString().slice(0, 10);
-}
-
-function formatModelContext(contextWindow: number | null): string {
-  if (contextWindow === null) {
-    return "Unknown";
-  }
-  if (contextWindow >= 1_000_000) {
-    return `${formatDecimal(contextWindow / 1_000_000)}M`;
-  }
-  if (contextWindow >= 1_000) {
-    return `${formatDecimal(contextWindow / 1_000)}K`;
-  }
-  return String(contextWindow);
 }
 
 function formatModelPrice(price: number | null): string {
@@ -4919,24 +4416,6 @@ function formatModelPrice(price: number | null): string {
   }
   const digits = price >= 1 ? 2 : 4;
   return `$${price.toFixed(digits)}`;
-}
-
-function formatDecimal(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function formatBooleanFeature(value: boolean): string {
-  return value ? "Yes" : "No";
-}
-
-function formatModelAvailability(value: string): string {
-  if (value === "available") {
-    return "Enabled";
-  }
-  if (value === "disabled") {
-    return "Disabled";
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function formatVirtualModelOptionLabel(virtualModel: {

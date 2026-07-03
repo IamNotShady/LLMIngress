@@ -145,4 +145,20 @@ describe("console dark restyle static contract", () => {
     expect(gatewayChatCompletions).not.toContain("providers.default_priority");
     expect(baselineMigration).not.toContain("default_priority");
   });
+
+  test("providers list changes selection locally without route navigation", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const providersClientSection = readFileSync(
+      join(appDir, "_modules/providers-client-section.tsx"),
+      "utf8",
+    );
+
+    expect(sections).toContain("ProvidersClientSection");
+    expect(sections).not.toContain("const providerHref = buildQueryHref(searchParams");
+    expect(providersClientSection).toContain('"use client"');
+    expect(providersClientSection).toContain("useState");
+    expect(providersClientSection).toContain("setSelectedProviderId(provider.id)");
+    expect(providersClientSection).toContain('type="button"');
+    expect(providersClientSection).not.toContain("href={providerHref}");
+  });
 });

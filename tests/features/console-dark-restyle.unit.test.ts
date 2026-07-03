@@ -89,15 +89,16 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(/\.sidebar-runtime-status\s*\{[^}]*align-items:\s*center/s);
   });
 
-  test("agents filters use a compact query button aligned with the controls", () => {
+  test("agents filters use a compact filter button aligned with the controls", () => {
     const agentsPage = readFileSync(join(appDir, "(dashboard)/agents/page.tsx"), "utf8");
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();
 
     expect(sections).not.toContain("Apply filters");
-    expect(sections).toContain("<span>Query</span>");
+    expect(sections).toContain("<span>Filter</span>");
+    expect(sections).not.toContain("<span>Query</span>");
     expect(sections).not.toContain(
-      '<FlatIcon name="filter" />\n                  <span>Query</span>',
+      '<FlatIcon name="filter" />\n                  <span>Filter</span>',
     );
     expect(agentsPage).not.toContain("FlatIcon");
     expect(agentsPage).toContain("<span>Create Agent</span>");
@@ -129,7 +130,8 @@ describe("console dark restyle static contract", () => {
 
     expect(modelsPage).not.toContain("FlatIcon");
     expect(modelsPage).toContain("<span>Create Virtual Model</span>");
-    expect(vmFilterForm).toContain("<span>Query</span>");
+    expect(vmFilterForm).toContain("<span>Filter</span>");
+    expect(vmFilterForm).not.toContain("<span>Query</span>");
     expect(vmFilterForm).not.toContain("FlatIcon");
     expect(vmFilterForm).not.toContain("<span>Apply</span>");
     expect(vmTable).toContain('className="agent-table-actions"');
@@ -141,7 +143,7 @@ describe("console dark restyle static contract", () => {
     );
   });
 
-  test("activity filters use a compact text-only query button aligned with the controls", () => {
+  test("activity filters use a compact text-only filter button aligned with the controls", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();
     const activityFilterForm = sections.slice(
@@ -149,7 +151,8 @@ describe("console dark restyle static contract", () => {
       sections.indexOf('<div className="activity-shell">'),
     );
 
-    expect(activityFilterForm).toContain("<span>Query</span>");
+    expect(activityFilterForm).toContain("<span>Filter</span>");
+    expect(activityFilterForm).not.toContain("<span>Query</span>");
     expect(activityFilterForm).not.toContain("FlatIcon");
     expect(activityFilterForm).not.toContain("<span>Apply</span>");
     expect(stylesheet).toMatch(/\.activity-filter-grid button\s*\{[^}]*min-height:\s*2\.25rem/s);
@@ -158,7 +161,7 @@ describe("console dark restyle static contract", () => {
     );
   });
 
-  test("usage filters use a compact text-only query button aligned with the controls", () => {
+  test("usage filters use a compact text-only filter button aligned with the controls", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();
     const usageFilterForm = sections.slice(
@@ -166,7 +169,8 @@ describe("console dark restyle static contract", () => {
       sections.indexOf('<div className="stat-grid usage-kpi-grid">'),
     );
 
-    expect(usageFilterForm).toContain("<span>Query</span>");
+    expect(usageFilterForm).toContain("<span>Filter</span>");
+    expect(usageFilterForm).not.toContain("<span>Query</span>");
     expect(usageFilterForm).not.toContain("FlatIcon");
     expect(usageFilterForm).not.toContain("<span>Apply</span>");
     expect(stylesheet).toMatch(/\.usage-filter-bar button\s*\{[^}]*height:\s*2\.55rem/s);

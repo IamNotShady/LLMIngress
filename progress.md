@@ -19,7 +19,7 @@
 - Release guards now accept 10 feature contracts.
 
 ### Review items intentionally not adopted / deferred
-- "Query" filter-button wording and centered dialog/save actions stay: both were explicit decisions recorded in the dark-restyle pass.
+- "Filter" filter-button wording and right-aligned dialog submit actions stay: both were explicit decisions recorded in the dark-restyle follow-up pass.
 - Deferred (P2, unscheduled): topbar/h1 title duplication + eyebrow system, nav two-letter icon tiles, request-ID/gateway-URL copy affordances, "High risk"/"Connected" metric tooltips, single-segment donut degradation, playground note tone, Usage vs Activity default-window unification.
 
 ## 2026-07-03 UI/UX Review → console-shared-formatters (batch 3 of 4)
@@ -102,6 +102,7 @@
 - Follow-up Console UI consistency sweep: fixed the remaining Usage query height mismatch and compacted text-only submit buttons in Agent/Provider dialogs plus the Virtual Model Add Model action.
 - Follow-up Agent create action alignment: right-aligned compact single-submit dialog actions while leaving centered multi-action rows unchanged.
 - Follow-up Virtual Models action alignment: right-aligned the route editor dialog `Cancel` / submit action row.
+- Follow-up filter button wording: renamed all Console filter-submit buttons from `Query` to `Filter`.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -149,6 +150,7 @@
   - Follow-up Console UI consistency sweep check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser swept the 10 main Console routes with zero horizontal overflow, zero persistent right-side detail panels, text-only Query buttons with `0px` height delta, no console warnings/errors, and confirmed Agent/Provider create plus Virtual Model Add Model dialog actions are compact and icon-free. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Agent create action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the New agent `Create` action is text-only, has zero icons, has `0px` right delta against the form, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Virtual Models action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Virtual Model route editor actions render as `Cancel` / `Create`, use `flex-end`, have zero icons, have `0px` right delta, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up filter button wording check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed Agents, Virtual Models, Activity, and Usage filter buttons all render `Filter`, have zero icons, have no remaining visible `Query` buttons, have no horizontal overflow, and have no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

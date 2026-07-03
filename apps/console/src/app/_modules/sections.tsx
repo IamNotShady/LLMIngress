@@ -673,7 +673,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
         </div>
         <div className="console-actions">
           <button type="submit">
-            <span>Query</span>
+            <span>Filter</span>
           </button>
         </div>
       </form>
@@ -1037,7 +1037,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
         </div>
         <div className="console-actions">
           <button type="submit">
-            <span>Query</span>
+            <span>Filter</span>
           </button>
         </div>
       </form>
@@ -1380,7 +1380,7 @@ export async function VirtualModelsSection({
           defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}
         />
         <button type="submit">
-          <span>Query</span>
+          <span>Filter</span>
         </button>
       </form>
       <div className="vm-shell">
@@ -2011,7 +2011,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
               </div>
               <div className="agents-filter-actions">
                 <button type="submit">
-                  <span>Query</span>
+                  <span>Filter</span>
                 </button>
               </div>
             </fieldset>

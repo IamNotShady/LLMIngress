@@ -113,5 +113,9 @@ describe("console dark restyle static contract", () => {
     expect(sections).toContain("AgentViewDialog");
     expect(sections).toContain('className="console-dialog agent-view-dialog"');
     expect(stylesheet).toMatch(/\.agents-shell\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).toMatch(/\.agent-view-dialog\s*\{[^}]*width:\s*min\(42rem/s);
+    expect(stylesheet).toMatch(
+      /\.agent-view-dialog \.agent-detail-fields\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    );
   });
 });

@@ -1508,10 +1508,50 @@ body:has(.console-dialog-scrim) {
   padding-inline: var(--space-sm);
   font-size: var(--text-xs);
 }
+.agent-view-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: min(42rem, calc(100vw - 2rem));
+}
+.agent-view-dialog .console-dialog-head {
+  align-items: flex-start;
+  margin-bottom: 0;
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border);
+}
 .agent-view-dialog-title {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
+  min-width: 0;
+}
+.agent-view-dialog-title h2 {
+  overflow-wrap: anywhere;
+}
+.agent-view-dialog .agent-detail-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+.agent-view-dialog .agent-detail-fields div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+.agent-view-dialog .agent-detail-section {
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+.agent-view-dialog .agent-limit-row {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  min-height: 1.75rem;
 }
 .agent-chip-list {
   display: flex;

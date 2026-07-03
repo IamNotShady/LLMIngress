@@ -247,7 +247,7 @@ describe("console dark restyle static contract", () => {
     expect(routeDialog).toContain("<span>Add Model</span>");
     expect(routeDialog).not.toContain('<FlatIcon name="add" />');
     expect(stylesheet).toMatch(
-      /\.provider-create-form > button\[type="submit"\][^}]*\{[^}]*justify-self:\s*center/s,
+      /\.provider-create-form > button\[type="submit"\][^}]*\{[^}]*justify-self:\s*end/s,
     );
     expect(stylesheet).toMatch(/\.vm-add-model-button\s*\{[^}]*align-self:\s*center/s);
   });

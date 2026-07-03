@@ -542,7 +542,7 @@ pre,
 .price-form > button[type="submit"],
 .provider-create-form > button[type="submit"],
 .provider-edit-form > button[type="submit"] {
-  justify-self: center;
+  justify-self: end;
   min-width: 6rem;
 }
 .field-error {

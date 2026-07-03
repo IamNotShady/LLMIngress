@@ -1739,7 +1739,7 @@ body:has(.console-dialog-scrim) {
   width: min(42rem, calc(100vw - 2rem));
 }
 .overview-dashboard .detail-layout {
-  grid-template-columns: minmax(0, 1.5fr) minmax(24rem, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 .detail-panel {
   display: flex;

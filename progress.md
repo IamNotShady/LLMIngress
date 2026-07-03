@@ -19,6 +19,7 @@
 - Implemented `console-dark-restyle`: Console now serves a dark-only violet skin with Geist / Geist Mono, compact 30px primary buttons, no theme toggle, fixed chart tokens, and responsive no-overflow checks at 1280px and 390px.
 - Moved `v1-console` from theme-toggle behavior to the dark-only shell contract.
 - Updated release guard expectations for 6 passing feature contracts.
+- Follow-up layout polish: Overview `Recent requests` now spans the content width, with `Gateway status` stacked below it instead of beside it.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -26,6 +27,7 @@
   - `pnpm run verify`
   - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features`
   - Temporary Playwright route scan: 10 Console routes checked at 1280px and 390px with no horizontal overflow.
+  - Follow-up layout check: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` passed; browser measured `Recent requests` at 1096.98px wide with `Gateway status` below it at 1407px viewport.
 
 ## Required Verification
 

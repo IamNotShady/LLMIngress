@@ -89,6 +89,29 @@ test("console serves the dark violet Geist skin with compact controls and no ove
           const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
           expect(fontFamily).toContain("Geist");
 
+          await page.setViewportSize({ width: 1280, height: 800 });
+          const overviewLayout = await page.evaluate(() => {
+            const findHeading = (text: string) =>
+              Array.from(document.querySelectorAll("h2")).find(
+                (heading) => heading.textContent === text,
+              );
+            const recentCard = findHeading("Recent requests")?.closest(".chart-card");
+            const gatewayPanel = findHeading("Gateway status")?.closest(".detail-panel");
+            if (!recentCard || !gatewayPanel) {
+              throw new Error("Overview layout cards were not rendered.");
+            }
+
+            const recent = recentCard.getBoundingClientRect();
+            const gateway = gatewayPanel.getBoundingClientRect();
+            return {
+              gatewayTop: gateway.top,
+              recentBottom: recent.bottom,
+              recentWidth: recent.width,
+            };
+          });
+          expect(overviewLayout.recentWidth).toBeGreaterThan(900);
+          expect(overviewLayout.gatewayTop).toBeGreaterThanOrEqual(overviewLayout.recentBottom - 1);
+
           // No horizontal overflow at desktop and mobile checkpoints.
           for (const viewport of [
             { width: 1280, height: 800 },

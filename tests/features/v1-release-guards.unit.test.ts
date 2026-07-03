@@ -12,6 +12,7 @@ const allowedFeatureIds = [
   "console-dark-restyle",
   "console-p0-layout",
   "console-semantic-status",
+  "console-shared-formatters",
 ];
 
 describe("v1 release guards milestone", () => {

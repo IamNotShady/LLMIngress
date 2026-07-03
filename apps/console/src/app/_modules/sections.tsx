@@ -3,7 +3,6 @@ import {
   type ConsoleActivityDetail,
   type ConsoleFallbackEvent,
   countConsoleActivities,
-  formatConsoleActivityCost,
   formatConsoleActivityFallbackAttempts,
   formatConsoleActivityMetadata,
   formatConsoleActivityRouteReason,
@@ -30,6 +29,13 @@ import {
 } from "@llmingress/db/console-agents";
 import { getConsoleAnalyticsSnapshot } from "@llmingress/db/console-analytics";
 import { getConsoleSecuritySummary } from "@llmingress/db/console-auth";
+import {
+  formatConsoleCompactCount,
+  formatConsoleCount,
+  formatConsoleTimestamp,
+  formatConsoleUsd,
+  MISSING_VALUE,
+} from "@llmingress/db/console-format";
 import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
@@ -70,7 +76,6 @@ import {
   type ConsoleUsageDimensionBreakdown,
   type ConsoleUsageTrendPoint,
   type ConsoleUsageWindow,
-  formatConsoleUsageCost,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
 } from "@llmingress/db/console-usage";
@@ -168,7 +173,7 @@ export async function OverviewSection() {
         <StatCard
           icon="RQ"
           label="Requests 24h"
-          value={formatCompactNumber(usageSummary.requestCount)}
+          value={formatConsoleCompactCount(usageSummary.requestCount)}
           delta={formatPreviousWindowPercentDelta(
             usageSummary.requestCount,
             overviewAnalytics.previous.requestCount,
@@ -182,7 +187,7 @@ export async function OverviewSection() {
         <StatCard
           icon="$"
           label="Cost 24h"
-          value={formatOverviewMoney(usageSummary.totalCostUsd)}
+          value={formatConsoleUsd(usageSummary.totalCostUsd)}
           delta={formatPreviousWindowPercentDelta(
             Number(usageSummary.totalCostUsd ?? 0),
             Number(overviewAnalytics.previous.totalCostUsd ?? 0),
@@ -196,7 +201,7 @@ export async function OverviewSection() {
         <StatCard
           icon="TK"
           label="Tokens 24h"
-          value={formatCompactNumber(usageSummary.totalTokens)}
+          value={formatConsoleCompactCount(usageSummary.totalTokens)}
           delta={formatPreviousWindowPercentDelta(
             usageSummary.totalTokens,
             overviewAnalytics.previous.totalTokens,
@@ -229,7 +234,7 @@ export async function OverviewSection() {
         <StatCard
           icon="SV"
           label="Savings"
-          value={formatOverviewMoney(usageSummary.totalSavingsUsd)}
+          value={formatConsoleUsd(usageSummary.totalSavingsUsd)}
           delta={formatPreviousWindowPercentDelta(
             Number(usageSummary.totalSavingsUsd ?? 0),
             Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
@@ -266,13 +271,13 @@ export async function OverviewSection() {
                 <tbody>
                   {recentActivities.map((activity) => (
                     <tr key={activity.id}>
-                      <td className="mono">{formatTime(activity.startedAt)}</td>
+                      <td className="mono">{formatConsoleTimestamp(activity.startedAt)}</td>
                       <td>{activity.agentName ?? "Unknown agent"}</td>
                       <td>{formatActivityVirtualModelLabel(activity)}</td>
                       <td>{formatActivityModelSummary(activity)}</td>
                       <td>{formatActivityProviderLabel(activity)}</td>
-                      <td className="num">{formatCompactNumber(activity.totalTokens ?? 0)}</td>
-                      <td className="num">{formatOverviewActivityCost(activity.totalCostUsd)}</td>
+                      <td className="num">{formatConsoleCount(activity.totalTokens)}</td>
+                      <td className="num">{formatConsoleUsd(activity.totalCostUsd)}</td>
                       <td>
                         <ActivityStatusPill status={activity.status} />
                       </td>
@@ -309,43 +314,6 @@ export async function OverviewSection() {
       </div>
     </section>
   );
-}
-
-function formatCompactNumber(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
-  return String(value);
-}
-
-function formatFullNumber(value: number | null): string {
-  return value === null ? "Unavailable" : value.toLocaleString("en-US");
-}
-
-function formatActivityTableTokens(value: number | null): string {
-  return value === null ? "N/A" : value.toLocaleString("en-US");
-}
-
-function formatActivityTableCost(value: string | null): string {
-  return value === null ? "N/A" : formatConsoleActivityCost(value);
-}
-
-function formatOverviewMoney(totalCostUsd: string | null): string {
-  const value = totalCostUsd === null ? 0 : Number(totalCostUsd);
-  if (!Number.isFinite(value)) {
-    return "$0.00";
-  }
-  if (value > 0 && value < 0.01) {
-    return `$${value.toFixed(4)}`;
-  }
-  return `$${value.toFixed(2)}`;
-}
-
-function formatOverviewActivityCost(totalCostUsd: string | null): string {
-  return totalCostUsd === null ? "Unavailable" : formatOverviewMoney(totalCostUsd);
 }
 
 function formatOverviewTrendPoint(point: ConsoleUsageTrendPoint) {
@@ -407,15 +375,6 @@ function failureRateTone(
 
 function toneToNumClass(tone: "danger" | "warn" | undefined): string | undefined {
   return tone ? `num-${tone}` : undefined;
-}
-
-function formatTime(value: Date): string {
-  return value.toLocaleTimeString("en-US", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }
 
 function formatActivityLatency(latencyMs: number | null): string {
@@ -768,20 +727,16 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
       </form>
 
       <div className="stat-grid usage-kpi-grid">
-        <StatCard
-          icon="$"
-          label="Total cost"
-          value={formatConsoleUsageCost(usageSummary.totalCostUsd)}
-        />
+        <StatCard icon="$" label="Total cost" value={formatConsoleUsd(usageSummary.totalCostUsd)} />
         <StatCard
           icon="TK"
           label="Total tokens"
-          value={formatCompactNumber(usageSummary.totalTokens)}
+          value={formatConsoleCompactCount(usageSummary.totalTokens)}
         />
         <StatCard
           icon="RQ"
           label="Total requests"
-          value={formatCompactNumber(usageSummary.requestCount)}
+          value={formatConsoleCompactCount(usageSummary.requestCount)}
         />
         <StatCard icon="LT" label="Avg latency" value={avgLatency} />
         <StatCard
@@ -793,7 +748,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
         <StatCard
           icon="SV"
           label="Estimated savings"
-          value={formatConsoleUsageCost(usageSummary.totalSavingsUsd)}
+          value={formatConsoleUsd(usageSummary.totalSavingsUsd)}
         />
       </div>
 
@@ -827,11 +782,11 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <dl className="usage-savings-list">
             <div>
               <dt>Saved amount</dt>
-              <dd>{formatConsoleUsageCost(usageSummary.totalSavingsUsd)}</dd>
+              <dd>{formatConsoleUsd(usageSummary.totalSavingsUsd)}</dd>
             </div>
             <div>
               <dt>Baseline cost</dt>
-              <dd>{formatConsoleUsageCost(baselineCost.toFixed(8))}</dd>
+              <dd>{formatConsoleUsd(baselineCost.toFixed(8))}</dd>
             </div>
             <div>
               <dt>Savings ratio</dt>
@@ -886,9 +841,9 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
                   <tr key={`${breakdown.providerId}:${breakdown.modelId}`}>
                     <td>{breakdown.providerLabel}</td>
                     <td>{breakdown.modelLabel}</td>
-                    <td className="num">{formatCompactNumber(breakdown.requestCount)}</td>
-                    <td className="num">{formatCompactNumber(breakdown.totalTokens)}</td>
-                    <td className="num">{formatConsoleUsageCost(breakdown.totalCostUsd)}</td>
+                    <td className="num">{formatConsoleCompactCount(breakdown.requestCount)}</td>
+                    <td className="num">{formatConsoleCompactCount(breakdown.totalTokens)}</td>
+                    <td className="num">{formatConsoleUsd(breakdown.totalCostUsd)}</td>
                     <td className="num">{formatLatencyMs(breakdown.avgLatencyMs)}</td>
                     <td className="num">
                       <span
@@ -899,7 +854,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
                         {formatFailureRate(breakdown.failureCount, breakdown.requestCount)}
                       </span>
                     </td>
-                    <td className="num">{formatConsoleUsageCost(breakdown.totalSavingsUsd)}</td>
+                    <td className="num">{formatConsoleUsd(breakdown.totalSavingsUsd)}</td>
                   </tr>
                 ))
               )}
@@ -1010,7 +965,7 @@ function formatUsageTrendLabel(value: Date): string {
 
 function formatLatencyMs(value: number | null): string {
   if (value === null) {
-    return "Unavailable";
+    return MISSING_VALUE;
   }
   if (value < 1000) {
     return `${Math.round(value)}ms`;
@@ -1167,7 +1122,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                         selectedActivity?.id === activity.id ? "is-selected" : "is-clickable"
                       }
                     >
-                      <td className="mono">{formatTime(activity.startedAt)}</td>
+                      <td className="mono">{formatConsoleTimestamp(activity.startedAt)}</td>
                       <td className="mono">
                         <a href={buildQueryHref(searchParams, { activityId: activity.id })}>
                           {activity.requestId}
@@ -1176,13 +1131,13 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                       <td>{activity.agentName ?? "Unknown agent"}</td>
                       <td>{formatActivityVirtualModelLabel(activity)}</td>
                       <td>{formatActivityProviderModelLabel(activity)}</td>
-                      <td className="num">{formatActivityTableTokens(activity.totalTokens)}</td>
-                      <td className="num">{formatActivityTableCost(activity.totalCostUsd)}</td>
+                      <td className="num">{formatConsoleCount(activity.totalTokens)}</td>
+                      <td className="num">{formatConsoleUsd(activity.totalCostUsd)}</td>
                       <td className="num">{formatActivityLatency(activity.latencyMs)}</td>
                       <td>
                         <ActivityStatusPill status={activity.status} />
                       </td>
-                      <td className="num">{formatFullNumber(activityFallbackCount(activity))}</td>
+                      <td className="num">{formatConsoleCount(activityFallbackCount(activity))}</td>
                     </tr>
                   ))
                 )}
@@ -1298,11 +1253,11 @@ function ActivityReferenceDetail({
         <div className="activity-metric-grid">
           <div>
             <span>Tokens</span>
-            <strong>{formatFullNumber(activity.totalTokens)}</strong>
+            <strong>{formatConsoleCount(activity.totalTokens)}</strong>
           </div>
           <div>
             <span>Cost</span>
-            <strong>{formatConsoleActivityCost(activity.totalCostUsd)}</strong>
+            <strong>{formatConsoleUsd(activity.totalCostUsd)}</strong>
           </div>
           <div>
             <span>Latency</span>
@@ -1428,7 +1383,7 @@ export async function VirtualModelsSection({
         <StatCard
           icon="Q"
           label="Requests 24h"
-          value={formatCompactNumber(totalVirtualModelRequests24h)}
+          value={formatConsoleCompactCount(totalVirtualModelRequests24h)}
         />
         <StatCard
           icon="$"
@@ -1524,7 +1479,7 @@ export async function VirtualModelsSection({
                                   {formatRouteStrategyLabel(policy.strategy)}
                                 </span>
                               ) : (
-                                "-"
+                                MISSING_VALUE
                               )}
                             </a>
                           </td>
@@ -1540,7 +1495,7 @@ export async function VirtualModelsSection({
                           </td>
                           <td className="num">
                             <a className="table-row-link" href={viewHref}>
-                              {formatCompactNumber(virtualModel.requestCount24h)}
+                              {formatConsoleCompactCount(virtualModel.requestCount24h)}
                             </a>
                           </td>
                           <td className="num">
@@ -1667,11 +1622,11 @@ function VirtualModelViewDialog({
         <dl className="agent-detail-fields">
           <div>
             <dt>Strategy</dt>
-            <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : "-"}</dd>
+            <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : MISSING_VALUE}</dd>
           </div>
           <div>
             <dt>Candidates</dt>
-            <dd>{routePolicy ? `${routePolicy.candidates.length} models` : "-"}</dd>
+            <dd>{routePolicy ? `${routePolicy.candidates.length} models` : MISSING_VALUE}</dd>
           </div>
           <div>
             <dt>Default hit</dt>
@@ -1679,7 +1634,7 @@ function VirtualModelViewDialog({
           </div>
           <div>
             <dt>Requests 24h</dt>
-            <dd>{formatCompactNumber(virtualModel.requestCount24h)}</dd>
+            <dd>{formatConsoleCompactCount(virtualModel.requestCount24h)}</dd>
           </div>
           <div>
             <dt>Cost 24h</dt>
@@ -2045,13 +2000,9 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             <StatCard
               icon="RQ"
               label="Requests 24h"
-              value={formatCompactNumber(usageToday.requestCount)}
+              value={formatConsoleCompactCount(usageToday.requestCount)}
             />
-            <StatCard
-              icon="$"
-              label="Cost 7d"
-              value={formatOverviewMoney(usageWeek.totalCostUsd)}
-            />
+            <StatCard icon="$" label="Cost 7d" value={formatConsoleUsd(usageWeek.totalCostUsd)} />
           </div>
           <form action="/agents" method="get">
             <fieldset className="agents-filter-bar">
@@ -2181,12 +2132,12 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                           </td>
                           <td className="num">
                             <a className="table-row-link" href={agentViewHref}>
-                              {formatCompactNumber(usage?.requestCount ?? 0)}
+                              {formatConsoleCompactCount(usage?.requestCount ?? 0)}
                             </a>
                           </td>
                           <td className="num">
                             <a className="table-row-link" href={agentViewHref}>
-                              {formatOverviewMoney(usage?.totalCostUsd ?? null)}
+                              {formatConsoleUsd(usage?.totalCostUsd ?? null)}
                             </a>
                           </td>
                           <td>
@@ -2865,14 +2816,14 @@ function formatAgentNumericLimit(limit: ConsoleAgentLimit | undefined): string {
   if (!limit?.enabled) {
     return "Not configured";
   }
-  return `${formatCompactNumber(limit.limitValue)} / ${limit.period}`;
+  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
 }
 
 function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
   if (!limit?.enabled) {
     return "Not configured";
   }
-  return `${formatCompactNumber(limit.limitValue)} / ${limit.period}`;
+  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
 }
 
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
@@ -4400,7 +4351,7 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
 }
 
 function formatDefaultCandidate(routePolicy: ConsoleRoutePolicy | null | undefined): string {
-  return routePolicy?.candidates[0]?.modelDisplayName ?? "-";
+  return routePolicy?.candidates[0]?.modelDisplayName ?? MISSING_VALUE;
 }
 
 function parseUsd(value: number | string | null): number {
@@ -4409,7 +4360,7 @@ function parseUsd(value: number | string | null): number {
 }
 
 function formatVirtualModelCost(value: number | string | null): string {
-  return formatOverviewMoney(String(parseUsd(value)));
+  return formatConsoleUsd(parseUsd(value));
 }
 
 function formatVirtualModelFailureRate(
@@ -4584,7 +4535,7 @@ function formatProviderInitials(displayName: string): string {
 
 function formatProviderKeyCount(count: number): string {
   if (count === 0) {
-    return "-";
+    return MISSING_VALUE;
   }
   return count === 1 ? "1 Key" : `${count} Keys`;
 }

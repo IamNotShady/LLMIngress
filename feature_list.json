@@ -88,6 +88,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-03: TDD red->green. Unit (7 static contracts) + E2E green: seeded 37.5% failure rate renders danger on Overview/VM KPIs and VM table cell, unchanged cost delta neutral while request growth reads good, stale heartbeat warns and db:migrate:check shows an ok pill, disabled provider chip is neutral gray, agent row delete is transparent at rest, limits row delete opens a confirm dialog and confirming removes the rules."
+    },
+    {
+      "id": "console-shared-formatters",
+      "name": "Console Shared Value Formatters",
+      "description": "Every console page formats the same value the same way via a shared formatter module: token counts are full locale numbers in tables and compact only in KPI cards, USD costs use one smart-precision rule (two decimals at or above one cent, three significant digits below, $0.00 for zero, never eight-decimal noise), missing values render as an em dash instead of the previous Unavailable/N-A/hyphen mix, and request timestamps outside the current day carry a date qualifier so lists spanning days read unambiguously.",
+      "verification": "pnpm exec vitest run tests/features/console-shared-formatters.unit.test.ts && pnpm test:e2e tests/e2e/console-shared-formatters.e2e.spec.ts",
+      "dependencies": [
+        "console-p0-layout"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-03: TDD red->green. Unit (formatter behavior + call-site contracts) + E2E green: seeded sub-cent cost renders $0.0000843 identically on Overview and Activity, token cells show full 92,535 counts, failed request shows em dashes (no N/A/Unavailable), 3-day-old row carries a date-qualified timestamp while today's row is HH:MM:SS, Usage total cost has no 8-decimal noise."
     }
   ]
 }

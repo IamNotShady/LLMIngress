@@ -1,4 +1,5 @@
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { formatConsoleUsd } from "@llmingress/db/console-format";
 
 export type ConsoleUsageWindow = "24h" | "7d" | "30d";
 
@@ -428,11 +429,7 @@ export async function getConsoleUsageSummary(input: {
 }
 
 export function formatConsoleUsageCost(totalCostUsd: string | null): string {
-  const numericCost = totalCostUsd === null ? 0 : Number(totalCostUsd);
-  if (!Number.isFinite(numericCost)) {
-    return "$0.00000000";
-  }
-  return `$${numericCost.toFixed(8)}`;
+  return formatConsoleUsd(totalCostUsd);
 }
 
 export function formatConsoleUsageTokens(input: {

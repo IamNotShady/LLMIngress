@@ -5,7 +5,15 @@
 - Date: 2026-07-03
 - Branch: `worktree-console-dark-restyle`
 - Base: `dev` at `d28e21ac`
-- Status: Console dark restyle verified; UI/UX review batches 1–2 (`console-p0-layout`, `console-semantic-status`) implemented and verified.
+- Status: Console dark restyle verified; UI/UX review batches 1–3 (`console-p0-layout`, `console-semantic-status`, `console-shared-formatters`) implemented and verified.
+
+## 2026-07-03 UI/UX Review → console-shared-formatters (batch 3 of 4)
+
+- Implemented `console-shared-formatters` (TDD red→green, seeded-data E2E):
+  - New shared module `packages/db/src/console-format.ts` (`@llmingress/db/console-format`): `MISSING_VALUE` (em dash), `formatConsoleCount` (full locale), `formatConsoleCompactCount` (KPI-only 92.5K/1.3M), `formatConsoleUsd` (≥1¢ two decimals, sub-cent three significant digits, $0.00 for zero), `formatConsoleTimestamp` (date-qualified outside the current day).
+  - `sections.tsx` dropped seven local look-alike formatters and the `N/A`/`Unavailable`/`-` null mix; overview recent-requests tokens now show full counts matching Activity.
+  - `formatConsoleUsageCost`/`formatConsoleActivityCost` in packages/db delegate to the shared USD rule (no more 8-decimal noise).
+- Release guards now accept 9 feature contracts.
 
 ## 2026-07-03 UI/UX Review → console-semantic-status (batch 2 of 4)
 

@@ -1,4 +1,5 @@
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { formatConsoleUsd } from "@llmingress/db/console-format";
 
 export type ConsoleActivity = {
   agentKeyPrefix: string | null;
@@ -462,16 +463,7 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
 }
 
 export function formatConsoleActivityCost(totalCostUsd: string | null): string {
-  if (totalCostUsd === null) {
-    return "Unavailable";
-  }
-
-  const numericCost = Number(totalCostUsd);
-  if (!Number.isFinite(numericCost)) {
-    return "Unavailable";
-  }
-
-  return `$${numericCost.toFixed(8)}`;
+  return formatConsoleUsd(totalCostUsd);
 }
 
 export function formatConsoleActivityTokens(input: {

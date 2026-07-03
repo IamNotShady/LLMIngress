@@ -168,6 +168,18 @@ export function ProvidersClientSection({
                             </td>
                             <td>
                               <span className="provider-table-actions">
+                                <form action="/api/provider-model-refresh" method="post">
+                                  <input type="hidden" name="providerId" value={provider.id} />
+                                  <button
+                                    className="provider-refresh-button"
+                                    disabled={providerKeyCount === 0}
+                                    aria-label={`Refresh models for ${provider.displayName}`}
+                                    title="Refresh models"
+                                    type="submit"
+                                  >
+                                    <FlatIcon name="refresh" />
+                                  </button>
+                                </form>
                                 {provider.enabled ? (
                                   <>
                                     <a

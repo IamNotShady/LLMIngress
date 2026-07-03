@@ -3294,16 +3294,10 @@ button.table-row-link {
   padding-block: var(--space-xs);
 }
 .vm-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.44fr);
-  gap: var(--space-md);
-  align-items: start;
+  display: block;
 }
 .vm-table td {
   white-space: nowrap;
-}
-.vm-detail-card {
-  align-self: start;
 }
 .vm-candidate-list {
   display: flex;

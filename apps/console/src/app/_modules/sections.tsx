@@ -1294,22 +1294,28 @@ export async function VirtualModelsSection({
     }
     return true;
   });
-  const selectedVirtualModelId = readSingleSearchParam(searchParams.selected);
-  const selectedVirtualModel =
-    visibleVirtualModels.find((virtualModel) => virtualModel.id === selectedVirtualModelId) ??
-    visibleVirtualModels[0] ??
-    null;
-  const selectedRoutePolicy = selectedVirtualModel
-    ? (routePolicyByVmId.get(selectedVirtualModel.id) ?? null)
+  const viewVirtualModelId = readSingleSearchParam(searchParams.virtualModelView);
+  const viewDialogVirtualModel = viewVirtualModelId
+    ? (virtualModels.find((virtualModel) => virtualModel.id === viewVirtualModelId) ?? null)
     : null;
-  const selectedRoutePolicyWarnings = selectedRoutePolicy
+  const viewDialogRoutePolicy = viewDialogVirtualModel
+    ? (routePolicyByVmId.get(viewDialogVirtualModel.id) ?? null)
+    : null;
+  const viewDialogRoutePolicyWarnings = viewDialogRoutePolicy
     ? [
-        ...selectedRoutePolicy.routeWarnings,
+        ...viewDialogRoutePolicy.routeWarnings,
         ...buildRoutePolicyHealthWarnings(
-          buildRoutePolicyHealthWarningCandidates(selectedRoutePolicy, providerHealthByProviderId),
+          buildRoutePolicyHealthWarningCandidates(
+            viewDialogRoutePolicy,
+            providerHealthByProviderId,
+          ),
         ),
       ]
     : [];
+  const viewDialogCloseHref = buildQueryHref(searchParams, {
+    selected: undefined,
+    virtualModelView: undefined,
+  });
   const dialogTarget = readSingleSearchParam(searchParams.virtualModelDialog);
   const dialogVirtualModel =
     dialogTarget && dialogTarget !== "new"
@@ -1335,9 +1341,9 @@ export async function VirtualModelsSection({
     (total, virtualModel) => total + virtualModel.requestCountTotal,
     0,
   );
-  const fallbackOverview = selectedVirtualModel
+  const viewDialogFallbackOverview = viewDialogVirtualModel
     ? await listVirtualModelFallbackBreakdown({
-        virtualModelId: selectedVirtualModel.id,
+        virtualModelId: viewDialogVirtualModel.id,
       })
     : [];
   return (
@@ -1419,55 +1425,75 @@ export async function VirtualModelsSection({
                   <tbody>
                     {visibleVirtualModels.map((virtualModel) => {
                       const policy = routePolicyByVmId.get(virtualModel.id);
-                      const selected = virtualModel.id === selectedVirtualModel?.id;
+                      const viewHref = buildQueryHref(searchParams, {
+                        selected: undefined,
+                        virtualModelDialog: undefined,
+                        virtualModelView: virtualModel.id,
+                      });
+                      const selected = virtualModel.id === viewDialogVirtualModel?.id;
                       return (
                         <tr
                           className={selected ? "is-selected" : "is-clickable"}
                           key={virtualModel.id}
                         >
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                selected: virtualModel.id,
-                                virtualModelDialog: undefined,
-                              })}
-                            >
+                            <a className="table-row-link" href={viewHref}>
                               {virtualModel.name}
                             </a>
                           </td>
                           <td>
-                            {policy ? (
-                              <span className="pill--info pill">
-                                {formatRouteStrategyLabel(policy.strategy)}
-                              </span>
-                            ) : (
-                              "-"
-                            )}
+                            <a className="table-row-link" href={viewHref}>
+                              {policy ? (
+                                <span className="pill--info pill">
+                                  {formatRouteStrategyLabel(policy.strategy)}
+                                </span>
+                              ) : (
+                                "-"
+                              )}
+                            </a>
                           </td>
-                          <td className="num">{policy?.candidates.length ?? 0}</td>
-                          <td>{formatDefaultCandidate(policy)}</td>
                           <td className="num">
-                            {formatCompactNumber(virtualModel.requestCount24h)}
-                          </td>
-                          <td className="num">{formatVirtualModelCost(virtualModel.cost24hUsd)}</td>
-                          <td className="num">
-                            {formatVirtualModelFailureRate(
-                              virtualModel.requestCountTotal,
-                              virtualModel.failureCountTotal,
-                            )}
+                            <a className="table-row-link" href={viewHref}>
+                              {policy?.candidates.length ?? 0}
+                            </a>
                           </td>
                           <td>
-                            {virtualModel.enabled ? (
-                              <span className="pill--ok pill">Enabled</span>
-                            ) : (
-                              <span className="pill">Disabled</span>
-                            )}
+                            <a className="table-row-link" href={viewHref}>
+                              {formatDefaultCandidate(policy)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={viewHref}>
+                              {formatCompactNumber(virtualModel.requestCount24h)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={viewHref}>
+                              {formatVirtualModelCost(virtualModel.cost24hUsd)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={viewHref}>
+                              {formatVirtualModelFailureRate(
+                                virtualModel.requestCountTotal,
+                                virtualModel.failureCountTotal,
+                              )}
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={viewHref}>
+                              {virtualModel.enabled ? (
+                                <span className="pill--ok pill">Enabled</span>
+                              ) : (
+                                <span className="pill">Disabled</span>
+                              )}
+                            </a>
                           </td>
                           <td>
                             <a
                               className="table-action-link"
                               href={buildQueryHref(searchParams, {
+                                virtualModelView: undefined,
                                 virtualModelDialog: virtualModel.id,
                               })}
                             >
@@ -1484,109 +1510,16 @@ export async function VirtualModelsSection({
             )}
           </div>
         </div>
-        <aside className="agent-detail-card vm-detail-card">
-          {selectedVirtualModel ? (
-            <>
-              <div className="agent-detail-head">
-                <h2>{selectedVirtualModel.name}</h2>
-                {selectedVirtualModel.enabled ? (
-                  <span className="pill--ok pill">Enabled</span>
-                ) : (
-                  <span className="pill">Disabled</span>
-                )}
-              </div>
-              <dl className="agent-detail-fields">
-                <div>
-                  <dt>Strategy</dt>
-                  <dd>
-                    {selectedRoutePolicy
-                      ? formatRouteStrategyLabel(selectedRoutePolicy.strategy)
-                      : "-"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Candidates</dt>
-                  <dd>
-                    {selectedRoutePolicy ? `${selectedRoutePolicy.candidates.length} models` : "-"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Default hit</dt>
-                  <dd>{formatDefaultCandidate(selectedRoutePolicy)}</dd>
-                </div>
-                <div>
-                  <dt>Requests 24h</dt>
-                  <dd>{formatCompactNumber(selectedVirtualModel.requestCount24h)}</dd>
-                </div>
-                <div>
-                  <dt>Cost 24h</dt>
-                  <dd>{formatVirtualModelCost(selectedVirtualModel.cost24hUsd)}</dd>
-                </div>
-                <div>
-                  <dt>Failure rate</dt>
-                  <dd>
-                    {formatVirtualModelFailureRate(
-                      selectedVirtualModel.requestCountTotal,
-                      selectedVirtualModel.failureCountTotal,
-                    )}
-                  </dd>
-                </div>
-              </dl>
-              <section className="agent-detail-section">
-                <h3>Candidates</h3>
-                {selectedRoutePolicy?.candidates.length ? (
-                  <div className="vm-candidate-list">
-                    {selectedRoutePolicy.candidates.map((candidate) => (
-                      <div className="vm-candidate-card" key={candidate.id}>
-                        <div>
-                          <strong>
-                            {candidate.providerDisplayName} / {candidate.modelDisplayName}
-                          </strong>
-                          <span>
-                            {formatModelPrice(candidate.inputUsdPerMillionTokens)} /{" "}
-                            {formatModelPrice(candidate.outputUsdPerMillionTokens)}
-                          </span>
-                        </div>
-                        {candidate.availability === "available" ? (
-                          <span className="pill--ok pill">Healthy</span>
-                        ) : (
-                          <span className="pill--danger pill">Disabled</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p>No candidates configured.</p>
-                )}
-              </section>
-              {selectedRoutePolicyWarnings.length > 0 ? (
-                <section className="agent-detail-section" aria-label="Route warnings">
-                  <h3>Route warnings</h3>
-                  {selectedRoutePolicyWarnings.map((warning) => (
-                    <p className="route-warning" key={warning}>
-                      {warning}
-                    </p>
-                  ))}
-                </section>
-              ) : null}
-              <section className="agent-detail-section">
-                <h3>Fallback overview</h3>
-                {fallbackOverview.length > 0 ? (
-                  <DonutBreakdown
-                    ariaLabel="Fallback overview"
-                    data={fallbackOverview}
-                    valueFormat="percent"
-                  />
-                ) : (
-                  <p>No fallback data recorded in the last 24h.</p>
-                )}
-              </section>
-            </>
-          ) : (
-            <p>No Virtual Model selected.</p>
-          )}
-        </aside>
       </div>
+      {viewDialogVirtualModel ? (
+        <VirtualModelViewDialog
+          closeHref={viewDialogCloseHref}
+          fallbackOverview={viewDialogFallbackOverview}
+          routePolicy={viewDialogRoutePolicy}
+          routePolicyWarnings={viewDialogRoutePolicyWarnings}
+          virtualModel={viewDialogVirtualModel}
+        />
+      ) : null}
       {dialogTarget === "new" ? (
         <VirtualModelRouteDialog
           closeHref={dialogCloseHref}
@@ -1605,6 +1538,127 @@ export async function VirtualModelsSection({
         />
       ) : null}
     </section>
+  );
+}
+
+function VirtualModelViewDialog({
+  closeHref,
+  fallbackOverview,
+  routePolicy,
+  routePolicyWarnings,
+  virtualModel,
+}: {
+  closeHref: string;
+  fallbackOverview: Awaited<ReturnType<typeof listVirtualModelFallbackBreakdown>>;
+  routePolicy: ConsoleRoutePolicy | null;
+  routePolicyWarnings: readonly string[];
+  virtualModel: ConsoleVirtualModel;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`virtual-model-view-dialog-title-${virtualModel.id}`}
+        aria-modal="true"
+        className="console-dialog agent-view-dialog vm-view-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <div className="agent-view-dialog-title">
+            <h2 id={`virtual-model-view-dialog-title-${virtualModel.id}`}>{virtualModel.name}</h2>
+            {virtualModel.enabled ? (
+              <span className="pill--ok pill">Enabled</span>
+            ) : (
+              <span className="pill">Disabled</span>
+            )}
+          </div>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <dl className="agent-detail-fields">
+          <div>
+            <dt>Strategy</dt>
+            <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : "-"}</dd>
+          </div>
+          <div>
+            <dt>Candidates</dt>
+            <dd>{routePolicy ? `${routePolicy.candidates.length} models` : "-"}</dd>
+          </div>
+          <div>
+            <dt>Default hit</dt>
+            <dd>{formatDefaultCandidate(routePolicy)}</dd>
+          </div>
+          <div>
+            <dt>Requests 24h</dt>
+            <dd>{formatCompactNumber(virtualModel.requestCount24h)}</dd>
+          </div>
+          <div>
+            <dt>Cost 24h</dt>
+            <dd>{formatVirtualModelCost(virtualModel.cost24hUsd)}</dd>
+          </div>
+          <div>
+            <dt>Failure rate</dt>
+            <dd>
+              {formatVirtualModelFailureRate(
+                virtualModel.requestCountTotal,
+                virtualModel.failureCountTotal,
+              )}
+            </dd>
+          </div>
+        </dl>
+        <section className="agent-detail-section">
+          <h3>Candidates</h3>
+          {routePolicy?.candidates.length ? (
+            <div className="vm-candidate-list">
+              {routePolicy.candidates.map((candidate) => (
+                <div className="vm-candidate-card" key={candidate.id}>
+                  <div>
+                    <strong>
+                      {candidate.providerDisplayName} / {candidate.modelDisplayName}
+                    </strong>
+                    <span>
+                      {formatModelPrice(candidate.inputUsdPerMillionTokens)} /{" "}
+                      {formatModelPrice(candidate.outputUsdPerMillionTokens)}
+                    </span>
+                  </div>
+                  {candidate.availability === "available" ? (
+                    <span className="pill--ok pill">Healthy</span>
+                  ) : (
+                    <span className="pill--danger pill">Disabled</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>No candidates configured.</p>
+          )}
+        </section>
+        {routePolicyWarnings.length > 0 ? (
+          <section className="agent-detail-section" aria-label="Route warnings">
+            <h3>Route warnings</h3>
+            {routePolicyWarnings.map((warning) => (
+              <p className="route-warning" key={warning}>
+                {warning}
+              </p>
+            ))}
+          </section>
+        ) : null}
+        <section className="agent-detail-section">
+          <h3>Fallback overview</h3>
+          {fallbackOverview.length > 0 ? (
+            <DonutBreakdown
+              ariaLabel="Fallback overview"
+              data={fallbackOverview}
+              valueFormat="percent"
+            />
+          ) : (
+            <p>No fallback data recorded in the last 24h.</p>
+          )}
+        </section>
+      </section>
+    </>
   );
 }
 

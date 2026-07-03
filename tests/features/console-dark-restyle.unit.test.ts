@@ -134,6 +134,18 @@ describe("console dark restyle static contract", () => {
     );
   });
 
+  test("virtual model details open in a read-only dialog instead of a side card", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+
+    expect(sections).not.toContain('<aside className="agent-detail-card vm-detail-card"');
+    expect(sections).toContain("virtualModelView");
+    expect(sections).toContain("VirtualModelViewDialog");
+    expect(sections).toContain('className="console-dialog agent-view-dialog vm-view-dialog"');
+    expect(stylesheet).toMatch(/\.vm-shell\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).not.toContain(".vm-detail-card");
+  });
+
   test("agents list opens read-only details in a dialog instead of a side card", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

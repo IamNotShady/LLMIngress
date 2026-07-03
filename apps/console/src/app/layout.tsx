@@ -20,6 +20,9 @@ const mono = Geist_Mono({
 export const metadata: Metadata = {
   title: "LLMIngress Console",
   description: "LLMIngress management console",
+  icons: {
+    icon: "/llmingress-icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

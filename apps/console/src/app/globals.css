@@ -296,17 +296,8 @@ pre,
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: url("/llmingress-icon.svg") center / contain no-repeat;
   flex: none;
-  box-shadow: var(--glow-accent);
-}
-.sidebar-mark::before {
-  content: "";
-  width: 1.1rem;
-  height: 1.1rem;
-  border: 2px solid currentColor;
-  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
 }
 
 .sidebar-wordmark {

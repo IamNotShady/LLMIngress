@@ -60,6 +60,7 @@
 ## 2026-07-03 Console Dark Restyle
 
 - Implemented `console-dark-restyle`: Console now serves a dark-only violet skin with Geist / Geist Mono, compact 30px primary buttons, no theme toggle, fixed chart tokens, and responsive no-overflow checks at 1280px and 390px.
+- Follow-up brand icon: selected the policy-slots mark, converted it to maintainable SVG, removed generated PNG drafts, and wired the SVG into the Console sidebar mark plus metadata favicon.
 - Moved `v1-console` from theme-toggle behavior to the dark-only shell contract.
 - Updated release guard expectations for 6 passing feature contracts.
 - Follow-up layout polish: Overview `Recent requests` now spans the content width, with `Gateway status` stacked below it instead of beside it.

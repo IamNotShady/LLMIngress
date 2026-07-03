@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
+const publicDir = join(rootDir, "apps/console/public");
 const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
 const layout = () => readFileSync(join(appDir, "layout.tsx"), "utf8");
 
@@ -48,6 +49,18 @@ describe("console dark restyle static contract", () => {
     const sidebar = readFileSync(join(appDir, "_components/sidebar.tsx"), "utf8");
     expect(sidebar).not.toContain("ThemeToggle");
     expect(css()).not.toContain(".theme-toggle");
+  });
+
+  test("brand mark uses the selected SVG asset", () => {
+    const stylesheet = css();
+    const layoutText = layout();
+
+    expect(existsSync(join(publicDir, "llmingress-icon.svg"))).toBe(true);
+    expect(layoutText).toContain('icon: "/llmingress-icon.svg"');
+    expect(stylesheet).toContain(
+      'background: url("/llmingress-icon.svg") center / contain no-repeat;',
+    );
+    expect(stylesheet).not.toContain(".sidebar-mark::before");
   });
 
   test("chart palette uses the fixed chart tokens", () => {

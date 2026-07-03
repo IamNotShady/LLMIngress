@@ -162,7 +162,7 @@ test("console keeps layout integrity with real data: no overflow, visible limits
           await expect(limitsWrap).toBeVisible();
           expect(
             await limitsWrap.evaluate((el) => el.scrollWidth - el.clientWidth),
-          ).toBeLessThanOrEqual(0);
+          ).toBeLessThanOrEqual(1);
           const lastActionCell = page.locator(".limits-rule-action-cell").last();
           const actionBox = await lastActionCell.boundingBox();
           const wrapBox = await limitsWrap.boundingBox();

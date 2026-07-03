@@ -7,6 +7,12 @@
 - Base: `dev` at `d28e21ac`
 - Status: Console dark restyle verified; UI/UX review batches 1–4 implemented and verified (`console-p0-layout`, `console-semantic-status`, `console-shared-formatters`, `console-providers-ia-and-forms`).
 
+## 2026-07-04 PR #15 CI Fix
+
+- Investigated GitHub Actions run `28668889005` / job `85027269182`: CI failed in `tests/e2e/console-p0-layout.e2e.spec.ts` because the Limits rules table wrapper measured `scrollWidth - clientWidth = 1` on the runner while the test required `0`.
+- Kept the product contract intact (page-level no-overflow and action visibility still asserted) and relaxed only the wrapper measurement to a 1px rounding tolerance, matching the existing action-cell tolerance.
+- Verification: `pnpm exec vitest run tests/features/console-p0-layout.unit.test.ts`, `pnpm test:e2e tests/e2e/console-p0-layout.e2e.spec.ts`, `pnpm run lint`, and full `pnpm test:e2e` passed.
+
 ## 2026-07-03 UI/UX Review → console-providers-ia-and-forms (batch 4 of 4)
 
 - Implemented `console-providers-ia-and-forms` (TDD red→green, seeded-data E2E):

@@ -3204,7 +3204,7 @@ function LimitsConfigDialog({
             </a>
             <button type="submit">
               <FlatIcon name="save" />
-              <span>Save rules</span>
+              <span>Save</span>
             </button>
           </div>
         </form>

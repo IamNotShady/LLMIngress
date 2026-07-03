@@ -47,6 +47,7 @@
 - Follow-up Activity filter button polish: changed the Activity filter submit button to text-only `Query` and aligned it with the Request ID input height.
 - Follow-up Usage filter button polish: changed the Usage filter submit button to text-only `Query` and aligned it with the adjacent Provider select height.
 - Follow-up Limits rule dialog: removed the right-side Rule configuration panel and added row-level `Edit` actions that open the existing rule form in a modal dialog.
+- Follow-up Limits save button text: shortened the rule dialog submit button from `Save rules` to `Save`.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -82,6 +83,7 @@
   - Follow-up Activity filter button check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Activity filter submit button reads `Query`, has zero `.flat-icon`/`svg` icons, has height `38.8px` matching the Request ID input at `38.8px`, submits without breaking the page, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Usage filter button check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Usage filter submit button reads `Query`, has zero `.flat-icon`/`svg` icons, has height `37.59px` matching the Provider select at `37.59px`, submits to `/usage` with form params, has no horizontal overflow, no visible framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Limits rule dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `/limits` defaults to zero `.limits-config-panel`, zero `.limits-config-dialog`, three row-level `Edit` actions, zero stale row links, zero clickable table rows, `.limits-main` is `display: block`, the Limit Rules card spans the main width at `1295.91px`, clicking `Edit` opens one `role=dialog` / `aria-modal=true` `.limits-config-dialog` at `672px`, Close removes `limitDialog`, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Limits save button text check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog submit button reads `Save`, no `Save rules` text remains, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

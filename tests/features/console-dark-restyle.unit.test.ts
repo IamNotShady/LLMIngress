@@ -188,6 +188,8 @@ describe("console dark restyle static contract", () => {
     expect(limitsSection).not.toContain("is-clickable");
     expect(limitsDialog).toContain('className="console-dialog limits-config-dialog"');
     expect(limitsDialog).toContain('aria-modal="true"');
+    expect(limitsDialog).toContain("<span>Save</span>");
+    expect(limitsDialog).not.toContain("Save rules");
     expect(limitsDialog).not.toContain("<aside");
     expect(stylesheet).toMatch(/\.limits-main\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).not.toContain(".limits-config-panel");

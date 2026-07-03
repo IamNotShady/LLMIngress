@@ -169,6 +169,30 @@ describe("console dark restyle static contract", () => {
     );
   });
 
+  test("limit rules open configuration in a dialog from row edit actions", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+    const limitsSection = sections.slice(
+      sections.indexOf("export async function LimitsSection"),
+      sections.indexOf("function LimitsConfigDialog"),
+    );
+    const limitsDialog = sections.slice(
+      sections.indexOf("function LimitsConfigDialog"),
+      sections.indexOf("function getAgentLimitRuntimeSnapshot"),
+    );
+
+    expect(limitsSection).toContain("limitDialog: row.agent.id");
+    expect(limitsSection).toContain("<span>Edit</span>");
+    expect(limitsSection).not.toContain("<LimitsConfigPanel");
+    expect(limitsSection).not.toContain('className="table-row-link"');
+    expect(limitsSection).not.toContain("is-clickable");
+    expect(limitsDialog).toContain('className="console-dialog limits-config-dialog"');
+    expect(limitsDialog).toContain('aria-modal="true"');
+    expect(limitsDialog).not.toContain("<aside");
+    expect(stylesheet).toMatch(/\.limits-main\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).not.toContain(".limits-config-panel");
+  });
+
   test("virtual model details open in a read-only dialog instead of a side card", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

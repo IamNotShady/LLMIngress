@@ -2832,10 +2832,7 @@ button.table-row-link {
   font-size: var(--text-sm);
 }
 .limits-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 30rem;
-  gap: var(--space-lg);
-  align-items: start;
+  display: block;
 }
 .limits-left-column {
   display: flex;
@@ -2893,16 +2890,14 @@ button.table-row-link {
 .limits-rule-table a:hover {
   color: var(--accent-strong);
 }
-.limits-rule-table .table-row-link {
-  display: flex;
-  align-items: center;
-  min-height: 1.75rem;
-}
-.limits-rule-table td.num .table-row-link {
-  justify-content: flex-end;
-}
 .limits-rule-action-cell {
   text-align: right;
+}
+.limits-rule-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
 }
 .limits-rule-delete-form {
   margin: 0;
@@ -2944,18 +2939,11 @@ button.table-row-link {
   padding-block: 0.25rem;
   font-size: var(--text-xs);
 }
-.limits-config-panel {
-  position: sticky;
-  top: calc(var(--space-md) + 4rem);
+.limits-config-dialog {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  min-width: 0;
-  padding: var(--space-xl);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  width: min(42rem, calc(100vw - 2rem));
 }
 .limits-config-head {
   display: flex;
@@ -3023,10 +3011,10 @@ button.table-row-link {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-sm);
 }
-.limits-config-panel .tag-row {
+.limits-config-dialog .tag-row {
   gap: var(--space-xs);
 }
-.limits-config-panel .tag-chip {
+.limits-config-dialog .tag-chip {
   padding: 0.35rem var(--space-sm);
   font-size: var(--text-xs);
   font-weight: 700;
@@ -3051,15 +3039,6 @@ button.table-row-link {
   min-width: 7.25rem;
 }
 
-@media (max-width: 76rem) {
-  .limits-main {
-    grid-template-columns: 1fr;
-  }
-  .limits-config-panel {
-    position: static;
-  }
-}
-
 @media (max-width: 56rem) {
   .limits-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3076,9 +3055,6 @@ button.table-row-link {
   }
   .limits-kpi-grid {
     grid-template-columns: 1fr;
-  }
-  .limits-config-panel {
-    padding: var(--space-md);
   }
 }
 

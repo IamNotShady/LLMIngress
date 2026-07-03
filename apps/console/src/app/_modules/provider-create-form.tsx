@@ -162,8 +162,7 @@ export function ProviderCreateForm({
         </>
       )}
       <button type="submit">
-        <FlatIcon name="add" />
-        <span>Create provider</span>
+        <span>Create</span>
       </button>
     </form>
   );

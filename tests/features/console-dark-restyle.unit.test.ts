@@ -169,8 +169,8 @@ describe("console dark restyle static contract", () => {
     expect(usageFilterForm).toContain("<span>Query</span>");
     expect(usageFilterForm).not.toContain("FlatIcon");
     expect(usageFilterForm).not.toContain("<span>Apply</span>");
-    expect(stylesheet).toMatch(/\.usage-filter-bar button\s*\{[^}]*height:\s*2\.35rem/s);
-    expect(stylesheet).toMatch(/\.usage-filter-bar button\s*\{[^}]*min-height:\s*2\.35rem/s);
+    expect(stylesheet).toMatch(/\.usage-filter-bar button\s*\{[^}]*height:\s*2\.55rem/s);
+    expect(stylesheet).toMatch(/\.usage-filter-bar button\s*\{[^}]*min-height:\s*2\.55rem/s);
     expect(stylesheet).toMatch(
       /\.usage-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
     );
@@ -212,6 +212,44 @@ describe("console dark restyle static contract", () => {
       /\.notification-channel-save-button\s*\{[^}]*justify-self:\s*center/s,
     );
     expect(stylesheet).toMatch(/\.notification-channel-save-button\s*\{[^}]*min-width:\s*6rem/s);
+  });
+
+  test("dialog form submit buttons stay compact and text-only", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const providerCreateForm = readFileSync(
+      join(appDir, "_modules/provider-create-form.tsx"),
+      "utf8",
+    );
+    const routeDialog = readFileSync(
+      join(appDir, "_modules/virtual-model-route-dialog.tsx"),
+      "utf8",
+    );
+    const stylesheet = css();
+    const agentCreateForm = sections.slice(
+      sections.indexOf('action="/api/agents" id="new-agent"'),
+      sections.indexOf("</form>", sections.indexOf('action="/api/agents" id="new-agent"')),
+    );
+    const providerCreateSubmit = providerCreateForm.slice(
+      providerCreateForm.lastIndexOf('<button type="submit">'),
+      providerCreateForm.indexOf(
+        "</button>",
+        providerCreateForm.lastIndexOf('<button type="submit">'),
+      ),
+    );
+
+    expect(agentCreateForm).toContain("<span>Create</span>");
+    expect(agentCreateForm).not.toContain("FlatIcon");
+    expect(providerCreateSubmit).toContain("<span>Create</span>");
+    expect(providerCreateSubmit).not.toContain("FlatIcon");
+    expect(sections).not.toContain("Save provider");
+    expect(sections).not.toContain("Save API key");
+    expect(sections).not.toContain("Save price override");
+    expect(routeDialog).toContain("<span>Add Model</span>");
+    expect(routeDialog).not.toContain('<FlatIcon name="add" />');
+    expect(stylesheet).toMatch(
+      /\.provider-create-form > button\[type="submit"\][^}]*\{[^}]*justify-self:\s*center/s,
+    );
+    expect(stylesheet).toMatch(/\.vm-add-model-button\s*\{[^}]*align-self:\s*center/s);
   });
 
   test("limit rules open configuration in a dialog from row edit actions", () => {

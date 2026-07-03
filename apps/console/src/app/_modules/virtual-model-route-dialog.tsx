@@ -273,7 +273,6 @@ export function VirtualModelRouteDialogClient({
                 type="button"
                 onClick={() => setPickerOpen(true)}
               >
-                <FlatIcon name="add" />
                 <span>Add Model</span>
               </button>
             </section>

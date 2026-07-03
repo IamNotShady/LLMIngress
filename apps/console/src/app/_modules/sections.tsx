@@ -2431,8 +2431,7 @@ function AgentCreateDialog({
             />
           </div>
           <button type="submit">
-            <FlatIcon name="add" />
-            <span>Create agent</span>
+            <span>Create</span>
           </button>
         </form>
       </section>
@@ -2635,7 +2634,6 @@ function AgentEditDialog({
             />
           </div>
           <button type="submit">
-            <FlatIcon name="save" />
             <span>Save</span>
           </button>
         </form>
@@ -3476,8 +3474,7 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
           required
         />
         <button type="submit">
-          <FlatIcon name="save" />
-          <span>Save price override</span>
+          <span>Save</span>
         </button>
       </form>
     </div>
@@ -3791,8 +3788,7 @@ function ProviderEditDialog({
             {baseUrlError}
           </p>
           <button type="submit">
-            <FlatIcon name="save" />
-            <span>Save provider</span>
+            <span>Save</span>
           </button>
         </form>
       </section>
@@ -3846,8 +3842,7 @@ function ProviderKeyCreateDialog({
             type="number"
           />
           <button type="submit">
-            <FlatIcon name="key" />
-            <span>Save API key</span>
+            <span>Save</span>
           </button>
         </form>
       </section>

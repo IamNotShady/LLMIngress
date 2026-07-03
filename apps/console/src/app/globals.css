@@ -534,6 +534,12 @@ pre,
   display: grid;
   gap: var(--space-sm);
 }
+.price-form > button[type="submit"],
+.provider-create-form > button[type="submit"],
+.provider-edit-form > button[type="submit"] {
+  justify-self: center;
+  min-width: 6rem;
+}
 .field-error {
   display: none;
   margin: calc(-1 * var(--space-2xs)) 0 0;
@@ -2720,8 +2726,8 @@ button.table-row-link {
   align-self: end;
 }
 .usage-filter-bar button {
-  height: 2.35rem;
-  min-height: 2.35rem;
+  height: 2.55rem;
+  min-height: 2.55rem;
   padding-block: var(--space-xs);
 }
 .usage-filter-bar input,
@@ -3399,6 +3405,12 @@ button.table-row-link {
   min-width: 5.5rem;
   min-height: 1.875rem;
   text-decoration: none;
+}
+.vm-add-model-button {
+  align-self: center;
+  justify-self: center;
+  width: auto;
+  min-width: 7.25rem;
 }
 .vm-model-picker-scrim {
   position: fixed;

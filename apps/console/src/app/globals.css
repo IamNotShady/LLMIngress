@@ -1212,7 +1212,7 @@ body:has(.console-dialog-scrim) {
   display: flex;
   align-items: flex-start;
   gap: var(--space-xs);
-  min-height: 7.75rem;
+  min-height: 8.5rem;
   padding: var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1224,7 +1224,8 @@ body:has(.console-dialog-scrim) {
 .sidebar-runtime-summary {
   display: flex;
   flex-direction: column;
-  line-height: var(--leading-snug);
+  gap: 0.18rem;
+  line-height: var(--leading-normal);
   min-width: 0;
 }
 .sidebar-runtime-card em {

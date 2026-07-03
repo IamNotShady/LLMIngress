@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FlatIcon } from "./_components/flat-icon";
 import {
   buildPlaygroundChatRequest,
   buildPlaygroundMessagesRequest,
@@ -446,11 +445,9 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
 
             <div className="console-actions playground-actions">
               <button type="button" className="secondary-button" onClick={clearPlayground}>
-                <FlatIcon name="cancel" />
                 <span>Clear</span>
               </button>
               <button type="submit" disabled={isSending}>
-                <FlatIcon name="confirm" />
                 <span>{isSending ? "Sending" : "Send"}</span>
               </button>
             </div>

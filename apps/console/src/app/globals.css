@@ -2566,9 +2566,11 @@ button.table-row-link {
 .playground-actions {
   gap: var(--space-sm);
   align-items: center;
+  justify-content: center;
 }
 .playground-actions button {
   min-width: 8rem;
+  justify-content: center;
 }
 .playground-status-pill {
   display: inline-flex;

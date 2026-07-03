@@ -189,6 +189,11 @@ describe("console dark restyle static contract", () => {
     expect(actions.indexOf("<span>Clear</span>")).toBeLessThan(actions.indexOf('"Send"'));
     expect(actions).toContain('"Send"');
     expect(actions).not.toContain("Send test");
+    expect(actions).not.toContain("FlatIcon");
+
+    const stylesheet = readFileSync(join(appDir, "globals.css"), "utf8");
+    expect(stylesheet).toMatch(/\.playground-actions\s*\{[^}]*justify-content:\s*center/s);
+    expect(stylesheet).toMatch(/\.playground-actions button\s*\{[^}]*justify-content:\s*center/s);
   });
 
   test("limit rules open configuration in a dialog from row edit actions", () => {

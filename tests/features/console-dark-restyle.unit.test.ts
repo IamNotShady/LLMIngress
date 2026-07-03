@@ -85,4 +85,16 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(/\.sidebar-runtime-card\s*\{[^}]*min-height:\s*8\.5rem/s);
     expect(stylesheet).toMatch(/\.sidebar-runtime-summary\s*\{[^}]*gap:\s*0\.18rem/s);
   });
+
+  test("agents filters use a compact query button aligned with the controls", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+
+    expect(sections).not.toContain("Apply filters");
+    expect(sections).toContain("<span>Query</span>");
+    expect(stylesheet).toMatch(/\.agents-filter-actions button\s*\{[^}]*min-height:\s*2\.25rem/s);
+    expect(stylesheet).toMatch(
+      /\.agents-filter-actions button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+    );
+  });
 });

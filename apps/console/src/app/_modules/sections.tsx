@@ -1991,7 +1991,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
               <div className="agents-filter-actions">
                 <button type="submit">
                   <FlatIcon name="filter" />
-                  <span>Apply filters</span>
+                  <span>Query</span>
                 </button>
               </div>
             </fieldset>

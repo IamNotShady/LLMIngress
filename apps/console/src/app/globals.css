@@ -1415,6 +1415,10 @@ body:has(.console-dialog-scrim) {
   justify-content: flex-end;
   grid-column: auto;
 }
+.agents-filter-actions button {
+  min-height: 2.25rem;
+  padding-block: var(--space-xs);
+}
 .agents-list-card {
   min-width: 0;
   overflow: hidden;

@@ -1,0 +1,112 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test } from "vitest";
+
+const rootDir = process.cwd();
+const appDir = join(rootDir, "apps/console/src/app");
+const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
+const sections = () => readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+const statCard = () => readFileSync(join(appDir, "_components/stat-card.tsx"), "utf8");
+const providersSection = () =>
+  readFileSync(join(appDir, "_modules/providers-client-section.tsx"), "utf8");
+
+// Slice the StatCard call that carries the given label so assertions read the
+// right card's props.
+function statCardBlock(source: string, label: string): string {
+  const start = source.indexOf(`label="${label}"`);
+  expect(start, `StatCard label="${label}" exists`).toBeGreaterThan(-1);
+  return source.slice(start, source.indexOf("/>", start));
+}
+
+describe("console semantic status static contract", () => {
+  test("stat card deltas speak valence (good/bad/neutral), not direction", () => {
+    expect(statCard()).toContain('"good" | "bad" | "neutral"');
+    expect(statCard()).toContain("valueTone");
+    expect(statCard()).not.toContain('"up" | "down"');
+
+    const stylesheet = css();
+    expect(stylesheet).toMatch(/\.stat-card-delta\.is-good\s*\{[^}]*var\(--ok\)/s);
+    expect(stylesheet).toMatch(/\.stat-card-delta\.is-bad\s*\{[^}]*var\(--danger\)/s);
+    expect(stylesheet).toMatch(/\.stat-card-delta\.is-neutral\s*\{[^}]*var\(--text-subtle\)/s);
+    expect(stylesheet).not.toContain(".stat-card-delta.is-up");
+    expect(stylesheet).not.toContain(".stat-card-delta.is-down");
+    expect(stylesheet).toMatch(/\.stat-card-value\.is-danger\s*\{[^}]*var\(--danger\)/s);
+    expect(stylesheet).toMatch(/\.stat-card-value\.is-warn\s*\{[^}]*var\(--warn\)/s);
+  });
+
+  test("overview KPI deltas carry per-metric polarity", () => {
+    const source = sections();
+    expect(source).toContain('"up-good" | "down-good"');
+    expect(statCardBlock(source, "Requests 24h")).toContain('"up-good"');
+    expect(statCardBlock(source, "Cost 24h")).toContain('"down-good"');
+    expect(statCardBlock(source, "Tokens 24h")).toContain('"up-good"');
+    expect(statCardBlock(source, "Failure rate")).toContain('"down-good"');
+    expect(statCardBlock(source, "Savings")).toContain('"up-good"');
+    expect(statCardBlock(source, "Over-limit today")).toContain('"down-good"');
+  });
+
+  test("failure rates at alert thresholds render warn/danger", () => {
+    const source = sections();
+    expect(source).toContain("function failureRateTone");
+    expect(source).toContain(">= 0.2");
+    expect(source).toContain(">= 0.05");
+    // Overview, Usage, and Virtual Models KPIs plus both failure-rate table
+    // cells consume the tone helper.
+    expect(source.match(/failureRateTone\(/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+
+    const stylesheet = css();
+    expect(stylesheet).toMatch(/\.num-danger\s*\{[^}]*var\(--danger\)/s);
+    expect(stylesheet).toMatch(/\.num-warn\s*\{[^}]*var\(--warn\)/s);
+  });
+
+  test("runtime heartbeat and migration check are status-colored", () => {
+    const source = sections();
+    expect(statCardBlock(source, "Heartbeat")).toContain("valueTone");
+    expect(source).toContain('<span className="pill--ok pill">Ready</span>');
+    expect(source).toContain('<span className="pill--danger pill">Blocked</span>');
+  });
+
+  test("disabled providers and models wear neutral chips, not error red", () => {
+    // Both pill implementations (sections.tsx renders the provider cards,
+    // providers-client-section.tsx renders the list/detail) short-circuit the
+    // disabled state before the danger fallback.
+    for (const source of [providersSection(), sections()]) {
+      expect(source).toContain('<span className="pill">Disabled</span>');
+      expect(source).not.toContain('pill--danger pill">Disabled');
+      const pillFn = source.slice(
+        source.indexOf("function ProviderStatusPill"),
+        source.indexOf("function formatProviderHealthStatusLabel"),
+      );
+      expect(pillFn).toContain('normalized === "disabled"');
+    }
+  });
+
+  test("row-level delete actions are quiet, destructive emphasis lives in dialogs", () => {
+    const stylesheet = css();
+    expect(stylesheet).toMatch(
+      /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*transparent/s,
+    );
+    expect(stylesheet).not.toMatch(
+      /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*var\(--danger\)/s,
+    );
+    expect(stylesheet).toMatch(/\.limits-rule-delete-button\s*\{[^}]*background:\s*transparent/s);
+    // The confirm dialog keeps the loud filled danger button.
+    expect(stylesheet).toMatch(/\.agent-delete-confirm\s*\{[^}]*var\(--danger\)/s);
+  });
+
+  test("limits row delete opens a confirm dialog instead of posting directly", () => {
+    const source = sections();
+    expect(source).toContain("function LimitsDeleteDialog");
+    expect(source).toContain("limitDelete: row.agent.id");
+    // The rules table row itself no longer submits the delete form.
+    const limitsSection = source.slice(
+      source.indexOf("export async function LimitsSection"),
+      source.indexOf("function LimitsConfigDialog"),
+    );
+    expect(limitsSection).not.toContain('name="action" value="deleteLimitRules"');
+    // The dialog posts the same API action with an explicit confirm.
+    const deleteDialog = source.slice(source.indexOf("function LimitsDeleteDialog"));
+    expect(deleteDialog).toContain('name="action" value="deleteLimitRules"');
+    expect(deleteDialog).toContain('aria-modal="true"');
+  });
+});

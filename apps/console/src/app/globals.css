@@ -1380,17 +1380,37 @@ body:has(.console-dialog-scrim) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.stat-card-value.is-danger {
+  color: var(--danger);
+}
+.stat-card-value.is-warn {
+  color: var(--warn);
+}
 .stat-card-delta {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-subtle);
 }
-.stat-card-delta.is-up {
+/* Delta tones are valence, not direction: a falling cost is good. */
+.stat-card-delta.is-good {
   color: var(--ok);
 }
-.stat-card-delta.is-down {
+.stat-card-delta.is-bad {
   color: var(--danger);
+}
+.stat-card-delta.is-neutral {
+  color: var(--text-subtle);
+}
+
+/* Numeric table cells that crossed an alert threshold. */
+.num-danger {
+  color: var(--danger);
+  font-weight: 700;
+}
+.num-warn {
+  color: var(--warn);
+  font-weight: 700;
 }
 
 /* ---- Master-detail layout (list + right detail panel) ---- */
@@ -2054,16 +2074,18 @@ button.table-row-link {
   background: var(--accent-strong) !important;
   border-color: var(--accent-strong) !important;
 }
+/* Row-level delete stays quiet at rest; the confirm dialog carries the loud
+   filled danger button. */
 .agent-table-actions .agent-action-delete {
-  color: var(--danger-fg) !important;
-  background: var(--danger) !important;
-  border-color: var(--danger) !important;
-  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--danger) 45%, transparent);
+  color: var(--danger-strong) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none;
 }
 .agent-table-actions .agent-action-delete:hover {
-  background: var(--danger-strong) !important;
-  border-color: var(--danger-strong) !important;
-  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--danger) 55%, transparent);
+  background: var(--danger-soft) !important;
+  border-color: var(--danger) !important;
+  box-shadow: none;
 }
 
 /* Compact icon-only action buttons (table rows, section heads). Labeled
@@ -2937,9 +2959,6 @@ button.table-row-link {
   justify-content: flex-end;
   gap: var(--space-xs);
 }
-.limits-rule-delete-form {
-  margin: 0;
-}
 .limits-rule-delete-button {
   appearance: none;
   display: inline-flex;
@@ -2947,22 +2966,21 @@ button.table-row-link {
   justify-content: center;
   min-height: 2rem;
   padding: 0 var(--space-sm);
-  color: var(--danger);
-  background: var(--danger-soft);
-  border: 1px solid var(--danger);
+  color: var(--danger-strong);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font: inherit;
   font-weight: 800;
   line-height: 1;
+  text-decoration: none;
   cursor: pointer;
   transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out),
     box-shadow 0.15s var(--ease-out), transform 0.05s var(--ease-out);
-  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--danger) 45%, transparent);
 }
 .limits-rule-delete-button:hover {
-  background: color-mix(in oklch, var(--danger-soft) 80%, var(--danger) 20%);
-  border-color: var(--danger-strong);
-  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--danger) 55%, transparent);
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 .limits-rule-delete-button:active {
   transform: translateY(1px);

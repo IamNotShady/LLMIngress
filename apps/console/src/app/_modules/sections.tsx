@@ -176,6 +176,7 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             usageSummary.requestCount,
             overviewAnalytics.previous.requestCount,
+            "up-good",
           )}
         />
         <StatCard
@@ -189,6 +190,7 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             Number(usageSummary.totalCostUsd ?? 0),
             Number(overviewAnalytics.previous.totalCostUsd ?? 0),
+            "down-good",
           )}
         />
         <StatCard
@@ -202,12 +204,14 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             usageSummary.totalTokens,
             overviewAnalytics.previous.totalTokens,
+            "up-good",
           )}
         />
         <StatCard
           icon="FR"
           label="Failure rate"
           value={failureRate}
+          valueTone={failureRateTone(usageSummary.failureCount, usageSummary.requestCount)}
           delta={formatPreviousWindowPointDelta(
             usageSummary.requestCount > 0
               ? usageSummary.failureCount / usageSummary.requestCount
@@ -215,10 +219,11 @@ export async function OverviewSection() {
             overviewAnalytics.previous.failureRate,
           )}
           deltaTone={formatDeltaTone(
-            overviewAnalytics.previous.failureRate,
             usageSummary.requestCount > 0
               ? usageSummary.failureCount / usageSummary.requestCount
               : 0,
+            overviewAnalytics.previous.failureRate,
+            "down-good",
           )}
         />
         <StatCard
@@ -232,6 +237,7 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             Number(usageSummary.totalSavingsUsd ?? 0),
             Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
+            "up-good",
           )}
         />
         <StatCard icon="AG" label="Active agents 24h" value={String(activeAgentCount)} />
@@ -368,8 +374,39 @@ function formatSignedDecimal(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
 }
 
-function formatDeltaTone(current: number, previous: number): "up" | "down" {
-  return current >= previous ? "up" : "down";
+// Valence per metric: callers say which direction is good (cost down is good,
+// requests up is good). Zero change is neutral, never tinted.
+function formatDeltaTone(
+  current: number,
+  previous: number,
+  direction: "up-good" | "down-good",
+): "good" | "bad" | "neutral" {
+  if (current === previous) {
+    return "neutral";
+  }
+  return current > previous === (direction === "up-good") ? "good" : "bad";
+}
+
+// Alert thresholds for failure rates: 5% warns, 20% is dangerous.
+function failureRateTone(
+  failureCount: number,
+  requestCount: number,
+): "danger" | "warn" | undefined {
+  if (requestCount <= 0) {
+    return undefined;
+  }
+  const rate = failureCount / requestCount;
+  if (rate >= 0.2) {
+    return "danger";
+  }
+  if (rate >= 0.05) {
+    return "warn";
+  }
+  return undefined;
+}
+
+function toneToNumClass(tone: "danger" | "warn" | undefined): string | undefined {
+  return tone ? `num-${tone}` : undefined;
 }
 
 function formatTime(value: Date): string {
@@ -466,6 +503,12 @@ export async function RuntimeSection() {
           icon="HB"
           label="Heartbeat"
           value={gateway ? formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) : "—"}
+          valueTone={
+            gateway &&
+            formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) !== "Healthy"
+              ? "warn"
+              : undefined
+          }
         />
       </div>
 
@@ -527,9 +570,11 @@ export async function RuntimeSection() {
           <div className="detail-field">
             <dt>db:migrate:check</dt>
             <dd>
-              {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready"
-                ? "Ready"
-                : "Blocked"}
+              {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready" ? (
+                <span className="pill--ok pill">Ready</span>
+              ) : (
+                <span className="pill--danger pill">Blocked</span>
+              )}
             </dd>
           </div>
           {gateway ? (
@@ -572,7 +617,8 @@ function ProviderStatusPill({ label, status }: { label: string; status: string }
   if (normalized === "healthy") {
     return <span className="pill--ok pill">{label}</span>;
   }
-  if (normalized === "unknown") {
+  // Unknown and intentionally disabled are neutral states, not errors.
+  if (normalized === "unknown" || normalized === "disabled") {
     return <span className="pill">{label}</span>;
   }
   if (normalized === "checking" || normalized === "quota_limited") {
@@ -738,7 +784,12 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           value={formatCompactNumber(usageSummary.requestCount)}
         />
         <StatCard icon="LT" label="Avg latency" value={avgLatency} />
-        <StatCard icon="FR" label="Failure rate" value={failureRate} />
+        <StatCard
+          icon="FR"
+          label="Failure rate"
+          value={failureRate}
+          valueTone={failureRateTone(usageSummary.failureCount, usageSummary.requestCount)}
+        />
         <StatCard
           icon="SV"
           label="Estimated savings"
@@ -840,7 +891,13 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
                     <td className="num">{formatConsoleUsageCost(breakdown.totalCostUsd)}</td>
                     <td className="num">{formatLatencyMs(breakdown.avgLatencyMs)}</td>
                     <td className="num">
-                      {formatFailureRate(breakdown.failureCount, breakdown.requestCount)}
+                      <span
+                        className={toneToNumClass(
+                          failureRateTone(breakdown.failureCount, breakdown.requestCount),
+                        )}
+                      >
+                        {formatFailureRate(breakdown.failureCount, breakdown.requestCount)}
+                      </span>
                     </td>
                     <td className="num">{formatConsoleUsageCost(breakdown.totalSavingsUsd)}</td>
                   </tr>
@@ -1386,6 +1443,7 @@ export async function VirtualModelsSection({
             totalVirtualModelFailures,
             2,
           )}
+          valueTone={failureRateTone(totalVirtualModelFailures, totalVirtualModelRequests)}
         />
       </div>
       <form className="vm-filter-bar" action="/models" method="get">
@@ -1492,10 +1550,19 @@ export async function VirtualModelsSection({
                           </td>
                           <td className="num">
                             <a className="table-row-link" href={viewHref}>
-                              {formatVirtualModelFailureRate(
-                                virtualModel.requestCountTotal,
-                                virtualModel.failureCountTotal,
-                              )}
+                              <span
+                                className={toneToNumClass(
+                                  failureRateTone(
+                                    virtualModel.failureCountTotal,
+                                    virtualModel.requestCountTotal,
+                                  ),
+                                )}
+                              >
+                                {formatVirtualModelFailureRate(
+                                  virtualModel.requestCountTotal,
+                                  virtualModel.failureCountTotal,
+                                )}
+                              </span>
                             </a>
                           </td>
                           <td>
@@ -1646,7 +1713,7 @@ function VirtualModelViewDialog({
                   {candidate.availability === "available" ? (
                     <span className="pill--ok pill">Healthy</span>
                   ) : (
-                    <span className="pill--danger pill">Disabled</span>
+                    <span className="pill">Disabled</span>
                   )}
                 </div>
               ))}
@@ -2811,6 +2878,7 @@ function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
   const dialogAgentId = readSingleSearchParam(searchParams.limitDialog);
+  const deleteDialogAgentId = readSingleSearchParam(searchParams.limitDelete);
   const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
   const agents = await listAgents();
   const agentLimits = await listAgentLimits();
@@ -2875,6 +2943,10 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
     ? getAgentLimitRuntimeSnapshot(dialogAgent.id, runtimeByAgentId)
     : null;
   const dialogCloseHref = buildQueryHref(searchParams, { limitDialog: undefined });
+  const deleteDialogAgent = deleteDialogAgentId
+    ? (agents.find((agent) => agent.id === deleteDialogAgentId) ?? null)
+    : null;
+  const deleteDialogCloseHref = buildQueryHref(searchParams, { limitDelete: undefined });
 
   return (
     <section className="limits-dashboard" aria-label="Limits">
@@ -2892,7 +2964,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
               label="Over-limit today"
               value={String(overLimitTodayCount)}
               delta={`vs yesterday ${formatSignedInteger(overLimitTodayCount - overLimitYesterdayCount)}`}
-              deltaTone={overLimitTodayCount >= overLimitYesterdayCount ? "up" : "down"}
+              deltaTone={formatDeltaTone(overLimitTodayCount, overLimitYesterdayCount, "down-good")}
             />
             <StatCard
               icon="B"
@@ -2985,21 +3057,16 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                                   <span>Edit</span>
                                 </a>
                               </span>
-                              <form
-                                action="/api/agent-limits"
-                                className="limits-rule-delete-form"
-                                method="post"
+                              <a
+                                aria-label={`Delete ${row.agent.name}`}
+                                className="limits-rule-delete-button"
+                                href={buildQueryHref(searchParams, {
+                                  limitDelete: row.agent.id,
+                                  limitDialog: undefined,
+                                })}
                               >
-                                <input type="hidden" name="action" value="deleteLimitRules" />
-                                <input type="hidden" name="agentId" value={row.agent.id} />
-                                <button
-                                  aria-label={`Delete ${row.agent.name}`}
-                                  className="limits-rule-delete-button"
-                                  type="submit"
-                                >
-                                  Delete
-                                </button>
-                              </form>
+                                Delete
+                              </a>
                             </span>
                           </td>
                         </tr>
@@ -3020,6 +3087,9 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
           allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(dialogAgent.id))}
           runtime={dialogRuntime ?? getEmptyAgentLimitRuntimeSnapshot(dialogAgent.id)}
         />
+      ) : null}
+      {deleteDialogAgent ? (
+        <LimitsDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
       ) : null}
     </section>
   );
@@ -3212,6 +3282,47 @@ function LimitsConfigDialog({
             </button>
           </div>
         </form>
+      </section>
+    </>
+  );
+}
+
+function LimitsDeleteDialog({
+  agent,
+  closeHref,
+}: {
+  agent: { id: string; name: string };
+  closeHref: string;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`limits-delete-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id={`limits-delete-dialog-title-${agent.id}`}>
+            Delete limit rules for {agent.name}?
+          </h2>
+        </div>
+        <p>This removes every limit rule configured for this Agent API key.</p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
+          </a>
+          <form action="/api/agent-limits" method="post">
+            <input type="hidden" name="action" value="deleteLimitRules" />
+            <input type="hidden" name="agentId" value={agent.id} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete</span>
+            </button>
+          </form>
+        </div>
       </section>
     </>
   );

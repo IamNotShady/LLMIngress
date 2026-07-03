@@ -574,7 +574,8 @@ function ModelAvailabilityPill({ value }: { value: string }) {
     return <span className="pill--ok pill">Enabled</span>;
   }
   if (normalized === "disabled") {
-    return <span className="pill--danger pill">Disabled</span>;
+    // Intentionally disabled is a neutral state, not an error.
+    return <span className="pill">Disabled</span>;
   }
   return <span className="pill">{formatModelAvailability(value)}</span>;
 }
@@ -584,7 +585,8 @@ function ProviderStatusPill({ label, status }: { label: string; status: string }
   if (normalized === "healthy") {
     return <span className="pill--ok pill">{label}</span>;
   }
-  if (normalized === "unknown") {
+  // Unknown and intentionally disabled are neutral states, not errors.
+  if (normalized === "unknown" || normalized === "disabled") {
     return <span className="pill">{label}</span>;
   }
   if (normalized === "checking" || normalized === "quota_limited") {

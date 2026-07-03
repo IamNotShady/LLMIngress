@@ -77,6 +77,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-03: TDD red->green. Unit (5 static contracts) + E2E green: seeded request/limit data, no horizontal overflow at 1280/390 on overview+limits, recent-requests table scrolls inside its card, limits actions fully visible at 1280, trend charts show chart-empty message on empty windows, mobile menu toggle reveals nav and closes after navigation."
+    },
+    {
+      "id": "console-semantic-status",
+      "name": "Console Semantic Status Colors And Quiet Destructive Actions",
+      "description": "Status colors match meaning across the console: KPI deltas are tinted by metric polarity (cost down is good, over-limit up is bad) with neutral zero-change, failure rates at or above alert thresholds render warn/danger on Overview, Usage and Virtual Models KPIs and table cells, runtime heartbeat staleness and db:migrate:check state render as status pills, intentionally disabled providers/models show neutral chips instead of error red, and row-level delete actions are visually quiet with the Limits row delete gated behind a confirm dialog.",
+      "verification": "pnpm exec vitest run tests/features/console-semantic-status.unit.test.ts && pnpm test:e2e tests/e2e/console-semantic-status.e2e.spec.ts",
+      "dependencies": [
+        "console-p0-layout"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-03: TDD red->green. Unit (7 static contracts) + E2E green: seeded 37.5% failure rate renders danger on Overview/VM KPIs and VM table cell, unchanged cost delta neutral while request growth reads good, stale heartbeat warns and db:migrate:check shows an ok pill, disabled provider chip is neutral gray, agent row delete is transparent at rest, limits row delete opens a confirm dialog and confirming removes the rules."
     }
   ]
 }

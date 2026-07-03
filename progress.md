@@ -5,7 +5,17 @@
 - Date: 2026-07-03
 - Branch: `worktree-console-dark-restyle`
 - Base: `dev` at `d28e21ac`
-- Status: Console dark restyle verified; UI/UX review batch 1 (`console-p0-layout`) implemented and verified.
+- Status: Console dark restyle verified; UI/UX review batches 1–2 (`console-p0-layout`, `console-semantic-status`) implemented and verified.
+
+## 2026-07-03 UI/UX Review → console-semantic-status (batch 2 of 4)
+
+- Implemented `console-semantic-status` (TDD red→green, seeded-data E2E):
+  - `StatCard` delta tones are valence (`good`/`bad`/`neutral`) chosen per metric polarity — cost down and over-limit down are good, requests/tokens/savings up are good, zero change is neutral gray; new optional `valueTone` colors KPI values.
+  - `failureRateTone` (≥5% warn, ≥20% danger) drives the Overview/Usage/Virtual Models failure-rate KPIs and the VM list + Usage summary table cells (`.num-warn`/`.num-danger`).
+  - Runtime: stale/missing heartbeat value renders warn; `db:migrate:check` renders `Ready`/`Blocked` as ok/danger pills.
+  - Intentionally disabled providers/models/candidates show neutral gray chips instead of danger red (both `ProviderStatusPill` copies + `ModelAvailabilityPill` + VM candidate card).
+  - Row-level Delete actions are quiet (transparent at rest, danger-soft on hover); the Limits row Delete now opens a `LimitsDeleteDialog` confirm instead of posting `deleteLimitRules` directly.
+- Release guards now accept 8 feature contracts.
 
 ## 2026-07-03 UI/UX Review → console-p0-layout (batch 1 of 4)
 

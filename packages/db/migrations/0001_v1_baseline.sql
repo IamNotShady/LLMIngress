@@ -515,9 +515,7 @@ CREATE TABLE public.providers (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     provider_template_id text,
-    default_priority integer DEFAULT 100 NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT providers_default_priority_check CHECK ((default_priority >= 0)),
     CONSTRAINT providers_provider_type_check CHECK ((provider_type = ANY (ARRAY['api_key'::text, 'local'::text, 'subscription'::text])))
 );
 
@@ -1858,5 +1856,4 @@ ALTER TABLE ONLY public.webhook_deliveries
 --
 -- PostgreSQL database dump complete
 --
-
 

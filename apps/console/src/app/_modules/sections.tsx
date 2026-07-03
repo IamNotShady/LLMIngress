@@ -3773,10 +3773,6 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
                   </dd>
                 </div>
                 <div>
-                  <dt>Default priority</dt>
-                  <dd>{formatProviderDefaultPriority(providers, selectedProvider)}</dd>
-                </div>
-                <div>
                   <dt>Available models</dt>
                   <dd>{selectedProviderModels.length}</dd>
                 </div>
@@ -4870,14 +4866,6 @@ function formatProviderKeyCount(count: number): string {
     return "-";
   }
   return count === 1 ? "1 Key" : `${count} Keys`;
-}
-
-function formatProviderDefaultPriority(
-  providers: readonly ConsoleProvider[],
-  selectedProvider: ConsoleProvider,
-): string {
-  const index = providers.findIndex((provider) => provider.id === selectedProvider.id);
-  return index >= 0 ? String(index + 1) : "-";
 }
 
 function formatProviderLastConnection(

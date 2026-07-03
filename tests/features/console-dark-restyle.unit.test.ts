@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-const appDir = join(process.cwd(), "apps/console/src/app");
+const rootDir = process.cwd();
+const appDir = join(rootDir, "apps/console/src/app");
 const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
 const layout = () => readFileSync(join(appDir, "layout.tsx"), "utf8");
 
@@ -120,5 +121,28 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(
       /\.agent-view-dialog \.agent-detail-fields div\s*\{[^}]*grid-template-columns:\s*minmax\(8rem,\s*0\.45fr\)\s*minmax\(0,\s*1fr\)/s,
     );
+  });
+
+  test("provider default priority is removed from detail and schema", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const consoleProviders = readFileSync(
+      join(rootDir, "packages/db/src/console-providers.ts"),
+      "utf8",
+    );
+    const gatewayChatCompletions = readFileSync(
+      join(rootDir, "packages/db/src/gateway-chat-completions.ts"),
+      "utf8",
+    );
+    const baselineMigration = readFileSync(
+      join(rootDir, "packages/db/migrations/0001_v1_baseline.sql"),
+      "utf8",
+    );
+
+    expect(sections).not.toContain("Default priority");
+    expect(sections).not.toContain("formatProviderDefaultPriority");
+    expect(consoleProviders).not.toContain("defaultPriority");
+    expect(consoleProviders).not.toContain("default_priority");
+    expect(gatewayChatCompletions).not.toContain("providers.default_priority");
+    expect(baselineMigration).not.toContain("default_priority");
   });
 });

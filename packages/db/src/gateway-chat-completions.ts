@@ -558,8 +558,7 @@ async function readProviderCredentials(input: {
           and providers.deleted_at is null
           and providers.provider_type = 'api_key'
           and provider_api_keys.enabled = true
-        order by providers.default_priority asc,
-                 providers.id,
+        order by providers.id,
                  provider_api_keys.priority asc,
                  provider_api_keys.created_at asc,
                  provider_api_keys.id asc

@@ -286,41 +286,6 @@ export function VirtualModelRouteDialogClient({
               </button>
             </div>
           </form>
-          <aside className="chart-card vm-policy-note">
-            <h3 className="chart-card-title">Current strategy</h3>
-            <dl className="agent-detail-fields">
-              <div>
-                <dt>Strategy</dt>
-                <dd>{formatRouteStrategyLabel(strategy)}</dd>
-              </div>
-              <div>
-                <dt>Candidates</dt>
-                <dd>
-                  {selectedCandidates.length
-                    ? `${selectedCandidates.length} models`
-                    : "Not configured"}
-                </dd>
-              </div>
-              <div>
-                <dt>Takes effect</dt>
-                <dd>Applies to new requests after saving</dd>
-              </div>
-              <div>
-                <dt>Fallback</dt>
-                <dd>Tries the next candidate on failure</dd>
-              </div>
-            </dl>
-            <section className="agent-detail-section">
-              <h3>Advanced capabilities not included</h3>
-              <p>- Task-type rules</p>
-              <p>- Context-length thresholds</p>
-              <p>- Tool-call conditions</p>
-              <p>- timeout / retry settings</p>
-            </section>
-            <p className="callout callout--warn">
-              This version only supports strategy + candidates.
-            </p>
-          </aside>
         </div>
       </section>
 

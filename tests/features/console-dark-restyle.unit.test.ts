@@ -146,6 +146,19 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).not.toContain(".vm-detail-card");
   });
 
+  test("virtual model edit dialog uses the full dialog width", () => {
+    const routeDialog = readFileSync(
+      join(appDir, "_modules/virtual-model-route-dialog.tsx"),
+      "utf8",
+    );
+    const stylesheet = css();
+
+    expect(routeDialog).not.toContain("vm-policy-note");
+    expect(routeDialog).not.toContain("Current strategy");
+    expect(stylesheet).toMatch(/\.vm-editor-grid\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).not.toContain(".vm-policy-note");
+  });
+
   test("agents list opens read-only details in a dialog instead of a side card", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

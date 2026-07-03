@@ -778,6 +778,15 @@ textarea:focus {
 }
 ```
 
+- [ ] **Step 2b: Sweep residual 2.75rem control heights**
+
+Run: `grep -n "min-height: 2.75rem" apps/console/src/app/globals.css`
+Three page-specific rules set it independently and must be retuned too:
+- `.limits-config-form input, .limits-config-form select` (~line 3032): change to `min-height: 2rem;` (input recipe)
+- `.limits-config-actions .secondary-button` (~line 3084): delete the `min-height` line (inherits the 1.875rem base button rule)
+- `.vm-dialog-actions > *` (~line 3465): change to `min-height: 1.875rem;`
+After this step the grep must return no matches.
+
 - [ ] **Step 3: Unit test — button contract green**
 
 Run: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`

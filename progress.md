@@ -25,6 +25,7 @@
 - Follow-up runtime-card height tweak: raised the sidebar runtime card minimum height from `7rem` to `7.75rem`.
 - Follow-up runtime-card spacing tweak: raised the sidebar runtime card minimum height to `8.5rem` and loosened the runtime summary line spacing.
 - Follow-up Agents filter polish: renamed the Agents filter submit button from `Apply filters` to `Query` and aligned its height with the search input.
+- Follow-up Agents button icon cleanup: removed the filter icon from `Query` and the add icon from `Create Agent`.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -38,6 +39,7 @@
   - Follow-up runtime-card height check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed runtime card height `124px`, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up runtime-card spacing check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed runtime card height `141.48px`, summary gap `2.88px`, line-height `19.2px`, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Agents filter check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed `Query` button text, button/search input height `38.80px`, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Agents button icon cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed `Query` and `Create Agent` each have only text, no `.flat-icon`/`svg`, centered flex alignment, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

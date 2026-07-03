@@ -304,7 +304,7 @@ git commit -m "test: register console-dark-restyle with failing static contract"
 
 ```ts
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -315,10 +315,23 @@ import {
 } from "../support/console-app";
 import { withProcessLock } from "../support/process-lock";
 
-function parseRgb(color: string): [number, number, number] {
-  const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  if (!match) throw new Error(`Unexpected color format: ${color}`);
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+// Computed colors authored in OKLCH serialize as "oklch(...)" in Chromium, so
+// convert via a 1x1 canvas pixel readback instead of parsing the string.
+async function backgroundRgb(page: Page, locator: Locator | null): Promise<[number, number, number]> {
+  const color = locator
+    ? await locator.evaluate((el) => getComputedStyle(el).backgroundColor)
+    : await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  return page.evaluate((value) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("2d canvas unavailable");
+    ctx.fillStyle = value;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return [r, g, b] as [number, number, number];
+  }, color);
 }
 
 test("console serves the dark violet Geist skin with compact controls and no overflow", async ({
@@ -349,9 +362,7 @@ test("console serves the dark violet Geist skin with compact controls and no ove
           // Auth screens already wear the skin: violet primary button, 30px tall.
           const createAdmin = page.getByRole("button", { name: "Create admin" });
           await expect(createAdmin).toBeVisible();
-          const [r, g, b] = parseRgb(
-            await createAdmin.evaluate((el) => getComputedStyle(el).backgroundColor),
-          );
+          const [r, g, b] = await backgroundRgb(page, createAdmin);
           expect(b).toBeGreaterThan(150); // violet: blue dominates
           expect(b).toBeGreaterThan(g);
           expect(r).toBeGreaterThan(g);
@@ -371,9 +382,7 @@ test("console serves the dark violet Geist skin with compact controls and no ove
           await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
 
           // Dark canvas: every channel of the body background is deep.
-          const canvas = parseRgb(
-            await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
-          );
+          const canvas = await backgroundRgb(page, null);
           for (const channel of canvas) {
             expect(channel).toBeLessThan(40);
           }

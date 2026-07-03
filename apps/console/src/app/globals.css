@@ -1212,7 +1212,7 @@ body:has(.console-dialog-scrim) {
   display: flex;
   align-items: flex-start;
   gap: var(--space-xs);
-  min-height: 7rem;
+  min-height: 7.75rem;
   padding: var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);

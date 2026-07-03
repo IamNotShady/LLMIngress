@@ -82,6 +82,6 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).not.toContain(".topbar-status");
     expect(stylesheet).not.toContain(".topbar-link");
     expect(stylesheet).not.toContain(".sidebar-account {");
-    expect(stylesheet).toMatch(/\.sidebar-runtime-card\s*\{[^}]*min-height:\s*7rem/s);
+    expect(stylesheet).toMatch(/\.sidebar-runtime-card\s*\{[^}]*min-height:\s*7\.75rem/s);
   });
 });

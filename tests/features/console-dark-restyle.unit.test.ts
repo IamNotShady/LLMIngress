@@ -169,6 +169,19 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).not.toContain(".vm-policy-note");
   });
 
+  test("activity request details open in a dialog instead of a side panel", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+
+    expect(sections).not.toContain("?? activities[0] ?? null");
+    expect(sections).toContain("activityDetailCloseHref");
+    expect(sections).toContain('className="console-dialog activity-detail-dialog"');
+    expect(sections).toContain('aria-modal="true"');
+    expect(sections).toContain("<span>Close</span>");
+    expect(stylesheet).toMatch(/\.activity-shell\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).toMatch(/\.activity-detail-dialog\s*\{[^}]*width:\s*min\(48rem/s);
+  });
+
   test("agents list opens read-only details in a dialog instead of a side card", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();

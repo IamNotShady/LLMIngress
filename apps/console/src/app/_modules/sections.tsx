@@ -985,12 +985,14 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
     countConsoleActivities({ filters }),
     listConsoleActivities({ filters, limit: PAGE_SIZE, page }),
   ]);
-  const selectedListActivity =
-    activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
+  const selectedListActivity = selectedActivityId
+    ? (activities.find((activity) => activity.id === selectedActivityId) ?? null)
+    : null;
   const selectedDetail = selectedListActivity
     ? await getConsoleActivityDetail({ activityId: selectedListActivity.id })
     : null;
   const selectedActivity = selectedDetail?.activity ?? selectedListActivity;
+  const activityDetailCloseHref = buildQueryHref(searchParams, { activityId: undefined });
   const view = {
     from: total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1,
     items: activities,
@@ -1131,19 +1133,25 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
           </div>
           <Pager view={view} searchParams={searchParams} />
         </div>
-
-        {selectedActivity ? (
-          <ActivityReferenceDetail detail={selectedDetail} fallbackActivity={selectedActivity} />
-        ) : null}
       </div>
+
+      {selectedActivity ? (
+        <ActivityReferenceDetail
+          closeHref={activityDetailCloseHref}
+          detail={selectedDetail}
+          fallbackActivity={selectedActivity}
+        />
+      ) : null}
     </section>
   );
 }
 
 function ActivityReferenceDetail({
+  closeHref,
   detail,
   fallbackActivity,
 }: {
+  closeHref: string;
   detail: ConsoleActivityDetail | null;
   fallbackActivity: ConsoleActivity;
 }) {
@@ -1153,102 +1161,111 @@ function ActivityReferenceDetail({
   const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(activity.fallbackAttempts);
 
   return (
-    <section
-      className="detail-panel activity-detail-panel"
-      aria-label="Request detail"
-      aria-labelledby="activity-detail-title"
-    >
-      <div className="detail-panel-head">
-        <h2 className="detail-panel-title" id="activity-detail-title">
-          Request detail
-        </h2>
-        <ActivityStatusPill status={activity.status} />
-      </div>
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-label="Request detail"
+        aria-labelledby="activity-detail-title"
+        aria-modal="true"
+        className="console-dialog activity-detail-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <div className="agent-view-dialog-title">
+            <h2 id="activity-detail-title">Request detail</h2>
+            <ActivityStatusPill status={activity.status} />
+          </div>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
 
-      <dl className="detail-field-list activity-detail-fields">
-        <div className="detail-field">
-          <dt>Request ID</dt>
-          <dd>{activity.requestId}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Agent</dt>
-          <dd>{activity.agentName ?? "Unknown agent"}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>API Key Prefix</dt>
-          <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Virtual Model</dt>
-          <dd>{formatActivityVirtualModelLabel(activity)}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Provider / Model</dt>
-          <dd>{formatActivityProviderModelLabel(activity)}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Strategy</dt>
-          <dd>{formatRouteReasonStrategy(activity.routeReason)}</dd>
-        </div>
-        <div className="detail-field detail-field-wide">
-          <dt>Route reason</dt>
-          <dd>{formatConsoleActivityRouteReason(activity.routeReason)}</dd>
-        </div>
-      </dl>
+        <dl className="detail-field-list activity-detail-fields">
+          <div className="detail-field">
+            <dt>Request ID</dt>
+            <dd>{activity.requestId}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Agent</dt>
+            <dd>{activity.agentName ?? "Unknown agent"}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>API Key Prefix</dt>
+            <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Virtual Model</dt>
+            <dd>{formatActivityVirtualModelLabel(activity)}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Provider / Model</dt>
+            <dd>{formatActivityProviderModelLabel(activity)}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Strategy</dt>
+            <dd>{formatRouteReasonStrategy(activity.routeReason)}</dd>
+          </div>
+          <div className="detail-field detail-field-wide">
+            <dt>Route reason</dt>
+            <dd>{formatConsoleActivityRouteReason(activity.routeReason)}</dd>
+          </div>
+        </dl>
 
-      <div>
-        <p className="detail-section-label">Fallback timeline</p>
-        {fallbackEvents.length === 0 ? (
-          <ul className="activity-legacy-timeline">
-            {fallbackAttemptLines.map((attempt) => (
-              <li key={attempt}>{attempt}</li>
-            ))}
-          </ul>
-        ) : (
-          <ol className="activity-timeline">
-            {fallbackEvents.map((event) => (
-              <li key={`${event.attemptOrder}:${event.status}`}>
-                <span className={activityTimelineStepClass(event.status)}>
-                  {event.attemptOrder}
-                </span>
-                <span>
-                  <strong>{formatFallbackEventModel(event)}</strong>
-                  <em>{formatFallbackEventResult(event)}</em>
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-
-      <div className="activity-metric-grid">
         <div>
-          <span>Tokens</span>
-          <strong>{formatFullNumber(activity.totalTokens)}</strong>
+          <p className="detail-section-label">Fallback timeline</p>
+          {fallbackEvents.length === 0 ? (
+            <ul className="activity-legacy-timeline">
+              {fallbackAttemptLines.map((attempt) => (
+                <li key={attempt}>{attempt}</li>
+              ))}
+            </ul>
+          ) : (
+            <ol className="activity-timeline">
+              {fallbackEvents.map((event) => (
+                <li key={`${event.attemptOrder}:${event.status}`}>
+                  <span className={activityTimelineStepClass(event.status)}>
+                    {event.attemptOrder}
+                  </span>
+                  <span>
+                    <strong>{formatFallbackEventModel(event)}</strong>
+                    <em>{formatFallbackEventResult(event)}</em>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
-        <div>
-          <span>Cost</span>
-          <strong>{formatConsoleActivityCost(activity.totalCostUsd)}</strong>
-        </div>
-        <div>
-          <span>Latency</span>
-          <strong>{formatActivityLatency(activity.latencyMs)}</strong>
-        </div>
-      </div>
 
-      {activity.errorMessage || activity.errorCode ? (
-        <div>
-          <p className="detail-section-label">Error info</p>
-          <p className="callout callout--warn">{formatActivityError(activity)}</p>
+        <div className="activity-metric-grid">
+          <div>
+            <span>Tokens</span>
+            <strong>{formatFullNumber(activity.totalTokens)}</strong>
+          </div>
+          <div>
+            <span>Cost</span>
+            <strong>{formatConsoleActivityCost(activity.totalCostUsd)}</strong>
+          </div>
+          <div>
+            <span>Latency</span>
+            <strong>{formatActivityLatency(activity.latencyMs)}</strong>
+          </div>
         </div>
-      ) : null}
 
-      <div>
-        <p className="detail-section-label">Request metadata</p>
-        <pre className="code-block activity-metadata-block">{metadataLines.join("\n")}</pre>
-        <p className="callout">Prompt / response bodies are not stored.</p>
-      </div>
-    </section>
+        {activity.errorMessage || activity.errorCode ? (
+          <div>
+            <p className="detail-section-label">Error info</p>
+            <p className="callout callout--warn">{formatActivityError(activity)}</p>
+          </div>
+        ) : null}
+
+        <div>
+          <p className="detail-section-label">Request metadata</p>
+          <pre className="code-block activity-metadata-block">{metadataLines.join("\n")}</pre>
+          <p className="callout">Prompt / response bodies are not stored.</p>
+        </div>
+      </section>
+    </>
   );
 }
 

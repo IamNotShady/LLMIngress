@@ -3104,10 +3104,7 @@ button.table-row-link {
   font-family: var(--font-mono);
 }
 .activity-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(25rem, 0.46fr);
-  gap: var(--space-md);
-  align-items: start;
+  display: block;
 }
 .activity-table-region {
   min-width: 0;
@@ -3175,10 +3172,11 @@ button.table-row-link {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.activity-detail-panel {
-  margin-top: calc(var(--text-lg) * var(--leading-tight) + var(--space-xs));
+.activity-detail-dialog {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-lg);
-  background: var(--surface);
+  width: min(48rem, calc(100vw - 2rem));
 }
 .activity-request-key {
   width: 100%;

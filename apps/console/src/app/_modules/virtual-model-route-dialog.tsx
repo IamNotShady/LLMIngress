@@ -281,7 +281,7 @@ export function VirtualModelRouteDialogClient({
                 <span>Cancel</span>
               </a>
               <button type="submit">
-                <span>Save</span>
+                <span>{virtualModel ? "Save" : "Create"}</span>
               </button>
             </div>
           </form>

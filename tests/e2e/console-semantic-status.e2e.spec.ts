@@ -147,7 +147,7 @@ test("console colors status by meaning and keeps destructive actions quiet but c
           // not error red.
           await page.goto(`${baseUrl}/providers`);
           const disabledChip = page
-            .locator(".provider-summary-card", { hasText: "Semantic Disabled Probe" })
+            .locator(".providers-table tr", { hasText: "Semantic Disabled Probe" })
             .locator(".pill", { hasText: "Disabled" })
             .first();
           await expect(disabledChip).toBeVisible();

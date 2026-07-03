@@ -673,6 +673,13 @@ textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+/* Display-only controls must read as such, not as broken inputs. */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 textarea {
   min-height: 7rem;
   resize: vertical;
@@ -1657,69 +1664,6 @@ body:has(.console-dialog-scrim) {
   line-height: var(--leading-relaxed);
   white-space: pre-wrap;
 }
-.provider-card-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-md);
-}
-.provider-summary-card {
-  display: flex;
-  min-width: 0;
-  min-height: 7.5rem;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-}
-.provider-summary-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  min-width: 0;
-}
-.provider-summary-head h2 {
-  font-size: var(--text-md);
-  letter-spacing: 0;
-}
-.provider-summary-head .pill {
-  margin-top: var(--space-2xs);
-}
-.provider-summary-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 2.5rem;
-  height: 2.5rem;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-2xs);
-  font-weight: 800;
-}
-.provider-summary-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-sm);
-  margin: 0;
-}
-.provider-summary-metrics div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-}
-.provider-summary-metrics dt {
-  color: var(--text-subtle);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-}
-.provider-summary-metrics dd {
-  margin: 0;
-  color: var(--text);
-  font-weight: 700;
-}
 .providers-content-grid {
   display: block;
 }
@@ -1732,6 +1676,21 @@ body:has(.console-dialog-scrim) {
 .providers-list-card,
 .model-library-card {
   padding: var(--space-lg);
+}
+.model-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.model-library-search input {
+  width: min(18rem, 100%);
+}
+.model-library-truncation-note {
+  margin: var(--space-sm) 0 0;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
 }
 .providers-table {
   min-width: 780px;
@@ -3519,9 +3478,6 @@ button.table-row-link {
   .overview-stat-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .provider-card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
   .vm-shell {
     grid-template-columns: 1fr;
   }
@@ -3546,7 +3502,7 @@ button.table-row-link {
   .overview-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .provider-card-grid {
+  .agents-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .vm-filter-bar,
@@ -3588,9 +3544,6 @@ button.table-row-link {
     height: auto;
   }
   .overview-stat-grid {
-    grid-template-columns: 1fr;
-  }
-  .provider-card-grid {
     grid-template-columns: 1fr;
   }
   .activity-page {

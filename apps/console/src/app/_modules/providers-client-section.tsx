@@ -9,6 +9,9 @@ import { type FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
 
+// Hard cap on rendered model rows; search narrows the rest.
+const MODEL_LIBRARY_PAGE_SIZE = 50;
+
 export function ProvidersClientSection({
   initialSelectedProviderId,
   providerHealthSummaries,
@@ -50,6 +53,7 @@ export function ProvidersClientSection({
   const initialProviderId = initialProvider?.id ?? null;
   const [selectedProviderId, setSelectedProviderId] = useState(initialProviderId);
   const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
+  const [modelQuery, setModelQuery] = useState("");
   useEffect(() => {
     setSelectedProviderId(initialProviderId);
   }, [initialProviderId]);
@@ -87,6 +91,15 @@ export function ProvidersClientSection({
   const selectedProviderModels = selectedProvider
     ? (providerModelsByProviderId.get(selectedProvider.id) ?? [])
     : [];
+  const normalizedModelQuery = modelQuery.trim().toLowerCase();
+  const filteredModels = normalizedModelQuery
+    ? selectedProviderModels.filter((model) =>
+        `${model.modelId} ${model.modelDisplayName} ${model.providerDisplayName}`
+          .toLowerCase()
+          .includes(normalizedModelQuery),
+      )
+    : selectedProviderModels;
+  const visibleModels = filteredModels.slice(0, MODEL_LIBRARY_PAGE_SIZE);
 
   return (
     <>
@@ -499,11 +512,26 @@ export function ProvidersClientSection({
       </div>
 
       <div className="chart-card model-library-card">
-        <h2 className="chart-card-title">
-          Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
-        </h2>
+        <div className="model-library-head">
+          <h2 className="chart-card-title">
+            Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
+          </h2>
+          {selectedProviderModels.length > 0 ? (
+            <label className="model-library-search">
+              <span className="sr-only">Search models</span>
+              <input
+                type="search"
+                placeholder="Search models"
+                value={modelQuery}
+                onChange={(event) => setModelQuery(event.target.value)}
+              />
+            </label>
+          ) : null}
+        </div>
         {selectedProviderModels.length === 0 ? (
           <p>No provider models discovered yet.</p>
+        ) : filteredModels.length === 0 ? (
+          <p>No models match “{modelQuery.trim()}”.</p>
         ) : (
           <div className="data-table-wrap">
             <table className="data-table model-library-table">
@@ -520,7 +548,7 @@ export function ProvidersClientSection({
                 </tr>
               </thead>
               <tbody>
-                {selectedProviderModels.map((model) => (
+                {visibleModels.map((model) => (
                   <tr key={model.id}>
                     <td>{model.providerDisplayName}</td>
                     <td>
@@ -541,6 +569,12 @@ export function ProvidersClientSection({
                 ))}
               </tbody>
             </table>
+            {filteredModels.length > visibleModels.length ? (
+              <p className="model-library-truncation-note">
+                Showing first {visibleModels.length} of {filteredModels.length} models — search to
+                narrow the list.
+              </p>
+            ) : null}
           </div>
         )}
       </div>

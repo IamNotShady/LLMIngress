@@ -48,10 +48,7 @@ import {
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
 } from "@llmingress/db/console-provider-keys";
-import {
-  type ConsoleProviderOAuthConnection,
-  listConsoleProviderOAuthConnections,
-} from "@llmingress/db/console-provider-oauth";
+import { listConsoleProviderOAuthConnections } from "@llmingress/db/console-provider-oauth";
 import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
 import { type ConsoleProvider, listProviders } from "@llmingress/db/console-providers";
 import {
@@ -565,51 +562,6 @@ export async function RuntimeSection() {
       </div>
     </section>
   );
-}
-
-function ProviderHealthDetailPill({ status }: { status: string }) {
-  return <ProviderStatusPill label={formatProviderHealthStatusLabel(status)} status={status} />;
-}
-
-function ProviderStatusPill({ label, status }: { label: string; status: string }) {
-  const normalized = status.toLowerCase();
-  if (normalized === "healthy") {
-    return <span className="pill--ok pill">{label}</span>;
-  }
-  // Unknown and intentionally disabled are neutral states, not errors.
-  if (normalized === "unknown" || normalized === "disabled") {
-    return <span className="pill">{label}</span>;
-  }
-  if (normalized === "checking" || normalized === "quota_limited") {
-    return <span className="pill--warn pill">{label}</span>;
-  }
-  return <span className="pill--danger pill">{label}</span>;
-}
-
-function formatProviderHealthStatusLabel(status: string): string {
-  const normalized = status.toLowerCase();
-  if (normalized === "healthy") {
-    return "Healthy";
-  }
-  if (normalized === "disabled") {
-    return "Disabled";
-  }
-  if (normalized === "checking") {
-    return "Checking";
-  }
-  if (normalized === "unhealthy") {
-    return "Unhealthy";
-  }
-  if (normalized === "auth_failed") {
-    return "Auth failed";
-  }
-  if (normalized === "quota_limited") {
-    return "Quota limited";
-  }
-  if (normalized === "network_error") {
-    return "Network error";
-  }
-  return "Unknown";
 }
 
 export async function UsageSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
@@ -3553,11 +3505,6 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const providerOAuthConnections = await listConsoleProviderOAuthConnections();
   const providerModelOptions = orderProviderModelsForConsole(await listProviderModelOptions());
   const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
-  const providerOAuthByProviderId = groupProviderOAuthByProviderId(providerOAuthConnections);
-  const providerHealthByProviderId = new Map(
-    providerHealthSummaries.map((summary) => [summary.id, summary]),
-  );
-  const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
   const providerDialog = readSingleSearchParam(searchParams.providerDialog);
   const providerDelete = readSingleSearchParam(searchParams.providerDelete);
   const providerError = readSingleSearchParam(searchParams.providerError);
@@ -3614,58 +3561,6 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
 
   return (
     <section className="providers-dashboard" aria-label="Providers & Models">
-      <div className="provider-card-grid">
-        {providers.length === 0 ? (
-          <article className="provider-summary-card">
-            <div className="provider-summary-head">
-              <span className="provider-summary-icon" aria-hidden="true">
-                +
-              </span>
-              <div>
-                <h2>No providers</h2>
-                <p>Add a provider to begin routing traffic.</p>
-              </div>
-            </div>
-          </article>
-        ) : (
-          providers.map((provider) => {
-            const providerHealth = providerHealthByProviderId.get(provider.id);
-            const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-            const providerKeyCount = readProviderCredentialCount(
-              provider,
-              providerKeysByProviderId,
-              providerOAuthByProviderId,
-            );
-
-            return (
-              <article className="provider-summary-card" key={provider.id}>
-                <div className="provider-summary-head">
-                  <span className="provider-summary-icon" aria-hidden="true">
-                    {formatProviderInitials(provider.displayName)}
-                  </span>
-                  <div>
-                    <h2>{provider.displayName}</h2>
-                    <ProviderHealthDetailPill
-                      status={provider.enabled ? (providerHealth?.status ?? "unknown") : "disabled"}
-                    />
-                  </div>
-                </div>
-                <dl className="provider-summary-metrics">
-                  <div>
-                    <dt>Keys</dt>
-                    <dd>{formatProviderKeyCount(providerKeyCount)}</dd>
-                  </div>
-                  <div>
-                    <dt>Models</dt>
-                    <dd>{providerModels.length}</dd>
-                  </div>
-                </dl>
-              </article>
-            );
-          })
-        )}
-      </div>
-
       <ProvidersClientSection
         initialSelectedProviderId={selectedProviderId ?? undefined}
         providerHealthSummaries={providerHealthSummaries}
@@ -4186,9 +4081,20 @@ export async function SettingsSection() {
                 <input type="hidden" name="action" value="create" />
                 <input type="hidden" name="channelType" value="webhook" />
                 <label htmlFor="notification-webhook-name">Webhook channel name</label>
-                <input id="notification-webhook-name" name="displayName" required />
+                <input
+                  id="notification-webhook-name"
+                  name="displayName"
+                  placeholder="Ops alerts"
+                  required
+                />
                 <label htmlFor="notification-webhook-url">Webhook URL</label>
-                <input id="notification-webhook-url" name="webhookUrl" type="url" required />
+                <input
+                  id="notification-webhook-url"
+                  name="webhookUrl"
+                  type="url"
+                  placeholder="https://hooks.example.com/llmingress"
+                  required
+                />
                 <button className="notification-channel-save-button" type="submit">
                   <span>Save</span>
                 </button>
@@ -4435,20 +4341,6 @@ function buildRoutePolicyHealthWarningCandidates(
   });
 }
 
-function groupProviderModelsByProviderId(
-  providerModels: Awaited<ReturnType<typeof listProviderModelOptions>>,
-) {
-  const grouped = new Map<string, typeof providerModels>();
-
-  for (const providerModel of providerModels) {
-    const models = grouped.get(providerModel.providerId) ?? [];
-    models.push(providerModel);
-    grouped.set(providerModel.providerId, models);
-  }
-
-  return grouped;
-}
-
 function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
   const grouped = new Map<string, ProviderApiKeyMetadata[]>();
 
@@ -4459,31 +4351,6 @@ function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
   }
 
   return grouped;
-}
-
-function groupProviderOAuthByProviderId(
-  providerOAuthConnections: ConsoleProviderOAuthConnection[],
-) {
-  const grouped = new Map<string, ConsoleProviderOAuthConnection[]>();
-
-  for (const connection of providerOAuthConnections) {
-    const connections = grouped.get(connection.providerId) ?? [];
-    connections.push(connection);
-    grouped.set(connection.providerId, connections);
-  }
-
-  return grouped;
-}
-
-function readProviderCredentialCount(
-  provider: ConsoleProvider,
-  providerKeysByProviderId: Map<string, ProviderApiKeyMetadata[]>,
-  providerOAuthByProviderId: Map<string, ConsoleProviderOAuthConnection[]>,
-): number {
-  if (provider.providerType === "subscription") {
-    return providerOAuthByProviderId.get(provider.id)?.length ?? 0;
-  }
-  return providerKeysByProviderId.get(provider.id)?.length ?? 0;
 }
 
 function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider[] {
@@ -4519,25 +4386,6 @@ function getConsoleProviderOrder(providerKey: string): number {
     ["ollama", 4],
   ]);
   return preferredOrder.get(providerKey) ?? 100;
-}
-
-function formatProviderInitials(displayName: string): string {
-  const initials = displayName
-    .split(/\s+/)
-    .map((part) => part.replace(/[^a-z0-9]/gi, "").charAt(0))
-    .filter(Boolean)
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  return initials || displayName.slice(0, 2).toUpperCase();
-}
-
-function formatProviderKeyCount(count: number): string {
-  if (count === 0) {
-    return MISSING_VALUE;
-  }
-  return count === 1 ? "1 Key" : `${count} Keys`;
 }
 
 function formatModelPrice(price: number | null): string {

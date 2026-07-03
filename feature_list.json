@@ -99,6 +99,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-03: TDD red->green. Unit (formatter behavior + call-site contracts) + E2E green: seeded sub-cent cost renders $0.0000843 identically on Overview and Activity, token cells show full 92,535 counts, failed request shows em dashes (no N/A/Unavailable), 3-day-old row carries a date-qualified timestamp while today's row is HH:MM:SS, Usage total cost has no 8-decimal noise."
+    },
+    {
+      "id": "console-providers-ia-and-forms",
+      "name": "Console Providers IA And Form Polish",
+      "description": "The Providers page shows one representation of providers (the actionable list, with the duplicate summary-card grid removed) and the model library is searchable and capped at 50 visible rows with a truncation note instead of rendering hundreds of rows, the Agents KPI grid collapses to two columns on mobile so values never truncate, Settings display-only selects look disabled and the webhook form carries example placeholders, and the Virtual Model dialog submit reads Create when creating and Save when editing.",
+      "verification": "pnpm exec vitest run tests/features/console-providers-ia-and-forms.unit.test.ts && pnpm test:e2e tests/e2e/console-providers-ia-and-forms.e2e.spec.ts",
+      "dependencies": [
+        "console-p0-layout"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-03: TDD red->green. Unit (5 static contracts) + E2E green: card grid gone with the provider list as single representation, 60 seeded models render capped at 50 with truncation note and live search narrowing to the needle model, providers page height < 4500px, agents KPI grid is 2 columns at 390 with zero truncated values, settings selects styled disabled (not-allowed cursor) with webhook placeholders, VM create dialog submit reads Create. Batch-2 contracts updated for the removed duplicate pill (list-row locator, providers-client-section-only pill check)."
     }
   ]
 }

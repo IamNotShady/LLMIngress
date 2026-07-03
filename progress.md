@@ -5,7 +5,22 @@
 - Date: 2026-07-03
 - Branch: `worktree-console-dark-restyle`
 - Base: `dev` at `d28e21ac`
-- Status: Console dark restyle verified; UI/UX review batches 1–3 (`console-p0-layout`, `console-semantic-status`, `console-shared-formatters`) implemented and verified.
+- Status: Console dark restyle verified; UI/UX review batches 1–4 implemented and verified (`console-p0-layout`, `console-semantic-status`, `console-shared-formatters`, `console-providers-ia-and-forms`).
+
+## 2026-07-03 UI/UX Review → console-providers-ia-and-forms (batch 4 of 4)
+
+- Implemented `console-providers-ia-and-forms` (TDD red→green, seeded-data E2E):
+  - Providers page keeps one representation: the duplicate provider summary-card grid (name/status/keys/models repeated above the actionable list) is removed with its CSS and orphaned helpers.
+  - Model library is client-searchable and capped at 50 visible rows with a "Showing first N of M" note — a 60-model provider no longer renders an 8500px page (E2E asserts < 4500px).
+  - `.agents-stat-grid` collapses to 2 columns at ≤56rem; KPI values no longer truncate at 390.
+  - `input/select/textarea:disabled` get real disabled styling (opacity + not-allowed cursor) so Settings' display-only selects read as such; the webhook form carries example placeholders.
+  - Virtual Model dialog submit reads `Create` when creating, `Save` when editing.
+  - Batch-2 contracts updated for the deleted duplicate pill implementation (provider list-row locator; pill check now targets providers-client-section only).
+- Release guards now accept 10 feature contracts.
+
+### Review items intentionally not adopted / deferred
+- "Query" filter-button wording and centered dialog/save actions stay: both were explicit decisions recorded in the dark-restyle pass.
+- Deferred (P2, unscheduled): topbar/h1 title duplication + eyebrow system, nav two-letter icon tiles, request-ID/gateway-URL copy affordances, "High risk"/"Connected" metric tooltips, single-segment donut degradation, playground note tone, Usage vs Activity default-window unification.
 
 ## 2026-07-03 UI/UX Review → console-shared-formatters (batch 3 of 4)
 

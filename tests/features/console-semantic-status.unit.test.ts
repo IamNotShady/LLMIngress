@@ -67,18 +67,18 @@ describe("console semantic status static contract", () => {
   });
 
   test("disabled providers and models wear neutral chips, not error red", () => {
-    // Both pill implementations (sections.tsx renders the provider cards,
-    // providers-client-section.tsx renders the list/detail) short-circuit the
-    // disabled state before the danger fallback.
-    for (const source of [providersSection(), sections()]) {
-      expect(source).toContain('<span className="pill">Disabled</span>');
-      expect(source).not.toContain('pill--danger pill">Disabled');
-      const pillFn = source.slice(
-        source.indexOf("function ProviderStatusPill"),
-        source.indexOf("function formatProviderHealthStatusLabel"),
-      );
-      expect(pillFn).toContain('normalized === "disabled"');
-    }
+    // The provider list/detail pill short-circuits the disabled state before
+    // the danger fallback; no rendering path paints Disabled in danger red.
+    // (The duplicate sections.tsx pill left with the provider card grid.)
+    const providerSource = providersSection();
+    expect(providerSource).toContain('<span className="pill">Disabled</span>');
+    expect(providerSource).not.toContain('pill--danger pill">Disabled');
+    const pillFn = providerSource.slice(
+      providerSource.indexOf("function ProviderStatusPill"),
+      providerSource.indexOf("function formatProviderHealthStatusLabel"),
+    );
+    expect(pillFn).toContain('normalized === "disabled"');
+    expect(sections()).not.toContain('pill--danger pill">Disabled');
   });
 
   test("row-level delete actions are quiet, destructive emphasis lives in dialogs", () => {

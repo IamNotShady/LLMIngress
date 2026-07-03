@@ -67,6 +67,7 @@ describe("console dark restyle static contract", () => {
     expect(sidebar).toContain("Gateway URL");
     expect(sidebar).toContain("Uptime");
     expect(sidebar).toContain("Providers");
+    expect(sidebar).toContain("sidebar-runtime-status");
     expect(sidebar).toContain("sidebar-provider-health-count");
   });
 
@@ -85,6 +86,7 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).not.toContain(".sidebar-account {");
     expect(stylesheet).toMatch(/\.sidebar-runtime-card\s*\{[^}]*min-height:\s*8\.5rem/s);
     expect(stylesheet).toMatch(/\.sidebar-runtime-summary\s*\{[^}]*gap:\s*0\.18rem/s);
+    expect(stylesheet).toMatch(/\.sidebar-runtime-status\s*\{[^}]*align-items:\s*center/s);
   });
 
   test("agents filters use a compact query button aligned with the controls", () => {
@@ -103,6 +105,13 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(
       /\.agents-filter-actions button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
     );
+  });
+
+  test("provider add action is centered text without a leading icon", () => {
+    const providersPage = readFileSync(join(appDir, "(dashboard)/providers/page.tsx"), "utf8");
+
+    expect(providersPage).not.toContain("FlatIcon");
+    expect(providersPage).toContain("<span>Add Provider</span>");
   });
 
   test("agents list opens read-only details in a dialog instead of a side card", () => {

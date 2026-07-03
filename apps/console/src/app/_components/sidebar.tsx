@@ -67,12 +67,14 @@ export function Sidebar({
 
       <div className="sidebar-footer">
         <div className="sidebar-runtime-card">
-          <span
-            className={`sidebar-account-dot${gatewayStatusHealthy ? "" : " is-warn"}`}
-            aria-hidden="true"
-          />
           <span className="sidebar-runtime-summary">
-            {gatewayStatusLabel}
+            <span className="sidebar-runtime-status">
+              <span
+                className={`sidebar-account-dot${gatewayStatusHealthy ? "" : " is-warn"}`}
+                aria-hidden="true"
+              />
+              <span className="sidebar-runtime-title">{gatewayStatusLabel}</span>
+            </span>
             <em>Gateway URL {gatewayUrlLabel}</em>
             <em>Config version {gatewayConfigVersionLabel}</em>
             <em>Uptime {gatewayUptimeLabel}</em>

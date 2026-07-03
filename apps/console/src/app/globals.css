@@ -1209,9 +1209,6 @@ body:has(.console-dialog-scrim) {
   display: none;
 }
 .sidebar-runtime-card {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-xs);
   min-height: 8.5rem;
   padding: var(--space-md);
   border: 1px solid var(--border);
@@ -1227,6 +1224,17 @@ body:has(.console-dialog-scrim) {
   gap: 0.18rem;
   line-height: var(--leading-normal);
   min-width: 0;
+}
+.sidebar-runtime-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.sidebar-runtime-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sidebar-runtime-card em {
   font-style: normal;

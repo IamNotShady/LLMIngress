@@ -157,7 +157,14 @@ describe("console dark restyle static contract", () => {
     expect(sections).not.toContain("const providerHref = buildQueryHref(searchParams");
     expect(providersClientSection).toContain('"use client"');
     expect(providersClientSection).toContain("useState");
-    expect(providersClientSection).toContain("setSelectedProviderId(provider.id)");
+    expect(providersClientSection).toContain("toggleProvider(provider.id)");
+    expect(providersClientSection).toContain(
+      "currentProviderId === providerId ? null : providerId",
+    );
+    expect(providersClientSection).toContain("const selectedProvider = selectedProviderId");
+    expect(providersClientSection).toContain(
+      "providers.find((provider) => provider.id === selectedProviderId)",
+    );
     expect(providersClientSection).toContain('type="button"');
     expect(providersClientSection).not.toContain("href={providerHref}");
   });

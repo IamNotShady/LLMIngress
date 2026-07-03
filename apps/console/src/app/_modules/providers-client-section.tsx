@@ -52,8 +52,14 @@ export function ProvidersClientSection({
   useEffect(() => {
     setSelectedProviderId(initialProviderId);
   }, [initialProviderId]);
-  const selectedProvider =
-    providers.find((provider) => provider.id === selectedProviderId) ?? initialProvider;
+  const toggleProvider = (providerId: string) => {
+    setSelectedProviderId((currentProviderId) =>
+      currentProviderId === providerId ? null : providerId,
+    );
+  };
+  const selectedProvider = selectedProviderId
+    ? (providers.find((provider) => provider.id === selectedProviderId) ?? null)
+    : null;
   const selectedProviderKeys = selectedProvider
     ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
     : [];
@@ -105,7 +111,7 @@ export function ProvidersClientSection({
                                 aria-expanded={isSelected}
                                 className="table-row-link"
                                 type="button"
-                                onClick={() => setSelectedProviderId(provider.id)}
+                                onClick={() => toggleProvider(provider.id)}
                               >
                                 <strong>{provider.displayName}</strong>
                               </button>
@@ -115,7 +121,7 @@ export function ProvidersClientSection({
                                 aria-expanded={isSelected}
                                 className="table-row-link"
                                 type="button"
-                                onClick={() => setSelectedProviderId(provider.id)}
+                                onClick={() => toggleProvider(provider.id)}
                               >
                                 <ProviderHealthDetailPill
                                   status={
@@ -131,7 +137,7 @@ export function ProvidersClientSection({
                                 aria-expanded={isSelected}
                                 className="table-row-link"
                                 type="button"
-                                onClick={() => setSelectedProviderId(provider.id)}
+                                onClick={() => toggleProvider(provider.id)}
                               >
                                 {formatProviderType(provider)}
                               </button>
@@ -141,7 +147,7 @@ export function ProvidersClientSection({
                                 aria-expanded={isSelected}
                                 className="table-row-link"
                                 type="button"
-                                onClick={() => setSelectedProviderId(provider.id)}
+                                onClick={() => toggleProvider(provider.id)}
                               >
                                 {providerKeyCount}
                               </button>
@@ -151,7 +157,7 @@ export function ProvidersClientSection({
                                 aria-expanded={isSelected}
                                 className="table-row-link"
                                 type="button"
-                                onClick={() => setSelectedProviderId(provider.id)}
+                                onClick={() => toggleProvider(provider.id)}
                               >
                                 {providerModels.length}
                               </button>
@@ -161,7 +167,7 @@ export function ProvidersClientSection({
                                 aria-expanded={isSelected}
                                 className="table-row-link"
                                 type="button"
-                                onClick={() => setSelectedProviderId(provider.id)}
+                                onClick={() => toggleProvider(provider.id)}
                               >
                                 {formatProviderLastConnection(providerHealth)}
                               </button>

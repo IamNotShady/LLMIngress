@@ -3336,9 +3336,10 @@ button.table-row-link {
   white-space: nowrap;
 }
 .vm-route-dialog {
-  width: min(72rem, calc(100vw - 3rem));
+  width: min(48rem, calc(100vw - 3rem));
   max-height: calc(100vh - 4rem);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .vm-editor-grid {
   display: block;

@@ -1,0 +1,113 @@
+import { randomUUID } from "node:crypto";
+import { expect, type Locator, type Page, test } from "@playwright/test";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import {
+  getFreePort,
+  signInFromFirstRun,
+  startConsoleProcess,
+  stopConsoleProcess,
+  waitForConsole,
+} from "../support/console-app";
+import { withProcessLock } from "../support/process-lock";
+
+// Computed colors authored in OKLCH serialize as "oklch(...)" in Chromium, so
+// convert via a 1x1 canvas pixel readback instead of parsing the string.
+async function backgroundRgb(
+  page: Page,
+  locator: Locator | null,
+): Promise<[number, number, number]> {
+  const color = locator
+    ? await locator.evaluate((el) => getComputedStyle(el).backgroundColor)
+    : await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  return page.evaluate((value) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("2d canvas unavailable");
+    ctx.fillStyle = value;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return [r, g, b] as [number, number, number];
+  }, color);
+}
+
+test("console serves the dark violet Geist skin with compact controls and no overflow", async ({
+  browser,
+}) => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_dark_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+
+    await withProcessLock("llmingress-console-next-dev", async () => {
+      const consoleApp = startConsoleProcess({
+        databaseUrl: fixture.databaseUrl,
+        port: await getFreePort(),
+      });
+
+      try {
+        const baseUrl = `http://localhost:${consoleApp.port}`;
+        const context = await browser.newContext();
+        const page = await context.newPage();
+
+        try {
+          await waitForConsole(baseUrl, consoleApp);
+          await page.goto(baseUrl);
+
+          // Auth screens already wear the skin: violet primary button, 30px tall.
+          const createAdmin = page.getByRole("button", { name: "Create admin" });
+          await expect(createAdmin).toBeVisible();
+          const [r, g, b] = await backgroundRgb(page, createAdmin);
+          expect(b).toBeGreaterThan(150); // violet: blue dominates
+          expect(b).toBeGreaterThan(g);
+          expect(r).toBeGreaterThan(g);
+          const box = await createAdmin.boundingBox();
+          expect(box).not.toBeNull();
+          expect(Math.round(box?.height ?? 0)).toBe(30);
+
+          await signInFromFirstRun(page, baseUrl);
+          await expect(
+            page.getByRole("heading", { level: 1, name: "Overview", exact: true }),
+          ).toBeVisible();
+
+          // Dark-only document theme, no toggle anywhere.
+          expect(
+            await page.evaluate(() => document.documentElement.getAttribute("data-theme")),
+          ).toBe("dark");
+          await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
+
+          // Dark canvas: every channel of the body background is deep.
+          const canvas = await backgroundRgb(page, null);
+          for (const channel of canvas) {
+            expect(channel).toBeLessThan(40);
+          }
+
+          // Geist is the rendered UI font.
+          const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+          expect(fontFamily).toContain("Geist");
+
+          // No horizontal overflow at desktop and mobile checkpoints.
+          for (const viewport of [
+            { width: 1280, height: 800 },
+            { width: 390, height: 844 },
+          ]) {
+            await page.setViewportSize(viewport);
+            const overflow = await page.evaluate(
+              () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            );
+            expect(overflow).toBeLessThanOrEqual(0);
+          }
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await stopConsoleProcess(consoleApp);
+      }
+    });
+  } finally {
+    await fixture.dispose();
+  }
+});

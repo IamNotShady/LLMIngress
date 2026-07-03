@@ -1900,22 +1900,27 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
     agentPlatformFilter,
   });
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
-  const selectedAgent =
-    visibleAgents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0] ?? null;
-  const selectedAccess = selectedAgent
-    ? (agentVirtualModelAccessByAgentId.get(selectedAgent.id) ?? null)
+  const agentView = readSingleSearchParam(searchParams.agentView);
+  const viewDialogAgent = agents.find((agent) => agent.id === agentView) ?? null;
+  const viewDialogAccess = viewDialogAgent
+    ? (agentVirtualModelAccessByAgentId.get(viewDialogAgent.id) ?? null)
     : null;
-  const selectedLimits = selectedAgent ? (agentLimitsByAgentId.get(selectedAgent.id) ?? []) : [];
-  const selectedBudgetLimit = findAgentLimit(selectedLimits, "budget");
-  const selectedTokenLimit = findAgentLimit(selectedLimits, "token");
-  const selectedRpmLimit = findAgentLimit(selectedLimits, "rpm");
-  const selectedTpmLimit = findAgentLimit(selectedLimits, "tpm");
+  const viewDialogLimits = viewDialogAgent
+    ? (agentLimitsByAgentId.get(viewDialogAgent.id) ?? [])
+    : [];
+  const agentViewCloseHref = buildQueryHref(searchParams, { agentView: undefined });
   const agentDialog = readSingleSearchParam(searchParams.agentDialog);
   const editDialogAgent = agents.find((agent) => agent.id === agentDialog) ?? null;
-  const agentDialogCloseHref = buildQueryHref(searchParams, { agentDialog: undefined });
+  const agentDialogCloseHref = buildQueryHref(searchParams, {
+    agentDialog: undefined,
+    agentView: undefined,
+  });
   const deleteAgent = readSingleSearchParam(searchParams.deleteAgent);
   const deleteDialogAgent = agents.find((agent) => agent.id === deleteAgent) ?? null;
-  const deleteDialogCloseHref = buildQueryHref(searchParams, { deleteAgent: undefined });
+  const deleteDialogCloseHref = buildQueryHref(searchParams, {
+    agentView: undefined,
+    deleteAgent: undefined,
+  });
 
   return (
     <section className="agents-dashboard" aria-label="Agents">
@@ -2021,100 +2026,58 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                     {visibleAgents.map((agent) => {
                       const access = agentVirtualModelAccessByAgentId.get(agent.id);
                       const usage = usageTodayByAgentId.get(agent.id);
+                      const agentViewHref = buildQueryHref(searchParams, {
+                        agentDialog: undefined,
+                        agentView: agent.id,
+                        deleteAgent: undefined,
+                        selected: agent.id,
+                      });
+                      const isSelectedAgent =
+                        agent.id === selectedAgentId || agent.id === viewDialogAgent?.id;
                       return (
                         <tr
-                          className={
-                            agent.id === selectedAgent?.id ? "is-selected" : "is-clickable"
-                          }
+                          className={isSelectedAgent ? "is-selected" : "is-clickable"}
                           key={agent.id}
                         >
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {agent.name}
                             </a>
                           </td>
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {formatAgentTypeLabel(agent.agentType)}
                             </a>
                           </td>
                           <td className="mono">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {agent.keyPrefix
                                 ? formatAgentKeyPrefixDisplay(agent.keyPrefix)
                                 : "No key"}
                             </a>
                           </td>
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {access?.defaultVirtualModel?.name ?? "None"}
                             </a>
                           </td>
                           <td className="num">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {access?.allowedVirtualModels.length ?? 0}
                             </a>
                           </td>
                           <td className="num">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {formatCompactNumber(usage?.requestCount ?? 0)}
                             </a>
                           </td>
                           <td className="num">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {formatOverviewMoney(usage?.totalCostUsd ?? null)}
                             </a>
                           </td>
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               <AgentStatusPill status={agent.status} />
                             </a>
                           </td>
@@ -2122,7 +2085,10 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                             <span className="agent-table-actions">
                               <a
                                 className="link-button agent-action-edit"
-                                href={buildQueryHref(searchParams, { agentDialog: agent.id })}
+                                href={buildQueryHref(searchParams, {
+                                  agentDialog: agent.id,
+                                  agentView: undefined,
+                                })}
                               >
                                 <FlatIcon name="edit" />
                                 <span>Edit</span>
@@ -2131,6 +2097,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                                 className="link-button agent-action-delete"
                                 href={buildQueryHref(searchParams, {
                                   agentDialog: undefined,
+                                  agentView: undefined,
                                   deleteAgent: agent.id,
                                 })}
                               >
@@ -2148,66 +2115,15 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             )}
           </div>
         </div>
-        <aside className="agent-detail-card" aria-label="Selected agent details">
-          {selectedAgent?.keyPrefix ? (
-            <>
-              <div className="agent-detail-head">
-                <h2>{selectedAgent.name}</h2>
-                <AgentStatusPill status={selectedAgent.status} />
-              </div>
-              <dl className="agent-detail-fields">
-                <div>
-                  <dt>Type</dt>
-                  <dd>{formatAgentTypeLabel(selectedAgent.agentType)}</dd>
-                </div>
-                <div>
-                  <dt>Platform</dt>
-                  <dd>{formatAgentIntegrationPlatformLabel(selectedAgent.integrationPlatform)}</dd>
-                </div>
-                <div>
-                  <dt>Created</dt>
-                  <dd>{formatAgentDetailDate(selectedAgent.createdAt)}</dd>
-                </div>
-                <div>
-                  <dt>Default model</dt>
-                  <dd>{selectedAccess?.defaultVirtualModel?.name ?? "None"}</dd>
-                </div>
-              </dl>
-              <section className="agent-detail-section">
-                <h3>Allowed Virtual Models</h3>
-                <div className="agent-chip-list">
-                  {(selectedAccess?.allowedVirtualModels ?? []).map((virtualModel) => (
-                    <span className="agent-chip" key={virtualModel.id}>
-                      {virtualModel.name}
-                    </span>
-                  ))}
-                </div>
-              </section>
-              <section className="agent-detail-section">
-                <h3>Budget / Limit</h3>
-                <div className="agent-limit-row">
-                  <span>Budget</span>
-                  <strong>{formatAgentBudgetLimit(selectedBudgetLimit)}</strong>
-                </div>
-                <div className="agent-limit-row">
-                  <span>RPM</span>
-                  <strong>{formatAgentNumericLimit(selectedRpmLimit)}</strong>
-                </div>
-                <div className="agent-limit-row">
-                  <span>TPM</span>
-                  <strong>{formatAgentNumericLimit(selectedTpmLimit)}</strong>
-                </div>
-                <div className="agent-limit-row">
-                  <span>Token limit</span>
-                  <strong>{formatAgentTokenLimit(selectedTokenLimit)}</strong>
-                </div>
-              </section>
-            </>
-          ) : (
-            <p>No agent selected.</p>
-          )}
-        </aside>
       </div>
+      {viewDialogAgent ? (
+        <AgentViewDialog
+          access={viewDialogAccess}
+          agent={viewDialogAgent}
+          closeHref={agentViewCloseHref}
+          limits={viewDialogLimits}
+        />
+      ) : null}
       {agentDialog === "new" ? (
         <AgentCreateDialog closeHref={agentDialogCloseHref} virtualModels={virtualModels} />
       ) : null}
@@ -2230,6 +2146,93 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
         <AgentDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
       ) : null}
     </section>
+  );
+}
+
+function AgentViewDialog({
+  access,
+  agent,
+  closeHref,
+  limits,
+}: {
+  access: AgentVirtualModelAccess | null;
+  agent: ConsoleAgent;
+  closeHref: string;
+  limits: readonly ConsoleAgentLimit[];
+}) {
+  const budgetLimit = findAgentLimit(limits, "budget");
+  const rpmLimit = findAgentLimit(limits, "rpm");
+  const tokenLimit = findAgentLimit(limits, "token");
+  const tpmLimit = findAgentLimit(limits, "tpm");
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`agent-view-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog agent-view-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <div className="agent-view-dialog-title">
+            <h2 id={`agent-view-dialog-title-${agent.id}`}>{agent.name}</h2>
+            <AgentStatusPill status={agent.status} />
+          </div>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <dl className="agent-detail-fields">
+          <div>
+            <dt>Type</dt>
+            <dd>{formatAgentTypeLabel(agent.agentType)}</dd>
+          </div>
+          <div>
+            <dt>Platform</dt>
+            <dd>{formatAgentIntegrationPlatformLabel(agent.integrationPlatform)}</dd>
+          </div>
+          <div>
+            <dt>Created</dt>
+            <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
+          </div>
+          <div>
+            <dt>Default model</dt>
+            <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
+          </div>
+        </dl>
+        <section className="agent-detail-section">
+          <h3>Allowed Virtual Models</h3>
+          <div className="agent-chip-list">
+            {(access?.allowedVirtualModels ?? []).map((virtualModel) => (
+              <span className="agent-chip" key={virtualModel.id}>
+                {virtualModel.name}
+              </span>
+            ))}
+          </div>
+        </section>
+        <section className="agent-detail-section">
+          <h3>Budget / Limit</h3>
+          <div className="agent-limit-row">
+            <span>Budget</span>
+            <strong>{formatAgentBudgetLimit(budgetLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>RPM</span>
+            <strong>{formatAgentNumericLimit(rpmLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>TPM</span>
+            <strong>{formatAgentNumericLimit(tpmLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>Token limit</span>
+            <strong>{formatAgentTokenLimit(tokenLimit)}</strong>
+          </div>
+        </section>
+      </section>
+    </>
   );
 }
 

@@ -1373,10 +1373,7 @@ body:has(.console-dialog-scrim) {
   align-items: start;
 }
 .agents-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 2.15fr) minmax(22rem, 0.95fr);
-  gap: var(--space-lg);
-  align-items: start;
+  display: block;
 }
 .agents-main-column {
   display: flex;
@@ -1510,6 +1507,11 @@ body:has(.console-dialog-scrim) {
   min-height: 2rem;
   padding-inline: var(--space-sm);
   font-size: var(--text-xs);
+}
+.agent-view-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
 }
 .agent-chip-list {
   display: flex;

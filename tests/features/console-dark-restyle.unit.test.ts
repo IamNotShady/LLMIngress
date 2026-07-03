@@ -103,4 +103,15 @@ describe("console dark restyle static contract", () => {
       /\.agents-filter-actions button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
     );
   });
+
+  test("agents list opens read-only details in a dialog instead of a side card", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const stylesheet = css();
+
+    expect(sections).not.toContain('<aside className="agent-detail-card"');
+    expect(sections).toContain("agentView");
+    expect(sections).toContain("AgentViewDialog");
+    expect(sections).toContain('className="console-dialog agent-view-dialog"');
+    expect(stylesheet).toMatch(/\.agents-shell\s*\{[^}]*display:\s*block/s);
+  });
 });

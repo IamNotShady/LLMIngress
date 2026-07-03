@@ -174,6 +174,10 @@ describe("console dark restyle static contract", () => {
       join(appDir, "_modules/providers-client-section.tsx"),
       "utf8",
     );
+    const providerModelRefreshRoute = readFileSync(
+      join(appDir, "api/provider-model-refresh/route.ts"),
+      "utf8",
+    );
     const stylesheet = css();
 
     expect(providersClientSection).not.toContain("provider-detail-card");
@@ -181,8 +185,12 @@ describe("console dark restyle static contract", () => {
     expect(providersClientSection).not.toContain("provider-detail-stats");
     expect(providersClientSection).not.toContain("Available models");
     expect(providersClientSection).toContain('action="/api/provider-model-refresh"');
+    expect(providersClientSection).toContain("refreshProviderModels(event, provider.id)");
+    expect(providersClientSection).toContain("event.preventDefault()");
+    expect(providersClientSection).toContain('headers: { accept: "application/json" }');
     expect(providersClientSection).toContain("provider-refresh-button");
     expect(providersClientSection).toContain("Refresh models for");
+    expect(providerModelRefreshRoute).toContain('includes("application/json")');
     expect(providersClientSection).toContain("provider-inline-detail-row");
     expect(providersClientSection).toContain("provider-inline-detail");
     expect(stylesheet).toContain(".provider-inline-detail");

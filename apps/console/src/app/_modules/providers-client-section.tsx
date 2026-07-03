@@ -5,7 +5,7 @@ import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-key
 import type { ConsoleProviderOAuthConnection } from "@llmingress/db/console-provider-oauth";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
 import type { ConsoleProviderModelOption } from "@llmingress/db/console-route-policies";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { type FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
 
@@ -49,6 +49,7 @@ export function ProvidersClientSection({
     null;
   const initialProviderId = initialProvider?.id ?? null;
   const [selectedProviderId, setSelectedProviderId] = useState(initialProviderId);
+  const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
   useEffect(() => {
     setSelectedProviderId(initialProviderId);
   }, [initialProviderId]);
@@ -56,6 +57,23 @@ export function ProvidersClientSection({
     setSelectedProviderId((currentProviderId) =>
       currentProviderId === providerId ? null : providerId,
     );
+  };
+  const refreshProviderModels = async (event: FormEvent<HTMLFormElement>, providerId: string) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setRefreshingProviderId(providerId);
+    try {
+      await fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+    } catch {
+      // ponytail: no toast yet; surface enqueue failures when refresh status UI exists.
+    } finally {
+      setRefreshingProviderId(null);
+    }
   };
   const selectedProvider = selectedProviderId
     ? (providers.find((provider) => provider.id === selectedProviderId) ?? null)
@@ -102,6 +120,7 @@ export function ProvidersClientSection({
                         providerOAuthByProviderId,
                       );
                       const isSelected = provider.id === selectedProvider?.id;
+                      const isRefreshing = provider.id === refreshingProviderId;
 
                       return (
                         <Fragment key={provider.id}>
@@ -174,11 +193,16 @@ export function ProvidersClientSection({
                             </td>
                             <td>
                               <span className="provider-table-actions">
-                                <form action="/api/provider-model-refresh" method="post">
+                                <form
+                                  action="/api/provider-model-refresh"
+                                  method="post"
+                                  onSubmit={(event) => refreshProviderModels(event, provider.id)}
+                                >
                                   <input type="hidden" name="providerId" value={provider.id} />
                                   <button
                                     className="provider-refresh-button"
-                                    disabled={providerKeyCount === 0}
+                                    disabled={providerKeyCount === 0 || isRefreshing}
+                                    aria-busy={isRefreshing}
                                     aria-label={`Refresh models for ${provider.displayName}`}
                                     title="Refresh models"
                                     type="submit"

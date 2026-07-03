@@ -35,6 +35,7 @@
 - Follow-up Provider inline detail compacting: removed the inline Provider details title, refresh/status summary, available model count, and last connected fields so the expanded row starts directly at the credential list with reduced vertical padding.
 - Follow-up Provider refresh action: moved the model refresh affordance into each Provider list row's Actions area and kept it backed by the existing `/api/provider-model-refresh` form endpoint.
 - Follow-up Provider row toggle: clicking an already-expanded Provider row now collapses its inline credential detail instead of keeping it open.
+- Follow-up Provider local refresh: Provider row refresh now submits through a local client fetch and the existing endpoint returns JSON for that path, so clicking refresh no longer navigates or reloads the page.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -58,6 +59,7 @@
   - Follow-up Provider inline detail compacting check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `MiniMax` opens one inline detail row that starts with API keys, has no Provider details heading, no provider-detail-stats, no Available models/Last connected text, height `154px`, URL unchanged, no horizontal overflow, no Next.js overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Provider refresh action check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed 17 Provider list rows all show a row-level refresh button posting to `/api/provider-model-refresh` with a hidden provider id, `MiniMax` selection still opens the compact API keys detail, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Provider row toggle check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed an expanded Provider row has one inline detail row, clicking the same row collapses to zero inline detail rows and zero expanded buttons, clicking it again restores one inline detail row, with no horizontal overflow and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Provider local refresh check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed clicking `Refresh models for OPEN AI1` from clean `/providers` keeps the URL unchanged at `/providers`, preserves the selected row and inline detail, keeps the page nonblank, has no horizontal overflow, and produces no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

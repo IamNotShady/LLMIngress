@@ -60,12 +60,6 @@ export function ProvidersClientSection({
   const selectedProviderOAuthConnections = selectedProvider
     ? (providerOAuthByProviderId.get(selectedProvider.id) ?? [])
     : [];
-  const selectedProviderCredentialCount =
-    selectedProvider?.providerType === "local"
-      ? 1
-      : selectedProvider?.providerType === "subscription"
-        ? selectedProviderOAuthConnections.length
-        : selectedProviderKeys.length;
   const selectedProviderModels = selectedProvider
     ? (providerModelsByProviderId.get(selectedProvider.id) ?? [])
     : [];
@@ -246,58 +240,8 @@ export function ProvidersClientSection({
                               <td colSpan={7}>
                                 <section
                                   className="provider-inline-detail"
-                                  aria-label={`Provider details - ${provider.displayName}`}
+                                  aria-label={`Provider credentials - ${provider.displayName}`}
                                 >
-                                  <header className="provider-detail-head">
-                                    <div>
-                                      <h2>Provider details - {provider.displayName}</h2>
-                                    </div>
-                                    <form
-                                      className="provider-refresh-form"
-                                      action="/api/provider-model-refresh"
-                                      method="post"
-                                    >
-                                      <input type="hidden" name="providerId" value={provider.id} />
-                                      <button
-                                        className="provider-refresh-button"
-                                        disabled={selectedProviderCredentialCount === 0}
-                                        aria-label="Refresh models"
-                                        title="Refresh models"
-                                        type="submit"
-                                      >
-                                        <FlatIcon name="refresh" />
-                                      </button>
-                                      {selectedProviderCredentialCount === 0 ? (
-                                        <p className="field-error is-visible">
-                                          {provider.providerType === "subscription"
-                                            ? "Add an OAuth connection first"
-                                            : "Add an API key first"}
-                                        </p>
-                                      ) : null}
-                                    </form>
-                                  </header>
-
-                                  <dl className="provider-detail-stats">
-                                    <div>
-                                      <dt>Status</dt>
-                                      <dd>
-                                        {formatProviderHealthStatusLabel(
-                                          provider.enabled
-                                            ? (providerHealth?.status ?? "unknown")
-                                            : "disabled",
-                                        )}
-                                      </dd>
-                                    </div>
-                                    <div>
-                                      <dt>Available models</dt>
-                                      <dd>{providerModels.length}</dd>
-                                    </div>
-                                    <div>
-                                      <dt>Last connected</dt>
-                                      <dd>{formatProviderLastConnection(providerHealth)}</dd>
-                                    </div>
-                                  </dl>
-
                                   <section className="provider-detail-section">
                                     <div className="provider-detail-section-head">
                                       <h3>

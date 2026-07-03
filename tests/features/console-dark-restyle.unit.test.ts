@@ -170,9 +170,13 @@ describe("console dark restyle static contract", () => {
     const stylesheet = css();
 
     expect(providersClientSection).not.toContain("provider-detail-card");
+    expect(providersClientSection).not.toContain("Provider details -");
+    expect(providersClientSection).not.toContain("provider-detail-stats");
+    expect(providersClientSection).not.toContain("Available models");
     expect(providersClientSection).toContain("provider-inline-detail-row");
     expect(providersClientSection).toContain("provider-inline-detail");
     expect(stylesheet).toContain(".provider-inline-detail");
     expect(stylesheet).not.toContain(".provider-detail-card");
+    expect(stylesheet).not.toContain(".provider-detail-stats");
   });
 });

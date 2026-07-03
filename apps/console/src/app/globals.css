@@ -1648,20 +1648,17 @@ body:has(.console-dialog-scrim) {
   gap: var(--space-sm);
   margin: 0;
 }
-.provider-summary-metrics div,
-.provider-detail-stats div {
+.provider-summary-metrics div {
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
 }
-.provider-summary-metrics dt,
-.provider-detail-stats dt {
+.provider-summary-metrics dt {
   color: var(--text-subtle);
   font-size: var(--text-2xs);
   font-weight: 600;
 }
-.provider-summary-metrics dd,
-.provider-detail-stats dd {
+.provider-summary-metrics dd {
   margin: 0;
   color: var(--text);
   font-weight: 700;
@@ -1697,45 +1694,22 @@ body:has(.console-dialog-scrim) {
   font-size: var(--text-2xs);
 }
 .provider-inline-detail-row td {
-  padding: 0 var(--space-sm) var(--space-md);
+  padding: 0 var(--space-sm) var(--space-sm);
   background: color-mix(in oklch, var(--surface-raised) 74%, transparent);
 }
 .provider-inline-detail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  padding: var(--space-md);
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
-.provider-detail-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-.provider-detail-head h2 {
-  font-size: var(--text-lg);
-  letter-spacing: 0;
-}
-.provider-refresh-form {
-  display: grid;
-  justify-items: end;
-  gap: var(--space-2xs);
-}
-.provider-detail-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-md);
-  margin: 0;
-}
 .provider-detail-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border);
+  gap: var(--space-xs);
 }
 .provider-detail-section-head {
   display: flex;
@@ -3522,8 +3496,7 @@ button.table-row-link {
   .overview-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .provider-card-grid,
-  .provider-detail-stats {
+  .provider-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .vm-filter-bar,
@@ -3566,8 +3539,7 @@ button.table-row-link {
   .overview-stat-grid {
     grid-template-columns: 1fr;
   }
-  .provider-card-grid,
-  .provider-detail-stats {
+  .provider-card-grid {
     grid-template-columns: 1fr;
   }
   .activity-page {

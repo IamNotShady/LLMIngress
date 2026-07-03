@@ -195,6 +195,13 @@ describe("console dark restyle static contract", () => {
       sections.indexOf("function LimitsConfigDialog"),
       sections.indexOf("function getAgentLimitRuntimeSnapshot"),
     );
+    const limitsActions = limitsDialog.slice(
+      limitsDialog.indexOf('<div className="limits-config-actions">'),
+      limitsDialog.indexOf(
+        "</div>",
+        limitsDialog.indexOf('<div className="limits-config-actions">'),
+      ),
+    );
 
     expect(limitsSection).toContain("limitDialog: row.agent.id");
     expect(limitsSection).toContain("<span>Edit</span>");
@@ -205,8 +212,10 @@ describe("console dark restyle static contract", () => {
     expect(limitsDialog).toContain('aria-modal="true"');
     expect(limitsDialog).toContain("<span>Save</span>");
     expect(limitsDialog).not.toContain("Save rules");
+    expect(limitsActions).not.toContain("FlatIcon");
     expect(limitsDialog).not.toContain("<aside");
     expect(stylesheet).toMatch(/\.limits-main\s*\{[^}]*display:\s*block/s);
+    expect(stylesheet).toMatch(/\.limits-config-actions\s*\{[^}]*justify-content:\s*center/s);
     expect(stylesheet).not.toContain(".limits-config-panel");
   });
 

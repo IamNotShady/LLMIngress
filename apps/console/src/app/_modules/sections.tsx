@@ -3203,7 +3203,6 @@ function LimitsConfigDialog({
               Cancel
             </a>
             <button type="submit">
-              <FlatIcon name="save" />
               <span>Save</span>
             </button>
           </div>

@@ -49,6 +49,7 @@
 - Follow-up Limits rule dialog: removed the right-side Rule configuration panel and added row-level `Edit` actions that open the existing rule form in a modal dialog.
 - Follow-up Limits save button text: shortened the rule dialog submit button from `Save rules` to `Save`.
 - Follow-up Playground action order: moved `Clear` before the submit action and shortened `Send test` to `Send`.
+- Follow-up Limits action alignment: centered the rule dialog `Cancel` / `Save` actions and removed the `Save` icon.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -86,6 +87,7 @@
   - Follow-up Limits rule dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `/limits` defaults to zero `.limits-config-panel`, zero `.limits-config-dialog`, three row-level `Edit` actions, zero stale row links, zero clickable table rows, `.limits-main` is `display: block`, the Limit Rules card spans the main width at `1295.91px`, clicking `Edit` opens one `role=dialog` / `aria-modal=true` `.limits-config-dialog` at `672px`, Close removes `limitDialog`, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Limits save button text check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog submit button reads `Save`, no `Save rules` text remains, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Playground action order check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Playground actions render as `Clear`, then `Send`, no `Send test` text remains, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Limits action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog actions are centered with `0px` center delta, render as `Cancel`, `Save`, have zero icons, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

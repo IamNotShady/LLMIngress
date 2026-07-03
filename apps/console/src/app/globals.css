@@ -3021,7 +3021,7 @@ button.table-row-link {
 }
 .limits-config-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: var(--space-sm);
   padding-top: var(--space-sm);
 }

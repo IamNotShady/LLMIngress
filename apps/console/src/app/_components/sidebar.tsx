@@ -97,10 +97,6 @@ export function Sidebar({
             </span>
           </span>
         </div>
-        <div className="sidebar-account">
-          <span className="sidebar-account-dot" aria-hidden="true" />
-          <span>Signed in as admin</span>
-        </div>
         <div className="sidebar-footer-row">
           <form action="/api/auth/logout" method="post">
             <button className="secondary-button" type="submit">

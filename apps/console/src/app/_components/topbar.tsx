@@ -3,12 +3,7 @@
 import { usePathname } from "next/navigation";
 import { findActiveNavItem } from "../_lib/nav";
 
-type TopbarProps = {
-  gatewayStatusHealthy: boolean;
-  gatewayStatusLabel: string;
-};
-
-export function Topbar({ gatewayStatusHealthy, gatewayStatusLabel }: TopbarProps) {
+export function Topbar() {
   const pathname = usePathname() || "/";
   const active = findActiveNavItem(pathname);
 
@@ -16,13 +11,6 @@ export function Topbar({ gatewayStatusHealthy, gatewayStatusLabel }: TopbarProps
     <header className="topbar">
       <p className="topbar-title">{active?.pageTitle ?? active?.label ?? "Console"}</p>
       <div className="topbar-actions">
-        <span className={`topbar-status${gatewayStatusHealthy ? "" : " is-warn"}`}>
-          <span className="topbar-status-dot" aria-hidden="true" />
-          {gatewayStatusLabel}
-        </span>
-        <a className="topbar-link" href="/runtime">
-          Help
-        </a>
         <span className="topbar-account">
           <span className="topbar-account-avatar" aria-hidden="true">
             A

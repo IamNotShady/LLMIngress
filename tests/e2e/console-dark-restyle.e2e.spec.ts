@@ -115,6 +115,14 @@ test("console serves the dark violet Geist skin with compact controls and no ove
           await expect(runtimeCard).toContainText("Providers");
           await expect(runtimeCard).not.toContainText(/healthy|unhealthy/i);
           expect(await runtimeCard.locator(".sidebar-provider-health-count").count()).toBe(2);
+          const runtimeCardBox = await runtimeCard.boundingBox();
+          expect(runtimeCardBox).not.toBeNull();
+          expect(runtimeCardBox?.height ?? 0).toBeGreaterThanOrEqual(112);
+          await expect(page.locator(".sidebar-account")).toHaveCount(0);
+          await expect(page.getByText("Signed in as admin")).toHaveCount(0);
+          await expect(page.locator(".topbar-status")).toHaveCount(0);
+          await expect(page.locator(".topbar-link")).toHaveCount(0);
+          await expect(page.getByText("Help", { exact: true })).toHaveCount(0);
 
           // No horizontal overflow at desktop and mobile checkpoints.
           for (const viewport of [

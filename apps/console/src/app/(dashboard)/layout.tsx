@@ -55,10 +55,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         providerUnhealthyCount={providerUnhealthyCount}
       />
       <div className="app-main">
-        <Topbar
-          gatewayStatusHealthy={gatewayStatusHealthy}
-          gatewayStatusLabel={gatewayStatusLabel}
-        />
+        <Topbar />
         {children}
       </div>
     </div>

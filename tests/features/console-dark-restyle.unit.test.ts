@@ -68,4 +68,20 @@ describe("console dark restyle static contract", () => {
     expect(sidebar).toContain("Providers");
     expect(sidebar).toContain("sidebar-provider-health-count");
   });
+
+  test("shell keeps gateway chrome only in the sidebar runtime card", () => {
+    const topbar = readFileSync(join(appDir, "_components/topbar.tsx"), "utf8");
+    const sidebar = readFileSync(join(appDir, "_components/sidebar.tsx"), "utf8");
+    const stylesheet = css();
+
+    expect(topbar).not.toContain("topbar-status");
+    expect(topbar).not.toContain("topbar-link");
+    expect(topbar).not.toContain("Help");
+    expect(sidebar).not.toContain("Signed in as admin");
+    expect(sidebar).not.toContain('className="sidebar-account"');
+    expect(stylesheet).not.toContain(".topbar-status");
+    expect(stylesheet).not.toContain(".topbar-link");
+    expect(stylesheet).not.toContain(".sidebar-account {");
+    expect(stylesheet).toMatch(/\.sidebar-runtime-card\s*\{[^}]*min-height:\s*7rem/s);
+  });
 });

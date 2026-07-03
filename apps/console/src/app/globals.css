@@ -2468,6 +2468,10 @@ button.table-row-link {
   gap: var(--space-lg);
   min-width: 0;
 }
+.notification-channel-save-button {
+  justify-self: center;
+  min-width: 6rem;
+}
 
 /* ---- Playground reference layout ---- */
 .playground-page {

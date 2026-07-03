@@ -4129,9 +4129,8 @@ export async function SettingsSection() {
                 <input id="notification-webhook-name" name="displayName" required />
                 <label htmlFor="notification-webhook-url">Webhook URL</label>
                 <input id="notification-webhook-url" name="webhookUrl" type="url" required />
-                <button type="submit">
-                  <FlatIcon name="add" />
-                  <span>Create webhook notification channel</span>
+                <button className="notification-channel-save-button" type="submit">
+                  <span>Save</span>
                 </button>
               </form>
             </div>

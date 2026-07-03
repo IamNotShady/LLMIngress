@@ -54,6 +54,7 @@
 - Follow-up Provider disabled refresh guard: disabled row-level model refresh for disabled Providers while keeping enabled Providers refreshable.
 - Follow-up Virtual Models edit action style: changed Virtual Model row `Edit` links to reuse the Agents row edit button styling.
 - Follow-up Limits edit action style: changed Limit Rules row `Edit` links to reuse the Agents row edit button styling.
+- Follow-up Settings notification button polish: shortened the webhook notification submit button to `Save`, removed the icon, and centered it at normal button width.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -96,6 +97,7 @@
   - Follow-up Provider disabled refresh check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed disabled Provider `Z.ai` has disabled refresh with `Enable provider to refresh models`, enabled Provider `OPEN AI1` remains refreshable, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Virtual Models edit action style check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed Virtual Model row `Edit` actions use `link-button agent-action-edit`, old `.vm-table .table-action-link` count is `0`, the button is 28px tall with accent background/border, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Limits edit action style check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed Limit Rules row `Edit` actions use `link-button agent-action-edit`, old `.limits-rule-table .table-action-link` count is `0`, Delete remains visible, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Settings notification button check: targeted unit, Console typecheck, lint, and SSR/source checks passed; markup and CSS confirm the webhook notification submit button renders as text-only `Save`, uses normal centered button width, has zero icons, and no old long label remains. In-app Browser control timed out during navigation/DOM reads, so full visual browser validation was not completed. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

@@ -3041,8 +3041,8 @@ button.table-row-link {
   color: var(--text);
   text-decoration: none;
 }
-.limits-config-actions button {
-  min-width: 7.25rem;
+.limits-config-actions :is(button, .secondary-button) {
+  width: 7.25rem;
 }
 
 @media (max-width: 56rem) {

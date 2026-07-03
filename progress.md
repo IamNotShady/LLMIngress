@@ -28,6 +28,7 @@
 - Follow-up Agents button icon cleanup: removed the filter icon from `Query` and the add icon from `Create Agent`.
 - Follow-up Agents detail polish: removed the right-side selected agent card and moved read-only agent details into a dialog opened from Agent list rows, letting the Agents KPIs, filters, and list span the full content width.
 - Follow-up Agents detail dialog layout: tightened the read-only dialog to the existing 42rem dialog width and grouped fields into aligned cards.
+- Follow-up Agents detail field layout: changed the read-only dialog summary fields to full-width label/value rows.
 - Verification completed:
   - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
   - `pnpm --filter @llmingress/console run typecheck`
@@ -44,6 +45,7 @@
   - Follow-up Agents button icon cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed `Query` and `Create Agent` each have only text, no `.flat-icon`/`svg`, centered flex alignment, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Agents detail dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `.agents-main-column`, `.agents-stat-grid`, `.agents-filter-bar`, and `.agents-list-card` all span `1112px`, no right-side `.agent-detail-card`, clicking an Agent list row opens one read-only `.agent-view-dialog` with no form controls, close removes it, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Follow-up Agents detail dialog layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the dialog width is `672px`, fields render as two equal `288px` columns, label/value left edges align, no form controls, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
+  - Follow-up Agents detail field layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the read-only dialog summary uses one field-grid column, four full-width rows with label/value on the same line, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
 
 ## Required Verification
 

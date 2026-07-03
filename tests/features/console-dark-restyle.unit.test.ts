@@ -115,7 +115,10 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(/\.agents-shell\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).toMatch(/\.agent-view-dialog\s*\{[^}]*width:\s*min\(42rem/s);
     expect(stylesheet).toMatch(
-      /\.agent-view-dialog \.agent-detail-fields\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+      /\.agent-view-dialog \.agent-detail-fields\s*\{[^}]*grid-template-columns:\s*1fr/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.agent-view-dialog \.agent-detail-fields div\s*\{[^}]*grid-template-columns:\s*minmax\(8rem,\s*0\.45fr\)\s*minmax\(0,\s*1fr\)/s,
     );
   });
 });

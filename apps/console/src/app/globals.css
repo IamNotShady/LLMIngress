@@ -1531,17 +1531,23 @@ body:has(.console-dialog-scrim) {
   overflow-wrap: anywhere;
 }
 .agent-view-dialog .agent-detail-fields {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-sm);
+  grid-template-columns: 1fr;
+  gap: var(--space-xs);
   padding: var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
 }
 .agent-view-dialog .agent-detail-fields div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.45fr) minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: center;
+  min-height: 2rem;
+}
+.agent-view-dialog .agent-detail-fields dd {
+  justify-self: end;
+  text-align: right;
 }
 .agent-view-dialog .agent-detail-section {
   padding: var(--space-md);

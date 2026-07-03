@@ -9,12 +9,20 @@ type SidebarProps = {
   gatewayConfigVersionLabel: string;
   gatewayStatusHealthy: boolean;
   gatewayStatusLabel: string;
+  gatewayUptimeLabel: string;
+  gatewayUrlLabel: string;
+  providerHealthyCount: number;
+  providerUnhealthyCount: number;
 };
 
 export function Sidebar({
   gatewayConfigVersionLabel,
   gatewayStatusHealthy,
   gatewayStatusLabel,
+  gatewayUptimeLabel,
+  gatewayUrlLabel,
+  providerHealthyCount,
+  providerUnhealthyCount,
 }: SidebarProps) {
   const pathname = usePathname() || "/";
   const active = findActiveNavItem(pathname);
@@ -63,9 +71,30 @@ export function Sidebar({
             className={`sidebar-account-dot${gatewayStatusHealthy ? "" : " is-warn"}`}
             aria-hidden="true"
           />
-          <span>
+          <span className="sidebar-runtime-summary">
             {gatewayStatusLabel}
+            <em>Gateway URL {gatewayUrlLabel}</em>
             <em>Config version {gatewayConfigVersionLabel}</em>
+            <em>Uptime {gatewayUptimeLabel}</em>
+            <span className="sidebar-runtime-providers">
+              <span>Providers</span>
+              <span
+                className="sidebar-provider-health-count"
+                aria-label={`${providerHealthyCount} healthy providers`}
+                role="img"
+              >
+                <span className="sidebar-provider-dot is-ok" aria-hidden="true" />
+                {providerHealthyCount}
+              </span>
+              <span
+                className="sidebar-provider-health-count"
+                aria-label={`${providerUnhealthyCount} unhealthy providers`}
+                role="img"
+              >
+                <span className="sidebar-provider-dot is-warn" aria-hidden="true" />
+                {providerUnhealthyCount}
+              </span>
+            </span>
           </span>
         </div>
         <div className="sidebar-account">

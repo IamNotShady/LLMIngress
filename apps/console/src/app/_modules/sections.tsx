@@ -62,10 +62,8 @@ import {
   routePolicyStrategies,
 } from "@llmingress/db/console-route-policies";
 import {
-  type ConsoleGatewayRuntimeStatus,
   formatGatewayConfigVersion,
   formatGatewayHeartbeatStatus,
-  formatGatewayHeartbeatSummary,
   formatRuntimeReloadResult,
   getConsoleRuntimeSnapshot,
 } from "@llmingress/db/console-runtime";
@@ -152,9 +150,6 @@ export async function OverviewSection() {
     topLimit: 20,
   });
   const activities = await listConsoleActivities();
-  const runtimeSnapshot = await getConsoleRuntimeSnapshot();
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
-  const gateway = runtimeSnapshot.gateways[0] ?? null;
 
   const recentActivities = activities.slice(0, 8);
   const activeAgentCount = usageSummary.agentBreakdowns.filter(
@@ -282,39 +277,6 @@ export async function OverviewSection() {
             </div>
           )}
         </div>
-        <div className="detail-panel">
-          <div className="detail-panel-head">
-            <h2 className="detail-panel-title">Gateway status</h2>
-            <span className={gateway ? "pill--ok pill" : "pill--warn pill"}>
-              {gateway ? gateway.status : "Unknown"}
-            </span>
-          </div>
-          <div className={gateway ? "overview-status-banner" : "overview-status-banner is-warn"}>
-            <span aria-hidden="true">✓</span>
-            <div>
-              <strong>{formatGatewayOverviewStatus(gateway)}</strong>
-              <small>{formatGatewayHeartbeatSummary({ gateway })}</small>
-            </div>
-          </div>
-          <dl className="detail-field-list">
-            <div className="detail-field">
-              <dt>Configured Gateway URL</dt>
-              <dd>{formatRuntimeAddress(getPlaygroundGatewayBaseUrl())}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Config version</dt>
-              <dd>{formatGatewayConfigVersion(gateway?.appliedConfigVersion ?? null)}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Uptime</dt>
-              <dd>{gateway ? formatUptime(gateway.startedAt) : "Unknown"}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Provider status</dt>
-              <dd>{formatProviderStatusSummary(providerHealthSummaries)}</dd>
-            </div>
-          </dl>
-        </div>
       </div>
 
       <div className="chart-grid-2">
@@ -423,50 +385,6 @@ function formatActivityLatency(latencyMs: number | null): string {
     return "—";
   }
   return `${(latencyMs / 1000).toFixed(2)}s`;
-}
-
-function formatGatewayOverviewStatus(gateway: ConsoleGatewayRuntimeStatus | null): string {
-  if (!gateway) {
-    return "Status unknown";
-  }
-  return gateway.status === "ready" &&
-    formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) === "Healthy"
-    ? "Running normally"
-    : `Gateway ${gateway.status}`;
-}
-
-function formatRuntimeAddress(value: string): string {
-  try {
-    return new URL(value).host;
-  } catch {
-    return value;
-  }
-}
-
-function formatUptime(startedAt: Date): string {
-  const totalMinutes = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 60_000));
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  if (days > 0) {
-    return `${days}d ${hours}h`;
-  }
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
-
-function formatProviderStatusSummary(summaries: ConsoleProviderHealthSummary[]): string {
-  const healthy = summaries.filter((summary) => summary.status === "healthy").length;
-  const unhealthy = summaries.filter(
-    (summary) =>
-      summary.status === "auth_failed" ||
-      summary.status === "network_error" ||
-      summary.status === "quota_limited" ||
-      summary.status === "unhealthy",
-  ).length;
-  return `${healthy} healthy / ${unhealthy} unhealthy`;
 }
 
 function buildTopAgentsByCost(

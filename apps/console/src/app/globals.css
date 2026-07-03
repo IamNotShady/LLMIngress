@@ -1218,7 +1218,7 @@ body:has(.console-dialog-scrim) {
 }
 .sidebar-runtime-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-xs);
   padding: var(--space-sm);
   border: 1px solid var(--border);
@@ -1228,15 +1228,43 @@ body:has(.console-dialog-scrim) {
   font-size: var(--text-xs);
   font-weight: 600;
 }
-.sidebar-runtime-card span:last-child {
+.sidebar-runtime-summary {
   display: flex;
   flex-direction: column;
   line-height: var(--leading-snug);
+  min-width: 0;
 }
 .sidebar-runtime-card em {
   font-style: normal;
   font-weight: 500;
   color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-runtime-providers {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  color: var(--text-faint);
+  font-weight: 500;
+}
+.sidebar-provider-health-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.sidebar-provider-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+}
+.sidebar-provider-dot.is-warn {
+  background: var(--danger);
 }
 
 /* ---- Topbar ---- */

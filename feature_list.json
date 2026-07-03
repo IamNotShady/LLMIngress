@@ -63,7 +63,7 @@
       "verification": "pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts && pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts",
       "dependencies": ["v1-console"],
       "status": "passing",
-      "evidence": "2026-07-03: Unit + E2E green (dark canvas, Geist, violet 30px buttons, no toggle, no overflow at 1280/390). pnpm run verify and verify:features green after restyle. Follow-up layout E2E/browser check keeps Overview Recent requests full-width with Gateway status stacked below."
+      "evidence": "2026-07-03: Unit + E2E green (dark canvas, Geist, violet 30px buttons, no toggle, no overflow at 1280/390). pnpm run verify and verify:features green after restyle. Follow-up layout/browser checks keep Overview Recent requests full-width and move gateway URL, config version, uptime, and provider health counts into the sidebar runtime card."
     }
   ]
 }

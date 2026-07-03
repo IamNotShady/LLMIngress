@@ -58,4 +58,14 @@ describe("console dark restyle static contract", () => {
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     expect(sections).not.toMatch(/"#[0-9a-fA-F]{6}"/);
   });
+
+  test("overview gateway details live in the sidebar runtime card", () => {
+    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sidebar = readFileSync(join(appDir, "_components/sidebar.tsx"), "utf8");
+    expect(sections).not.toContain('<h2 className="detail-panel-title">Gateway status</h2>');
+    expect(sidebar).toContain("Gateway URL");
+    expect(sidebar).toContain("Uptime");
+    expect(sidebar).toContain("Providers");
+    expect(sidebar).toContain("sidebar-provider-health-count");
+  });
 });

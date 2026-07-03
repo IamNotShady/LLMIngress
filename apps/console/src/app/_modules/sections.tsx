@@ -95,9 +95,9 @@ import { VirtualModelRouteDialogClient } from "./virtual-model-route-dialog";
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 
 const providerTemplateGroups = listProviderTemplateSelectorGroups();
-const usageTrendActualColor = "#16a34a";
-const usageTrendBaselineColor = "#2563eb";
-const usageTrendTokenColor = "#f59e0b";
+const usageTrendActualColor = "var(--chart-3)";
+const usageTrendBaselineColor = "var(--chart-2)";
+const usageTrendTokenColor = "var(--chart-4)";
 const directProviderCreateChoices = [
   {
     action: "create",

@@ -11,7 +11,7 @@ import {
 } from "../support/console-app";
 import { withProcessLock } from "../support/process-lock";
 
-test("sidebar groups modules and routes each nav item to its own page with a theme toggle", async ({
+test("sidebar groups modules and routes each nav item to its own page in the dark-only shell", async ({
   browser,
 }) => {
   const fixture = await createTestPostgresFixture({
@@ -55,20 +55,11 @@ test("sidebar groups modules and routes each nav item to its own page with a the
             ).toHaveAttribute("aria-current", "page");
           }
 
-          // Theme toggle flips the document theme between light and dark.
-          const themeBefore = await page.evaluate(() =>
-            document.documentElement.getAttribute("data-theme"),
-          );
-          await page.getByRole("button", { name: /theme/i }).click();
-          await expect
-            .poll(async () =>
-              page.evaluate(() => document.documentElement.getAttribute("data-theme")),
-            )
-            .not.toBe(themeBefore);
-          const themeAfter = await page.evaluate(() =>
-            document.documentElement.getAttribute("data-theme"),
-          );
-          expect(["light", "dark"]).toContain(themeAfter);
+          // The console is dark-only: no toggle exists and the theme never changes.
+          await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
+          expect(
+            await page.evaluate(() => document.documentElement.getAttribute("data-theme")),
+          ).toBe("dark");
         } finally {
           await context.close();
         }

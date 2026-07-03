@@ -1,7 +1,7 @@
 // KPI stat card used across the redesigned dashboard pages (Overview, Agents,
 // Virtual Models, Usage, Limits). Matches the prototype's metric tiles.
 export function StatCard({
-  icon,
+  icon: _icon,
   label,
   value,
   delta,
@@ -17,9 +17,6 @@ export function StatCard({
   return (
     <article className="stat-card">
       <div className="stat-card-head">
-        <span className="stat-card-icon" aria-hidden="true">
-          {icon}
-        </span>
         <span className="stat-card-label">{label}</span>
       </div>
       <span className="stat-card-value">{value}</span>

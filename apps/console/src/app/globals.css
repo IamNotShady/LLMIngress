@@ -1,14 +1,14 @@
 /* ============================================================================
    LLMIngress Console — design system
-   "Control plane" aesthetic: instrument-like, calm, information-dense.
-   Tokens in OKLCH; neutrals tinted toward the brand iris hue. Light + dark.
+   Dark-only control-plane skin: violet accent, glow depth, Geist type.
+   Tokens in OKLCH; neutrals tinted toward the accent hue.
    ========================================================================== */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  /* Brand hue anchor (blue). Neutrals are tinted toward it for cohesion. */
-  --hue: 226;
+  /* Accent hue anchor (violet). Neutrals are tinted toward it for cohesion. */
+  --hue: 288;
 
   /* Spacing — 4pt scale, semantic names */
   --space-2xs: 0.25rem;
@@ -21,9 +21,9 @@
   --space-3xl: 4rem;
 
   /* Radii */
-  --radius-sm: 7px;
-  --radius-md: 11px;
-  --radius-lg: 18px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
   --radius-pill: 999px;
 
   /* Type scale — fixed rem for product UI, ~1.25 ratio */
@@ -41,117 +41,62 @@
   --leading-normal: 1.6;
   --leading-relaxed: 1.75;
 
-  --font-display: var(--font-display), "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
-  --font-body: var(--font-body), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-mono), "Spline Sans Mono", ui-monospace, "SFMono-Regular", monospace;
+  --font-body: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
 
   --sidebar-width: 15.625rem;
   --content-max: 76rem;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-}
 
-/* ---- Light (default) ---- */
-:root,
-[data-theme="light"] {
-  --canvas: oklch(0.984 0.004 var(--hue));
-  --surface: oklch(1 0 0);
-  --surface-raised: oklch(0.997 0.003 var(--hue));
-  --surface-sunken: oklch(0.965 0.006 var(--hue));
-  --surface-inset: oklch(0.955 0.008 var(--hue));
+  /* Surfaces */
+  --canvas: oklch(0.16 0.008 var(--hue));
+  --surface: oklch(0.2 0.01 var(--hue));
+  --surface-raised: oklch(0.225 0.011 var(--hue));
+  --surface-sunken: oklch(0.145 0.007 var(--hue));
+  --surface-inset: oklch(0.175 0.009 var(--hue));
 
-  --border: oklch(0.905 0.008 var(--hue));
-  --border-strong: oklch(0.83 0.012 var(--hue));
+  --border: oklch(0.27 0.015 var(--hue));
+  --border-strong: oklch(0.33 0.02 var(--hue));
+  --hairline: oklch(0.23 0.012 var(--hue));
 
-  --text: oklch(0.26 0.025 var(--hue));
-  --text-muted: oklch(0.48 0.022 var(--hue));
-  --text-subtle: oklch(0.6 0.018 var(--hue));
-  --text-faint: oklch(0.7 0.014 var(--hue));
+  --text: oklch(0.93 0.005 var(--hue));
+  --text-muted: oklch(0.71 0.01 var(--hue));
+  --text-subtle: oklch(0.59 0.012 var(--hue));
+  --text-faint: oklch(0.47 0.012 var(--hue));
 
-  --accent: oklch(0.54 0.16 var(--hue));
-  --accent-strong: oklch(0.47 0.17 var(--hue));
-  --accent-fg: oklch(0.99 0.012 var(--hue));
-  --accent-soft: oklch(0.95 0.035 var(--hue));
-  --accent-soft-border: oklch(0.88 0.06 var(--hue));
+  --accent: oklch(0.65 0.19 var(--hue));
+  --accent-strong: oklch(0.7 0.17 var(--hue));
+  --accent-fg: oklch(0.2 0.09 var(--hue));
+  --accent-soft: oklch(0.65 0.19 var(--hue) / 0.1);
+  --accent-soft-border: oklch(0.65 0.19 var(--hue) / 0.35);
+  --accent-text: oklch(0.73 0.15 var(--hue));
 
-  --ok: oklch(0.52 0.13 152);
-  --ok-soft: oklch(0.95 0.045 152);
-  --warn: oklch(0.62 0.13 70);
-  --warn-soft: oklch(0.95 0.06 75);
-  --danger: oklch(0.52 0.19 25);
-  --danger-soft: oklch(0.95 0.045 25);
-  --danger-strong: oklch(0.46 0.2 25);
+  --ok: oklch(0.76 0.15 160);
+  --ok-soft: oklch(0.76 0.15 160 / 0.09);
+  --warn: oklch(0.78 0.15 70);
+  --warn-soft: oklch(0.78 0.15 70 / 0.09);
+  --danger: oklch(0.68 0.19 25);
+  --danger-soft: oklch(0.68 0.19 25 / 0.09);
+  --danger-strong: oklch(0.74 0.15 20);
   --danger-fg: oklch(0.99 0.012 25);
 
-  --shadow-sm: 0 1px 2px oklch(0.2 0.03 var(--hue) / 0.06);
-  --shadow-md: 0 10px 30px -14px oklch(0.2 0.03 var(--hue) / 0.22);
-  --shadow-pop: 0 18px 48px -20px oklch(0.2 0.03 var(--hue) / 0.32);
-}
+  --shadow-sm: none;
+  --shadow-md: 0 10px 30px -14px oklch(0 0 0 / 0.5);
+  --shadow-pop: 0 18px 48px -20px oklch(0 0 0 / 0.65);
+  --glow-accent: 0 0 14px oklch(0.65 0.19 var(--hue) / 0.3);
+  --glow-accent-strong: 0 0 18px oklch(0.65 0.19 var(--hue) / 0.45);
+  --glow-ok: 0 0 6px oklch(0.76 0.15 160 / 0.8);
+  --glow-warn: 0 0 6px oklch(0.78 0.15 70 / 0.8);
+  --glow-danger: 0 0 6px oklch(0.68 0.19 25 / 0.8);
 
-/* ---- Dark ---- */
-[data-theme="dark"] {
-  --canvas: oklch(0.165 0.008 var(--hue));
-  --surface: oklch(0.205 0.011 var(--hue));
-  --surface-raised: oklch(0.235 0.013 var(--hue));
-  --surface-sunken: oklch(0.148 0.008 var(--hue));
-  --surface-inset: oklch(0.255 0.014 var(--hue));
-
-  --border: oklch(0.3 0.014 var(--hue));
-  --border-strong: oklch(0.42 0.018 var(--hue));
-
-  --text: oklch(0.95 0.006 var(--hue));
-  --text-muted: oklch(0.74 0.014 var(--hue));
-  --text-subtle: oklch(0.62 0.014 var(--hue));
-  --text-faint: oklch(0.52 0.014 var(--hue));
-
-  --accent: oklch(0.72 0.15 var(--hue));
-  --accent-strong: oklch(0.78 0.15 var(--hue));
-  --accent-fg: oklch(0.17 0.02 var(--hue));
-  --accent-soft: oklch(0.3 0.05 var(--hue));
-  --accent-soft-border: oklch(0.42 0.08 var(--hue));
-
-  --ok: oklch(0.74 0.15 152);
-  --ok-soft: oklch(0.3 0.05 152);
-  --warn: oklch(0.82 0.13 80);
-  --warn-soft: oklch(0.32 0.05 75);
-  --danger: oklch(0.7 0.17 25);
-  --danger-soft: oklch(0.32 0.06 25);
-  --danger-strong: oklch(0.76 0.16 25);
-  --danger-fg: oklch(0.99 0.012 25);
-
-  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
-  --shadow-md: 0 12px 34px -16px oklch(0 0 0 / 0.6);
-  --shadow-pop: 0 22px 56px -22px oklch(0 0 0 / 0.7);
-}
-
-/* No-JS fallback: honor OS preference when no explicit theme is set. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --canvas: oklch(0.165 0.008 var(--hue));
-    --surface: oklch(0.205 0.011 var(--hue));
-    --surface-raised: oklch(0.235 0.013 var(--hue));
-    --surface-sunken: oklch(0.148 0.008 var(--hue));
-    --surface-inset: oklch(0.255 0.014 var(--hue));
-    --border: oklch(0.3 0.014 var(--hue));
-    --border-strong: oklch(0.42 0.018 var(--hue));
-    --text: oklch(0.95 0.006 var(--hue));
-    --text-muted: oklch(0.74 0.014 var(--hue));
-    --text-subtle: oklch(0.62 0.014 var(--hue));
-    --text-faint: oklch(0.52 0.014 var(--hue));
-    --accent: oklch(0.72 0.15 var(--hue));
-    --accent-strong: oklch(0.78 0.15 var(--hue));
-    --accent-fg: oklch(0.17 0.02 var(--hue));
-    --accent-soft: oklch(0.3 0.05 var(--hue));
-    --accent-soft-border: oklch(0.42 0.08 var(--hue));
-    --ok: oklch(0.74 0.15 152);
-    --ok-soft: oklch(0.3 0.05 152);
-    --warn: oklch(0.82 0.13 80);
-    --warn-soft: oklch(0.32 0.05 75);
-    --danger: oklch(0.7 0.17 25);
-    --danger-soft: oklch(0.32 0.06 25);
-    --danger-strong: oklch(0.76 0.16 25);
-    --danger-fg: oklch(0.99 0.012 25);
-  }
+  --chart-1: var(--accent);
+  --chart-2: oklch(0.65 0.16 262);
+  --chart-3: var(--ok);
+  --chart-4: var(--warn);
+  --chart-5: oklch(0.72 0.18 350);
+  --chart-6: oklch(0.83 0.12 210);
 }
 
 /* ============================================================================
@@ -349,6 +294,7 @@ pre,
   background: var(--accent);
   color: var(--accent-fg);
   flex: none;
+  box-shadow: var(--glow-accent);
 }
 .sidebar-mark::before {
   content: "";
@@ -410,7 +356,8 @@ pre,
 }
 .nav-item.is-active {
   background: var(--accent-soft);
-  color: var(--accent-strong);
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--text);
 }
 .nav-item.is-active .nav-item-label {
   font-weight: 600;
@@ -454,40 +401,10 @@ pre,
 .sidebar-footer-row form {
   width: 100%;
 }
-.sidebar-footer-row .theme-toggle,
 .sidebar-footer-row .btn,
 .sidebar-footer-row button {
   width: 100%;
   white-space: nowrap;
-}
-
-/* ---- Theme toggle ---- */
-
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-  min-height: 2.25rem;
-  padding: 0 var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text-muted);
-  font: inherit;
-  font-size: var(--text-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s var(--ease-out), color 0.15s var(--ease-out);
-}
-.theme-toggle:hover {
-  background: var(--surface);
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-.theme-toggle svg {
-  width: 1rem;
-  height: 1rem;
 }
 
 /* ============================================================================
@@ -510,8 +427,6 @@ pre,
 .eyebrow {
   font-size: var(--text-2xs);
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: var(--accent);
 }
 .page-title {
@@ -734,12 +649,12 @@ input,
 select,
 textarea {
   width: 100%;
-  min-height: 2.75rem;
+  min-height: 2rem;
   padding: var(--space-xs) var(--space-sm);
   font: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   color: var(--text);
-  background: var(--surface);
+  background: var(--surface-inset);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
@@ -826,8 +741,8 @@ button,
   align-items: center;
   justify-content: center;
   gap: var(--space-xs);
-  min-height: 2.75rem;
-  padding: 0 var(--space-md);
+  min-height: 1.875rem;
+  padding: 0 var(--space-sm);
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 600;
@@ -848,13 +763,13 @@ button:active,
   transform: translateY(1px);
 }
 .btn {
-  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--accent) 45%, transparent);
+  box-shadow: var(--glow-accent);
 }
 .btn:hover {
-  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--accent) 55%, transparent);
+  box-shadow: var(--glow-accent-strong);
 }
 .btn:active {
-  box-shadow: 0 1px 2px -1px color-mix(in oklch, var(--accent) 40%, transparent);
+  box-shadow: var(--glow-accent);
 }
 
 .flat-icon {
@@ -883,14 +798,14 @@ button .flat-icon,
 
 .secondary-button {
   color: var(--text);
-  background: var(--surface);
+  background: transparent;
   border-color: var(--border-strong);
   box-shadow: none;
 }
 .secondary-button:hover {
-  background: var(--surface-inset);
+  background: var(--surface-raised);
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 .secondary-button:active {
   transform: translateY(1px);
@@ -1265,8 +1180,6 @@ body:has(.console-dialog-scrim) {
   font-style: normal;
   font-size: var(--text-2xs);
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-faint);
 }
 
@@ -1278,19 +1191,21 @@ body:has(.console-dialog-scrim) {
 .nav-item-icon {
   display: grid;
   place-items: center;
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.5rem;
+  height: 1.5rem;
   flex: none;
   border-radius: var(--radius-sm);
-  background: var(--surface-inset);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   color: var(--text-subtle);
+  font-family: var(--font-mono);
   font-size: var(--text-2xs);
   font-weight: 700;
-  letter-spacing: 0.02em;
 }
 .nav-item.is-active .nav-item-icon {
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-border);
+  color: var(--accent-text);
 }
 .nav-item-text {
   display: flex;
@@ -1415,46 +1330,38 @@ body:has(.console-dialog-scrim) {
   flex-direction: column;
   gap: var(--space-2xs);
   min-width: 0;
-  padding: var(--space-md) var(--space-lg);
-  background: var(--surface-raised);
+  padding: 0.6875rem 0.8125rem;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
 }
 .stat-card-head {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
 }
-.stat-card-icon {
-  display: grid;
-  place-items: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: var(--text-2xs);
-  font-weight: 700;
-}
 .stat-card-label {
   font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
+  font-weight: 400;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .stat-card-value {
   font-family: var(--font-mono);
   font-feature-settings: "tnum" 1;
-  font-size: var(--text-lg);
-  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md);
+  font-weight: 500;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .stat-card-delta {
-  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
   color: var(--text-subtle);
 }
 .stat-card-delta.is-up {
@@ -1703,10 +1610,9 @@ body:has(.console-dialog-scrim) {
 }
 .provider-summary-metrics dt,
 .provider-detail-stats dt {
-  color: var(--text-faint);
+  color: var(--text-subtle);
   font-size: var(--text-2xs);
   font-weight: 600;
-  text-transform: uppercase;
 }
 .provider-summary-metrics dd,
 .provider-detail-stats dd {
@@ -1879,9 +1785,7 @@ body:has(.console-dialog-scrim) {
 .detail-section-label {
   font-size: var(--text-2xs);
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--text-subtle);
 }
 .detail-field-list {
   display: flex;
@@ -1998,24 +1902,25 @@ body:has(.console-dialog-scrim) {
 }
 .data-table thead th {
   font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-faint);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--hairline);
   background: var(--surface-sunken);
 }
 .data-table tbody tr {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--hairline);
 }
 .data-table tbody tr:last-child {
   border-bottom: none;
 }
 .data-table tbody tr.is-selected {
   background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .data-table tbody tr.is-clickable:hover {
-  background: var(--surface-sunken);
+  background: var(--surface-raised);
 }
 .data-table td.num,
 .data-table th.num {
@@ -2340,6 +2245,16 @@ body:has(.console-dialog-scrim) {
   background: var(--accent-soft);
 }
 
+/* Health dots glow in the dark shell. */
+.topbar-status-dot,
+.sidebar-account-dot {
+  box-shadow: var(--glow-ok);
+}
+.topbar-status.is-warn .topbar-status-dot,
+.sidebar-account-dot.is-warn {
+  box-shadow: var(--glow-warn);
+}
+
 /* ---- Progress / usage bars ---- */
 .usage-bar {
   display: flex;
@@ -2361,13 +2276,25 @@ body:has(.console-dialog-scrim) {
 .usage-bar-fill {
   height: 100%;
   border-radius: var(--radius-pill);
-  background: var(--accent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--accent) 70%, var(--surface)),
+    var(--accent)
+  );
 }
 .usage-bar-fill.is-warn {
-  background: var(--warn);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--warn) 70%, var(--surface)),
+    var(--warn)
+  );
 }
 .usage-bar-fill.is-danger {
-  background: var(--danger);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--danger) 70%, var(--surface)),
+    var(--danger)
+  );
 }
 
 /* ---- Selectable strategy / option cards (route editor, candidates) ---- */
@@ -2840,39 +2767,17 @@ body:has(.console-dialog-scrim) {
   background: var(--surface);
   border-radius: var(--radius-md);
 }
-.limits-kpi-grid .stat-card-icon {
-  width: 2.75rem;
-  height: 2.75rem;
-}
-.limits-kpi-grid .stat-card:nth-child(1) .stat-card-icon {
-  color: var(--ok);
-  background: var(--ok-soft);
-}
-.limits-kpi-grid .stat-card:nth-child(2) .stat-card-icon {
-  color: var(--danger);
-  background: var(--danger-soft);
-}
-.limits-kpi-grid .stat-card:nth-child(3) .stat-card-icon {
-  color: var(--warn);
-  background: var(--warn-soft);
-}
-.limits-kpi-grid .stat-card:nth-child(4) .stat-card-icon {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
 .limits-kpi-grid .stat-card-label {
   letter-spacing: 0;
   text-transform: none;
   font-size: var(--text-sm);
 }
 .limits-kpi-grid .stat-card-value {
-  margin-left: calc(2.75rem + var(--space-xs));
   font-family: inherit;
   font-size: var(--text-xl);
   font-weight: 800;
 }
 .limits-kpi-grid .stat-card-delta {
-  margin-left: calc(2.75rem + var(--space-xs));
   font-size: var(--text-sm);
 }
 .limits-main {
@@ -3029,7 +2934,7 @@ body:has(.console-dialog-scrim) {
 }
 .limits-config-form input,
 .limits-config-form select {
-  min-height: 2.75rem;
+  min-height: 2rem;
   background: var(--surface);
 }
 .limits-form-grid {
@@ -3051,7 +2956,11 @@ body:has(.console-dialog-scrim) {
   height: 0.65rem;
 }
 .limits-usage-block .usage-bar-fill {
-  background: var(--warn);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--warn) 70%, var(--surface)),
+    var(--warn)
+  );
 }
 .limits-config-subtitle {
   margin: 0 0 var(--space-sm);
@@ -3081,7 +2990,6 @@ body:has(.console-dialog-scrim) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.75rem;
   padding: 0 var(--space-md);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -3462,7 +3370,7 @@ body:has(.console-dialog-scrim) {
   align-items: center;
   justify-content: center;
   min-width: 5.5rem;
-  min-height: 2.75rem;
+  min-height: 1.875rem;
   text-decoration: none;
 }
 .vm-model-picker-scrim {
@@ -3624,11 +3532,6 @@ body:has(.console-dialog-scrim) {
    so every E2E selector and interaction is unchanged.
    ========================================================================== */
 
-/* KPI icon chips read as a clearly bounded accent token. */
-.stat-card-icon {
-  border: 1px solid var(--accent-soft-border);
-}
-
 /* Sidebar: a crisper active state with an accent rail beside the chip. */
 .sidebar-nav .nav-item {
   position: relative;
@@ -3667,9 +3570,9 @@ body:has(.console-dialog-scrim) {
 /* Primary CTAs carry a subtle accent shadow for depth (kept flat otherwise). */
 a.btn,
 .page-actions .btn {
-  box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--accent) 55%, transparent);
+  box-shadow: var(--glow-accent);
 }
 a.btn:hover,
 .page-actions .btn:hover {
-  box-shadow: 0 3px 10px -3px color-mix(in oklch, var(--accent) 60%, transparent);
+  box-shadow: var(--glow-accent-strong);
 }

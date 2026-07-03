@@ -2,10 +2,10 @@
 
 ## Current State
 
-- Date: 2026-07-02
-- Branch: `codex/ponytail-v1-history-compression`
-- Base: `dev` at `dfe72244 fix: restore console polish box shadow helper`
-- Status: V1 pre-release history compressed into milestone artifacts.
+- Date: 2026-07-03
+- Branch: `worktree-console-dark-restyle`
+- Base: `dev` at `d28e21ac`
+- Status: Console dark restyle implemented and verified.
 
 ## Compression Summary
 
@@ -13,6 +13,19 @@
 - `tests/features` and `tests/e2e` now keep only the 5 V1 milestone unit/E2E specs.
 - `packages/db/migrations` now ships one destructive pre-release baseline migration: `0001_v1_baseline.sql`.
 - Historical session notes, old feature tests, and old migration steps are intentionally left to git history.
+
+## 2026-07-03 Console Dark Restyle
+
+- Implemented `console-dark-restyle`: Console now serves a dark-only violet skin with Geist / Geist Mono, compact 30px primary buttons, no theme toggle, fixed chart tokens, and responsive no-overflow checks at 1280px and 390px.
+- Moved `v1-console` from theme-toggle behavior to the dark-only shell contract.
+- Updated release guard expectations for 6 passing feature contracts.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm --filter @llmingress/console run typecheck`
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts --workers=1`
+  - `pnpm run verify`
+  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features`
+  - Temporary Playwright route scan: 10 Console routes checked at 1280px and 390px with no horizontal overflow.
 
 ## Required Verification
 

@@ -38,12 +38,12 @@ export function TrendLineChart({
     <div className="chart-surface" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+          <CartesianGrid stroke="var(--hairline)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="label"
             tick={{ fill: "var(--text-faint)", fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
+            axisLine={{ stroke: "var(--hairline)" }}
             minTickGap={24}
           />
           <YAxis
@@ -54,8 +54,8 @@ export function TrendLineChart({
           />
           <Tooltip
             contentStyle={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
+              background: "var(--surface-raised)",
+              border: "1px solid var(--border-strong)",
               borderRadius: 8,
               fontSize: 12,
               color: "var(--text)",

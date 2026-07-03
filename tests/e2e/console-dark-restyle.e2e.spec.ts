@@ -95,10 +95,13 @@ test("console serves the dark violet Geist skin with compact controls and no ove
             { width: 390, height: 844 },
           ]) {
             await page.setViewportSize(viewport);
-            const overflow = await page.evaluate(
-              () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-            );
-            expect(overflow).toBeLessThanOrEqual(0);
+            await expect
+              .poll(() =>
+                page.evaluate(
+                  () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                ),
+              )
+              .toBeLessThanOrEqual(0);
           }
         } finally {
           await context.close();

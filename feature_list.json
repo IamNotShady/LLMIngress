@@ -62,8 +62,8 @@
       "description": "The Console serves a dark-only skin from the real app: dark canvas and Geist fonts render on live pages, primary buttons are compact 30px violet, the theme toggle is gone, and pages show no horizontal overflow at 1280px and 390px.",
       "verification": "pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts && pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts",
       "dependencies": ["v1-console"],
-      "status": "failing",
-      "evidence": "2026-07-03: Registered with failing tests ahead of implementation (TDD)."
+      "status": "passing",
+      "evidence": "2026-07-03: Unit + E2E green (dark canvas, Geist, violet 30px buttons, no toggle, no overflow at 1280/390). pnpm run verify and verify:features green after restyle."
     }
   ]
 }

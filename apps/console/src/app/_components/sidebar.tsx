@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { consoleNavItems, findActiveNavItem } from "../_lib/nav";
 import { FlatIcon } from "./flat-icon";
-import { ThemeToggle } from "./theme-toggle";
 
 type SidebarProps = {
   gatewayConfigVersionLabel: string;
@@ -74,7 +73,6 @@ export function Sidebar({
           <span>Signed in as admin</span>
         </div>
         <div className="sidebar-footer-row">
-          <ThemeToggle />
           <form action="/api/auth/logout" method="post">
             <button className="secondary-button" type="submit">
               <FlatIcon name="lock" />

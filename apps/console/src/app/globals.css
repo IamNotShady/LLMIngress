@@ -210,7 +210,8 @@ pre,
   animation: none;
 }
 
-.providers-page {
+.providers-page,
+.models-page {
   max-width: 100rem;
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))

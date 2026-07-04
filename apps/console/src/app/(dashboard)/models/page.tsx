@@ -8,7 +8,7 @@ export default async function VirtualModelsPage({
 }) {
   const resolved = searchParams ? await searchParams : {};
   return (
-    <div className="page">
+    <div className="page models-page">
       <PageHeader
         title="Virtual Models / Routes"
         description="Expose simple routing policies under a Virtual Model name: strategy + candidates."

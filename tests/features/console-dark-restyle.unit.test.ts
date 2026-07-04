@@ -142,6 +142,7 @@ describe("console dark restyle static contract", () => {
     );
 
     expect(modelsPage).not.toContain("FlatIcon");
+    expect(modelsPage).toContain('className="page models-page"');
     expect(modelsPage).toContain("<span>Create Virtual Model</span>");
     expect(vmFilterForm).toContain("<span>Filter</span>");
     expect(vmFilterForm).not.toContain("<span>Query</span>");
@@ -151,6 +152,7 @@ describe("console dark restyle static contract", () => {
     expect(vmTable).toContain('className="link-button agent-action-edit row-action-button"');
     expect(vmTable).toContain('<FlatIcon name="edit" />');
     expect(vmTable).not.toContain('className="table-action-link"');
+    expect(stylesheet).toMatch(/\.models-page\s*\{[^}]*margin:\s*0/s);
     expect(stylesheet).toMatch(/\.vm-filter-bar button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
       /\.vm-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,

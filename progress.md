@@ -204,6 +204,16 @@
   - `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` after the first full feature run hit transient Console startup contention
   - `pnpm run verify:features` passed with all 11 passing features re-verified.
 
+## 2026-07-04 Virtual Models Page Alignment Follow-up
+
+- Changed `/models` from the centered generic `.page` shell to `.page models-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/models` measured `.models-page` with `leftGap: 0`, `marginLeft: 0px`, and no console warnings/errors; captured viewport evidence.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped per user request for this UI-only tuning pass.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

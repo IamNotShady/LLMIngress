@@ -74,6 +74,7 @@ type GatewayJsonEndpointDefinition = {
 
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   const app = Fastify({
+    bodyLimit: readNonNegativeIntegerEnv("GATEWAY_BODY_LIMIT_BYTES", 10_485_760),
     logger: true,
   });
 
@@ -99,7 +100,20 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     };
   });
 
-  app.get("/metrics", async (_request, reply) => {
+  app.get("/metrics", async (request, reply) => {
+    const requiredToken = process.env.GATEWAY_METRICS_TOKEN?.trim();
+    if (requiredToken) {
+      const authorization = firstRequestHeaderValue(request.headers.authorization);
+      if (authorization !== `Bearer ${requiredToken}`) {
+        return reply.code(401).send({
+          error: {
+            code: "unauthorized_metrics_access",
+            message: "Metrics access requires a valid bearer token.",
+          },
+        });
+      }
+    }
+
     const document = await getPrometheusMetricsDocument({});
     return reply.header("content-type", document.contentType).send(document.body);
   });

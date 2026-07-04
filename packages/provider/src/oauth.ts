@@ -84,6 +84,7 @@ const providerOAuthConfigs: Record<SubscriptionProviderKey, ProviderOAuthConfig>
     tokenUrl: "https://auth.openai.com/oauth/token",
   },
 };
+const providerOAuthRequestTimeoutMs = 30_000;
 
 export function buildProviderOAuthAuthorizeUrl(input: BuildProviderOAuthAuthorizeUrlInput): string {
   const config = readOAuthConfig(input.providerKey);
@@ -220,6 +221,7 @@ async function requestOAuthToken(input: {
     body: requestBody,
     headers: input.headers,
     method: "POST",
+    signal: AbortSignal.timeout(providerOAuthRequestTimeoutMs),
   });
   const body = await readJsonBody(response);
   if (!response.ok) {

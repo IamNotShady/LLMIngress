@@ -18,6 +18,7 @@ export type NormalizedOpenAIChatMessage = {
 export type NormalizedOpenAIChatRequest = {
   maxOutputTokens?: number;
   messages: NormalizedOpenAIChatMessage[];
+  passthrough?: Record<string, unknown>;
   stream?: boolean;
   temperature?: number;
   toolChoice?: string | Record<string, unknown>;
@@ -89,7 +90,7 @@ type CreateOpenAIProviderAdapterOptions = {
   timeoutMs?: number;
 };
 
-type OpenAIChatCompletionsPayload = {
+type OpenAIChatCompletionsPayload = Record<string, unknown> & {
   max_tokens?: number;
   messages: NormalizedOpenAIChatMessage[];
   model: string;
@@ -215,6 +216,7 @@ function buildChatCompletionsPayload(
   target: OpenAIProviderTarget,
 ): OpenAIChatCompletionsPayload {
   return omitUndefined({
+    ...request.passthrough,
     max_tokens: request.maxOutputTokens,
     messages: request.messages,
     model: target.modelId,

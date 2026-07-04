@@ -300,6 +300,29 @@
   - `pnpm run verify:features` passed with all 15 previously passing features re-verified before marking F5 passing.
 - Remaining risks/non-goals: request hygiene remains for F6; the broader streaming/non-streaming provider adapter unification remains intentionally out of scope.
 
+## 2026-07-04 Gateway Pipeline Hardening F6
+
+- Implemented `gateway-request-hygiene`:
+  - Added configurable Gateway `bodyLimit` with a 10 MiB default so normal multi-megabyte chat requests are accepted.
+  - Validated client `x-request-id` against a bounded safe-character pattern and generated a Gateway request id for malformed values.
+  - Fixed baseline candidate selection to sort a copy instead of mutating the config snapshot.
+  - Changed text token estimation so CJK characters count as one token each while non-CJK text still uses the 4-character estimate.
+  - Protected `/metrics` with optional `GATEWAY_METRICS_TOKEN` bearer-token enforcement.
+  - Added OpenAI chat completions passthrough for the documented whitelist and made `max_completion_tokens` take precedence over `max_tokens`; streaming chat payloads use the same passthrough behavior.
+  - Refreshed expired provider OAuth tokens inside a `provider_oauth` row-lock transaction so concurrent requests refresh once, and bounded OAuth token HTTP requests with a 30 second timeout.
+  - Documented chat passthrough scope, multimodal and TPM non-goals, and the current Gateway runtime package boundary in `docs/ARCHITECTURE.md`.
+- Verification completed:
+  - Red phase: `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts` failed on missing request-id export, CJK estimator export, mutating sort, max token precedence, and OAuth row-lock helper.
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/provider typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 16 previously passing features re-verified before marking F6 passing.
+- Remaining risks/non-goals: streaming and non-streaming provider execution still have separate implementations; complete adapter unification, chat multimodal support, and pooling low-frequency Console/Worker DB paths remain out of scope for this plan.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

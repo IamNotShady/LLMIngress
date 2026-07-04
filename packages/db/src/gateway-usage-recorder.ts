@@ -409,7 +409,7 @@ export function buildGatewayProviderUsageResponseBody(usage: GatewayProviderToke
 export function selectGatewayBaselineCandidate(
   routePolicy: GatewayRoutePolicySnapshot,
 ): GatewayRouteCandidateSnapshot {
-  const candidate = routePolicy.candidates.sort(
+  const candidate = [...routePolicy.candidates].sort(
     (left, right) => left.candidateOrder - right.candidateOrder,
   )[0];
   if (!candidate) {

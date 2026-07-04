@@ -47,6 +47,8 @@ type AgentApiKeyAuthRow = PostgresQueryResultRow & {
   request_logging_enabled: boolean;
 };
 
+const gatewayRequestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
+
 export function buildGatewayAgentApiKeyHash(plaintext: string): string {
   return `sha256:v1:${createHash("sha256")
     .update("llmingress:agent-api-key:v1")
@@ -111,8 +113,9 @@ export async function authenticateGatewayRequest(input: {
   };
 }
 
-function readGatewayRequestId(headers: GatewayAuthHeaders): string {
-  return firstHeaderValue(headers["x-request-id"])?.trim() || `gw_${randomUUID()}`;
+export function readGatewayRequestId(headers: GatewayAuthHeaders): string {
+  const value = firstHeaderValue(headers["x-request-id"])?.trim();
+  return value && gatewayRequestIdPattern.test(value) ? value : `gw_${randomUUID()}`;
 }
 
 function gatewayAuthFailure(code: GatewayAuthErrorCode, requestId: string): GatewayAuthFailure {

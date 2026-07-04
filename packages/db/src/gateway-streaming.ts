@@ -863,6 +863,7 @@ function buildStreamingPayload(input: {
       ok: true,
       pathSuffix: "chat/completions",
       payload: omitUndefined({
+        ...normalized.request.passthrough,
         max_tokens: normalized.request.maxOutputTokens,
         messages: normalized.request.messages,
         temperature: normalized.request.temperature,

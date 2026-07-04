@@ -1,6 +1,9 @@
-import { getPostgresPool, withPooledPostgresClient } from "@llmingress/db/client";
 import {
-  completeProviderOAuthConnection,
+  getPostgresPool,
+  withPooledPostgresClient,
+  withPostgresTransaction,
+} from "@llmingress/db/client";
+import {
   type PostgresQueryResultRow,
   readEnabledCompletedProviderOAuthConnections,
 } from "@llmingress/db/providers";
@@ -11,7 +14,10 @@ import type {
   NormalizedOpenAIChatRequest,
   OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
-import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
+import {
+  isSubscriptionProviderKey,
+  type SubscriptionProviderKey,
+} from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
@@ -116,7 +122,23 @@ type ProviderCredentials = {
   keys: FallbackProviderApiKey[];
 };
 
+type ProviderCredentialOAuthLockRow = PostgresQueryResultRow & {
+  encrypted_token: unknown;
+};
+
 const maxChatCompletionOutputTokens = 16_384;
+const chatPassthroughParameterKeys = [
+  "frequency_penalty",
+  "logprobs",
+  "parallel_tool_calls",
+  "presence_penalty",
+  "response_format",
+  "seed",
+  "stop",
+  "top_logprobs",
+  "top_p",
+  "user",
+] as const;
 
 export function normalizeOpenAIChatCompletionRequest(
   body: unknown,
@@ -131,7 +153,9 @@ export function normalizeOpenAIChatCompletionRequest(
     return invalidChatRequest(requestId);
   }
 
-  const maxOutputTokens = readOptionalPositiveInteger(body.max_tokens);
+  const maxOutputTokens = readOptionalPositiveInteger(
+    body.max_completion_tokens ?? body.max_tokens,
+  );
   if (maxOutputTokens === null) {
     return invalidChatRequest(requestId);
   }
@@ -153,11 +177,14 @@ export function normalizeOpenAIChatCompletionRequest(
     return invalidChatRequest(requestId);
   }
 
+  const passthrough = readChatPassthroughParameters(body);
+
   return {
     ok: true,
     request: omitUndefined({
       maxOutputTokens,
       messages: messages as NormalizedOpenAIChatMessage[],
+      passthrough,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       temperature,
       toolChoice,
@@ -541,6 +568,18 @@ function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | nu
   return value as Record<string, unknown>[];
 }
 
+function readChatPassthroughParameters(
+  body: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const passthrough: Record<string, unknown> = {};
+  for (const key of chatPassthroughParameterKeys) {
+    if (body[key] !== undefined) {
+      passthrough[key] = body[key];
+    }
+  }
+  return Object.keys(passthrough).length > 0 ? passthrough : undefined;
+}
+
 function readOptionalOpenAIToolChoice(
   value: unknown,
 ): string | Record<string, unknown> | null | undefined {
@@ -649,15 +688,12 @@ async function readProviderCredentials(input: {
           if (!token.refreshToken) {
             continue;
           }
-          token = await refreshProviderOAuthToken({
-            providerKey: provider.provider_key,
-            refreshToken: token.refreshToken,
-          });
-          await completeProviderOAuthConnection({
+          token = await refreshProviderOAuthTokenWithLock({
             databaseUrl: input.databaseUrl,
-            encryptedToken: encryption.encrypt(JSON.stringify(token)),
+            encryption,
+            providerKey: provider.provider_key,
             providerOAuthId: connection.id,
-            tokenExpiresAt: token.expiresAt === null ? null : new Date(token.expiresAt),
+            refresh: refreshProviderOAuthToken,
           });
         }
         providerCredentials.keys.push({
@@ -669,6 +705,69 @@ async function readProviderCredentials(input: {
     }
 
     return credentials;
+  });
+}
+
+export async function refreshProviderOAuthTokenWithLock(input: {
+  databaseUrl?: string;
+  encryption: ReturnType<typeof createSecretEncryption>;
+  providerKey: SubscriptionProviderKey;
+  providerOAuthId: string;
+  refresh: (input: {
+    providerKey: SubscriptionProviderKey;
+    refreshToken: string;
+  }) => Promise<ProviderOAuthTokenBlob>;
+}): Promise<ProviderOAuthTokenBlob> {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
+    const result = await client.query<ProviderCredentialOAuthLockRow>(
+      `
+        select encrypted_token
+        from provider_oauth
+        where id = $1
+        for update
+      `,
+      [input.providerOAuthId],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new GatewayPipelineError(
+        "provider_credentials_missing",
+        "Provider OAuth connection is missing.",
+      );
+    }
+
+    const current = readProviderOAuthTokenBlob(
+      input.encryption.decrypt(readEncryptedSecret(row.encrypted_token)),
+    );
+    if (!isProviderOAuthTokenExpired(current)) {
+      return current;
+    }
+    if (!current.refreshToken) {
+      throw new GatewayPipelineError(
+        "provider_credentials_missing",
+        "Provider OAuth token expired without a refresh token.",
+      );
+    }
+
+    const refreshed = await input.refresh({
+      providerKey: input.providerKey,
+      refreshToken: current.refreshToken,
+    });
+    await client.query(
+      `
+        update provider_oauth
+        set encrypted_token = $2,
+            token_expires_at = $3,
+            updated_at = now()
+        where id = $1
+      `,
+      [
+        input.providerOAuthId,
+        JSON.stringify(input.encryption.encrypt(JSON.stringify(refreshed))),
+        refreshed.expiresAt === null ? null : new Date(refreshed.expiresAt),
+      ],
+    );
+    return refreshed;
   });
 }
 

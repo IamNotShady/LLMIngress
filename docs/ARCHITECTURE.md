@@ -179,6 +179,12 @@ Public API 的默认调用方是 AI Agent。Playground 需要从浏览器直接�
 - 如果请求包含 `previous_response_id` 或要求 `store = true`，V1 默认返回明确的 unsupported error；未来可以在单 Provider passthrough 模式下扩展。
 - Gateway 内部仍把无状态 responses 请求归一化为 normalized request，再路由到支持对应输入 / 输出能力的 Provider adapter。
 
+`/v1/chat/completions` 的 V1 透传范围：
+
+- Gateway 归一化 `messages`、`tools`、`tool_choice`、`temperature`、`stream` 和输出 token 上限，并把 `max_completion_tokens` 作为 `max_tokens` 的同义输入；两者同时出现时优先使用 `max_completion_tokens`。
+- Gateway 仅白名单透传 `frequency_penalty`、`logprobs`、`top_logprobs`、`parallel_tool_calls`、`presence_penalty`、`response_format`、`seed`、`stop`、`top_p`、`user`。
+- V1 不做 OpenAI chat completions 多模态 `image_url` 跨 Provider 兼容，收到不支持的 content shape 时返回明确 400；多模态支持另立协议适配方案。
+
 ### 4.2 Routing Runtime
 
 Routing Runtime 使用确定性规则引擎，不在 V1 默认额外调用 LLM 分类器。它根据以下输入选择真实 Provider 与 Model：
@@ -234,7 +240,7 @@ auth
   -> route decision
 ```
 
-RPM 和并发检查不依赖 token 估算，应尽早执行。TPM 和预算检查依赖 token 估算，因此必须在协议归一化和 metadata extraction 之后执行。
+RPM 和并发检查不依赖 token 估算，应尽早执行。TPM 和预算检查依赖 token 估算，因此必须在协议归一化和 metadata extraction 之后执行。TPM window 保持请求开始时的估算语义，不用 Provider 实际 token 在请求结束后回填重算；实际 usage 只用于 request usage/cost 和 budget reservation 结算。
 
 Budget reservation 的泄漏回收：
 
@@ -1021,7 +1027,7 @@ LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
 
 ### 10.1 Gateway app 只做运行时编排
 
-`apps/gateway` 负责 HTTP 服务、请求 pipeline、streaming、Provider 调用、Postgres notification 驱动的热加载和运行数据写入。领域规则尽量放在 `packages/routing`、`packages/domain`、`packages/providers` 中，避免 Gateway app 变成大而全的业务仓库。
+`apps/gateway` 负责 HTTP 服务、请求 pipeline、streaming response 编排、Postgres notification 驱动的热加载和运行数据写入。可被 Gateway、Console 或 Worker 复用的领域规则不能放进 `apps/gateway`。当前仓库尚未拆出 `packages/routing`，Gateway 运行时领域模块现阶段以 `gateway-*` 前缀集中在 `packages/db/src`，共享路由计算放在 `packages/domain`，Provider adapter 放在 `packages/provider`；后续拆分独立 routing/runtime package 另立方案。
 
 ### 10.2 Console app 只做控制面体验
 

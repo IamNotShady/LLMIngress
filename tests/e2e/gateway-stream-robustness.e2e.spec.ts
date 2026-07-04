@@ -129,6 +129,69 @@ test("gateway terminates a streaming response that stalls after the first chunk"
   }
 });
 
+test("gateway closes the upstream provider stream when the client aborts", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_stream_abort_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const fakeProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedOpenAIGatewayRoute({
+      agentApiKey: `${agentApiKey}_abort`,
+      fixture,
+      providerBaseUrl: `${fakeProvider.url}?mode=stream-stall`,
+      virtualModelName: "vm-stream-abort",
+    });
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      env: { GATEWAY_STREAM_IDLE_TIMEOUT_MS: "30000" },
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      const controller = new AbortController();
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-stream-abort",
+          stream: true,
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}_abort`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+        signal: controller.signal,
+      });
+
+      expect(response.status).toBe(200);
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+      if (!reader) {
+        return;
+      }
+      const first = await reader.read();
+      expect(first.done).toBe(false);
+
+      controller.abort();
+      await reader.cancel().catch(() => undefined);
+      await waitFor(() =>
+        fakeProvider.closedRequests.some((request) => request.mode === "stream-stall"),
+      );
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await fakeProvider.close();
+    await fixture.dispose();
+  }
+});
+
 async function readRemainingStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<"done" | "error"> {
@@ -146,4 +209,15 @@ async function readRemainingStream(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 2_000) {
+    if (predicate()) {
+      return;
+    }
+    await delay(50);
+  }
+  expect(predicate()).toBe(true);
 }

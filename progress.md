@@ -355,6 +355,27 @@
   - `pnpm --filter @llmingress/console typecheck`
 - Full regression intentionally skipped for this UI-only tuning pass.
 
+## 2026-07-04 Gateway Pipeline Hardening Follow-up
+
+- Fixed post-merge audit follow-ups for the Gateway hardening branch:
+  - Client abort now propagates through the nested stream wrappers and cancels the readahead provider reader instead of stopping at the intermediate PassThrough.
+  - Codex subscription responses and Claude Code subscription messages now use the shared provider request timeout behavior.
+  - Subscription OAuth credential loading releases the outer pooled client before reading/refreshing OAuth tokens, so expired-token refresh does not require a second pool slot while the first is held.
+- TDD red phase completed:
+  - `pnpm exec vitest run tests/features/gateway-stream-robustness.unit.test.ts tests/features/gateway-request-hygiene.unit.test.ts` failed on missing subscription timeouts, missing nested stream cancellation, and OAuth pool exhaustion with `LLMINGRESS_DB_POOL_MAX=1`.
+  - `pnpm test:e2e tests/e2e/gateway-stream-robustness.e2e.spec.ts --workers=1` failed because client abort did not close the fake provider stream.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/gateway-stream-robustness.unit.test.ts tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-stream-robustness.e2e.spec.ts --workers=1`
+  - `pnpm --filter @llmingress/provider typecheck`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 17 passing features re-verified on the current post-merge HEAD.
+  - `git diff --check`
+  - `jq empty feature_list.json`
+- Remaining risks/non-goals: no new tracker feature was added; broader streaming/non-streaming adapter unification and Console/Worker DB pooling remain out of scope.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

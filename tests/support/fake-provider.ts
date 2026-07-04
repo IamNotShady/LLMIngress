@@ -36,6 +36,7 @@ export type FakeProviderModel = {
 };
 
 export type FakeProviderServer = {
+  closedRequests: CapturedFakeProviderRequest[];
   url: string;
   requests: CapturedFakeProviderRequest[];
   setModels: (models: FakeProviderModel[]) => void;
@@ -52,15 +53,21 @@ export async function createFakeProviderServer(
   options: FakeProviderServerOptions = {},
 ): Promise<FakeProviderServer> {
   const requests: CapturedFakeProviderRequest[] = [];
+  const closedRequests: CapturedFakeProviderRequest[] = [];
   let models = options.models ?? [{ id: "fake-model" }];
   const timeoutMs = options.timeoutMs ?? 30_000;
 
   const server = createServer((request, response) => {
-    void handleRequest(request, response, requests, {
-      getModels: () => models,
-      requiredModelListAuthorization: options.requiredModelListAuthorization,
-      timeoutMs,
-    });
+    void handleRequest(
+      request,
+      response,
+      { closedRequests, requests },
+      {
+        getModels: () => models,
+        requiredModelListAuthorization: options.requiredModelListAuthorization,
+        timeoutMs,
+      },
+    );
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -74,6 +81,7 @@ export async function createFakeProviderServer(
   const address = server.address() as AddressInfo;
 
   return {
+    closedRequests,
     url: `http://127.0.0.1:${address.port}`,
     requests,
     setModels: (nextModels) => {
@@ -95,7 +103,10 @@ export async function createFakeProviderServer(
 async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse<IncomingMessage>,
-  requests: CapturedFakeProviderRequest[],
+  capture: {
+    closedRequests: CapturedFakeProviderRequest[];
+    requests: CapturedFakeProviderRequest[];
+  },
   options: {
     getModels: () => FakeProviderModel[];
     requiredModelListAuthorization?: string;
@@ -108,13 +119,17 @@ async function handleRequest(
     const bodyRaw = await readBody(request);
     const bodyJson = parseJsonBody(bodyRaw);
 
-    requests.push({
+    const capturedRequest = {
       method: request.method ?? "GET",
       path: url.pathname,
       mode,
       headers: request.headers,
       bodyRaw,
       bodyJson,
+    };
+    capture.requests.push(capturedRequest);
+    response.once("close", () => {
+      capture.closedRequests.push(capturedRequest);
     });
 
     if (

@@ -10,6 +10,7 @@ import {
 import {
   isRecord,
   isRetryableHttpStatus,
+  providerRequestTimeoutMs,
   readProviderRequestId,
   readResponseBody,
 } from "./adapter-http.js";
@@ -26,6 +27,7 @@ import type {
 
 type CreateSubscriptionAdapterOptions = {
   fetch?: typeof globalThis.fetch;
+  timeoutMs?: number;
 };
 
 type CodexResponsesPayload = {
@@ -40,6 +42,7 @@ export function createCodexSubscriptionAdapter(
   options: CreateSubscriptionAdapterOptions = {},
 ): OpenAIProviderAdapter {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
     chatCompletion: async () => unsupportedOpenAIAdapterResult("codex_chat_unsupported"),
@@ -49,6 +52,7 @@ export function createCodexSubscriptionAdapter(
           body: JSON.stringify(buildCodexResponsesPayload(request, target.modelId)),
           headers: buildCodexSubscriptionHeaders(target.apiKey ?? ""),
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
         if (!response.ok) {
@@ -61,7 +65,7 @@ export function createCodexSubscriptionAdapter(
           statusCode: response.status,
         };
       } catch (error) {
-        return requestFailed(error);
+        return requestFailed(error, timeoutMs);
       }
     },
   };
@@ -71,6 +75,7 @@ export function createClaudeCodeProviderAdapter(
   options: CreateSubscriptionAdapterOptions = {},
 ): AnthropicProviderAdapter {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
     messages: async ({ request, target }): Promise<AnthropicAdapterResult> => {
@@ -83,6 +88,7 @@ export function createClaudeCodeProviderAdapter(
           }),
           headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? ""),
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
         if (!response.ok) {
@@ -96,7 +102,7 @@ export function createClaudeCodeProviderAdapter(
           statusCode: response.status,
         };
       } catch (error) {
-        return requestFailed(error);
+        return requestFailed(error, timeoutMs);
       }
     },
   };
@@ -198,15 +204,23 @@ function unsupportedOpenAIAdapterResult(errorCode: string): OpenAIAdapterResult 
   };
 }
 
-function requestFailed(error: unknown): OpenAIAdapterResult {
+function requestFailed(error: unknown, timeoutMs: number): OpenAIAdapterResult {
   return {
     body: null,
     errorCode: "provider_request_failed",
-    errorMessage: error instanceof Error ? error.message : "Provider request failed.",
+    errorMessage: isTimeoutError(error)
+      ? `Provider request timed out after ${timeoutMs}ms.`
+      : error instanceof Error
+        ? error.message
+        : "Provider request failed.",
     ok: false,
     retryable: true,
     statusCode: null,
   };
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === "TimeoutError";
 }
 
 function mapOpenAIProviderError(statusCode: number, body: unknown): OpenAIAdapterResult {

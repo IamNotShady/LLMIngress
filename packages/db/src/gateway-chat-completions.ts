@@ -8,7 +8,10 @@ import {
   readEnabledCompletedProviderOAuthConnections,
 } from "@llmingress/db/providers";
 import { selectRouteAttempts } from "@llmingress/domain";
-import { type ProviderOAuthTokenBlob, refreshProviderOAuthToken } from "@llmingress/provider/oauth";
+import {
+  type ProviderOAuthTokenBlob,
+  refreshProviderOAuthToken as refreshProviderOAuthTokenRequest,
+} from "@llmingress/provider/oauth";
 import type {
   NormalizedOpenAIChatMessage,
   NormalizedOpenAIChatRequest,
@@ -121,6 +124,11 @@ type ProviderCredentials = {
   baseUrl: string;
   keys: FallbackProviderApiKey[];
 };
+
+type ProviderOAuthTokenRefresh = (input: {
+  providerKey: SubscriptionProviderKey;
+  refreshToken: string;
+}) => Promise<ProviderOAuthTokenBlob>;
 
 type ProviderCredentialOAuthLockRow = PostgresQueryResultRow & {
   encrypted_token: unknown;
@@ -373,12 +381,14 @@ export async function attachGatewayProviderCredentials(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
   databaseUrl?: string;
   masterKeySource: MasterKeySource;
+  refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
 }): Promise<FallbackChainCandidate[]> {
   const providerIds = [...new Set(input.candidates.map((candidate) => candidate.providerId))];
   const credentials = await readProviderCredentials({
     databaseUrl: input.databaseUrl,
     masterKeySource: input.masterKeySource,
     providerIds,
+    refreshProviderOAuthToken: input.refreshProviderOAuthToken,
   });
 
   return input.candidates.map((candidate) => {
@@ -412,6 +422,7 @@ export async function attachGatewayProviderCredentialsLeniently(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
   databaseUrl?: string;
   masterKeySource: MasterKeySource;
+  refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
 }): Promise<FallbackChainCandidate[]> {
   const attached: FallbackChainCandidate[] = [];
   for (const candidate of input.candidates) {
@@ -600,112 +611,124 @@ async function readProviderCredentials(input: {
   databaseUrl?: string;
   masterKeySource: MasterKeySource;
   providerIds: string[];
+  refreshProviderOAuthToken?: ProviderOAuthTokenRefresh;
 }): Promise<Map<string, ProviderCredentials>> {
   if (input.providerIds.length === 0) {
     return new Map();
   }
 
   const encryption = createSecretEncryption(input.masterKeySource);
-  return withPooledPostgresClient(input.databaseUrl, async (client) => {
-    const providerResult = await client.query<ProviderCredentialProviderRow>(
-      `
-        select id::text as provider_id,
-               provider_type,
-               provider_key,
-               base_url
-        from providers
-        where id = any($1::uuid[])
-          and enabled = true
-          and deleted_at is null
-      `,
-      [input.providerIds],
-    );
-    const credentials = new Map<string, ProviderCredentials>();
-    for (const row of providerResult.rows) {
-      if (!row.base_url?.trim()) {
-        throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
-      }
-      credentials.set(row.provider_id, {
-        baseUrl: row.base_url,
-        keys: row.provider_type === "local" ? [{ apiKey: "" }] : [],
-      });
+  const { apiKeyRows, providerRows } = await withPooledPostgresClient(
+    input.databaseUrl,
+    async (client) => {
+      const providerResult = await client.query<ProviderCredentialProviderRow>(
+        `
+          select id::text as provider_id,
+                 provider_type,
+                 provider_key,
+                 base_url
+          from providers
+          where id = any($1::uuid[])
+            and enabled = true
+            and deleted_at is null
+        `,
+        [input.providerIds],
+      );
+
+      const apiKeyResult = await client.query<ProviderCredentialRow>(
+        `
+          select providers.id::text as provider_id,
+                 providers.base_url,
+                 provider_api_keys.id::text as provider_api_key_id,
+                 provider_api_keys.key_prefix,
+                 provider_api_keys.encrypted_key
+          from providers
+          join provider_api_keys on provider_api_keys.provider_id = providers.id
+          where providers.id = any($1::uuid[])
+            and providers.enabled = true
+            and providers.deleted_at is null
+            and providers.provider_type = 'api_key'
+            and provider_api_keys.enabled = true
+          order by providers.id,
+                   provider_api_keys.priority asc,
+                   provider_api_keys.created_at asc,
+                   provider_api_keys.id asc
+        `,
+        [input.providerIds],
+      );
+
+      return {
+        apiKeyRows: apiKeyResult.rows,
+        providerRows: providerResult.rows,
+      };
+    },
+  );
+
+  const credentials = new Map<string, ProviderCredentials>();
+  for (const row of providerRows) {
+    if (!row.base_url?.trim()) {
+      throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
+    }
+    credentials.set(row.provider_id, {
+      baseUrl: row.base_url,
+      keys: row.provider_type === "local" ? [{ apiKey: "" }] : [],
+    });
+  }
+
+  for (const row of apiKeyRows) {
+    if (!row.base_url?.trim()) {
+      throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
     }
 
-    const result = await client.query<ProviderCredentialRow>(
-      `
-        select providers.id::text as provider_id,
-               providers.base_url,
-               provider_api_keys.id::text as provider_api_key_id,
-               provider_api_keys.key_prefix,
-               provider_api_keys.encrypted_key
-        from providers
-        join provider_api_keys on provider_api_keys.provider_id = providers.id
-        where providers.id = any($1::uuid[])
-          and providers.enabled = true
-          and providers.deleted_at is null
-          and providers.provider_type = 'api_key'
-          and provider_api_keys.enabled = true
-        order by providers.id,
-                 provider_api_keys.priority asc,
-                 provider_api_keys.created_at asc,
-                 provider_api_keys.id asc
-      `,
-      [input.providerIds],
-    );
-    for (const row of result.rows) {
-      if (!row.base_url?.trim()) {
-        throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
-      }
+    const existing = credentials.get(row.provider_id);
+    const providerCredentials = existing ?? { baseUrl: row.base_url, keys: [] };
+    providerCredentials.keys.push({
+      apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
+      credentialKind: "api_key",
+      keyPrefix: row.key_prefix,
+      providerApiKeyId: row.provider_api_key_id,
+    });
+    credentials.set(row.provider_id, providerCredentials);
+  }
 
-      const existing = credentials.get(row.provider_id);
-      const providerCredentials = existing ?? { baseUrl: row.base_url, keys: [] };
-      providerCredentials.keys.push({
-        apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
-        credentialKind: "api_key",
-        keyPrefix: row.key_prefix,
-        providerApiKeyId: row.provider_api_key_id,
-      });
-      credentials.set(row.provider_id, providerCredentials);
+  const refresh = input.refreshProviderOAuthToken ?? refreshProviderOAuthTokenRequest;
+  for (const provider of providerRows) {
+    if (provider.provider_type !== "subscription") {
+      continue;
     }
-
-    for (const provider of providerResult.rows) {
-      if (provider.provider_type !== "subscription") {
-        continue;
-      }
-      const providerCredentials = credentials.get(provider.provider_id);
-      if (!providerCredentials || !isSubscriptionProviderKey(provider.provider_key)) {
-        continue;
-      }
-      const connections = await readEnabledCompletedProviderOAuthConnections({
-        databaseUrl: input.databaseUrl,
-        providerId: provider.provider_id,
-      });
-      for (const connection of connections) {
-        let token = readProviderOAuthTokenBlob(
-          encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
-        );
-        if (isProviderOAuthTokenExpired(token)) {
-          if (!token.refreshToken) {
-            continue;
-          }
-          token = await refreshProviderOAuthTokenWithLock({
-            databaseUrl: input.databaseUrl,
-            encryption,
-            providerKey: provider.provider_key,
-            providerOAuthId: connection.id,
-            refresh: refreshProviderOAuthToken,
-          });
+    const providerCredentials = credentials.get(provider.provider_id);
+    if (!providerCredentials || !isSubscriptionProviderKey(provider.provider_key)) {
+      continue;
+    }
+    const connections = await readEnabledCompletedProviderOAuthConnections({
+      databaseUrl: input.databaseUrl,
+      providerId: provider.provider_id,
+    });
+    for (const connection of connections) {
+      let token = readProviderOAuthTokenBlob(
+        encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
+      );
+      if (isProviderOAuthTokenExpired(token)) {
+        if (!token.refreshToken) {
+          continue;
         }
-        providerCredentials.keys.push({
-          apiKey: token.accessToken,
-          credentialKind: "oauth",
+        token = await refreshProviderOAuthTokenWithLock({
+          databaseUrl: input.databaseUrl,
+          encryption,
+          providerKey: provider.provider_key,
           providerOAuthId: connection.id,
+          refresh,
         });
       }
+      providerCredentials.keys.push({
+        apiKey: token.accessToken,
+        credentialKind: "oauth",
+        providerOAuthId: connection.id,
+      });
     }
+  }
 
-    return credentials;
-  });
+  return credentials;
 }
 
 export async function refreshProviderOAuthTokenWithLock(input: {

@@ -642,6 +642,15 @@ export function createReadaheadStream(
   options: { idleTimeoutMs?: number } = {},
 ): Readable {
   const idleTimeoutMs = options.idleTimeoutMs ?? streamIdleTimeoutMs();
+  let readerCanceled = false;
+
+  async function cancelReader(): Promise<void> {
+    if (readerCanceled) {
+      return;
+    }
+    readerCanceled = true;
+    await reader.cancel().catch(() => undefined);
+  }
 
   async function* pump(): AsyncGenerator<Buffer> {
     yield Buffer.from(firstValue);
@@ -661,10 +670,19 @@ export function createReadaheadStream(
       }
     } finally {
       // Consumer closed/destroyed (or stream ended) — release the upstream reader.
-      await reader.cancel().catch(() => undefined);
+      await cancelReader();
     }
   }
-  return Readable.from(pump());
+  const stream = Readable.from(pump());
+  const destroy = stream.destroy.bind(stream);
+  stream.destroy = (error?: Error | null) => {
+    void cancelReader();
+    return destroy(error ?? undefined);
+  };
+  stream.once("close", () => {
+    void cancelReader();
+  });
+  return stream;
 }
 
 export function wrapProviderStreamWithActivityCompletion(
@@ -752,6 +770,11 @@ export function wrapProviderStreamWithErrorRecording(
     });
   });
   source.pipe(output);
+  output.once("close", () => {
+    if (!source.destroyed && !source.readableEnded) {
+      source.destroy();
+    }
+  });
 
   return output;
 }

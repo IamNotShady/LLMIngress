@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closePostgresPools } from "../../packages/db/src/client";
 import { readGatewayRequestId } from "../../packages/db/src/gateway-auth";
 import {
+  attachGatewayProviderCredentials,
   normalizeOpenAIChatCompletionRequest,
   refreshProviderOAuthTokenWithLock,
 } from "../../packages/db/src/gateway-chat-completions";
@@ -89,7 +90,7 @@ describe("gateway request hygiene", () => {
         expiresAt: Date.now() + 600_000,
         refreshToken: "refresh-token",
         scopes: ["chat"],
-        tokenType: "Bearer",
+        tokenType: "Bearer" as const,
       };
       let refreshCalls = 0;
 
@@ -146,6 +147,84 @@ describe("gateway request hygiene", () => {
       expect(first.accessToken).toBe("fresh-token");
       expect(second.accessToken).toBe("fresh-token");
     } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it("does not hold the outer credential pool client while refreshing OAuth tokens", async () => {
+    const fixture = await createTestPostgresFixture({
+      databaseNamePrefix: `llmingress_oauth_pool_release_${randomUUID().replaceAll("-", "_")}`,
+    });
+    const originalPoolMax = process.env.LLMINGRESS_DB_POOL_MAX;
+    await closePostgresPools();
+    process.env.LLMINGRESS_DB_POOL_MAX = "1";
+    try {
+      await runMigrations({ databaseUrl: fixture.databaseUrl });
+      const encryption = createSecretEncryption({ kind: "inline", value: "test-master-key" });
+      const providerId = randomUUID();
+      const providerOAuthId = randomUUID();
+      const expired = {
+        accessToken: "expired-token",
+        expiresAt: Date.now() - 60_000,
+        refreshToken: "refresh-token",
+        scopes: [],
+        tokenType: "Bearer",
+      };
+      const refreshed = {
+        accessToken: "fresh-token",
+        expiresAt: Date.now() + 600_000,
+        refreshToken: "refresh-token",
+        scopes: ["chat"],
+        tokenType: "Bearer",
+      };
+      let refreshCalls = 0;
+
+      await fixture.query(
+        `
+          insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+          values ($1, 'subscription', 'openai_codex', 'OpenAI Codex', 'http://provider.test/v1', true)
+        `,
+        [providerId],
+      );
+      await fixture.query(
+        `
+          insert into provider_oauth (
+            id,
+            provider_id,
+            encrypted_token,
+            token_expires_at,
+            completed_at
+          )
+          values ($1, $2, $3, $4, now())
+        `,
+        [
+          providerOAuthId,
+          providerId,
+          JSON.stringify(encryption.encrypt(JSON.stringify(expired))),
+          new Date(expired.expiresAt),
+        ],
+      );
+
+      const attached = await attachGatewayProviderCredentials({
+        candidates: [candidateSnapshot({ providerId, providerKey: "openai_codex" })],
+        databaseUrl: fixture.databaseUrl,
+        masterKeySource: { kind: "inline", value: "test-master-key" },
+        refreshProviderOAuthToken: async () => {
+          refreshCalls += 1;
+          return refreshed;
+        },
+      });
+
+      expect(refreshCalls).toBe(1);
+      expect(attached[0]?.apiKey).toBe("fresh-token");
+      expect(attached[0]?.providerApiKeys[0]?.providerOAuthId).toBe(providerOAuthId);
+    } finally {
+      if (originalPoolMax === undefined) {
+        delete process.env.LLMINGRESS_DB_POOL_MAX;
+      } else {
+        process.env.LLMINGRESS_DB_POOL_MAX = originalPoolMax;
+      }
+      await closePostgresPools();
       await fixture.dispose();
     }
   });

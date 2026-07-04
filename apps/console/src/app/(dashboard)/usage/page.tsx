@@ -10,7 +10,6 @@ export default async function UsagePage({
   return (
     <div className="page usage-page">
       <PageHeader
-        eyebrow="Monitor"
         title="Usage & Cost"
         description="Analyze tokens, cost, latency, failure rate, and savings by agent, virtual model, provider, and model."
       />

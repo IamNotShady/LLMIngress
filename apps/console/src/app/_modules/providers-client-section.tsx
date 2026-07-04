@@ -215,7 +215,7 @@ export function ProvidersClientSection({
                                 >
                                   <input type="hidden" name="providerId" value={provider.id} />
                                   <button
-                                    className="provider-refresh-button"
+                                    className="provider-refresh-button row-action-button"
                                     disabled={isRefreshDisabled}
                                     aria-busy={isRefreshing}
                                     aria-label={`Refresh models for ${provider.displayName}`}
@@ -232,7 +232,7 @@ export function ProvidersClientSection({
                                 {provider.enabled ? (
                                   <>
                                     <a
-                                      className="provider-action-button provider-action-edit"
+                                      className="provider-action-button provider-action-edit row-action-button"
                                       href={buildQueryHref(searchParams, {
                                         providerDialog: provider.id,
                                         selected: provider.id,
@@ -246,7 +246,7 @@ export function ProvidersClientSection({
                                       <input type="hidden" name="action" value="disable" />
                                       <input type="hidden" name="id" value={provider.id} />
                                       <button
-                                        className="provider-action-button provider-action-delete"
+                                        className="provider-action-button provider-action-disable row-action-button"
                                         aria-label={`Disable ${provider.displayName}`}
                                         title="Disable"
                                         type="submit"
@@ -255,7 +255,7 @@ export function ProvidersClientSection({
                                       </button>
                                     </form>
                                     <a
-                                      className="provider-action-button provider-action-delete"
+                                      className="provider-action-button provider-action-delete row-action-button row-action-danger"
                                       href={buildQueryHref(searchParams, {
                                         providerDelete: provider.id,
                                         selected: provider.id,
@@ -272,7 +272,7 @@ export function ProvidersClientSection({
                                       <input type="hidden" name="action" value="enable" />
                                       <input type="hidden" name="id" value={provider.id} />
                                       <button
-                                        className="provider-action-button provider-action-enable"
+                                        className="provider-action-button provider-action-enable row-action-button"
                                         aria-label={`Enable ${provider.displayName}`}
                                         title="Enable"
                                         type="submit"
@@ -281,7 +281,7 @@ export function ProvidersClientSection({
                                       </button>
                                     </form>
                                     <a
-                                      className="provider-action-button provider-action-delete"
+                                      className="provider-action-button provider-action-delete row-action-button row-action-danger"
                                       href={buildQueryHref(searchParams, {
                                         providerDelete: provider.id,
                                         selected: provider.id,
@@ -405,8 +405,8 @@ export function ProvidersClientSection({
                                                             <button
                                                               className={
                                                                 connection.enabled
-                                                                  ? "provider-key-delete-button"
-                                                                  : "provider-action-button provider-action-enable"
+                                                                  ? "provider-key-delete-button row-action-button row-action-danger"
+                                                                  : "provider-action-button provider-action-enable row-action-button"
                                                               }
                                                               aria-label={
                                                                 connection.enabled

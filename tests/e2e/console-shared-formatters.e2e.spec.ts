@@ -121,7 +121,7 @@ test("console formats counts, costs, missing values and timestamps consistently 
           ).toBeVisible();
 
           // --- Overview recent requests: full token counts, smart-precision
-          // cost, em-dash blanks, date-qualified timestamps for older rows.
+          // cost, em-dash blanks, and 24h-only recency.
           const recentTable = page.locator(".chart-card", { hasText: "Recent requests" });
           const todayRow = recentTable.locator("tbody tr", { hasText: "92,535" });
           await expect(todayRow).toHaveCount(1);
@@ -129,10 +129,7 @@ test("console formats counts, costs, missing values and timestamps consistently 
           expect(await todayRow.locator("td").first().innerText()).toMatch(/^\d{2}:\d{2}:\d{2}$/);
 
           const oldRow = recentTable.locator("tbody tr", { hasText: "81,269" });
-          await expect(oldRow).toContainText("$0.14");
-          expect(await oldRow.locator("td").first().innerText()).toMatch(
-            /^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}$/,
-          );
+          await expect(oldRow).toHaveCount(0);
 
           const failedRow = recentTable.locator("tbody tr", { hasText: "Failed" });
           const failedCells = await failedRow.locator("td").allInnerTexts();
@@ -144,6 +141,11 @@ test("console formats counts, costs, missing values and timestamps consistently 
           const activityRow = page.locator("tbody tr", { hasText: "92,535" });
           await expect(activityRow).toHaveCount(1);
           await expect(activityRow).toContainText("$0.0000843");
+          const oldActivityRow = page.locator("tbody tr", { hasText: "81,269" });
+          await expect(oldActivityRow).toContainText("$0.14");
+          expect(await oldActivityRow.locator("td").first().innerText()).toMatch(
+            /^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}$/,
+          );
           const failedActivityRow = page.locator("tbody tr", { hasText: "Failed" });
           await expect(failedActivityRow).toContainText("—");
           await expect(failedActivityRow).not.toContainText("N/A");

@@ -638,6 +638,11 @@ label {
   font-weight: 500;
   color: var(--text-muted);
 }
+.form-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+}
 
 input,
 select,
@@ -688,6 +693,17 @@ textarea {
 .checkbox-label input {
   width: auto;
   min-height: 0;
+}
+.agent-vm-checkbox-list {
+  display: grid;
+  min-width: 0;
+  max-height: 11rem;
+  margin: 0;
+  padding: var(--space-2xs);
+  overflow: auto;
+  background: var(--surface-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
 }
 .agent-limit-toggle {
   margin-top: var(--space-2xs);
@@ -2037,6 +2053,28 @@ button.table-row-link {
   border-color: var(--danger) !important;
   box-shadow: none;
 }
+.row-action-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.1rem !important;
+  min-width: 2.1rem !important;
+  min-height: 2.1rem !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+.row-action-button .flat-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.row-action-danger {
+  color: var(--danger) !important;
+}
+.row-action-danger:hover {
+  color: var(--danger) !important;
+  background: var(--danger-soft) !important;
+  border-color: var(--danger) !important;
+}
 
 /* Compact icon-only action buttons (table rows, section heads). Labeled
    buttons elsewhere keep their icon + text via the normal button styles. */
@@ -2092,6 +2130,10 @@ button.table-row-link {
 .provider-action-enable:hover {
   color: var(--ok);
   background: var(--ok-soft);
+}
+.provider-action-disable:hover {
+  color: var(--warn);
+  background: var(--warn-soft);
 }
 .provider-action-delete,
 .provider-key-delete-button {
@@ -3117,10 +3159,15 @@ button.table-row-link {
 }
 .activity-table th:nth-child(1),
 .activity-table td:nth-child(1) {
-  width: 4.8rem;
+  width: 8.4rem;
+}
+.activity-table td:nth-child(1) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .activity-table td:nth-child(2) {
-  width: 12rem;
+  width: 8.4rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }

@@ -14,6 +14,7 @@ const gatewayErrorStatusByCode: Record<string, number> = {
   provider_credentials_missing: 500,
   provider_protocol_unsupported: 400,
   provider_rate_limited: 429,
+  provider_rejected_request: 502,
   provider_request_failed: 502,
   provider_unavailable: 503,
   rate_limit_exceeded: 429,

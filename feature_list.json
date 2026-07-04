@@ -176,8 +176,8 @@
       "dependencies": [
         "gateway-stream-robustness"
       ],
-      "status": "failing",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-07-04: TDD red->green. Added typed GatewayPipelineError handling, provider_rejected_request upstream 4xx status/message passthrough, provider_rate_limited mapping, sanitized provider-message truncation, lenient non-streaming credential attachment that skips missing-key candidates, and streaming provider API key retry iteration. Added fake provider bad-request mode plus focused unit and E2E coverage for typed fallback errors, missing credential fallback, provider 400 passthrough, and streaming multi-key retry. Focused unit and E2E passed; pnpm run lint plus @llmingress/db and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 15 previously passing features re-verified before status update."
     },
     {
       "id": "gateway-request-hygiene",

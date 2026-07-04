@@ -29,6 +29,7 @@ import type {
   GatewayRouteCandidateSnapshot,
 } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
+import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
 import {
   executeFallbackChain,
   type FallbackChainCandidate,
@@ -57,6 +58,8 @@ import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 export type GatewayChatCompletionErrorCode =
   | "invalid_chat_request"
   | "provider_credentials_missing"
+  | "provider_rate_limited"
+  | "provider_rejected_request"
   | "provider_request_failed"
   | "provider_unavailable"
   | "route_not_found";
@@ -241,9 +244,12 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
     );
     if (chatCompletionCandidates.length === 0) {
-      throw new Error("Provider credentials are missing for chat completions route.");
+      throw new GatewayPipelineError(
+        "provider_credentials_missing",
+        "Provider credentials are missing for chat completions route.",
+      );
     }
-    const candidates = await attachGatewayProviderCredentials({
+    const candidates = await attachGatewayProviderCredentialsLeniently({
       candidates: chatCompletionCandidates,
       databaseUrl: input.databaseUrl,
       masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
@@ -317,13 +323,16 @@ export async function executeGatewayOpenAIChatCompletion(input: {
         statusCode: error.statusCode,
       };
     }
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyChatCompletionError(message);
+    const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,
-      body: createGatewayChatCompletionErrorBody(code, input.requestId),
+      body: createGatewayChatCompletionErrorBody(
+        parts.code as GatewayChatCompletionErrorCode,
+        input.requestId,
+        parts.message,
+      ),
       requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
+      statusCode: parts.statusCode,
     };
   } finally {
     await releaseGatewayConcurrency({
@@ -348,11 +357,17 @@ export async function attachGatewayProviderCredentials(input: {
   return input.candidates.map((candidate) => {
     const credential = credentials.get(candidate.providerId);
     if (!credential) {
-      throw new Error(`Provider credentials are missing for provider ${candidate.providerId}.`);
+      throw new GatewayPipelineError(
+        "provider_credentials_missing",
+        `Provider credentials are missing for provider ${candidate.providerId}.`,
+      );
     }
     const primaryKey = credential.keys[0];
     if (!primaryKey) {
-      throw new Error(`Provider credentials are missing for provider ${candidate.providerId}.`);
+      throw new GatewayPipelineError(
+        "provider_credentials_missing",
+        `Provider credentials are missing for provider ${candidate.providerId}.`,
+      );
     }
 
     return {
@@ -366,14 +381,42 @@ export async function attachGatewayProviderCredentials(input: {
   });
 }
 
+export async function attachGatewayProviderCredentialsLeniently(input: {
+  candidates: readonly GatewayRouteCandidateSnapshot[];
+  databaseUrl?: string;
+  masterKeySource: MasterKeySource;
+}): Promise<FallbackChainCandidate[]> {
+  const attached: FallbackChainCandidate[] = [];
+  for (const candidate of input.candidates) {
+    try {
+      attached.push(
+        ...(await attachGatewayProviderCredentials({
+          ...input,
+          candidates: [candidate],
+        })),
+      );
+    } catch {
+      // Missing credentials or provider base URL for one candidate should not abort fallback.
+    }
+  }
+  if (attached.length === 0) {
+    throw new GatewayPipelineError(
+      "provider_credentials_missing",
+      "Provider credentials are not configured for any candidate on the selected route.",
+    );
+  }
+  return attached;
+}
+
 export function createGatewayChatCompletionErrorBody(
   code: GatewayChatCompletionErrorCode,
   requestId: string,
+  message = chatCompletionErrorMessage(code),
 ): GatewayChatCompletionErrorBody {
   return {
     error: {
       code,
-      message: chatCompletionErrorMessage(code),
+      message,
     },
     requestId,
   };
@@ -697,16 +740,6 @@ function isProviderOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
   return token.expiresAt !== null && token.expiresAt <= Date.now() + 60_000;
 }
 
-function classifyChatCompletionError(message: string): GatewayChatCompletionErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  return "provider_request_failed";
-}
-
 function chatCompletionErrorMessage(code: GatewayChatCompletionErrorCode): string {
   if (code === "invalid_chat_request") {
     return "Chat completion request must include at least one string-content message.";
@@ -716,6 +749,12 @@ function chatCompletionErrorMessage(code: GatewayChatCompletionErrorCode): strin
   }
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
+  }
+  if (code === "provider_rate_limited") {
+    return "Provider rate limit exceeded.";
+  }
+  if (code === "provider_rejected_request") {
+    return "Provider rejected the request.";
   }
   if (code === "provider_unavailable") {
     return "No eligible provider candidates are available for the selected route.";

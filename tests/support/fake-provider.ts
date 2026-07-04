@@ -10,6 +10,7 @@ export type FakeProviderMode =
   | "json"
   | "stream"
   | "error"
+  | "bad-request"
   | "rate-limit"
   | "timeout"
   | "stream-stall"
@@ -318,6 +319,16 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "bad-request") {
+      writeJson(response, 400, {
+        error: {
+          code: "context_length_exceeded",
+          message: "context length exceeded by fake provider",
+        },
+      });
+      return;
+    }
+
     if (mode === "rate-limit") {
       writeJson(response, 429, {
         error: {
@@ -369,6 +380,7 @@ function readMode(url: URL): FakeProviderMode {
     mode === "json" ||
     mode === "stream" ||
     mode === "error" ||
+    mode === "bad-request" ||
     mode === "rate-limit" ||
     mode === "timeout" ||
     mode === "stream-stall" ||

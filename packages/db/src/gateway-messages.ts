@@ -18,12 +18,13 @@ import {
   reserveGatewayBudget,
 } from "./gateway-budgets.ts";
 import {
-  attachGatewayProviderCredentials,
+  attachGatewayProviderCredentialsLeniently,
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
+import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
 import {
   executeProviderFallbackAttempts,
   type FallbackFailedAttempt,
@@ -51,6 +52,8 @@ import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 export type GatewayAnthropicMessagesErrorCode =
   | "invalid_messages_request"
   | "provider_credentials_missing"
+  | "provider_rate_limited"
+  | "provider_rejected_request"
   | "provider_request_failed"
   | "provider_unavailable"
   | "route_not_found";
@@ -245,7 +248,7 @@ export async function executeGatewayAnthropicMessages(input: {
       routeDecision,
     });
 
-    const candidates = await attachGatewayProviderCredentials({
+    const candidates = await attachGatewayProviderCredentialsLeniently({
       candidates: gatewayChain,
       databaseUrl: input.databaseUrl,
       masterKeySource: readGatewayMasterKeySource(),
@@ -313,7 +316,7 @@ export async function executeGatewayAnthropicMessages(input: {
       requestId: input.requestId,
     });
     if (!success) {
-      throw new Error("Provider request failed.");
+      throw new GatewayPipelineError("provider_request_failed", "Provider request failed.");
     }
 
     await recordGatewayProviderApiKeyLastUsed({
@@ -350,13 +353,16 @@ export async function executeGatewayAnthropicMessages(input: {
         statusCode: error.statusCode,
       };
     }
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyMessagesError(message);
+    const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,
-      body: createGatewayAnthropicMessagesErrorBody(code, input.requestId),
+      body: createGatewayAnthropicMessagesErrorBody(
+        parts.code as GatewayAnthropicMessagesErrorCode,
+        input.requestId,
+        parts.message,
+      ),
       requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
+      statusCode: parts.statusCode,
     };
   } finally {
     await releaseGatewayConcurrency({
@@ -369,11 +375,12 @@ export async function executeGatewayAnthropicMessages(input: {
 export function createGatewayAnthropicMessagesErrorBody(
   code: GatewayAnthropicMessagesErrorCode,
   requestId: string,
+  message = messagesErrorMessage(code),
 ): GatewayAnthropicMessagesErrorBody {
   return {
     error: {
       code,
-      message: messagesErrorMessage(code),
+      message,
     },
     requestId,
   };
@@ -524,16 +531,6 @@ function invalidMessagesRequest(requestId: string): GatewayAnthropicMessagesRequ
   };
 }
 
-function classifyMessagesError(message: string): GatewayAnthropicMessagesErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  return "provider_request_failed";
-}
-
 function messagesErrorMessage(code: GatewayAnthropicMessagesErrorCode): string {
   if (code === "invalid_messages_request") {
     return "Anthropic messages request must include max_tokens and at least one message.";
@@ -543,6 +540,12 @@ function messagesErrorMessage(code: GatewayAnthropicMessagesErrorCode): string {
   }
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
+  }
+  if (code === "provider_rate_limited") {
+    return "Provider rate limit exceeded.";
+  }
+  if (code === "provider_rejected_request") {
+    return "Provider rejected the request.";
   }
   if (code === "provider_unavailable") {
     return "No eligible provider candidates are available for the selected route.";

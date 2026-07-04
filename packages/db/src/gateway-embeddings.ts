@@ -16,12 +16,13 @@ import {
   reserveGatewayBudget,
 } from "./gateway-budgets.ts";
 import {
-  attachGatewayProviderCredentials,
+  attachGatewayProviderCredentialsLeniently,
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
+import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
 import {
   executeProviderFallbackAttempts,
   type FallbackFailedAttempt,
@@ -46,6 +47,8 @@ import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 export type GatewayEmbeddingsErrorCode =
   | "invalid_embeddings_request"
   | "provider_credentials_missing"
+  | "provider_rate_limited"
+  | "provider_rejected_request"
   | "provider_request_failed"
   | "provider_unavailable"
   | "route_not_found";
@@ -225,9 +228,12 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
     );
     if (embeddingsCandidates.length === 0) {
-      throw new Error("Provider credentials are missing for embeddings route.");
+      throw new GatewayPipelineError(
+        "provider_credentials_missing",
+        "Provider credentials are missing for embeddings route.",
+      );
     }
-    const candidates = await attachGatewayProviderCredentials({
+    const candidates = await attachGatewayProviderCredentialsLeniently({
       candidates: embeddingsCandidates,
       databaseUrl: input.databaseUrl,
       masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
@@ -291,7 +297,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
       requestId: input.requestId,
     });
     if (!success) {
-      throw new Error("Provider request failed.");
+      throw new GatewayPipelineError("provider_request_failed", "Provider request failed.");
     }
     await recordGatewayProviderApiKeyLastUsed({
       databaseUrl: input.databaseUrl,
@@ -327,13 +333,16 @@ export async function executeGatewayOpenAIEmbeddings(input: {
         statusCode: error.statusCode,
       };
     }
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyEmbeddingsError(message);
+    const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,
-      body: createGatewayEmbeddingsErrorBody(code, input.requestId),
+      body: createGatewayEmbeddingsErrorBody(
+        parts.code as GatewayEmbeddingsErrorCode,
+        input.requestId,
+        parts.message,
+      ),
       requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
+      statusCode: parts.statusCode,
     };
   } finally {
     await releaseGatewayConcurrency({
@@ -354,11 +363,12 @@ function invalidEmbeddingsRequest(requestId: string): GatewayEmbeddingsRequestFa
 function createGatewayEmbeddingsErrorBody(
   code: GatewayEmbeddingsErrorCode,
   requestId: string,
+  message = embeddingsErrorMessage(code),
 ): GatewayEmbeddingsErrorBody {
   return {
     error: {
       code,
-      message: embeddingsErrorMessage(code),
+      message,
     },
     requestId,
   };
@@ -374,20 +384,16 @@ function embeddingsErrorMessage(code: GatewayEmbeddingsErrorCode): string {
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
   }
+  if (code === "provider_rate_limited") {
+    return "Provider rate limit exceeded.";
+  }
+  if (code === "provider_rejected_request") {
+    return "Provider rejected the request.";
+  }
   if (code === "provider_unavailable") {
     return "No eligible provider candidates are available for the selected route.";
   }
   return "Provider request failed.";
-}
-
-function classifyEmbeddingsError(message: string): GatewayEmbeddingsErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  return "provider_request_failed";
 }
 
 function readEmbeddingsInput(value: unknown): string | string[] | null {

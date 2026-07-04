@@ -281,6 +281,25 @@
   - `pnpm run verify:features` passed with all 14 previously passing features re-verified before marking F4 passing.
 - Remaining risks/non-goals: typed provider error fidelity and request hygiene remain for F5-F6.
 
+## 2026-07-04 Gateway Pipeline Hardening F5
+
+- Implemented `gateway-error-fidelity`:
+  - Added typed `GatewayPipelineError` response conversion so Gateway runtime errors no longer depend on string matching.
+  - Added `provider_rejected_request` handling for non-retryable provider 4xx responses, preserving upstream status and a sanitized/truncated provider message.
+  - Added `provider_rate_limited` handling for upstream 429 responses.
+  - Changed non-streaming credential attachment to skip candidates with missing credentials and continue through the fallback chain; all-missing routes still fail with `provider_credentials_missing`.
+  - Changed streaming fallback attempts to iterate every provider API key for a candidate, matching the non-streaming retry semantics and recording the key actually used.
+  - Added fake provider `bad-request` mode and coverage for provider 400 passthrough, missing credential fallback, typed fallback errors, provider-message sanitization, and streaming multi-key retry.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/gateway-error-fidelity.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 15 previously passing features re-verified before marking F5 passing.
+- Remaining risks/non-goals: request hygiene remains for F6; the broader streaming/non-streaming provider adapter unification remains intentionally out of scope.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

@@ -16,12 +16,13 @@ import {
   reserveGatewayBudget,
 } from "./gateway-budgets.ts";
 import {
-  attachGatewayProviderCredentials,
+  attachGatewayProviderCredentialsLeniently,
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
+import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
 import {
   executeProviderFallbackAttempts,
   type FallbackFailedAttempt,
@@ -51,6 +52,8 @@ export type GatewayResponsesErrorCode =
   | "provider_credentials_missing"
   | "provider_protocol_unsupported"
   | "provider_request_failed"
+  | "provider_rate_limited"
+  | "provider_rejected_request"
   | "provider_unavailable"
   | "route_not_found"
   | "unsupported_stateful_responses";
@@ -214,14 +217,17 @@ export async function executeGatewayOpenAIResponse(input: {
       routeDecision,
     });
 
-    const candidates = await attachGatewayProviderCredentials({
+    const candidates = await attachGatewayProviderCredentialsLeniently({
       candidates: gatewayChain,
       databaseUrl: input.databaseUrl,
       masterKeySource: readGatewayMasterKeySource(),
     });
     const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
     if (!genericAdapter.response) {
-      throw new Error("OpenAI responses provider adapter is not configured.");
+      throw new GatewayPipelineError(
+        "provider_protocol_unsupported",
+        "OpenAI responses provider adapter is not configured.",
+      );
     }
     const codexAdapter = input.adapter ? null : createCodexSubscriptionAdapter();
     const unsupportedProviders = new Set<string>();
@@ -240,7 +246,10 @@ export async function executeGatewayOpenAIResponse(input: {
         const adapter =
           candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : genericAdapter;
         if (!adapter.response) {
-          throw new Error("OpenAI responses provider adapter is not configured.");
+          throw new GatewayPipelineError(
+            "provider_protocol_unsupported",
+            "OpenAI responses provider adapter is not configured.",
+          );
         }
         const providerStartedAt = new Date();
         const result = await adapter.response({
@@ -292,12 +301,13 @@ export async function executeGatewayOpenAIResponse(input: {
       requestId: input.requestId,
     });
     if (!success && supportedCandidates.length === 0 && unsupportedProviders.size > 0) {
-      throw new Error(
+      throw new GatewayPipelineError(
+        "provider_protocol_unsupported",
         `Responses API cannot use provider ${Array.from(unsupportedProviders).join(", ")}.`,
       );
     }
     if (!success) {
-      throw new Error("Provider request failed.");
+      throw new GatewayPipelineError("provider_request_failed", "Provider request failed.");
     }
 
     await recordGatewayProviderApiKeyLastUsed({
@@ -334,19 +344,16 @@ export async function executeGatewayOpenAIResponse(input: {
         statusCode: error.statusCode,
       };
     }
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyResponsesError(message);
+    const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,
       body: createGatewayResponsesErrorBody(
-        code,
+        parts.code as GatewayResponsesErrorCode,
         input.requestId,
-        code === "provider_protocol_unsupported" || code === "provider_request_failed"
-          ? message
-          : undefined,
+        parts.message,
       ),
       requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
+      statusCode: parts.statusCode,
     };
   } finally {
     await releaseGatewayConcurrency({
@@ -479,19 +486,6 @@ function unsupportedStatefulResponses(requestId: string): GatewayResponsesReques
   };
 }
 
-function classifyResponsesError(message: string): GatewayResponsesErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  if (message.includes("Responses API cannot use provider")) {
-    return "provider_protocol_unsupported";
-  }
-  return "provider_request_failed";
-}
-
 function responsesErrorMessage(code: GatewayResponsesErrorCode): string {
   if (code === "unsupported_stateful_responses") {
     return "Stateful Responses API fields are not supported by this Gateway.";
@@ -504,6 +498,12 @@ function responsesErrorMessage(code: GatewayResponsesErrorCode): string {
   }
   if (code === "provider_credentials_missing") {
     return "Provider credentials are not configured for the selected route.";
+  }
+  if (code === "provider_rate_limited") {
+    return "Provider rate limit exceeded.";
+  }
+  if (code === "provider_rejected_request") {
+    return "Provider rejected the request.";
   }
   if (code === "provider_protocol_unsupported") {
     return "The selected provider cannot serve Responses API requests.";

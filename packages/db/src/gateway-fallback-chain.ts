@@ -15,6 +15,7 @@ import {
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
 import type { GatewayBudgetReservation } from "./gateway-budgets.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
+import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
@@ -180,7 +181,22 @@ export async function executeFallbackChain(
     };
   }
 
-  throw new Error(lastError?.errorMessage ?? "All fallback candidates failed.");
+  const status = lastError?.statusCode ?? null;
+  if (status !== null && status >= 400 && status < 500 && status !== 429) {
+    throw new GatewayPipelineError(
+      "provider_rejected_request",
+      truncateProviderMessage(lastError?.errorMessage ?? "Provider rejected the request."),
+      status,
+    );
+  }
+  if (status === 429) {
+    throw new GatewayPipelineError("provider_rate_limited", "Provider rate limit exceeded.", 429);
+  }
+  throw new GatewayPipelineError(
+    "provider_request_failed",
+    lastError?.errorMessage ?? "All fallback candidates failed.",
+    status,
+  );
 }
 
 export async function executeProviderFallbackAttempts<

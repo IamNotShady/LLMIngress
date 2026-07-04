@@ -28,10 +28,12 @@ import {
 } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
+import { toGatewayErrorResponseParts, truncateProviderMessage } from "./gateway-errors.ts";
 import {
   buildFallbackFailedAttempt,
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
+  readFallbackProviderApiKeys,
   recordFailedAttemptInDatabase,
   recordSucceededAttemptInDatabase,
 } from "./gateway-fallback-chain.ts";
@@ -93,6 +95,7 @@ type GatewayStreamingErrorCode =
   | "provider_credentials_missing"
   | "provider_protocol_unsupported"
   | "provider_rate_limited"
+  | "provider_rejected_request"
   | "provider_request_failed"
   | "provider_unavailable"
   | "route_not_found";
@@ -231,316 +234,325 @@ export async function executeGatewayStreamingRequest(input: {
         continue;
       }
 
-      // --- Reserve budget for this candidate ---
-      const budget = await reserveGatewayBudget({
-        agentApiKeyId: input.agentApiKeyId,
-        databaseUrl: input.databaseUrl,
-        price: candidate.price,
-        requestId: input.requestId,
-        requestMetadata: normalized.requestMetadata,
-      });
-      if (!budget.ok) {
-        // Budget rejection (402) is non-retryable — stop immediately.
-        await releaseGatewayConcurrency({
-          databaseUrl: input.databaseUrl,
-          lease: concurrencyLease,
-        });
-        concurrencyLease = undefined;
-        return {
-          body: budget.body,
-          ok: false,
-          requestMetadata: normalized.requestMetadata,
-          statusCode: budget.statusCode,
-        };
-      }
-      // Set currentReservation BEFORE any async work so the outer catch can always release it.
-      currentReservation = budget.reservation;
-
-      attemptOrder += 1;
-      anyAttempted = true;
-      const providerStartedAt = new Date();
-      const providerUrl = buildStreamingProviderUrl({
-        baseUrl: candidate.baseUrl,
-        pathSuffix: normalized.pathSuffix,
-        providerKey: candidate.providerKey,
-      });
-
-      // --- Fetch with network-error catch ---
-      let response: Response | undefined;
-      let networkError: Error | undefined;
-      const connectController = new AbortController();
-      const connectTimeout = setTimeout(() => {
-        connectController.abort(
-          new Error("Provider connection timed out before response headers."),
-        );
-      }, streamConnectTimeoutMs());
-      connectTimeout.unref?.();
-      try {
-        response = await (input.fetch ?? globalThis.fetch)(providerUrl, {
-          body: JSON.stringify(
-            buildStreamingProviderRequestBody({
-              modelId: candidate.modelId,
-              pathSuffix: normalized.pathSuffix,
-              payload: normalized.payload,
-              providerKey: candidate.providerKey,
-            }),
-          ),
-          headers: buildStreamingProviderHeaders({
-            apiKey: candidate.apiKey,
-            headersWithApiKey: normalized.headersWithApiKey,
-            providerKey: candidate.providerKey,
-          }),
-          method: "POST",
-          signal: connectController.signal,
-        });
-      } catch (err) {
-        networkError = err instanceof Error ? err : new Error("Provider network error.");
-      } finally {
-        clearTimeout(connectTimeout);
-      }
-
-      if (networkError || !response) {
-        // Network-level failure — build failed attempt via the shared helper (FIX m2).
-        await recordGatewayProviderTrace({
-          errorCode: "provider_request_failed",
-          modelId: candidate.modelId,
-          providerKey: candidate.providerKey,
-          requestId: input.requestId,
-          startedAt: providerStartedAt,
-          status: "failed",
-        });
-        const failedAttempt = buildFallbackFailedAttempt({
-          attemptOrder,
-          providerApiKey: {
-            apiKey: candidate.apiKey,
-            ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
-            ...(candidate.providerApiKeyPrefix
-              ? { keyPrefix: candidate.providerApiKeyPrefix }
-              : {}),
-          },
-          providerModelId: candidate.providerModelId,
-          result: {
-            errorCode: "provider_request_failed",
-            errorMessage: networkError?.message ?? "Provider network error.",
-            statusCode: null, // network error → null → retryable
-          },
-        });
-        fallbackAttempts.push(failedAttempt);
-        await recordFailedAttemptInDatabase(
-          { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-          failedAttempt,
-        );
-        await releaseGatewayBudgetReservation({
-          databaseUrl: input.databaseUrl,
-          reservation: currentReservation,
-        });
-        currentReservation = undefined;
-        lastFailureCode = "provider_request_failed";
-        continue; // retryable — advance to next candidate
-      }
-
-      await recordGatewayProviderTrace({
-        errorCode: response.ok && response.body ? null : "provider_request_failed",
-        modelId: candidate.modelId,
-        providerKey: candidate.providerKey,
-        requestId: input.requestId,
-        startedAt: providerStartedAt,
-        status: response.ok && response.body ? "succeeded" : "failed",
-      });
-
-      if (!response.ok || !response.body) {
-        // HTTP-level error — determine retryability from status.
-        const providerErrorBody = await readProviderErrorBody(response);
-        console.error("gateway provider streaming request failed", {
-          modelId: candidate.modelId,
-          providerKey: candidate.providerKey,
-          requestId: input.requestId,
-          statusCode: response.status,
-          url: providerUrl,
-        });
-
-        const errorCode: GatewayStreamingErrorCode =
-          response.status === 429 ? "provider_rate_limited" : "provider_request_failed";
-        const retryable = response.status === 429 || response.status >= 500;
-
-        // Use buildFallbackFailedAttempt with the REAL statusCode (FIX m1: statusCode is real).
-        const failedAttempt = buildFallbackFailedAttempt({
-          attemptOrder,
-          providerApiKey: {
-            apiKey: candidate.apiKey,
-            ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
-            ...(candidate.providerApiKeyPrefix
-              ? { keyPrefix: candidate.providerApiKeyPrefix }
-              : {}),
-          },
-          providerModelId: candidate.providerModelId,
-          result: {
-            errorCode,
-            errorMessage: providerErrorBody ?? "Provider request failed.",
-            statusCode: response.status,
-          },
-        });
-        fallbackAttempts.push(failedAttempt);
-        await recordFailedAttemptInDatabase(
-          { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-          failedAttempt,
-        );
-        await releaseGatewayBudgetReservation({
-          databaseUrl: input.databaseUrl,
-          reservation: currentReservation,
-        });
-        currentReservation = undefined;
-        lastFailureCode = errorCode;
-
-        if (retryable) {
-          // Continue to next candidate.
-          continue;
-        }
-        // Non-retryable (4xx other than 429) — stop the chain.
-        await releaseGatewayConcurrency({
-          databaseUrl: input.databaseUrl,
-          lease: concurrencyLease,
-        });
-        concurrencyLease = undefined;
-        return {
-          body: createGatewayStreamingErrorBody(errorCode, input.requestId),
-          ok: false,
-          requestMetadata: normalized.requestMetadata,
-          statusCode: mapGatewayErrorStatus(errorCode),
-        };
-      }
-
-      // --- 200 + body: read-ahead the first chunk before committing to the client (P1) ---
-      // getReader() locks the web stream, so the remainder is pumped via this reader below.
-      const reader = response.body.getReader();
-      let firstChunk: ReadableStreamReadResult<Uint8Array> | undefined;
-      let readaheadError: string | undefined;
-      try {
-        firstChunk = await readChunkWithTimeout(
-          reader,
-          FIRST_CHUNK_TIMEOUT_MS,
-          "Provider stream timed out before first byte.",
-        );
-      } catch (streamError) {
-        readaheadError =
-          streamError instanceof Error
-            ? streamError.message
-            : "Provider stream failed before first byte.";
-      }
-
-      if (readaheadError !== undefined || !firstChunk || firstChunk.done) {
-        // Stream errored, timed out, or sent nothing before the first byte reached the
-        // client -> retryable failed attempt; we can still try the next candidate.
-        await reader.cancel().catch(() => undefined);
-        await recordGatewayProviderTrace({
-          errorCode: "provider_request_failed",
-          modelId: candidate.modelId,
-          providerKey: candidate.providerKey,
-          requestId: input.requestId,
-          startedAt: providerStartedAt,
-          status: "failed",
-        });
-        const failedAttempt = buildFallbackFailedAttempt({
-          attemptOrder,
-          providerApiKey: {
-            apiKey: candidate.apiKey,
-            ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
-            ...(candidate.providerApiKeyPrefix
-              ? { keyPrefix: candidate.providerApiKeyPrefix }
-              : {}),
-          },
-          providerModelId: candidate.providerModelId,
-          result: {
-            errorCode: "provider_request_failed",
-            errorMessage: readaheadError ?? "Provider returned an empty stream.",
-            statusCode: null, // before first byte -> null -> retryable
-          },
-        });
-        fallbackAttempts.push(failedAttempt);
-        await recordFailedAttemptInDatabase(
-          { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-          failedAttempt,
-        );
-        await releaseGatewayBudgetReservation({
-          databaseUrl: input.databaseUrl,
-          reservation: currentReservation,
-        });
-        currentReservation = undefined;
-        lastFailureCode = "provider_request_failed";
-        continue; // retryable — advance to next candidate
-      }
-      const firstValue = firstChunk.value;
-
-      // --- SUCCESS — first chunk confirmed, this candidate wins ---
-      await recordSucceededAttemptInDatabase(
-        { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-        {
-          attemptOrder,
-          ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
-          ...(candidate.providerApiKeyPrefix
-            ? { providerApiKeyPrefix: candidate.providerApiKeyPrefix }
+      for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
+        const {
+          apiKey: _candidateApiKey,
+          providerApiKeyId: _candidateProviderApiKeyId,
+          providerApiKeyPrefix: _candidateProviderApiKeyPrefix,
+          ...candidateWithoutKey
+        } = candidate;
+        const attemptedCandidate: FallbackChainCandidate = {
+          ...candidateWithoutKey,
+          apiKey: providerApiKey.apiKey,
+          ...(providerApiKey.providerApiKeyId
+            ? { providerApiKeyId: providerApiKey.providerApiKeyId }
             : {}),
-          providerModelId: candidate.providerModelId,
-        },
-      );
-      await recordGatewayProviderApiKeyLastUsed({
-        databaseUrl: input.databaseUrl,
-        providerApiKeyId: candidate.providerApiKeyId,
-      });
+          ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
+        };
 
-      const activity = buildGatewayRequestActivityRoute({
-        candidate,
-        fallbackAttempts,
-        routeDecision,
-      });
+        // --- Reserve budget for this candidate ---
+        const budget = await reserveGatewayBudget({
+          agentApiKeyId: input.agentApiKeyId,
+          databaseUrl: input.databaseUrl,
+          price: attemptedCandidate.price,
+          requestId: input.requestId,
+          requestMetadata: normalized.requestMetadata,
+        });
+        if (!budget.ok) {
+          // Budget rejection (402) is non-retryable — stop immediately.
+          await releaseGatewayConcurrency({
+            databaseUrl: input.databaseUrl,
+            lease: concurrencyLease,
+          });
+          concurrencyLease = undefined;
+          return {
+            body: budget.body,
+            ok: false,
+            requestMetadata: normalized.requestMetadata,
+            statusCode: budget.statusCode,
+          };
+        }
+        // Set currentReservation BEFORE any async work so the outer catch can always release it.
+        currentReservation = budget.reservation;
 
-      const body = wrapProviderStreamWithConcurrencyRelease(
-        wrapProviderStreamWithMidStreamHealthRecording(
-          wrapProviderStreamWithErrorRecording(createReadaheadStream(reader, firstValue), {
-            recordRuntimeError: (error) =>
-              recordGatewayRuntimeError({
-                databaseUrl: input.databaseUrl,
-                error,
-                metadata: {
-                  protocol: input.protocol,
-                  providerModelId: candidate.providerModelId,
-                  requestId: input.requestId,
-                  virtualModelId: input.virtualModel.id,
-                },
+        attemptOrder += 1;
+        anyAttempted = true;
+        const providerStartedAt = new Date();
+        const providerUrl = buildStreamingProviderUrl({
+          baseUrl: attemptedCandidate.baseUrl,
+          pathSuffix: normalized.pathSuffix,
+          providerKey: attemptedCandidate.providerKey,
+        });
+
+        // --- Fetch with network-error catch ---
+        let response: Response | undefined;
+        let networkError: Error | undefined;
+        const connectController = new AbortController();
+        const connectTimeout = setTimeout(() => {
+          connectController.abort(
+            new Error("Provider connection timed out before response headers."),
+          );
+        }, streamConnectTimeoutMs());
+        connectTimeout.unref?.();
+        try {
+          response = await (input.fetch ?? globalThis.fetch)(providerUrl, {
+            body: JSON.stringify(
+              buildStreamingProviderRequestBody({
+                modelId: attemptedCandidate.modelId,
+                pathSuffix: normalized.pathSuffix,
+                payload: normalized.payload,
+                providerKey: attemptedCandidate.providerKey,
               }),
-          }),
+            ),
+            headers: buildStreamingProviderHeaders({
+              apiKey: attemptedCandidate.apiKey,
+              headersWithApiKey: normalized.headersWithApiKey,
+              providerKey: attemptedCandidate.providerKey,
+            }),
+            method: "POST",
+            signal: connectController.signal,
+          });
+        } catch (err) {
+          networkError = err instanceof Error ? err : new Error("Provider network error.");
+        } finally {
+          clearTimeout(connectTimeout);
+        }
+
+        if (networkError || !response) {
+          // Network-level failure — build failed attempt via the shared helper (FIX m2).
+          await recordGatewayProviderTrace({
+            errorCode: "provider_request_failed",
+            modelId: attemptedCandidate.modelId,
+            providerKey: attemptedCandidate.providerKey,
+            requestId: input.requestId,
+            startedAt: providerStartedAt,
+            status: "failed",
+          });
+          const failedAttempt = buildFallbackFailedAttempt({
+            attemptOrder,
+            providerApiKey,
+            providerModelId: attemptedCandidate.providerModelId,
+            result: {
+              errorCode: "provider_request_failed",
+              errorMessage: networkError?.message ?? "Provider network error.",
+              statusCode: null, // network error → null → retryable
+            },
+          });
+          fallbackAttempts.push(failedAttempt);
+          await recordFailedAttemptInDatabase(
+            { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
+            failedAttempt,
+          );
+          await releaseGatewayBudgetReservation({
+            databaseUrl: input.databaseUrl,
+            reservation: currentReservation,
+          });
+          currentReservation = undefined;
+          lastFailureCode = "provider_request_failed";
+          continue; // retryable — advance to next candidate
+        }
+
+        await recordGatewayProviderTrace({
+          errorCode: response.ok && response.body ? null : "provider_request_failed",
+          modelId: attemptedCandidate.modelId,
+          providerKey: attemptedCandidate.providerKey,
+          requestId: input.requestId,
+          startedAt: providerStartedAt,
+          status: response.ok && response.body ? "succeeded" : "failed",
+        });
+
+        if (!response.ok || !response.body) {
+          // HTTP-level error — determine retryability from status.
+          const providerErrorBody = await readProviderErrorBody(response);
+          console.error("gateway provider streaming request failed", {
+            modelId: attemptedCandidate.modelId,
+            providerKey: attemptedCandidate.providerKey,
+            requestId: input.requestId,
+            statusCode: response.status,
+            url: providerUrl,
+          });
+
+          const errorCode: GatewayStreamingErrorCode =
+            response.status === 429
+              ? "provider_rate_limited"
+              : response.status >= 400 && response.status < 500
+                ? "provider_rejected_request"
+                : "provider_request_failed";
+          const retryable = response.status === 429 || response.status >= 500;
+
+          // Use buildFallbackFailedAttempt with the REAL statusCode (FIX m1: statusCode is real).
+          const failedAttempt = buildFallbackFailedAttempt({
+            attemptOrder,
+            providerApiKey,
+            providerModelId: attemptedCandidate.providerModelId,
+            result: {
+              errorCode,
+              errorMessage: providerErrorBody ?? "Provider request failed.",
+              statusCode: response.status,
+            },
+          });
+          fallbackAttempts.push(failedAttempt);
+          await recordFailedAttemptInDatabase(
+            { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
+            failedAttempt,
+          );
+          await releaseGatewayBudgetReservation({
+            databaseUrl: input.databaseUrl,
+            reservation: currentReservation,
+          });
+          currentReservation = undefined;
+          lastFailureCode = errorCode;
+
+          if (retryable) {
+            // Continue to next candidate.
+            continue;
+          }
+          // Non-retryable (4xx other than 429) — stop the chain.
+          await releaseGatewayConcurrency({
+            databaseUrl: input.databaseUrl,
+            lease: concurrencyLease,
+          });
+          concurrencyLease = undefined;
+          return {
+            body: createGatewayStreamingErrorBody(
+              errorCode,
+              input.requestId,
+              truncateProviderMessage(providerErrorBody ?? "Provider rejected the request."),
+            ),
+            ok: false,
+            requestMetadata: normalized.requestMetadata,
+            statusCode: response.status,
+          };
+        }
+
+        // --- 200 + body: read-ahead the first chunk before committing to the client (P1) ---
+        // getReader() locks the web stream, so the remainder is pumped via this reader below.
+        const reader = response.body.getReader();
+        let firstChunk: ReadableStreamReadResult<Uint8Array> | undefined;
+        let readaheadError: string | undefined;
+        try {
+          firstChunk = await readChunkWithTimeout(
+            reader,
+            FIRST_CHUNK_TIMEOUT_MS,
+            "Provider stream timed out before first byte.",
+          );
+        } catch (streamError) {
+          readaheadError =
+            streamError instanceof Error
+              ? streamError.message
+              : "Provider stream failed before first byte.";
+        }
+
+        if (readaheadError !== undefined || !firstChunk || firstChunk.done) {
+          // Stream errored, timed out, or sent nothing before the first byte reached the
+          // client -> retryable failed attempt; we can still try the next candidate.
+          await reader.cancel().catch(() => undefined);
+          await recordGatewayProviderTrace({
+            errorCode: "provider_request_failed",
+            modelId: attemptedCandidate.modelId,
+            providerKey: attemptedCandidate.providerKey,
+            requestId: input.requestId,
+            startedAt: providerStartedAt,
+            status: "failed",
+          });
+          const failedAttempt = buildFallbackFailedAttempt({
+            attemptOrder,
+            providerApiKey,
+            providerModelId: attemptedCandidate.providerModelId,
+            result: {
+              errorCode: "provider_request_failed",
+              errorMessage: readaheadError ?? "Provider returned an empty stream.",
+              statusCode: null, // before first byte -> null -> retryable
+            },
+          });
+          fallbackAttempts.push(failedAttempt);
+          await recordFailedAttemptInDatabase(
+            { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
+            failedAttempt,
+          );
+          await releaseGatewayBudgetReservation({
+            databaseUrl: input.databaseUrl,
+            reservation: currentReservation,
+          });
+          currentReservation = undefined;
+          lastFailureCode = "provider_request_failed";
+          continue; // retryable — advance to next candidate
+        }
+        const firstValue = firstChunk.value;
+
+        // --- SUCCESS — first chunk confirmed, this candidate wins ---
+        await recordSucceededAttemptInDatabase(
+          { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
+          {
+            attemptOrder,
+            ...(attemptedCandidate.providerApiKeyId
+              ? { providerApiKeyId: attemptedCandidate.providerApiKeyId }
+              : {}),
+            ...(attemptedCandidate.providerApiKeyPrefix
+              ? { providerApiKeyPrefix: attemptedCandidate.providerApiKeyPrefix }
+              : {}),
+            providerModelId: attemptedCandidate.providerModelId,
+          },
+        );
+        await recordGatewayProviderApiKeyLastUsed({
+          databaseUrl: input.databaseUrl,
+          providerApiKeyId: attemptedCandidate.providerApiKeyId,
+        });
+
+        const activity = buildGatewayRequestActivityRoute({
+          candidate: attemptedCandidate,
+          fallbackAttempts,
+          routeDecision,
+        });
+
+        const body = wrapProviderStreamWithConcurrencyRelease(
+          wrapProviderStreamWithMidStreamHealthRecording(
+            wrapProviderStreamWithErrorRecording(createReadaheadStream(reader, firstValue), {
+              recordRuntimeError: (error) =>
+                recordGatewayRuntimeError({
+                  databaseUrl: input.databaseUrl,
+                  error,
+                  metadata: {
+                    protocol: input.protocol,
+                    providerModelId: attemptedCandidate.providerModelId,
+                    requestId: input.requestId,
+                    virtualModelId: input.virtualModel.id,
+                  },
+                }),
+            }),
+            {
+              databaseUrl: input.databaseUrl,
+              candidate: attemptedCandidate,
+            },
+          ),
           {
             databaseUrl: input.databaseUrl,
-            candidate,
+            lease: concurrencyLease,
           },
-        ),
-        {
-          databaseUrl: input.databaseUrl,
-          lease: concurrencyLease,
-        },
-      );
-      const budgetReservation = currentReservation;
-      // Transfer ownership to the caller/stream wrappers — clear so outer catch doesn't double-release.
-      currentReservation = undefined;
-      concurrencyLease = undefined;
+        );
+        const budgetReservation = currentReservation;
+        // Transfer ownership to the caller/stream wrappers — clear so outer catch doesn't double-release.
+        currentReservation = undefined;
+        concurrencyLease = undefined;
 
-      return {
-        activity,
-        body,
-        budgetReservation,
-        contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
-        ok: true,
-        requestMetadata: normalized.requestMetadata,
-        statusCode: response.status,
-        usageCost: {
-          actualPrice: candidate.price,
-          baselinePrice: baselineCandidate.price,
-          baselineProviderModelId: baselineCandidate.providerModelId,
-          estimatedInputTokens: normalized.estimatedInputTokens,
-          estimatedOutputTokens: normalized.estimatedOutputTokens,
-          providerModelId: candidate.providerModelId,
-        },
-      };
+        return {
+          activity,
+          body,
+          budgetReservation,
+          contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
+          ok: true,
+          requestMetadata: normalized.requestMetadata,
+          statusCode: response.status,
+          usageCost: {
+            actualPrice: attemptedCandidate.price,
+            baselinePrice: baselineCandidate.price,
+            baselineProviderModelId: baselineCandidate.providerModelId,
+            estimatedInputTokens: normalized.estimatedInputTokens,
+            estimatedOutputTokens: normalized.estimatedOutputTokens,
+            providerModelId: attemptedCandidate.providerModelId,
+          },
+        };
+      }
     }
 
     // Loop ended without a success — all candidates were either skipped or failed.
@@ -576,17 +588,16 @@ export async function executeGatewayStreamingRequest(input: {
       databaseUrl: input.databaseUrl,
       lease: concurrencyLease,
     });
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyStreamingError(message);
+    const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       body: createGatewayStreamingErrorBody(
-        code,
+        parts.code as GatewayStreamingErrorCode,
         input.requestId,
-        code === "provider_request_failed" ? message : undefined,
+        parts.message,
       ),
       ok: false,
       requestMetadata: normalized.requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
+      statusCode: parts.statusCode,
     };
   }
 }
@@ -1114,16 +1125,6 @@ function createGatewayStreamingErrorBody(
   };
 }
 
-function classifyStreamingError(message: string): GatewayStreamingErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  return "provider_request_failed";
-}
-
 function streamingErrorMessage(code: GatewayStreamingErrorCode): string {
   if (code === "route_not_found") {
     return "No route policy is available for the selected Virtual Model.";
@@ -1133,6 +1134,9 @@ function streamingErrorMessage(code: GatewayStreamingErrorCode): string {
   }
   if (code === "provider_rate_limited") {
     return "Provider rate limit exceeded.";
+  }
+  if (code === "provider_rejected_request") {
+    return "Provider rejected the request.";
   }
   if (code === "provider_protocol_unsupported") {
     return "Provider protocol is not supported for this endpoint.";

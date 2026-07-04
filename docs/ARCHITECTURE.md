@@ -1,166 +1,201 @@
 # LLMIngress Architecture Design
 
-> 本文基于 `docs/PRODUCT.md` 输出 Gateway Service 与 Console 控制台的目标架构设计。本文只聚焦架构边界、模块职责、技术选型、数据存储与项目目录结构，不展开具体代码实现细节。
+> This document derives the target architecture for Gateway Service and Console
+> from `docs/PRODUCT.md`. It focuses on architecture boundaries, module
+> responsibilities, technology choices, data storage, and project layout. It
+> does not describe implementation details.
 
-## 1. 架构目标
+## 1. Architecture Goals
 
-LLMIngress 是单用户、自托管的 AI Agent Gateway。产品上分为两个核心平面：
+LLMIngress is a single-user, self-hosted AI Agent Gateway. Product-wise, it has
+two core planes:
 
-- Gateway Service：数据面，接收 AI Agent 请求，执行鉴权、预算检查、路由决策、Provider 转发、Fallback 和用量记录。
-- Console：控制面，负责配置管理、运行状态查看、Activity / Usage 展示、预算与限流配置，以及接入引导。
+- Gateway Service: the data plane. It receives AI Agent requests and performs
+  authentication, budget checks, route decisions, provider forwarding, fallback,
+  and usage recording.
+- Console: the control plane. It manages configuration, runtime status,
+  Activity / Usage views, budget and rate-limit settings, and onboarding.
 
-运行时还需要一个后台任务平面：
+Runtime also needs a background task plane:
 
-- Background Worker / Scheduler：异步任务面，负责告警评估、通知投递、模型发现、价格同步、账单对账、日志保留、JSONL / webhook export、周期性备份和维护任务。
+- Background Worker / Scheduler: the asynchronous task plane. It handles alert
+  evaluation, notification delivery, model discovery, price sync, billing
+  reconciliation, log retention, JSONL / webhook export, scheduled backup, and
+  maintenance tasks.
 
-核心设计约束：
+Core design constraints:
 
-- AI Agent 只直接访问 Gateway Service，不直接访问 Console。
-- Console 修改的是 Gateway 运行所需配置，不处理 Agent 的模型请求流量。
-- Console 不直接调用真实 Provider；Provider 出网调用由 Gateway 的请求路径或 Background Worker 的异步任务负责。
-- Gateway 对新请求使用最新配置；已进入处理流程的请求继续使用进入时捕获的配置快照。
-- Gateway 在 Console 不可用时仍可继续处理请求，前提是已有可用配置快照、数据库连接和可用的 secret master key。
-- Background Worker 不在 AI Agent 的同步请求路径上；Worker 暂停只影响异步能力，不应阻断 Gateway 处理新请求。
-- 默认面向本地或单机自托管部署，不以多租户 SaaS 为 V1 架构目标。
-- V1 假定每个部署只有一个 active Gateway 进程处理请求；多 Gateway 是后续扩展路径，需要先把 RPM / TPM / concurrency 等运行时计数迁移到共享状态组件。
+- AI Agents call Gateway Service directly. They do not call Console directly.
+- Console changes Gateway runtime configuration. It does not process Agent model
+  request traffic.
+- Console does not directly call real providers. Provider egress calls belong
+  to the Gateway request path or Background Worker asynchronous tasks.
+- Gateway uses the latest configuration for new requests. In-flight requests
+  keep the configuration snapshot captured when they entered processing.
+- Gateway can continue processing requests while Console is unavailable, as
+  long as it has a usable configuration snapshot, database connection, and
+  usable secret master key.
+- Background Worker is not in the AI Agent synchronous request path. Worker
+  downtime only delays asynchronous capabilities and must not block Gateway from
+  handling new requests.
+- The default target is local or single-node self-hosted deployment. Multi-tenant
+  SaaS is not a V1 architecture goal.
+- V1 assumes one active Gateway process per deployment. Multiple Gateways are a
+  future extension and require moving RPM / TPM / concurrency runtime counters
+  to shared state first.
 
-## 2. TypeScript 技术栈选择
+## 2. TypeScript Stack Choices
 
-LLMIngress 使用 TypeScript 统一 Gateway、Console 和共享领域模型，降低协议、配置和数据结构在前后端之间漂移的风险。
+LLMIngress uses TypeScript across Gateway, Console, and shared domain models to
+reduce protocol, configuration, and data-shape drift between frontend and
+backend.
 
-| 层级 | 选型 | 作用 |
+| Layer | Choice | Purpose |
 | --- | --- | --- |
-| Monorepo | pnpm workspace + Turborepo | 管理 Gateway、Console、Worker 和共享 packages，支持分包构建与复用 |
-| Runtime | Node.js | 统一运行 Gateway、Console API、后台任务与 CLI |
-| Gateway Service | Fastify | 承载高吞吐 Public API、流式响应和插件化 request pipeline |
-| Console Web | Next.js App Router + React, Node runtime | 构建管理控制台、服务端渲染页面、Console API routes；需要常驻 Node 进程支撑 Postgres listener 或长轮询 |
-| Background Worker | Node.js worker process + database-backed scheduler | 承载周期任务、异步任务、通知投递、模型刷新、价格同步和日志清理 |
-| Database / coordination | PostgreSQL | 作为 canonical database，并通过 `LISTEN/NOTIFY` 承载配置热加载、job 唤醒和运行状态变更通知 |
-| UI | Tailwind CSS + shadcn/ui + lucide-react | 控制台 UI、表格、表单、图标、弹窗、导航等基础组件 |
-| Client state | TanStack Query | Console 页面读取配置、状态、Activity 与 Usage 数据 |
-| Chart | Recharts | Usage、Cost、Latency、Fallback 等图表 |
-| Schema / validation | Zod | 共享请求、配置、路由策略、Provider 配置与 Console 表单校验 |
-| Database access | SQL migrations now, Drizzle schema later | 当前迁移以 `packages/db/migrations/*.sql` 为 source of truth；后续可补 Drizzle schema 和查询类型约束 |
-| Logging | Pino | Gateway 请求日志、运行日志、错误日志 |
-| Observability | OpenTelemetry + Prometheus exporter | traces、metrics、Provider latency、Gateway runtime 指标 |
+| Monorepo | pnpm workspace + Turborepo | Manage Gateway, Console, Worker, and shared packages with package-level builds and reuse |
+| Runtime | Node.js | Run Gateway, Console API, background tasks, and CLI tools |
+| Gateway Service | Fastify | Host high-throughput Public API, streaming responses, and plugin-style request pipeline |
+| Console Web | Next.js App Router + React, Node runtime | Build the management Console, SSR pages, Console API routes, and a long-lived Node process for Postgres listeners or polling |
+| Background Worker | Node.js worker process + database-backed scheduler | Run scheduled jobs, async tasks, notifications, model refresh, price sync, and log cleanup |
+| Database / coordination | PostgreSQL | Canonical database plus `LISTEN/NOTIFY` for config hot reload, job wakeup, and runtime status updates |
+| UI | Tailwind CSS + shadcn/ui + lucide-react | Console UI, tables, forms, icons, dialogs, and navigation |
+| Client state | TanStack Query | Read Console configuration, status, Activity, and Usage data |
+| Chart | Recharts | Usage, Cost, Latency, and Fallback charts |
+| Schema / validation | Zod | Shared request, configuration, route policy, provider configuration, and Console form validation |
+| Database access | SQL migrations now, Drizzle schema later | `packages/db/migrations/*.sql` is the current source of truth; Drizzle schema and typed queries can be added later |
+| Logging | Pino | Gateway request logs, runtime logs, and error logs |
+| Observability | OpenTelemetry + Prometheus exporter | Traces, metrics, provider latency, and Gateway runtime metrics |
 
-选择 Fastify 作为 Gateway 默认框架的原因是：Gateway 是运行时请求路径，重点是 HTTP 性能、streaming、插件边界和低额外延迟。Console 采用 Next.js，是因为控制台需要页面路由、表单、数据展示、鉴权引导和部署形态兼容。
+Fastify is the default Gateway framework because Gateway is the runtime request
+path and needs HTTP performance, streaming, plugin boundaries, and low added
+latency. Console uses Next.js because the control plane needs page routing,
+forms, data display, authentication onboarding, and deployment compatibility.
 
-## 3. 总体拓扑
+## 3. Overall Topology
 
 ```text
 AI Agents
-  │
-  │ OpenAI-compatible / Anthropic-compatible API
-  ▼
+  |
+  | OpenAI-compatible / Anthropic-compatible API
+  v
 Gateway Service
-  ├── Agent-owned API key 鉴权
-  ├── Budget / Rate Limit 检查
-  ├── Virtual Model / Route Policy 解析
-  ├── Provider / Model 选择
-  ├── Fallback Chain 执行
-  ├── Streaming 响应转发
-  └── Usage / Activity 写入
-  │
-  ▼
+  |-- Agent-owned API key authentication
+  |-- Budget / Rate Limit checks
+  |-- Virtual Model / Route Policy resolution
+  |-- Provider / Model selection
+  |-- Fallback Chain execution
+  |-- Streaming response proxy
+  `-- Usage / Activity writes
+  |
+  v
 Providers
-  ├── OpenAI
-  ├── Anthropic
-  ├── Google Gemini
-  ├── OpenRouter
-  ├── Local Provider / Ollama
-  └── 后续 Provider
+  |-- OpenAI
+  |-- Anthropic
+  |-- Google Gemini
+  |-- OpenRouter
+  |-- Local Provider / Ollama
+  `-- Future providers
 
 Browser
-  ├── Console
-  │   ├── Agents / Providers / Models / Routes / Limits 管理
-  │   ├── Activity / Usage / Cost 展示
-  │   ├── Gateway Runtime 状态查看
-  │   └── 配置变更发布
-  │
-  └── Playground live request
-      └── Gateway Public API
+  |-- Console
+  |   |-- Agents / Providers / Models / Routes / Limits management
+  |   |-- Activity / Usage / Cost display
+  |   |-- Gateway Runtime status
+  |   `-- Config change publishing
+  |
+  `-- Playground live request
+      `-- Gateway Public API
 
 Background Worker / Scheduler
-  ├── Model discovery / refresh
-  ├── Price sync / billing reconciliation
-  ├── Alerts / notifications
-  ├── Retention / cleanup
-  ├── JSONL / webhook export
-  └── Scheduled backup / maintenance tasks
+  |-- Model discovery / refresh
+  |-- Price sync / billing reconciliation
+  |-- Alerts / notifications
+  |-- Retention / cleanup
+  |-- JSONL / webhook export
+  `-- Scheduled backup / maintenance tasks
 
-Gateway Service ───────┐
-        │              │
-        ▼              ▼
+Gateway Service ------+
+        |             |
+        v             v
 PostgreSQL canonical database + LISTEN/NOTIFY channels
-        ▲              ▲
-        │              │
-Console ┴──────── Background Worker
+        ^             ^
+        |             |
+Console +------ Background Worker
 ```
 
-Gateway、Console 与 Background Worker 共享同一个 PostgreSQL 数据库，并把 PostgreSQL 作为进程间通信媒介：
+Gateway, Console, and Background Worker share one PostgreSQL database and use
+PostgreSQL as the inter-process communication medium:
 
-- Console 写入用户配置数据，并通过共享 config publisher 发布配置版本变更。
-- Gateway 读取配置数据，构建内存中的只读配置快照。
-- Gateway 写入请求 metadata、usage、cost、fallback、error 等运行数据。
-- Console 读取 Gateway 运行数据，用于 Activity、Usage 和 Runtime 页面展示。
-- Background Worker 读取配置、运行数据和待处理任务，写回模型库、价格、告警、通知、对账结果、健康摘要和清理状态。
-- `LISTEN/NOTIFY` 只负责唤醒和低延迟通知；持久化表仍是配置版本、job、运行状态和事件记录的 source of truth。
+- Console writes user configuration and publishes configuration version changes
+  through the shared config publisher.
+- Gateway reads configuration data and builds an in-memory read-only config
+  snapshot.
+- Gateway writes request metadata, usage, cost, fallback, error, and other
+  runtime data.
+- Console reads Gateway runtime data for Activity, Usage, and Runtime pages.
+- Background Worker reads configuration, runtime data, and pending jobs, then
+  writes model library data, prices, alerts, notifications, reconciliation
+  results, health summaries, and cleanup state.
+- `LISTEN/NOTIFY` is only a wakeup and low-latency notification mechanism.
+  Durable tables remain the source of truth for config versions, jobs, runtime
+  status, and event records.
 
-## 4. Gateway Service 架构
+## 4. Gateway Service Architecture
 
-Gateway Service 是数据面，重点是请求路径稳定、低延迟、可观测和可热加载。
+Gateway Service is the data plane. Its priorities are a stable request path, low
+latency, observability, and hot reload.
 
 ```text
 Gateway Service
-├── Public API Layer
-│   ├── OpenAI-compatible endpoints
-│   ├── Anthropic-compatible endpoints
-│   └── Models endpoint
-│
-├── Request Pipeline
-│   ├── Request ID / logging context
-│   ├── Agent-owned API key authentication
-│   ├── Agent permission check
-│   ├── Cheap RPM / concurrency check
-│   ├── Protocol normalization
-│   ├── Request metadata extraction
-│   ├── Token estimate
-│   └── TPM / budget reservation
-│
-├── Routing Runtime
-│   ├── Config snapshot reader
-│   ├── Virtual Model resolver
-│   ├── Deterministic route policy engine
-│   ├── Provider / model selector
-│   ├── Fallback orchestrator
-│   └── Route reason builder
-│
-├── Provider Runtime
-│   ├── Provider adapter registry
-│   ├── Provider key selector
-│   ├── Streaming proxy
-│   ├── Timeout / cancellation handling
-│   └── Provider health tracking
-│
-├── Observability Runtime
-│   ├── Activity recorder
-│   ├── Usage / cost recorder
-│   ├── Baseline / savings recorder
-│   ├── Error / fallback recorder
-│   ├── Metrics exporter
-│   └── Trace exporter
-│
-└── Postgres Coordination Subscriber
-    ├── Config change listener
-    ├── Health summary listener
-    ├── Runtime heartbeat writer
-    └── Periodic reconcile loop
+|-- Public API Layer
+|   |-- OpenAI-compatible endpoints
+|   |-- Anthropic-compatible endpoints
+|   `-- Models endpoint
+|
+|-- Request Pipeline
+|   |-- Request ID / logging context
+|   |-- Agent-owned API key authentication
+|   |-- Agent permission check
+|   |-- Cheap RPM / concurrency check
+|   |-- Protocol normalization
+|   |-- Request metadata extraction
+|   |-- Token estimate
+|   `-- TPM / budget reservation
+|
+|-- Routing Runtime
+|   |-- Config snapshot reader
+|   |-- Virtual Model resolver
+|   |-- Deterministic route policy engine
+|   |-- Provider / model selector
+|   |-- Fallback orchestrator
+|   `-- Route reason builder
+|
+|-- Provider Runtime
+|   |-- Provider adapter registry
+|   |-- Provider key selector
+|   |-- Streaming proxy
+|   |-- Timeout / cancellation handling
+|   `-- Provider health tracking
+|
+|-- Observability Runtime
+|   |-- Activity recorder
+|   |-- Usage / cost recorder
+|   |-- Baseline / savings recorder
+|   |-- Error / fallback recorder
+|   |-- Metrics exporter
+|   `-- Trace exporter
+|
+`-- Postgres Coordination Subscriber
+    |-- Config change listener
+    |-- Health summary listener
+    |-- Runtime heartbeat writer
+    `-- Periodic reconcile loop
 ```
 
 ### 4.1 Public API Layer
 
-Gateway 对 AI Agent 暴露统一 endpoint，优先覆盖：
+Gateway exposes one unified endpoint surface to AI Agents, with priority support
+for:
 
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
@@ -168,61 +203,97 @@ Gateway 对 AI Agent 暴露统一 endpoint，优先覆盖：
 - `POST /v1/embeddings`
 - `GET /v1/models`
 
-其中 `GET /v1/models` 返回当前 Agent 被授权使用的 Virtual Model Name，不直接暴露真实 Provider 模型列表。
+`GET /v1/models` returns the Virtual Model Names authorized for the current
+Agent. It does not expose the real provider model list.
 
-Public API 的默认调用方是 AI Agent。Playground 需要从浏览器直接调用 Gateway Public API 时，Gateway 只允许配置过的 Console origin 通过 CORS 访问；默认本机部署可允许 Console localhost origin，server 部署必须显式配置 allowed origins。Playground 使用的 Gateway Base URL 来自 Console 中展示给 Agent 的 Gateway URL / runtime setting；如果 Console 与 Gateway 不同端口或域名，用户必须配置浏览器可访问的 Gateway Base URL。
+The default caller of Public API is an AI Agent. When Playground calls Gateway
+Public API directly from the browser, Gateway only allows configured Console
+origins through CORS. Local deployments may allow Console localhost origins by
+default. Server deployments must explicitly configure allowed origins.
+Playground uses the Gateway Base URL shown in Console through Agent onboarding
+or runtime settings. If Console and Gateway run on different ports or domains,
+the user must configure a browser-reachable Gateway Base URL.
 
-`/v1/responses` 的 V1 支持范围：
+`/v1/responses` V1 support:
 
-- V1 支持无状态 Responses API 子集，用于兼容使用 OpenAI-compatible `/v1/responses` 的 Agent。
-- V1 不默认实现跨 Provider 的 `previous_response_id`、server-side `store`、response state replay 或 provider state migration。
-- 如果请求包含 `previous_response_id` 或要求 `store = true`，V1 默认返回明确的 unsupported error；未来可以在单 Provider passthrough 模式下扩展。
-- Gateway 内部仍把无状态 responses 请求归一化为 normalized request，再路由到支持对应输入 / 输出能力的 Provider adapter。
+- V1 supports a stateless Responses API subset for Agents that use the
+  OpenAI-compatible `/v1/responses` path.
+- V1 does not implement cross-provider `previous_response_id`, server-side
+  `store`, response state replay, or provider state migration by default.
+- If a request contains `previous_response_id` or requires `store = true`, V1
+  returns a clear unsupported error by default. Future single-provider
+  passthrough mode may extend this.
+- Gateway still normalizes stateless responses requests internally and routes
+  them to provider adapters that support the corresponding input and output
+  capabilities.
 
 ### 4.2 Routing Runtime
 
-Routing Runtime 使用确定性规则引擎，不在 V1 默认额外调用 LLM 分类器。它根据以下输入选择真实 Provider 与 Model：
+Routing Runtime uses a deterministic rule engine. V1 does not call an extra LLM
+classifier by default. It selects a real provider and model from:
 
-- Agent-owned API key。
-- Agent 类型。
-- Virtual Model Name。
-- Route Policy。
-- 请求协议。
-- 输入 token 估算。
-- tools / function calling 需求。
-- context window 需求。
-- coding、reasoning、terminal、repo、long context 等任务特征。
-- Gateway in-memory Provider / Model health view。
-- Route Policy 配置的成本偏好和 Fallback Chain。
+- Agent-owned API key.
+- Agent type.
+- Virtual Model Name.
+- Route Policy.
+- Request protocol.
+- Input token estimate.
+- Tools / function calling requirements.
+- Context window requirements.
+- Task features such as coding, reasoning, terminal, repository, and long
+  context.
+- Gateway in-memory Provider / Model health view.
+- Route Policy cost preference and Fallback Chain.
 
-路由结果必须产出用户可理解的 route reason，供响应 metadata 与 Activity 页面展示。
+The route result must include a user-understandable route reason for response
+metadata and Activity display.
 
 ### 4.3 Config Snapshot
 
-Gateway 不在每个请求中直接拼装完整配置，而是在内存中维护一个 immutable config snapshot：
+Gateway does not assemble full configuration on every request. It keeps an
+immutable config snapshot in memory:
 
-- snapshot 来源于数据库中的 Agents、Agent Virtual Model grants、Providers、Models、Virtual Models、Route Policies、Limits 等配置。
-- 每次配置热加载生成新的 snapshot。
-- 新请求读取当前最新 snapshot。
-- 已开始处理的请求继续使用它进入 pipeline 时捕获的 snapshot。
-- 如果新配置加载或校验失败，Gateway 保留上一份可用 snapshot。
+- The snapshot comes from database configuration such as Agents, Agent Virtual
+  Model grants, Providers, Models, Virtual Models, Route Policies, and Limits.
+- Each config hot reload builds a new snapshot.
+- New requests read the latest current snapshot.
+- In-flight requests keep the snapshot captured when they entered the pipeline.
+- If new config loading or validation fails, Gateway keeps the previous usable
+  snapshot.
 
-该设计保证配置更新不会影响进行中的 streaming 请求，也能避免运行时配置读到半更新状态。
+This prevents configuration updates from affecting in-flight streaming requests
+and avoids reading partially updated runtime configuration.
 
-### 4.4 Runtime Counter and Health State
+### 4.4 Runtime Counter And Health State
 
-Gateway 负责同步请求路径中的可变运行时状态，包括限流计数、预算预留、并发计数和路由健康视图。它们不能放进 immutable config snapshot，也不能在每个请求上实时聚合全量历史表。
+Gateway owns mutable runtime state in the synchronous request path: rate-limit
+counters, budget reservations, concurrency counters, and the routing health
+view. These do not belong in the immutable config snapshot and must not be
+computed from full history on every request.
 
-运行时状态归属：
+Runtime state ownership:
 
-- RPM / TPM window：Gateway 在内存中维护当前窗口的快速计数，并把窗口累计值周期性或按请求写入数据库，用于重启恢复和 Console 展示。
-- Concurrency：Gateway 在内存中维护当前进程内的并发计数，请求结束或取消时释放；Gateway 重启后并发计数自然归零。
-- Budget period：数据库保存每个 Agent 当前预算周期的累计 token、cost 和 reservation；Gateway 在请求开始时做预算预留，在请求结束后用实际或估算 usage 结算。
-- Budget reservation：请求开始时按输入 token 估算值和可用的输出上限做预留；streaming 输出 token 在请求开始时未知，请求结束后用实际输出 token 和实际或估算成本结算差额。
-- Usage record：`request_usage` 是审计与分析记录，不是同步限流检查的唯一来源。
-- Provider / Model health view：Gateway 维护进程内健康视图，综合请求路径内的失败、超时、429、首包延迟和 Worker 周期探测摘要；路由决策读取这份 in-memory health view，不在每个请求上查询 `provider_health_events`。
+- RPM / TPM window: Gateway keeps fast in-memory counters for the current
+  window and periodically or per request writes window totals to the database
+  for restart recovery and Console display.
+- Concurrency: Gateway keeps current process concurrency in memory and releases
+  it when the request finishes or is canceled. After Gateway restart,
+  concurrency naturally resets to zero.
+- Budget period: the database stores each Agent's current budget-period token,
+  cost, and reservation totals. Gateway reserves budget at request start and
+  settles with actual or estimated usage at request end.
+- Budget reservation: request start reserves from estimated input tokens and
+  available output limits. Streaming output tokens are unknown at request start,
+  so request end settles the delta using actual output tokens and actual or
+  estimated cost.
+- Usage record: `request_usage` is an audit and analytics record. It is not the
+  only source for synchronous limit checks.
+- Provider / Model health view: Gateway maintains an in-memory health view from
+  request-path failures, timeouts, 429s, first-chunk latency, and Worker
+  periodic probe summaries. Routing decisions read this view and do not query
+  `provider_health_events` on every request.
 
-推荐的检查顺序：
+Recommended check order:
 
 ```text
 auth
@@ -234,850 +305,1142 @@ auth
   -> route decision
 ```
 
-RPM 和并发检查不依赖 token 估算，应尽早执行。TPM 和预算检查依赖 token 估算，因此必须在协议归一化和 metadata extraction 之后执行。
+RPM and concurrency checks do not depend on token estimation and should run
+early. TPM and budget checks depend on token estimation, so they run after
+protocol normalization and metadata extraction.
 
-Budget reservation 的泄漏回收：
+Budget reservation leak recovery:
 
-- Gateway 启动时清理本进程上次异常退出遗留的 stale reservation。
-- Gateway 在请求取消、超时或 provider fallback 全部失败时结算或释放 reservation。
-- Worker 的 Data Maintenance 周期性扫描并释放超过 TTL 的 stale reservation，作为兜底。
+- Gateway startup cleans stale reservations left by the same process after a
+  previous abnormal exit.
+- Gateway settles or releases reservations on request cancellation, timeout, or
+  all-provider fallback failure.
+- Worker Data Maintenance periodically scans and releases TTL-expired stale
+  reservations as a safety net.
 
-Provider health 的合并规则：
+Provider health merge rules:
 
-- Gateway 请求路径信号优先影响即时路由，例如连续失败、429、timeout 或首包延迟异常。
-- Worker 周期探测写入 `provider_health_events`，并更新 `provider_health_summary`。
-- Gateway 通过 Postgres `health_summary_changed` 通知或轻量定时 refresh 读取最新 `provider_health_summary`，合并到 in-memory health view。
-- Console 展示完整 `provider_health_events` 和当前 `provider_health_summary`；这些表不是每次路由的同步查询来源。
+- Gateway request-path signals immediately influence routing, including
+  consecutive failures, 429s, timeouts, or abnormal first-chunk latency.
+- Worker periodic probes write `provider_health_events` and update
+  `provider_health_summary`.
+- Gateway receives Postgres `health_summary_changed` notifications or performs
+  lightweight periodic refreshes to read the latest `provider_health_summary`
+  and merge it into the in-memory health view.
+- Console displays full `provider_health_events` and current
+  `provider_health_summary`. These tables are not synchronous query sources for
+  every route decision.
 
-Postgres 是运行时状态的持久化 owner，Gateway 是请求路径上低延迟 in-memory view 的 owner。Gateway 可以用内存计数支撑单实例低延迟检查，并把可恢复状态写入 Postgres；如果未来运行多个 Gateway 实例，RPM / TPM / concurrency 需要迁移到 Postgres 原子更新、advisory lock 或 Redis 等共享状态组件，不能继续只依赖单进程内存。
+Postgres is the durable owner of runtime state. Gateway is the owner of the
+low-latency in-memory view on the request path. Gateway can use memory counters
+for single-instance low-latency checks and write recoverable state to Postgres.
+If multiple Gateway instances are added later, RPM / TPM / concurrency must
+move to shared state such as Postgres atomic updates, advisory locks, or Redis.
+They cannot keep relying only on single-process memory.
 
-### 4.5 Savings 计算归属
+### 4.5 Savings Calculation Ownership
 
-成本节省是请求级可观测数据，owner 是 Gateway 的 Observability Runtime，而不是 Console 查询时临时反推。
+Cost savings are request-level observability data owned by Gateway
+Observability Runtime, not data Console derives later during queries.
 
-Gateway 在完成路由决策并拿到实际 usage 后，同步写入：
+After route decision and actual usage are known, Gateway synchronously writes:
 
-- actual provider / model cost：本次真实命中的 Provider / Model 成本。
-- baseline provider / model：该 Virtual Model 的基线模型，来自用户显式配置；如果用户未配置，则使用该 Virtual Model 的质量优先默认模型。
-- baseline hypothetical cost：按同一输入 / 输出 token 和 baseline 模型价格计算的假想成本。
-- savings amount / percent：`baseline hypothetical cost - actual cost` 及百分比。
-- price source / price version：记录本次计算使用的价格来源，避免后续价格同步后历史 savings 被重算漂移。
+- Actual provider / model cost: the cost from the provider and model actually
+  used for the request.
+- Baseline provider / model: the baseline model for the Virtual Model, from user
+  configuration. If the user did not configure one, use the quality-first
+  default model for that Virtual Model.
+- Baseline hypothetical cost: the cost that the same input / output tokens would
+  have produced on the baseline model.
+- Savings amount / percent: `baseline hypothetical cost - actual cost` and its
+  percentage.
+- Price source / price version: the price source used for this calculation, so
+  later price sync does not drift historical savings.
 
-这样 Overview 和 Usage 页面可以直接聚合 `request_costs` 中的 baseline / savings 字段，不需要在查询时重新跑一遍历史路由逻辑。Worker 的 billing reconciliation 可以更新 actual cost，但不改变原始 route decision；如果 actual cost 被对账修正，Worker 可以按同一 baseline 重新计算 savings 并标记 reconciled。
+Overview and Usage can aggregate baseline and savings fields directly from
+`request_costs`. They do not need to re-run historical routing logic during
+queries. Worker billing reconciliation can update actual cost without changing
+the original route decision. If actual cost is corrected, Worker can recompute
+savings against the same baseline and mark it reconciled.
 
 ### 4.6 Provider Adapter Strategy
 
-Provider adapter 不按每个长尾 Provider 都实现一套独立 adapter。V1 采用两层策略：
+Provider adapters are not implemented one-by-one for every long-tail provider.
+V1 uses two layers:
 
-- Native adapter：用于 OpenAI、Anthropic、Google Gemini、OpenRouter、Ollama 等协议或行为差异明显的 Provider。
-- Generic OpenAI-compatible adapter：用于 DeepSeek、xAI、Qwen、Moonshot / Kimi、MiniMax、Z.ai、LM Studio、llama.cpp 等兼容 OpenAI API 形态的 Provider。
+- Native adapter: for OpenAI, Anthropic, Google Gemini, OpenRouter, Ollama, and
+  providers with meaningful protocol or behavior differences.
+- Generic OpenAI-compatible adapter: for DeepSeek, xAI, Qwen, Moonshot / Kimi,
+  MiniMax, Z.ai, LM Studio, llama.cpp, and other providers that follow the
+  OpenAI API shape.
 
-通用 OpenAI-compatible adapter 不能变成任意自定义 endpoint。它只能通过内置白名单 Provider template 启用，template 分为两类：
+The generic OpenAI-compatible adapter must not become arbitrary custom endpoint
+support. It is enabled only through built-in allowlisted provider templates.
+Templates define:
 
-- Provider id、display name 和类别。
-- 远程 Provider template 固定 base URL 和 endpoint path，例如 DeepSeek、xAI、Qwen。
-- Local Provider template 固定 endpoint path、协议形态和能力声明，但 base URL 由用户在 Provider 配置中填写，例如 LM Studio、llama.cpp；这仍然受该 local provider template 约束，不等同于任意自定义 endpoint。
-- auth header / key placement。
-- 支持的 endpoint 子集，例如 chat completions、responses stateless subset、embeddings。
-- streaming、tools、JSON mode、max context 等能力声明。
-- 模型发现方式：provider model list API、静态 registry，或 local provider probe。
+- Provider id, display name, and category.
+- For remote providers, fixed base URL and endpoint path, such as DeepSeek,
+  xAI, and Qwen.
+- For local provider templates, fixed endpoint path, protocol shape, and
+  capability declarations, while base URL is entered by the user in Provider
+  configuration, such as LM Studio and llama.cpp. This remains constrained by
+  the local provider template and is not arbitrary custom endpoint support.
+- Auth header / key placement.
+- Supported endpoint subset, such as chat completions, stateless responses
+  subset, and embeddings.
+- Capability declarations such as streaming, tools, JSON mode, and max context.
+- Model discovery method: provider model list API, static registry, or local
+  provider probe.
 
-这样可以覆盖产品清单里的长尾 Provider，同时保持“V1 不支持任意自定义 endpoint”的产品边界。
+This covers the long-tail provider list while preserving the product boundary
+that V1 does not support arbitrary custom endpoints.
 
-## 5. Console 架构
+## 5. Console Architecture
 
-Console 是控制面，面向用户提供配置、观测和接入引导。
+Console is the control plane for user-facing configuration, observability, and
+onboarding.
 
 ```text
 Console
-├── Web App
-│   ├── Overview
-│   ├── Agents
-│   ├── Providers
-│   ├── Models
-│   ├── Virtual Models / Routes
-│   ├── Activity
-│   ├── Usage & Cost
-│   ├── Limits
-│   ├── Gateway Runtime
-│   ├── Playground
-│   └── Settings
-│
-├── Console API
-│   ├── Agent management
-│   ├── Provider management
-│   ├── Model library management
-│   ├── Route policy management
-│   ├── Limit management
-│   ├── Usage query
-│   ├── Activity query
-│   ├── Runtime query
-│   └── Import / export
-│
-├── Domain Services
-│   ├── Dependency check service
-│   ├── Config validation service
-│   ├── Shared config publisher client
-│   ├── Secret encryption client
-│   └── Import / export service
-│
-├── Runtime Queries
-│   ├── Gateway status query from Postgres
-│   ├── Worker job status query from Postgres
-│   └── Provider health query from Postgres
-│
-└── Job Client
-    ├── Model refresh job trigger
-    ├── Price sync job trigger
-    ├── Provider connectivity check trigger
-    └── Export / cleanup job trigger
+|-- Web App
+|   |-- Overview
+|   |-- Agents
+|   |-- Providers
+|   |-- Models
+|   |-- Virtual Models / Routes
+|   |-- Activity
+|   |-- Usage & Cost
+|   |-- Limits
+|   |-- Gateway Runtime
+|   |-- Playground
+|   `-- Settings
+|
+|-- Console API
+|   |-- Agent management
+|   |-- Provider management
+|   |-- Model library management
+|   |-- Route policy management
+|   |-- Limit management
+|   |-- Usage query
+|   |-- Activity query
+|   |-- Runtime query
+|   `-- Import / export
+|
+|-- Domain Services
+|   |-- Dependency check service
+|   |-- Config validation service
+|   |-- Shared config publisher client
+|   |-- Secret encryption client
+|   `-- Import / export service
+|
+|-- Runtime Queries
+|   |-- Gateway status query from Postgres
+|   |-- Worker job status query from Postgres
+|   `-- Provider health query from Postgres
+|
+`-- Job Client
+    |-- Model refresh job trigger
+    |-- Price sync job trigger
+    |-- Provider connectivity check trigger
+    `-- Export / cleanup job trigger
 ```
 
-Console 的关键职责：
+Console responsibilities:
 
-- 写入并校验配置。
-- 在禁用或删除 Provider、Model、Route Policy 前做依赖检查。
-- 对 Provider Key 做加密写入，对 Agent-owned API key 做 hash 存储。
-- 生成 Agent 接入说明和可复制配置。
-- 展示 Gateway 写入的 Activity、Usage、Cost、Fallback 和错误数据。
-- 管理 Gateway Runtime 设置，例如监听地址、端口、日志保留和数据导入导出。
-- 为模型刷新、Provider 连通性检查、价格同步、备份、日志清理等异步动作创建后台任务，而不是直接在 Console 请求中执行长耗时 Provider 调用。
-- Console 不拥有 config publisher 的事务实现；它只调用 `packages/config` 中的共享 publisher。
+- Write and validate configuration.
+- Check dependencies before disabling or deleting Providers, Models, or Route
+  Policies.
+- Encrypt Provider Keys and hash Agent-owned API keys.
+- Generate Agent onboarding instructions and copyable configuration snippets.
+- Display Activity, Usage, Cost, Fallback, and error data written by Gateway.
+- Manage Gateway Runtime settings such as listen address, port, log retention,
+  and data import/export.
+- Create background jobs for model refresh, provider connectivity checks, price
+  sync, backup, log cleanup, and other asynchronous actions instead of running
+  long provider calls inside Console requests.
+- Use the shared publisher from `packages/config`; Console does not own the
+  config publisher transaction implementation.
 
-Console 不承担 Provider 请求转发，也不参与 AI Agent 的实时请求路径。Console 不直接调用 Gateway 内部接口；控制动作通过 Postgres 配置表、job 表和 notification channel 传递，真实 Provider 出网调用由 Gateway 或 Background Worker 执行。
+Console does not forward provider requests and does not participate in the AI
+Agent realtime request path. Console does not call private Gateway interfaces.
+Control actions flow through Postgres configuration tables, job tables, and
+notification channels. Real provider egress calls are performed by Gateway or
+Background Worker.
 
-## 6. Background Worker / Scheduler 架构
+## 6. Background Worker / Scheduler Architecture
 
-Background Worker 是异步任务面，负责所有不属于 Agent 同步请求路径、也不应该阻塞 Console 页面请求的能力。
+Background Worker is the asynchronous task plane. It owns all capabilities that
+do not belong in the Agent synchronous request path and should not block Console
+page requests.
 
 ```text
 Background Worker / Scheduler
-├── Job Runner
-│   ├── Scheduled jobs
-│   ├── Manual jobs from Console
-│   ├── Retry / backoff
-│   └── Job lease / deduplication
-│
-├── Provider Maintenance
-│   ├── Model discovery / refresh
-│   ├── Provider connectivity probes
-│   ├── Price registry sync
-│   └── Billing reconciliation
-│
-├── Alerting / Notification
-│   ├── Budget threshold evaluator
-│   ├── Provider failure evaluator
-│   ├── Fallback exhaustion evaluator
-│   └── Webhook dispatcher
-│
-├── Data Maintenance
-│   ├── Request log retention
-│   ├── Optional content cleanup
-│   ├── Stale budget reservation cleanup
-│   ├── JSONL request log export
-│   └── Cost report export
-│
-└── Lifecycle Maintenance
-    ├── Backup job
-    ├── Database maintenance
-    └── Migration status check
+|-- Job Runner
+|   |-- Scheduled jobs
+|   |-- Manual jobs from Console
+|   |-- Retry / backoff
+|   `-- Job lease / deduplication
+|
+|-- Provider Maintenance
+|   |-- Model discovery / refresh
+|   |-- Provider connectivity probes
+|   |-- Price registry sync
+|   `-- Billing reconciliation
+|
+|-- Alerting / Notification
+|   |-- Budget threshold evaluator
+|   |-- Provider failure evaluator
+|   |-- Fallback exhaustion evaluator
+|   `-- Webhook dispatcher
+|
+|-- Data Maintenance
+|   |-- Request log retention
+|   |-- Optional content cleanup
+|   |-- Stale budget reservation cleanup
+|   |-- JSONL request log export
+|   `-- Cost report export
+|
+`-- Lifecycle Maintenance
+    |-- Backup job
+    |-- Database maintenance
+    `-- Migration status check
 ```
 
-配置写入 owner 规则：
+Configuration write ownership:
 
-- Console 是用户配置的 owner，写入 Agents、Agent Virtual Model grants、Providers、Virtual Models、Route Policies、Limits、Settings 等用户显式配置。
-- Worker 是 Provider 派生数据和异步运行数据的 owner：provider model list、price registry snapshot 等会进入配置版本；provider health summary、billing reconciliation 对 `request_costs` 的修正等是运行数据，不进入 config snapshot。
-- Console 和 Worker 都必须通过同一个 config publisher 发布 routing-visible config version；任何一方发布 config version 后，都通过 Postgres `config_changed` channel 唤醒 Gateway reload。Worker 的健康探测结果不发布 config version，而是通过 health summary 表和 `health_summary_changed` channel 进入 Gateway health view 的刷新链路。
+- Console owns user configuration writes: Agents, Agent Virtual Model grants,
+  Providers, Virtual Models, Route Policies, Limits, Settings, and other
+  explicitly user-authored configuration.
+- Worker owns provider-derived data and asynchronous runtime data. Provider
+  model lists and price registry snapshots enter the configuration version.
+  Provider health summary and billing reconciliation corrections to
+  `request_costs` are runtime data and do not enter the config snapshot.
+- Console and Worker must both publish routing-visible config versions through
+  the same config publisher. After either side publishes a config version,
+  Postgres `config_changed` wakes Gateway reload. Worker health probe results do
+  not publish config versions. They refresh Gateway health view through health
+  summary tables and the `health_summary_changed` channel.
 
-Worker 的运行边界：
+Worker runtime boundaries:
 
-- Worker 不是请求代理；Agent 的模型请求仍只经过 Gateway。
-- Worker 可以解密 Provider Key，因为它需要执行模型发现、价格同步、账单对账和 Provider 健康探测。
-- Worker 运行失败不应阻断 Gateway 请求，但会让模型刷新、通知、清理、对账等异步能力延迟。
-- Worker 可以和 Gateway / Console 在同一个进程 supervisor 下运行，也可以是独立进程。
+- Worker is not a request proxy. Agent model requests only go through Gateway.
+- Worker can decrypt Provider Keys because it must perform model discovery,
+  price sync, billing reconciliation, and provider health probes.
+- Worker failure must not block Gateway requests, but it delays model refresh,
+  notifications, cleanup, reconciliation, and other asynchronous capabilities.
+- Worker can run under the same process supervisor as Gateway / Console or as a
+  separate process.
 
-### 6.1 模型发现与刷新链路
+### 6.1 Model Discovery And Refresh Path
 
-Provider 模型发现由 Background Worker 执行，避免 Console 直接出网调用 Provider，也避免 Gateway 的同步请求路径被模型刷新任务占用。
+Background Worker performs provider model discovery. This avoids direct provider
+egress from Console and keeps Gateway's synchronous request path free of model
+refresh work.
 
 ```text
 User
-  ▼
+  v
 Console Providers / Models page
-  ▼
+  v
 Console API
-  ▼
+  v
 create model_refresh_job
-  ▼
+  v
 Background Worker
-  ├── load provider config
-  ├── decrypt provider key
-  ├── call provider model list API
-  ├── normalize model metadata
-  ├── upsert provider_models
-  ├── publish config version if routing-visible data changed
-  └── emit Postgres config_changed notification
+  |-- load provider config
+  |-- decrypt provider key
+  |-- call provider model list API
+  |-- normalize model metadata
+  |-- upsert provider_models
+  |-- publish config version if routing-visible data changed
+  `-- emit Postgres config_changed notification
 ```
 
-触发方式：
+Triggers:
 
-- 自动刷新：新增或启用 Provider 后，Console 创建一次模型刷新任务。
-- 手动刷新：用户在 Console 点击 refresh，Console 创建一次模型刷新任务。
-- 周期刷新：Worker 按配置周期刷新模型列表；Provider 健康探测走 health summary 链路，不发布 config version。
+- Automatic refresh: after adding or enabling a Provider, Console creates one
+  model refresh job.
+- Manual refresh: when the user clicks refresh in Console, Console creates one
+  model refresh job.
+- Scheduled refresh: Worker refreshes model lists on a configured cadence.
+  Provider health probes use the health summary path and do not publish config
+  versions.
 
-Gateway 的 `GET /v1/models` 不走 Provider discovery，它只基于当前 config snapshot 返回 Agent 被授权使用的 Virtual Model Name。
+Gateway `GET /v1/models` does not run provider discovery. It only returns the
+Virtual Model Names authorized for the Agent from the current config snapshot.
 
-Provider 派生模型数据的引用完整性规则：
+Provider-derived model data referential integrity:
 
-- Worker 刷新模型列表时只做 upsert 和状态标记，不直接硬删除 `provider_models` 记录。
-- Provider 侧消失的模型标记为 `unavailable`、`not_listed` 或 `deprecated`，并记录 last seen 时间。
-- 如果消失的模型被 Route Policy candidate、Fallback Chain 或固定模型路由引用，Worker 写入告警事件，Console 在 Models / Routes 页面提示受影响配置。
-- 硬删除 Provider 派生模型只能由用户在 Console 显式执行，并且必须经过依赖检查。
-- Gateway 路由不会选择已标记 unavailable 的模型，除非用户显式覆盖并承担失败风险。
+- Worker refresh only upserts and marks status. It does not hard-delete
+  `provider_models` rows directly.
+- Models that disappear from the provider are marked `unavailable`,
+  `not_listed`, or `deprecated` and record last-seen time.
+- If a missing model is referenced by a Route Policy candidate, Fallback Chain,
+  or fixed-model route, Worker writes an alert event and Console highlights the
+  affected configuration on Models / Routes pages.
+- Hard-deleting provider-derived models can only be explicitly performed by the
+  user in Console and must pass dependency checks.
+- Gateway routing does not select models marked unavailable unless the user
+  explicitly overrides and accepts the failure risk.
 
-### 6.2 Provider 连通性检查与健康探测
+### 6.2 Provider Connectivity Checks And Health Probes
 
-Provider 连通性检查和周期健康探测共用同一套 Worker health probe 管道，避免出现两套健康 owner。
+Provider connectivity checks and periodic health probes share one Worker health
+probe pipeline. This avoids two separate health owners.
 
-- `provider-health.job.ts` 是执行 owner，负责解密 Provider Key、发起轻量 probe、写入 `provider_health_events`，并更新 `provider_health_summary`。
-- 周期探测由 Worker scheduler 触发，用于持续刷新 Provider / Model 健康状态。
-- Console 的手动“连接测试”创建 `provider_connectivity_check` job，本质是一次 trigger 为 manual 的 health probe。
-- 手动检查结果同时写入 job result 和 `provider_health_events`；如果结果比当前 summary 更新，则更新 `provider_health_summary` 并发送 `health_summary_changed`。
-- Gateway 只消费合并后的 in-memory health view，不直接执行 Console 发起的 Provider 连接测试。
+- `provider-health.job.ts` is the execution owner. It decrypts Provider Keys,
+  sends lightweight probes, writes `provider_health_events`, and updates
+  `provider_health_summary`.
+- Periodic probes are triggered by Worker scheduler to continuously refresh
+  Provider / Model health.
+- Console manual "connection test" creates a `provider_connectivity_check` job,
+  which is a health probe with `trigger = manual`.
+- Manual results write both job result and `provider_health_events`. If the
+  result is newer than the current summary, Worker updates
+  `provider_health_summary` and emits `health_summary_changed`.
+- Gateway only consumes the merged in-memory health view. It does not execute
+  provider connection tests requested by Console.
 
-### 6.3 价格同步与账单对账
+### 6.3 Price Sync And Billing Reconciliation
 
-Gateway 在请求结束时先写入 usage 和估算成本，保证 Activity 与 Usage 页面能及时展示。Background Worker 再负责异步对账：
+Gateway writes usage and estimated cost at request end so Activity and Usage
+pages can display data immediately. Background Worker performs asynchronous
+reconciliation:
 
-- Provider 支持返回实际 usage / billing 数据时，Worker 周期性拉取并写入 actual cost。
-- Provider 不支持实际计费数据时，继续使用 token 估算成本，并标记 cost source 为 estimated。
-- 对账结果不改变原始 request activity，只补充 cost source、actual cost、reconciled at 等字段。
-- 如果价格同步改变了会影响路由选择的价格表或模型可用性，Worker 通过 config publisher 发布新 config version，并通过 Postgres `config_changed` channel 触发 Gateway reload fast path。
+- When a provider returns actual usage or billing data, Worker periodically
+  fetches it and writes actual cost.
+- When a provider does not support actual billing data, LLMIngress keeps token
+  estimated cost and marks cost source as estimated.
+- Reconciliation does not change original request activity. It adds cost source,
+  actual cost, reconciled-at, and similar fields.
+- If price sync changes a price table or model availability in a way that
+  affects routing, Worker publishes a new config version through the config
+  publisher and triggers Gateway reload through Postgres `config_changed`.
 
-这样满足“优先采用 Provider 实际计费数据，无法获得时才使用估算值”的产品口径，同时不把账单 API 调用放进 Gateway 请求路径。
+This satisfies the product rule that provider actual billing data is preferred,
+with estimates used when actual data is unavailable, without placing billing API
+calls in the Gateway request path.
 
-## 7. Gateway、Console 与 Worker 的交互
+## 7. Gateway, Console, And Worker Interactions
 
-Gateway、Console 与 Worker 的交互分为五类：配置写入、Postgres 通知热加载、运行数据读取、异步任务调度、Playground Public API 测试。
+Interactions fall into five categories: configuration writes, Postgres
+notification hot reload, runtime data reads, async job scheduling, and
+Playground Public API tests.
 
-### 7.1 配置写入链路
+### 7.1 Configuration Write Path
 
 ```text
 User-authored config
-  └── Console API
-        └── Config validation / dependency check
+  `-- Console API
+      `-- Config validation / dependency check
 
 Provider-derived config
-  └── Background Worker
-        └── Provider / registry normalization
+  `-- Background Worker
+      `-- Provider / registry normalization
 
 Both paths
-  ▼
+  v
 Shared config publisher in `packages/config`
-  ▼
+  v
 Database transaction
-  ├── write config or derived config tables
-  ├── increment config version
-  ├── append config change event
-  └── pg_notify('config_changed', version payload)
+  |-- write config or derived config tables
+  |-- increment config version
+  |-- append config change event
+  `-- pg_notify('config_changed', version payload)
 ```
 
-配置有两个受控写入方：
+Configuration has two controlled writers:
 
-- Console 写用户显式配置，例如 Agent、Provider、Virtual Model、Route Policy、Limit、Settings。
-- Worker 写 Provider 派生配置，例如 provider model list、price registry snapshot；Provider health summary 属于运行时健康状态，不进入 config snapshot。
+- Console writes explicit user configuration such as Agent, Provider, Virtual
+  Model, Route Policy, Limit, and Settings.
+- Worker writes provider-derived configuration such as provider model lists and
+  price registry snapshots. Provider health summary is runtime health state and
+  does not enter the config snapshot.
 
-两类配置写入都必须通过 `packages/config` 提供的同一个 config publisher。只要变更影响 Gateway 路由、权限、模型能力、静态启用状态或价格，就递增全局 config version，并通过 Postgres `NOTIFY` 唤醒 Gateway。Provider 健康变化不递增 config version，而是刷新 Gateway 的 in-memory health view。
+Both configuration write paths must go through the same config publisher in
+`packages/config`. Any change that affects Gateway routing, permissions, model
+capability, static enabled state, or prices increments the global config version
+and wakes Gateway through Postgres `NOTIFY`. Provider health changes do not
+increment config version. They refresh Gateway's in-memory health view.
 
-### 7.2 热加载通知链路
+### 7.2 Hot Reload Notification Path
 
-推荐采用“Postgres `LISTEN/NOTIFY` + 周期 reconcile”的组合，而不是让 Console / Worker 直接调用 Gateway 私有接口。
+Use "Postgres `LISTEN/NOTIFY` + periodic reconcile" instead of direct private
+HTTP calls from Console / Worker to Gateway.
 
 ```text
 Shared config publisher in `packages/config`
-  │
-  │ 1. Console or Worker publishes config version
-  │ 2. PostgreSQL commits config transaction
-  │ 3. PostgreSQL emits NOTIFY config_changed
-  ▼
+  |
+  | 1. Console or Worker publishes config version
+  | 2. PostgreSQL commits config transaction
+  | 3. PostgreSQL emits NOTIFY config_changed
+  v
 Gateway Postgres listener
-  │
-  │ 4. read latest config version from Postgres
-  ▼
+  |
+  | 4. read latest config version from Postgres
+  v
 Config Loader
-  │
-  │ 5. build and validate new immutable snapshot
-  ▼
+  |
+  | 5. build and validate new immutable snapshot
+  v
 Atomic Snapshot Swap
-  │
-  │ 6. new requests use latest snapshot
-  ▼
+  |
+  | 6. new requests use latest snapshot
+  v
 Gateway writes applied config version to runtime status table
 ```
 
-热加载策略：
+Hot reload strategy:
 
-- Fast path：Console 或 Worker 通过 config publisher 写入 routing-visible config version 后，在同一事务中执行 Postgres `NOTIFY config_changed`；Gateway 的 dedicated listener connection 收到通知后加载指定 config version。
-- Safety path：Gateway 启动时加载最新配置，并周期性检查 Postgres 中的 latest config version；如果 Gateway 重连期间错过 `NOTIFY`，也能通过 reconcile 发现配置变化。
-- Multi-gateway future：多个 Gateway 实例可以同时 `LISTEN config_changed`；Postgres 会把通知广播给所有活跃 listener。`config_versions`（含 `changes` JSON）仍是持久化 source of truth。
-- 通知语义：Postgres `NOTIFY` 是 wake-up signal，不是 durable queue；payload 只放 config version、change id 和 change type，完整配置始终从数据库读取。
-- 控制反馈语义：Console 对 Gateway 的控制是异步、最终一致的。用户保存配置后，Console 只能先展示目标 config version 为 pending；是否已应用、是否失败，以 Gateway 写入 `gateway_runtime_status.applied_config_version` 和 reload failure event 为准，而不是以某个同步 HTTP 调用成功为准。
+- Fast path: Console or Worker writes a routing-visible config version through
+  the config publisher and executes Postgres `NOTIFY config_changed` in the same
+  transaction. Gateway's dedicated listener connection receives the notification
+  and loads the specified config version.
+- Safety path: Gateway loads the latest configuration on startup and
+  periodically checks the latest config version in Postgres. If Gateway misses a
+  `NOTIFY` while reconnecting, reconcile still detects the change.
+- Multi-gateway future: multiple Gateway instances can all `LISTEN
+  config_changed`. Postgres broadcasts notifications to active listeners.
+  `config_versions`, including `changes` JSON, remains the durable source of
+  truth.
+- Notification semantics: Postgres `NOTIFY` is a wakeup signal, not a durable
+  queue. Payload only includes config version, change id, and change type. Full
+  configuration is always read from the database.
+- Control feedback semantics: Console control over Gateway is asynchronous and
+  eventually consistent. After saving config, Console can show the target config
+  version as pending. Whether it was applied or failed depends on
+  `gateway_runtime_status.applied_config_version` and reload failure events
+  written by Gateway, not on a synchronous HTTP call.
 
-热加载失败处理：
+Hot reload failure handling:
 
-- Gateway 对新 snapshot 做完整校验。
-- 校验失败时不切换 snapshot。
-- Gateway 记录 reload failure event。
-- Console 的 Gateway Runtime 页面展示目标版本、已应用版本和失败原因。
-- 如果 Gateway 在线但错过通知，周期 reconcile 会重新加载；如果配置本身校验失败，用户修复配置后再次发布新版本。
+- Gateway fully validates the new snapshot.
+- If validation fails, Gateway does not switch snapshots.
+- Gateway records a reload failure event.
+- Console Gateway Runtime page shows target version, applied version, and
+  failure reason.
+- If Gateway is online but misses a notification, periodic reconcile reloads.
+  If the configuration itself fails validation, the user must fix it and publish
+  a new version.
 
-### 7.3 运行数据读取链路
+### 7.3 Runtime Data Read Path
 
-Gateway 处理请求后写入运行数据：
+Gateway writes runtime data after processing requests:
 
 ```text
 Gateway Request Pipeline
-  ├── Activity records
-  ├── Usage records
-  ├── Cost records
-  ├── Fallback events
-  ├── Error events
-  ├── Provider health snapshots
-  └── Gateway runtime heartbeat / applied config version
-        ▼
+  |-- Activity records
+  |-- Usage records
+  |-- Cost records
+  |-- Fallback events
+  |-- Error events
+  |-- Provider health snapshots
+  `-- Gateway runtime heartbeat / applied config version
+        v
       Postgres
-        ▼
+        v
       Console Activity / Usage / Runtime pages
 ```
 
-Console 从 Postgres 读取 Activity、Usage、Cost、Runtime 状态、Provider health summary 和 Worker job 状态。Gateway 周期性写入 `gateway_runtime_status.heartbeat_at`，Runtime 页面默认把超过 30 秒未更新的 Gateway 标记为 stale / down；Provider health summary 的用户可见展示集中在 Providers 页面，避免 Gateway Runtime 重复展示 provider 维度状态。
+Console reads Activity, Usage, Cost, Runtime status, Provider health summary,
+and Worker job status from Postgres. Gateway periodically writes
+`gateway_runtime_status.heartbeat_at`. Runtime page marks Gateway as stale/down
+by default when heartbeat is older than 30 seconds. User-visible Provider health
+summary is centralized on the Providers page to avoid duplicating provider
+dimension status in Gateway Runtime.
 
-对于实时刷新页面，可以由 Console Web 使用 polling、SSE 或 WebSocket 拉取 Console API。Console API 如果要订阅 Postgres notification channel，必须运行在常驻 Node.js 进程中；不假设 edge runtime 或 serverless 短生命周期函数可以长期 `LISTEN`。如果部署环境不适合长连接 listener，Console 使用 polling 读取 Postgres 状态即可。
+For live refresh, Console Web can use polling, SSE, or WebSocket through Console
+API. If Console API subscribes to Postgres notification channels, it must run in
+a long-lived Node.js process. It must not assume an edge runtime or short-lived
+serverless function can hold a long `LISTEN`. If the deployment does not fit a
+long-lived listener, Console should poll Postgres state.
 
-### 7.4 异步任务调度链路
+### 7.4 Async Job Scheduling Path
 
-Console 对耗时动作只创建任务，不直接执行 Provider 出网调用或长耗时维护动作。周期性维护任务可以由 Worker scheduler 自行创建，也可以由 Console 手动触发。
+Console only creates jobs for long-running actions. It does not directly perform
+provider egress calls or long maintenance actions. Scheduled maintenance jobs
+can be created by Worker scheduler. Manual jobs can be triggered by Console.
 
 ```text
 Worker scheduler
-  ├── retention_cleanup
-  ├── stale_reservation_cleanup
-  └── backup (trigger=scheduled)
+  |-- retention_cleanup
+  |-- stale_reservation_cleanup
+  `-- backup (trigger=scheduled)
 
 Console API manual trigger
-  ├── model_refresh
-  ├── provider_connectivity_check
-  ├── price_sync
-  ├── billing_reconciliation
-  ├── webhook_export
-  └── backup (trigger=manual)
+  |-- model_refresh
+  |-- provider_connectivity_check
+  |-- price_sync
+  |-- billing_reconciliation
+  |-- webhook_export
+  `-- backup (trigger=manual)
 
 Both paths
-  ▼
+  v
 create job record
-  ├── model_refresh
-  ├── provider_connectivity_check
-  ├── price_sync
-  ├── billing_reconciliation
-  ├── retention_cleanup
-  ├── stale_reservation_cleanup
-  ├── webhook_export
-  └── backup
-      │
-      ├── pg_notify('job_created', job payload)
-      ▼
+  |-- model_refresh
+  |-- provider_connectivity_check
+  |-- price_sync
+  |-- billing_reconciliation
+  |-- retention_cleanup
+  |-- stale_reservation_cleanup
+  |-- webhook_export
+  `-- backup
+      |
+      |-- pg_notify('job_created', job payload)
+      v
 Background Worker
-  ├── LISTEN job_created or poll due jobs
-  ├── acquire job lease
-  ├── execute job
-  ├── write job result
-  └── publish config version and emit config_changed if routing-visible data changed
+  |-- LISTEN job_created or poll due jobs
+  |-- acquire job lease
+  |-- execute job
+  |-- write job result
+  `-- publish config version and emit config_changed if routing-visible data changed
 ```
 
-Worker job 使用 Postgres 行锁、advisory lock 或 job lease 做去重，避免同一个任务被多个 worker 同时执行。`job_created` notification 只用于唤醒，`jobs` 表才是任务 source of truth。`backup` job 通过 trigger 字段区分 scheduled 和 manual。V1 可以只运行一个 Worker；未来多实例 Worker 也可以基于 Postgres `FOR UPDATE SKIP LOCKED` 或 advisory lock 做并发消费。
+Worker jobs use Postgres row locks, advisory locks, or job leases to deduplicate
+work and avoid multiple workers executing the same job. `job_created`
+notification is only a wakeup. The `jobs` table is the source of truth. The
+`backup` job distinguishes scheduled and manual runs through a trigger field.
+V1 can run one Worker. Future multi-instance Workers can use Postgres
+`FOR UPDATE SKIP LOCKED` or advisory locks for concurrent consumption.
 
-### 7.5 Playground Public API 测试链路
+### 7.5 Playground Public API Test Path
 
-Playground 使用 Gateway Public API 做真实请求测试。Console 后端不代理 Playground 请求，也不保存、读取或恢复 Agent API key 明文；用户需要在 Playground 页面手动输入 Agent API key，然后选择一个 Virtual Model Name 作为请求中的 `model`。
+Playground uses Gateway Public API for real request testing. Console backend
+does not proxy Playground requests and does not store, read, or recover
+plaintext Agent API keys. The user manually enters an Agent API key in the
+Playground page, then selects a Virtual Model Name as the request `model`.
 
 ```text
 User
-  ▼
+  v
 Console Playground in browser
-  ├── input Agent API key, held in page memory only
-  ├── GET /v1/models through Gateway Public API
-  └── select Virtual Model Name
-  ▼
+  |-- input Agent API key, held in page memory only
+  |-- GET /v1/models through Gateway Public API
+  `-- select Virtual Model Name
+  v
 Gateway Public API
-  ├── normal Agent-owned API key authentication
-  ├── normal Virtual Model authorization
-  ├── normal rate limit / budget / concurrency check
-  ├── normal route policy / fallback execution
-  ├── live Provider call
-  └── normal activity / usage / cost record
+  |-- normal Agent-owned API key authentication
+  |-- normal Virtual Model authorization
+  |-- normal rate limit / budget / concurrency check
+  |-- normal route policy / fallback execution
+  |-- live Provider call
+  `-- normal activity / usage / cost record
 ```
 
-因为 Playground 走的是真实 Public API 请求，它默认计入该 Agent 的 Rate Limit、Budget、Usage 和 Cost。Console 可以在页面内展示本次测试的 request id、route reason 和响应结果，但这些数据来自 Public API 响应和后续 Activity 查询，不需要内部测试 endpoint。
+Because Playground uses real Public API requests, it counts toward that Agent's
+Rate Limit, Budget, Usage, and Cost by default. Console can show the request id,
+route reason, and response in the page, but those data come from the Public API
+response and later Activity queries. No internal test endpoint is needed.
 
-Playground 安全边界：
+Playground safety boundary:
 
-- Agent API key 只保存在当前页面内存中，不写入 localStorage、sessionStorage、cookie 或 Console 后端日志。
-- Console 与 Gateway 不同端口或域名时，Playground 使用用户配置的 Gateway Base URL，并要求 Gateway CORS allowlist 包含当前 Console origin。
-- 这是自托管单用户场景下可接受的显式操作；如果用户关闭页面或刷新页面，需要重新粘贴 Agent API key。
+- Agent API key is kept only in current page memory. It is not written to
+  localStorage, sessionStorage, cookies, or Console backend logs.
+- If Console and Gateway use different ports or domains, Playground uses the
+  user-configured Gateway Base URL and requires Gateway CORS allowlist to include
+  the current Console origin.
+- This is an acceptable explicit operation for a self-hosted single-user
+  scenario. If the user closes or refreshes the page, the Agent API key must be
+  pasted again.
 
-### 7.6 Postgres 通信与权限边界
+### 7.6 Postgres Communication And Permission Boundary
 
-Gateway 只暴露面向 Agent 和 Playground 的 Public API；Gateway、Console、Worker 之间的控制通信统一通过 Postgres 表和 notification channel 完成。Postgres 连接凭据是部署 secret，不能与 Provider secret master key 混用。
+Gateway only exposes Public API for Agents and Playground. Control
+communication among Gateway, Console, and Worker goes through Postgres tables
+and notification channels. Postgres credentials are deployment secrets and must
+not be reused as provider secret master keys.
 
-- Gateway：读取配置表，订阅 `config_changed` / `health_summary_changed`，写入 request runtime records、gateway heartbeat、applied config version 和 reload failure event。
-- Console：写用户配置、创建 job、读取 runtime / activity / usage / health 数据；不调用 Gateway 私有 HTTP endpoint。
-- Worker：claim job、写 Provider 派生配置、写 health summary、写通知 / 对账 / 清理结果，并在 routing-visible 变更时通过 config publisher 发出 `config_changed`。
-- 推荐在部署上使用独立 Postgres role 或最小权限 schema grant，避免 Console / Worker / Gateway 拿到超出职责的数据库权限。
+- Gateway: reads config tables, subscribes to `config_changed` /
+  `health_summary_changed`, writes request runtime records, Gateway heartbeat,
+  applied config version, and reload failure events.
+- Console: writes user configuration, creates jobs, and reads runtime /
+  Activity / Usage / health data. It does not call a private Gateway HTTP
+  endpoint.
+- Worker: claims jobs, writes provider-derived configuration, writes health
+  summaries, writes notification / reconciliation / cleanup results, and emits
+  `config_changed` through the config publisher when routing-visible data
+  changes.
+- Deployment should use separate Postgres roles or least-privilege schema grants
+  so Console, Worker, and Gateway do not receive database permissions beyond
+  their responsibilities.
 
-### 7.7 Runtime Settings 变更语义
+### 7.7 Runtime Settings Change Semantics
 
-Console 可以管理 Gateway Runtime 设置，但不是所有 runtime settings 都能通过 config snapshot 热加载。
+Console can manage Gateway Runtime settings, but not every runtime setting can
+be hot reloaded through a config snapshot.
 
-| 设置类型 | 生效方式 | 生效执行方 |
+| Setting type | Effective mechanism | Executor |
 | --- | --- | --- |
-| Route Policy、Virtual Model、Agent 权限、Provider 启用状态、模型元数据、价格、Limits | config version + snapshot 热加载 | Console / Worker 通过 shared config publisher |
-| 日志保留周期、导出计划、告警阈值、通知目标 | Worker scheduler 下次 tick 或 job reload 生效 | Worker |
-| Console UI 偏好、报表筛选默认值 | Console API / Web App 即时生效 | Console |
-| Gateway listen host、port、TLS 配置、Postgres connection string、数据目录、master key 来源 | 需要 supervisor 重启相关进程 | local / deployment supervisor |
+| Route Policy, Virtual Model, Agent permissions, Provider enabled state, model metadata, prices, Limits | config version + snapshot hot reload | Console / Worker through shared config publisher |
+| Log retention period, export schedule, alert thresholds, notification targets | Worker scheduler next tick or job reload | Worker |
+| Console UI preferences, report filter defaults | Console API / Web App immediate effect | Console |
+| Gateway listen host, port, TLS config, Postgres connection string, data directory, master key source | Requires supervisor restart of affected process | local / deployment supervisor |
 
-监听地址、端口和数据目录这类进程启动参数不能通过 immutable config snapshot 原子替换。Console 修改这些设置时应标记为 restart required，并交给 local / deployment supervisor 执行重启。
+Listen address, port, and data directory are process startup parameters and
+cannot be atomically swapped through an immutable config snapshot. Console
+should mark changes to these settings as restart required and hand restart
+execution to the local / deployment supervisor.
 
-Gateway listen host、port、Postgres connection string、数据目录、master key 来源等 bootstrap 参数在数据库连接建立前就需要，不能只保存在业务数据库中。它们应持久化在 supervisor 拥有的 bootstrap 配置文件或环境变量里；Console 修改这类设置时，通过 local / deployment supervisor 写回 bootstrap 配置，而不是直接写入业务数据库后等待热加载。
+Gateway listen host, port, Postgres connection string, data directory, and
+master key source are needed before database connection is established. They
+cannot live only in the business database. They should be persisted in
+supervisor-owned bootstrap config files or environment variables. When Console
+changes these settings, the local / deployment supervisor writes the bootstrap
+configuration instead of writing only to the business database and waiting for
+hot reload.
 
-## 8. 数据存储选型
+## 8. Data Storage Choice
 
-### 8.1 默认选择：PostgreSQL
+### 8.1 Default: PostgreSQL
 
-V1 直接使用 PostgreSQL 作为 canonical database，并把它作为 Gateway、Console、Worker 之间的通信媒介。
+V1 uses PostgreSQL directly as the canonical database and as the communication
+medium among Gateway, Console, and Worker.
 
-选择原因：
+Reasons:
 
-- Gateway、Console、Worker 是多个独立进程，Postgres 比本地文件数据库更适合并发写入、长期运行和 Docker / server 部署。
-- 配置数据、请求 metadata、usage、cost、fallback event、job、notification 都是强结构化数据，适合关系模型。
-- `LISTEN/NOTIFY` 可以承担配置热加载、job 唤醒、health summary 刷新的低延迟通知，不需要 Gateway 暴露私有控制接口。
-- `SELECT ... FOR UPDATE SKIP LOCKED`、transaction、advisory lock 可以支撑 Worker job lease、预算预留、周期任务去重等协调需求。
-- 后续如果扩展到多 Gateway / 多 Worker，Postgres 仍能作为默认共享状态层；Redis 只作为高频限流或缓存优化选项，而不是 V1 必需组件。
+- Gateway, Console, and Worker are separate processes. Postgres is better than a
+  local file database for concurrent writes, long-running operation, and Docker
+  / server deployment.
+- Configuration data, request metadata, usage, cost, fallback events, jobs, and
+  notifications are strongly structured data and fit a relational model.
+- `LISTEN/NOTIFY` can support low-latency notifications for config hot reload,
+  job wakeup, and health summary refresh without exposing a private Gateway
+  control interface.
+- `SELECT ... FOR UPDATE SKIP LOCKED`, transactions, and advisory locks support
+  Worker job leases, budget reservations, and scheduled task deduplication.
+- If the system later expands to multiple Gateways or Workers, Postgres can
+  still be the default shared state layer. Redis is an optimization for
+  high-frequency rate limiting or caching, not a required V1 component.
 
-### 8.2 数据分组
+### 8.2 Data Groups
 
 ```text
 PostgreSQL database
-├── Identity / access
-│   ├── agents
-│   ├── agent_virtual_models
-│   └── console_users
-│
-├── Provider / model config
-│   ├── providers
-│   ├── provider_keys
-│   └── provider_models (including manual price fields)
-│
-├── Routing config
-│   ├── virtual_models
-│   ├── route_policies
-│   ├── route_policy_rules
-│   └── route_policy_candidates
-│
-├── Limits
-│   ├── agent_limits
-│   ├── rate_limit_windows
-│   ├── budget_periods
-│   └── budget_reservations
-│
-├── Runtime records
-│   ├── request_activity (including request-level config label snapshots)
-│   ├── request_usage
-│   ├── request_costs (including baseline and savings fields)
-│   ├── fallback_events
-│   ├── provider_health_events
-│   ├── provider_health_summary
-│   ├── gateway_runtime_status
-│   └── runtime_errors
-│
-├── Background jobs
-│   ├── jobs
-│   ├── job_attempts
-│   ├── notification_events
-│   └── webhook_deliveries
-│
-├── Billing / pricing
-│   └── provider_models manual and synced current price fields
-│
-├── Config lifecycle
-│   ├── config_versions
-│   └── migration_history
-│
-└── Optional content records
-    ├── request_prompts
-    └── response_outputs
+|-- Identity / access
+|   |-- agents
+|   |-- agent_virtual_models
+|   `-- console_users
+|
+|-- Provider / model config
+|   |-- providers
+|   |-- provider_keys
+|   `-- provider_models (including manual price fields)
+|
+|-- Routing config
+|   |-- virtual_models
+|   |-- route_policies
+|   |-- route_policy_rules
+|   `-- route_policy_candidates
+|
+|-- Limits
+|   |-- agent_limits
+|   |-- rate_limit_windows
+|   |-- budget_periods
+|   `-- budget_reservations
+|
+|-- Runtime records
+|   |-- request_activity (including request-level config label snapshots)
+|   |-- request_usage
+|   |-- request_costs (including baseline and savings fields)
+|   |-- fallback_events
+|   |-- provider_health_events
+|   |-- provider_health_summary
+|   |-- gateway_runtime_status
+|   `-- runtime_errors
+|
+|-- Background jobs
+|   |-- jobs
+|   |-- job_attempts
+|   |-- notification_events
+|   `-- webhook_deliveries
+|
+|-- Billing / pricing
+|   `-- provider_models manual and synced current price fields
+|
+|-- Config lifecycle
+|   |-- config_versions
+|   `-- migration_history
+|
+`-- Optional content records
+    |-- request_prompts
+    `-- response_outputs
 ```
 
-Config tables use `deleted_at` for Console delete semantics: Agents, Providers,
-Provider Models, Virtual Models, and Route Policies are hidden and disabled when
-deleted instead of being physically removed from the database. Runtime history
-tables keep restrictive foreign keys to those config rows, so request audit data
-remains referentially intact. Request activity also stores minimal label
-snapshots for Agent, Virtual Model, Route Policy strategy, Provider, and Provider
-Model labels; historical reports prefer those snapshots and fall back to the
-joined config rows for older records.
+Config tables use `deleted_at` for Console delete semantics. Agents, Providers,
+Provider Models, Virtual Models, and Route Policies are hidden and disabled
+when deleted instead of physically removed. Runtime history tables keep
+restrictive foreign keys to those config rows so request audit data remains
+referentially intact. Request activity also stores minimal label snapshots for
+Agent, Virtual Model, Route Policy strategy, Provider, and Provider Model.
+Historical reports prefer those snapshots and fall back to joined config rows
+for older records.
 
-Postgres notification channels：
+Postgres notification channels:
 
-- `config_changed`：config publisher 在 routing-visible 配置版本提交后发出，Gateway 订阅后加载新 snapshot。
-- `job_created`：Console 或 Worker scheduler 创建 job 后发出，Worker 订阅后尽快 claim job。
-- `health_summary_changed`：Worker 更新 provider / model health summary 后发出，Gateway 订阅后刷新 in-memory health view。
-- `runtime_status_changed`：Gateway 或 Worker 写入关键运行状态变化后可选发出，Console API 可订阅后刷新 Runtime 页面。
+- `config_changed`: emitted by the config publisher after a routing-visible
+  config version commits. Gateway subscribes and loads the new snapshot.
+- `job_created`: emitted after Console or Worker scheduler creates a job.
+  Worker subscribes and claims jobs quickly.
+- `health_summary_changed`: emitted after Worker updates provider / model health
+  summary. Gateway subscribes and refreshes the in-memory health view.
+- `runtime_status_changed`: optional channel emitted after Gateway or Worker
+  writes important runtime status changes. Console API can subscribe and refresh
+  Runtime pages.
 
-所有 channel 都只是 wake-up signal，不承载完整业务状态。完整状态必须从持久化表读取。
+All channels are wakeup signals only. They do not carry full business state.
+Complete state must be read from durable tables.
 
-### 8.3 凭据与隐私数据
+### 8.3 Credentials And Private Data
 
-- Provider API Key：加密后存储，只展示 prefix 或 label。
-- Subscription Token：如未来支持，必须加密存储，并明确标注 Provider ToS 风险。
-- Agent API key：hash/prefix/default Virtual Model 存在 `agents` 上，Allowed Virtual Models 存在 `agent_virtual_models`；明文只在创建 Agent 时展示一次。Playground 无法从 Console 服务端取回既有 key，用户需要自行粘贴明文 key。V1 不支持 rotate/disable/history，key 丢失或泄露时删除并重建 Agent。
-- prompt / response 内容：默认不记录；用户显式开启后才进入 optional content records。
-- 数据导出：支持导出配置、成本报表和请求 metadata；导出 prompt / response 内容需要用户显式确认。
+- Provider API Key: encrypted at rest and only shown as prefix or label.
+- Subscription Token: if supported later, must be encrypted at rest and clearly
+  labeled with provider ToS risk.
+- Agent API key: hash, prefix, and default Virtual Model live on `agents`.
+  Allowed Virtual Models live in `agent_virtual_models`. Plaintext is shown only
+  once at Agent creation. Playground cannot recover existing keys from Console
+  server; the user must paste the plaintext key. V1 does not support
+  rotate/disable/history. If a key is lost or leaked, delete and recreate the
+  Agent.
+- Prompt / response content: not recorded by default. It enters optional content
+  records only when the user explicitly enables it.
+- Data export: supports configuration, cost reports, and request metadata.
+  Prompt / response export requires explicit user confirmation.
 
-### 8.4 Secret Master Key 管理
+### 8.4 Secret Master Key Management
 
-Provider Key 加密不是 Console 的私有能力。Gateway、Console 和 Worker 都需要使用同一套 secret encryption 能力：
+Provider Key encryption is not a Console-private capability. Gateway, Console,
+and Worker all need the same secret encryption capability:
 
-- Console：写入或轮换 Provider Key 时加密。
-- Gateway：调用真实 Provider 前解密。
-- Worker：执行模型发现、价格同步、账单对账和 Provider 健康探测时解密。
+- Console encrypts Provider Keys when writing or rotating them.
+- Gateway decrypts before calling real providers.
+- Worker decrypts for model discovery, price sync, billing reconciliation, and
+  provider health probes.
 
-master key 归属规则：
+Master key ownership:
 
-- master key 不能存放在 PostgreSQL 业务数据库中。
-- Local / single-node 模式：首次初始化时生成 master key，保存到 bootstrap secret file、环境变量或系统 secret store 中。
-- Docker / Server 模式：通过环境变量或 mounted secret 注入，例如 `LLMINGRESS_MASTER_KEY`。
-- Single binary 模式：supervisor 负责在启动 Gateway、Console、Worker 前加载 master key。
-- 数据库中只保存 encrypted secret、key id、算法版本和 key prefix / label。
-- master key 丢失后，已加密的 Provider Key 无法恢复，只能由用户重新录入。
+- Master key must not be stored in the PostgreSQL business database.
+- Local / single-node mode: first initialization generates a master key and
+  stores it in a bootstrap secret file, environment variable, or system secret
+  store.
+- Docker / Server mode: inject through environment variable or mounted secret,
+  such as `LLMINGRESS_MASTER_KEY`.
+- Single binary mode: supervisor loads the master key before starting Gateway,
+  Console, and Worker.
+- Database stores only encrypted secret, key id, algorithm version, and key
+  prefix / label.
+- If the master key is lost, encrypted Provider Keys cannot be recovered and
+  must be re-entered by the user.
 
-Gateway 在 Console 不可用时能继续处理请求的前提包括：Gateway 进程已加载 master key，并且数据库中存在可用配置与 encrypted Provider Key。
+Gateway can continue processing requests while Console is unavailable only if
+the Gateway process has loaded the master key and the database contains usable
+configuration and encrypted Provider Keys.
 
-### 8.5 Schema Migration 与备份
+### 8.5 Schema Migration And Backup
 
-Migration 是部署期 / 启动期的共享关注点，不属于 Console 独有领域服务。
+Migration is a deployment-time / startup-time shared concern. It is not a
+Console-only domain service.
 
-- `packages/db` 持有 schema 与 migration 定义。
-- `scripts/migrate.ts` 是显式 migration 入口。
-- Local / single binary supervisor 在升级前调用 `scripts/backup.ts` 做 preflight backup，再运行 migration，再启动 Gateway / Console / Worker。
-- Docker / server 模式应在启动应用进程前运行 migration job。
-- Gateway、Console、Worker 启动时都检查 schema version；发现版本不兼容时 fail fast，而不是各自尝试隐式修改 schema。
-- Worker 可以负责周期性例行备份，但不负责升级前备份；升级前备份属于 supervisor / deployment pipeline 的时序职责。
+- `packages/db` owns schema and migration definitions.
+- `scripts/migrate.ts` is the explicit migration entry point.
+- Local / single binary supervisor runs `scripts/backup.ts` for preflight backup
+  before upgrades, then runs migration, then starts Gateway / Console / Worker.
+- Docker / server mode should run a migration job before starting application
+  processes.
+- Gateway, Console, and Worker all check schema version at startup and fail fast
+  on incompatible versions instead of each trying to modify schema implicitly.
+- Worker can perform scheduled routine backups, but not pre-upgrade backups.
+  Pre-upgrade backup is a supervisor / deployment pipeline sequencing
+  responsibility.
 
-### 8.6 Postgres 通信约束
+### 8.6 Postgres Communication Constraints
 
-Postgres 同时承担持久化和进程间协调，但需要明确语义边界：
+Postgres handles both persistence and inter-process coordination, but the
+semantic boundary must be explicit:
 
-- `NOTIFY` 不是 durable queue；如果进程断线，可能错过通知。因此每个消费者都必须在启动和重连后从表中 reconcile 最新状态。
-- `config_versions`、`jobs`、`provider_health_summary`、`gateway_runtime_status` 等表是 source of truth。
-- Gateway、Console、Worker 应为 `LISTEN/NOTIFY` 使用独立连接，避免长事务阻塞通知接收。
-- Worker 多实例消费 job 时使用 Postgres 行锁、advisory lock 或 lease 字段去重；不能只依赖 `job_created` 通知。
-- Gateway 的高频请求路径不能每次都同步查询配置；仍必须使用 immutable config snapshot 和 in-memory runtime view。
-- 如果未来多 Gateway 实例共享 RPM / TPM / concurrency，需要把这些计数迁移到 Postgres 原子写入、advisory lock、Redis 或其他共享状态组件。
+- `NOTIFY` is not a durable queue. If a process disconnects, it can miss
+  notifications. Every consumer must reconcile latest state from tables after
+  startup and reconnect.
+- Tables such as `config_versions`, `jobs`, `provider_health_summary`, and
+  `gateway_runtime_status` are the source of truth.
+- Gateway, Console, and Worker should use dedicated connections for
+  `LISTEN/NOTIFY` so long transactions do not block notification reception.
+- Multi-instance Worker job consumption uses Postgres row locks, advisory locks,
+  or lease fields for deduplication. It cannot rely only on `job_created`.
+- Gateway's high-frequency request path must not synchronously query
+  configuration on every request. It must use immutable config snapshots and
+  the in-memory runtime view.
+- If multiple Gateway instances later share RPM / TPM / concurrency, those
+  counters must move to Postgres atomic writes, advisory locks, Redis, or
+  another shared state component.
 
-### 8.7 后续扩展路径
+### 8.7 Future Extension Path
 
-当部署形态从单机自托管扩展到更高并发 server / multi-instance，可以增加：
+If deployment expands from single-node self-hosting to higher-concurrency server
+or multi-instance modes, add:
 
-- Redis：用于高频分布式 rate limit、并发计数、短 TTL cache；不用于替代 canonical database。
-- Object storage：用于长期归档大量 request content 或导出文件。
-- Postgres partition / retention policy：用于长期保存 request_activity、usage、cost 和 audit 数据。
-- Read replica：用于较重的报表查询，避免影响 Gateway 写入路径。
+- Redis: distributed high-frequency rate limit, concurrency counters, and short
+  TTL cache. It does not replace the canonical database.
+- Object storage: long-term archive for large request content or export files.
+- Postgres partition / retention policy: long-term retention for
+  `request_activity`, usage, cost, and audit data.
+- Read replica: heavier reporting queries without affecting the Gateway write
+  path.
 
-这些是扩展选项，不改变 V1 以 Postgres 作为 canonical database 和协调媒介的核心选择。
+These are extension options. They do not change the V1 core choice of Postgres
+as canonical database and coordination medium.
 
-## 9. 推荐项目目录结构
+## 9. Recommended Project Layout
 
-以下是目标代码目录结构，当前仓库不需要一次性创建全部文件；后续实现时可以按模块逐步落地。
+The following is the target directory shape. The current repository does not
+need to create every file at once. Later implementation can land modules
+incrementally.
 
 ```text
-LLMIngress/ # 仓库根目录，承载所有应用、共享包、文档和脚本
-├── apps/ # 可独立运行的应用进程
-│   ├── gateway/ # Gateway Service 数据面应用
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── src/ # Gateway 源码目录
-│   │       ├── main.ts
-│   │       ├── server.ts
-│   │       ├── public-api/ # 面向 AI Agent 的公开 API 路由
-│   │       │   ├── openai.routes.ts
-│   │       │   ├── anthropic.routes.ts
-│   │       │   ├── models.routes.ts
-│   │       │   └── errors.ts
-│   │       ├── pipeline/ # 请求进入 Provider 前的同步处理链路
-│   │       │   ├── request-context.ts
-│   │       │   ├── authentication.ts
-│   │       │   ├── authorization.ts
-│   │       │   ├── protocol-normalizer.ts
-│   │       │   ├── token-estimator.ts
-│   │       │   ├── budget-reservation.ts
-│   │       │   └── limits.ts
-│   │       ├── runtime/ # Gateway 请求运行时核心逻辑
-│   │       │   ├── config-snapshot.ts
-│   │       │   ├── config-loader.ts
-│   │       │   ├── router-runtime.ts
-│   │       │   ├── fallback-runtime.ts
-│   │       │   ├── provider-runtime.ts
-│   │       │   ├── runtime-counters.ts
-│   │       │   ├── health-view.ts
-│   │       │   ├── usage-recorder.ts
-│   │       │   ├── cost-recorder.ts
-│   │       │   └── savings-recorder.ts
-│   │       ├── coordination/ # Gateway 与 Postgres 协调通道
-│   │       │   ├── postgres-listener.ts
-│   │       │   ├── config-reload.ts
-│   │       │   ├── runtime-heartbeat.ts
-│   │       │   └── reconcile-loop.ts
-│   │       └── observability/ # Gateway 观测能力
-│   │           ├── logger.ts
-│   │           ├── metrics.ts
-│   │           └── tracing.ts
-│   │
-│   ├── worker/ # Background Worker 异步任务应用
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── src/ # Worker 源码目录
-│   │       ├── main.ts
-│   │       ├── scheduler.ts
-│   │       ├── jobs/ # 具体后台任务实现
-│   │       │   ├── model-refresh.job.ts
-│   │       │   ├── provider-health.job.ts
-│   │       │   ├── price-sync.job.ts
-│   │       │   ├── billing-reconciliation.job.ts
-│   │       │   ├── alert-evaluation.job.ts
-│   │       │   ├── retention-cleanup.job.ts
-│   │       │   ├── stale-reservation-cleanup.job.ts
-│   │       │   ├── jsonl-export.job.ts
-│   │       │   └── backup.job.ts
-│   │       └── dispatchers/ # 异步通知和外部投递实现
-│   │           ├── notification-event-writer.ts
-│   │           └── webhook.ts
-│   │
-│   └── console/ # Console 控制面 Web 应用
-│       ├── package.json
-│       ├── tsconfig.json
-│       └── src/ # Console 源码目录
-│           ├── app/ # Next.js App Router 页面路由
-│           │   ├── layout.tsx
-│           │   ├── page.tsx
-│           │   ├── agents/ # Agents 页面路由
-│           │   ├── providers/ # Providers 页面路由
-│           │   ├── models/ # Models 页面路由
-│           │   ├── routes/ # Virtual Models / Routes 页面路由
-│           │   ├── activity/ # Activity 请求记录页面路由
-│           │   ├── usage/ # Usage & Cost 页面路由
-│           │   ├── limits/ # Limits 页面路由
-│           │   ├── runtime/ # Gateway Runtime 页面路由
-│           │   ├── playground/ # Playground 页面路由
-│           │   └── settings/ # Settings 页面路由
-│           ├── features/ # 按业务功能组织的页面逻辑和组件
-│           │   ├── agents/ # Agent 管理功能模块
-│           │   ├── providers/ # Provider 配置功能模块
-│           │   ├── models/ # 模型库展示功能模块
-│           │   ├── route-policies/ # Virtual Model 和路由策略功能模块
-│           │   ├── activity/ # 请求记录功能模块
-│           │   ├── usage/ # Usage 与 Cost 图表功能模块
-│           │   ├── limits/ # Budget、RPM、TPM、并发限制功能模块
-│           │   ├── runtime/ # Gateway 运行状态功能模块
-│           │   └── jobs/ # Worker job 管理功能模块
-│           ├── server/ # Console server-side 入口和后端适配
-│           │   ├── console-api.ts
-│           │   ├── auth.ts
-│           │   ├── runtime-query.ts
-│           │   ├── job-client.ts
-│           │   └── import-export.ts
-│           └── components/ # Console 通用 UI 组件
-│               ├── navigation/ # 导航组件
-│               ├── tables/ # 表格组件
-│               ├── forms/ # 表单组件
-│               ├── charts/ # 图表组件
-│               └── runtime-status/ # 运行状态组件
-│
-├── packages/ # Gateway、Console、Worker 共享的内部包
-│   ├── domain/ # 领域模型和核心业务类型
-│   │   └── src/ # domain package 源码目录
-│   │       ├── agents/ # Agent 领域类型
-│   │       ├── providers/ # Provider 领域类型
-│   │       ├── models/ # 模型元数据领域类型
-│   │       ├── route-policies/ # 路由策略领域类型
-│   │       ├── limits/ # 限流和预算领域类型
-│   │       └── usage/ # Usage 和 Cost 领域类型
-│   │
-│   ├── db/ # 数据库 schema、migration 和 repository
-│   │   └── src/ # db package 源码目录
-│   │       ├── schema/ # 后续 Drizzle schema 定义
-│   │       ├── migrations/ # SQL 数据库迁移文件
-│   │       ├── repositories/ # 数据访问封装
-│   │       ├── connection.ts
-│   │       └── schema-version.ts
-│   │
-│   ├── protocol/ # 外部协议和归一化协议定义
-│   │   └── src/ # protocol package 源码目录
-│   │       ├── openai/ # OpenAI-compatible 协议类型
-│   │       ├── anthropic/ # Anthropic-compatible 协议类型
-│   │       ├── provider/ # Provider adapter 协议类型
-│   │       └── normalized/ # Gateway 内部归一化协议类型
-│   │
-│   ├── routing/ # 确定性路由规则引擎
-│   │   └── src/ # routing package 源码目录
-│   │       ├── policy-types.ts
-│   │       ├── policy-compiler.ts
-│   │       ├── rule-engine.ts
-│   │       ├── model-selector.ts
-│   │       └── route-reason.ts
-│   │
-│   ├── providers/ # 真实 Provider adapter 实现
-│   │   └── src/ # providers package 源码目录
-│   │       ├── provider-adapter.ts
-│   │       ├── provider-templates/ # 白名单 Provider 模板
-│   │       ├── openai-compatible/ # 通用 OpenAI-compatible adapter
-│   │       ├── openai/ # OpenAI Provider adapter
-│   │       ├── anthropic/ # Anthropic Provider adapter
-│   │       ├── google/ # Google Gemini Provider adapter
-│   │       ├── openrouter/ # OpenRouter Provider adapter
-│   │       └── ollama/ # Ollama / local provider adapter
-│   │
-│   ├── security/ # 凭据、认证和权限安全工具
-│   │   └── src/ # security package 源码目录
-│   │       ├── api-key.ts
-│   │       ├── secret-encryption.ts
-│   │       ├── master-key.ts
-│   │       ├── console-auth.ts
-│   │       └── permissions.ts
-│   │
-│   ├── jobs/ # 后台任务通用模型和执行抽象
-│   │   └── src/ # jobs package 源码目录
-│   │       ├── job-types.ts
-│   │       ├── job-lease.ts
-│   │       ├── job-runner.ts
-│   │       └── job-results.ts
-│   │
-│   ├── billing/ # 成本估算、价格表和账单对账
-│   │   └── src/ # billing package 源码目录
-│   │       ├── cost-estimator.ts
-│   │       ├── price-registry.ts
-│   │       ├── savings.ts
-│   │       └── reconciliation.ts
-│   │
-│   ├── notifications/ # 告警规则和通知目标模型
-│   │   └── src/ # notifications package 源码目录
-│   │       ├── alert-rules.ts
-│   │       ├── notification-events.ts
-│   │       └── delivery-targets.ts
-│   │
-│   ├── config/ # 配置发布、校验和 runtime settings
-│   │   └── src/ # config package 源码目录
-│   │       ├── config-version.ts
-│   │       ├── config-validation.ts
-│   │       ├── dependency-check.ts
-│   │       └── runtime-settings.ts
-│   │
-│   ├── coordination/ # Postgres 进程间协调契约
-│   │   └── src/ # coordination package 源码目录
-│   │       ├── channels.ts
-│   │       ├── notification-payloads.ts
-│   │       ├── listener.ts
-│   │       └── locks.ts
-│   │
-│   └── ui/ # Console 共享 UI 基础包
-│       └── src/ # ui package 源码目录
-│           ├── components/ # 可复用基础组件
-│           ├── hooks/ # Console 共享 React hooks
-│           └── styles/ # Tailwind / 全局样式入口
-│
-├── docs/ # 产品、架构和设计文档
-│   ├── PRODUCT.md
-│   └── ARCHITECTURE.md
-│
-├── scripts/ # 本地开发、迁移和维护脚本
-│   ├── dev.ts
-│   ├── migrate.ts
-│   ├── check-schema.ts
-│   └── backup.ts
-│
-├── package.json
-├── pnpm-workspace.yaml
-├── turbo.json
-└── tsconfig.base.json
+LLMIngress/ # repository root for apps, shared packages, docs, and scripts
+|-- apps/ # independently runnable application processes
+|   |-- gateway/ # Gateway Service data-plane app
+|   |   |-- package.json
+|   |   |-- tsconfig.json
+|   |   `-- src/ # Gateway source directory
+|   |       |-- main.ts
+|   |       |-- server.ts
+|   |       |-- public-api/ # public API routes for AI Agents
+|   |       |   |-- openai.routes.ts
+|   |       |   |-- anthropic.routes.ts
+|   |       |   |-- models.routes.ts
+|   |       |   `-- errors.ts
+|   |       |-- pipeline/ # synchronous chain before provider calls
+|   |       |   |-- request-context.ts
+|   |       |   |-- authentication.ts
+|   |       |   |-- authorization.ts
+|   |       |   |-- protocol-normalizer.ts
+|   |       |   |-- token-estimator.ts
+|   |       |   |-- budget-reservation.ts
+|   |       |   `-- limits.ts
+|   |       |-- runtime/ # Gateway request runtime core
+|   |       |   |-- config-snapshot.ts
+|   |       |   |-- config-loader.ts
+|   |       |   |-- router-runtime.ts
+|   |       |   |-- fallback-runtime.ts
+|   |       |   |-- provider-runtime.ts
+|   |       |   |-- runtime-counters.ts
+|   |       |   |-- health-view.ts
+|   |       |   |-- usage-recorder.ts
+|   |       |   |-- cost-recorder.ts
+|   |       |   `-- savings-recorder.ts
+|   |       |-- coordination/ # Gateway / Postgres coordination channel
+|   |       |   |-- postgres-listener.ts
+|   |       |   |-- config-reload.ts
+|   |       |   |-- runtime-heartbeat.ts
+|   |       |   `-- reconcile-loop.ts
+|   |       `-- observability/ # Gateway observability
+|   |           |-- logger.ts
+|   |           |-- metrics.ts
+|   |           `-- tracing.ts
+|   |
+|   |-- worker/ # Background Worker async task app
+|   |   |-- package.json
+|   |   |-- tsconfig.json
+|   |   `-- src/ # Worker source directory
+|   |       |-- main.ts
+|   |       |-- scheduler.ts
+|   |       |-- jobs/ # concrete background job implementations
+|   |       |   |-- model-refresh.job.ts
+|   |       |   |-- provider-health.job.ts
+|   |       |   |-- price-sync.job.ts
+|   |       |   |-- billing-reconciliation.job.ts
+|   |       |   |-- alert-evaluation.job.ts
+|   |       |   |-- retention-cleanup.job.ts
+|   |       |   |-- stale-reservation-cleanup.job.ts
+|   |       |   |-- jsonl-export.job.ts
+|   |       |   `-- backup.job.ts
+|   |       `-- dispatchers/ # async notification and external delivery
+|   |           |-- notification-event-writer.ts
+|   |           `-- webhook.ts
+|   |
+|   `-- console/ # Console control-plane web app
+|       |-- package.json
+|       |-- tsconfig.json
+|       `-- src/ # Console source directory
+|           |-- app/ # Next.js App Router page routes
+|           |   |-- layout.tsx
+|           |   |-- page.tsx
+|           |   |-- agents/ # Agents page route
+|           |   |-- providers/ # Providers page route
+|           |   |-- models/ # Models page route
+|           |   |-- routes/ # Virtual Models / Routes page route
+|           |   |-- activity/ # Activity request log page route
+|           |   |-- usage/ # Usage & Cost page route
+|           |   |-- limits/ # Limits page route
+|           |   |-- runtime/ # Gateway Runtime page route
+|           |   |-- playground/ # Playground page route
+|           |   `-- settings/ # Settings page route
+|           |-- features/ # page logic and components by product feature
+|           |   |-- agents/ # Agent management module
+|           |   |-- providers/ # Provider configuration module
+|           |   |-- models/ # model library display module
+|           |   |-- route-policies/ # Virtual Model and routing policy module
+|           |   |-- activity/ # request log module
+|           |   |-- usage/ # Usage and Cost chart module
+|           |   |-- limits/ # Budget, RPM, TPM, and concurrency limits module
+|           |   |-- runtime/ # Gateway runtime status module
+|           |   `-- jobs/ # Worker job management module
+|           |-- server/ # Console server-side entry points and adapters
+|           |   |-- console-api.ts
+|           |   |-- auth.ts
+|           |   |-- runtime-query.ts
+|           |   |-- job-client.ts
+|           |   `-- import-export.ts
+|           `-- components/ # shared Console UI components
+|               |-- navigation/ # navigation components
+|               |-- tables/ # table components
+|               |-- forms/ # form components
+|               |-- charts/ # chart components
+|               `-- runtime-status/ # runtime status components
+|
+|-- packages/ # internal packages shared by Gateway, Console, and Worker
+|   |-- domain/ # domain model and core business types
+|   |   `-- src/ # domain package source directory
+|   |       |-- agents/ # Agent domain types
+|   |       |-- providers/ # Provider domain types
+|   |       |-- models/ # model metadata domain types
+|   |       |-- route-policies/ # routing policy domain types
+|   |       |-- limits/ # rate limit and budget domain types
+|   |       `-- usage/ # Usage and Cost domain types
+|   |
+|   |-- db/ # database schema, migrations, and repositories
+|   |   `-- src/ # db package source directory
+|   |       |-- schema/ # future Drizzle schema definitions
+|   |       |-- migrations/ # SQL database migration files
+|   |       |-- repositories/ # data access wrappers
+|   |       |-- connection.ts
+|   |       `-- schema-version.ts
+|   |
+|   |-- protocol/ # external protocols and normalized protocol definitions
+|   |   `-- src/ # protocol package source directory
+|   |       |-- openai/ # OpenAI-compatible protocol types
+|   |       |-- anthropic/ # Anthropic-compatible protocol types
+|   |       |-- provider/ # Provider adapter protocol types
+|   |       `-- normalized/ # Gateway internal normalized protocol types
+|   |
+|   |-- routing/ # deterministic routing rule engine
+|   |   `-- src/ # routing package source directory
+|   |       |-- policy-types.ts
+|   |       |-- policy-compiler.ts
+|   |       |-- rule-engine.ts
+|   |       |-- model-selector.ts
+|   |       `-- route-reason.ts
+|   |
+|   |-- providers/ # real Provider adapter implementations
+|   |   `-- src/ # providers package source directory
+|   |       |-- provider-adapter.ts
+|   |       |-- provider-templates/ # allowlisted Provider templates
+|   |       |-- openai-compatible/ # generic OpenAI-compatible adapter
+|   |       |-- openai/ # OpenAI Provider adapter
+|   |       |-- anthropic/ # Anthropic Provider adapter
+|   |       |-- google/ # Google Gemini Provider adapter
+|   |       |-- openrouter/ # OpenRouter Provider adapter
+|   |       `-- ollama/ # Ollama / local provider adapter
+|   |
+|   |-- security/ # credential, authentication, and permission tools
+|   |   `-- src/ # security package source directory
+|   |       |-- api-key.ts
+|   |       |-- secret-encryption.ts
+|   |       |-- master-key.ts
+|   |       |-- console-auth.ts
+|   |       `-- permissions.ts
+|   |
+|   |-- jobs/ # shared background job models and execution abstractions
+|   |   `-- src/ # jobs package source directory
+|   |       |-- job-types.ts
+|   |       |-- job-lease.ts
+|   |       |-- job-runner.ts
+|   |       `-- job-results.ts
+|   |
+|   |-- billing/ # cost estimation, price registry, and reconciliation
+|   |   `-- src/ # billing package source directory
+|   |       |-- cost-estimator.ts
+|   |       |-- price-registry.ts
+|   |       |-- savings.ts
+|   |       `-- reconciliation.ts
+|   |
+|   |-- notifications/ # alert rules and delivery target models
+|   |   `-- src/ # notifications package source directory
+|   |       |-- alert-rules.ts
+|   |       |-- notification-events.ts
+|   |       `-- delivery-targets.ts
+|   |
+|   |-- config/ # config publishing, validation, and runtime settings
+|   |   `-- src/ # config package source directory
+|   |       |-- config-version.ts
+|   |       |-- config-validation.ts
+|   |       |-- dependency-check.ts
+|   |       `-- runtime-settings.ts
+|   |
+|   |-- coordination/ # Postgres inter-process coordination contracts
+|   |   `-- src/ # coordination package source directory
+|   |       |-- channels.ts
+|   |       |-- notification-payloads.ts
+|   |       |-- listener.ts
+|   |       `-- locks.ts
+|   |
+|   `-- ui/ # Console shared UI foundation package
+|       `-- src/ # ui package source directory
+|           |-- components/ # reusable base components
+|           |-- hooks/ # shared Console React hooks
+|           `-- styles/ # Tailwind / global style entry
+|
+|-- docs/ # product, architecture, and design docs
+|   |-- PRODUCT.md
+|   `-- ARCHITECTURE.md
+|
+|-- scripts/ # local development, migration, and maintenance scripts
+|   |-- dev.ts
+|   |-- migrate.ts
+|   |-- check-schema.ts
+|   `-- backup.ts
+|
+|-- package.json
+|-- pnpm-workspace.yaml
+|-- turbo.json
+`-- tsconfig.base.json
 ```
 
-## 10. 模块边界建议
+## 10. Module Boundary Guidance
 
-### 10.1 Gateway app 只做运行时编排
+### 10.1 Gateway App Only Orchestrates Runtime
 
-`apps/gateway` 负责 HTTP 服务、请求 pipeline、streaming、Provider 调用、Postgres notification 驱动的热加载和运行数据写入。领域规则尽量放在 `packages/routing`、`packages/domain`、`packages/providers` 中，避免 Gateway app 变成大而全的业务仓库。
+`apps/gateway` owns HTTP service, request pipeline, streaming, provider calls,
+Postgres-notification-driven hot reload, and runtime data writes. Domain rules
+should live in `packages/routing`, `packages/domain`, and `packages/providers`
+where possible, so the Gateway app does not become an all-in-one business
+bucket.
 
-### 10.2 Console app 只做控制面体验
+### 10.2 Console App Only Handles Control-Plane Experience
 
-`apps/console` 负责页面、表单、配置操作、Activity / Usage 展示、Worker job 状态和 Runtime 状态查看。依赖检查、调用共享 config publisher、导入导出等控制面入口可以放在 Console server 层，但共享类型和领域规则仍应放在 packages 中。
+`apps/console` owns pages, forms, configuration actions, Activity / Usage
+display, Worker job status, and Runtime status views. Dependency checks, shared
+config publisher calls, and import/export entry points can live in the Console
+server layer, but shared types and domain rules should stay in packages.
 
-### 10.3 Worker app 承载异步任务
+### 10.3 Worker App Owns Async Tasks
 
-`apps/worker` 负责周期任务和异步任务执行，包括模型刷新、Provider 健康探测、价格同步、账单对账、告警评估、通知投递、日志保留和周期性备份任务。Worker 可以使用 `packages/providers` 和 `packages/security` 解密并调用 Provider，但不能承接 Agent 的同步模型请求。
+`apps/worker` owns scheduled and asynchronous tasks, including model refresh,
+provider health probes, price sync, billing reconciliation, alert evaluation,
+notification delivery, log retention, and scheduled backup. Worker may use
+`packages/providers` and `packages/security` to decrypt and call providers, but
+it must not take over Agent synchronous model requests.
 
-### 10.4 Shared packages 保持协议稳定
+### 10.4 Shared Packages Keep Protocols Stable
 
-Agent 协议、Provider 协议、Route Policy、配置发布、配置校验、Postgres notification channel、数据库 schema 和安全工具都应作为共享 package 管理。这样 Gateway、Console 和 Worker 对同一个配置对象使用同一套类型定义、校验规则和协调契约。
+Agent protocols, provider protocols, Route Policy, config publishing, config
+validation, Postgres notification channels, database schema, and security tools
+should be managed as shared packages. Gateway, Console, and Worker then use the
+same type definitions, validation rules, and coordination contracts for the same
+configuration objects.
 
-## 11. 部署形态
+## 11. Deployment Shapes
 
 ### 11.1 Local / Single-Node
 
-- Gateway 默认监听 `127.0.0.1`。
-- Console 默认只允许本机访问。
-- Gateway、Console 和 Worker 可以由同一个 local supervisor 或 process manager 启动和监控。
-- V1 只支持一个 active Gateway 进程处理请求；可以有多个 Worker，但需要通过 Postgres job lease 去重。
-- 需要配置 PostgreSQL connection string；本地模式可以使用本机 Postgres、Docker Compose Postgres 或托管 Postgres。
-- Provider Key 加密存储。
-- 适合个人电脑、本地服务器或轻量自托管运行形态。
+- Gateway listens on `127.0.0.1` by default.
+- Console allows local access only by default.
+- Gateway, Console, and Worker can be started and supervised by one local
+  supervisor or process manager.
+- V1 supports only one active Gateway process handling requests. Multiple
+  Workers are allowed if they deduplicate through Postgres job leases.
+- PostgreSQL connection string is required. Local mode can use local Postgres,
+  Docker Compose Postgres, or hosted Postgres.
+- Provider Keys are encrypted at rest.
+- Suitable for personal computers, local servers, or lightweight self-hosted
+  deployments.
 
 ### 11.2 Docker / Server
 
-- Gateway、Console 和 Worker 可以作为多个进程运行，也可以由同一个 supervisor 管理。
-- 非 localhost 监听必须启用 Console 登录。
-- PostgreSQL 是必需依赖，负责持久化、配置热加载通知、job 唤醒和 runtime status 共享。
-- 应通过 network policy、防火墙和最小权限数据库 role 限制 Postgres 访问。
-- 数据目录只保存导出文件、备份文件或可选本地缓存，不保存 canonical database。
+- Gateway, Console, and Worker can run as multiple processes or under one
+  supervisor.
+- Non-localhost listeners must enable Console login.
+- PostgreSQL is required for persistence, config hot reload notifications, job
+  wakeup, and runtime status sharing.
+- Network policy, firewall, and least-privilege database roles should restrict
+  Postgres access.
+- Data directory stores only export files, backup files, or optional local
+  cache. It does not store the canonical database.
 
 ### 11.3 Single Binary
 
-- 后续可以把 Gateway、Console 静态资源、Worker、migration 和 runtime supervisor 打包成单个分发物。
-- Single Binary 默认形态是应用单二进制 + 外部 PostgreSQL，或由 compose / supervisor 管理的本机 PostgreSQL sidecar；它不是零依赖单文件数据库形态。
-- 架构上仍保留 Gateway 数据面和 Console 控制面的边界。
+- Future distribution can bundle Gateway, Console static assets, Worker,
+  migration, and runtime supervisor into one artifact.
+- The default Single Binary shape is one application binary plus external
+  PostgreSQL, or a local PostgreSQL sidecar managed by compose / supervisor. It
+  is not a zero-dependency single-file database.
+- The architecture still keeps the Gateway data plane and Console control plane
+  boundaries.
 
-## 12. 关键架构决策
+## 12. Key Architecture Decisions
 
-- TypeScript 贯穿 Gateway、Console、Worker 和共享 packages，减少协议与配置类型漂移。
-- Gateway 使用 Fastify，优先满足 streaming、低延迟、Public API 和插件化请求 pipeline。
-- Console 使用 Next.js，优先满足本地管理控制台、表单配置、数据展示和鉴权引导。
-- Background Worker 承载模型发现、价格同步、账单对账、告警通知、日志保留、JSONL / webhook export 和周期性备份任务。
-- PostgreSQL 作为 V1 默认 canonical database，并作为 Gateway、Console、Worker 之间的通信媒介。
-- `packages/db/config-versions` 提供共享 config publisher；Console 和 Worker 都通过它发布 routing-visible config version。
-- Config publisher 通过 Postgres `LISTEN/NOTIFY` 唤醒 Gateway 是 fast path，Gateway 周期 reconcile 是 safety path。
-- Gateway 只暴露 Public API；Console 和 Worker 不调用 Gateway 私有控制接口。
-- Console 对 Gateway 的控制反馈是异步最终一致的，以 Postgres 中的 applied config version、heartbeat 和 failure event 为准。
-- V1 只支持单 active Gateway 进程；多 Gateway 需要先引入共享限流、预算和并发计数状态。
-- Gateway 使用 immutable config snapshot，新请求即时使用新配置，进行中的请求不受影响。
-- `/v1/responses` V1 支持无状态子集，不默认实现跨 Provider response state。
-- Console 不进入 Agent 请求路径，Gateway 在 Console 暂时不可用时仍应能继续处理请求。
-- Console 删除配置默认写入 `deleted_at` 软删除；Agents、Providers、Provider Models、Virtual Models 和 Route Policies 的 active 查询都过滤 deleted rows。
-- Runtime history 表继续使用 restrictive foreign keys，不 cascade、不 set null；硬删除只作为维护操作，并且必须确认没有 active 配置依赖和没有 runtime history 引用。
-- Provider 派生模型数据仍使用 availability marker 表达 refresh 结果；Provider Model 被软删除后不会参与 active routing、price sync 或 health checks。
-- Route Policy 的候选模型统一存放在 `route_policy_candidates`，构成单一有序候选池，仅用 `candidate_order` 表达顺序；不再使用 `is_fallback` 区分主/备候选，完整的 fallback 链在请求时由 route policy 的 `strategy`（`fixed` 按 `candidate_order`、`cost_first`/`quality_first` 按估算成本、`random` 随机）推导，并按 provider/model 健康状态排除不可用候选；不单独维护 `fallback_chain_items` 表。
-- OpenAI-compatible 长尾 Provider 通过内置白名单 template 复用通用 adapter，不开放任意自定义 endpoint。
-- Playground 使用 Gateway Public API 测试；用户手动输入 Agent API key 并选择 Virtual Model Name，Console 后端不代理请求也不保存该 key。
-- Gateway 拥有同步限流、预算预留、并发计数和 in-memory health view；数据库保存可恢复的窗口、预算周期累计、健康事件和 health summary。
-- Gateway 在请求路径记录 baseline cost 和 request savings；Console 聚合展示，Worker 只在成本对账后修正 actual cost / savings。
-- Runtime settings 区分 hot-reloadable 与 restart-required；监听地址、端口、数据目录等由 supervisor 重启生效。
-- master key 存储在数据库之外，由 Gateway、Console、Worker 共享加载；Postgres 连接凭据与 master key 分离。
-- Migration 和升级前备份是部署期 / supervisor 关注点，不属于 Console 私有服务。
-- Provider Key 加密存储，Agent API key hash 存储，prompt / response 默认不落库。
+- TypeScript spans Gateway, Console, Worker, and shared packages to reduce
+  protocol and configuration type drift.
+- Gateway uses Fastify for streaming, low latency, Public API, and plugin-style
+  request pipeline needs.
+- Console uses Next.js for local management UI, form configuration, data
+  display, and authentication onboarding.
+- Background Worker owns model discovery, price sync, billing reconciliation,
+  alerts, notifications, log retention, JSONL / webhook export, and scheduled
+  backup tasks.
+- PostgreSQL is the V1 canonical database and the communication medium among
+  Gateway, Console, and Worker.
+- `packages/db/config-versions` provides the shared config publisher. Console
+  and Worker both use it to publish routing-visible config versions.
+- Postgres `LISTEN/NOTIFY` waking Gateway through the config publisher is the
+  fast path. Gateway periodic reconcile is the safety path.
+- Gateway only exposes Public API. Console and Worker do not call private
+  Gateway control interfaces.
+- Console control feedback for Gateway is asynchronous and eventually
+  consistent. The source of truth is applied config version, heartbeat, and
+  failure events in Postgres.
+- V1 supports one active Gateway process. Multiple Gateways require shared
+  state for rate limits, budget counters, and concurrency first.
+- Gateway uses immutable config snapshots. New requests use new configuration
+  immediately after reload, while in-flight requests are unaffected.
+- `/v1/responses` V1 supports a stateless subset and does not implement
+  cross-provider response state by default.
+- Console is not in the Agent request path. Gateway should continue processing
+  requests while Console is temporarily unavailable.
+- Console delete operations default to `deleted_at` soft deletes. Active queries
+  for Agents, Providers, Provider Models, Virtual Models, and Route Policies
+  filter deleted rows.
+- Runtime history tables keep restrictive foreign keys. They do not cascade or
+  set null. Hard delete is a maintenance operation and must first confirm there
+  are no active config dependencies and no runtime history references.
+- Provider-derived model data uses availability markers to represent refresh
+  results. Soft-deleted Provider Models do not participate in active routing,
+  price sync, or health checks.
+- Route Policy candidates are stored in `route_policy_candidates` as one ordered
+  candidate pool. `candidate_order` expresses order. There is no separate
+  `is_fallback` flag or `fallback_chain_items` table. The full fallback chain is
+  derived at request time from Route Policy `strategy`: `fixed` uses
+  `candidate_order`, `cost_first` / `quality_first` use estimated cost, and
+  `random` randomizes. Unavailable candidates are excluded by provider/model
+  health state.
+- OpenAI-compatible long-tail providers reuse the generic adapter through
+  built-in allowlisted templates. Arbitrary custom endpoints are not supported.
+- Playground tests through Gateway Public API. The user manually enters an Agent
+  API key and selects a Virtual Model Name. Console backend does not proxy the
+  request or store the key.
+- Gateway owns synchronous rate limiting, budget reservation, concurrency
+  counting, and the in-memory health view. The database stores recoverable
+  windows, budget period totals, health events, and health summaries.
+- Gateway records baseline cost and request savings on the request path. Console
+  aggregates and displays them. Worker only corrects actual cost / savings after
+  cost reconciliation.
+- Runtime settings are split between hot-reloadable and restart-required.
+  Listen address, port, and data directory take effect through supervisor
+  restart.
+- Master key is stored outside the database and loaded by Gateway, Console, and
+  Worker. Postgres credentials are separate from the master key.
+- Migration and pre-upgrade backup are deployment / supervisor concerns, not
+  Console-private services.
+- Provider Keys are encrypted at rest. Agent API keys are stored as hashes.
+  Prompt / response content is not stored by default.

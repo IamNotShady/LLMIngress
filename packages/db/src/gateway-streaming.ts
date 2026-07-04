@@ -16,7 +16,6 @@ import {
 } from "@llmingress/provider/subscription";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
-  finalizeGatewayBudgetReservation,
   type GatewayBudgetReservation,
   releaseGatewayBudgetReservation,
   reserveGatewayBudget,
@@ -67,6 +66,7 @@ export type GatewayStreamingProtocol = "chat_completions" | "messages" | "respon
 export type GatewayStreamingResult =
   | {
       body: Readable;
+      budgetReservation?: GatewayBudgetReservation;
       contentType: string;
       activity?: GatewayRequestActivityRoute;
       headers?: Record<string, string>;
@@ -495,29 +495,23 @@ export async function executeGatewayStreamingRequest(input: {
       });
 
       const body = wrapProviderStreamWithConcurrencyRelease(
-        wrapProviderStreamWithBudgetFinalization(
-          wrapProviderStreamWithMidStreamHealthRecording(
-            wrapProviderStreamWithErrorRecording(createReadaheadStream(reader, firstValue), {
-              recordRuntimeError: (error) =>
-                recordGatewayRuntimeError({
-                  databaseUrl: input.databaseUrl,
-                  error,
-                  metadata: {
-                    protocol: input.protocol,
-                    providerModelId: candidate.providerModelId,
-                    requestId: input.requestId,
-                    virtualModelId: input.virtualModel.id,
-                  },
-                }),
-            }),
-            {
-              databaseUrl: input.databaseUrl,
-              candidate,
-            },
-          ),
+        wrapProviderStreamWithMidStreamHealthRecording(
+          wrapProviderStreamWithErrorRecording(createReadaheadStream(reader, firstValue), {
+            recordRuntimeError: (error) =>
+              recordGatewayRuntimeError({
+                databaseUrl: input.databaseUrl,
+                error,
+                metadata: {
+                  protocol: input.protocol,
+                  providerModelId: candidate.providerModelId,
+                  requestId: input.requestId,
+                  virtualModelId: input.virtualModel.id,
+                },
+              }),
+          }),
           {
             databaseUrl: input.databaseUrl,
-            reservation: currentReservation,
+            candidate,
           },
         ),
         {
@@ -525,13 +519,15 @@ export async function executeGatewayStreamingRequest(input: {
           lease: concurrencyLease,
         },
       );
-      // Transfer ownership to stream wrappers — clear so outer catch doesn't double-release.
+      const budgetReservation = currentReservation;
+      // Transfer ownership to the caller/stream wrappers — clear so outer catch doesn't double-release.
       currentReservation = undefined;
       concurrencyLease = undefined;
 
       return {
         activity,
         body,
+        budgetReservation,
         contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
         ok: true,
         requestMetadata: normalized.requestMetadata,
@@ -795,38 +791,6 @@ function wrapProviderStreamWithMidStreamHealthRecording(
     }).catch(() => undefined);
   });
 
-  return source;
-}
-
-function wrapProviderStreamWithBudgetFinalization(
-  source: Readable,
-  input: {
-    databaseUrl?: string;
-    reservation: GatewayBudgetReservation | undefined;
-  },
-): Readable {
-  let settled = false;
-  source.once("end", () => {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    void finalizeGatewayBudgetReservation(input);
-  });
-  source.once("error", () => {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    void releaseGatewayBudgetReservation(input);
-  });
-  source.once("close", () => {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    void releaseGatewayBudgetReservation(input);
-  });
   return source;
 }
 

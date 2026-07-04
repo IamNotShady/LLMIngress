@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
 import { withPostgresTransaction } from "@llmingress/db/client";
+import type { GatewayBudgetActualUsage } from "./gateway-budgets.ts";
 import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
@@ -229,6 +230,27 @@ export function buildGatewayUsageCostRecords(
       savingsUsd,
     },
     requestUsage: usage,
+  };
+}
+
+export function buildGatewayBudgetActualUsage(input: {
+  price: ModelTokenPrice;
+  providerUsage: GatewayProviderTokenUsage | undefined;
+}): GatewayBudgetActualUsage | undefined {
+  if (!input.providerUsage) {
+    return undefined;
+  }
+  const cost = calculateTokenCostUsd(input.price, {
+    cachedInputTokens: input.providerUsage.cachedInputTokens,
+    inputTokens: input.providerUsage.inputTokens,
+    outputTokens: input.providerUsage.outputTokens,
+  });
+  if (cost.status !== "estimated") {
+    return undefined;
+  }
+  return {
+    costUsd: cost.totalCostUsd,
+    totalTokens: input.providerUsage.inputTokens + input.providerUsage.outputTokens,
   };
 }
 

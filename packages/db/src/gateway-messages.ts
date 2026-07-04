@@ -41,6 +41,7 @@ import {
 } from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import {
+  buildGatewayBudgetActualUsage,
   type GatewayUsageCostDetails,
   readGatewayProviderTokenUsage,
   selectGatewayBaselineCandidate,
@@ -284,8 +285,15 @@ export async function executeGatewayAnthropicMessages(input: {
       candidates: supportedCandidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
-      finalizeAttempt: (r) =>
-        finalizeGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
+      finalizeAttempt: (r, success) =>
+        finalizeGatewayBudgetReservation({
+          actual: buildGatewayBudgetActualUsage({
+            price: success.candidate.price,
+            providerUsage: readGatewayProviderTokenUsage(success.body),
+          }),
+          databaseUrl: input.databaseUrl,
+          reservation: r,
+        }),
       releaseAttempt: (r) =>
         releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
       reserveAttempt: async (candidate) => {

@@ -31,6 +31,11 @@ export type GatewayBudgetReservation = {
   reservedTotalTokens: number;
 };
 
+export type GatewayBudgetActualUsage = {
+  costUsd: number;
+  totalTokens: number;
+};
+
 export type GatewayBudgetDecision =
   | {
       ok: true;
@@ -154,7 +159,7 @@ export async function reserveGatewayBudget(input: {
           reserved_cost_usd,
           expires_at
         )
-        values ($1, $2, $3, 'pending', $4, $5, $6, now() + interval '5 minutes')
+        values ($1, $2, $3, 'pending', $4, $5, $6, now() + make_interval(secs => $7::int))
       `,
       [
         reservation.id,
@@ -163,6 +168,7 @@ export async function reserveGatewayBudget(input: {
         reservation.reservedInputTokens,
         reservation.reservedOutputTokens,
         reservation.reservedCostUsd,
+        readBudgetReservationTtlSeconds(),
       ],
     );
 
@@ -171,6 +177,7 @@ export async function reserveGatewayBudget(input: {
 }
 
 export async function finalizeGatewayBudgetReservation(input: {
+  actual?: GatewayBudgetActualUsage;
   databaseUrl?: string;
   reservation: GatewayBudgetReservation | undefined;
 }): Promise<void> {
@@ -178,7 +185,12 @@ export async function finalizeGatewayBudgetReservation(input: {
     return;
   }
 
-  await updateGatewayBudgetReservation(input.databaseUrl, input.reservation, "finalized");
+  await updateGatewayBudgetReservation(
+    input.databaseUrl,
+    input.reservation,
+    "finalized",
+    input.actual,
+  );
 }
 
 export async function releaseGatewayBudgetReservation(input: {
@@ -377,42 +389,55 @@ async function updateGatewayBudgetReservation(
   databaseUrl: string | undefined,
   reservation: GatewayBudgetReservation,
   status: "finalized" | "released",
+  actual?: GatewayBudgetActualUsage,
 ): Promise<void> {
   await withPostgresTransaction(databaseUrl, async (client) => {
     const result = await client.query<{ status: string }>(
       "select status from budget_reservations where id = $1 for update",
       [reservation.id],
     );
-    if (result.rows[0]?.status !== "pending") {
+    const currentStatus = result.rows[0]?.status;
+    const chargeTokens = actual?.totalTokens ?? reservation.reservedTotalTokens;
+    const chargeCostUsd = actual?.costUsd ?? reservation.reservedCostUsd;
+    if (!currentStatus) {
       return;
     }
 
-    if (status === "finalized") {
+    if (currentStatus === "pending" && status === "finalized") {
       await client.query(
         `
           update budget_periods
           set tokens_used = tokens_used + $1,
               cost_used_usd = cost_used_usd + $2,
-              reserved_tokens = greatest(reserved_tokens - $1, 0),
-              reserved_cost_usd = greatest(reserved_cost_usd - $2, 0),
+              reserved_tokens = greatest(reserved_tokens - $3, 0),
+              reserved_cost_usd = greatest(reserved_cost_usd - $4, 0),
               updated_at = now()
-          where id = $3
+          where id = $5
         `,
-        [reservation.reservedTotalTokens, reservation.reservedCostUsd, reservation.budgetPeriodId],
+        [
+          chargeTokens,
+          chargeCostUsd,
+          reservation.reservedTotalTokens,
+          reservation.reservedCostUsd,
+          reservation.budgetPeriodId,
+        ],
       );
       await client.query(
         `
           update budget_reservations
-          set status = 'finalized',
+          set status = $2,
               actual_total_tokens = $1,
-              actual_cost_usd = $2,
+              actual_cost_usd = $3,
               finalized_at = now(),
               updated_at = now()
-          where id = $3
+          where id = $4
         `,
-        [reservation.reservedTotalTokens, reservation.reservedCostUsd, reservation.id],
+        [chargeTokens, status, chargeCostUsd, reservation.id],
       );
-    } else {
+      return;
+    }
+
+    if (currentStatus === "pending" && status === "released") {
       await client.query(
         `
           update budget_periods
@@ -432,8 +457,43 @@ async function updateGatewayBudgetReservation(
         `,
         [reservation.id],
       );
+      return;
+    }
+
+    if (
+      (currentStatus === "expired" || currentStatus === "released") &&
+      status === "finalized" &&
+      actual
+    ) {
+      await client.query(
+        `
+          update budget_periods
+          set tokens_used = tokens_used + $1,
+              cost_used_usd = cost_used_usd + $2,
+              updated_at = now()
+          where id = $3
+        `,
+        [actual.totalTokens, actual.costUsd, reservation.budgetPeriodId],
+      );
+      await client.query(
+        `
+          update budget_reservations
+          set status = 'finalized',
+              actual_total_tokens = $1,
+              actual_cost_usd = $2,
+              finalized_at = now(),
+              updated_at = now()
+          where id = $3
+        `,
+        [actual.totalTokens, actual.costUsd, reservation.id],
+      );
     }
   });
+}
+
+function readBudgetReservationTtlSeconds(env: Record<string, string | undefined> = process.env) {
+  const parsed = Number(env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS ?? "");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1_800;
 }
 
 function isBudgetPeriod(period: string): period is GatewayBudgetPeriod {

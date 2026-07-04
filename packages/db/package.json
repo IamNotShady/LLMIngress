@@ -116,6 +116,10 @@
       "types": "./src/gateway-auth.ts",
       "default": "./src/gateway-auth.ts"
     },
+    "./gateway-budgets": {
+      "types": "./src/gateway-budgets.ts",
+      "default": "./src/gateway-budgets.ts"
+    },
     "./gateway-chat-completions": {
       "types": "./src/gateway-chat-completions.ts",
       "default": "./src/gateway-chat-completions.ts"
@@ -227,6 +231,10 @@
     "./worker-stale-reservations": {
       "types": "./src/worker-stale-reservations.ts",
       "default": "./src/worker-stale-reservations.ts"
+    },
+    "./worker-stale-concurrency": {
+      "types": "./src/worker-stale-concurrency.ts",
+      "default": "./src/worker-stale-concurrency.ts"
     },
     "./worker-webhook-export": {
       "types": "./src/worker-webhook-export.ts",

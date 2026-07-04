@@ -262,6 +262,25 @@
   - `pnpm run verify:features` passed with all 13 previously passing features re-verified before marking F3 passing.
 - Remaining risks/non-goals: settlement finalization, reservation TTL/reconciliation, typed error fidelity, and request hygiene remain for F4-F6.
 
+## 2026-07-04 Gateway Pipeline Hardening F4
+
+- Implemented `gateway-settlement-integrity`:
+  - Added actual-usage budget finalization: pending reservations charge provider actual cost/tokens when available and fall back to the reserved estimate when not.
+  - Added late finalize for `expired`/`released` reservations with actual usage so long streams can still record true cost after stale-reservation cleanup returned the reserved amount.
+  - Parameterized reservation TTL with `GATEWAY_BUDGET_RESERVATION_TTL_SECONDS` and defaulted it to 30 minutes.
+  - Added `buildGatewayBudgetActualUsage` and wired non-streaming fallback success paths to finalize with provider usage.
+  - Moved streaming budget settlement ownership to `apps/gateway/src/request-recording.ts`, where stream completion has access to collected SSE usage.
+  - Added `stale_concurrency_reconcile` job type migration, worker handler, periodic task registration, and `reconcileGatewayConcurrencyWindows` for quiet concurrency-window self-healing.
+  - Documented budget late-finalize and stale concurrency reconciliation tradeoffs in `docs/ARCHITECTURE.md`.
+- Verification completed:
+  - Red phase: `pnpm exec vitest run tests/features/gateway-settlement-integrity.unit.test.ts` failed because `worker-stale-concurrency` did not exist.
+  - `pnpm exec vitest run tests/features/gateway-settlement-integrity.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-settlement-integrity.e2e.spec.ts`
+  - `pnpm run db:migrate:check`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 14 previously passing features re-verified before marking F4 passing.
+- Remaining risks/non-goals: typed provider error fidelity and request hygiene remain for F5-F6.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

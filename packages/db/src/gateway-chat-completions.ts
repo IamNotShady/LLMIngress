@@ -47,6 +47,7 @@ import {
   requireGatewayRoutePolicy,
 } from "./gateway-runtime-helpers.ts";
 import {
+  buildGatewayBudgetActualUsage,
   type GatewayUsageCostDetails,
   readGatewayProviderTokenUsage,
   selectGatewayBaselineCandidate,
@@ -251,8 +252,15 @@ export async function executeGatewayOpenAIChatCompletion(input: {
       adapter: input.adapter,
       candidates,
       databaseUrl: input.databaseUrl,
-      finalizeAttempt: (r) =>
-        finalizeGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
+      finalizeAttempt: (r, success) =>
+        finalizeGatewayBudgetReservation({
+          actual: buildGatewayBudgetActualUsage({
+            price: success.candidate.price,
+            providerUsage: readGatewayProviderTokenUsage(success.body),
+          }),
+          databaseUrl: input.databaseUrl,
+          reservation: r,
+        }),
       recordFailedAttempt: async (attempt) => {
         fallbackAttempts.push(attempt);
       },

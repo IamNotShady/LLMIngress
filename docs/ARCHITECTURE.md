@@ -239,8 +239,15 @@ RPM 和并发检查不依赖 token 估算，应尽早执行。TPM 和预算检�
 Budget reservation 的泄漏回收：
 
 - Gateway 启动时清理本进程上次异常退出遗留的 stale reservation。
-- Gateway 在请求取消、超时或 provider fallback 全部失败时结算或释放 reservation。
-- Worker 的 Data Maintenance 周期性扫描并释放超过 TTL 的 stale reservation，作为兜底。
+- Gateway 在请求成功时优先用 Provider 返回的实际 usage 结算 reservation；如果 usage 不可用，则退回到预留估算值。
+- Gateway 在请求取消、超时或 provider fallback 全部失败时释放 reservation。
+- Worker 的 Data Maintenance 周期性扫描并释放超过 TTL 的 stale reservation，作为兜底。长流请求如果在 Worker 扫描后才结束，Gateway 允许对 `expired` reservation 做 late finalize，只补记实际 cost / token，不再二次扣 reserved 值。
+
+Concurrency 的泄漏回收：
+
+- Gateway 在请求结束或断开时释放 concurrency lease；释放使用 `greatest(active_count - 1, 0)`，避免重复释放造成负数。
+- Worker 的 `stale_concurrency_reconcile` 周期任务只修正 quiet window：默认 5 分钟内没有更新的 concurrency window 才会被对账。
+- 对账用最近仍处于 `started` 状态且未超过默认 15 分钟的 `request_activity` 作为 in-flight 近似。超过该窗口仍在飞行的长请求可能被暂时低估；后续真实 release 仍会安全落到 0，这个取舍只作为 crash 泄漏兜底，不替代请求路径释放。
 
 Provider health 的合并规则：
 

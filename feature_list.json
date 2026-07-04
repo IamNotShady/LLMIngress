@@ -165,8 +165,8 @@
         "gateway-db-pool",
         "gateway-recording-resilience"
       ],
-      "status": "failing",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-07-04: TDD red->green. Budget reservations now finalize with provider actual usage when available, keep reserved-estimate fallback when usage is unavailable, late-finalize expired reservations without double-releasing reserved amounts, and use configurable reservation TTL. Streaming budget settlement moved to Gateway stream completion so collected SSE usage can drive actual finalization. Added stale_concurrency_reconcile worker job, migration 0002, periodic scheduling, Worker handler registration, and architecture notes for quiet-window reconciliation tradeoffs. Focused unit and E2E passed; pnpm run db:migrate:check passed; pnpm run verify passed; pnpm run verify:features passed with all 14 previously passing features re-verified before status update."
     },
     {
       "id": "gateway-error-fidelity",

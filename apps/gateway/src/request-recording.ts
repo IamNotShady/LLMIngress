@@ -6,6 +6,10 @@ import {
   type GatewayStartedRequestActivity,
   readGatewayActivityError,
 } from "@llmingress/db/gateway-activity-recorder";
+import {
+  finalizeGatewayBudgetReservation,
+  releaseGatewayBudgetReservation,
+} from "@llmingress/db/gateway-budgets";
 import type { GatewayRequestMetadata } from "@llmingress/db/gateway-request-metadata";
 import {
   type GatewayStreamingResult,
@@ -13,6 +17,7 @@ import {
 } from "@llmingress/db/gateway-streaming";
 import { recordGatewayRequestTrace } from "@llmingress/db/gateway-tracing";
 import {
+  buildGatewayBudgetActualUsage,
   buildGatewayProviderUsageResponseBody,
   createGatewayStreamingUsageCollector,
   type GatewayUsageCostDetails,
@@ -161,6 +166,27 @@ export async function executeRecordedGatewayStreamingRequest(input: {
       collectChunk: (chunk) => usageCollector.collect(chunk),
       completeActivity: async ({ statusCode }) => {
         const providerUsage = usageCollector.readUsage();
+        try {
+          if (statusCode < 400) {
+            await finalizeGatewayBudgetReservation({
+              actual: response.usageCost
+                ? buildGatewayBudgetActualUsage({
+                    price: response.usageCost.actualPrice,
+                    providerUsage,
+                  })
+                : undefined,
+              reservation: response.budgetReservation,
+            });
+          } else {
+            await releaseGatewayBudgetReservation({ reservation: response.budgetReservation });
+          }
+        } catch (error) {
+          input.logger.error(
+            { err: error, requestId: input.requestId },
+            "gateway stream settlement failed",
+          );
+        }
+
         if (activity && response.usageCost) {
           try {
             await recorder.recordUsageCost({

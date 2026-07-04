@@ -85,7 +85,10 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     candidates: readonly FallbackChainCandidate[];
     databaseUrl?: string;
     fallbackAttempts: FallbackFailedAttempt[];
-    finalizeAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
+    finalizeAttempt?: (
+      reservation: GatewayBudgetReservation | undefined,
+      success: { body: unknown; candidate: FallbackChainCandidate },
+    ) => Promise<void>;
     recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void>;
     recordHealthEvent?: typeof recordProviderHealthEvent;
     releaseAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
@@ -100,7 +103,10 @@ export type ExecuteFallbackChainInput = {
   adapter?: OpenAIProviderAdapter;
   candidates: readonly FallbackChainCandidate[];
   databaseUrl?: string;
-  finalizeAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
+  finalizeAttempt?: (
+    reservation: GatewayBudgetReservation | undefined,
+    success: { body: unknown; candidate: FallbackChainCandidate },
+  ) => Promise<void>;
   recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void>;
   recordHealthEvent?: typeof recordProviderHealthEvent;
   releaseAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
@@ -202,7 +208,7 @@ export async function executeProviderFallbackAttempts<
             providerModelId: candidate.providerModelId,
           });
           reservationSettled = true;
-          await input.finalizeAttempt?.(reservation);
+          await input.finalizeAttempt?.(reservation, { body: result.body, candidate });
           return {
             candidate: {
               ...candidate,

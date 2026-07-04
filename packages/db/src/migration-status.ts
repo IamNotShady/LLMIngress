@@ -52,6 +52,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0001",
     name: "v1_baseline",
   },
+  {
+    checksum: "cec33c998433f2bac833da83f04e2481ef6e62419a46009a094c2dc6a3338fe2",
+    id: "0002",
+    name: "stale_concurrency_job_type",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

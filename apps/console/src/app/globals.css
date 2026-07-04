@@ -2614,7 +2614,7 @@ button.table-row-link {
 .playground-actions {
   gap: var(--space-sm);
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
 }
 .playground-actions button {
   min-width: 8rem;

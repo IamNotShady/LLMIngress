@@ -210,7 +210,7 @@ describe("console dark restyle static contract", () => {
     expect(actions).not.toContain("FlatIcon");
 
     const stylesheet = readFileSync(join(appDir, "globals.css"), "utf8");
-    expect(stylesheet).toMatch(/\.playground-actions\s*\{[^}]*justify-content:\s*center/s);
+    expect(stylesheet).toMatch(/\.playground-actions\s*\{[^}]*justify-content:\s*flex-end/s);
     expect(stylesheet).toMatch(/\.playground-actions button\s*\{[^}]*justify-content:\s*center/s);
   });
 

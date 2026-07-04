@@ -191,6 +191,19 @@
   - `pnpm run verify:features` passed with all 11 passing features re-verified.
 - Rendered verification used the repo Playwright E2E path; no in-app Browser fallback was needed. No unresolved blockers.
 
+## 2026-07-04 Playground Action Alignment Follow-up
+
+- Changed the Playground `Clear` / `Send` action row from centered to right-aligned in `.playground-actions`.
+- Updated `tests/features/console-dark-restyle.unit.test.ts` to assert `justify-content: flex-end`.
+- Browser verification on `http://localhost:3000/playground` measured `.playground-actions` as `justifyContent: flex-end` with `rightGap: 0` between the action row and Send button right edges; captured viewport evidence after scrolling to the action row.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+  - `pnpm run verify`
+  - `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` after the first full feature run hit transient Console startup contention
+  - `pnpm run verify:features` passed with all 11 passing features re-verified.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

@@ -121,7 +121,7 @@
         "console-shared-formatters"
       ],
       "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Focused unit and E2E passed for Activity timestamp overflow at desktop/mobile, honest Overview 24h recent/top-cost data, 7d Usage default, Online/Cost 24h/Failure rate total labels, checkbox virtual-model grants, compact row action classes, Close icon consistency, removed page eyebrows, and llmi_ Playground placeholder. Console typecheck, lint, pnpm run verify, and pnpm run verify:features passed; verify:features re-verified all 11 passing features after adding this tracker entry."
+      "evidence": "2026-07-04: TDD red->green. Focused unit and E2E passed for Activity timestamp overflow at desktop/mobile, honest Overview 24h recent/top-cost data, 7d Usage default, Online/Cost 24h/Failure rate total labels, checkbox virtual-model grants, compact row action classes, Close icon consistency, removed page eyebrows, and llmi_ Playground placeholder. Console typecheck, lint, pnpm run verify, and pnpm run verify:features passed; verify:features re-verified all 11 passing features after adding this tracker entry. Follow-up Playground action alignment right-aligns Clear and Send; focused unit, in-app browser measurement/screenshot, lint, Console typecheck, pnpm run verify, focused v1-console E2E after transient startup contention, and pnpm run verify:features passed."
     }
   ]
 }

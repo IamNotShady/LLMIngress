@@ -225,6 +225,17 @@
   - `pnpm --filter @llmingress/console typecheck`
 - Full regression intentionally skipped for this UI-only tuning pass.
 
+## 2026-07-04 Settings Page Alignment Follow-up
+
+- Changed `/settings` from the centered generic `.page` shell to `.page settings-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/settings` measured `.settings-page` with `leftGap: 0`, `marginLeft: 0px`, no horizontal overflow, no visible framework overlay, and no console warnings/errors; captured viewport evidence.
+- The in-app Browser DOM snapshot API remained unavailable, so rendered verification used the same in-app Browser's read-only DOM evaluate plus screenshot path.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped for this UI-only tuning pass.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

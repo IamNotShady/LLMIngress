@@ -323,6 +323,38 @@
   - `pnpm run verify:features` passed with all 16 previously passing features re-verified before marking F6 passing.
 - Remaining risks/non-goals: streaming and non-streaming provider execution still have separate implementations; complete adapter unification, chat multimodal support, and pooling low-frequency Console/Worker DB paths remain out of scope for this plan.
 
+## 2026-07-04 Virtual Models Page Alignment Follow-up
+
+- Changed `/models` from the centered generic `.page` shell to `.page models-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/models` measured `.models-page` with `leftGap: 0`, `marginLeft: 0px`, and no console warnings/errors; captured viewport evidence.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped per user request for this UI-only tuning pass.
+
+## 2026-07-04 Gateway Runtime Page Alignment Follow-up
+
+- Changed `/runtime` from the centered generic `.page` shell to `.page runtime-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/runtime` measured `.runtime-page` with `leftGap: 0`, `marginLeft: 0px`, no horizontal overflow, and no console warnings/errors; captured viewport evidence.
+- The in-app Browser DOM snapshot API returned an interface error, so rendered verification used the same in-app Browser's read-only DOM evaluate plus screenshot path.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped for this UI-only tuning pass.
+
+## 2026-07-04 Settings Page Alignment Follow-up
+
+- Changed `/settings` from the centered generic `.page` shell to `.page settings-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/settings` measured `.settings-page` with `leftGap: 0`, `marginLeft: 0px`, no horizontal overflow, no visible framework overlay, and no console warnings/errors; captured viewport evidence.
+- The in-app Browser DOM snapshot API remained unavailable, so rendered verification used the same in-app Browser's read-only DOM evaluate plus screenshot path.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped for this UI-only tuning pass.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

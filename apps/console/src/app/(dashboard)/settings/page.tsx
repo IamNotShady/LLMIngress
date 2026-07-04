@@ -5,7 +5,6 @@ export default function SettingsPage() {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="System"
         title="Settings"
         description="Console preferences, security reminders, and notification channels."
       />

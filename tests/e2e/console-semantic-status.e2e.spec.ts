@@ -130,7 +130,7 @@ test("console colors status by meaning and keeps destructive actions quiet but c
           await page.goto(`${baseUrl}/models`);
           await expect(
             page
-              .locator(".stat-card", { hasText: "Avg failure rate" })
+              .locator(".stat-card", { hasText: "Failure rate total" })
               .locator(".stat-card-value.is-danger"),
           ).toBeVisible();
           await expect(page.locator(".vm-table .num-danger").first()).toBeVisible();

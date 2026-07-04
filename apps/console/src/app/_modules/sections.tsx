@@ -151,9 +151,10 @@ export async function OverviewSection() {
     start: overviewStart,
     topLimit: 20,
   });
-  const activities = await listConsoleActivities();
-
-  const recentActivities = activities.slice(0, 8);
+  const recentActivities = await listConsoleActivities({
+    filters: { from: overviewStart },
+    limit: 8,
+  });
   const activeAgentCount = usageSummary.agentBreakdowns.filter(
     (agent) => agent.requestCount > 0,
   ).length;
@@ -162,7 +163,7 @@ export async function OverviewSection() {
       ? `${((usageSummary.failureCount / usageSummary.requestCount) * 100).toFixed(2)}%`
       : "0.00%";
   const trend = usageSummary.trend.map(formatOverviewTrendPoint);
-  const topAgents = buildTopAgentsByCost(usageSummary.agentBreakdowns, recentActivities);
+  const topAgents = buildTopAgentsByCost(usageSummary.agentBreakdowns);
 
   return (
     <section className="overview-dashboard" aria-label="Overview">
@@ -381,30 +382,13 @@ function formatActivityLatency(latencyMs: number | null): string {
   return `${(latencyMs / 1000).toFixed(2)}s`;
 }
 
-function buildTopAgentsByCost(
-  agentBreakdowns: ConsoleUsageDimensionBreakdown[],
-  recentActivities: ConsoleActivity[],
-) {
-  const fromUsage = agentBreakdowns
+function buildTopAgentsByCost(agentBreakdowns: ConsoleUsageDimensionBreakdown[]) {
+  return agentBreakdowns
     .map((breakdown) => ({
       name: breakdown.label,
       value: Number(breakdown.totalCostUsd ?? 0),
     }))
-    .filter((breakdown) => breakdown.value > 0);
-  if (fromUsage.length > 0) {
-    return fromUsage.sort((left, right) => right.value - left.value).slice(0, 5);
-  }
-
-  const recentCosts = new Map<string, number>();
-  for (const activity of recentActivities) {
-    const value = Number(activity.totalCostUsd ?? 0);
-    if (!Number.isFinite(value) || value <= 0) {
-      continue;
-    }
-    const label = activity.agentName ?? "Unknown agent";
-    recentCosts.set(label, (recentCosts.get(label) ?? 0) + value);
-  }
-  return Array.from(recentCosts, ([name, value]) => ({ name, value }))
+    .filter((breakdown) => breakdown.value > 0)
     .sort((left, right) => right.value - left.value)
     .slice(0, 5);
 }
@@ -1344,7 +1328,7 @@ export async function VirtualModelsSection({
         />
         <StatCard
           icon="!"
-          label="Avg failure rate"
+          label="Failure rate total"
           value={formatVirtualModelFailureRate(
             totalVirtualModelRequests,
             totalVirtualModelFailures,
@@ -1400,7 +1384,7 @@ export async function VirtualModelsSection({
                       <th>Default hit model</th>
                       <th className="num">Requests 24h</th>
                       <th className="num">Cost 24h</th>
-                      <th className="num">Failure rate</th>
+                      <th className="num">Failure rate total</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -1484,14 +1468,15 @@ export async function VirtualModelsSection({
                           <td>
                             <span className="agent-table-actions">
                               <a
-                                className="link-button agent-action-edit"
+                                aria-label={`Edit ${virtualModel.name}`}
+                                className="link-button agent-action-edit row-action-button"
                                 href={buildQueryHref(searchParams, {
                                   virtualModelView: undefined,
                                   virtualModelDialog: virtualModel.id,
                                 })}
+                                title="Edit"
                               >
                                 <FlatIcon name="edit" />
-                                <span>Edit</span>
                               </a>
                             </span>
                           </td>
@@ -1593,7 +1578,7 @@ function VirtualModelViewDialog({
             <dd>{formatVirtualModelCost(virtualModel.cost24hUsd)}</dd>
           </div>
           <div>
-            <dt>Failure rate</dt>
+            <dt>Failure rate total</dt>
             <dd>
               {formatVirtualModelFailureRate(
                 virtualModel.requestCountTotal,
@@ -1896,7 +1881,6 @@ export async function RoutePoliciesSection({
 
 export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const usageToday = await getConsoleUsageSummary({ window: "24h" });
-  const usageWeek = await getConsoleUsageSummary({ window: "7d" });
   const agents = await listAgents();
   const agentVirtualModelAccess = await listAgentVirtualModelAccess();
   const agentLimits = await listAgentLimits();
@@ -1905,7 +1889,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
     agentVirtualModelAccess.map((access) => [access.agentId, access]),
   );
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
-  const connectedAgentCount = agents.filter((agent) => agent.hasApiKey).length;
+  const onlineAgentCount = agents.filter((agent) => agent.status === "online").length;
   const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
   const agentTypeFilter = readAgentTypeFilter(readSingleSearchParam(searchParams.agentType));
   const agentStatusFilter = readAgentStatusFilter(readSingleSearchParam(searchParams.agentStatus));
@@ -1948,13 +1932,13 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
         <div className="agents-main-column">
           <div className="stat-grid agents-stat-grid">
             <StatCard icon="AG" label="Agents" value={String(agents.length)} />
-            <StatCard icon="ON" label="Connected" value={String(connectedAgentCount)} />
+            <StatCard icon="ON" label="Online" value={String(onlineAgentCount)} />
             <StatCard
               icon="RQ"
               label="Requests 24h"
               value={formatConsoleCompactCount(usageToday.requestCount)}
             />
-            <StatCard icon="$" label="Cost 7d" value={formatConsoleUsd(usageWeek.totalCostUsd)} />
+            <StatCard icon="$" label="Cost 24h" value={formatConsoleUsd(usageToday.totalCostUsd)} />
           </div>
           <form action="/agents" method="get">
             <fieldset className="agents-filter-bar">
@@ -2100,25 +2084,27 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                           <td>
                             <span className="agent-table-actions">
                               <a
-                                className="link-button agent-action-edit"
+                                aria-label={`Edit ${agent.name}`}
+                                className="link-button agent-action-edit row-action-button"
                                 href={buildQueryHref(searchParams, {
                                   agentDialog: agent.id,
                                   agentView: undefined,
                                 })}
+                                title="Edit"
                               >
                                 <FlatIcon name="edit" />
-                                <span>Edit</span>
                               </a>
                               <a
-                                className="link-button agent-action-delete"
+                                aria-label={`Delete ${agent.name}`}
+                                className="link-button agent-action-delete row-action-button row-action-danger"
                                 href={buildQueryHref(searchParams, {
                                   agentDialog: undefined,
                                   agentView: undefined,
                                   deleteAgent: agent.id,
                                 })}
+                                title="Delete"
                               >
                                 <FlatIcon name="delete" />
-                                <span>Delete</span>
                               </a>
                             </span>
                           </td>
@@ -2281,11 +2267,11 @@ function AgentCreateDialog({
           <input id="agent-name" name="name" required />
           <label htmlFor="agent-type">Agent type</label>
           <select id="agent-type" name="agentType" required defaultValue="coding">
-            <option value="coding">coding</option>
-            <option value="desktop">desktop</option>
-            <option value="terminal">terminal</option>
-            <option value="ide">ide</option>
-            <option value="other">other</option>
+            <option value="coding">Coding</option>
+            <option value="desktop">Desktop</option>
+            <option value="terminal">Terminal</option>
+            <option value="ide">IDE</option>
+            <option value="other">Other</option>
           </select>
           <label htmlFor="agent-integration-platform">Integration platform</label>
           <select
@@ -2296,7 +2282,7 @@ function AgentCreateDialog({
           >
             {agentIntegrationPlatforms.map((platform) => (
               <option key={platform} value={platform}>
-                {platform}
+                {formatAgentIntegrationPlatformLabel(platform)}
               </option>
             ))}
           </select>
@@ -2307,22 +2293,17 @@ function AgentCreateDialog({
             required
             defaultValue="true"
           >
-            <option value="true">enabled</option>
-            <option value="false">disabled</option>
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
           </select>
-          <label htmlFor="agent-allowed-virtual-models">Allowed virtual models</label>
-          <select
-            id="agent-allowed-virtual-models"
-            name="allowedVirtualModelIds"
-            multiple
-            size={virtualModelSelectSize(virtualModels.length)}
-          >
-            {virtualModels.map((virtualModel) => (
-              <option key={virtualModel.id} value={virtualModel.id}>
-                {formatVirtualModelOptionLabel(virtualModel)}
-              </option>
-            ))}
-          </select>
+          <span className="form-label" id="agent-allowed-virtual-models-label">
+            Allowed virtual models
+          </span>
+          <AgentAllowedVirtualModelsCheckboxes
+            labelId="agent-allowed-virtual-models-label"
+            selectedVirtualModelIds={[]}
+            virtualModels={virtualModels}
+          />
           <label htmlFor="agent-default-virtual-model">Default virtual model</label>
           <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
             <option value="">No default virtual model</option>
@@ -2452,24 +2433,22 @@ function AgentEditDialog({
         <form className="provider-edit-form" action="/api/agents" method="post">
           <input type="hidden" name="action" value="saveAll" />
           <input type="hidden" name="id" value={agent.id} />
-          <label htmlFor={`agent-name-${agent.id}`}>Edit agent name</label>
+          <label htmlFor={`agent-name-${agent.id}`}>Agent name</label>
           <input id={`agent-name-${agent.id}`} name="name" defaultValue={agent.name} required />
-          <label htmlFor={`agent-type-${agent.id}`}>Edit agent type</label>
+          <label htmlFor={`agent-type-${agent.id}`}>Agent type</label>
           <select
             id={`agent-type-${agent.id}`}
             name="agentType"
             defaultValue={agent.agentType}
             required
           >
-            <option value="coding">coding</option>
-            <option value="desktop">desktop</option>
-            <option value="terminal">terminal</option>
-            <option value="ide">ide</option>
-            <option value="other">other</option>
+            <option value="coding">Coding</option>
+            <option value="desktop">Desktop</option>
+            <option value="terminal">Terminal</option>
+            <option value="ide">IDE</option>
+            <option value="other">Other</option>
           </select>
-          <label htmlFor={`agent-integration-platform-${agent.id}`}>
-            Edit integration platform
-          </label>
+          <label htmlFor={`agent-integration-platform-${agent.id}`}>Integration platform</label>
           <select
             id={`agent-integration-platform-${agent.id}`}
             name="integrationPlatform"
@@ -2478,34 +2457,30 @@ function AgentEditDialog({
           >
             {agentIntegrationPlatforms.map((platform) => (
               <option key={platform} value={platform}>
-                {platform}
+                {formatAgentIntegrationPlatformLabel(platform)}
               </option>
             ))}
           </select>
-          <label htmlFor={`agent-request-logging-${agent.id}`}>Edit request logging</label>
+          <label htmlFor={`agent-request-logging-${agent.id}`}>Request logging</label>
           <select
             id={`agent-request-logging-${agent.id}`}
             name="requestLoggingEnabled"
             defaultValue={String(agent.requestLoggingEnabled)}
             required
           >
-            <option value="true">enabled</option>
-            <option value="false">disabled</option>
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
           </select>
-          <label htmlFor={`agent-allowed-virtual-models-${agent.id}`}>Allowed virtual models</label>
-          <select
-            defaultValue={access.allowedVirtualModels.map((virtualModel) => virtualModel.id)}
-            id={`agent-allowed-virtual-models-${agent.id}`}
-            name="allowedVirtualModelIds"
-            multiple
-            size={virtualModelSelectSize(virtualModels.length)}
-          >
-            {virtualModels.map((virtualModel) => (
-              <option key={virtualModel.id} value={virtualModel.id}>
-                {formatVirtualModelOptionLabel(virtualModel)}
-              </option>
-            ))}
-          </select>
+          <span className="form-label" id={`agent-allowed-virtual-models-label-${agent.id}`}>
+            Allowed virtual models
+          </span>
+          <AgentAllowedVirtualModelsCheckboxes
+            labelId={`agent-allowed-virtual-models-label-${agent.id}`}
+            selectedVirtualModelIds={access.allowedVirtualModels.map(
+              (virtualModel) => virtualModel.id,
+            )}
+            virtualModels={virtualModels}
+          />
           <label htmlFor={`agent-default-virtual-model-${agent.id}`}>Default virtual model</label>
           <select
             id={`agent-default-virtual-model-${agent.id}`}
@@ -2612,6 +2587,40 @@ function AgentEditDialog({
         </form>
       </section>
     </>
+  );
+}
+
+function AgentAllowedVirtualModelsCheckboxes({
+  labelId,
+  selectedVirtualModelIds,
+  virtualModels,
+}: {
+  labelId: string;
+  selectedVirtualModelIds: readonly string[];
+  virtualModels: readonly ConsoleVirtualModel[];
+}) {
+  const selectedIds = new Set(selectedVirtualModelIds);
+  if (virtualModels.length === 0) {
+    return <p className="form-hint">No virtual models configured.</p>;
+  }
+  return (
+    <fieldset aria-labelledby={labelId} className="agent-vm-checkbox-list">
+      {virtualModels.map((virtualModel) => {
+        const inputId = `${labelId}-${virtualModel.id}`;
+        return (
+          <label className="checkbox-label" htmlFor={inputId} key={virtualModel.id}>
+            <input
+              defaultChecked={selectedIds.has(virtualModel.id)}
+              id={inputId}
+              name="allowedVirtualModelIds"
+              type="checkbox"
+              value={virtualModel.id}
+            />
+            <span>{formatVirtualModelOptionLabel(virtualModel)}</span>
+          </label>
+        );
+      })}
+    </fieldset>
   );
 }
 
@@ -2953,22 +2962,23 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                               <span className="agent-table-actions">
                                 <a
                                   aria-label={`Edit ${row.agent.name}`}
-                                  className="link-button agent-action-edit"
+                                  className="link-button agent-action-edit row-action-button"
                                   href={editHref}
+                                  title="Edit"
                                 >
                                   <FlatIcon name="edit" />
-                                  <span>Edit</span>
                                 </a>
                               </span>
                               <a
                                 aria-label={`Delete ${row.agent.name}`}
-                                className="limits-rule-delete-button"
+                                className="limits-rule-delete-button row-action-button row-action-danger"
                                 href={buildQueryHref(searchParams, {
                                   limitDelete: row.agent.id,
                                   limitDialog: undefined,
                                 })}
+                                title="Delete"
                               >
-                                Delete
+                                <FlatIcon name="delete" />
                               </a>
                             </span>
                           </td>
@@ -3038,7 +3048,8 @@ function LimitsConfigDialog({
             <p>{agent.name}</p>
           </div>
           <a className="secondary-button" href={closeHref}>
-            Close
+            <FlatIcon name="cancel" />
+            <span>Close</span>
           </a>
         </div>
         <form className="limits-config-form" action="/api/agent-limits" method="post">
@@ -4300,10 +4311,6 @@ function formatRoutePolicyCandidateOrder(candidates: Array<{ optionLabel: string
 
 function providerModelSelectSize(optionCount: number): number {
   return Math.min(6, Math.max(2, optionCount));
-}
-
-function virtualModelSelectSize(optionCount: number): number {
-  return Math.min(8, Math.max(2, optionCount));
 }
 
 function listRoutePolicyProviderFilterOptions(

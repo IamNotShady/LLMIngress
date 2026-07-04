@@ -164,6 +164,46 @@
   - Follow-up Limits header cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog header has no `.mono` key prefix, still shows `Rule configuration`, `test1`, and `Close`, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Full regression merge check: initial `pnpm run verify:features` exposed stale local Next dev PID `47013` holding the Console dev lock and making Console E2E startup exit with code 1. After stopping that process, `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` passed and the rerun `pnpm run verify:features` passed with all 10 passing features re-verified.
 
+## 2026-07-04 Console UI Audit Confirmed Fixes
+
+- Created isolated worktree `.worktrees/console-ui-audit-confirmed-fixes` on branch `codex/console-ui-audit-confirmed-fixes` and copied the ignored root `.env.local` into it.
+- Baseline before edits: `pnpm run verify:features` passed with all 10 existing passing features re-verified.
+- Added `console-ui-audit-confirmed-fixes` tracker entry and TDD coverage:
+  - `tests/features/console-ui-audit-confirmed-fixes.unit.test.ts`
+  - `tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts`
+- Confirmed red phase:
+  - Focused unit failed on the expected static contracts before implementation.
+  - Focused E2E failed because Overview still showed old all-time recent activity beside `Requests 24h 0`.
+- Implemented the confirmed audit fixes only: Activity Time/Request ID overflow protection, Overview 24h-only recent/top-cost data, Usage 7d default window, Agents `Online` and `Cost 24h` labels, Virtual Models `Failure rate total` labels, compact icon row action classes, Agent checkbox virtual-model grants, form display labels, Limits close icon, removed isolated page eyebrows, and `llmi_` Playground placeholder.
+- Updated older regression contracts to match the new confirmed behavior:
+  - Release guard feature ID/count expectations now include `console-ui-audit-confirmed-fixes`.
+  - Semantic-status E2E now checks `Failure rate total`.
+  - Shared-formatters E2E now verifies old requests are not shown in Overview 24h recent requests while Activity still verifies date-qualified timestamps.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-ui-audit-confirmed-fixes.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts`
+  - `pnpm --filter @llmingress/console typecheck`
+  - `pnpm run lint`
+  - `pnpm test:e2e tests/e2e/console-semantic-status.e2e.spec.ts`
+  - `pnpm test:e2e tests/e2e/console-shared-formatters.e2e.spec.ts`
+  - `pnpm test:e2e tests/e2e/v1-release-guards.e2e.spec.ts`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 11 passing features re-verified.
+- Rendered verification used the repo Playwright E2E path; no in-app Browser fallback was needed. No unresolved blockers.
+
+## 2026-07-04 Playground Action Alignment Follow-up
+
+- Changed the Playground `Clear` / `Send` action row from centered to right-aligned in `.playground-actions`.
+- Updated `tests/features/console-dark-restyle.unit.test.ts` to assert `justify-content: flex-end`.
+- Browser verification on `http://localhost:3000/playground` measured `.playground-actions` as `justifyContent: flex-end` with `rightGap: 0` between the action row and Send button right edges; captured viewport evidence after scrolling to the action row.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+  - `pnpm run verify`
+  - `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` after the first full feature run hit transient Console startup contention
+  - `pnpm run verify:features` passed with all 11 passing features re-verified.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

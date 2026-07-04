@@ -310,7 +310,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 id="playground-agent-api-key"
                 type="password"
                 autoComplete="off"
-                placeholder="sk-************************8fA7"
+                placeholder="llmi_************************"
                 value={agentApiKey}
                 onBlur={() => {
                   if (agentApiKey.trim() && models.length === 0 && !isLoadingModels) {

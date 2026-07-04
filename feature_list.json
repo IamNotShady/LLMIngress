@@ -110,6 +110,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-03: TDD red->green. Unit (5 static contracts) + E2E green: card grid gone with the provider list as single representation, 60 seeded models render capped at 50 with truncation note and live search narrowing to the needle model, providers page height < 4500px, agents KPI grid is 2 columns at 390 with zero truncated values, settings selects styled disabled (not-allowed cursor) with webhook placeholders, VM create dialog submit reads Create. Batch-2 contracts updated for the removed duplicate pill (list-row locator, providers-client-section-only pill check). 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified."
+    },
+    {
+      "id": "console-ui-audit-confirmed-fixes",
+      "name": "Console UI Audit Confirmed Fixes",
+      "description": "The Console fixes the confirmed audit issues without broad redesign: Activity timestamps cannot overlap Request IDs, Overview 24h widgets do not show all-time fallback data, Usage defaults to the configured 7-day window, Agents and Virtual Models labels state their actual time windows, row actions use one compact icon-button contract, dialogs/forms use consistent copy and display labels, isolated page eyebrows are removed, and the Playground key hint uses the llmi_ prefix.",
+      "verification": "pnpm exec vitest run tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts",
+      "dependencies": [
+        "console-providers-ia-and-forms",
+        "console-shared-formatters"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-04: TDD red->green. Focused unit and E2E passed for Activity timestamp overflow at desktop/mobile, honest Overview 24h recent/top-cost data, 7d Usage default, Online/Cost 24h/Failure rate total labels, checkbox virtual-model grants, compact row action classes, Close icon consistency, removed page eyebrows, and llmi_ Playground placeholder. Console typecheck, lint, pnpm run verify, and pnpm run verify:features passed; verify:features re-verified all 11 passing features after adding this tracker entry. Follow-up Playground action alignment right-aligns Clear and Send; focused unit, in-app browser measurement/screenshot, lint, Console typecheck, pnpm run verify, focused v1-console E2E after transient startup contention, and pnpm run verify:features passed."
     }
   ]
 }

@@ -152,10 +152,22 @@ describe("console dark restyle static contract", () => {
     expect(vmTable).toContain('className="link-button agent-action-edit row-action-button"');
     expect(vmTable).toContain('<FlatIcon name="edit" />');
     expect(vmTable).not.toContain('className="table-action-link"');
-    expect(stylesheet).toMatch(/\.models-page\s*\{[^}]*margin:\s*0/s);
+    expect(stylesheet).toMatch(
+      /\.providers-page,\s*\.models-page,\s*\.runtime-page\s*\{[^}]*margin:\s*0/s,
+    );
     expect(stylesheet).toMatch(/\.vm-filter-bar button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
       /\.vm-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+    );
+  });
+
+  test("gateway runtime page uses the left-aligned console shell", () => {
+    const runtimePage = readFileSync(join(appDir, "(dashboard)/runtime/page.tsx"), "utf8");
+    const stylesheet = css();
+
+    expect(runtimePage).toContain('className="page runtime-page"');
+    expect(stylesheet).toMatch(
+      /\.providers-page,\s*\.models-page,\s*\.runtime-page\s*\{[^}]*margin:\s*0/s,
     );
   });
 

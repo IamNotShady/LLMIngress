@@ -321,7 +321,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     await releaseGatewayConcurrency({
       databaseUrl: input.databaseUrl,
       lease: concurrencyLease,
-    });
+    }).catch(() => undefined);
   }
 }
 

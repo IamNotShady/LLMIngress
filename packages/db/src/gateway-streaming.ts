@@ -342,7 +342,6 @@ export async function executeGatewayStreamingRequest(input: {
         // HTTP-level error — determine retryability from status.
         const providerErrorBody = await readProviderErrorBody(response);
         console.error("gateway provider streaming request failed", {
-          body: providerErrorBody,
           modelId: candidate.modelId,
           providerKey: candidate.providerKey,
           requestId: input.requestId,

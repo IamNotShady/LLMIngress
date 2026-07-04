@@ -142,8 +142,8 @@
       "dependencies": [
         "gateway-db-pool"
       ],
-      "status": "failing",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-07-04: TDD red->green. Moved Gateway recording wrappers into apps/gateway/src/request-recording.ts, injected a recorder for unit coverage, kept JSON and streaming responses resilient to activity/usage/trace write failures, downgraded concurrency-release failures so they cannot override chat responses, and removed provider body from streaming failure stderr logs. Focused unit and E2E passed; pnpm run verify passed; pnpm run verify:features passed with all 12 previously passing features re-verified before status update."
     },
     {
       "id": "gateway-stream-robustness",

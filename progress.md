@@ -229,6 +229,23 @@
 - Release guard tests now allow the registered Gateway hardening entries to be `failing` while still requiring the previously accepted feature contracts to stay `passing`; the E2E dry-run assertion reads the current passing count from `feature_list.json`.
 - Remaining risks/non-goals: streaming/non-streaming provider runtime is still split, Console and Worker DB paths are not pooled in this slice, and F2-F6 remain unimplemented.
 
+## 2026-07-04 Gateway Pipeline Hardening F2
+
+- Implemented `gateway-recording-resilience`:
+  - Moved the Gateway JSON/streaming recording wrappers from `apps/gateway/src/main.ts` into `apps/gateway/src/request-recording.ts`.
+  - Added recorder injection for focused unit tests and made activity creation, activity completion, usage recording, and trace recording failures log at error level without changing the LLM response.
+  - Allows provider execution to continue with `requestActivityId: undefined` when activity creation fails; usage recording is skipped without an activity id because request usage has an activity FK.
+  - Changed chat completion concurrency release cleanup to avoid throwing from the finally path.
+  - Removed provider response body from streaming provider failure `console.error` payloads.
+  - Added `tests/support/gateway-route-seed.ts` for compact Gateway E2E route seeding.
+- Verification completed:
+  - Red phase: `pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts` failed because `apps/gateway/src/request-recording.ts` did not exist.
+  - `pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 12 previously passing features re-verified before marking F2 passing.
+- Remaining risks/non-goals: recording failures are now non-fatal, but budget settlement semantics and stream timeout/backpressure remain for F3/F4.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

@@ -2,6 +2,7 @@ import {
   isRecord,
   isRetryableHttpStatus,
   joinProviderUrl,
+  providerRequestTimeoutMs,
   readProviderRequestId,
   readResponseBody,
 } from "./adapter-http.js";
@@ -85,6 +86,7 @@ type CreateOpenAIProviderAdapterOptions = {
   fetch?: typeof globalThis.fetch;
   headers?: Record<string, string>;
   mapProviderError?: (statusCode: number, body: unknown) => OpenAIAdapterError;
+  timeoutMs?: number;
 };
 
 type OpenAIChatCompletionsPayload = {
@@ -119,6 +121,7 @@ export function createOpenAIProviderAdapter(
 ): OpenAIProviderAdapter {
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const mapError = options.mapProviderError ?? mapProviderError;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
     chatCompletion: async ({ request, target }) => {
@@ -127,6 +130,7 @@ export function createOpenAIProviderAdapter(
           body: JSON.stringify(buildChatCompletionsPayload(request, target)),
           headers: buildProviderHeaders(target.apiKey, options.headers),
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
 
@@ -141,14 +145,7 @@ export function createOpenAIProviderAdapter(
           statusCode: response.status,
         };
       } catch (error) {
-        return {
-          body: null,
-          errorCode: "provider_request_failed",
-          errorMessage: error instanceof Error ? error.message : "Provider request failed.",
-          ok: false,
-          retryable: true,
-          statusCode: null,
-        };
+        return mapRequestFailure(error, timeoutMs);
       }
     },
     embeddings: async ({ request, target }) => {
@@ -157,6 +154,7 @@ export function createOpenAIProviderAdapter(
           body: JSON.stringify(buildEmbeddingsPayload(request, target)),
           headers: buildProviderHeaders(target.apiKey, options.headers),
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
 
@@ -171,14 +169,7 @@ export function createOpenAIProviderAdapter(
           statusCode: response.status,
         };
       } catch (error) {
-        return {
-          body: null,
-          errorCode: "provider_request_failed",
-          errorMessage: error instanceof Error ? error.message : "Provider request failed.",
-          ok: false,
-          retryable: true,
-          statusCode: null,
-        };
+        return mapRequestFailure(error, timeoutMs);
       }
     },
     response: async ({ request, target }) => {
@@ -187,6 +178,7 @@ export function createOpenAIProviderAdapter(
           body: JSON.stringify(buildResponsesPayload(request, target)),
           headers: buildProviderHeaders(target.apiKey, options.headers),
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
 
@@ -201,14 +193,7 @@ export function createOpenAIProviderAdapter(
           statusCode: response.status,
         };
       } catch (error) {
-        return {
-          body: null,
-          errorCode: "provider_request_failed",
-          errorMessage: error instanceof Error ? error.message : "Provider request failed.",
-          ok: false,
-          retryable: true,
-          statusCode: null,
-        };
+        return mapRequestFailure(error, timeoutMs);
       }
     },
   };
@@ -294,6 +279,25 @@ function mapProviderError(statusCode: number, body: unknown): OpenAIAdapterError
     retryable: isRetryableHttpStatus(statusCode),
     statusCode,
   };
+}
+
+function mapRequestFailure(error: unknown, timeoutMs: number): OpenAIAdapterError {
+  return {
+    body: null,
+    errorCode: "provider_request_failed",
+    errorMessage: isTimeoutError(error)
+      ? `Provider request timed out after ${timeoutMs}ms.`
+      : error instanceof Error
+        ? error.message
+        : "Provider request failed.",
+    ok: false,
+    retryable: true,
+    statusCode: null,
+  };
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === "TimeoutError";
 }
 
 function readProviderError(body: unknown): { code: string; message: string } {

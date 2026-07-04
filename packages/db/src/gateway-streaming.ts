@@ -268,6 +268,13 @@ export async function executeGatewayStreamingRequest(input: {
       // --- Fetch with network-error catch ---
       let response: Response | undefined;
       let networkError: Error | undefined;
+      const connectController = new AbortController();
+      const connectTimeout = setTimeout(() => {
+        connectController.abort(
+          new Error("Provider connection timed out before response headers."),
+        );
+      }, streamConnectTimeoutMs());
+      connectTimeout.unref?.();
       try {
         response = await (input.fetch ?? globalThis.fetch)(providerUrl, {
           body: JSON.stringify(
@@ -284,9 +291,12 @@ export async function executeGatewayStreamingRequest(input: {
             providerKey: candidate.providerKey,
           }),
           method: "POST",
+          signal: connectController.signal,
         });
       } catch (err) {
         networkError = err instanceof Error ? err : new Error("Provider network error.");
+      } finally {
+        clearTimeout(connectTimeout);
       }
 
       if (networkError || !response) {
@@ -406,7 +416,11 @@ export async function executeGatewayStreamingRequest(input: {
       let firstChunk: ReadableStreamReadResult<Uint8Array> | undefined;
       let readaheadError: string | undefined;
       try {
-        firstChunk = await readFirstChunkWithTimeout(reader, FIRST_CHUNK_TIMEOUT_MS);
+        firstChunk = await readChunkWithTimeout(
+          reader,
+          FIRST_CHUNK_TIMEOUT_MS,
+          "Provider stream timed out before first byte.",
+        );
       } catch (streamError) {
         readaheadError =
           streamError instanceof Error
@@ -583,18 +597,24 @@ export async function executeGatewayStreamingRequest(input: {
 
 const FIRST_CHUNK_TIMEOUT_MS = 30_000;
 
-// Read the provider stream's first chunk, racing a timeout so a provider that
-// 200s but never sends data falls back instead of hanging the request.
-async function readFirstChunkWithTimeout(
+export function streamConnectTimeoutMs(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  return readPositiveIntegerEnv(env.GATEWAY_STREAM_CONNECT_TIMEOUT_MS, 30_000);
+}
+
+export function streamIdleTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  return readPositiveIntegerEnv(env.GATEWAY_STREAM_IDLE_TIMEOUT_MS, 120_000);
+}
+
+async function readChunkWithTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   timeoutMs: number,
+  message: string,
 ): Promise<ReadableStreamReadResult<Uint8Array>> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () => reject(new Error("Provider stream timed out before first byte.")),
-      timeoutMs,
-    );
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
     timer.unref?.();
   });
   try {
@@ -609,15 +629,22 @@ async function readFirstChunkWithTimeout(
 // Re-emit the already-read first chunk, then pump the rest from the same reader
 // (the web stream is locked once getReader() is called, so Readable.fromWeb can
 // no longer be used). Backpressure-aware; cancels the reader if the consumer closes.
-function createReadaheadStream(
+export function createReadaheadStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   firstValue: Uint8Array,
+  options: { idleTimeoutMs?: number } = {},
 ): Readable {
+  const idleTimeoutMs = options.idleTimeoutMs ?? streamIdleTimeoutMs();
+
   async function* pump(): AsyncGenerator<Buffer> {
     yield Buffer.from(firstValue);
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await readChunkWithTimeout(
+          reader,
+          idleTimeoutMs,
+          "Provider stream stalled mid-response.",
+        );
         if (done) {
           return;
         }
@@ -642,13 +669,13 @@ export function wrapProviderStreamWithActivityCompletion(
     statusCode: number;
   },
 ): Readable {
-  const output = new PassThrough();
+  const output = new PassThrough({ highWaterMark: 16 * 1024 });
   let settled = false;
 
-  source.on("data", (chunk) => {
-    input.collectChunk?.(chunk);
-    output.write(chunk);
-  });
+  if (input.collectChunk) {
+    source.on("data", input.collectChunk);
+  }
+  source.pipe(output, { end: false });
   source.once("end", () => {
     void settleActivity(input.statusCode)
       .catch(() => undefined)
@@ -669,6 +696,11 @@ export function wrapProviderStreamWithActivityCompletion(
       .catch(() => undefined)
       .finally(() => output.destroy());
   });
+  output.once("close", () => {
+    if (!source.destroyed && !source.readableEnded) {
+      source.destroy();
+    }
+  });
 
   async function settleActivity(statusCode: number): Promise<void> {
     if (settled) {
@@ -679,6 +711,14 @@ export function wrapProviderStreamWithActivityCompletion(
   }
 
   return output;
+}
+
+function readPositiveIntegerEnv(value: string | undefined, fallback: number): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export function wrapProviderStreamWithErrorRecording(

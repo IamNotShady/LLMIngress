@@ -246,6 +246,22 @@
   - `pnpm run verify:features` passed with all 12 previously passing features re-verified before marking F2 passing.
 - Remaining risks/non-goals: recording failures are now non-fatal, but budget settlement semantics and stream timeout/backpressure remain for F3/F4.
 
+## 2026-07-04 Gateway Pipeline Hardening F3
+
+- Implemented `gateway-stream-robustness`:
+  - Added provider request timeouts for non-streaming OpenAI chat, embeddings, responses, and Anthropic messages adapter calls via `PROVIDER_REQUEST_TIMEOUT_MS`.
+  - Added Gateway streaming connect timeout via `GATEWAY_STREAM_CONNECT_TIMEOUT_MS`, kept the existing first-chunk timeout, and added mid-response idle timeout via `GATEWAY_STREAM_IDLE_TIMEOUT_MS`.
+  - Exported the readahead stream helper for focused coverage and made it fail stalled provider bodies instead of hanging forever after the first chunk.
+  - Changed activity stream completion wrapping to use `pipe` backpressure, collect usage as an observer, and destroy upstream provider streams when the client side closes.
+  - Added fake provider `stream-stall` mode and E2E coverage for hung non-streaming providers and streaming providers that stall after one chunk.
+- Verification completed:
+  - Red phase: `pnpm exec vitest run tests/features/gateway-stream-robustness.unit.test.ts` failed on missing timeout behavior/export and on unbounded/manual stream forwarding.
+  - `pnpm exec vitest run tests/features/gateway-stream-robustness.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-stream-robustness.e2e.spec.ts`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 13 previously passing features re-verified before marking F3 passing.
+- Remaining risks/non-goals: settlement finalization, reservation TTL/reconciliation, typed error fidelity, and request hygiene remain for F4-F6.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

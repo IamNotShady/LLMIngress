@@ -2,6 +2,7 @@ import {
   isRecord,
   isRetryableHttpStatus,
   joinProviderUrl,
+  providerRequestTimeoutMs,
   readProviderRequestId,
   readResponseBody,
 } from "./adapter-http.js";
@@ -66,6 +67,7 @@ export type AnthropicProviderAdapter = {
 
 type CreateAnthropicProviderAdapterOptions = {
   fetch?: typeof globalThis.fetch;
+  timeoutMs?: number;
 };
 
 export type AnthropicMessagesPayload = {
@@ -91,6 +93,7 @@ export function createAnthropicProviderAdapter(
   options: CreateAnthropicProviderAdapterOptions = {},
 ): AnthropicProviderAdapter {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
     messages: async ({ request, target }) => {
@@ -103,6 +106,7 @@ export function createAnthropicProviderAdapter(
             "x-api-key": target.apiKey,
           },
           method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
 
@@ -117,14 +121,7 @@ export function createAnthropicProviderAdapter(
           statusCode: response.status,
         };
       } catch (error) {
-        return {
-          body: null,
-          errorCode: "provider_request_failed",
-          errorMessage: error instanceof Error ? error.message : "Provider request failed.",
-          ok: false,
-          retryable: true,
-          statusCode: null,
-        };
+        return mapRequestFailure(error, timeoutMs);
       }
     },
   };
@@ -191,6 +188,25 @@ function mapProviderError(statusCode: number, body: unknown): AnthropicAdapterEr
     retryable: isRetryableHttpStatus(statusCode),
     statusCode,
   };
+}
+
+function mapRequestFailure(error: unknown, timeoutMs: number): AnthropicAdapterError {
+  return {
+    body: null,
+    errorCode: "provider_request_failed",
+    errorMessage: isTimeoutError(error)
+      ? `Provider request timed out after ${timeoutMs}ms.`
+      : error instanceof Error
+        ? error.message
+        : "Provider request failed.",
+    ok: false,
+    retryable: true,
+    statusCode: null,
+  };
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === "TimeoutError";
 }
 
 function readProviderError(body: unknown): { code: string; message: string } {

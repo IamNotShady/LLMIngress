@@ -6,6 +6,12 @@ export function joinProviderUrl(baseUrl: string, path: string): string {
   return url.toString();
 }
 
+export function providerRequestTimeoutMs(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  return readPositiveIntegerEnv(env.PROVIDER_REQUEST_TIMEOUT_MS, 30_000);
+}
+
 export async function readResponseBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) {
@@ -32,4 +38,12 @@ export function isRetryableHttpStatus(statusCode: number): boolean {
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readPositiveIntegerEnv(value: string | undefined, fallback: number): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }

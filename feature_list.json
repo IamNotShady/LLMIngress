@@ -153,8 +153,8 @@
       "dependencies": [
         "gateway-db-pool"
       ],
-      "status": "failing",
-      "evidence": ""
+      "status": "passing",
+      "evidence": "2026-07-04: TDD red->green. Added provider request timeouts for non-streaming OpenAI/Anthropic adapter calls, Gateway streaming connect and mid-response idle timeouts, backpressure-preserving activity stream wrapping, and upstream destruction on client close. Added fake provider stream-stall mode plus E2E coverage for hung non-streaming providers and streams that stall after the first chunk. Focused unit and E2E passed; pnpm run verify passed; pnpm run verify:features passed with all 13 previously passing features re-verified before status update."
     },
     {
       "id": "gateway-settlement-integrity",

@@ -12,6 +12,7 @@ export type FakeProviderMode =
   | "error"
   | "rate-limit"
   | "timeout"
+  | "stream-stall"
   | "first-byte-failure"
   | "midstream-error"
   | "openrouter-error"
@@ -285,6 +286,15 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "stream-stall") {
+      response.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+      });
+      response.write('data: {"delta":"fake"}\n\n');
+      return;
+    }
+
     if (mode === "midstream-error") {
       response.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
@@ -361,6 +371,7 @@ function readMode(url: URL): FakeProviderMode {
     mode === "error" ||
     mode === "rate-limit" ||
     mode === "timeout" ||
+    mode === "stream-stall" ||
     mode === "first-byte-failure" ||
     mode === "midstream-error" ||
     mode === "openrouter-error" ||

@@ -1,4 +1,5 @@
 import { readConsoleAuthState, sessionCookieName } from "@llmingress/db/console-auth";
+import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
 import {
   formatGatewayConfigVersion,
   formatGatewayShellStatus,
@@ -25,12 +26,22 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     return <Login />;
   }
 
-  const gateway = (await listConsoleGatewayRuntimeStatuses())[0] ?? null;
+  const [gateways, providerHealthSummaries] = await Promise.all([
+    listConsoleGatewayRuntimeStatuses(),
+    listConsoleProviderHealthSummaries(),
+  ]);
+  const gateway = gateways[0] ?? null;
   const gatewayStatusLabel = formatGatewayShellStatus({ gateway });
   const gatewayStatusHealthy = isGatewayRuntimeHealthy({ gateway });
   const gatewayConfigVersionLabel = formatGatewayConfigVersion(
     gateway?.appliedConfigVersion ?? null,
   );
+  const providerHealthyCount = providerHealthSummaries.filter(
+    (summary) => summary.status === "healthy",
+  ).length;
+  const providerUnhealthyCount = providerHealthSummaries.filter((summary) =>
+    ["auth_failed", "network_error", "quota_limited", "unhealthy"].includes(summary.status),
+  ).length;
 
   return (
     <div className="app-shell">
@@ -38,14 +49,41 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         gatewayConfigVersionLabel={gatewayConfigVersionLabel}
         gatewayStatusHealthy={gatewayStatusHealthy}
         gatewayStatusLabel={gatewayStatusLabel}
+        gatewayUptimeLabel={gateway ? formatUptime(gateway.startedAt) : "Unknown"}
+        gatewayUrlLabel={formatRuntimeAddress(getGatewayBaseUrl())}
+        providerHealthyCount={providerHealthyCount}
+        providerUnhealthyCount={providerUnhealthyCount}
       />
       <div className="app-main">
-        <Topbar
-          gatewayStatusHealthy={gatewayStatusHealthy}
-          gatewayStatusLabel={gatewayStatusLabel}
-        />
+        <Topbar />
         {children}
       </div>
     </div>
   );
+}
+
+function getGatewayBaseUrl(): string {
+  return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
+}
+
+function formatRuntimeAddress(value: string): string {
+  try {
+    return new URL(value).host;
+  } catch {
+    return value;
+  }
+}
+
+function formatUptime(startedAt: Date): string {
+  const totalMinutes = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 60_000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
 }

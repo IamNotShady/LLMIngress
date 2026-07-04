@@ -8,7 +8,7 @@ test("v1 release verification runner and docker compose contracts stay runnable"
   const dryRun = await execFileAsync("pnpm", ["run", "verify:features", "--", "--dry-run"], {
     cwd: process.cwd(),
   });
-  expect(dryRun.stdout).toContain("Optimized feature regression plan: 5 passing feature(s).");
+  expect(dryRun.stdout).toContain("Optimized feature regression plan: 10 passing feature(s).");
   expect(dryRun.stdout).toContain("Optimized coverage comparison passed.");
 
   const services = await execFileAsync(

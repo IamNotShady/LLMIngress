@@ -9,10 +9,15 @@ const allowedFeatureIds = [
   "v1-console",
   "v1-worker-ops",
   "v1-release-guards",
+  "console-dark-restyle",
+  "console-p0-layout",
+  "console-semantic-status",
+  "console-shared-formatters",
+  "console-providers-ia-and-forms",
 ];
 
 describe("v1 release guards milestone", () => {
-  it("tracks V1 as five milestone features", () => {
+  it("tracks V1 milestones plus accepted post-V1 feature contracts", () => {
     const featureList = readJson<{
       features: Array<{ id: string; status: string; verification: string }>;
     }>("feature_list.json");

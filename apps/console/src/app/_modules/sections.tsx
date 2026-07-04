@@ -3,7 +3,6 @@ import {
   type ConsoleActivityDetail,
   type ConsoleFallbackEvent,
   countConsoleActivities,
-  formatConsoleActivityCost,
   formatConsoleActivityFallbackAttempts,
   formatConsoleActivityMetadata,
   formatConsoleActivityRouteReason,
@@ -31,6 +30,13 @@ import {
 import { getConsoleAnalyticsSnapshot } from "@llmingress/db/console-analytics";
 import { getConsoleSecuritySummary } from "@llmingress/db/console-auth";
 import {
+  formatConsoleCompactCount,
+  formatConsoleCount,
+  formatConsoleTimestamp,
+  formatConsoleUsd,
+  MISSING_VALUE,
+} from "@llmingress/db/console-format";
+import {
   type ConsoleNotificationChannel,
   listNotificationChannels,
 } from "@llmingress/db/console-notification-channels";
@@ -39,14 +45,10 @@ import {
   listConsoleProviderHealthSummaries,
 } from "@llmingress/db/console-provider-health";
 import {
-  formatProviderApiKeyTestStatusLabel,
   listProviderApiKeyMetadata,
   type ProviderApiKeyMetadata,
 } from "@llmingress/db/console-provider-keys";
-import {
-  type ConsoleProviderOAuthConnection,
-  listConsoleProviderOAuthConnections,
-} from "@llmingress/db/console-provider-oauth";
+import { listConsoleProviderOAuthConnections } from "@llmingress/db/console-provider-oauth";
 import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
 import { type ConsoleProvider, listProviders } from "@llmingress/db/console-providers";
 import {
@@ -62,10 +64,8 @@ import {
   routePolicyStrategies,
 } from "@llmingress/db/console-route-policies";
 import {
-  type ConsoleGatewayRuntimeStatus,
   formatGatewayConfigVersion,
   formatGatewayHeartbeatStatus,
-  formatGatewayHeartbeatSummary,
   formatRuntimeReloadResult,
   getConsoleRuntimeSnapshot,
 } from "@llmingress/db/console-runtime";
@@ -73,7 +73,6 @@ import {
   type ConsoleUsageDimensionBreakdown,
   type ConsoleUsageTrendPoint,
   type ConsoleUsageWindow,
-  formatConsoleUsageCost,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
 } from "@llmingress/db/console-usage";
@@ -90,14 +89,15 @@ import { Disclosure, Pager, Row } from "../_components/list-ui";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref, PAGE_SIZE, paginate, readPageParam } from "../_lib/pagination";
 import { ProviderCreateForm } from "./provider-create-form";
+import { ProvidersClientSection } from "./providers-client-section";
 import { VirtualModelRouteDialogClient } from "./virtual-model-route-dialog";
 
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 
 const providerTemplateGroups = listProviderTemplateSelectorGroups();
-const usageTrendActualColor = "#16a34a";
-const usageTrendBaselineColor = "#2563eb";
-const usageTrendTokenColor = "#f59e0b";
+const usageTrendActualColor = "var(--chart-3)";
+const usageTrendBaselineColor = "var(--chart-2)";
+const usageTrendTokenColor = "var(--chart-4)";
 const directProviderCreateChoices = [
   {
     action: "create",
@@ -152,9 +152,6 @@ export async function OverviewSection() {
     topLimit: 20,
   });
   const activities = await listConsoleActivities();
-  const runtimeSnapshot = await getConsoleRuntimeSnapshot();
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
-  const gateway = runtimeSnapshot.gateways[0] ?? null;
 
   const recentActivities = activities.slice(0, 8);
   const activeAgentCount = usageSummary.agentBreakdowns.filter(
@@ -173,7 +170,7 @@ export async function OverviewSection() {
         <StatCard
           icon="RQ"
           label="Requests 24h"
-          value={formatCompactNumber(usageSummary.requestCount)}
+          value={formatConsoleCompactCount(usageSummary.requestCount)}
           delta={formatPreviousWindowPercentDelta(
             usageSummary.requestCount,
             overviewAnalytics.previous.requestCount,
@@ -181,12 +178,13 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             usageSummary.requestCount,
             overviewAnalytics.previous.requestCount,
+            "up-good",
           )}
         />
         <StatCard
           icon="$"
           label="Cost 24h"
-          value={formatOverviewMoney(usageSummary.totalCostUsd)}
+          value={formatConsoleUsd(usageSummary.totalCostUsd)}
           delta={formatPreviousWindowPercentDelta(
             Number(usageSummary.totalCostUsd ?? 0),
             Number(overviewAnalytics.previous.totalCostUsd ?? 0),
@@ -194,12 +192,13 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             Number(usageSummary.totalCostUsd ?? 0),
             Number(overviewAnalytics.previous.totalCostUsd ?? 0),
+            "down-good",
           )}
         />
         <StatCard
           icon="TK"
           label="Tokens 24h"
-          value={formatCompactNumber(usageSummary.totalTokens)}
+          value={formatConsoleCompactCount(usageSummary.totalTokens)}
           delta={formatPreviousWindowPercentDelta(
             usageSummary.totalTokens,
             overviewAnalytics.previous.totalTokens,
@@ -207,12 +206,14 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             usageSummary.totalTokens,
             overviewAnalytics.previous.totalTokens,
+            "up-good",
           )}
         />
         <StatCard
           icon="FR"
           label="Failure rate"
           value={failureRate}
+          valueTone={failureRateTone(usageSummary.failureCount, usageSummary.requestCount)}
           delta={formatPreviousWindowPointDelta(
             usageSummary.requestCount > 0
               ? usageSummary.failureCount / usageSummary.requestCount
@@ -220,16 +221,17 @@ export async function OverviewSection() {
             overviewAnalytics.previous.failureRate,
           )}
           deltaTone={formatDeltaTone(
-            overviewAnalytics.previous.failureRate,
             usageSummary.requestCount > 0
               ? usageSummary.failureCount / usageSummary.requestCount
               : 0,
+            overviewAnalytics.previous.failureRate,
+            "down-good",
           )}
         />
         <StatCard
           icon="SV"
           label="Savings"
-          value={formatOverviewMoney(usageSummary.totalSavingsUsd)}
+          value={formatConsoleUsd(usageSummary.totalSavingsUsd)}
           delta={formatPreviousWindowPercentDelta(
             Number(usageSummary.totalSavingsUsd ?? 0),
             Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
@@ -237,6 +239,7 @@ export async function OverviewSection() {
           deltaTone={formatDeltaTone(
             Number(usageSummary.totalSavingsUsd ?? 0),
             Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
+            "up-good",
           )}
         />
         <StatCard icon="AG" label="Active agents 24h" value={String(activeAgentCount)} />
@@ -265,13 +268,13 @@ export async function OverviewSection() {
                 <tbody>
                   {recentActivities.map((activity) => (
                     <tr key={activity.id}>
-                      <td className="mono">{formatTime(activity.startedAt)}</td>
+                      <td className="mono">{formatConsoleTimestamp(activity.startedAt)}</td>
                       <td>{activity.agentName ?? "Unknown agent"}</td>
                       <td>{formatActivityVirtualModelLabel(activity)}</td>
                       <td>{formatActivityModelSummary(activity)}</td>
                       <td>{formatActivityProviderLabel(activity)}</td>
-                      <td className="num">{formatCompactNumber(activity.totalTokens ?? 0)}</td>
-                      <td className="num">{formatOverviewActivityCost(activity.totalCostUsd)}</td>
+                      <td className="num">{formatConsoleCount(activity.totalTokens)}</td>
+                      <td className="num">{formatConsoleUsd(activity.totalCostUsd)}</td>
                       <td>
                         <ActivityStatusPill status={activity.status} />
                       </td>
@@ -282,39 +285,6 @@ export async function OverviewSection() {
             </div>
           )}
         </div>
-        <div className="detail-panel">
-          <div className="detail-panel-head">
-            <h2 className="detail-panel-title">Gateway status</h2>
-            <span className={gateway ? "pill--ok pill" : "pill--warn pill"}>
-              {gateway ? gateway.status : "Unknown"}
-            </span>
-          </div>
-          <div className={gateway ? "overview-status-banner" : "overview-status-banner is-warn"}>
-            <span aria-hidden="true">✓</span>
-            <div>
-              <strong>{formatGatewayOverviewStatus(gateway)}</strong>
-              <small>{formatGatewayHeartbeatSummary({ gateway })}</small>
-            </div>
-          </div>
-          <dl className="detail-field-list">
-            <div className="detail-field">
-              <dt>Configured Gateway URL</dt>
-              <dd>{formatRuntimeAddress(getPlaygroundGatewayBaseUrl())}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Config version</dt>
-              <dd>{formatGatewayConfigVersion(gateway?.appliedConfigVersion ?? null)}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Uptime</dt>
-              <dd>{gateway ? formatUptime(gateway.startedAt) : "Unknown"}</dd>
-            </div>
-            <div className="detail-field">
-              <dt>Provider status</dt>
-              <dd>{formatProviderStatusSummary(providerHealthSummaries)}</dd>
-            </div>
-          </dl>
-        </div>
       </div>
 
       <div className="chart-grid-2">
@@ -322,6 +292,7 @@ export async function OverviewSection() {
           <h2 className="chart-card-title">Requests &amp; cost trend</h2>
           <TrendLineChart
             ariaLabel="Requests and cost trend"
+            emptyMessage="No requests in the last 24h."
             data={trend}
             series={[
               { key: "requests", name: "Requests", color: chartAccent },
@@ -340,43 +311,6 @@ export async function OverviewSection() {
       </div>
     </section>
   );
-}
-
-function formatCompactNumber(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
-  return String(value);
-}
-
-function formatFullNumber(value: number | null): string {
-  return value === null ? "Unavailable" : value.toLocaleString("en-US");
-}
-
-function formatActivityTableTokens(value: number | null): string {
-  return value === null ? "N/A" : value.toLocaleString("en-US");
-}
-
-function formatActivityTableCost(value: string | null): string {
-  return value === null ? "N/A" : formatConsoleActivityCost(value);
-}
-
-function formatOverviewMoney(totalCostUsd: string | null): string {
-  const value = totalCostUsd === null ? 0 : Number(totalCostUsd);
-  if (!Number.isFinite(value)) {
-    return "$0.00";
-  }
-  if (value > 0 && value < 0.01) {
-    return `$${value.toFixed(4)}`;
-  }
-  return `$${value.toFixed(2)}`;
-}
-
-function formatOverviewActivityCost(totalCostUsd: string | null): string {
-  return totalCostUsd === null ? "Unavailable" : formatOverviewMoney(totalCostUsd);
 }
 
 function formatOverviewTrendPoint(point: ConsoleUsageTrendPoint) {
@@ -405,17 +339,39 @@ function formatSignedDecimal(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
 }
 
-function formatDeltaTone(current: number, previous: number): "up" | "down" {
-  return current >= previous ? "up" : "down";
+// Valence per metric: callers say which direction is good (cost down is good,
+// requests up is good). Zero change is neutral, never tinted.
+function formatDeltaTone(
+  current: number,
+  previous: number,
+  direction: "up-good" | "down-good",
+): "good" | "bad" | "neutral" {
+  if (current === previous) {
+    return "neutral";
+  }
+  return current > previous === (direction === "up-good") ? "good" : "bad";
 }
 
-function formatTime(value: Date): string {
-  return value.toLocaleTimeString("en-US", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+// Alert thresholds for failure rates: 5% warns, 20% is dangerous.
+function failureRateTone(
+  failureCount: number,
+  requestCount: number,
+): "danger" | "warn" | undefined {
+  if (requestCount <= 0) {
+    return undefined;
+  }
+  const rate = failureCount / requestCount;
+  if (rate >= 0.2) {
+    return "danger";
+  }
+  if (rate >= 0.05) {
+    return "warn";
+  }
+  return undefined;
+}
+
+function toneToNumClass(tone: "danger" | "warn" | undefined): string | undefined {
+  return tone ? `num-${tone}` : undefined;
 }
 
 function formatActivityLatency(latencyMs: number | null): string {
@@ -423,50 +379,6 @@ function formatActivityLatency(latencyMs: number | null): string {
     return "—";
   }
   return `${(latencyMs / 1000).toFixed(2)}s`;
-}
-
-function formatGatewayOverviewStatus(gateway: ConsoleGatewayRuntimeStatus | null): string {
-  if (!gateway) {
-    return "Status unknown";
-  }
-  return gateway.status === "ready" &&
-    formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) === "Healthy"
-    ? "Running normally"
-    : `Gateway ${gateway.status}`;
-}
-
-function formatRuntimeAddress(value: string): string {
-  try {
-    return new URL(value).host;
-  } catch {
-    return value;
-  }
-}
-
-function formatUptime(startedAt: Date): string {
-  const totalMinutes = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 60_000));
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  if (days > 0) {
-    return `${days}d ${hours}h`;
-  }
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
-
-function formatProviderStatusSummary(summaries: ConsoleProviderHealthSummary[]): string {
-  const healthy = summaries.filter((summary) => summary.status === "healthy").length;
-  const unhealthy = summaries.filter(
-    (summary) =>
-      summary.status === "auth_failed" ||
-      summary.status === "network_error" ||
-      summary.status === "quota_limited" ||
-      summary.status === "unhealthy",
-  ).length;
-  return `${healthy} healthy / ${unhealthy} unhealthy`;
 }
 
 function buildTopAgentsByCost(
@@ -547,6 +459,12 @@ export async function RuntimeSection() {
           icon="HB"
           label="Heartbeat"
           value={gateway ? formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) : "—"}
+          valueTone={
+            gateway &&
+            formatGatewayHeartbeatStatus({ heartbeatAt: gateway.heartbeatAt }) !== "Healthy"
+              ? "warn"
+              : undefined
+          }
         />
       </div>
 
@@ -608,9 +526,11 @@ export async function RuntimeSection() {
           <div className="detail-field">
             <dt>db:migrate:check</dt>
             <dd>
-              {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready"
-                ? "Ready"
-                : "Blocked"}
+              {runtimeSnapshot.migrations.migrateCheckHealth.status === "ready" ? (
+                <span className="pill--ok pill">Ready</span>
+              ) : (
+                <span className="pill--danger pill">Blocked</span>
+              )}
             </dd>
           </div>
           {gateway ? (
@@ -642,77 +562,6 @@ export async function RuntimeSection() {
       </div>
     </section>
   );
-}
-
-function ProviderHealthDetailPill({ status }: { status: string }) {
-  return <ProviderStatusPill label={formatProviderHealthStatusLabel(status)} status={status} />;
-}
-
-function ProviderApiKeyTestStatusPill({
-  status,
-}: {
-  status: ProviderApiKeyMetadata["lastTestStatus"];
-}) {
-  return <ProviderStatusPill label={formatProviderApiKeyTestStatusLabel(status)} status={status} />;
-}
-
-function ProviderOAuthTestStatusPill({
-  status,
-}: {
-  status: ConsoleProviderOAuthConnection["lastTestStatus"];
-}) {
-  return <ProviderStatusPill label={formatProviderApiKeyTestStatusLabel(status)} status={status} />;
-}
-
-function ModelAvailabilityPill({ value }: { value: string }) {
-  const normalized = value.toLowerCase();
-  if (normalized === "available") {
-    return <span className="pill--ok pill">Enabled</span>;
-  }
-  if (normalized === "disabled") {
-    return <span className="pill--danger pill">Disabled</span>;
-  }
-  return <span className="pill">{formatModelAvailability(value)}</span>;
-}
-
-function ProviderStatusPill({ label, status }: { label: string; status: string }) {
-  const normalized = status.toLowerCase();
-  if (normalized === "healthy") {
-    return <span className="pill--ok pill">{label}</span>;
-  }
-  if (normalized === "unknown") {
-    return <span className="pill">{label}</span>;
-  }
-  if (normalized === "checking" || normalized === "quota_limited") {
-    return <span className="pill--warn pill">{label}</span>;
-  }
-  return <span className="pill--danger pill">{label}</span>;
-}
-
-function formatProviderHealthStatusLabel(status: string): string {
-  const normalized = status.toLowerCase();
-  if (normalized === "healthy") {
-    return "Healthy";
-  }
-  if (normalized === "disabled") {
-    return "Disabled";
-  }
-  if (normalized === "checking") {
-    return "Checking";
-  }
-  if (normalized === "unhealthy") {
-    return "Unhealthy";
-  }
-  if (normalized === "auth_failed") {
-    return "Auth failed";
-  }
-  if (normalized === "quota_limited") {
-    return "Quota limited";
-  }
-  if (normalized === "network_error") {
-    return "Network error";
-  }
-  return "Unknown";
 }
 
 export async function UsageSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
@@ -824,34 +673,34 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
         </div>
         <div className="console-actions">
           <button type="submit">
-            <FlatIcon name="filter" />
-            <span>Apply</span>
+            <span>Filter</span>
           </button>
         </div>
       </form>
 
       <div className="stat-grid usage-kpi-grid">
-        <StatCard
-          icon="$"
-          label="Total cost"
-          value={formatConsoleUsageCost(usageSummary.totalCostUsd)}
-        />
+        <StatCard icon="$" label="Total cost" value={formatConsoleUsd(usageSummary.totalCostUsd)} />
         <StatCard
           icon="TK"
           label="Total tokens"
-          value={formatCompactNumber(usageSummary.totalTokens)}
+          value={formatConsoleCompactCount(usageSummary.totalTokens)}
         />
         <StatCard
           icon="RQ"
           label="Total requests"
-          value={formatCompactNumber(usageSummary.requestCount)}
+          value={formatConsoleCompactCount(usageSummary.requestCount)}
         />
         <StatCard icon="LT" label="Avg latency" value={avgLatency} />
-        <StatCard icon="FR" label="Failure rate" value={failureRate} />
+        <StatCard
+          icon="FR"
+          label="Failure rate"
+          value={failureRate}
+          valueTone={failureRateTone(usageSummary.failureCount, usageSummary.requestCount)}
+        />
         <StatCard
           icon="SV"
           label="Estimated savings"
-          value={formatConsoleUsageCost(usageSummary.totalSavingsUsd)}
+          value={formatConsoleUsd(usageSummary.totalSavingsUsd)}
         />
       </div>
 
@@ -860,6 +709,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <h2 className="chart-card-title">Cost trend</h2>
           <TrendLineChart
             ariaLabel="Cost trend"
+            emptyMessage="No cost recorded in this range."
             data={costTrend}
             series={[
               { key: "baselineCostUsd", name: "Baseline (USD)", color: usageTrendBaselineColor },
@@ -871,6 +721,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <h2 className="chart-card-title">Tokens trend</h2>
           <TrendLineChart
             ariaLabel="Tokens trend"
+            emptyMessage="No tokens recorded in this range."
             data={tokenTrend}
             series={[
               { key: "inputTokens", name: "Input tokens", color: usageTrendBaselineColor },
@@ -883,11 +734,11 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           <dl className="usage-savings-list">
             <div>
               <dt>Saved amount</dt>
-              <dd>{formatConsoleUsageCost(usageSummary.totalSavingsUsd)}</dd>
+              <dd>{formatConsoleUsd(usageSummary.totalSavingsUsd)}</dd>
             </div>
             <div>
               <dt>Baseline cost</dt>
-              <dd>{formatConsoleUsageCost(baselineCost.toFixed(8))}</dd>
+              <dd>{formatConsoleUsd(baselineCost.toFixed(8))}</dd>
             </div>
             <div>
               <dt>Savings ratio</dt>
@@ -942,14 +793,20 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
                   <tr key={`${breakdown.providerId}:${breakdown.modelId}`}>
                     <td>{breakdown.providerLabel}</td>
                     <td>{breakdown.modelLabel}</td>
-                    <td className="num">{formatCompactNumber(breakdown.requestCount)}</td>
-                    <td className="num">{formatCompactNumber(breakdown.totalTokens)}</td>
-                    <td className="num">{formatConsoleUsageCost(breakdown.totalCostUsd)}</td>
+                    <td className="num">{formatConsoleCompactCount(breakdown.requestCount)}</td>
+                    <td className="num">{formatConsoleCompactCount(breakdown.totalTokens)}</td>
+                    <td className="num">{formatConsoleUsd(breakdown.totalCostUsd)}</td>
                     <td className="num">{formatLatencyMs(breakdown.avgLatencyMs)}</td>
                     <td className="num">
-                      {formatFailureRate(breakdown.failureCount, breakdown.requestCount)}
+                      <span
+                        className={toneToNumClass(
+                          failureRateTone(breakdown.failureCount, breakdown.requestCount),
+                        )}
+                      >
+                        {formatFailureRate(breakdown.failureCount, breakdown.requestCount)}
+                      </span>
                     </td>
-                    <td className="num">{formatConsoleUsageCost(breakdown.totalSavingsUsd)}</td>
+                    <td className="num">{formatConsoleUsd(breakdown.totalSavingsUsd)}</td>
                   </tr>
                 ))
               )}
@@ -1060,7 +917,7 @@ function formatUsageTrendLabel(value: Date): string {
 
 function formatLatencyMs(value: number | null): string {
   if (value === null) {
-    return "Unavailable";
+    return MISSING_VALUE;
   }
   if (value < 1000) {
     return `${Math.round(value)}ms`;
@@ -1094,12 +951,14 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
     countConsoleActivities({ filters }),
     listConsoleActivities({ filters, limit: PAGE_SIZE, page }),
   ]);
-  const selectedListActivity =
-    activities.find((activity) => activity.id === selectedActivityId) ?? activities[0] ?? null;
+  const selectedListActivity = selectedActivityId
+    ? (activities.find((activity) => activity.id === selectedActivityId) ?? null)
+    : null;
   const selectedDetail = selectedListActivity
     ? await getConsoleActivityDetail({ activityId: selectedListActivity.id })
     : null;
   const selectedActivity = selectedDetail?.activity ?? selectedListActivity;
+  const activityDetailCloseHref = buildQueryHref(searchParams, { activityId: undefined });
   const view = {
     from: total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1,
     items: activities,
@@ -1178,8 +1037,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
         </div>
         <div className="console-actions">
           <button type="submit">
-            <FlatIcon name="filter" />
-            <span>Apply</span>
+            <span>Filter</span>
           </button>
         </div>
       </form>
@@ -1216,7 +1074,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                         selectedActivity?.id === activity.id ? "is-selected" : "is-clickable"
                       }
                     >
-                      <td className="mono">{formatTime(activity.startedAt)}</td>
+                      <td className="mono">{formatConsoleTimestamp(activity.startedAt)}</td>
                       <td className="mono">
                         <a href={buildQueryHref(searchParams, { activityId: activity.id })}>
                           {activity.requestId}
@@ -1225,13 +1083,13 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                       <td>{activity.agentName ?? "Unknown agent"}</td>
                       <td>{formatActivityVirtualModelLabel(activity)}</td>
                       <td>{formatActivityProviderModelLabel(activity)}</td>
-                      <td className="num">{formatActivityTableTokens(activity.totalTokens)}</td>
-                      <td className="num">{formatActivityTableCost(activity.totalCostUsd)}</td>
+                      <td className="num">{formatConsoleCount(activity.totalTokens)}</td>
+                      <td className="num">{formatConsoleUsd(activity.totalCostUsd)}</td>
                       <td className="num">{formatActivityLatency(activity.latencyMs)}</td>
                       <td>
                         <ActivityStatusPill status={activity.status} />
                       </td>
-                      <td className="num">{formatFullNumber(activityFallbackCount(activity))}</td>
+                      <td className="num">{formatConsoleCount(activityFallbackCount(activity))}</td>
                     </tr>
                   ))
                 )}
@@ -1240,19 +1098,25 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
           </div>
           <Pager view={view} searchParams={searchParams} />
         </div>
-
-        {selectedActivity ? (
-          <ActivityReferenceDetail detail={selectedDetail} fallbackActivity={selectedActivity} />
-        ) : null}
       </div>
+
+      {selectedActivity ? (
+        <ActivityReferenceDetail
+          closeHref={activityDetailCloseHref}
+          detail={selectedDetail}
+          fallbackActivity={selectedActivity}
+        />
+      ) : null}
     </section>
   );
 }
 
 function ActivityReferenceDetail({
+  closeHref,
   detail,
   fallbackActivity,
 }: {
+  closeHref: string;
   detail: ConsoleActivityDetail | null;
   fallbackActivity: ConsoleActivity;
 }) {
@@ -1262,102 +1126,111 @@ function ActivityReferenceDetail({
   const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(activity.fallbackAttempts);
 
   return (
-    <section
-      className="detail-panel activity-detail-panel"
-      aria-label="Request detail"
-      aria-labelledby="activity-detail-title"
-    >
-      <div className="detail-panel-head">
-        <h2 className="detail-panel-title" id="activity-detail-title">
-          Request detail
-        </h2>
-        <ActivityStatusPill status={activity.status} />
-      </div>
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-label="Request detail"
+        aria-labelledby="activity-detail-title"
+        aria-modal="true"
+        className="console-dialog activity-detail-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <div className="agent-view-dialog-title">
+            <h2 id="activity-detail-title">Request detail</h2>
+            <ActivityStatusPill status={activity.status} />
+          </div>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
 
-      <dl className="detail-field-list activity-detail-fields">
-        <div className="detail-field">
-          <dt>Request ID</dt>
-          <dd>{activity.requestId}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Agent</dt>
-          <dd>{activity.agentName ?? "Unknown agent"}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>API Key Prefix</dt>
-          <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Virtual Model</dt>
-          <dd>{formatActivityVirtualModelLabel(activity)}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Provider / Model</dt>
-          <dd>{formatActivityProviderModelLabel(activity)}</dd>
-        </div>
-        <div className="detail-field">
-          <dt>Strategy</dt>
-          <dd>{formatRouteReasonStrategy(activity.routeReason)}</dd>
-        </div>
-        <div className="detail-field detail-field-wide">
-          <dt>Route reason</dt>
-          <dd>{formatConsoleActivityRouteReason(activity.routeReason)}</dd>
-        </div>
-      </dl>
+        <dl className="detail-field-list activity-detail-fields">
+          <div className="detail-field">
+            <dt>Request ID</dt>
+            <dd>{activity.requestId}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Agent</dt>
+            <dd>{activity.agentName ?? "Unknown agent"}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>API Key Prefix</dt>
+            <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Virtual Model</dt>
+            <dd>{formatActivityVirtualModelLabel(activity)}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Provider / Model</dt>
+            <dd>{formatActivityProviderModelLabel(activity)}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Strategy</dt>
+            <dd>{formatRouteReasonStrategy(activity.routeReason)}</dd>
+          </div>
+          <div className="detail-field detail-field-wide">
+            <dt>Route reason</dt>
+            <dd>{formatConsoleActivityRouteReason(activity.routeReason)}</dd>
+          </div>
+        </dl>
 
-      <div>
-        <p className="detail-section-label">Fallback timeline</p>
-        {fallbackEvents.length === 0 ? (
-          <ul className="activity-legacy-timeline">
-            {fallbackAttemptLines.map((attempt) => (
-              <li key={attempt}>{attempt}</li>
-            ))}
-          </ul>
-        ) : (
-          <ol className="activity-timeline">
-            {fallbackEvents.map((event) => (
-              <li key={`${event.attemptOrder}:${event.status}`}>
-                <span className={activityTimelineStepClass(event.status)}>
-                  {event.attemptOrder}
-                </span>
-                <span>
-                  <strong>{formatFallbackEventModel(event)}</strong>
-                  <em>{formatFallbackEventResult(event)}</em>
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-
-      <div className="activity-metric-grid">
         <div>
-          <span>Tokens</span>
-          <strong>{formatFullNumber(activity.totalTokens)}</strong>
+          <p className="detail-section-label">Fallback timeline</p>
+          {fallbackEvents.length === 0 ? (
+            <ul className="activity-legacy-timeline">
+              {fallbackAttemptLines.map((attempt) => (
+                <li key={attempt}>{attempt}</li>
+              ))}
+            </ul>
+          ) : (
+            <ol className="activity-timeline">
+              {fallbackEvents.map((event) => (
+                <li key={`${event.attemptOrder}:${event.status}`}>
+                  <span className={activityTimelineStepClass(event.status)}>
+                    {event.attemptOrder}
+                  </span>
+                  <span>
+                    <strong>{formatFallbackEventModel(event)}</strong>
+                    <em>{formatFallbackEventResult(event)}</em>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
-        <div>
-          <span>Cost</span>
-          <strong>{formatConsoleActivityCost(activity.totalCostUsd)}</strong>
-        </div>
-        <div>
-          <span>Latency</span>
-          <strong>{formatActivityLatency(activity.latencyMs)}</strong>
-        </div>
-      </div>
 
-      {activity.errorMessage || activity.errorCode ? (
-        <div>
-          <p className="detail-section-label">Error info</p>
-          <p className="callout callout--warn">{formatActivityError(activity)}</p>
+        <div className="activity-metric-grid">
+          <div>
+            <span>Tokens</span>
+            <strong>{formatConsoleCount(activity.totalTokens)}</strong>
+          </div>
+          <div>
+            <span>Cost</span>
+            <strong>{formatConsoleUsd(activity.totalCostUsd)}</strong>
+          </div>
+          <div>
+            <span>Latency</span>
+            <strong>{formatActivityLatency(activity.latencyMs)}</strong>
+          </div>
         </div>
-      ) : null}
 
-      <div>
-        <p className="detail-section-label">Request metadata</p>
-        <pre className="code-block activity-metadata-block">{metadataLines.join("\n")}</pre>
-        <p className="callout">Prompt / response bodies are not stored.</p>
-      </div>
-    </section>
+        {activity.errorMessage || activity.errorCode ? (
+          <div>
+            <p className="detail-section-label">Error info</p>
+            <p className="callout callout--warn">{formatActivityError(activity)}</p>
+          </div>
+        ) : null}
+
+        <div>
+          <p className="detail-section-label">Request metadata</p>
+          <pre className="code-block activity-metadata-block">{metadataLines.join("\n")}</pre>
+          <p className="callout">Prompt / response bodies are not stored.</p>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -1403,22 +1276,28 @@ export async function VirtualModelsSection({
     }
     return true;
   });
-  const selectedVirtualModelId = readSingleSearchParam(searchParams.selected);
-  const selectedVirtualModel =
-    visibleVirtualModels.find((virtualModel) => virtualModel.id === selectedVirtualModelId) ??
-    visibleVirtualModels[0] ??
-    null;
-  const selectedRoutePolicy = selectedVirtualModel
-    ? (routePolicyByVmId.get(selectedVirtualModel.id) ?? null)
+  const viewVirtualModelId = readSingleSearchParam(searchParams.virtualModelView);
+  const viewDialogVirtualModel = viewVirtualModelId
+    ? (virtualModels.find((virtualModel) => virtualModel.id === viewVirtualModelId) ?? null)
     : null;
-  const selectedRoutePolicyWarnings = selectedRoutePolicy
+  const viewDialogRoutePolicy = viewDialogVirtualModel
+    ? (routePolicyByVmId.get(viewDialogVirtualModel.id) ?? null)
+    : null;
+  const viewDialogRoutePolicyWarnings = viewDialogRoutePolicy
     ? [
-        ...selectedRoutePolicy.routeWarnings,
+        ...viewDialogRoutePolicy.routeWarnings,
         ...buildRoutePolicyHealthWarnings(
-          buildRoutePolicyHealthWarningCandidates(selectedRoutePolicy, providerHealthByProviderId),
+          buildRoutePolicyHealthWarningCandidates(
+            viewDialogRoutePolicy,
+            providerHealthByProviderId,
+          ),
         ),
       ]
     : [];
+  const viewDialogCloseHref = buildQueryHref(searchParams, {
+    selected: undefined,
+    virtualModelView: undefined,
+  });
   const dialogTarget = readSingleSearchParam(searchParams.virtualModelDialog);
   const dialogVirtualModel =
     dialogTarget && dialogTarget !== "new"
@@ -1444,9 +1323,9 @@ export async function VirtualModelsSection({
     (total, virtualModel) => total + virtualModel.requestCountTotal,
     0,
   );
-  const fallbackOverview = selectedVirtualModel
+  const viewDialogFallbackOverview = viewDialogVirtualModel
     ? await listVirtualModelFallbackBreakdown({
-        virtualModelId: selectedVirtualModel.id,
+        virtualModelId: viewDialogVirtualModel.id,
       })
     : [];
   return (
@@ -1456,7 +1335,7 @@ export async function VirtualModelsSection({
         <StatCard
           icon="Q"
           label="Requests 24h"
-          value={formatCompactNumber(totalVirtualModelRequests24h)}
+          value={formatConsoleCompactCount(totalVirtualModelRequests24h)}
         />
         <StatCard
           icon="$"
@@ -1471,6 +1350,7 @@ export async function VirtualModelsSection({
             totalVirtualModelFailures,
             2,
           )}
+          valueTone={failureRateTone(totalVirtualModelFailures, totalVirtualModelRequests)}
         />
       </div>
       <form className="vm-filter-bar" action="/models" method="get">
@@ -1500,8 +1380,7 @@ export async function VirtualModelsSection({
           defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}
         />
         <button type="submit">
-          <FlatIcon name="filter" />
-          <span>Apply</span>
+          <span>Filter</span>
         </button>
       </form>
       <div className="vm-shell">
@@ -1529,61 +1408,92 @@ export async function VirtualModelsSection({
                   <tbody>
                     {visibleVirtualModels.map((virtualModel) => {
                       const policy = routePolicyByVmId.get(virtualModel.id);
-                      const selected = virtualModel.id === selectedVirtualModel?.id;
+                      const viewHref = buildQueryHref(searchParams, {
+                        selected: undefined,
+                        virtualModelDialog: undefined,
+                        virtualModelView: virtualModel.id,
+                      });
+                      const selected = virtualModel.id === viewDialogVirtualModel?.id;
                       return (
                         <tr
                           className={selected ? "is-selected" : "is-clickable"}
                           key={virtualModel.id}
                         >
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                selected: virtualModel.id,
-                                virtualModelDialog: undefined,
-                              })}
-                            >
+                            <a className="table-row-link" href={viewHref}>
                               {virtualModel.name}
                             </a>
                           </td>
                           <td>
-                            {policy ? (
-                              <span className="pill--info pill">
-                                {formatRouteStrategyLabel(policy.strategy)}
-                              </span>
-                            ) : (
-                              "-"
-                            )}
-                          </td>
-                          <td className="num">{policy?.candidates.length ?? 0}</td>
-                          <td>{formatDefaultCandidate(policy)}</td>
-                          <td className="num">
-                            {formatCompactNumber(virtualModel.requestCount24h)}
-                          </td>
-                          <td className="num">{formatVirtualModelCost(virtualModel.cost24hUsd)}</td>
-                          <td className="num">
-                            {formatVirtualModelFailureRate(
-                              virtualModel.requestCountTotal,
-                              virtualModel.failureCountTotal,
-                            )}
-                          </td>
-                          <td>
-                            {virtualModel.enabled ? (
-                              <span className="pill--ok pill">Enabled</span>
-                            ) : (
-                              <span className="pill">Disabled</span>
-                            )}
-                          </td>
-                          <td>
-                            <a
-                              className="table-action-link"
-                              href={buildQueryHref(searchParams, {
-                                virtualModelDialog: virtualModel.id,
-                              })}
-                            >
-                              <FlatIcon name="edit" />
-                              <span>Edit</span>
+                            <a className="table-row-link" href={viewHref}>
+                              {policy ? (
+                                <span className="pill--info pill">
+                                  {formatRouteStrategyLabel(policy.strategy)}
+                                </span>
+                              ) : (
+                                MISSING_VALUE
+                              )}
                             </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={viewHref}>
+                              {policy?.candidates.length ?? 0}
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={viewHref}>
+                              {formatDefaultCandidate(policy)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={viewHref}>
+                              {formatConsoleCompactCount(virtualModel.requestCount24h)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={viewHref}>
+                              {formatVirtualModelCost(virtualModel.cost24hUsd)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={viewHref}>
+                              <span
+                                className={toneToNumClass(
+                                  failureRateTone(
+                                    virtualModel.failureCountTotal,
+                                    virtualModel.requestCountTotal,
+                                  ),
+                                )}
+                              >
+                                {formatVirtualModelFailureRate(
+                                  virtualModel.requestCountTotal,
+                                  virtualModel.failureCountTotal,
+                                )}
+                              </span>
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={viewHref}>
+                              {virtualModel.enabled ? (
+                                <span className="pill--ok pill">Enabled</span>
+                              ) : (
+                                <span className="pill">Disabled</span>
+                              )}
+                            </a>
+                          </td>
+                          <td>
+                            <span className="agent-table-actions">
+                              <a
+                                className="link-button agent-action-edit"
+                                href={buildQueryHref(searchParams, {
+                                  virtualModelView: undefined,
+                                  virtualModelDialog: virtualModel.id,
+                                })}
+                              >
+                                <FlatIcon name="edit" />
+                                <span>Edit</span>
+                              </a>
+                            </span>
                           </td>
                         </tr>
                       );
@@ -1594,109 +1504,16 @@ export async function VirtualModelsSection({
             )}
           </div>
         </div>
-        <aside className="agent-detail-card vm-detail-card">
-          {selectedVirtualModel ? (
-            <>
-              <div className="agent-detail-head">
-                <h2>{selectedVirtualModel.name}</h2>
-                {selectedVirtualModel.enabled ? (
-                  <span className="pill--ok pill">Enabled</span>
-                ) : (
-                  <span className="pill">Disabled</span>
-                )}
-              </div>
-              <dl className="agent-detail-fields">
-                <div>
-                  <dt>Strategy</dt>
-                  <dd>
-                    {selectedRoutePolicy
-                      ? formatRouteStrategyLabel(selectedRoutePolicy.strategy)
-                      : "-"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Candidates</dt>
-                  <dd>
-                    {selectedRoutePolicy ? `${selectedRoutePolicy.candidates.length} models` : "-"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Default hit</dt>
-                  <dd>{formatDefaultCandidate(selectedRoutePolicy)}</dd>
-                </div>
-                <div>
-                  <dt>Requests 24h</dt>
-                  <dd>{formatCompactNumber(selectedVirtualModel.requestCount24h)}</dd>
-                </div>
-                <div>
-                  <dt>Cost 24h</dt>
-                  <dd>{formatVirtualModelCost(selectedVirtualModel.cost24hUsd)}</dd>
-                </div>
-                <div>
-                  <dt>Failure rate</dt>
-                  <dd>
-                    {formatVirtualModelFailureRate(
-                      selectedVirtualModel.requestCountTotal,
-                      selectedVirtualModel.failureCountTotal,
-                    )}
-                  </dd>
-                </div>
-              </dl>
-              <section className="agent-detail-section">
-                <h3>Candidates</h3>
-                {selectedRoutePolicy?.candidates.length ? (
-                  <div className="vm-candidate-list">
-                    {selectedRoutePolicy.candidates.map((candidate) => (
-                      <div className="vm-candidate-card" key={candidate.id}>
-                        <div>
-                          <strong>
-                            {candidate.providerDisplayName} / {candidate.modelDisplayName}
-                          </strong>
-                          <span>
-                            {formatModelPrice(candidate.inputUsdPerMillionTokens)} /{" "}
-                            {formatModelPrice(candidate.outputUsdPerMillionTokens)}
-                          </span>
-                        </div>
-                        {candidate.availability === "available" ? (
-                          <span className="pill--ok pill">Healthy</span>
-                        ) : (
-                          <span className="pill--danger pill">Disabled</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p>No candidates configured.</p>
-                )}
-              </section>
-              {selectedRoutePolicyWarnings.length > 0 ? (
-                <section className="agent-detail-section" aria-label="Route warnings">
-                  <h3>Route warnings</h3>
-                  {selectedRoutePolicyWarnings.map((warning) => (
-                    <p className="route-warning" key={warning}>
-                      {warning}
-                    </p>
-                  ))}
-                </section>
-              ) : null}
-              <section className="agent-detail-section">
-                <h3>Fallback overview</h3>
-                {fallbackOverview.length > 0 ? (
-                  <DonutBreakdown
-                    ariaLabel="Fallback overview"
-                    data={fallbackOverview}
-                    valueFormat="percent"
-                  />
-                ) : (
-                  <p>No fallback data recorded in the last 24h.</p>
-                )}
-              </section>
-            </>
-          ) : (
-            <p>No Virtual Model selected.</p>
-          )}
-        </aside>
       </div>
+      {viewDialogVirtualModel ? (
+        <VirtualModelViewDialog
+          closeHref={viewDialogCloseHref}
+          fallbackOverview={viewDialogFallbackOverview}
+          routePolicy={viewDialogRoutePolicy}
+          routePolicyWarnings={viewDialogRoutePolicyWarnings}
+          virtualModel={viewDialogVirtualModel}
+        />
+      ) : null}
       {dialogTarget === "new" ? (
         <VirtualModelRouteDialog
           closeHref={dialogCloseHref}
@@ -1715,6 +1532,127 @@ export async function VirtualModelsSection({
         />
       ) : null}
     </section>
+  );
+}
+
+function VirtualModelViewDialog({
+  closeHref,
+  fallbackOverview,
+  routePolicy,
+  routePolicyWarnings,
+  virtualModel,
+}: {
+  closeHref: string;
+  fallbackOverview: Awaited<ReturnType<typeof listVirtualModelFallbackBreakdown>>;
+  routePolicy: ConsoleRoutePolicy | null;
+  routePolicyWarnings: readonly string[];
+  virtualModel: ConsoleVirtualModel;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`virtual-model-view-dialog-title-${virtualModel.id}`}
+        aria-modal="true"
+        className="console-dialog agent-view-dialog vm-view-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <div className="agent-view-dialog-title">
+            <h2 id={`virtual-model-view-dialog-title-${virtualModel.id}`}>{virtualModel.name}</h2>
+            {virtualModel.enabled ? (
+              <span className="pill--ok pill">Enabled</span>
+            ) : (
+              <span className="pill">Disabled</span>
+            )}
+          </div>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <dl className="agent-detail-fields">
+          <div>
+            <dt>Strategy</dt>
+            <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : MISSING_VALUE}</dd>
+          </div>
+          <div>
+            <dt>Candidates</dt>
+            <dd>{routePolicy ? `${routePolicy.candidates.length} models` : MISSING_VALUE}</dd>
+          </div>
+          <div>
+            <dt>Default hit</dt>
+            <dd>{formatDefaultCandidate(routePolicy)}</dd>
+          </div>
+          <div>
+            <dt>Requests 24h</dt>
+            <dd>{formatConsoleCompactCount(virtualModel.requestCount24h)}</dd>
+          </div>
+          <div>
+            <dt>Cost 24h</dt>
+            <dd>{formatVirtualModelCost(virtualModel.cost24hUsd)}</dd>
+          </div>
+          <div>
+            <dt>Failure rate</dt>
+            <dd>
+              {formatVirtualModelFailureRate(
+                virtualModel.requestCountTotal,
+                virtualModel.failureCountTotal,
+              )}
+            </dd>
+          </div>
+        </dl>
+        <section className="agent-detail-section">
+          <h3>Candidates</h3>
+          {routePolicy?.candidates.length ? (
+            <div className="vm-candidate-list">
+              {routePolicy.candidates.map((candidate) => (
+                <div className="vm-candidate-card" key={candidate.id}>
+                  <div>
+                    <strong>
+                      {candidate.providerDisplayName} / {candidate.modelDisplayName}
+                    </strong>
+                    <span>
+                      {formatModelPrice(candidate.inputUsdPerMillionTokens)} /{" "}
+                      {formatModelPrice(candidate.outputUsdPerMillionTokens)}
+                    </span>
+                  </div>
+                  {candidate.availability === "available" ? (
+                    <span className="pill--ok pill">Healthy</span>
+                  ) : (
+                    <span className="pill">Disabled</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>No candidates configured.</p>
+          )}
+        </section>
+        {routePolicyWarnings.length > 0 ? (
+          <section className="agent-detail-section" aria-label="Route warnings">
+            <h3>Route warnings</h3>
+            {routePolicyWarnings.map((warning) => (
+              <p className="route-warning" key={warning}>
+                {warning}
+              </p>
+            ))}
+          </section>
+        ) : null}
+        <section className="agent-detail-section">
+          <h3>Fallback overview</h3>
+          {fallbackOverview.length > 0 ? (
+            <DonutBreakdown
+              ariaLabel="Fallback overview"
+              data={fallbackOverview}
+              valueFormat="percent"
+            />
+          ) : (
+            <p>No fallback data recorded in the last 24h.</p>
+          )}
+        </section>
+      </section>
+    </>
   );
 }
 
@@ -1982,22 +1920,27 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
     agentPlatformFilter,
   });
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
-  const selectedAgent =
-    visibleAgents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0] ?? null;
-  const selectedAccess = selectedAgent
-    ? (agentVirtualModelAccessByAgentId.get(selectedAgent.id) ?? null)
+  const agentView = readSingleSearchParam(searchParams.agentView);
+  const viewDialogAgent = agents.find((agent) => agent.id === agentView) ?? null;
+  const viewDialogAccess = viewDialogAgent
+    ? (agentVirtualModelAccessByAgentId.get(viewDialogAgent.id) ?? null)
     : null;
-  const selectedLimits = selectedAgent ? (agentLimitsByAgentId.get(selectedAgent.id) ?? []) : [];
-  const selectedBudgetLimit = findAgentLimit(selectedLimits, "budget");
-  const selectedTokenLimit = findAgentLimit(selectedLimits, "token");
-  const selectedRpmLimit = findAgentLimit(selectedLimits, "rpm");
-  const selectedTpmLimit = findAgentLimit(selectedLimits, "tpm");
+  const viewDialogLimits = viewDialogAgent
+    ? (agentLimitsByAgentId.get(viewDialogAgent.id) ?? [])
+    : [];
+  const agentViewCloseHref = buildQueryHref(searchParams, { agentView: undefined });
   const agentDialog = readSingleSearchParam(searchParams.agentDialog);
   const editDialogAgent = agents.find((agent) => agent.id === agentDialog) ?? null;
-  const agentDialogCloseHref = buildQueryHref(searchParams, { agentDialog: undefined });
+  const agentDialogCloseHref = buildQueryHref(searchParams, {
+    agentDialog: undefined,
+    agentView: undefined,
+  });
   const deleteAgent = readSingleSearchParam(searchParams.deleteAgent);
   const deleteDialogAgent = agents.find((agent) => agent.id === deleteAgent) ?? null;
-  const deleteDialogCloseHref = buildQueryHref(searchParams, { deleteAgent: undefined });
+  const deleteDialogCloseHref = buildQueryHref(searchParams, {
+    agentView: undefined,
+    deleteAgent: undefined,
+  });
 
   return (
     <section className="agents-dashboard" aria-label="Agents">
@@ -2009,13 +1952,9 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             <StatCard
               icon="RQ"
               label="Requests 24h"
-              value={formatCompactNumber(usageToday.requestCount)}
+              value={formatConsoleCompactCount(usageToday.requestCount)}
             />
-            <StatCard
-              icon="$"
-              label="Cost 7d"
-              value={formatOverviewMoney(usageWeek.totalCostUsd)}
-            />
+            <StatCard icon="$" label="Cost 7d" value={formatConsoleUsd(usageWeek.totalCostUsd)} />
           </div>
           <form action="/agents" method="get">
             <fieldset className="agents-filter-bar">
@@ -2072,8 +2011,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
               </div>
               <div className="agents-filter-actions">
                 <button type="submit">
-                  <FlatIcon name="filter" />
-                  <span>Apply filters</span>
+                  <span>Filter</span>
                 </button>
               </div>
             </fieldset>
@@ -2104,100 +2042,58 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                     {visibleAgents.map((agent) => {
                       const access = agentVirtualModelAccessByAgentId.get(agent.id);
                       const usage = usageTodayByAgentId.get(agent.id);
+                      const agentViewHref = buildQueryHref(searchParams, {
+                        agentDialog: undefined,
+                        agentView: agent.id,
+                        deleteAgent: undefined,
+                        selected: agent.id,
+                      });
+                      const isSelectedAgent =
+                        agent.id === selectedAgentId || agent.id === viewDialogAgent?.id;
                       return (
                         <tr
-                          className={
-                            agent.id === selectedAgent?.id ? "is-selected" : "is-clickable"
-                          }
+                          className={isSelectedAgent ? "is-selected" : "is-clickable"}
                           key={agent.id}
                         >
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {agent.name}
                             </a>
                           </td>
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {formatAgentTypeLabel(agent.agentType)}
                             </a>
                           </td>
                           <td className="mono">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {agent.keyPrefix
                                 ? formatAgentKeyPrefixDisplay(agent.keyPrefix)
                                 : "No key"}
                             </a>
                           </td>
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {access?.defaultVirtualModel?.name ?? "None"}
                             </a>
                           </td>
                           <td className="num">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               {access?.allowedVirtualModels.length ?? 0}
                             </a>
                           </td>
                           <td className="num">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
-                              {formatCompactNumber(usage?.requestCount ?? 0)}
+                            <a className="table-row-link" href={agentViewHref}>
+                              {formatConsoleCompactCount(usage?.requestCount ?? 0)}
                             </a>
                           </td>
                           <td className="num">
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
-                              {formatOverviewMoney(usage?.totalCostUsd ?? null)}
+                            <a className="table-row-link" href={agentViewHref}>
+                              {formatConsoleUsd(usage?.totalCostUsd ?? null)}
                             </a>
                           </td>
                           <td>
-                            <a
-                              className="table-row-link"
-                              href={buildQueryHref(searchParams, {
-                                agentDialog: undefined,
-                                selected: agent.id,
-                              })}
-                            >
+                            <a className="table-row-link" href={agentViewHref}>
                               <AgentStatusPill status={agent.status} />
                             </a>
                           </td>
@@ -2205,7 +2101,10 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                             <span className="agent-table-actions">
                               <a
                                 className="link-button agent-action-edit"
-                                href={buildQueryHref(searchParams, { agentDialog: agent.id })}
+                                href={buildQueryHref(searchParams, {
+                                  agentDialog: agent.id,
+                                  agentView: undefined,
+                                })}
                               >
                                 <FlatIcon name="edit" />
                                 <span>Edit</span>
@@ -2214,6 +2113,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                                 className="link-button agent-action-delete"
                                 href={buildQueryHref(searchParams, {
                                   agentDialog: undefined,
+                                  agentView: undefined,
                                   deleteAgent: agent.id,
                                 })}
                               >
@@ -2231,66 +2131,15 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
             )}
           </div>
         </div>
-        <aside className="agent-detail-card" aria-label="Selected agent details">
-          {selectedAgent?.keyPrefix ? (
-            <>
-              <div className="agent-detail-head">
-                <h2>{selectedAgent.name}</h2>
-                <AgentStatusPill status={selectedAgent.status} />
-              </div>
-              <dl className="agent-detail-fields">
-                <div>
-                  <dt>Type</dt>
-                  <dd>{formatAgentTypeLabel(selectedAgent.agentType)}</dd>
-                </div>
-                <div>
-                  <dt>Platform</dt>
-                  <dd>{formatAgentIntegrationPlatformLabel(selectedAgent.integrationPlatform)}</dd>
-                </div>
-                <div>
-                  <dt>Created</dt>
-                  <dd>{formatAgentDetailDate(selectedAgent.createdAt)}</dd>
-                </div>
-                <div>
-                  <dt>Default model</dt>
-                  <dd>{selectedAccess?.defaultVirtualModel?.name ?? "None"}</dd>
-                </div>
-              </dl>
-              <section className="agent-detail-section">
-                <h3>Allowed Virtual Models</h3>
-                <div className="agent-chip-list">
-                  {(selectedAccess?.allowedVirtualModels ?? []).map((virtualModel) => (
-                    <span className="agent-chip" key={virtualModel.id}>
-                      {virtualModel.name}
-                    </span>
-                  ))}
-                </div>
-              </section>
-              <section className="agent-detail-section">
-                <h3>Budget / Limit</h3>
-                <div className="agent-limit-row">
-                  <span>Budget</span>
-                  <strong>{formatAgentBudgetLimit(selectedBudgetLimit)}</strong>
-                </div>
-                <div className="agent-limit-row">
-                  <span>RPM</span>
-                  <strong>{formatAgentNumericLimit(selectedRpmLimit)}</strong>
-                </div>
-                <div className="agent-limit-row">
-                  <span>TPM</span>
-                  <strong>{formatAgentNumericLimit(selectedTpmLimit)}</strong>
-                </div>
-                <div className="agent-limit-row">
-                  <span>Token limit</span>
-                  <strong>{formatAgentTokenLimit(selectedTokenLimit)}</strong>
-                </div>
-              </section>
-            </>
-          ) : (
-            <p>No agent selected.</p>
-          )}
-        </aside>
       </div>
+      {viewDialogAgent ? (
+        <AgentViewDialog
+          access={viewDialogAccess}
+          agent={viewDialogAgent}
+          closeHref={agentViewCloseHref}
+          limits={viewDialogLimits}
+        />
+      ) : null}
       {agentDialog === "new" ? (
         <AgentCreateDialog closeHref={agentDialogCloseHref} virtualModels={virtualModels} />
       ) : null}
@@ -2313,6 +2162,93 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
         <AgentDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
       ) : null}
     </section>
+  );
+}
+
+function AgentViewDialog({
+  access,
+  agent,
+  closeHref,
+  limits,
+}: {
+  access: AgentVirtualModelAccess | null;
+  agent: ConsoleAgent;
+  closeHref: string;
+  limits: readonly ConsoleAgentLimit[];
+}) {
+  const budgetLimit = findAgentLimit(limits, "budget");
+  const rpmLimit = findAgentLimit(limits, "rpm");
+  const tokenLimit = findAgentLimit(limits, "token");
+  const tpmLimit = findAgentLimit(limits, "tpm");
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`agent-view-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog agent-view-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <div className="agent-view-dialog-title">
+            <h2 id={`agent-view-dialog-title-${agent.id}`}>{agent.name}</h2>
+            <AgentStatusPill status={agent.status} />
+          </div>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <dl className="agent-detail-fields">
+          <div>
+            <dt>Type</dt>
+            <dd>{formatAgentTypeLabel(agent.agentType)}</dd>
+          </div>
+          <div>
+            <dt>Platform</dt>
+            <dd>{formatAgentIntegrationPlatformLabel(agent.integrationPlatform)}</dd>
+          </div>
+          <div>
+            <dt>Created</dt>
+            <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
+          </div>
+          <div>
+            <dt>Default model</dt>
+            <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
+          </div>
+        </dl>
+        <section className="agent-detail-section">
+          <h3>Allowed Virtual Models</h3>
+          <div className="agent-chip-list">
+            {(access?.allowedVirtualModels ?? []).map((virtualModel) => (
+              <span className="agent-chip" key={virtualModel.id}>
+                {virtualModel.name}
+              </span>
+            ))}
+          </div>
+        </section>
+        <section className="agent-detail-section">
+          <h3>Budget / Limit</h3>
+          <div className="agent-limit-row">
+            <span>Budget</span>
+            <strong>{formatAgentBudgetLimit(budgetLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>RPM</span>
+            <strong>{formatAgentNumericLimit(rpmLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>TPM</span>
+            <strong>{formatAgentNumericLimit(tpmLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>Token limit</span>
+            <strong>{formatAgentTokenLimit(tokenLimit)}</strong>
+          </div>
+        </section>
+      </section>
+    </>
   );
 }
 
@@ -2468,8 +2404,7 @@ function AgentCreateDialog({
             />
           </div>
           <button type="submit">
-            <FlatIcon name="add" />
-            <span>Create agent</span>
+            <span>Create</span>
           </button>
         </form>
       </section>
@@ -2672,7 +2607,6 @@ function AgentEditDialog({
             />
           </div>
           <button type="submit">
-            <FlatIcon name="save" />
             <span>Save</span>
           </button>
         </form>
@@ -2834,18 +2768,20 @@ function formatAgentNumericLimit(limit: ConsoleAgentLimit | undefined): string {
   if (!limit?.enabled) {
     return "Not configured";
   }
-  return `${formatCompactNumber(limit.limitValue)} / ${limit.period}`;
+  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
 }
 
 function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
   if (!limit?.enabled) {
     return "Not configured";
   }
-  return `${formatCompactNumber(limit.limitValue)} / ${limit.period}`;
+  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
 }
 
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
+  const dialogAgentId = readSingleSearchParam(searchParams.limitDialog);
+  const deleteDialogAgentId = readSingleSearchParam(searchParams.limitDelete);
   const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
   const agents = await listAgents();
   const agentLimits = await listAgentLimits();
@@ -2860,8 +2796,12 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
   const ruleAgents = agents.filter(
     (agent) => (agentLimitsByAgentId.get(agent.id) ?? []).length > 0,
   );
-  const selectedAgent =
-    agents.find((agent) => agent.id === selectedAgentId) ?? ruleAgents[0] ?? agents[0] ?? null;
+  const selectedAgent = selectedAgentId
+    ? (agents.find((agent) => agent.id === selectedAgentId) ?? null)
+    : null;
+  const dialogAgent = dialogAgentId
+    ? (agents.find((agent) => agent.id === dialogAgentId) ?? null)
+    : null;
 
   const rows = ruleAgents.map((agent) => {
     const limits = agentLimitsByAgentId.get(agent.id) ?? [];
@@ -2901,10 +2841,15 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
   const nearBudgetCount = rows.filter(
     (row) => row.budgetUsagePercent >= row.alertThresholdPercent,
   ).length;
-  const selectedLimits = selectedAgent ? (agentLimitsByAgentId.get(selectedAgent.id) ?? []) : [];
-  const selectedRuntime = selectedAgent
-    ? getAgentLimitRuntimeSnapshot(selectedAgent.id, runtimeByAgentId)
+  const dialogLimits = dialogAgent ? (agentLimitsByAgentId.get(dialogAgent.id) ?? []) : [];
+  const dialogRuntime = dialogAgent
+    ? getAgentLimitRuntimeSnapshot(dialogAgent.id, runtimeByAgentId)
     : null;
+  const dialogCloseHref = buildQueryHref(searchParams, { limitDialog: undefined });
+  const deleteDialogAgent = deleteDialogAgentId
+    ? (agents.find((agent) => agent.id === deleteDialogAgentId) ?? null)
+    : null;
+  const deleteDialogCloseHref = buildQueryHref(searchParams, { limitDelete: undefined });
 
   return (
     <section className="limits-dashboard" aria-label="Limits">
@@ -2922,7 +2867,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
               label="Over-limit today"
               value={String(overLimitTodayCount)}
               delta={`vs yesterday ${formatSignedInteger(overLimitTodayCount - overLimitYesterdayCount)}`}
-              deltaTone={overLimitTodayCount >= overLimitYesterdayCount ? "up" : "down"}
+              deltaTone={formatDeltaTone(overLimitTodayCount, overLimitYesterdayCount, "down-good")}
             />
             <StatCard
               icon="B"
@@ -2962,8 +2907,8 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                   <tr>
                     <th>Agent</th>
                     <th>API Key</th>
-                    <th className="num">Cost limit</th>
-                    <th className="num">Token limit</th>
+                    <th className="num">Budget</th>
+                    <th className="num">Tokens</th>
                     <th className="num">RPM</th>
                     <th className="num">TPM</th>
                     <th className="num">Concurrency</th>
@@ -2979,79 +2924,53 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                     </tr>
                   ) : (
                     filteredRows.map((row) => {
-                      const selectedHref = buildQueryHref(searchParams, {
+                      const editHref = buildQueryHref(searchParams, {
+                        limitDialog: row.agent.id,
                         selected: row.agent.id,
                       });
                       return (
                         <tr
                           key={row.agent.id}
-                          className={
-                            selectedAgent?.id === row.agent.id ? "is-selected" : "is-clickable"
-                          }
+                          className={selectedAgent?.id === row.agent.id ? "is-selected" : undefined}
                         >
+                          <td>{row.agent.name}</td>
+                          <td className="mono">{formatLimitsKeyPrefix(row.agent.keyPrefix)}</td>
+                          <td className="num">{formatLimitBudgetCell(row.limits)}</td>
+                          <td className="num">{formatLimitNumericCell(row.limits, "token")}</td>
+                          <td className="num">{formatLimitNumericCell(row.limits, "rpm")}</td>
+                          <td className="num">{formatLimitNumericCell(row.limits, "tpm")}</td>
+                          <td className="num">
+                            {formatLimitNumericCell(row.limits, "concurrency")}
+                          </td>
+                          <td className="num">{formatUsagePercent(row.budgetUsagePercent)}</td>
                           <td>
-                            <a className="table-row-link" href={selectedHref}>
-                              {row.agent.name}
-                            </a>
-                          </td>
-                          <td className="mono">
-                            <a className="table-row-link" href={selectedHref}>
-                              {formatLimitsKeyPrefix(row.agent.keyPrefix)}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={selectedHref}>
-                              {formatLimitBudgetCell(row.limits)}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={selectedHref}>
-                              {formatLimitNumericCell(row.limits, "token")}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={selectedHref}>
-                              {formatLimitNumericCell(row.limits, "rpm")}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={selectedHref}>
-                              {formatLimitNumericCell(row.limits, "tpm")}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={selectedHref}>
-                              {formatLimitNumericCell(row.limits, "concurrency")}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={selectedHref}>
-                              {formatUsagePercent(row.budgetUsagePercent)}
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={selectedHref}>
-                              <span className={`pill limits-status-pill ${row.status.className}`}>
-                                {row.status.label}
-                              </span>
-                            </a>
+                            <span className={`pill limits-status-pill ${row.status.className}`}>
+                              {row.status.label}
+                            </span>
                           </td>
                           <td className="limits-rule-action-cell">
-                            <form
-                              action="/api/agent-limits"
-                              className="limits-rule-delete-form"
-                              method="post"
-                            >
-                              <input type="hidden" name="action" value="deleteLimitRules" />
-                              <input type="hidden" name="agentId" value={row.agent.id} />
-                              <button
+                            <span className="limits-rule-actions">
+                              <span className="agent-table-actions">
+                                <a
+                                  aria-label={`Edit ${row.agent.name}`}
+                                  className="link-button agent-action-edit"
+                                  href={editHref}
+                                >
+                                  <FlatIcon name="edit" />
+                                  <span>Edit</span>
+                                </a>
+                              </span>
+                              <a
                                 aria-label={`Delete ${row.agent.name}`}
                                 className="limits-rule-delete-button"
-                                type="submit"
+                                href={buildQueryHref(searchParams, {
+                                  limitDelete: row.agent.id,
+                                  limitDialog: undefined,
+                                })}
                               >
                                 Delete
-                              </button>
-                            </form>
+                              </a>
+                            </span>
                           </td>
                         </tr>
                       );
@@ -3062,26 +2981,32 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
             </div>
           </div>
         </div>
-        {selectedAgent ? (
-          <LimitsConfigPanel
-            agent={selectedAgent}
-            limits={selectedLimits}
-            allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(selectedAgent.id))}
-            runtime={selectedRuntime ?? getEmptyAgentLimitRuntimeSnapshot(selectedAgent.id)}
-          />
-        ) : null}
       </div>
+      {dialogAgent ? (
+        <LimitsConfigDialog
+          agent={dialogAgent}
+          closeHref={dialogCloseHref}
+          limits={dialogLimits}
+          allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(dialogAgent.id))}
+          runtime={dialogRuntime ?? getEmptyAgentLimitRuntimeSnapshot(dialogAgent.id)}
+        />
+      ) : null}
+      {deleteDialogAgent ? (
+        <LimitsDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
+      ) : null}
     </section>
   );
 }
 
-function LimitsConfigPanel({
+function LimitsConfigDialog({
   agent,
+  closeHref,
   limits,
   allowedVirtualModels,
   runtime,
 }: {
   agent: { id: string; keyPrefix: string | null; name: string };
+  closeHref: string;
   limits: readonly ConsoleAgentLimit[];
   allowedVirtualModels: ReadonlyArray<{ id: string; displayName: string; name: string }>;
   runtime: ConsoleAgentLimitRuntimeSnapshot;
@@ -3096,159 +3021,212 @@ function LimitsConfigPanel({
   const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
 
   return (
-    <aside className="limits-config-panel" aria-label="Rule configuration">
-      <div className="limits-config-head">
-        <div>
-          <h2 className="limits-config-title">Rule configuration</h2>
-          <p>{agent.name}</p>
-        </div>
-        <span className="mono">{formatLimitsKeyPrefix(agent.keyPrefix)}</span>
-      </div>
-      <form className="limits-config-form" action="/api/agent-limits" method="post">
-        <input type="hidden" name="action" value="saveLimitRules" />
-        <input type="hidden" name="agentId" value={agent.id} />
-        <div className="limits-form-grid">
-          <div className="console-field">
-            <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
-            <input
-              id={`limits-budget-${agent.id}`}
-              name="budgetUsd"
-              type="number"
-              min="0.000001"
-              step="0.000001"
-              defaultValue={formatInputNumber(
-                budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
-              )}
-              required
-            />
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-label="Rule configuration"
+        aria-labelledby={`limits-config-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog limits-config-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head limits-config-head">
+          <div>
+            <h2 className="limits-config-title" id={`limits-config-title-${agent.id}`}>
+              Rule configuration
+            </h2>
+            <p>{agent.name}</p>
           </div>
-          <div className="console-field">
-            <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
-            <input
-              id={`limits-token-${agent.id}`}
-              name="tokenLimit"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={formatInputNumber(
-                tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
-              )}
-              required
-            />
-          </div>
-          <div className="console-field">
-            <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
-            <select
-              id={`limits-budget-period-${agent.id}`}
-              name="budgetPeriod"
-              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
-              required
-            >
-              <option value="day">Day</option>
-              <option value="week">Week</option>
-              <option value="month">Month</option>
-            </select>
-          </div>
-          <div className="console-field">
-            <label htmlFor={`limits-alert-threshold-${agent.id}`}>Alert threshold</label>
-            <input
-              id={`limits-alert-threshold-${agent.id}`}
-              name="alertThresholdPercent"
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              defaultValue={formatInputNumber(alertThresholdPercent)}
-              required
-            />
-          </div>
-        </div>
-        <div className="limits-usage-block">
-          <div className="usage-bar">
-            <div className="usage-bar-head">
-              <span>Current usage</span>
-              <span>{formatUsagePercent(usagePercent)}</span>
-            </div>
-            <div className="usage-bar-track">
-              <div
-                className={`usage-bar-fill ${usageTone}`.trim()}
-                style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
-              />
-            </div>
-          </div>
-        </div>
-        <div>
-          <h3 className="limits-config-subtitle">Rate limit caps</h3>
-          <div className="limits-rate-grid">
-            <div className="console-field">
-              <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
-              <input
-                id={`limits-rpm-${agent.id}`}
-                name="rpm"
-                type="number"
-                min="1"
-                step="1"
-                defaultValue={formatInputNumber(
-                  rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
-                )}
-                required
-              />
-            </div>
-            <div className="console-field">
-              <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
-              <input
-                id={`limits-tpm-${agent.id}`}
-                name="tpm"
-                type="number"
-                min="1"
-                step="1"
-                defaultValue={formatInputNumber(
-                  tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
-                )}
-                required
-              />
-            </div>
-            <div className="console-field">
-              <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
-              <input
-                id={`limits-concurrency-${agent.id}`}
-                name="concurrency"
-                type="number"
-                min="1"
-                step="1"
-                defaultValue={formatInputNumber(
-                  concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
-                )}
-                required
-              />
-            </div>
-          </div>
-        </div>
-        <div>
-          <h3 className="limits-config-subtitle">Allowed Virtual Models</h3>
-          <div className="tag-row">
-            {allowedVirtualModels.length === 0 ? (
-              <span className="tag-chip">All virtual models</span>
-            ) : (
-              allowedVirtualModels.map((virtualModel) => (
-                <span className="tag-chip" key={virtualModel.id}>
-                  {virtualModel.name}
-                </span>
-              ))
-            )}
-          </div>
-        </div>
-        <div className="limits-config-actions">
-          <a className="secondary-button" href={buildQueryHref({}, { selected: agent.id })}>
-            Cancel
+          <a className="secondary-button" href={closeHref}>
+            Close
           </a>
-          <button type="submit">
-            <FlatIcon name="save" />
-            <span>Save rules</span>
-          </button>
         </div>
-      </form>
-    </aside>
+        <form className="limits-config-form" action="/api/agent-limits" method="post">
+          <input type="hidden" name="action" value="saveLimitRules" />
+          <input type="hidden" name="agentId" value={agent.id} />
+          <div className="limits-form-grid">
+            <div className="console-field">
+              <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
+              <input
+                id={`limits-budget-${agent.id}`}
+                name="budgetUsd"
+                type="number"
+                min="0.000001"
+                step="0.000001"
+                defaultValue={formatInputNumber(
+                  budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
+                )}
+                required
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
+              <input
+                id={`limits-token-${agent.id}`}
+                name="tokenLimit"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
+                )}
+                required
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
+              <select
+                id={`limits-budget-period-${agent.id}`}
+                name="budgetPeriod"
+                defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+                required
+              >
+                <option value="day">Day</option>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+              </select>
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-alert-threshold-${agent.id}`}>Alert threshold</label>
+              <input
+                id={`limits-alert-threshold-${agent.id}`}
+                name="alertThresholdPercent"
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                defaultValue={formatInputNumber(alertThresholdPercent)}
+                required
+              />
+            </div>
+          </div>
+          <div className="limits-usage-block">
+            <div className="usage-bar">
+              <div className="usage-bar-head">
+                <span>Current usage</span>
+                <span>{formatUsagePercent(usagePercent)}</span>
+              </div>
+              <div className="usage-bar-track">
+                <div
+                  className={`usage-bar-fill ${usageTone}`.trim()}
+                  style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3 className="limits-config-subtitle">Rate limit caps</h3>
+            <div className="limits-rate-grid">
+              <div className="console-field">
+                <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
+                <input
+                  id={`limits-rpm-${agent.id}`}
+                  name="rpm"
+                  type="number"
+                  min="1"
+                  step="1"
+                  defaultValue={formatInputNumber(
+                    rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
+                  )}
+                  required
+                />
+              </div>
+              <div className="console-field">
+                <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
+                <input
+                  id={`limits-tpm-${agent.id}`}
+                  name="tpm"
+                  type="number"
+                  min="1"
+                  step="1"
+                  defaultValue={formatInputNumber(
+                    tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
+                  )}
+                  required
+                />
+              </div>
+              <div className="console-field">
+                <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
+                <input
+                  id={`limits-concurrency-${agent.id}`}
+                  name="concurrency"
+                  type="number"
+                  min="1"
+                  step="1"
+                  defaultValue={formatInputNumber(
+                    concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
+                  )}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3 className="limits-config-subtitle">Allowed Virtual Models</h3>
+            <div className="tag-row">
+              {allowedVirtualModels.length === 0 ? (
+                <span className="tag-chip">All virtual models</span>
+              ) : (
+                allowedVirtualModels.map((virtualModel) => (
+                  <span className="tag-chip" key={virtualModel.id}>
+                    {virtualModel.name}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="limits-config-actions">
+            <a className="secondary-button" href={closeHref}>
+              Cancel
+            </a>
+            <button type="submit">
+              <span>Save</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function LimitsDeleteDialog({
+  agent,
+  closeHref,
+}: {
+  agent: { id: string; name: string };
+  closeHref: string;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`limits-delete-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id={`limits-delete-dialog-title-${agent.id}`}>
+            Delete limit rules for {agent.name}?
+          </h2>
+        </div>
+        <p>This removes every limit rule configured for this Agent API key.</p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
+          </a>
+          <form action="/api/agent-limits" method="post">
+            <input type="hidden" name="action" value="deleteLimitRules" />
+            <input type="hidden" name="agentId" value={agent.id} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete</span>
+            </button>
+          </form>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -3512,8 +3490,7 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
           required
         />
         <button type="submit">
-          <FlatIcon name="save" />
-          <span>Save price override</span>
+          <span>Save</span>
         </button>
       </form>
     </div>
@@ -3527,11 +3504,6 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const providerOAuthConnections = await listConsoleProviderOAuthConnections();
   const providerModelOptions = orderProviderModelsForConsole(await listProviderModelOptions());
   const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
-  const providerOAuthByProviderId = groupProviderOAuthByProviderId(providerOAuthConnections);
-  const providerHealthByProviderId = new Map(
-    providerHealthSummaries.map((summary) => [summary.id, summary]),
-  );
-  const providerModelsByProviderId = groupProviderModelsByProviderId(providerModelOptions);
   const providerDialog = readSingleSearchParam(searchParams.providerDialog);
   const providerDelete = readSingleSearchParam(searchParams.providerDelete);
   const providerError = readSingleSearchParam(searchParams.providerError);
@@ -3579,501 +3551,24 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     providers.find((provider) => provider.providerKey === "openai") ??
     providers[0] ??
     null;
-  const selectedProviderHealth = selectedProvider
-    ? providerHealthByProviderId.get(selectedProvider.id)
-    : undefined;
   const selectedProviderKeys = selectedProvider
     ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
     : [];
-  const selectedProviderOAuthConnections = selectedProvider
-    ? (providerOAuthByProviderId.get(selectedProvider.id) ?? [])
-    : [];
-  const selectedProviderCredentialCount =
-    selectedProvider?.providerType === "local"
-      ? 1
-      : selectedProvider?.providerType === "subscription"
-        ? selectedProviderOAuthConnections.length
-        : selectedProviderKeys.length;
   const deleteProviderKey = selectedProviderKeys.find(
     (providerKey) => providerKey.id === providerKeyDelete,
   );
-  const selectedProviderModels = selectedProvider
-    ? (providerModelsByProviderId.get(selectedProvider.id) ?? [])
-    : [];
 
   return (
     <section className="providers-dashboard" aria-label="Providers & Models">
-      <div className="provider-card-grid">
-        {providers.length === 0 ? (
-          <article className="provider-summary-card">
-            <div className="provider-summary-head">
-              <span className="provider-summary-icon" aria-hidden="true">
-                +
-              </span>
-              <div>
-                <h2>No providers</h2>
-                <p>Add a provider to begin routing traffic.</p>
-              </div>
-            </div>
-          </article>
-        ) : (
-          providers.map((provider) => {
-            const providerHealth = providerHealthByProviderId.get(provider.id);
-            const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-            const providerKeyCount = readProviderCredentialCount(
-              provider,
-              providerKeysByProviderId,
-              providerOAuthByProviderId,
-            );
-
-            return (
-              <article className="provider-summary-card" key={provider.id}>
-                <div className="provider-summary-head">
-                  <span className="provider-summary-icon" aria-hidden="true">
-                    {formatProviderInitials(provider.displayName)}
-                  </span>
-                  <div>
-                    <h2>{provider.displayName}</h2>
-                    <ProviderHealthDetailPill
-                      status={provider.enabled ? (providerHealth?.status ?? "unknown") : "disabled"}
-                    />
-                  </div>
-                </div>
-                <dl className="provider-summary-metrics">
-                  <div>
-                    <dt>Keys</dt>
-                    <dd>{formatProviderKeyCount(providerKeyCount)}</dd>
-                  </div>
-                  <div>
-                    <dt>Models</dt>
-                    <dd>{providerModels.length}</dd>
-                  </div>
-                </dl>
-              </article>
-            );
-          })
-        )}
-      </div>
-
-      <div className="providers-content-grid">
-        <div className="providers-main-column">
-          <div className="chart-card providers-list-card">
-            <h2 className="chart-card-title">Provider list</h2>
-            {providers.length === 0 ? (
-              <p>No providers configured.</p>
-            ) : (
-              <div className="data-table-wrap">
-                <table className="data-table providers-table">
-                  <thead>
-                    <tr>
-                      <th>Provider</th>
-                      <th>Status</th>
-                      <th>Type</th>
-                      <th className="num">Keys</th>
-                      <th className="num">Models</th>
-                      <th>Last connected</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {providers.map((provider) => {
-                      const providerHealth = providerHealthByProviderId.get(provider.id);
-                      const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
-                      const providerKeyCount = readProviderCredentialCount(
-                        provider,
-                        providerKeysByProviderId,
-                        providerOAuthByProviderId,
-                      );
-                      const providerHref = buildQueryHref(searchParams, {
-                        providerDialog: undefined,
-                        selected: provider.id,
-                      });
-                      return (
-                        <tr
-                          className={
-                            provider.id === selectedProvider?.id ? "is-selected" : "is-clickable"
-                          }
-                          key={provider.id}
-                        >
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              <strong>{provider.displayName}</strong>
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              <ProviderHealthDetailPill
-                                status={
-                                  provider.enabled
-                                    ? (providerHealth?.status ?? "unknown")
-                                    : "disabled"
-                                }
-                              />
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              {formatProviderType(provider)}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={providerHref}>
-                              {providerKeyCount}
-                            </a>
-                          </td>
-                          <td className="num">
-                            <a className="table-row-link" href={providerHref}>
-                              {providerModels.length}
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={providerHref}>
-                              {formatProviderLastConnection(providerHealth)}
-                            </a>
-                          </td>
-                          <td>
-                            <span className="provider-table-actions">
-                              {provider.enabled ? (
-                                <>
-                                  <a
-                                    className="provider-action-button provider-action-edit"
-                                    href={buildQueryHref(searchParams, {
-                                      providerDialog: provider.id,
-                                      selected: provider.id,
-                                    })}
-                                    aria-label={`Edit ${provider.displayName}`}
-                                    title="Edit"
-                                  >
-                                    <FlatIcon name="edit" />
-                                  </a>
-                                  <form action="/api/providers" method="post">
-                                    <input type="hidden" name="action" value="disable" />
-                                    <input type="hidden" name="id" value={provider.id} />
-                                    <button
-                                      className="provider-action-button provider-action-delete"
-                                      aria-label={`Disable ${provider.displayName}`}
-                                      title="Disable"
-                                      type="submit"
-                                    >
-                                      <FlatIcon name="disable" />
-                                    </button>
-                                  </form>
-                                  <a
-                                    className="provider-action-button provider-action-delete"
-                                    href={buildQueryHref(searchParams, {
-                                      providerDelete: provider.id,
-                                      selected: provider.id,
-                                    })}
-                                    aria-label={`Delete ${provider.displayName}`}
-                                    title="Delete"
-                                  >
-                                    <FlatIcon name="delete" />
-                                  </a>
-                                </>
-                              ) : (
-                                <>
-                                  <form action="/api/providers" method="post">
-                                    <input type="hidden" name="action" value="enable" />
-                                    <input type="hidden" name="id" value={provider.id} />
-                                    <button
-                                      className="provider-action-button provider-action-enable"
-                                      aria-label={`Enable ${provider.displayName}`}
-                                      title="Enable"
-                                      type="submit"
-                                    >
-                                      <FlatIcon name="enable" />
-                                    </button>
-                                  </form>
-                                  <a
-                                    className="provider-action-button provider-action-delete"
-                                    href={buildQueryHref(searchParams, {
-                                      providerDelete: provider.id,
-                                      selected: provider.id,
-                                    })}
-                                    aria-label={`Delete ${provider.displayName}`}
-                                    title="Delete"
-                                  >
-                                    <FlatIcon name="delete" />
-                                  </a>
-                                </>
-                              )}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <aside className="provider-detail-card" aria-label="Selected provider details">
-          {selectedProvider ? (
-            <>
-              <header className="provider-detail-head">
-                <div>
-                  <h2>Provider details - {selectedProvider.displayName}</h2>
-                </div>
-                <form
-                  className="provider-refresh-form"
-                  action="/api/provider-model-refresh"
-                  method="post"
-                >
-                  <input type="hidden" name="providerId" value={selectedProvider.id} />
-                  <button
-                    className="provider-refresh-button"
-                    disabled={selectedProviderCredentialCount === 0}
-                    aria-label="Refresh models"
-                    title="Refresh models"
-                    type="submit"
-                  >
-                    <FlatIcon name="refresh" />
-                  </button>
-                  {selectedProviderCredentialCount === 0 ? (
-                    <p className="field-error is-visible">
-                      {selectedProvider.providerType === "subscription"
-                        ? "Add an OAuth connection first"
-                        : "Add an API key first"}
-                    </p>
-                  ) : null}
-                </form>
-              </header>
-
-              <dl className="provider-detail-stats">
-                <div>
-                  <dt>Status</dt>
-                  <dd>
-                    {formatProviderHealthStatusLabel(
-                      selectedProvider.enabled
-                        ? (selectedProviderHealth?.status ?? "unknown")
-                        : "disabled",
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Default priority</dt>
-                  <dd>{formatProviderDefaultPriority(providers, selectedProvider)}</dd>
-                </div>
-                <div>
-                  <dt>Available models</dt>
-                  <dd>{selectedProviderModels.length}</dd>
-                </div>
-                <div>
-                  <dt>Last connected</dt>
-                  <dd>{formatProviderLastConnection(selectedProviderHealth)}</dd>
-                </div>
-              </dl>
-
-              <section className="provider-detail-section">
-                <div className="provider-detail-section-head">
-                  <h3>
-                    {selectedProvider.providerType === "subscription"
-                      ? "OAuth connections"
-                      : selectedProvider.providerType === "local"
-                        ? "Local connection"
-                        : "API keys"}
-                  </h3>
-                  {selectedProvider.providerType === "subscription" ? (
-                    <form
-                      action="/api/provider-oauth"
-                      className="provider-oauth-add-form"
-                      method="post"
-                    >
-                      <input type="hidden" name="action" value="start" />
-                      <input type="hidden" name="providerId" value={selectedProvider.id} />
-                      <input type="hidden" name="priority" value="100" />
-                      <button
-                        aria-label="Add OAuth connection"
-                        className="provider-key-add-button"
-                        title="Add OAuth connection"
-                        type="submit"
-                      >
-                        <FlatIcon name="key" />
-                      </button>
-                    </form>
-                  ) : selectedProvider.providerType === "local" ? null : (
-                    <a
-                      className="provider-key-add-button"
-                      href={buildQueryHref(searchParams, {
-                        providerKeyDialog: selectedProvider.id,
-                      })}
-                      aria-label="Add API key"
-                      title="Add API key"
-                    >
-                      <FlatIcon name="key" />
-                    </a>
-                  )}
-                </div>
-                {selectedProvider.providerType === "local" ? (
-                  <p>Local providers do not require API keys.</p>
-                ) : (
-                  <div className="data-table-wrap">
-                    <table className="data-table provider-key-table">
-                      <thead>
-                        <tr>
-                          <th>Label</th>
-                          <th>Priority</th>
-                          <th>Status</th>
-                          <th>Last tested</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedProvider.providerType === "subscription" ? (
-                          selectedProviderOAuthConnections.length === 0 ? (
-                            <tr>
-                              <td colSpan={5}>No OAuth connection stored.</td>
-                            </tr>
-                          ) : (
-                            selectedProviderOAuthConnections.map((connection) => (
-                              <tr key={connection.id}>
-                                <td>{connection.label ?? "-"}</td>
-                                <td>{connection.priority}</td>
-                                <td>
-                                  <ProviderOAuthTestStatusPill status={connection.lastTestStatus} />
-                                </td>
-                                <td>{formatProviderOAuthLastTest(connection)}</td>
-                                <td>
-                                  <span className="provider-table-actions">
-                                    <form action="/api/provider-oauth" method="post">
-                                      <input
-                                        type="hidden"
-                                        name="action"
-                                        value={connection.enabled ? "disable" : "enable"}
-                                      />
-                                      <input
-                                        type="hidden"
-                                        name="providerOAuthId"
-                                        value={connection.id}
-                                      />
-                                      <button
-                                        className={
-                                          connection.enabled
-                                            ? "provider-key-delete-button"
-                                            : "provider-action-button provider-action-enable"
-                                        }
-                                        aria-label={
-                                          connection.enabled
-                                            ? "Disable OAuth connection"
-                                            : "Enable OAuth connection"
-                                        }
-                                        title={connection.enabled ? "Disable" : "Enable"}
-                                        type="submit"
-                                      >
-                                        <FlatIcon
-                                          name={connection.enabled ? "disable" : "enable"}
-                                        />
-                                      </button>
-                                    </form>
-                                    <form action="/api/provider-oauth" method="post">
-                                      <input type="hidden" name="action" value="delete" />
-                                      <input
-                                        type="hidden"
-                                        name="providerOAuthId"
-                                        value={connection.id}
-                                      />
-                                      <button
-                                        className="provider-key-delete-button"
-                                        aria-label="Delete OAuth connection"
-                                        title="Delete OAuth connection"
-                                        type="submit"
-                                      >
-                                        <FlatIcon name="delete" />
-                                      </button>
-                                    </form>
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
-                          )
-                        ) : selectedProviderKeys.length === 0 ? (
-                          <tr>
-                            <td colSpan={5}>No provider key stored.</td>
-                          </tr>
-                        ) : (
-                          selectedProviderKeys.map((providerKey) => (
-                            <tr key={providerKey.id}>
-                              <td>{providerKey.label ?? "-"}</td>
-                              <td>{providerKey.priority}</td>
-                              <td>
-                                <ProviderApiKeyTestStatusPill status={providerKey.lastTestStatus} />
-                              </td>
-                              <td>{formatProviderApiKeyLastTest(providerKey)}</td>
-                              <td>
-                                <a
-                                  className="provider-key-delete-button"
-                                  href={buildQueryHref(searchParams, {
-                                    providerKeyDelete: providerKey.id,
-                                  })}
-                                  aria-label="Delete API key"
-                                  title="Delete API key"
-                                >
-                                  <FlatIcon name="delete" />
-                                </a>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-            </>
-          ) : (
-            <p>No provider selected.</p>
-          )}
-        </aside>
-      </div>
-
-      <div className="chart-card model-library-card">
-        <h2 className="chart-card-title">
-          Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
-        </h2>
-        {selectedProviderModels.length === 0 ? (
-          <p>No provider models discovered yet.</p>
-        ) : (
-          <div className="data-table-wrap">
-            <table className="data-table model-library-table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Model ID</th>
-                  <th>Context</th>
-                  <th>Input price</th>
-                  <th>Output price</th>
-                  <th>Tools</th>
-                  <th>Streaming</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedProviderModels.map((model) => (
-                  <tr key={model.id}>
-                    <td>{model.providerDisplayName}</td>
-                    <td>
-                      <span className="model-id-cell">
-                        <strong>{model.modelDisplayName}</strong>
-                        <small className="mono">{model.modelId}</small>
-                      </span>
-                    </td>
-                    <td>{formatModelContext(model.contextWindow)}</td>
-                    <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
-                    <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
-                    <td>{formatBooleanFeature(model.supportsTools)}</td>
-                    <td>{formatBooleanFeature(model.supportsStreaming)}</td>
-                    <td>
-                      <ModelAvailabilityPill value={model.availability} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <ProvidersClientSection
+        initialSelectedProviderId={selectedProviderId ?? undefined}
+        providerHealthSummaries={providerHealthSummaries}
+        providerKeys={providerKeys}
+        providerModelOptions={providerModelOptions}
+        providerOAuthConnections={providerOAuthConnections}
+        providers={providers}
+        searchParams={searchParams}
+      />
       {providerDialog === "new" ? (
         <ProviderCreateDialog
           closeHref={providerDialogCloseHref}
@@ -4252,8 +3747,7 @@ function ProviderEditDialog({
             {baseUrlError}
           </p>
           <button type="submit">
-            <FlatIcon name="save" />
-            <span>Save provider</span>
+            <span>Save</span>
           </button>
         </form>
       </section>
@@ -4307,8 +3801,7 @@ function ProviderKeyCreateDialog({
             type="number"
           />
           <button type="submit">
-            <FlatIcon name="key" />
-            <span>Save API key</span>
+            <span>Save</span>
           </button>
         </form>
       </section>
@@ -4587,12 +4080,22 @@ export async function SettingsSection() {
                 <input type="hidden" name="action" value="create" />
                 <input type="hidden" name="channelType" value="webhook" />
                 <label htmlFor="notification-webhook-name">Webhook channel name</label>
-                <input id="notification-webhook-name" name="displayName" required />
+                <input
+                  id="notification-webhook-name"
+                  name="displayName"
+                  placeholder="Ops alerts"
+                  required
+                />
                 <label htmlFor="notification-webhook-url">Webhook URL</label>
-                <input id="notification-webhook-url" name="webhookUrl" type="url" required />
-                <button type="submit">
-                  <FlatIcon name="add" />
-                  <span>Create webhook notification channel</span>
+                <input
+                  id="notification-webhook-url"
+                  name="webhookUrl"
+                  type="url"
+                  placeholder="https://hooks.example.com/llmingress"
+                  required
+                />
+                <button className="notification-channel-save-button" type="submit">
+                  <span>Save</span>
                 </button>
               </form>
             </div>
@@ -4753,7 +4256,7 @@ function formatRoutePolicyCandidateList(candidates: Array<{ optionLabel: string 
 }
 
 function formatDefaultCandidate(routePolicy: ConsoleRoutePolicy | null | undefined): string {
-  return routePolicy?.candidates[0]?.modelDisplayName ?? "-";
+  return routePolicy?.candidates[0]?.modelDisplayName ?? MISSING_VALUE;
 }
 
 function parseUsd(value: number | string | null): number {
@@ -4762,7 +4265,7 @@ function parseUsd(value: number | string | null): number {
 }
 
 function formatVirtualModelCost(value: number | string | null): string {
-  return formatOverviewMoney(String(parseUsd(value)));
+  return formatConsoleUsd(parseUsd(value));
 }
 
 function formatVirtualModelFailureRate(
@@ -4837,20 +4340,6 @@ function buildRoutePolicyHealthWarningCandidates(
   });
 }
 
-function groupProviderModelsByProviderId(
-  providerModels: Awaited<ReturnType<typeof listProviderModelOptions>>,
-) {
-  const grouped = new Map<string, typeof providerModels>();
-
-  for (const providerModel of providerModels) {
-    const models = grouped.get(providerModel.providerId) ?? [];
-    models.push(providerModel);
-    grouped.set(providerModel.providerId, models);
-  }
-
-  return grouped;
-}
-
 function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
   const grouped = new Map<string, ProviderApiKeyMetadata[]>();
 
@@ -4861,31 +4350,6 @@ function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
   }
 
   return grouped;
-}
-
-function groupProviderOAuthByProviderId(
-  providerOAuthConnections: ConsoleProviderOAuthConnection[],
-) {
-  const grouped = new Map<string, ConsoleProviderOAuthConnection[]>();
-
-  for (const connection of providerOAuthConnections) {
-    const connections = grouped.get(connection.providerId) ?? [];
-    connections.push(connection);
-    grouped.set(connection.providerId, connections);
-  }
-
-  return grouped;
-}
-
-function readProviderCredentialCount(
-  provider: ConsoleProvider,
-  providerKeysByProviderId: Map<string, ProviderApiKeyMetadata[]>,
-  providerOAuthByProviderId: Map<string, ConsoleProviderOAuthConnection[]>,
-): number {
-  if (provider.providerType === "subscription") {
-    return providerOAuthByProviderId.get(provider.id)?.length ?? 0;
-  }
-  return providerKeysByProviderId.get(provider.id)?.length ?? 0;
 }
 
 function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider[] {
@@ -4923,112 +4387,12 @@ function getConsoleProviderOrder(providerKey: string): number {
   return preferredOrder.get(providerKey) ?? 100;
 }
 
-function formatProviderInitials(displayName: string): string {
-  const initials = displayName
-    .split(/\s+/)
-    .map((part) => part.replace(/[^a-z0-9]/gi, "").charAt(0))
-    .filter(Boolean)
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  return initials || displayName.slice(0, 2).toUpperCase();
-}
-
-function formatProviderType(provider: ConsoleProvider): string {
-  if (provider.providerType === "local") {
-    return "Local";
-  }
-  if (provider.providerType === "subscription") {
-    return "Subscription";
-  }
-  return provider.providerTemplateId ? "Template" : "API Key";
-}
-
-function formatProviderKeyCount(count: number): string {
-  if (count === 0) {
-    return "-";
-  }
-  return count === 1 ? "1 Key" : `${count} Keys`;
-}
-
-function formatProviderDefaultPriority(
-  providers: readonly ConsoleProvider[],
-  selectedProvider: ConsoleProvider,
-): string {
-  const index = providers.findIndex((provider) => provider.id === selectedProvider.id);
-  return index >= 0 ? String(index + 1) : "-";
-}
-
-function formatProviderLastConnection(
-  providerHealth: ConsoleProviderHealthSummary | undefined,
-): string {
-  if (!providerHealth?.latestProbeAt) {
-    return "-";
-  }
-
-  return formatRelativeDateTime(providerHealth.latestProbeAt);
-}
-
-function formatProviderApiKeyLastTest(providerKey: ProviderApiKeyMetadata): string {
-  return providerKey.lastTestedAt ? formatRelativeDateTime(providerKey.lastTestedAt) : "-";
-}
-
-function formatProviderOAuthLastTest(connection: ConsoleProviderOAuthConnection): string {
-  return connection.lastTestedAt ? formatRelativeDateTime(connection.lastTestedAt) : "-";
-}
-
-function formatRelativeDateTime(value: Date): string {
-  const elapsedMs = Date.now() - value.getTime();
-  if (elapsedMs < 60_000) {
-    return "just now";
-  }
-  if (elapsedMs < 3_600_000) {
-    return `${Math.floor(elapsedMs / 60_000)} min ago`;
-  }
-  if (elapsedMs < 86_400_000) {
-    return `${Math.floor(elapsedMs / 3_600_000)} h ago`;
-  }
-  return value.toISOString().slice(0, 10);
-}
-
-function formatModelContext(contextWindow: number | null): string {
-  if (contextWindow === null) {
-    return "Unknown";
-  }
-  if (contextWindow >= 1_000_000) {
-    return `${formatDecimal(contextWindow / 1_000_000)}M`;
-  }
-  if (contextWindow >= 1_000) {
-    return `${formatDecimal(contextWindow / 1_000)}K`;
-  }
-  return String(contextWindow);
-}
-
 function formatModelPrice(price: number | null): string {
   if (price === null) {
     return "Unknown";
   }
   const digits = price >= 1 ? 2 : 4;
   return `$${price.toFixed(digits)}`;
-}
-
-function formatDecimal(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function formatBooleanFeature(value: boolean): string {
-  return value ? "Yes" : "No";
-}
-
-function formatModelAvailability(value: string): string {
-  if (value === "available") {
-    return "Enabled";
-  }
-  if (value === "disabled") {
-    return "Disabled";
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function formatVirtualModelOptionLabel(virtualModel: {

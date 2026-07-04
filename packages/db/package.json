@@ -52,6 +52,10 @@
       "types": "./src/console-auth.ts",
       "default": "./src/console-auth.ts"
     },
+    "./console-format": {
+      "types": "./src/console-format.ts",
+      "default": "./src/console-format.ts"
+    },
     "./console-import-export": {
       "types": "./src/console-import-export.ts",
       "default": "./src/console-import-export.ts"

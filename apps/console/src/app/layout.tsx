@@ -1,48 +1,33 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Hanken_Grotesk, Spline_Sans_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
-const display = Bricolage_Grotesque({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-display",
-  display: "swap",
-});
-
-const body = Hanken_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-body",
-  display: "swap",
-});
-
-const mono = Spline_Sans_Mono({
+const sans = Geist({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  variable: "--font-mono",
+  variable: "--font-geist-sans",
+  display: "swap",
+});
+
+const mono = Geist_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-geist-mono",
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "LLMIngress Console",
   description: "LLMIngress management console",
+  icons: {
+    icon: "/llmingress-icon.svg",
+  },
 };
-
-// Applied before first paint so the stored/OS theme never flashes.
-const themeBootstrap = `(function(){try{var t=localStorage.getItem('llmingress-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${display.variable} ${body.variable} ${mono.variable}`}
-    >
-      <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint theme bootstrap must run before hydration */}
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
-      </head>
+    <html lang="en" data-theme="dark" className={`${sans.variable} ${mono.variable}`}>
       <body>{children}</body>
     </html>
   );

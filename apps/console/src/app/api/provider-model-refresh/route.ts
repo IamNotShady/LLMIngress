@@ -18,6 +18,9 @@ export async function POST(request: NextRequest) {
       providerId: readText(form, "providerId"),
     });
     await enqueueProviderModelRefreshJob({ providerId: input.providerId });
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return NextResponse.json({ ok: true, providerId: input.providerId });
+    }
     return NextResponse.redirect(
       new URL(
         `/providers?modelRefreshProviderId=${encodeURIComponent(input.providerId)}&selected=${encodeURIComponent(input.providerId)}`,

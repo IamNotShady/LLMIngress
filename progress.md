@@ -204,6 +204,31 @@
   - `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` after the first full feature run hit transient Console startup contention
   - `pnpm run verify:features` passed with all 11 passing features re-verified.
 
+## 2026-07-04 Gateway Pipeline Hardening F1
+
+- Worktree `.claude/worktrees/gateway-pipeline-hardening` is on branch `worktree-gateway-pipeline-hardening`; local `dev` was merged before implementation so the branch includes the latest Console fixes.
+- Baseline before Gateway edits:
+  - `pnpm install`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed after the optimized E2E batch fell back to per-feature reruns; final result was all 11 passing features re-verified.
+- Registered the six Gateway pipeline hardening tracker entries from the implementation plan. `gateway-db-pool` is now passing; the remaining five Gateway entries stay `failing` until their slices are implemented.
+- Implemented `gateway-db-pool`:
+  - Added process-level `pg.Pool` helpers in `packages/db/src/client.ts`: `getPostgresPool`, `closePostgresPools`, `withPooledPostgresClient`, and `withPostgresTransaction`.
+  - Migrated Gateway request-path DB operations to pooled access for auth, virtual-model access, activity recording, rate limits, budget reservations, usage recording, provider credential reads, fallback events, streaming runtime errors, provider health event writes, and provider API key last-used updates.
+  - Kept dedicated/low-frequency paths out of scope: config LISTEN, provider health LISTEN, gateway metrics, and runtime heartbeat/status writes.
+  - Added `closePostgresPools()` to Gateway Fastify `onClose`.
+  - Extracted reusable Gateway process helpers to `tests/support/gateway-process.ts`.
+  - Added focused unit coverage and an E2E 30-request burst that holds `request_activity` inserts briefly and asserts Postgres backend count remains bounded under the pool.
+- Verification completed:
+  - Red phase: `pnpm exec vitest run tests/features/gateway-db-pool.unit.test.ts` failed on missing `getPostgresPool`.
+  - `pnpm exec vitest run tests/features/gateway-db-pool.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts`
+  - `pnpm test:e2e tests/e2e/gateway-db-pool.e2e.spec.ts`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 11 previously passing features re-verified.
+- Release guard tests now allow the registered Gateway hardening entries to be `failing` while still requiring the previously accepted feature contracts to stay `passing`; the E2E dry-run assertion reads the current passing count from `feature_list.json`.
+- Remaining risks/non-goals: streaming/non-streaming provider runtime is still split, Console and Worker DB paths are not pooled in this slice, and F2-F6 remain unimplemented.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

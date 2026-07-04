@@ -122,6 +122,74 @@
       ],
       "status": "passing",
       "evidence": "2026-07-04: TDD red->green. Focused unit and E2E passed for Activity timestamp overflow at desktop/mobile, honest Overview 24h recent/top-cost data, 7d Usage default, Online/Cost 24h/Failure rate total labels, checkbox virtual-model grants, compact row action classes, Close icon consistency, removed page eyebrows, and llmi_ Playground placeholder. Console typecheck, lint, pnpm run verify, and pnpm run verify:features passed; verify:features re-verified all 11 passing features after adding this tracker entry. Follow-up Playground action alignment right-aligns Clear and Send; focused unit, in-app browser measurement/screenshot, lint, Console typecheck, pnpm run verify, focused v1-console E2E after transient startup contention, and pnpm run verify:features passed."
+    },
+    {
+      "id": "gateway-db-pool",
+      "name": "Gateway Postgres Connection Pool",
+      "description": "Gateway request-path database access goes through a process-level pg.Pool: a 30-request burst against a running gateway keeps total postgres connections bounded by the pool max instead of opening connections per query, and pools close on app shutdown.",
+      "verification": "pnpm exec vitest run tests/features/gateway-db-pool.unit.test.ts && pnpm test:e2e tests/e2e/gateway-db-pool.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-04: TDD red->green. Added process-level pg.Pool helpers, migrated Gateway request-path short DB operations and transactions to pooled access while leaving LISTEN/low-frequency paths alone, extracted shared Gateway E2E process helpers, and added a 30-request burst E2E with a short request_activity sleep trigger proving Postgres connections stay bounded by the pool. Focused unit, v1 gateway routing E2E, focused gateway-db-pool E2E, pnpm run verify, and pnpm run verify:features passed."
+    },
+    {
+      "id": "gateway-recording-resilience",
+      "name": "Gateway Recording Resilience",
+      "description": "A running gateway still returns the LLM response with HTTP 200 when activity/usage/trace recording writes fail (up to the request_activity table being dropped), logging failures at error level instead of failing the agent request.",
+      "verification": "pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts && pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts",
+      "dependencies": [
+        "gateway-db-pool"
+      ],
+      "status": "failing",
+      "evidence": ""
+    },
+    {
+      "id": "gateway-stream-robustness",
+      "name": "Gateway Stream Robustness",
+      "description": "Provider calls time out (non-streaming request timeout; streaming connect, first-chunk, and mid-stream idle timeouts) against a running gateway with a stalling fake provider, slow clients cause bounded buffering via pipe backpressure, and client disconnects cancel the upstream provider stream.",
+      "verification": "pnpm exec vitest run tests/features/gateway-stream-robustness.unit.test.ts && pnpm test:e2e tests/e2e/gateway-stream-robustness.e2e.spec.ts",
+      "dependencies": [
+        "gateway-db-pool"
+      ],
+      "status": "failing",
+      "evidence": ""
+    },
+    {
+      "id": "gateway-settlement-integrity",
+      "name": "Gateway Settlement Integrity",
+      "description": "Budget finalization charges actual provider usage when available (falling back to reserved estimates), reservations carry a configurable TTL, streams outliving the TTL still settle their actual cost after sweeper expiry, and a periodic worker job reconciles leaked concurrency counters from request_activity.",
+      "verification": "pnpm exec vitest run tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/gateway-settlement-integrity.e2e.spec.ts",
+      "dependencies": [
+        "gateway-db-pool",
+        "gateway-recording-resilience"
+      ],
+      "status": "failing",
+      "evidence": ""
+    },
+    {
+      "id": "gateway-error-fidelity",
+      "name": "Gateway Error Fidelity",
+      "description": "Gateway error handling is typed instead of string-matched, non-retryable provider 4xx responses pass through sanitized provider messages with the upstream status code to the agent, a fallback candidate with missing credentials is skipped instead of failing the request, and streaming attempts iterate provider API keys like the non-streaming chain.",
+      "verification": "pnpm exec vitest run tests/features/gateway-error-fidelity.unit.test.ts && pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts",
+      "dependencies": [
+        "gateway-stream-robustness"
+      ],
+      "status": "failing",
+      "evidence": ""
+    },
+    {
+      "id": "gateway-request-hygiene",
+      "name": "Gateway Request Hygiene",
+      "description": "A running gateway accepts 2MB chat bodies under a configurable body limit, rejects malformed client x-request-id values, estimates CJK tokens realistically, protects /metrics behind an optional bearer token, passes whitelisted OpenAI chat parameters (including max_completion_tokens) through to providers, and refreshes provider OAuth tokens under a row lock so concurrent requests refresh exactly once.",
+      "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts",
+      "dependencies": [
+        "gateway-db-pool",
+        "gateway-error-fidelity"
+      ],
+      "status": "failing",
+      "evidence": ""
     }
   ]
 }

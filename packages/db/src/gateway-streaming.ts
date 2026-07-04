@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
-import { PostgresClient } from "@llmingress/db/client";
+import { getPostgresPool } from "@llmingress/db/client";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { selectRouteAttempts } from "@llmingress/domain";
 import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
@@ -935,33 +935,27 @@ async function recordGatewayRuntimeError(input: {
   error: GatewayRuntimeStreamError;
   metadata: Record<string, unknown>;
 }): Promise<void> {
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-  try {
-    await client.query(
-      `
-        insert into runtime_errors (
-          id,
-          process_type,
-          process_id,
-          severity,
-          error_code,
-          error_message,
-          metadata
-        )
-        values ($1, 'gateway', $2, 'error', $3, $4, $5)
-      `,
-      [
-        randomUUID(),
-        process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
-        input.error.errorCode,
-        input.error.errorMessage,
-        JSON.stringify(input.metadata),
-      ],
-    );
-  } finally {
-    await client.end();
-  }
+  await getPostgresPool(input.databaseUrl).query(
+    `
+      insert into runtime_errors (
+        id,
+        process_type,
+        process_id,
+        severity,
+        error_code,
+        error_message,
+        metadata
+      )
+      values ($1, 'gateway', $2, 'error', $3, $4, $5)
+    `,
+    [
+      randomUUID(),
+      process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
+      input.error.errorCode,
+      input.error.errorMessage,
+      JSON.stringify(input.metadata),
+    ],
+  );
 }
 
 function buildProviderUrl(baseUrl: string, suffix: string): string {

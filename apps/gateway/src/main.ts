@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
-import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
+import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingress/db/client";
 import {
   completeGatewayRequestActivity,
   createGatewayRequestActivity,
@@ -162,6 +162,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
   app.addHook("onClose", async () => {
     await options.configRuntime?.stop();
+    await closePostgresPools();
   });
 
   return app;

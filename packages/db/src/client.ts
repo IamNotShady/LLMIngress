@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { Client, type ClientConfig } from "pg";
+import { Client, type ClientConfig, Pool } from "pg";
 
 type DatabaseUrlEnvironment = Record<string, string | undefined>;
 
@@ -35,6 +35,8 @@ export type PostgresQueryClient = {
   ) => Promise<PostgresQueryResult<T>>;
 };
 
+const postgresPools = new Map<string, Pool>();
+
 export function readPostgresDatabaseUrl(options: ReadPostgresDatabaseUrlOptions = {}): string {
   const env = options.env ?? process.env;
   const configFilePath = options.configFilePath ?? env.LLMINGRESS_BOOTSTRAP_CONFIG;
@@ -61,6 +63,59 @@ export function assertPostgresDatabaseConfigured(
   options: ReadPostgresDatabaseUrlOptions = {},
 ): void {
   readPostgresDatabaseUrl(options);
+}
+
+export function getPostgresPool(databaseUrl?: string): Pool {
+  const connectionString = databaseUrl?.trim() || readPostgresDatabaseUrl();
+  const existing = postgresPools.get(connectionString);
+  if (existing) {
+    return existing;
+  }
+
+  const pool = new Pool({
+    connectionString,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 30_000,
+    max: readPostgresPoolMax(),
+  });
+  pool.on("error", () => undefined);
+  postgresPools.set(connectionString, pool);
+  return pool;
+}
+
+export async function closePostgresPools(): Promise<void> {
+  const pools = [...postgresPools.values()];
+  postgresPools.clear();
+  await Promise.all(pools.map((pool) => pool.end()));
+}
+
+export async function withPooledPostgresClient<T>(
+  databaseUrl: string | undefined,
+  operation: (client: PostgresQueryClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPostgresPool(databaseUrl).connect();
+  try {
+    return await operation(client);
+  } finally {
+    client.release();
+  }
+}
+
+export async function withPostgresTransaction<T>(
+  databaseUrl: string | undefined,
+  operation: (client: PostgresQueryClient) => Promise<T>,
+): Promise<T> {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
+    await client.query("begin");
+    try {
+      const result = await operation(client);
+      await client.query("commit");
+      return result;
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    }
+  });
 }
 
 export async function withPostgresClient<T>(
@@ -99,4 +154,9 @@ function readBootstrapConfigFile(path: string): BootstrapConfigFile {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`LLMINGRESS_BOOTSTRAP_CONFIG could not be read: ${message}`);
   }
+}
+
+function readPostgresPoolMax(env: DatabaseUrlEnvironment = process.env): number {
+  const parsed = Number(env.LLMINGRESS_DB_POOL_MAX ?? "10");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 10;
 }

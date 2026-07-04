@@ -1,6 +1,6 @@
+import { getPostgresPool, withPooledPostgresClient } from "@llmingress/db/client";
 import {
   completeProviderOAuthConnection,
-  PostgresClient,
   type PostgresQueryResultRow,
   readEnabledCompletedProviderOAuthConnections,
 } from "@llmingress/db/providers";
@@ -516,10 +516,7 @@ async function readProviderCredentials(input: {
   }
 
   const encryption = createSecretEncryption(input.masterKeySource);
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const providerResult = await client.query<ProviderCredentialProviderRow>(
       `
         select id::text as provider_id,
@@ -621,9 +618,7 @@ async function readProviderCredentials(input: {
     }
 
     return credentials;
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function recordGatewayProviderApiKeyLastUsed(input: {
@@ -634,21 +629,15 @@ export async function recordGatewayProviderApiKeyLastUsed(input: {
     return;
   }
 
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-  try {
-    await client.query(
-      `
-        update provider_api_keys
-        set last_used_at = now(),
-            updated_at = now()
-        where id = $1
-      `,
-      [input.providerApiKeyId],
-    );
-  } finally {
-    await client.end();
-  }
+  await getPostgresPool(input.databaseUrl).query(
+    `
+      update provider_api_keys
+      set last_used_at = now(),
+          updated_at = now()
+      where id = $1
+    `,
+    [input.providerApiKeyId],
+  );
 }
 
 function readEncryptedSecret(value: unknown): EncryptedSecret {

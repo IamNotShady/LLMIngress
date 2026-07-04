@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/client";
+import { getPostgresPool } from "@llmingress/db/client";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import {
   classifyProviderFailureStatus,
@@ -295,35 +295,29 @@ export async function recordSucceededAttemptInDatabase(
     return;
   }
 
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-  try {
-    await client.query(
-      `
-        insert into fallback_events (
-          id,
-          request_activity_id,
-          provider_model_id,
-          provider_api_key_id,
-          provider_api_key_prefix,
-          attempt_order,
-          status,
-          failed_before_first_byte
-        )
-        values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
-      `,
-      [
-        randomUUID(),
-        input.requestActivityId,
-        attempt.providerModelId,
-        attempt.providerApiKeyId || null,
-        attempt.providerApiKeyPrefix || null,
-        attempt.attemptOrder,
-      ],
-    );
-  } finally {
-    await client.end();
-  }
+  await getPostgresPool(input.databaseUrl).query(
+    `
+      insert into fallback_events (
+        id,
+        request_activity_id,
+        provider_model_id,
+        provider_api_key_id,
+        provider_api_key_prefix,
+        attempt_order,
+        status,
+        failed_before_first_byte
+      )
+      values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
+    `,
+    [
+      randomUUID(),
+      input.requestActivityId,
+      attempt.providerModelId,
+      attempt.providerApiKeyId || null,
+      attempt.providerApiKeyPrefix || null,
+      attempt.attemptOrder,
+    ],
+  );
 }
 
 export async function recordFailedAttemptInDatabase(
@@ -334,40 +328,34 @@ export async function recordFailedAttemptInDatabase(
     return;
   }
 
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-  try {
-    await client.query(
-      `
-        insert into fallback_events (
-          id,
-          request_activity_id,
-          provider_model_id,
-          provider_api_key_id,
-          provider_api_key_prefix,
-          attempt_order,
-          status,
-          error_code,
-          error_message,
-          failed_before_first_byte
-        )
-        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
-      `,
-      [
-        randomUUID(),
-        input.requestActivityId,
-        attempt.providerModelId,
-        attempt.providerApiKeyId || null,
-        attempt.providerApiKeyPrefix || null,
-        attempt.attemptOrder,
-        attempt.errorCode,
-        attempt.errorMessage,
-        attempt.failedBeforeFirstByte,
-      ],
-    );
-  } finally {
-    await client.end();
-  }
+  await getPostgresPool(input.databaseUrl).query(
+    `
+      insert into fallback_events (
+        id,
+        request_activity_id,
+        provider_model_id,
+        provider_api_key_id,
+        provider_api_key_prefix,
+        attempt_order,
+        status,
+        error_code,
+        error_message,
+        failed_before_first_byte
+      )
+      values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
+    `,
+    [
+      randomUUID(),
+      input.requestActivityId,
+      attempt.providerModelId,
+      attempt.providerApiKeyId || null,
+      attempt.providerApiKeyPrefix || null,
+      attempt.attemptOrder,
+      attempt.errorCode,
+      attempt.errorMessage,
+      attempt.failedBeforeFirstByte,
+    ],
+  );
 }
 
 export async function recordCandidateHealthFailure(

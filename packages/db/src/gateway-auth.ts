@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { getPostgresPool, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export type GatewayAuthErrorCode =
   | "disabled_agent_api_key"
@@ -127,27 +127,21 @@ async function readAgentApiKeyByHash(
   databaseUrl: string | undefined,
   keyHash: string,
 ): Promise<AgentApiKeyAuthRow | undefined> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-  try {
-    const result = await client.query<AgentApiKeyAuthRow>(
-      `
-        select agents.id::text,
-               agents.id::text as agent_id,
-               agents.key_prefix,
-               agents.default_virtual_model_id::text,
-               agents.enabled,
-               agents.request_logging_enabled
-        from agents
-        where agents.key_hash = $1
-          and agents.deleted_at is null
-      `,
-      [keyHash],
-    );
-    return result.rows[0];
-  } finally {
-    await client.end();
-  }
+  const result = await getPostgresPool(databaseUrl).query<AgentApiKeyAuthRow>(
+    `
+      select agents.id::text,
+             agents.id::text as agent_id,
+             agents.key_prefix,
+             agents.default_virtual_model_id::text,
+             agents.enabled,
+             agents.request_logging_enabled
+      from agents
+      where agents.key_hash = $1
+        and agents.deleted_at is null
+    `,
+    [keyHash],
+  );
+  return result.rows[0];
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {

@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import {
+  getPostgresPool,
+  type PostgresQueryClient,
+  type PostgresQueryResultRow,
+  withPostgresTransaction,
+} from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 
 export type GatewayRateLimitType = "concurrency" | "rpm" | "tpm";
@@ -57,14 +62,9 @@ export async function enforceGatewayRateLimits(input: {
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayRateLimitDecision> {
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
-    await client.query("begin");
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const limits = await readEnabledGatewayRateLimits(client, input.agentApiKeyId);
     if (limits.length === 0) {
-      await client.query("commit");
       return { ok: true };
     }
 
@@ -110,7 +110,6 @@ export async function enforceGatewayRateLimits(input: {
             : Math.max(1, window.windowEnd.getTime() - now.getTime()),
       });
       if (!decision.ok) {
-        await client.query("rollback");
         return decision;
       }
     }
@@ -124,7 +123,6 @@ export async function enforceGatewayRateLimits(input: {
       });
     }
 
-    await client.query("commit");
     const concurrencyIncrement = increments.find(
       (increment) => increment.limitType === "concurrency",
     );
@@ -134,12 +132,7 @@ export async function enforceGatewayRateLimits(input: {
         : undefined,
       ok: true,
     };
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function releaseGatewayConcurrency(input: {
@@ -150,24 +143,17 @@ export async function releaseGatewayConcurrency(input: {
     return;
   }
 
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
-    await client.query(
-      `
-        update rate_limit_windows
-        set active_count = greatest(active_count - 1, 0),
-            updated_at = now()
-        where agent_id = $1
-          and limit_type = 'concurrency'
-          and window_start = $2
-      `,
-      [input.lease.agentApiKeyId, input.lease.window.windowStart],
-    );
-  } finally {
-    await client.end();
-  }
+  await getPostgresPool(input.databaseUrl).query(
+    `
+      update rate_limit_windows
+      set active_count = greatest(active_count - 1, 0),
+          updated_at = now()
+      where agent_id = $1
+        and limit_type = 'concurrency'
+        and window_start = $2
+    `,
+    [input.lease.agentApiKeyId, input.lease.window.windowStart],
+  );
 }
 
 export function getMinuteWindow(date: Date): WindowBoundary {
@@ -235,7 +221,7 @@ export function createGatewayRateLimitErrorBody(input: {
 }
 
 async function readEnabledGatewayRateLimits(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   agentApiKeyId: string,
 ): Promise<
   Array<{
@@ -273,7 +259,7 @@ async function readEnabledGatewayRateLimits(
 }
 
 async function lockRateLimitWindow(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   input: {
     agentApiKeyId: string;
     limitType: GatewayRateLimitType;
@@ -327,7 +313,7 @@ async function lockRateLimitWindow(
 }
 
 async function incrementRateLimitWindow(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   input: {
     agentApiKeyId: string;
     increment: number;

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { expect, test } from "@playwright/test";
 
@@ -8,7 +9,15 @@ test("v1 release verification runner and docker compose contracts stay runnable"
   const dryRun = await execFileAsync("pnpm", ["run", "verify:features", "--", "--dry-run"], {
     cwd: process.cwd(),
   });
-  expect(dryRun.stdout).toContain("Optimized feature regression plan: 11 passing feature(s).");
+  const featureList = JSON.parse(await readFile("feature_list.json", "utf8")) as {
+    features: Array<{ status: string }>;
+  };
+  const passingFeatureCount = featureList.features.filter(
+    (feature) => feature.status === "passing",
+  ).length;
+  expect(dryRun.stdout).toContain(
+    `Optimized feature regression plan: ${passingFeatureCount} passing feature(s).`,
+  );
   expect(dryRun.stdout).toContain("Optimized coverage comparison passed.");
 
   const services = await execFileAsync(

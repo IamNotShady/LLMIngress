@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/client";
+import { getPostgresPool } from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-recorder.ts";
 
@@ -75,58 +75,52 @@ export async function createGatewayRequestActivity(
 ): Promise<GatewayStartedRequestActivity> {
   const startedAt = input.startedAt ?? new Date();
   const id = randomUUID();
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
 
-  try {
-    await client.query(
-      `
-        insert into request_activity (
-          id,
-          request_id,
-          agent_id,
-          virtual_model_id,
-          agent_key_prefix,
-          protocol,
-          model,
-          stream,
-          agent_name_snapshot,
-          virtual_model_name_snapshot,
-          status,
-          started_at,
-          created_at
-        )
-        values (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          (select name from agents where id = $3),
-          (select name from virtual_models where id = $4),
-          'started',
-          $9,
-          $9
-        )
-      `,
-      [
+  await getPostgresPool(input.databaseUrl).query(
+    `
+      insert into request_activity (
         id,
-        input.requestId,
-        input.agentApiKeyId,
-        input.virtualModelId,
-        input.agentApiKeyPrefix,
-        input.protocol,
-        input.model,
-        input.stream,
-        startedAt.toISOString(),
-      ],
-    );
-  } finally {
-    await client.end();
-  }
+        request_id,
+        agent_id,
+        virtual_model_id,
+        agent_key_prefix,
+        protocol,
+        model,
+        stream,
+        agent_name_snapshot,
+        virtual_model_name_snapshot,
+        status,
+        started_at,
+        created_at
+      )
+      values (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        (select name from agents where id = $3),
+        (select name from virtual_models where id = $4),
+        'started',
+        $9,
+        $9
+      )
+    `,
+    [
+      id,
+      input.requestId,
+      input.agentApiKeyId,
+      input.virtualModelId,
+      input.agentApiKeyPrefix,
+      input.protocol,
+      input.model,
+      input.stream,
+      startedAt.toISOString(),
+    ],
+  );
 
   return { id, startedAt };
 }
@@ -150,67 +144,60 @@ export async function completeGatewayRequestActivity(
     }),
     route: input.route,
   });
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
-    await client.query(
-      `
-        update request_activity
-        set route_policy_id = $2,
-            provider_id = $3,
-            provider_model_id = $4,
-            route_reason = $5::jsonb,
-            fallback_attempts = $6::jsonb,
-            request_metadata = $7::jsonb,
-            response_metadata = $8::jsonb,
-            provider_api_key_id = $9,
-            provider_api_key_prefix = $10,
-            route_policy_strategy_snapshot = (
-              select strategy::text from route_policies where id = $2
-            ),
-            provider_key_snapshot = (
-              select provider_key from providers where id = $3
-            ),
-            provider_display_name_snapshot = (
-              select display_name from providers where id = $3
-            ),
-            provider_model_name_snapshot = (
-              select model_id from provider_models where id = $4
-            ),
-            provider_model_display_name_snapshot = (
-              select display_name from provider_models where id = $4
-            ),
-            status = $11,
-            error_code = $12,
-            error_message = $13,
-            http_status = $14,
-            latency_ms = $15,
-            completed_at = $16
-        where id = $1
-      `,
-      [
-        input.activityId,
-        loggingPolicy.route?.routePolicyId ?? null,
-        loggingPolicy.route?.providerId ?? null,
-        loggingPolicy.route?.providerModelId ?? null,
-        JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
-        JSON.stringify(loggingPolicy.route?.fallbackAttempts ?? []),
-        JSON.stringify(loggingPolicy.requestMetadata),
-        JSON.stringify(loggingPolicy.responseMetadata),
-        loggingPolicy.route?.providerApiKeyId ?? null,
-        loggingPolicy.route?.providerApiKeyPrefix ?? null,
-        completion.status,
-        completion.errorCode,
-        loggingPolicy.errorMessage,
-        completion.httpStatus,
-        completion.latencyMs,
-        completion.completedAt.toISOString(),
-      ],
-    );
-  } finally {
-    await client.end();
-  }
+  await getPostgresPool(input.databaseUrl).query(
+    `
+      update request_activity
+      set route_policy_id = $2,
+          provider_id = $3,
+          provider_model_id = $4,
+          route_reason = $5::jsonb,
+          fallback_attempts = $6::jsonb,
+          request_metadata = $7::jsonb,
+          response_metadata = $8::jsonb,
+          provider_api_key_id = $9,
+          provider_api_key_prefix = $10,
+          route_policy_strategy_snapshot = (
+            select strategy::text from route_policies where id = $2
+          ),
+          provider_key_snapshot = (
+            select provider_key from providers where id = $3
+          ),
+          provider_display_name_snapshot = (
+            select display_name from providers where id = $3
+          ),
+          provider_model_name_snapshot = (
+            select model_id from provider_models where id = $4
+          ),
+          provider_model_display_name_snapshot = (
+            select display_name from provider_models where id = $4
+          ),
+          status = $11,
+          error_code = $12,
+          error_message = $13,
+          http_status = $14,
+          latency_ms = $15,
+          completed_at = $16
+      where id = $1
+    `,
+    [
+      input.activityId,
+      loggingPolicy.route?.routePolicyId ?? null,
+      loggingPolicy.route?.providerId ?? null,
+      loggingPolicy.route?.providerModelId ?? null,
+      JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
+      JSON.stringify(loggingPolicy.route?.fallbackAttempts ?? []),
+      JSON.stringify(loggingPolicy.requestMetadata),
+      JSON.stringify(loggingPolicy.responseMetadata),
+      loggingPolicy.route?.providerApiKeyId ?? null,
+      loggingPolicy.route?.providerApiKeyPrefix ?? null,
+      completion.status,
+      completion.errorCode,
+      loggingPolicy.errorMessage,
+      completion.httpStatus,
+      completion.latencyMs,
+      completion.completedAt.toISOString(),
+    ],
+  );
 }
 
 export function applyGatewayRequestLoggingPolicy(input: {

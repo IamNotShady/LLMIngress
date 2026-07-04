@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import {
+  type PostgresQueryClient,
+  type PostgresQueryResultRow,
+  withPostgresTransaction,
+} from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 
 export type GatewayBudgetErrorCode =
@@ -72,11 +76,7 @@ export async function reserveGatewayBudget(input: {
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayBudgetDecision> {
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
-    await client.query("begin");
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const limits = await readEnabledBudgetLimits(client, input.agentApiKeyId);
     const totalTokens =
       input.requestMetadata.estimatedInputTokens + input.requestMetadata.estimatedOutputTokens;
@@ -86,7 +86,6 @@ export async function reserveGatewayBudget(input: {
         limit.limitType === "token" && limit.period === "request" && limit.unit === "tokens",
     );
     if (tokenLimit && totalTokens > tokenLimit.limitValue) {
-      await client.query("rollback");
       return budgetFailure("token_budget_exceeded", input.requestId);
     }
 
@@ -95,16 +94,13 @@ export async function reserveGatewayBudget(input: {
         limit.limitType === "budget" && limit.unit === "usd" && isBudgetPeriod(limit.period),
     );
     if (!costLimit) {
-      await client.query("commit");
       return { ok: true };
     }
     if (!isBudgetPeriod(costLimit.period)) {
-      await client.query("commit");
       return { ok: true };
     }
 
     if (input.price.status === "unknown_price") {
-      await client.query("rollback");
       return budgetFailure("cost_budget_price_unavailable", input.requestId);
     }
 
@@ -128,7 +124,6 @@ export async function reserveGatewayBudget(input: {
         reservationInput.reservedCostUsd >
       costLimit.limitValue
     ) {
-      await client.query("rollback");
       return budgetFailure("cost_budget_exceeded", input.requestId);
     }
 
@@ -171,14 +166,8 @@ export async function reserveGatewayBudget(input: {
       ],
     );
 
-    await client.query("commit");
     return { ok: true, reservation };
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function finalizeGatewayBudgetReservation(input: {
@@ -296,7 +285,7 @@ function budgetFailure(code: GatewayBudgetErrorCode, requestId: string): Gateway
 }
 
 async function readEnabledBudgetLimits(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   agentApiKeyId: string,
 ): Promise<
   Array<{
@@ -336,7 +325,7 @@ async function readEnabledBudgetLimits(
 }
 
 async function lockBudgetPeriod(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   input: {
     agentApiKeyId: string;
     period: PeriodWindow;
@@ -389,17 +378,12 @@ async function updateGatewayBudgetReservation(
   reservation: GatewayBudgetReservation,
   status: "finalized" | "released",
 ): Promise<void> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    await client.query("begin");
+  await withPostgresTransaction(databaseUrl, async (client) => {
     const result = await client.query<{ status: string }>(
       "select status from budget_reservations where id = $1 for update",
       [reservation.id],
     );
     if (result.rows[0]?.status !== "pending") {
-      await client.query("commit");
       return;
     }
 
@@ -449,14 +433,7 @@ async function updateGatewayBudgetReservation(
         [reservation.id],
       );
     }
-
-    await client.query("commit");
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 function isBudgetPeriod(period: string): period is GatewayBudgetPeriod {

@@ -6,6 +6,7 @@ import {
   withPostgresTransaction,
 } from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
+import type { GatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 
 export type GatewayBudgetErrorCode =
   | "cost_budget_exceeded"
@@ -202,6 +203,27 @@ export async function releaseGatewayBudgetReservation(input: {
   }
 
   await updateGatewayBudgetReservation(input.databaseUrl, input.reservation, "released");
+}
+
+export function buildGatewayBudgetActualUsage(input: {
+  price: ModelTokenPrice;
+  providerUsage: GatewayProviderTokenUsage | undefined;
+}): GatewayBudgetActualUsage | undefined {
+  if (!input.providerUsage) {
+    return undefined;
+  }
+  const cost = calculateTokenCostUsd(input.price, {
+    cachedInputTokens: input.providerUsage.cachedInputTokens,
+    inputTokens: input.providerUsage.inputTokens,
+    outputTokens: input.providerUsage.outputTokens,
+  });
+  if (cost.status !== "estimated") {
+    return undefined;
+  }
+  return {
+    costUsd: cost.totalCostUsd,
+    totalTokens: input.providerUsage.inputTokens + input.providerUsage.outputTokens,
+  };
 }
 
 export function calculateBudgetReservation(input: {

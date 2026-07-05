@@ -164,6 +164,10 @@
       "types": "./src/gateway-tracing.ts",
       "default": "./src/gateway-tracing.ts"
     },
+    "./gateway-usage-collector": {
+      "types": "./src/gateway-usage-collector.ts",
+      "default": "./src/gateway-usage-collector.ts"
+    },
     "./gateway-usage-recorder": {
       "types": "./src/gateway-usage-recorder.ts",
       "default": "./src/gateway-usage-recorder.ts"

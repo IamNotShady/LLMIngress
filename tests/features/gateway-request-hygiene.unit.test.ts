@@ -9,7 +9,7 @@ import {
   refreshProviderOAuthTokenWithLock,
 } from "../../packages/db/src/gateway-provider-credentials";
 import { estimateTextTokens } from "../../packages/db/src/gateway-request-metadata";
-import { selectGatewayBaselineCandidate } from "../../packages/db/src/gateway-usage-recorder";
+import { selectGatewayBaselineCandidate } from "../../packages/db/src/gateway-runtime-helpers";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 

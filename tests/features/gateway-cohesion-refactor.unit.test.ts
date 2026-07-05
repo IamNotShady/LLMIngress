@@ -43,4 +43,11 @@ describe("gateway cohesion fitness", () => {
       expect(content).not.toMatch(/^export type Gateway\w+ErrorCode/m);
     }
   });
+
+  it("keeps SSE parsing, baseline selection, and budget math out of the usage recorder", () => {
+    const recorder = src("packages/db/src/gateway-usage-recorder.ts");
+    expect(recorder).not.toContain("createGatewayStreamingUsageCollector");
+    expect(recorder).not.toContain("selectGatewayBaselineCandidate");
+    expect(recorder).not.toContain("buildGatewayBudgetActualUsage");
+  });
 });

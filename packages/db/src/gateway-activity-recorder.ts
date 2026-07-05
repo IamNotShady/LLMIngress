@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getPostgresPool } from "@llmingress/db/client";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
-import { readGatewayProviderTokenUsage } from "./gateway-usage-recorder.ts";
+import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 
 export type GatewayRequestActivityProtocol =
   | "chat_completions"

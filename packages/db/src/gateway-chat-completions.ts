@@ -8,6 +8,7 @@ import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
+  buildGatewayBudgetActualUsage,
   finalizeGatewayBudgetReservation,
   GatewayBudgetRejectedError,
   releaseGatewayBudgetReservation,
@@ -37,13 +38,10 @@ import {
   isRecord,
   omitUndefined,
   requireGatewayRoutePolicy,
-} from "./gateway-runtime-helpers.ts";
-import {
-  buildGatewayBudgetActualUsage,
-  type GatewayUsageCostDetails,
-  readGatewayProviderTokenUsage,
   selectGatewayBaselineCandidate,
-} from "./gateway-usage-recorder.ts";
+} from "./gateway-runtime-helpers.ts";
+import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
+import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
 export type GatewayChatCompletionResponse = {

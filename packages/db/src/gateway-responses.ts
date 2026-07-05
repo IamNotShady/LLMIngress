@@ -10,6 +10,7 @@ import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
+  buildGatewayBudgetActualUsage,
   finalizeGatewayBudgetReservation,
   GatewayBudgetRejectedError,
   releaseGatewayBudgetReservation,
@@ -42,14 +43,11 @@ import {
   isRecord,
   omitUndefined,
   requireGatewayRoutePolicy,
+  selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
-import {
-  buildGatewayBudgetActualUsage,
-  type GatewayUsageCostDetails,
-  readGatewayProviderTokenUsage,
-  selectGatewayBaselineCandidate,
-} from "./gateway-usage-recorder.ts";
+import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
+import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
 export type GatewayResponsesResponse = {

@@ -60,12 +60,10 @@ import {
   isRecord,
   omitUndefined,
   requireGatewayRoutePolicy,
+  selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
-import {
-  type GatewayUsageCostDetails,
-  selectGatewayBaselineCandidate,
-} from "./gateway-usage-recorder.ts";
+import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";

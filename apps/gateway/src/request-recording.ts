@@ -7,6 +7,7 @@ import {
   readGatewayActivityError,
 } from "@llmingress/db/gateway-activity-recorder";
 import {
+  buildGatewayBudgetActualUsage,
   finalizeGatewayBudgetReservation,
   releaseGatewayBudgetReservation,
 } from "@llmingress/db/gateway-budgets";
@@ -17,9 +18,10 @@ import {
 } from "@llmingress/db/gateway-streaming";
 import { recordGatewayRequestTrace } from "@llmingress/db/gateway-tracing";
 import {
-  buildGatewayBudgetActualUsage,
   buildGatewayProviderUsageResponseBody,
   createGatewayStreamingUsageCollector,
+} from "@llmingress/db/gateway-usage-collector";
+import {
   type GatewayUsageCostDetails,
   recordGatewayUsageCostAndSavings,
 } from "@llmingress/db/gateway-usage-recorder";

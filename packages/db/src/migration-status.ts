@@ -67,6 +67,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0004",
     name: "relax_vocab_checks",
   },
+  {
+    checksum: "6996ebfcbce4e4715d3019344a91627da8eaf209af693d3c74782d46670786f2",
+    id: "0005",
+    name: "drop_notification_deliveries",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

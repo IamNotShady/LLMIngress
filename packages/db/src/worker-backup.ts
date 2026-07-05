@@ -89,7 +89,6 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "gateway_runtime_status",
     "runtime_errors",
     "notification_events",
-    "notification_deliveries",
     "webhook_deliveries",
   ],
   system: ["migration_history", "console_admins", "console_sessions"],

@@ -32,7 +32,7 @@
 | 顺序 | 改造项 | 迁移 | 进度 |
 | --- | --- | --- | --- |
 | 1 | 改造3：放宽产品词表 CHECK | 0004_relax_vocab_checks | ✅ |
-| 2 | 改造2：删除只写表 notification_deliveries | 0005_drop_notification_deliveries | ⬜ |
+| 2 | 改造2：删除只写表 notification_deliveries | 0005_drop_notification_deliveries | ✅ |
 | 3 | 改造1：fallback 收敛到 fallback_events | 0006_fallback_single_source | ⬜ |
 | 4 | 改造4：并发计数出库（**待决策**） | 0007_drop_concurrency_windows | ⬜ |
 | 5 | 改造5：ARCHITECTURE.md 对齐（随最后一项） | — | ⬜ |

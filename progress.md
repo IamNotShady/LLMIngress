@@ -490,6 +490,23 @@
   - `pnpm run verify:features` passed with all 19 passing features re-verified.
 - Remaining risks/non-goals: direct database writes can now insert future product vocabulary values; supported application write paths remain guarded.
 
+## 2026-07-05 Schema Refactor 0005 Notification Deliveries
+
+- Implemented `0005_drop_notification_deliveries.sql`:
+  - Dropped the write-only `notification_deliveries` audit table.
+  - Notification dispatch now updates retry state directly on `notification_events` without inserting per-attempt audit rows.
+  - Backup artifacts no longer include or skip `notification_deliveries`; `webhook_deliveries` remains unchanged as the webhook export dedup ledger.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/schema-notification-deliveries-removed.unit.test.ts` failed because old dispatcher still inserted into the dropped table, migrated schema still had the table, and backup still listed it.
+  - `pnpm test:e2e tests/e2e/schema-notification-deliveries-removed.e2e.spec.ts` failed because the table still existed after migrations.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/schema-notification-deliveries-removed.unit.test.ts tests/features/v1-platform.unit.test.ts tests/features/v1-release-guards.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/schema-notification-deliveries-removed.e2e.spec.ts`
+  - `pnpm run db:migrate:check`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 20 passing features re-verified.
+- Remaining risks/non-goals: historical notification delivery audit rows are intentionally removed by the migration; retry status retained on `notification_events` is the surviving operational state.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

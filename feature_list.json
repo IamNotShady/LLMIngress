@@ -214,6 +214,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-05: TDD red->green. Added migration 0004_relax_vocab_checks to drop product vocabulary CHECK constraints for jobs.job_type, agents.integration_platform, and providers.provider_template_id while keeping machine-state CHECK constraints enforced and existing application-layer validation intact. RED focused test failed on jobs_job_type_check, agents_integration_platform_check, and providers_template_id_whitelisted. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 19 passing features re-verified."
+    },
+    {
+      "id": "schema-notification-deliveries-removed",
+      "name": "Schema Notification Deliveries Removed",
+      "description": "The write-only notification_deliveries audit table is removed; notification retry state lives solely on notification_events (attempt_count, last_error_*, status), the dispatcher no longer records per-attempt audit rows, and backups no longer include the table. webhook_deliveries stays as the webhook export dedup ledger.",
+      "verification": "pnpm exec vitest run tests/features/schema-notification-deliveries-removed.unit.test.ts && pnpm test:e2e tests/e2e/schema-notification-deliveries-removed.e2e.spec.ts",
+      "dependencies": [
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-05: TDD red->green. Added migration 0005_drop_notification_deliveries to remove the write-only notification_deliveries table, simplified notification dispatch recording to update notification_events only, and removed the table from backup artifacts while keeping webhook_deliveries unchanged. RED unit failed on missing notification_deliveries when simulating the dropped table plus schema/backup assertions; RED E2E failed because the table still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 20 passing features re-verified."
     }
   ]
 }

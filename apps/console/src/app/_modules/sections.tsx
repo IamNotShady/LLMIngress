@@ -2333,9 +2333,9 @@ function AgentCreateDialog({
               name="budgetPeriod"
               defaultValue={defaultAgentLimitFormValues.budgetPeriod}
             >
-              <option value="day">day</option>
-              <option value="week">week</option>
-              <option value="month">month</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
             </select>
             <label htmlFor="agent-alert-threshold">Alert threshold (%)</label>
             <input
@@ -2525,9 +2525,9 @@ function AgentEditDialog({
               defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
               required
             >
-              <option value="day">day</option>
-              <option value="week">week</option>
-              <option value="month">month</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
             </select>
             <label htmlFor={`agent-alert-threshold-${agent.id}`}>Alert threshold (%)</label>
             <input

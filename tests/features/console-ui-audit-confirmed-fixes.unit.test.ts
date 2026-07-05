@@ -68,9 +68,15 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(sourceText).not.toContain('<option value="coding">coding</option>');
     expect(sourceText).not.toContain('<option value="terminal">terminal</option>');
     expect(sourceText).not.toContain('<option value="true">enabled</option>');
+    expect(agentFormsSource).not.toContain('<option value="day">day</option>');
+    expect(agentFormsSource).not.toContain('<option value="week">week</option>');
+    expect(agentFormsSource).not.toContain('<option value="month">month</option>');
     expect(sourceText).toContain('<option value="coding">Coding</option>');
     expect(sourceText).toContain('<option value="terminal">Terminal</option>');
     expect(sourceText).toContain('<option value="true">Enabled</option>');
+    expect(agentFormsSource).toContain('<option value="day">Day</option>');
+    expect(agentFormsSource).toContain('<option value="week">Week</option>');
+    expect(agentFormsSource).toContain('<option value="month">Month</option>');
     expect(agentFormsSource).toContain('type="checkbox"');
     expect(agentFormsSource).toContain('name="allowedVirtualModelIds"');
     expect(agentFormsSource).not.toContain("multiple\n");

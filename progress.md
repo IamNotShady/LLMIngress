@@ -236,6 +236,16 @@
   - `pnpm --filter @llmingress/console typecheck`
 - Full regression intentionally skipped for this UI-only tuning pass.
 
+## 2026-07-05 Agent Budget Period Label Follow-up
+
+- Fixed the missed Agent limit `Budget period` option display labels in Create/Edit Agent dialogs from `day` / `week` / `month` to `Day` / `Week` / `Month`; submitted values remain unchanged.
+- Browser verification on `http://localhost:3000/agents?agentDialog=...` measured Edit Agent `Budget period` options as `Day`, `Week`, `Month`, with no raw lowercase labels, no visible framework overlay, no horizontal overflow, and no console warnings/errors.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-ui-audit-confirmed-fixes.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Left out by scope: Activity timestamp ellipsis at 1280, older time/header/status consistency P2s, and Usage negative-savings copy.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

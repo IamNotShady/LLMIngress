@@ -5,7 +5,14 @@
 - Date: 2026-07-05
 - Branch: `worktree-gateway-pipeline-hardening`
 - Base: `585d5f30`
-- Status: Gateway cohesion refactor implemented and verified (`gateway-cohesion-refactor`).
+- Status: Gateway cohesion refactor implemented and verified; Activity agent filter regression fixed.
+
+## 2026-07-05 Gateway Cohesion Follow-up
+
+- Fixed the S7 rename regression where ActivitySection still sent `agentApiKeyId` to `countConsoleActivities` / `listConsoleActivities`; the Console Activity agent filter now passes `agentId` and keeps the selected value from the same field.
+- Added E2E coverage to `console-ui-audit-confirmed-fixes.e2e.spec.ts`: `/activity?agentId=...` keeps only that agent's request rows visible.
+- Expanded `gateway-cohesion-refactor.unit.test.ts` agent-name fitness coverage to scan `apps/console/src` and `apps/worker/src` in addition to `packages/db/src` and `apps/gateway/src`; the only allowed `agentApiKeyId` occurrence is the existing `agent-limits` HTTP form compatibility alias.
+- Verification passed: focused fitness test, focused Console audit E2E, Console typecheck, `pnpm run verify`, and `pnpm run verify:features`.
 
 ## 2026-07-05 Gateway Cohesion Refactor
 

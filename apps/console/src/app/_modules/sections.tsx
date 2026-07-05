@@ -921,7 +921,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
   const selectedActivityId = readSingleSearchParam(searchParams.activityId);
   const activityRange = parseActivityRange(readSingleSearchParam(searchParams.activityRange));
   const filters = {
-    agentApiKeyId: readSingleSearchParam(searchParams.agentId),
+    agentId: readSingleSearchParam(searchParams.agentId),
     from: getActivityWindowStart(new Date(), activityRange),
     providerId: readSingleSearchParam(searchParams.providerId),
     requestIdQuery: readSingleSearchParam(searchParams.q),
@@ -957,7 +957,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
       <form className="activity-filter-grid" action="/activity" method="get">
         <div className="console-field">
           <label htmlFor="activity-agent">Agent</label>
-          <select id="activity-agent" name="agentId" defaultValue={filters.agentApiKeyId ?? ""}>
+          <select id="activity-agent" name="agentId" defaultValue={filters.agentId ?? ""}>
             <option value="">All agents</option>
             {agents.map((agent) => (
               <option key={agent.id} value={agent.id}>

@@ -90,8 +90,21 @@ describe("gateway cohesion fitness", () => {
     ]) {
       expect(src(`packages/db/src/${file}.ts`)).not.toMatch(/process\.env\.(GATEWAY|LLMINGRESS)_/);
     }
-    for (const file of allSourceFiles(["packages/db/src", "apps/gateway/src"])) {
-      expect(src(file)).not.toContain("agentApiKey" + "Id");
+    const allowedAgentApiKeyIdCompatibility = 'readRequiredText(form, "agentId", "agentApiKeyId")';
+    for (const file of allSourceFiles([
+      "packages/db/src",
+      "apps/gateway/src",
+      "apps/console/src",
+      "apps/worker/src",
+    ])) {
+      const forbiddenLines = src(file)
+        .split("\n")
+        .filter(
+          (line) =>
+            line.includes("agentApiKey" + "Id") &&
+            !line.includes(allowedAgentApiKeyIdCompatibility),
+        );
+      expect(forbiddenLines).toEqual([]);
     }
   });
 });
@@ -103,7 +116,7 @@ function allSourceFiles(directories: string[]): string[] {
       const path = `${directory}/${entry.name}`;
       if (entry.isDirectory()) {
         files.push(...allSourceFiles([path]));
-      } else if (entry.isFile() && path.endsWith(".ts")) {
+      } else if (entry.isFile() && (path.endsWith(".ts") || path.endsWith(".tsx"))) {
         files.push(path);
       }
     }

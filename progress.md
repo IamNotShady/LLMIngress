@@ -474,6 +474,22 @@
   - `pnpm run verify:features` passed with all 18 passing features re-verified.
 - Remaining risks/non-goals: Activity/usage/cost/fallback persistence is still in-process best-effort; a process crash immediately after response can lose these observability rows. DB schema is intentionally unchanged.
 
+## 2026-07-05 Schema Refactor 0004 Vocabulary Checks
+
+- Implemented `0004_relax_vocab_checks.sql`:
+  - Dropped product vocabulary CHECK constraints for `jobs.job_type`, `agents.integration_platform`, and `providers.provider_template_id`.
+  - Kept machine-state database constraints, including job status/trigger and agent type checks.
+  - Confirmed the write-path still validates current Console/provider-template vocabularies in application code.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/schema-vocab-checks-relaxed.unit.test.ts` failed on `jobs_job_type_check`, `agents_integration_platform_check`, and `providers_template_id_whitelisted`.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/schema-vocab-checks-relaxed.unit.test.ts tests/features/v1-platform.unit.test.ts tests/features/v1-release-guards.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/schema-vocab-checks-relaxed.e2e.spec.ts`
+  - `pnpm run db:migrate:check`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 19 passing features re-verified.
+- Remaining risks/non-goals: direct database writes can now insert future product vocabulary values; supported application write paths remain guarded.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

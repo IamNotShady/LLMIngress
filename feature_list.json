@@ -203,6 +203,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-05: Implemented through seven TDD slices in commits 951dd98c, db25a1c6, 93307302, 9d7ce2a2, b0f9ba1f, ae7e817b, and f47ea659. Added structural fitness coverage for provider credential ownership, the single gateway error-code union, usage collector separation, shared JSON protocol orchestration, provider streaming dialect registry usage, stream pipeline/budget settlement ownership, centralized env readers, and agentId naming. Behavior alignment was limited to provider 4xx passthrough across all JSON endpoints and chat all-subscription candidate failures returning provider_protocol_unsupported. Focused slice tests, db/provider/gateway typechecks, pnpm run verify, and pnpm run verify:features passed during the slice work; final pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features passed with all 18 passing feature verifications re-run. Follow-up fixed the Console Activity agent filter S7 rename escape by passing agentId through ActivitySection, added E2E coverage for /activity?agentId filtering, expanded the naming fitness scan to Console and Worker sources with only the agent-limits form compatibility alias allowed, and passed focused tests, Console typecheck, pnpm run verify, and pnpm run verify:features. Follow-up consolidated Gateway `agent_limits` reads behind one shared enabled-limits reader; JSON and streaming request paths now read once and pass the same snapshot to rate-limit and budget execution while keeping their existing transaction semantics. Added structural fitness coverage and passed focused tests, DB/Gateway typechecks, lint, pnpm run verify, and pnpm run verify:features. 2026-07-05 follow-up replaced separate gateway-rate-limits/gateway-budgets modules with gateway-agent-limits as the unified request-start executor and deleted the old modules from runtime/package exports. Focused cohesion/settlement/recording tests, DB/Gateway typechecks, pnpm run verify, and pnpm run verify:features passed with all 18 passing features re-verified."
+    },
+    {
+      "id": "schema-vocab-checks-relaxed",
+      "name": "Schema Vocab Checks Relaxed",
+      "description": "Product vocabulary values (job_type, agent integration_platform, provider_template_id) are validated only at the application layer; the database accepts values outside today's vocabulary while machine-state CHECK constraints (status, trigger, agent_type, numeric ranges) remain enforced.",
+      "verification": "pnpm exec vitest run tests/features/schema-vocab-checks-relaxed.unit.test.ts && pnpm test:e2e tests/e2e/schema-vocab-checks-relaxed.e2e.spec.ts",
+      "dependencies": [
+        "v1-platform"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-05: TDD red->green. Added migration 0004_relax_vocab_checks to drop product vocabulary CHECK constraints for jobs.job_type, agents.integration_platform, and providers.provider_template_id while keeping machine-state CHECK constraints enforced and existing application-layer validation intact. RED focused test failed on jobs_job_type_check, agents_integration_platform_check, and providers_template_id_whitelisted. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 19 passing features re-verified."
     }
   ]
 }

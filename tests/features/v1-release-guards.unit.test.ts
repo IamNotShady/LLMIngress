@@ -22,6 +22,7 @@ const allowedFeatureIds = [
   "gateway-error-fidelity",
   "gateway-request-hygiene",
   "gateway-cohesion-refactor",
+  "schema-vocab-checks-relaxed",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -32,6 +33,7 @@ const inProgressFeatureIds = new Set([
   "gateway-error-fidelity",
   "gateway-request-hygiene",
   "gateway-cohesion-refactor",
+  "schema-vocab-checks-relaxed",
 ]);
 
 describe("v1 release guards milestone", () => {

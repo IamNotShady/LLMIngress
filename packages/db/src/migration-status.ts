@@ -62,6 +62,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0003",
     name: "remove_budget_reservations",
   },
+  {
+    checksum: "b49690f559aa4cc3faf2ca13d4925394751fbd351635c5ac5b6c0b65c9b16a89",
+    id: "0004",
+    name: "relax_vocab_checks",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

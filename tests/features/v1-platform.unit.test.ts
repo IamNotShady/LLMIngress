@@ -93,6 +93,7 @@ describe("v1 platform milestone", () => {
       { id: "0001", name: "v1_baseline" },
       { id: "0002", name: "stale_concurrency_job_type" },
       { id: "0003", name: "remove_budget_reservations" },
+      { id: "0004", name: "relax_vocab_checks" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

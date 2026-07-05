@@ -8,6 +8,7 @@ import {
   resolveProviderStreamingDialect,
 } from "@llmingress/provider/dialect";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
+import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import {
   type GatewayBudgetReservation,
   releaseGatewayBudgetReservation,
@@ -310,7 +311,7 @@ export async function executeGatewayStreamingRequest(input: {
 
         if (networkError || !response) {
           // Network-level failure — build failed attempt via the shared helper (FIX m2).
-          await recordGatewayProviderTrace({
+          recordGatewayProviderTrace({
             errorCode: "provider_request_failed",
             modelId: attemptedCandidate.modelId,
             providerKey: attemptedCandidate.providerKey,
@@ -329,7 +330,7 @@ export async function executeGatewayStreamingRequest(input: {
             },
           });
           fallbackAttempts.push(failedAttempt);
-          await recordFailedAttemptInDatabase(
+          recordFailedAttemptInDatabase(
             { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
             failedAttempt,
           );
@@ -342,7 +343,7 @@ export async function executeGatewayStreamingRequest(input: {
           continue; // retryable — advance to next candidate
         }
 
-        await recordGatewayProviderTrace({
+        recordGatewayProviderTrace({
           errorCode: response.ok && response.body ? null : "provider_request_failed",
           modelId: attemptedCandidate.modelId,
           providerKey: attemptedCandidate.providerKey,
@@ -382,7 +383,7 @@ export async function executeGatewayStreamingRequest(input: {
             },
           });
           fallbackAttempts.push(failedAttempt);
-          await recordFailedAttemptInDatabase(
+          recordFailedAttemptInDatabase(
             { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
             failedAttempt,
           );
@@ -437,7 +438,7 @@ export async function executeGatewayStreamingRequest(input: {
           // Stream errored, timed out, or sent nothing before the first byte reached the
           // client -> retryable failed attempt; we can still try the next candidate.
           await reader.cancel().catch(() => undefined);
-          await recordGatewayProviderTrace({
+          recordGatewayProviderTrace({
             errorCode: "provider_request_failed",
             modelId: attemptedCandidate.modelId,
             providerKey: attemptedCandidate.providerKey,
@@ -456,7 +457,7 @@ export async function executeGatewayStreamingRequest(input: {
             },
           });
           fallbackAttempts.push(failedAttempt);
-          await recordFailedAttemptInDatabase(
+          recordFailedAttemptInDatabase(
             { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
             failedAttempt,
           );
@@ -471,7 +472,7 @@ export async function executeGatewayStreamingRequest(input: {
         const firstValue = firstChunk.value;
 
         // --- SUCCESS — first chunk confirmed, this candidate wins ---
-        await recordSucceededAttemptInDatabase(
+        recordSucceededAttemptInDatabase(
           { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
           {
             attemptOrder,
@@ -484,7 +485,7 @@ export async function executeGatewayStreamingRequest(input: {
             providerModelId: attemptedCandidate.providerModelId,
           },
         );
-        await recordGatewayProviderApiKeyLastUsed({
+        recordGatewayProviderApiKeyLastUsed({
           databaseUrl: input.databaseUrl,
           providerApiKeyId: attemptedCandidate.providerApiKeyId,
         });
@@ -708,32 +709,41 @@ function buildStreamingPayload(input: {
   };
 }
 
-async function recordGatewayRuntimeError(input: {
+function recordGatewayRuntimeError(input: {
   databaseUrl?: string;
   error: GatewayRuntimeStreamError;
   metadata: Record<string, unknown>;
-}): Promise<void> {
-  await getPostgresPool(input.databaseUrl).query(
-    `
-      insert into runtime_errors (
-        id,
-        process_type,
-        process_id,
-        severity,
-        error_code,
-        error_message,
-        metadata
-      )
-      values ($1, 'gateway', $2, 'error', $3, $4, $5)
-    `,
-    [
-      randomUUID(),
-      gatewayInstanceId(),
-      input.error.errorCode,
-      input.error.errorMessage,
-      JSON.stringify(input.metadata),
-    ],
-  );
+}): void {
+  runGatewayBackgroundTask({
+    message: "gateway runtime stream error recording failed",
+    metadata: {
+      errorCode: input.error.errorCode,
+      requestId: input.metadata.requestId,
+    },
+    task: async () => {
+      await getPostgresPool(input.databaseUrl).query(
+        `
+          insert into runtime_errors (
+            id,
+            process_type,
+            process_id,
+            severity,
+            error_code,
+            error_message,
+            metadata
+          )
+          values ($1, 'gateway', $2, 'error', $3, $4, $5)
+        `,
+        [
+          randomUUID(),
+          gatewayInstanceId(),
+          input.error.errorCode,
+          input.error.errorMessage,
+          JSON.stringify(input.metadata),
+        ],
+      );
+    },
+  });
 }
 
 function buildStreamingRequestBodyForDialect(input: {

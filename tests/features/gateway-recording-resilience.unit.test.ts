@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -5,8 +7,24 @@ import {
   executeRecordedGatewayStreamingRequest,
   type GatewayRequestRecorder,
 } from "../../apps/gateway/src/request-recording";
+import {
+  executeProviderFallbackAttempts,
+  type FallbackChainCandidate,
+} from "../../packages/db/src/gateway-fallback-chain";
+import { wrapProviderStreamWithErrorRecording } from "../../packages/db/src/gateway-stream-pipeline";
 
+const postgresQueryMock = vi.hoisted(() => vi.fn(async () => ({ rows: [] })));
 const settleGatewayStreamBudgetMock = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock("@llmingress/db/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@llmingress/db/client")>();
+  return {
+    ...actual,
+    getPostgresPool: vi.fn(() => ({
+      query: postgresQueryMock,
+    })),
+  };
+});
 
 vi.mock("@llmingress/db/gateway-stream-pipeline", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@llmingress/db/gateway-stream-pipeline")>();
@@ -29,6 +47,23 @@ const baseInput = {
   requestId: "req-1",
   virtualModelId: "vm-id-1",
 };
+
+function fallbackCandidate(
+  overrides: Partial<FallbackChainCandidate> = {},
+): FallbackChainCandidate {
+  return {
+    apiKey: "provider-key",
+    baseUrl: "http://provider.local",
+    displayName: "Provider Model",
+    healthStatus: "healthy",
+    modelId: "model-1",
+    price: { status: "unknown_price", priceVersion: "v0" } as never,
+    providerId: "provider-1",
+    providerKey: "openai",
+    providerModelId: "provider-model-1",
+    ...overrides,
+  };
+}
 
 function recorder(overrides: Partial<GatewayRequestRecorder> = {}): GatewayRequestRecorder {
   return {
@@ -88,6 +123,8 @@ async function waitForErrorLogs(
 
 describe("gateway recording resilience", () => {
   beforeEach(() => {
+    postgresQueryMock.mockReset();
+    postgresQueryMock.mockResolvedValue({ rows: [] });
     settleGatewayStreamBudgetMock.mockReset();
     settleGatewayStreamBudgetMock.mockResolvedValue(undefined);
   });
@@ -244,5 +281,109 @@ describe("gateway recording resilience", () => {
     expect(events).toEqual(["settled", "complete-started"]);
 
     completionBlocked.resolve();
+  });
+
+  it("returns a successful fallback result before recording the succeeded attempt finishes", async () => {
+    const insertStarted = deferred();
+    const insertBlocked = deferred();
+    postgresQueryMock.mockImplementationOnce(async () => {
+      insertStarted.resolve();
+      await insertBlocked.promise;
+      return { rows: [] };
+    });
+
+    const resultPromise = executeProviderFallbackAttempts({
+      callProvider: vi.fn(async () => ({ body: { ok: true }, ok: true, statusCode: 200 })),
+      candidates: [fallbackCandidate()],
+      fallbackAttempts: [],
+      requestActivityId: "activity-1",
+      requestId: "req-1",
+    });
+
+    await insertStarted.promise;
+    const result = await expectResolvedBeforeRecording(resultPromise);
+    expect(result?.result.statusCode).toBe(200);
+
+    insertBlocked.resolve();
+  });
+
+  it("continues fallback before recording the failed attempt finishes", async () => {
+    const failedInsertStarted = deferred();
+    const failedInsertBlocked = deferred();
+    postgresQueryMock
+      .mockImplementationOnce(async () => {
+        failedInsertStarted.resolve();
+        await failedInsertBlocked.promise;
+        return { rows: [] };
+      })
+      .mockResolvedValue({ rows: [] });
+    const callProvider = vi
+      .fn()
+      .mockResolvedValueOnce({
+        errorCode: "provider_request_failed",
+        errorMessage: "socket hang up",
+        ok: false,
+        statusCode: null,
+      })
+      .mockResolvedValueOnce({ body: { ok: true }, ok: true, statusCode: 200 });
+
+    const resultPromise = executeProviderFallbackAttempts({
+      callProvider,
+      candidates: [
+        fallbackCandidate({ providerModelId: "provider-model-1" }),
+        fallbackCandidate({ providerModelId: "provider-model-2" }),
+      ],
+      fallbackAttempts: [],
+      requestActivityId: "activity-1",
+      requestId: "req-1",
+    });
+
+    await failedInsertStarted.promise;
+    const result = await expectResolvedBeforeRecording(resultPromise);
+    expect(result?.candidate.providerModelId).toBe("provider-model-2");
+    expect(callProvider).toHaveBeenCalledTimes(2);
+
+    failedInsertBlocked.resolve();
+  });
+
+  it("propagates stream runtime errors before runtime error recording finishes", async () => {
+    const recordStarted = deferred();
+    const recordBlocked = deferred();
+    const source = new Readable({
+      read() {},
+    });
+    const output = wrapProviderStreamWithErrorRecording(source, {
+      recordRuntimeError: async () => {
+        recordStarted.resolve();
+        await recordBlocked.promise;
+      },
+    });
+    const errorPromise = new Promise<Error>((resolve) => {
+      output.once("error", (error) => resolve(error));
+    });
+
+    source.destroy(new Error("midstream boom"));
+
+    await recordStarted.promise;
+    const error = await expectResolvedBeforeRecording(errorPromise);
+    expect(error.message).toBe("midstream boom");
+
+    recordBlocked.resolve();
+  });
+
+  it("keeps gateway observability writes off the awaited request path", () => {
+    const runtimeFiles = [
+      "packages/db/src/gateway-protocol-request.ts",
+      "packages/db/src/gateway-streaming.ts",
+      "packages/db/src/gateway-fallback-chain.ts",
+    ];
+    const source = runtimeFiles
+      .map((file) => readFileSync(join(process.cwd(), file), "utf8"))
+      .join("\n");
+
+    expect(source).not.toMatch(/\bawait\s+recordGatewayProviderTrace\(/);
+    expect(source).not.toMatch(/\bawait\s+recordSucceededAttemptInDatabase\(/);
+    expect(source).not.toMatch(/\bawait\s+recordFailedAttemptInDatabase\(/);
+    expect(source).not.toMatch(/\bawait\s+recordGatewayProviderApiKeyLastUsed\(/);
   });
 });

@@ -145,7 +145,7 @@ export function wrapProviderStreamWithActivityCompletion(
 export function wrapProviderStreamWithErrorRecording(
   source: Readable,
   input: {
-    recordRuntimeError: (error: GatewayRuntimeStreamError) => Promise<void>;
+    recordRuntimeError: (error: GatewayRuntimeStreamError) => Promise<void> | void;
   },
 ): Readable {
   const output = new PassThrough();
@@ -157,13 +157,15 @@ export function wrapProviderStreamWithErrorRecording(
       errorMessage: error instanceof Error ? error.message : "Provider stream failed.",
     };
 
-    const record = recorded
-      ? Promise.resolve()
-      : input.recordRuntimeError(runtimeError).catch(() => undefined);
+    if (!recorded) {
+      try {
+        void Promise.resolve(input.recordRuntimeError(runtimeError)).catch(() => undefined);
+      } catch {
+        // Runtime error recording is diagnostic-only.
+      }
+    }
     recorded = true;
-    void record.finally(() => {
-      output.destroy(error instanceof Error ? error : new Error(runtimeError.errorMessage));
-    });
+    output.destroy(error instanceof Error ? error : new Error(runtimeError.errorMessage));
   });
   source.pipe(output);
   output.once("close", () => {
@@ -245,7 +247,7 @@ export function composeGatewayProviderStreamPipeline(input: {
   idleTimeoutMs?: number;
   lease: GatewayConcurrencyLease | undefined;
   reader: ReadableStreamDefaultReader<Uint8Array>;
-  recordRuntimeError: (error: GatewayRuntimeStreamError) => Promise<void>;
+  recordRuntimeError: (error: GatewayRuntimeStreamError) => Promise<void> | void;
 }): Readable {
   return wrapProviderStreamWithConcurrencyRelease(
     wrapProviderStreamWithMidStreamHealthRecording(

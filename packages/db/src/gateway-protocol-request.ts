@@ -180,7 +180,7 @@ export async function executeGatewayProtocolRequest<
           providerApiKey,
           request: normalized.request,
         });
-        await recordGatewayProviderTrace({
+        recordGatewayProviderTrace({
           errorCode: result.ok ? null : result.errorCode,
           modelId: candidate.modelId,
           providerKey: candidate.providerKey,
@@ -227,7 +227,7 @@ export async function executeGatewayProtocolRequest<
       throw buildFallbackExhaustionError(lastError);
     }
 
-    await recordGatewayProviderApiKeyLastUsed({
+    recordGatewayProviderApiKeyLastUsed({
       databaseUrl: input.databaseUrl,
       providerApiKeyId: success.candidate.providerApiKeyId,
     });

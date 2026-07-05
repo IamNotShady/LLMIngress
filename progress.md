@@ -4,8 +4,16 @@
 
 - Date: 2026-07-05
 - Branch: `dev`
-- Base: `9035e0d0`
-- Status: Gateway Activity recording async follow-up implemented and verified.
+- Base: `1f493c42`
+- Status: Gateway observability writes async follow-up implemented and verified.
+
+## 2026-07-05 Gateway Observability Writes Async Follow-up
+
+- Made provider trace export, fallback attempt event inserts, provider API key `last_used_at` updates, and streaming runtime error inserts best-effort in-process background tasks.
+- Kept budget reservation/finalization/release, rate-limit/concurrency control, provider fetch, stream first-byte read-ahead, `createActivity`, and stream budget settlement on the synchronous control path.
+- Added unit coverage for blocked fallback event writes, fallback continuation after blocked failure recording, nonblocking stream runtime error propagation, and static fitness preventing awaited observability writes from returning to the Gateway request path.
+- Extended the Gateway resilience E2E with slow OTEL, slow `fallback_events`, and slow `provider_api_keys` triggers for both non-streaming response latency and streaming first-chunk latency.
+- Verification passed: `pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts`, `pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts`, `pnpm --filter @llmingress/db typecheck`, `pnpm --filter @llmingress/gateway typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 18 passing features re-verified.
 
 ## 2026-07-05 Gateway Activity Recording Async Follow-up
 

@@ -20,6 +20,7 @@ import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
+import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError } from "./gateway-errors.ts";
 import type { FallbackChainCandidate, FallbackProviderApiKey } from "./gateway-fallback-chain.ts";
@@ -326,23 +327,29 @@ export async function refreshProviderOAuthTokenWithLock(input: {
   });
 }
 
-export async function recordGatewayProviderApiKeyLastUsed(input: {
+export function recordGatewayProviderApiKeyLastUsed(input: {
   databaseUrl?: string;
   providerApiKeyId?: string;
-}): Promise<void> {
+}): void {
   if (!input.providerApiKeyId) {
     return;
   }
 
-  await getPostgresPool(input.databaseUrl).query(
-    `
-      update provider_api_keys
-      set last_used_at = now(),
-          updated_at = now()
-      where id = $1
-    `,
-    [input.providerApiKeyId],
-  );
+  runGatewayBackgroundTask({
+    message: "gateway provider api key last-used recording failed",
+    metadata: { providerApiKeyId: input.providerApiKeyId },
+    task: async () => {
+      await getPostgresPool(input.databaseUrl).query(
+        `
+          update provider_api_keys
+          set last_used_at = now(),
+              updated_at = now()
+          where id = $1
+        `,
+        [input.providerApiKeyId],
+      );
+    },
+  });
 }
 
 function readEncryptedSecret(value: unknown): EncryptedSecret {

@@ -1,0 +1,110 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test } from "vitest";
+import { parseConsoleUsageWindow } from "../../packages/db/src/console-usage";
+
+const rootDir = process.cwd();
+const appDir = join(rootDir, "apps/console/src/app");
+
+const source = (path: string) => readFileSync(join(rootDir, path), "utf8");
+const appSource = (path: string) => readFileSync(join(appDir, path), "utf8");
+const sections = () => appSource("_modules/sections.tsx");
+const css = () => appSource("globals.css");
+
+describe("console UI audit confirmed fixes static contract", () => {
+  test("activity timestamp cells cannot paint into request id cells", () => {
+    const stylesheet = css();
+    expect(stylesheet).toMatch(
+      /\.activity-table th:nth-child\(1\),\s*\.activity-table td:nth-child\(1\)\s*\{[^}]*width:\s*8\.\d+rem/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.activity-table td:nth-child\(1\)\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.activity-table td:nth-child\(2\)\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/s,
+    );
+  });
+
+  test("usage defaults to the settings time window", () => {
+    expect(parseConsoleUsageWindow(undefined)).toBe("7d");
+    expect(parseConsoleUsageWindow("")).toBe("7d");
+  });
+
+  test("overview does not mix all-time recent activity into 24h cards", () => {
+    const overview = sections().slice(
+      sections().indexOf("export async function OverviewSection"),
+      sections().indexOf("function formatOverviewTrendPoint"),
+    );
+    expect(overview).toContain("listConsoleActivities({");
+    expect(overview).toContain("filters: { from: overviewStart }");
+    expect(overview).toContain("limit: 8");
+    expect(overview).not.toContain("const activities = await listConsoleActivities();");
+    expect(overview).not.toContain(
+      "buildTopAgentsByCost(usageSummary.agentBreakdowns, recentActivities)",
+    );
+  });
+
+  test("stat labels describe the data they actually show", () => {
+    const sourceText = sections();
+    expect(sourceText).toContain('label="Online"');
+    expect(sourceText).toContain('label="Cost 24h"');
+    expect(sourceText).toContain('label="Failure rate total"');
+    expect(sourceText).toContain('<th className="num">Failure rate total</th>');
+    expect(sourceText).not.toContain('label="Connected"');
+    expect(sourceText).not.toContain('label="Cost 7d"');
+    expect(sourceText).not.toContain('label="Avg failure rate"');
+  });
+
+  test("agent forms use display labels and checkbox grants", () => {
+    const sourceText = sections();
+    const agentFormsSource = sourceText.slice(
+      sourceText.indexOf("function AgentCreateDialog"),
+      sourceText.indexOf("function AgentDeleteDialog"),
+    );
+    expect(sourceText).not.toContain("Edit agent name");
+    expect(sourceText).not.toContain("Edit agent type");
+    expect(sourceText).not.toContain("Edit integration platform");
+    expect(sourceText).not.toContain("Edit request logging");
+    expect(sourceText).not.toContain('<option value="coding">coding</option>');
+    expect(sourceText).not.toContain('<option value="terminal">terminal</option>');
+    expect(sourceText).not.toContain('<option value="true">enabled</option>');
+    expect(agentFormsSource).not.toContain('<option value="day">day</option>');
+    expect(agentFormsSource).not.toContain('<option value="week">week</option>');
+    expect(agentFormsSource).not.toContain('<option value="month">month</option>');
+    expect(sourceText).toContain('<option value="coding">Coding</option>');
+    expect(sourceText).toContain('<option value="terminal">Terminal</option>');
+    expect(sourceText).toContain('<option value="true">Enabled</option>');
+    expect(agentFormsSource).toContain('<option value="day">Day</option>');
+    expect(agentFormsSource).toContain('<option value="week">Week</option>');
+    expect(agentFormsSource).toContain('<option value="month">Month</option>');
+    expect(agentFormsSource).toContain('type="checkbox"');
+    expect(agentFormsSource).toContain('name="allowedVirtualModelIds"');
+    expect(agentFormsSource).not.toContain("multiple\n");
+  });
+
+  test("row actions share a compact icon-button contract", () => {
+    const sourceText = sections();
+    const providerSource = appSource("_modules/providers-client-section.tsx");
+    expect(css()).toContain(".row-action-button");
+    expect(sourceText.match(/row-action-button/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(providerSource.match(/row-action-button/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(sourceText).toContain("row-action-danger");
+    expect(providerSource).toContain("row-action-danger");
+  });
+
+  test("page headers and dialog close actions are consistent", () => {
+    expect(source("apps/console/src/app/(dashboard)/usage/page.tsx")).not.toContain("eyebrow=");
+    expect(source("apps/console/src/app/(dashboard)/runtime/page.tsx")).not.toContain("eyebrow=");
+    expect(source("apps/console/src/app/(dashboard)/settings/page.tsx")).not.toContain("eyebrow=");
+    const limitsDialogHead = sections().slice(
+      sections().indexOf('className="console-dialog-head limits-config-head"'),
+      sections().indexOf('<form className="limits-config-form"'),
+    );
+    expect(limitsDialogHead).toContain('<FlatIcon name="cancel" />');
+  });
+
+  test("playground API key hint matches LLMIngress keys", () => {
+    expect(appSource("playground.tsx")).toContain('placeholder="llmi_************************"');
+    expect(appSource("playground.tsx")).not.toContain("sk-************************8fA7");
+  });
+});

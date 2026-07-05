@@ -105,10 +105,10 @@ type UsageTrendRow = PostgresQueryResultRow & {
 };
 
 export function parseConsoleUsageWindow(value: string | undefined): ConsoleUsageWindow {
-  if (value === "7d" || value === "30d") {
+  if (value === "24h" || value === "7d" || value === "30d") {
     return value;
   }
-  return "24h";
+  return "7d";
 }
 
 export async function getConsoleUsageSummary(input: {

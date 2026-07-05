@@ -1,0 +1,168 @@
+import { randomUUID } from "node:crypto";
+import { expect, type Page, test } from "@playwright/test";
+import {
+  createTestPostgresFixture,
+  runMigrations,
+  withPostgresClient,
+} from "../../packages/db/src/index";
+import {
+  getFreePort,
+  signInFromFirstRun,
+  startConsoleProcess,
+  stopConsoleProcess,
+  waitForConsole,
+} from "../support/console-app";
+import { withProcessLock } from "../support/process-lock";
+
+async function seedAuditData(databaseUrl: string) {
+  const agentId = randomUUID();
+  const virtualModelId = randomUUID();
+  const activityId = randomUUID();
+
+  await withPostgresClient(databaseUrl, async (client) => {
+    await client.query(
+      `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
+       values ($1, 'audit-old-agent', 'terminal', 'llmi_audit_old', 'test-hash', true)`,
+      [agentId],
+    );
+    await client.query(
+      `insert into virtual_models (id, name, description, enabled)
+       values ($1, 'audit-probe-vm', 'Audit probe', true)`,
+      [virtualModelId],
+    );
+    await client.query(
+      `insert into request_activity (
+         id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+         protocol, model, stream, status, http_status, latency_ms,
+         started_at, completed_at,
+         agent_name_snapshot, virtual_model_name_snapshot
+       )
+       values (
+         $1, 'gw_audit_old_request', $2, $3, 'llmi_audit_old',
+         'chat_completions', 'audit-model', false, 'succeeded', 200, 1200,
+         now() - interval '3 days', now() - interval '3 days',
+         'audit-old-agent', 'audit-probe-vm'
+       )`,
+      [activityId, agentId, virtualModelId],
+    );
+    await client.query(
+      `insert into request_usage (
+         id, request_activity_id, agent_id, virtual_model_id,
+         input_tokens, output_tokens, total_tokens, token_source
+       )
+       values ($1, $2, $3, $4, 12000, 345, 12345, 'provider')`,
+      [randomUUID(), activityId, agentId, virtualModelId],
+    );
+    await client.query(
+      `insert into request_costs (
+         id, request_activity_id, agent_id, total_cost_usd, cost_source
+       )
+       values ($1, $2, $3, '0.42', 'provider')`,
+      [randomUUID(), activityId, agentId],
+    );
+  });
+}
+
+async function expectActivityTimeCellContained(page: Page) {
+  const metrics = await page
+    .locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" })
+    .evaluate((row) => {
+      const [timeCell, requestCell] = Array.from(row.querySelectorAll("td"));
+      const timeStyle = getComputedStyle(timeCell);
+      return {
+        requestCellOverflow: getComputedStyle(requestCell).overflow,
+        timeCellClientWidth: timeCell.clientWidth,
+        timeCellOverflow: timeStyle.overflow,
+        timeCellScrollWidth: timeCell.scrollWidth,
+      };
+    });
+  expect(metrics.requestCellOverflow).toBe("hidden");
+  expect(
+    metrics.timeCellScrollWidth <= metrics.timeCellClientWidth ||
+      metrics.timeCellOverflow === "hidden",
+  ).toBe(true);
+}
+
+test("console audit fixes keep time windows honest and prevent activity timestamp overlap", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_audit_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedAuditData(fixture.databaseUrl);
+
+    await withProcessLock("llmingress-console-next-dev", async () => {
+      const consoleApp = startConsoleProcess({
+        databaseUrl: fixture.databaseUrl,
+        port: await getFreePort(),
+      });
+
+      try {
+        const baseUrl = `http://localhost:${consoleApp.port}`;
+        const context = await browser.newContext();
+        const page = await context.newPage();
+
+        try {
+          await waitForConsole(baseUrl, consoleApp);
+          await signInFromFirstRun(page, baseUrl);
+
+          await page.goto(baseUrl, { waitUntil: "networkidle" });
+          await expect(page.locator(".stat-card", { hasText: "Requests 24h" })).toContainText("0");
+          await expect(
+            page.locator(".chart-card", { hasText: "Recent requests" }),
+          ).not.toContainText("audit-old-agent");
+          await expect(
+            page.locator(".chart-card", { hasText: "Top agents by cost" }),
+          ).not.toContainText("$0.42");
+
+          await page.goto(`${baseUrl}/usage`, { waitUntil: "networkidle" });
+          const daySpan = await page.evaluate(() => {
+            const from = (document.querySelector("#usage-date-from") as HTMLInputElement).value;
+            const to = (document.querySelector("#usage-date-to") as HTMLInputElement).value;
+            return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+          });
+          expect(daySpan).toBe(7);
+          await expect(page.locator(".stat-card", { hasText: "Total cost" })).toContainText(
+            "$0.42",
+          );
+
+          await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
+          await expect(page.locator(".stat-card", { hasText: "Online" })).toContainText("0");
+          await expect(page.locator(".stat-card", { hasText: "Cost 24h" })).toContainText("$0.00");
+
+          await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
+          await expect(page.locator(".vm-table thead")).toContainText("Failure rate total");
+
+          await page.goto(`${baseUrl}/agents?agentDialog=new`, { waitUntil: "networkidle" });
+          await expect(page.locator("#agent-allowed-virtual-models")).toHaveCount(0);
+          await expect(
+            page.locator('input[name="allowedVirtualModelIds"][type="checkbox"]'),
+          ).toHaveCount(1);
+          await expect(page.locator("#agent-type")).toContainText("Coding");
+
+          for (const viewport of [
+            { width: 1280, height: 800 },
+            { width: 390, height: 844 },
+          ]) {
+            await page.setViewportSize(viewport);
+            await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
+            await expect(
+              page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
+            ).toBeVisible();
+            await expectActivityTimeCellContained(page);
+          }
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await stopConsoleProcess(consoleApp);
+      }
+    });
+  } finally {
+    await fixture.dispose();
+  }
+});

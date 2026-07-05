@@ -128,7 +128,7 @@ describe("console dark restyle static contract", () => {
     expect(providersPage).toContain("<span>Add Provider</span>");
   });
 
-  test("virtual model actions use centered text without leading icons", () => {
+  test("virtual model actions use compact icon row actions", () => {
     const modelsPage = readFileSync(join(appDir, "(dashboard)/models/page.tsx"), "utf8");
     const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
     const stylesheet = css();
@@ -142,17 +142,34 @@ describe("console dark restyle static contract", () => {
     );
 
     expect(modelsPage).not.toContain("FlatIcon");
+    expect(modelsPage).toContain('className="page models-page"');
     expect(modelsPage).toContain("<span>Create Virtual Model</span>");
     expect(vmFilterForm).toContain("<span>Filter</span>");
     expect(vmFilterForm).not.toContain("<span>Query</span>");
     expect(vmFilterForm).not.toContain("FlatIcon");
     expect(vmFilterForm).not.toContain("<span>Apply</span>");
     expect(vmTable).toContain('className="agent-table-actions"');
-    expect(vmTable).toContain('className="link-button agent-action-edit"');
+    expect(vmTable).toContain('className="link-button agent-action-edit row-action-button"');
+    expect(vmTable).toContain('<FlatIcon name="edit" />');
     expect(vmTable).not.toContain('className="table-action-link"');
+    expect(stylesheet).toMatch(
+      /\.providers-page,\s*\.models-page,\s*\.runtime-page,\s*\.settings-page\s*\{[^}]*margin:\s*0/s,
+    );
     expect(stylesheet).toMatch(/\.vm-filter-bar button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
       /\.vm-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
+    );
+  });
+
+  test("utility console pages use the left-aligned console shell", () => {
+    const runtimePage = readFileSync(join(appDir, "(dashboard)/runtime/page.tsx"), "utf8");
+    const settingsPage = readFileSync(join(appDir, "(dashboard)/settings/page.tsx"), "utf8");
+    const stylesheet = css();
+
+    expect(runtimePage).toContain('className="page runtime-page"');
+    expect(settingsPage).toContain('className="page settings-page"');
+    expect(stylesheet).toMatch(
+      /\.providers-page,\s*\.models-page,\s*\.runtime-page,\s*\.settings-page\s*\{[^}]*margin:\s*0/s,
     );
   });
 
@@ -209,7 +226,7 @@ describe("console dark restyle static contract", () => {
     expect(actions).not.toContain("FlatIcon");
 
     const stylesheet = readFileSync(join(appDir, "globals.css"), "utf8");
-    expect(stylesheet).toMatch(/\.playground-actions\s*\{[^}]*justify-content:\s*center/s);
+    expect(stylesheet).toMatch(/\.playground-actions\s*\{[^}]*justify-content:\s*flex-end/s);
     expect(stylesheet).toMatch(/\.playground-actions button\s*\{[^}]*justify-content:\s*center/s);
   });
 
@@ -289,9 +306,9 @@ describe("console dark restyle static contract", () => {
     );
 
     expect(limitsSection).toContain("limitDialog: row.agent.id");
-    expect(limitsSection).toContain("<span>Edit</span>");
+    expect(limitsSection).toContain('<FlatIcon name="edit" />');
     expect(limitsSection).toContain('className="agent-table-actions"');
-    expect(limitsSection).toContain('className="link-button agent-action-edit"');
+    expect(limitsSection).toContain('className="link-button agent-action-edit row-action-button"');
     expect(limitsSection).not.toContain('className="table-action-link"');
     expect(limitsSection).not.toContain("<LimitsConfigPanel");
     expect(limitsSection).not.toContain('className="table-row-link"');

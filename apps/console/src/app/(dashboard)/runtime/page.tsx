@@ -3,9 +3,8 @@ import { RuntimeSection } from "../../_modules/sections";
 
 export default function GatewayRuntimePage() {
   return (
-    <div className="page">
+    <div className="page runtime-page">
       <PageHeader
-        eyebrow="Infrastructure"
         title="Gateway Runtime"
         description="Read-only Gateway process status, config reload state, and migration health."
       />

@@ -14,6 +14,7 @@ const allowedFeatureIds = [
   "console-semantic-status",
   "console-shared-formatters",
   "console-providers-ia-and-forms",
+  "console-ui-audit-confirmed-fixes",
 ];
 
 describe("v1 release guards milestone", () => {

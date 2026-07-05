@@ -164,6 +164,88 @@
   - Follow-up Limits header cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog header has no `.mono` key prefix, still shows `Rule configuration`, `test1`, and `Close`, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
   - Full regression merge check: initial `pnpm run verify:features` exposed stale local Next dev PID `47013` holding the Console dev lock and making Console E2E startup exit with code 1. After stopping that process, `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` passed and the rerun `pnpm run verify:features` passed with all 10 passing features re-verified.
 
+## 2026-07-04 Console UI Audit Confirmed Fixes
+
+- Created isolated worktree `.worktrees/console-ui-audit-confirmed-fixes` on branch `codex/console-ui-audit-confirmed-fixes` and copied the ignored root `.env.local` into it.
+- Baseline before edits: `pnpm run verify:features` passed with all 10 existing passing features re-verified.
+- Added `console-ui-audit-confirmed-fixes` tracker entry and TDD coverage:
+  - `tests/features/console-ui-audit-confirmed-fixes.unit.test.ts`
+  - `tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts`
+- Confirmed red phase:
+  - Focused unit failed on the expected static contracts before implementation.
+  - Focused E2E failed because Overview still showed old all-time recent activity beside `Requests 24h 0`.
+- Implemented the confirmed audit fixes only: Activity Time/Request ID overflow protection, Overview 24h-only recent/top-cost data, Usage 7d default window, Agents `Online` and `Cost 24h` labels, Virtual Models `Failure rate total` labels, compact icon row action classes, Agent checkbox virtual-model grants, form display labels, Limits close icon, removed isolated page eyebrows, and `llmi_` Playground placeholder.
+- Updated older regression contracts to match the new confirmed behavior:
+  - Release guard feature ID/count expectations now include `console-ui-audit-confirmed-fixes`.
+  - Semantic-status E2E now checks `Failure rate total`.
+  - Shared-formatters E2E now verifies old requests are not shown in Overview 24h recent requests while Activity still verifies date-qualified timestamps.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-ui-audit-confirmed-fixes.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts`
+  - `pnpm --filter @llmingress/console typecheck`
+  - `pnpm run lint`
+  - `pnpm test:e2e tests/e2e/console-semantic-status.e2e.spec.ts`
+  - `pnpm test:e2e tests/e2e/console-shared-formatters.e2e.spec.ts`
+  - `pnpm test:e2e tests/e2e/v1-release-guards.e2e.spec.ts`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 11 passing features re-verified.
+- Rendered verification used the repo Playwright E2E path; no in-app Browser fallback was needed. No unresolved blockers.
+
+## 2026-07-04 Playground Action Alignment Follow-up
+
+- Changed the Playground `Clear` / `Send` action row from centered to right-aligned in `.playground-actions`.
+- Updated `tests/features/console-dark-restyle.unit.test.ts` to assert `justify-content: flex-end`.
+- Browser verification on `http://localhost:3000/playground` measured `.playground-actions` as `justifyContent: flex-end` with `rightGap: 0` between the action row and Send button right edges; captured viewport evidence after scrolling to the action row.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+  - `pnpm run verify`
+  - `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` after the first full feature run hit transient Console startup contention
+  - `pnpm run verify:features` passed with all 11 passing features re-verified.
+
+## 2026-07-04 Virtual Models Page Alignment Follow-up
+
+- Changed `/models` from the centered generic `.page` shell to `.page models-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/models` measured `.models-page` with `leftGap: 0`, `marginLeft: 0px`, and no console warnings/errors; captured viewport evidence.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped per user request for this UI-only tuning pass.
+
+## 2026-07-04 Gateway Runtime Page Alignment Follow-up
+
+- Changed `/runtime` from the centered generic `.page` shell to `.page runtime-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/runtime` measured `.runtime-page` with `leftGap: 0`, `marginLeft: 0px`, no horizontal overflow, and no console warnings/errors; captured viewport evidence.
+- The in-app Browser DOM snapshot API returned an interface error, so rendered verification used the same in-app Browser's read-only DOM evaluate plus screenshot path.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped for this UI-only tuning pass.
+
+## 2026-07-04 Settings Page Alignment Follow-up
+
+- Changed `/settings` from the centered generic `.page` shell to `.page settings-page`, reusing the Agents/Providers left-aligned width rule.
+- Browser verification on `http://localhost:3000/settings` measured `.settings-page` with `leftGap: 0`, `marginLeft: 0px`, no horizontal overflow, no visible framework overlay, and no console warnings/errors; captured viewport evidence.
+- The in-app Browser DOM snapshot API remained unavailable, so rendered verification used the same in-app Browser's read-only DOM evaluate plus screenshot path.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Full regression intentionally skipped for this UI-only tuning pass.
+
+## 2026-07-05 Agent Budget Period Label Follow-up
+
+- Fixed the missed Agent limit `Budget period` option display labels in Create/Edit Agent dialogs from `day` / `week` / `month` to `Day` / `Week` / `Month`; submitted values remain unchanged.
+- Browser verification on `http://localhost:3000/agents?agentDialog=...` measured Edit Agent `Budget period` options as `Day`, `Week`, `Month`, with no raw lowercase labels, no visible framework overlay, no horizontal overflow, and no console warnings/errors.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-ui-audit-confirmed-fixes.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm --filter @llmingress/console typecheck`
+- Left out by scope: Activity timestamp ellipsis at 1280, older time/header/status consistency P2s, and Usage negative-savings copy.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

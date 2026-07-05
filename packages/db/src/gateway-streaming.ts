@@ -8,13 +8,13 @@ import {
   resolveProviderStreamingDialect,
 } from "@llmingress/provider/dialect";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
-import { readEnabledGatewayAgentLimits } from "./gateway-agent-limits.ts";
-import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import {
-  type GatewayBudgetReservation,
-  releaseGatewayBudgetReservation,
-  reserveGatewayBudget,
-} from "./gateway-budgets.ts";
+  enforceGatewayAgentLimits,
+  type GatewayBudgetSettlement,
+  type GatewayConcurrencyLease,
+  releaseGatewayConcurrency,
+} from "./gateway-agent-limits.ts";
+import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import { normalizeOpenAIChatCompletionRequest } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { gatewayInstanceId, gatewayStreamConnectTimeoutMs } from "./gateway-env.ts";
@@ -39,11 +39,6 @@ import {
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-provider-credentials.ts";
-import {
-  enforceGatewayRateLimits,
-  type GatewayConcurrencyLease,
-  releaseGatewayConcurrency,
-} from "./gateway-rate-limits.ts";
 import {
   buildAnthropicMessagesRequestMetadata,
   buildOpenAIChatCompletionRequestMetadata,
@@ -72,7 +67,7 @@ export type GatewayStreamingProtocol = "chat_completions" | "messages" | "respon
 export type GatewayStreamingResult =
   | {
       body: Readable;
-      budgetReservation?: GatewayBudgetReservation;
+      budgetSettlement?: GatewayBudgetSettlement;
       contentType: string;
       activity?: GatewayRequestActivityRoute;
       headers?: Record<string, string>;
@@ -123,36 +118,10 @@ export async function executeGatewayStreamingRequest(input: {
   if (!normalized.ok) {
     return normalized;
   }
-  const enabledLimits = await readEnabledGatewayAgentLimits({
-    agentId: input.agentId,
-    databaseUrl: input.databaseUrl,
-  });
 
-  const rateLimit = await enforceGatewayRateLimits({
-    agentId: input.agentId,
-    databaseUrl: input.databaseUrl,
-    enabledLimits,
-    requestId: input.requestId,
-    requestMetadata: normalized.requestMetadata,
-  });
-  if (!rateLimit.ok) {
-    return {
-      body: rateLimit.body,
-      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
-      ok: false,
-      requestMetadata: normalized.requestMetadata,
-      statusCode: rateLimit.statusCode,
-    };
-  }
-
-  // Concurrency lease: acquired once, released exactly once — either in the stream wrapper
-  // on success, in each early-return error path, or in the outer catch.
-  let concurrencyLease: GatewayConcurrencyLease | undefined = rateLimit.concurrencyLease;
-  // currentReservation holds the active budget reservation for the candidate currently being
-  // attempted. It is set BEFORE reserving and cleared (= undefined) whenever ownership is
-  // transferred (to the stream wrapper on success) or released (on failure/skip). The outer
-  // catch releases it if still set, guaranteeing no reservation can ever leak.
-  let currentReservation: GatewayBudgetReservation | undefined;
+  let concurrencyLease: GatewayConcurrencyLease | undefined;
+  let budgetSettlement: GatewayBudgetSettlement | undefined;
+  let limitsEnforced = false;
 
   try {
     const routeResult = selectRouteAttempts({
@@ -208,7 +177,7 @@ export async function executeGatewayStreamingRequest(input: {
     for (const rawCandidate of gatewayChain) {
       // --- Lazy per-candidate credentials (FIX C5) ---
       // Attach credentials for this single candidate only. If credentials are missing
-      // or the provider doesn't support the streaming protocol, release budget and continue.
+      // or the provider doesn't support the streaming protocol, skip it.
       let credentialedCandidates: FallbackChainCandidate[];
       try {
         credentialedCandidates = await attachGatewayProviderCredentials({
@@ -229,7 +198,6 @@ export async function executeGatewayStreamingRequest(input: {
       const providerDialect = resolveProviderStreamingDialect(candidate.providerKey);
       // Protocol check — if this candidate doesn't support the streaming protocol, skip it.
       if (!providerDialect.supportsPathSuffix(normalized.pathSuffix)) {
-        // Not a real attempt — no budget reservation needed, just skip.
         continue;
       }
 
@@ -249,31 +217,29 @@ export async function executeGatewayStreamingRequest(input: {
           ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
         };
 
-        // --- Reserve budget for this candidate ---
-        const budget = await reserveGatewayBudget({
-          agentId: input.agentId,
-          databaseUrl: input.databaseUrl,
-          enabledLimits,
-          price: attemptedCandidate.price,
-          requestId: input.requestId,
-          requestMetadata: normalized.requestMetadata,
-        });
-        if (!budget.ok) {
-          // Budget rejection (402) is non-retryable — stop immediately.
-          await releaseGatewayConcurrency({
+        if (!limitsEnforced) {
+          const limits = await enforceGatewayAgentLimits({
+            agentId: input.agentId,
+            budgetPrice: attemptedCandidate.price,
             databaseUrl: input.databaseUrl,
-            lease: concurrencyLease,
-          });
-          concurrencyLease = undefined;
-          return {
-            body: budget.body,
-            ok: false,
+            requestId: input.requestId,
             requestMetadata: normalized.requestMetadata,
-            statusCode: budget.statusCode,
-          };
+          });
+          if (!limits.ok) {
+            return {
+              body: limits.body,
+              ...(limits.retryAfterSeconds
+                ? { headers: { "retry-after": String(limits.retryAfterSeconds) } }
+                : {}),
+              ok: false,
+              requestMetadata: normalized.requestMetadata,
+              statusCode: limits.statusCode,
+            };
+          }
+          concurrencyLease = limits.concurrencyLease;
+          budgetSettlement = limits.budgetSettlement;
+          limitsEnforced = true;
         }
-        // Set currentReservation BEFORE any async work so the outer catch can always release it.
-        currentReservation = budget.reservation;
 
         attemptOrder += 1;
         anyAttempted = true;
@@ -341,11 +307,6 @@ export async function executeGatewayStreamingRequest(input: {
             { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
             failedAttempt,
           );
-          await releaseGatewayBudgetReservation({
-            databaseUrl: input.databaseUrl,
-            reservation: currentReservation,
-          });
-          currentReservation = undefined;
           lastFailureCode = "provider_request_failed";
           continue; // retryable — advance to next candidate
         }
@@ -394,11 +355,6 @@ export async function executeGatewayStreamingRequest(input: {
             { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
             failedAttempt,
           );
-          await releaseGatewayBudgetReservation({
-            databaseUrl: input.databaseUrl,
-            reservation: currentReservation,
-          });
-          currentReservation = undefined;
           lastFailureCode = errorCode;
 
           if (retryable) {
@@ -468,11 +424,6 @@ export async function executeGatewayStreamingRequest(input: {
             { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
             failedAttempt,
           );
-          await releaseGatewayBudgetReservation({
-            databaseUrl: input.databaseUrl,
-            reservation: currentReservation,
-          });
-          currentReservation = undefined;
           lastFailureCode = "provider_request_failed";
           continue; // retryable — advance to next candidate
         }
@@ -521,15 +472,12 @@ export async function executeGatewayStreamingRequest(input: {
               },
             }),
         });
-        const budgetReservation = currentReservation;
-        // Transfer ownership to the caller/stream wrappers — clear so outer catch doesn't double-release.
-        currentReservation = undefined;
         concurrencyLease = undefined;
 
         return {
           activity,
           body,
-          budgetReservation,
+          budgetSettlement,
           contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
           ok: true,
           requestMetadata: normalized.requestMetadata,
@@ -569,12 +517,7 @@ export async function executeGatewayStreamingRequest(input: {
       statusCode: mapGatewayErrorStatus(exhaustionCode),
     };
   } catch (error) {
-    // Outer catch: release any unreleased reservation + concurrency lease (FIX C1).
-    await releaseGatewayBudgetReservation({
-      databaseUrl: input.databaseUrl,
-      reservation: currentReservation,
-    });
-    currentReservation = undefined;
+    // Outer catch: release any unreleased concurrency lease.
     await releaseGatewayConcurrency({
       databaseUrl: input.databaseUrl,
       lease: concurrencyLease,

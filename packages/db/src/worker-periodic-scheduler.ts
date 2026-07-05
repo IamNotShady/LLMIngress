@@ -15,7 +15,6 @@ export type PeriodicTaskJobType =
   | "billing_reconciliation"
   | "retention_cleanup"
   | "stale_concurrency_reconcile"
-  | "stale_reservation_cleanup"
   | "webhook_export"
   | "backup"
   | "budget_threshold_alerts"
@@ -91,15 +90,6 @@ export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
       id: "stale-concurrency-reconcile",
       intervalMs: 300_000,
       jobType: "stale_concurrency_reconcile",
-      maxAttempts: 1,
-      payload: {},
-      priority: 0,
-      startAt: new Date(0),
-    },
-    {
-      id: "stale-reservation-cleanup",
-      intervalMs: 60_000,
-      jobType: "stale_reservation_cleanup",
       maxAttempts: 1,
       payload: {},
       priority: 0,

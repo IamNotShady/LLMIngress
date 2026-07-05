@@ -6,7 +6,6 @@ import {
   shouldRecordProviderRequestPathHealthFailure,
 } from "@llmingress/provider/connectivity";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
-import type { GatewayBudgetReservation } from "./gateway-budgets.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
 
@@ -72,16 +71,8 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     candidates: readonly FallbackChainCandidate[];
     databaseUrl?: string;
     fallbackAttempts: FallbackFailedAttempt[];
-    finalizeAttempt?: (
-      reservation: GatewayBudgetReservation | undefined,
-      success: { body: unknown; candidate: FallbackChainCandidate },
-    ) => Promise<void>;
     recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void> | void;
     recordHealthEvent?: typeof recordProviderHealthEvent;
-    releaseAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-    reserveAttempt?: (
-      candidate: FallbackChainCandidate,
-    ) => Promise<GatewayBudgetReservation | undefined>;
     requestActivityId?: string;
     requestId?: string;
   };
@@ -123,52 +114,38 @@ export async function executeProviderFallbackAttempts<
     const candidateFailedAttempts: FallbackFailedAttempt[] = [];
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
-      const reservation = await input.reserveAttempt?.(candidate);
-      let reservationSettled = false;
-      try {
-        const result = await input.callProvider({ candidate, providerApiKey });
+      const result = await input.callProvider({ candidate, providerApiKey });
 
-        if (result.ok) {
-          recordSucceededAttemptInDatabase(input, {
-            attemptOrder,
-            ...(providerApiKey.providerApiKeyId
-              ? { providerApiKeyId: providerApiKey.providerApiKeyId }
-              : {}),
-            ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
-            providerModelId: candidate.providerModelId,
-          });
-          reservationSettled = true;
-          await input.finalizeAttempt?.(reservation, { body: result.body, candidate });
-          return {
-            candidate: {
-              ...candidate,
-              apiKey: providerApiKey.apiKey,
-              providerApiKeyId: providerApiKey.providerApiKeyId,
-              providerApiKeyPrefix: providerApiKey.keyPrefix,
-            },
-            result,
-          };
-        }
-
-        reservationSettled = true;
-        await input.releaseAttempt?.(reservation);
-        const failedAttempt = buildFallbackFailedAttempt({
+      if (result.ok) {
+        recordSucceededAttemptInDatabase(input, {
           attemptOrder,
-          providerApiKey,
+          ...(providerApiKey.providerApiKeyId
+            ? { providerApiKeyId: providerApiKey.providerApiKeyId }
+            : {}),
+          ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
           providerModelId: candidate.providerModelId,
-          result,
         });
-        input.fallbackAttempts.push(failedAttempt);
-        candidateFailedAttempts.push(failedAttempt);
-        await input.recordFailedAttempt?.(failedAttempt);
-        recordFailedAttemptInDatabase(input, failedAttempt);
-      } catch (error) {
-        if (!reservationSettled) {
-          reservationSettled = true;
-          await input.releaseAttempt?.(reservation);
-        }
-        throw error;
+        return {
+          candidate: {
+            ...candidate,
+            apiKey: providerApiKey.apiKey,
+            providerApiKeyId: providerApiKey.providerApiKeyId,
+            providerApiKeyPrefix: providerApiKey.keyPrefix,
+          },
+          result,
+        };
       }
+
+      const failedAttempt = buildFallbackFailedAttempt({
+        attemptOrder,
+        providerApiKey,
+        providerModelId: candidate.providerModelId,
+        result,
+      });
+      input.fallbackAttempts.push(failedAttempt);
+      candidateFailedAttempts.push(failedAttempt);
+      await input.recordFailedAttempt?.(failedAttempt);
+      recordFailedAttemptInDatabase(input, failedAttempt);
     }
 
     if (candidateFailedAttempts.some((attempt) => !attempt.retryable)) {

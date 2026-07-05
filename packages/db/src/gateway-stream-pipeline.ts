@@ -1,16 +1,8 @@
 import { PassThrough, Readable } from "node:stream";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
-import {
-  buildGatewayBudgetActualUsage,
-  finalizeGatewayBudgetReservation,
-  type GatewayBudgetReservation,
-  releaseGatewayBudgetReservation,
-} from "./gateway-budgets.ts";
+import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-agent-limits.ts";
 import { gatewayStreamIdleTimeoutMs } from "./gateway-env.ts";
 import type { FallbackChainCandidate } from "./gateway-fallback-chain.ts";
-import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
-import type { GatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
-import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import { recordProviderHealthEvent } from "./provider-health.ts";
 
 export type GatewayRuntimeStreamError = {
@@ -267,31 +259,4 @@ export function composeGatewayProviderStreamPipeline(input: {
       lease: input.lease,
     },
   );
-}
-
-export async function settleGatewayStreamBudget(input: {
-  databaseUrl?: string;
-  providerUsage: GatewayProviderTokenUsage | undefined;
-  reservation: GatewayBudgetReservation | undefined;
-  statusCode: number;
-  usageCost: GatewayUsageCostDetails | undefined;
-}): Promise<void> {
-  if (input.statusCode < 400) {
-    await finalizeGatewayBudgetReservation({
-      actual: input.usageCost
-        ? buildGatewayBudgetActualUsage({
-            price: input.usageCost.actualPrice,
-            providerUsage: input.providerUsage,
-          })
-        : undefined,
-      databaseUrl: input.databaseUrl,
-      reservation: input.reservation,
-    });
-    return;
-  }
-
-  await releaseGatewayBudgetReservation({
-    databaseUrl: input.databaseUrl,
-    reservation: input.reservation,
-  });
 }

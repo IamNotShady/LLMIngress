@@ -10,11 +10,117 @@ import {
 } from "../support/gateway-process";
 import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
-const agentApiKey = "llmi_gateway_settlement_integrity_key_094";
 const expectedActualCostUsd = 0.11;
 const expectedActualTokens = 1200;
 
-test("gateway streaming budget settlement late-finalizes expired reservations with actual usage", async () => {
+test("gateway records non-streaming budget usage without reservations", async () => {
+  await withSettlementGateway(
+    { budgetLimitUsd: 1, mode: "cached-usage", virtualModelName: "vm-settlement-json" },
+    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-settlement-json",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(1);
+      await expect
+        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .toEqual({
+          costUsedUsd: expectedActualCostUsd,
+          tokensUsed: expectedActualTokens,
+        });
+      await expect.poll(() => budgetReservationsTableExists(fixture)).toBe(false);
+    },
+  );
+});
+
+test("gateway records streaming budget usage after EOF without reservations", async () => {
+  await withSettlementGateway(
+    {
+      budgetLimitUsd: 1,
+      mode: "stream&usage=chat&stream_end_ms=100",
+      virtualModelName: "vm-settlement-stream",
+    },
+    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-settlement-stream",
+          stream: true,
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("[DONE]");
+      expect(fakeProvider.requests).toHaveLength(1);
+      await expect
+        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .toEqual({
+          costUsedUsd: expectedActualCostUsd,
+          tokensUsed: expectedActualTokens,
+        });
+      await expect.poll(() => budgetReservationsTableExists(fixture)).toBe(false);
+    },
+  );
+});
+
+test("gateway rejects exceeded budgets before provider calls", async () => {
+  await withSettlementGateway(
+    { budgetLimitUsd: 0.000001, mode: "cached-usage", virtualModelName: "vm-budget-exceeded" },
+    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-budget-exceeded",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(402);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "cost_budget_exceeded" },
+      });
+      expect(fakeProvider.requests).toHaveLength(0);
+      await expect.poll(() => readBudgetUsage(fixture, seeded.agentId)).toBeNull();
+      await expect.poll(() => budgetReservationsTableExists(fixture)).toBe(false);
+    },
+  );
+});
+
+type SettlementGatewayContext = {
+  agentApiKey: string;
+  baseUrl: string;
+  fakeProvider: Awaited<ReturnType<typeof createFakeProviderServer>>;
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>;
+  seeded: Awaited<ReturnType<typeof seedOpenAIGatewayRoute>>;
+};
+
+async function withSettlementGateway(
+  input: {
+    budgetLimitUsd: number;
+    mode: string;
+    virtualModelName: string;
+  },
+  run: (context: SettlementGatewayContext) => Promise<void>,
+): Promise<void> {
+  const agentApiKey = `llmi_gateway_settlement_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_settlement_e2e_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -25,8 +131,8 @@ test("gateway streaming budget settlement late-finalizes expired reservations wi
     const seeded = await seedOpenAIGatewayRoute({
       agentApiKey,
       fixture,
-      providerBaseUrl: `${fakeProvider.url}?mode=stream&usage=chat&stream_end_ms=1600`,
-      virtualModelName: "vm-settlement",
+      providerBaseUrl: `${fakeProvider.url}?mode=${input.mode}`,
+      virtualModelName: input.virtualModelName,
     });
     await fixture.query(
       `
@@ -41,61 +147,20 @@ test("gateway streaming budget settlement late-finalizes expired reservations wi
     await fixture.query(
       `
         insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
-        values ($1, $2, 'budget', 'day', 1, 'usd', true)
+        values ($1, $2, 'budget', 'day', $3, 'usd', true)
       `,
-      [randomUUID(), seeded.agentId],
+      [randomUUID(), seeded.agentId, input.budgetLimitUsd],
     );
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
-      env: { GATEWAY_BUDGET_RESERVATION_TTL_SECONDS: "1" },
       port: await getFreePort(),
     });
 
     try {
       const baseUrl = `http://127.0.0.1:${gateway.port}`;
       await waitForGateway(baseUrl, gateway);
-
-      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-        body: JSON.stringify({
-          messages: [{ content: "ping", role: "user" }],
-          model: "vm-settlement",
-          stream: true,
-        }),
-        headers: {
-          authorization: `Bearer ${agentApiKey}`,
-          "content-type": "application/json",
-        },
-        method: "POST",
-      });
-      expect(response.status).toBe(200);
-      expect(response.body).not.toBeNull();
-      const reader = response.body?.getReader();
-      expect(reader).toBeDefined();
-      if (!reader) {
-        return;
-      }
-
-      const first = await reader.read();
-      expect(first.done).toBe(false);
-      const reservation = await waitForPendingReservation(fixture, seeded.agentId);
-      await expireReservationLikeSweeper(fixture, reservation.id, reservation.budget_period_id);
-
-      await readRemainingStream(reader);
-
-      await expect
-        .poll(() => readBudgetSettlement(fixture, reservation.id), {
-          timeout: 5_000,
-        })
-        .toEqual({
-          actualCostUsd: expectedActualCostUsd,
-          actualTotalTokens: expectedActualTokens,
-          costUsedUsd: expectedActualCostUsd,
-          reservedCostUsd: 0,
-          reservedTokens: 0,
-          status: "finalized",
-          tokensUsed: expectedActualTokens,
-        });
+      await run({ agentApiKey, baseUrl, fakeProvider, fixture, seeded });
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -103,7 +168,7 @@ test("gateway streaming budget settlement late-finalizes expired reservations wi
     await fakeProvider.close();
     await fixture.dispose();
   }
-});
+}
 
 type QueryableFixture = {
   query: <T extends Record<string, unknown>>(
@@ -112,128 +177,44 @@ type QueryableFixture = {
   ) => Promise<{ rows: T[] }>;
 };
 
-async function waitForPendingReservation(
+async function readBudgetUsage(
   fixture: QueryableFixture,
   agentId: string,
-): Promise<{ budget_period_id: string; id: string }> {
-  return expect
-    .poll(async () => {
-      const result = await fixture.query<{ budget_period_id: string; id: string }>(
-        `
-          select id::text,
-                 budget_period_id::text
-          from budget_reservations
-          where agent_id = $1
-            and status = 'pending'
-          order by created_at desc
-          limit 1
-        `,
-        [agentId],
-      );
-      return result.rows[0] ?? null;
-    })
-    .not.toBeNull()
-    .then(async () => {
-      const result = await fixture.query<{ budget_period_id: string; id: string }>(
-        `
-          select id::text,
-                 budget_period_id::text
-          from budget_reservations
-          where agent_id = $1
-          order by created_at desc
-          limit 1
-        `,
-        [agentId],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        throw new Error("Budget reservation was not created.");
-      }
-      return row;
-    });
-}
-
-async function expireReservationLikeSweeper(
-  fixture: QueryableFixture,
-  reservationId: string,
-  budgetPeriodId: string,
-): Promise<void> {
-  await fixture.query(
-    `
-      update budget_periods
-      set reserved_tokens = 0,
-          reserved_cost_usd = 0,
-          updated_at = now()
-      where id = $1
-    `,
-    [budgetPeriodId],
-  );
-  await fixture.query(
-    `
-      update budget_reservations
-      set status = 'expired',
-          updated_at = now()
-      where id = $1
-    `,
-    [reservationId],
-  );
-}
-
-async function readRemainingStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) {
-      return;
-    }
-  }
-}
-
-async function readBudgetSettlement(
-  fixture: QueryableFixture,
-  reservationId: string,
-): Promise<{
-  actualCostUsd: number | null;
-  actualTotalTokens: number | null;
-  costUsedUsd: number;
-  reservedCostUsd: number;
-  reservedTokens: number;
-  status: string;
-  tokensUsed: number;
-} | null> {
+): Promise<{ costUsedUsd: number; tokensUsed: number } | null> {
   const result = await fixture.query<{
-    actual_cost_usd: string | null;
-    actual_total_tokens: string | null;
     cost_used_usd: string;
-    reserved_cost_usd: string;
-    reserved_tokens: string;
-    status: string;
     tokens_used: string;
   }>(
     `
-      select budget_reservations.status,
-             budget_reservations.actual_total_tokens::text,
-             budget_reservations.actual_cost_usd::text,
-             budget_periods.tokens_used::text,
-             budget_periods.cost_used_usd::text,
-             budget_periods.reserved_tokens::text,
-             budget_periods.reserved_cost_usd::text
-      from budget_reservations
-      join budget_periods on budget_periods.id = budget_reservations.budget_period_id
-      where budget_reservations.id = $1
+      select tokens_used::text,
+             cost_used_usd::text
+      from budget_periods
+      where agent_id = $1
+      order by created_at desc
+      limit 1
     `,
-    [reservationId],
+    [agentId],
   );
   const row = result.rows[0];
   if (!row) {
     return null;
   }
   return {
-    actualCostUsd: row.actual_cost_usd === null ? null : Number(row.actual_cost_usd),
-    actualTotalTokens: row.actual_total_tokens === null ? null : Number(row.actual_total_tokens),
     costUsedUsd: Number(row.cost_used_usd),
-    reservedCostUsd: Number(row.reserved_cost_usd),
-    reservedTokens: Number(row.reserved_tokens),
-    status: row.status,
     tokensUsed: Number(row.tokens_used),
   };
+}
+
+async function budgetReservationsTableExists(fixture: QueryableFixture): Promise<boolean> {
+  const result = await fixture.query<{ exists: boolean }>(
+    `
+      select exists (
+        select 1
+        from information_schema.tables
+        where table_schema = 'public'
+          and table_name = 'budget_reservations'
+      ) as exists
+    `,
+  );
+  return result.rows[0]?.exists ?? false;
 }

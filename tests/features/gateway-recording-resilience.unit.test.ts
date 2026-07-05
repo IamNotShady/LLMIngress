@@ -14,7 +14,7 @@ import {
 import { wrapProviderStreamWithErrorRecording } from "../../packages/db/src/gateway-stream-pipeline";
 
 const postgresQueryMock = vi.hoisted(() => vi.fn(async () => ({ rows: [] })));
-const settleGatewayStreamBudgetMock = vi.hoisted(() => vi.fn(async () => undefined));
+const recordGatewayBudgetUsageMock = vi.hoisted(() => vi.fn(async () => undefined));
 
 vi.mock("@llmingress/db/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@llmingress/db/client")>();
@@ -26,11 +26,11 @@ vi.mock("@llmingress/db/client", async (importOriginal) => {
   };
 });
 
-vi.mock("@llmingress/db/gateway-stream-pipeline", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@llmingress/db/gateway-stream-pipeline")>();
+vi.mock("@llmingress/db/gateway-agent-limits", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@llmingress/db/gateway-agent-limits")>();
   return {
     ...actual,
-    settleGatewayStreamBudget: settleGatewayStreamBudgetMock,
+    recordGatewayBudgetUsage: recordGatewayBudgetUsageMock,
   };
 });
 
@@ -125,8 +125,8 @@ describe("gateway recording resilience", () => {
   beforeEach(() => {
     postgresQueryMock.mockReset();
     postgresQueryMock.mockResolvedValue({ rows: [] });
-    settleGatewayStreamBudgetMock.mockReset();
-    settleGatewayStreamBudgetMock.mockResolvedValue(undefined);
+    recordGatewayBudgetUsageMock.mockReset();
+    recordGatewayBudgetUsageMock.mockResolvedValue(undefined);
   });
 
   it("returns the LLM response when activity creation fails", async () => {
@@ -240,13 +240,17 @@ describe("gateway recording resilience", () => {
     completionBlocked.resolve();
   });
 
-  it("ends a successful stream after budget settlement without waiting for activity completion", async () => {
+  it("ends a successful stream without waiting for budget usage or activity completion", async () => {
     const logger = fakeLogger();
+    const budgetStarted = deferred();
+    const budgetBlocked = deferred();
     const completionStarted = deferred();
     const completionBlocked = deferred();
     const events: string[] = [];
-    settleGatewayStreamBudgetMock.mockImplementationOnce(async () => {
-      events.push("settled");
+    recordGatewayBudgetUsageMock.mockImplementationOnce(async () => {
+      events.push("budget-started");
+      budgetStarted.resolve();
+      await budgetBlocked.promise;
     });
 
     const response = await executeRecordedGatewayStreamingRequest({
@@ -260,7 +264,20 @@ describe("gateway recording resilience", () => {
           estimatedOutputTokens: 1,
           messagesCount: 1,
         },
+        budgetSettlement: {
+          periodEnd: new Date("2026-07-06T00:00:00.000Z"),
+          periodStart: new Date("2026-07-05T00:00:00.000Z"),
+          periodType: "day",
+        },
         statusCode: 200,
+        usageCost: {
+          actualPrice: { status: "unknown_price", priceVersion: "v0" } as never,
+          baselinePrice: { status: "unknown_price", priceVersion: "v0" } as never,
+          baselineProviderModelId: "pm-1",
+          estimatedInputTokens: 1,
+          estimatedOutputTokens: 1,
+          providerModelId: "pm-1",
+        },
       }),
       logger,
       recorder: recorder({
@@ -275,11 +292,13 @@ describe("gateway recording resilience", () => {
     expect(response.ok).toBe(true);
     const bodyPromise = readStreamBody(response.body);
 
+    await budgetStarted.promise;
     await completionStarted.promise;
     const body = await expectResolvedBeforeRecording(bodyPromise);
     expect(body).toBe("streamed response");
-    expect(events).toEqual(["settled", "complete-started"]);
+    expect(events).toEqual(["budget-started", "complete-started"]);
 
+    budgetBlocked.resolve();
     completionBlocked.resolve();
   });
 

@@ -1,177 +1,134 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  finalizeGatewayBudgetReservation,
-  type GatewayBudgetReservation,
-  releaseGatewayBudgetReservation,
-  reserveGatewayBudget,
-} from "../../packages/db/src/gateway-budgets";
+  enforceGatewayAgentLimits,
+  recordGatewayBudgetUsage,
+} from "../../packages/db/src/gateway-agent-limits";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createDefaultPeriodicTasks } from "../../packages/db/src/worker-periodic-scheduler";
 import { reconcileGatewayConcurrencyWindows } from "../../packages/db/src/worker-stale-concurrency";
 
 describe("gateway settlement integrity", () => {
-  it("finalizes pending budget reservations with actual provider usage", async () => {
+  it("rejects a cost budget without budget reservation state", async () => {
     await withMigratedFixture(async (fixture) => {
-      const seeded = await seedBudgetReservation(fixture, {
-        reservedCostUsd: 1,
-        reservedInputTokens: 500,
-        reservedOutputTokens: 500,
-        status: "pending",
+      const agentId = await seedAgent(fixture);
+      await seedAgentLimit(fixture, agentId, {
+        limitType: "budget",
+        limitValue: 0.0001,
+        period: "day",
+        unit: "usd",
       });
 
-      await finalizeGatewayBudgetReservation({
-        actual: { costUsd: 0.02, totalTokens: 300 },
+      const decision = await enforceGatewayAgentLimits({
+        agentId,
+        budgetPrice: pricedModel(),
         databaseUrl: fixture.databaseUrl,
-        reservation: seeded.reservation,
+        requestId: "req-budget-exceeded",
+        requestMetadata: requestMetadata({ estimatedInputTokens: 100, estimatedOutputTokens: 100 }),
       });
 
-      await expectBudgetPeriod(fixture, seeded.budgetPeriodId, {
-        costUsedUsd: 0.02,
-        reservedCostUsd: 0,
-        reservedTokens: 0,
-        tokensUsed: 300,
+      expect(decision).toMatchObject({
+        body: { error: { code: "cost_budget_exceeded" } },
+        ok: false,
+        statusCode: 402,
       });
-      await expectBudgetReservation(fixture, seeded.reservation.id, {
-        actualCostUsd: 0.02,
-        actualTotalTokens: 300,
-        status: "finalized",
-      });
+      expect(await budgetReservationsTableExists(fixture)).toBe(false);
     });
   });
 
-  it("keeps reserved-estimate finalization when actual usage is unavailable", async () => {
+  it("records successful budget usage after the request", async () => {
     await withMigratedFixture(async (fixture) => {
-      const seeded = await seedBudgetReservation(fixture, {
-        reservedCostUsd: 1,
-        reservedInputTokens: 500,
-        reservedOutputTokens: 500,
-        status: "pending",
+      const agentId = await seedAgent(fixture);
+      await seedAgentLimit(fixture, agentId, {
+        limitType: "budget",
+        limitValue: 10,
+        period: "day",
+        unit: "usd",
       });
 
-      await finalizeGatewayBudgetReservation({
+      const decision = await enforceGatewayAgentLimits({
+        agentId,
+        budgetPrice: pricedModel(),
         databaseUrl: fixture.databaseUrl,
-        reservation: seeded.reservation,
+        requestId: "req-budget-success",
+        requestMetadata: requestMetadata({ estimatedInputTokens: 100, estimatedOutputTokens: 100 }),
       });
 
-      await expectBudgetPeriod(fixture, seeded.budgetPeriodId, {
-        costUsedUsd: 1,
-        reservedCostUsd: 0,
-        reservedTokens: 0,
-        tokensUsed: 1000,
-      });
-    });
-  });
-
-  it("late-finalizes an expired reservation with actual provider usage", async () => {
-    await withMigratedFixture(async (fixture) => {
-      const seeded = await seedBudgetReservation(fixture, {
-        budgetReservedCostUsd: 0,
-        budgetReservedTokens: 0,
-        reservedCostUsd: 1,
-        reservedInputTokens: 500,
-        reservedOutputTokens: 500,
-        status: "expired",
-      });
-
-      await finalizeGatewayBudgetReservation({
-        actual: { costUsd: 0.02, totalTokens: 300 },
-        databaseUrl: fixture.databaseUrl,
-        reservation: seeded.reservation,
-      });
-
-      await expectBudgetPeriod(fixture, seeded.budgetPeriodId, {
-        costUsedUsd: 0.02,
-        reservedCostUsd: 0,
-        reservedTokens: 0,
-        tokensUsed: 300,
-      });
-      await expectBudgetReservation(fixture, seeded.reservation.id, {
-        actualCostUsd: 0.02,
-        actualTotalTokens: 300,
-        status: "finalized",
-      });
-    });
-  });
-
-  it("leaves expired reservations unchanged when released", async () => {
-    await withMigratedFixture(async (fixture) => {
-      const seeded = await seedBudgetReservation(fixture, {
-        budgetReservedCostUsd: 0,
-        budgetReservedTokens: 0,
-        reservedCostUsd: 1,
-        reservedInputTokens: 500,
-        reservedOutputTokens: 500,
-        status: "expired",
-      });
-
-      await releaseGatewayBudgetReservation({
-        databaseUrl: fixture.databaseUrl,
-        reservation: seeded.reservation,
-      });
-
-      await expectBudgetPeriod(fixture, seeded.budgetPeriodId, {
-        costUsedUsd: 0,
-        reservedCostUsd: 0,
-        reservedTokens: 0,
-        tokensUsed: 0,
-      });
-      await expectBudgetReservation(fixture, seeded.reservation.id, {
-        actualCostUsd: null,
-        actualTotalTokens: null,
-        status: "expired",
-      });
-    });
-  });
-
-  it("uses the configured reservation TTL when reserving budget", async () => {
-    const originalTtl = process.env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS;
-    process.env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS = "60";
-    try {
-      await withMigratedFixture(async (fixture) => {
-        const agentId = await seedAgent(fixture);
-        await fixture.query(
-          `
-            insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
-            values ($1, $2, 'budget', 'day', 10, 'usd', true)
-          `,
-          [randomUUID(), agentId],
-        );
-        const before = Date.now();
-
-        const decision = await reserveGatewayBudget({
-          agentId: agentId,
-          databaseUrl: fixture.databaseUrl,
-          price: pricedModel(),
-          requestId: "req-ttl",
-          requestMetadata: {
-            estimatedInputTokens: 100,
-            estimatedOutputTokens: 100,
-            messageCount: 1,
-            model: "vm",
-            protocol: "chat_completions",
-            stream: false,
-            usesTools: false,
-          },
-        });
-
-        expect(decision.ok).toBe(true);
-        if (!decision.ok || !decision.reservation) {
-          return;
-        }
-        const row = await readReservation(fixture, decision.reservation.id);
-        const expiresAt = new Date(row.expires_at).getTime();
-        expect(expiresAt - before).toBeGreaterThanOrEqual(55_000);
-        expect(expiresAt - before).toBeLessThanOrEqual(65_000);
-      });
-    } finally {
-      if (originalTtl === undefined) {
-        delete process.env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS;
-      } else {
-        process.env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS = originalTtl;
+      expect(decision.ok).toBe(true);
+      if (!decision.ok) {
+        return;
       }
-    }
+      await recordGatewayBudgetUsage({
+        agentId,
+        budgetSettlement: decision.budgetSettlement,
+        databaseUrl: fixture.databaseUrl,
+        requestId: "req-budget-success",
+        usageCost: {
+          actualPrice: pricedModel(),
+          baselinePrice: pricedModel(),
+          baselineProviderModelId: randomUUID(),
+          estimatedInputTokens: 100,
+          estimatedOutputTokens: 100,
+          providerModelId: randomUUID(),
+          providerUsage: {
+            cachedInputTokens: 0,
+            inputTokens: 120,
+            outputTokens: 80,
+            reasoningTokens: 0,
+          },
+        },
+      });
+
+      const row = await readLatestBudgetPeriod(fixture, agentId);
+      expect(Number(row?.cost_used_usd)).toBe(0.0002);
+      expect(Number(row?.tokens_used)).toBe(200);
+      expect(await budgetReservationsTableExists(fixture)).toBe(false);
+    });
+  });
+
+  it("ignores disabled budget limits for start checks and end accounting", async () => {
+    await withMigratedFixture(async (fixture) => {
+      const agentId = await seedAgent(fixture);
+      await seedAgentLimit(fixture, agentId, {
+        enabled: false,
+        limitType: "budget",
+        limitValue: 0.0001,
+        period: "day",
+        unit: "usd",
+      });
+
+      const decision = await enforceGatewayAgentLimits({
+        agentId,
+        budgetPrice: pricedModel(),
+        databaseUrl: fixture.databaseUrl,
+        requestId: "req-budget-disabled",
+        requestMetadata: requestMetadata({ estimatedInputTokens: 100, estimatedOutputTokens: 100 }),
+      });
+
+      expect(decision.ok).toBe(true);
+      if (!decision.ok) {
+        return;
+      }
+      expect(decision.budgetSettlement).toBeUndefined();
+      await recordGatewayBudgetUsage({
+        agentId,
+        budgetSettlement: decision.budgetSettlement,
+        databaseUrl: fixture.databaseUrl,
+        requestId: "req-budget-disabled",
+        usageCost: {
+          actualPrice: pricedModel(),
+          baselinePrice: pricedModel(),
+          baselineProviderModelId: randomUUID(),
+          estimatedInputTokens: 100,
+          estimatedOutputTokens: 100,
+          providerModelId: randomUUID(),
+        },
+      });
+
+      expect(await readLatestBudgetPeriod(fixture, agentId)).toBeUndefined();
+      expect(await budgetReservationsTableExists(fixture)).toBe(false);
+    });
   });
 
   it("reconciles quiet leaked concurrency windows but leaves active windows alone", async () => {
@@ -207,17 +164,13 @@ describe("gateway settlement integrity", () => {
         jobType: "stale_concurrency_reconcile",
       }),
     );
+    expect(createDefaultPeriodicTasks()).not.toContainEqual(
+      expect.objectContaining({
+        jobType: "stale_reservation_cleanup",
+      }),
+    );
   });
 });
-
-type BudgetReservationSeed = {
-  budgetReservedCostUsd?: number;
-  budgetReservedTokens?: number;
-  reservedCostUsd: number;
-  reservedInputTokens: number;
-  reservedOutputTokens: number;
-  status: "expired" | "pending";
-};
 
 async function withMigratedFixture<T>(
   run: (fixture: TestPostgresFixture) => Promise<T>,
@@ -242,71 +195,71 @@ async function seedAgent(fixture: TestPostgresFixture): Promise<string> {
   return agentId;
 }
 
-async function seedBudgetReservation(
+async function seedAgentLimit(
   fixture: TestPostgresFixture,
-  input: BudgetReservationSeed,
-): Promise<{ budgetPeriodId: string; reservation: GatewayBudgetReservation }> {
-  const agentId = await seedAgent(fixture);
-  const budgetPeriodId = randomUUID();
-  const reservationId = randomUUID();
-  const reservedTotalTokens = input.reservedInputTokens + input.reservedOutputTokens;
-
+  agentId: string,
+  input: {
+    enabled?: boolean;
+    limitType: "budget" | "concurrency" | "rpm" | "token" | "tpm";
+    limitValue: number;
+    period: string;
+    unit: string;
+  },
+): Promise<void> {
   await fixture.query(
     `
-      insert into budget_periods (
-        id,
-        agent_id,
-        period_type,
-        period_start,
-        period_end,
-        reserved_tokens,
-        reserved_cost_usd
-      )
-      values ($1, $2, 'day', now() - interval '1 hour', now() + interval '23 hours', $3, $4)
+      insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
+      values ($1, $2, $3, $4, $5, $6, $7)
     `,
     [
-      budgetPeriodId,
+      randomUUID(),
       agentId,
-      input.budgetReservedTokens ?? reservedTotalTokens,
-      input.budgetReservedCostUsd ?? input.reservedCostUsd,
+      input.limitType,
+      input.period,
+      input.limitValue,
+      input.unit,
+      input.enabled ?? true,
     ],
   );
-  await fixture.query(
-    `
-      insert into budget_reservations (
-        id,
-        agent_id,
-        budget_period_id,
-        status,
-        reserved_input_tokens,
-        reserved_output_tokens,
-        reserved_cost_usd,
-        expires_at
-      )
-      values ($1, $2, $3, $4, $5, $6, $7, now() + interval '1 hour')
-    `,
-    [
-      reservationId,
-      agentId,
-      budgetPeriodId,
-      input.status,
-      input.reservedInputTokens,
-      input.reservedOutputTokens,
-      input.reservedCostUsd,
-    ],
-  );
+}
 
+function requestMetadata(input: { estimatedInputTokens: number; estimatedOutputTokens: number }) {
   return {
-    budgetPeriodId,
-    reservation: {
-      budgetPeriodId,
-      id: reservationId,
-      reservedCostUsd: input.reservedCostUsd,
-      reservedInputTokens: input.reservedInputTokens,
-      reservedOutputTokens: input.reservedOutputTokens,
-      reservedTotalTokens,
-    },
+    estimatedInputTokens: input.estimatedInputTokens,
+    estimatedOutputTokens: input.estimatedOutputTokens,
+    messageCount: 1,
+    model: "vm",
+    protocol: "chat_completions" as const,
+    stream: false,
+    usesTools: false,
   };
+}
+
+async function readLatestBudgetPeriod(
+  fixture: TestPostgresFixture,
+  agentId: string,
+): Promise<
+  | {
+      cost_used_usd: string;
+      tokens_used: string;
+    }
+  | undefined
+> {
+  const result = await fixture.query<{
+    cost_used_usd: string;
+    tokens_used: string;
+  }>(
+    `
+      select cost_used_usd::text,
+             tokens_used::text
+      from budget_periods
+      where agent_id = $1
+      order by created_at desc
+      limit 1
+    `,
+    [agentId],
+  );
+  return result.rows[0];
 }
 
 async function seedConcurrencyWindow(
@@ -331,91 +284,6 @@ async function seedConcurrencyWindow(
   );
 }
 
-async function expectBudgetPeriod(
-  fixture: TestPostgresFixture,
-  budgetPeriodId: string,
-  expected: {
-    costUsedUsd: number;
-    reservedCostUsd: number;
-    reservedTokens: number;
-    tokensUsed: number;
-  },
-): Promise<void> {
-  const result = await fixture.query<{
-    cost_used_usd: string;
-    reserved_cost_usd: string;
-    reserved_tokens: string;
-    tokens_used: string;
-  }>(
-    `
-      select cost_used_usd::text,
-             reserved_cost_usd::text,
-             reserved_tokens::text,
-             tokens_used::text
-      from budget_periods
-      where id = $1
-    `,
-    [budgetPeriodId],
-  );
-  const row = result.rows[0];
-  expect(row).toBeDefined();
-  expect(Number(row?.cost_used_usd)).toBe(expected.costUsedUsd);
-  expect(Number(row?.reserved_cost_usd)).toBe(expected.reservedCostUsd);
-  expect(Number(row?.reserved_tokens)).toBe(expected.reservedTokens);
-  expect(Number(row?.tokens_used)).toBe(expected.tokensUsed);
-}
-
-async function expectBudgetReservation(
-  fixture: TestPostgresFixture,
-  reservationId: string,
-  expected: {
-    actualCostUsd: number | null;
-    actualTotalTokens: number | null;
-    status: string;
-  },
-): Promise<void> {
-  const row = await readReservation(fixture, reservationId);
-  expect(row.status).toBe(expected.status);
-  expect(row.actual_total_tokens === null ? null : Number(row.actual_total_tokens)).toBe(
-    expected.actualTotalTokens,
-  );
-  expect(row.actual_cost_usd === null ? null : Number(row.actual_cost_usd)).toBe(
-    expected.actualCostUsd,
-  );
-}
-
-async function readReservation(
-  fixture: TestPostgresFixture,
-  reservationId: string,
-): Promise<{
-  actual_cost_usd: string | null;
-  actual_total_tokens: string | null;
-  expires_at: string;
-  status: string;
-}> {
-  const result = await fixture.query<{
-    actual_cost_usd: string | null;
-    actual_total_tokens: string | null;
-    expires_at: string;
-    status: string;
-  }>(
-    `
-      select actual_cost_usd::text,
-             actual_total_tokens::text,
-             expires_at::text,
-             status
-      from budget_reservations
-      where id = $1
-    `,
-    [reservationId],
-  );
-  const row = result.rows[0];
-  if (!row) {
-    throw new Error(`Reservation ${reservationId} was not found.`);
-  }
-  return row;
-}
-
 async function expectConcurrencyCount(
   fixture: TestPostgresFixture,
   agentId: string,
@@ -426,6 +294,20 @@ async function expectConcurrencyCount(
     [agentId],
   );
   expect(result.rows[0]?.active_count).toBe(expected);
+}
+
+async function budgetReservationsTableExists(fixture: TestPostgresFixture): Promise<boolean> {
+  const result = await fixture.query<{ exists: boolean }>(
+    `
+      select exists (
+        select 1
+        from information_schema.tables
+        where table_schema = 'public'
+          and table_name = 'budget_reservations'
+      ) as exists
+    `,
+  );
+  return result.rows[0]?.exists ?? false;
 }
 
 function pricedModel() {

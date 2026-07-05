@@ -6,11 +6,12 @@ import {
   type GatewayStartedRequestActivity,
   readGatewayActivityError,
 } from "@llmingress/db/gateway-activity-recorder";
-import type { GatewayRequestMetadata } from "@llmingress/db/gateway-request-metadata";
 import {
-  settleGatewayStreamBudget,
-  wrapProviderStreamWithActivityCompletion,
-} from "@llmingress/db/gateway-stream-pipeline";
+  type GatewayBudgetSettlement,
+  recordGatewayBudgetUsage,
+} from "@llmingress/db/gateway-agent-limits";
+import type { GatewayRequestMetadata } from "@llmingress/db/gateway-request-metadata";
+import { wrapProviderStreamWithActivityCompletion } from "@llmingress/db/gateway-stream-pipeline";
 import type { GatewayStreamingResult } from "@llmingress/db/gateway-streaming";
 import { recordGatewayRequestTrace } from "@llmingress/db/gateway-tracing";
 import {
@@ -26,6 +27,7 @@ import type { FastifyBaseLogger } from "fastify";
 export type GatewayJsonEndpointResponse = {
   activity?: GatewayRequestActivityRoute;
   body: unknown;
+  budgetSettlement?: GatewayBudgetSettlement;
   headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
@@ -85,6 +87,17 @@ export async function executeRecordedGatewayJsonRequest(input: {
   });
   const response = await input.execute(activity?.id);
   const startedAt = activity?.startedAt ?? new Date();
+  const usageCost = response.usageCost;
+
+  if (response.statusCode < 400 && usageCost) {
+    scheduleBudgetUsage({
+      agentId: input.agentId,
+      budgetSettlement: response.budgetSettlement,
+      input,
+      message: "gateway budget usage recording failed",
+      usageCost,
+    });
+  }
 
   if (activity) {
     scheduleCompleteActivity({
@@ -97,7 +110,6 @@ export async function executeRecordedGatewayJsonRequest(input: {
       statusCode: response.statusCode,
     });
 
-    const usageCost = response.usageCost;
     if (response.statusCode < 400 && usageCost) {
       runRecordingTask({
         activityId: activity.id,
@@ -176,22 +188,21 @@ export async function executeRecordedGatewayStreamingRequest(input: {
       collectChunk: (chunk) => usageCollector.collect(chunk),
       completeActivity: async ({ statusCode }) => {
         const providerUsage = usageCollector.readUsage();
-        try {
-          await settleGatewayStreamBudget({
-            providerUsage,
-            reservation: response.budgetReservation,
-            statusCode,
-            usageCost: response.usageCost,
+        const usageCost = response.usageCost;
+        const usageCostWithProviderUsage =
+          usageCost && providerUsage ? { ...usageCost, providerUsage } : usageCost;
+
+        if (statusCode < 400 && usageCostWithProviderUsage) {
+          scheduleBudgetUsage({
+            agentId: input.agentId,
+            budgetSettlement: response.budgetSettlement,
+            input,
+            message: "gateway stream budget usage recording failed",
+            usageCost: usageCostWithProviderUsage,
           });
-        } catch (error) {
-          input.logger.error(
-            { err: error, requestId: input.requestId },
-            "gateway stream settlement failed",
-          );
         }
 
-        const usageCost = response.usageCost;
-        if (activity && usageCost) {
+        if (activity && usageCostWithProviderUsage) {
           runRecordingTask({
             activityId: activity.id,
             logger: input.logger,
@@ -201,10 +212,7 @@ export async function executeRecordedGatewayStreamingRequest(input: {
               recorder.recordUsageCost({
                 activityId: activity.id,
                 agentId: input.agentId,
-                usageCost: {
-                  ...usageCost,
-                  ...(providerUsage ? { providerUsage } : {}),
-                },
+                usageCost: usageCostWithProviderUsage,
                 virtualModelId: input.virtualModelId,
               }),
           });
@@ -286,6 +294,30 @@ function scheduleCompleteActivity(input: {
         route: input.route,
         startedAt: input.activity.startedAt,
         statusCode: input.statusCode,
+      }),
+  });
+}
+
+function scheduleBudgetUsage(input: {
+  agentId: string;
+  budgetSettlement: GatewayBudgetSettlement | undefined;
+  input: {
+    logger: FastifyBaseLogger;
+    requestId: string;
+  };
+  message: string;
+  usageCost: GatewayUsageCostDetails;
+}): void {
+  runRecordingTask({
+    logger: input.input.logger,
+    message: input.message,
+    requestId: input.input.requestId,
+    task: () =>
+      recordGatewayBudgetUsage({
+        agentId: input.agentId,
+        budgetSettlement: input.budgetSettlement,
+        requestId: input.input.requestId,
+        usageCost: input.usageCost,
       }),
   });
 }

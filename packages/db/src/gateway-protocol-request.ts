@@ -1,14 +1,12 @@
 import { selectRouteAttempts } from "@llmingress/domain";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
-import { readEnabledGatewayAgentLimits } from "./gateway-agent-limits.ts";
 import {
-  buildGatewayBudgetActualUsage,
-  finalizeGatewayBudgetReservation,
-  GatewayBudgetRejectedError,
-  releaseGatewayBudgetReservation,
-  reserveGatewayBudget,
-} from "./gateway-budgets.ts";
+  enforceGatewayAgentLimits,
+  type GatewayBudgetSettlement,
+  type GatewayConcurrencyLease,
+  releaseGatewayConcurrency,
+} from "./gateway-agent-limits.ts";
 import type {
   GatewayConfigSnapshot,
   GatewayRouteCandidateSnapshot,
@@ -35,7 +33,6 @@ import {
   readGatewayMasterKeySource,
   recordGatewayProviderApiKeyLastUsed,
 } from "./gateway-provider-credentials.ts";
-import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import {
   buildGatewayRequestActivityRoute,
@@ -61,6 +58,7 @@ export type GatewayProtocolNormalizeResult<TNormalized> =
 export type GatewayProtocolResponse = {
   activity?: GatewayRequestActivityRoute;
   body: unknown;
+  budgetSettlement?: GatewayBudgetSettlement;
   headers?: Record<string, string>;
   requestMetadata?: GatewayRequestMetadata;
   statusCode: number;
@@ -112,28 +110,9 @@ export async function executeGatewayProtocolRequest<
     rawBody: input.requestBody,
     request: normalized.request,
   });
-  const enabledLimits = await readEnabledGatewayAgentLimits({
-    agentId: input.agentId,
-    databaseUrl: input.databaseUrl,
-  });
 
-  const rateLimit = await enforceGatewayRateLimits({
-    agentId: input.agentId,
-    databaseUrl: input.databaseUrl,
-    enabledLimits,
-    requestId: input.requestId,
-    requestMetadata,
-  });
-  if (!rateLimit.ok) {
-    return {
-      body: rateLimit.body,
-      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
-      requestMetadata,
-      statusCode: rateLimit.statusCode,
-    };
-  }
-
-  const concurrencyLease = rateLimit.concurrencyLease;
+  let concurrencyLease: GatewayConcurrencyLease | undefined;
+  let budgetSettlement: GatewayBudgetSettlement | undefined;
   let activity: GatewayRequestActivityRoute | undefined;
   const fallbackAttempts: FallbackFailedAttempt[] = [];
   let lastError: FallbackAttemptErrorLike | undefined;
@@ -178,6 +157,27 @@ export async function executeGatewayProtocolRequest<
       masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
     });
 
+    const limits = await enforceGatewayAgentLimits({
+      agentId: input.agentId,
+      budgetPrice: candidates[0]?.price,
+      databaseUrl: input.databaseUrl,
+      requestId: input.requestId,
+      requestMetadata,
+    });
+    if (!limits.ok) {
+      return {
+        activity,
+        body: limits.body,
+        ...(limits.retryAfterSeconds
+          ? { headers: { "retry-after": String(limits.retryAfterSeconds) } }
+          : {}),
+        requestMetadata,
+        statusCode: limits.statusCode,
+      };
+    }
+    concurrencyLease = limits.concurrencyLease;
+    budgetSettlement = limits.budgetSettlement;
+
     const success = await executeProviderFallbackAttempts<TSuccess>({
       callProvider: async ({ candidate, providerApiKey }) => {
         const providerStartedAt = new Date();
@@ -202,31 +202,6 @@ export async function executeGatewayProtocolRequest<
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
-      finalizeAttempt: (reservation, success) =>
-        finalizeGatewayBudgetReservation({
-          actual: buildGatewayBudgetActualUsage({
-            price: success.candidate.price,
-            providerUsage: readGatewayProviderTokenUsage(success.body),
-          }),
-          databaseUrl: input.databaseUrl,
-          reservation,
-        }),
-      releaseAttempt: (reservation) =>
-        releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation }),
-      reserveAttempt: async (candidate) => {
-        const reservation = await reserveGatewayBudget({
-          agentId: input.agentId,
-          databaseUrl: input.databaseUrl,
-          enabledLimits,
-          price: candidate.price,
-          requestId: input.requestId,
-          requestMetadata,
-        });
-        if (!reservation.ok) {
-          throw new GatewayBudgetRejectedError(reservation.body, reservation.statusCode);
-        }
-        return reservation.reservation;
-      },
       requestActivityId: input.requestActivityId,
       requestId: input.requestId,
     });
@@ -247,6 +222,7 @@ export async function executeGatewayProtocolRequest<
     return {
       activity,
       body: success.result.body,
+      budgetSettlement,
       requestMetadata,
       statusCode: success.result.statusCode,
       usageCost: {
@@ -260,14 +236,6 @@ export async function executeGatewayProtocolRequest<
       },
     };
   } catch (error) {
-    if (error instanceof GatewayBudgetRejectedError) {
-      return {
-        activity,
-        body: error.body,
-        requestMetadata,
-        statusCode: error.statusCode,
-      };
-    }
     const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,

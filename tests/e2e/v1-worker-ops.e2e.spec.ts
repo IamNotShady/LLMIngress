@@ -319,13 +319,13 @@ async function seedDailyOperationsData(
     `
       insert into budget_periods (
         id, agent_id, period_type, period_start, period_end,
-        tokens_used, cost_used_usd, reserved_cost_usd, created_at, updated_at
+        tokens_used, cost_used_usd, created_at, updated_at
       )
       values (
         $1, $2, 'month',
         $3::timestamptz,
         $4::timestamptz,
-        160, 9.25000000, 0.00000000,
+        160, 9.25000000,
         $5::timestamptz, $5::timestamptz
       )
     `,

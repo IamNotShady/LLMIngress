@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 function src(path: string): string {
@@ -68,12 +68,19 @@ describe("gateway cohesion fitness", () => {
 
   it("reads enabled gateway agent limits once for rate-limit and budget execution", () => {
     expect(src("packages/db/src/gateway-agent-limits.ts")).toMatch(/from agent_limits/);
-    expect(src("packages/db/src/gateway-rate-limits.ts")).not.toMatch(/from agent_limits/);
-    expect(src("packages/db/src/gateway-budgets.ts")).not.toMatch(/from agent_limits/);
-    expect(src("packages/db/src/gateway-protocol-request.ts")).toContain(
-      "readEnabledGatewayAgentLimits",
-    );
-    expect(src("packages/db/src/gateway-streaming.ts")).toContain("readEnabledGatewayAgentLimits");
+    expect(src("packages/db/src/gateway-agent-limits.ts")).toContain("enforceGatewayAgentLimits");
+    expect(existsSync("packages/db/src/gateway-rate-limits.ts")).toBe(false);
+    expect(existsSync("packages/db/src/gateway-budgets.ts")).toBe(false);
+    expect(src("packages/db/package.json")).not.toContain("./gateway-budgets");
+    for (const file of ["gateway-protocol-request", "gateway-streaming"]) {
+      const content = src(`packages/db/src/${file}.ts`);
+      expect(content).toContain("enforceGatewayAgentLimits");
+      expect(content).not.toContain("enforceGatewayRateLimits");
+      expect(content).not.toContain("reserveGatewayBudget");
+      expect(content).not.toContain("GatewayBudgetRejectedError");
+      expect(content).not.toContain("finalizeGatewayBudgetReservation");
+      expect(content).not.toContain("releaseGatewayBudgetReservation");
+    }
   });
 
   it("resolves provider dialects through the registry, not string dispatch", () => {
@@ -88,13 +95,18 @@ describe("gateway cohesion fitness", () => {
     expect(streaming).toContain("composeGatewayProviderStreamPipeline");
     const recording = src("apps/gateway/src/request-recording.ts");
     expect(recording).not.toContain("finalizeGatewayBudgetReservation");
-    expect(recording).toContain("settleGatewayStreamBudget");
+    expect(recording).not.toContain("settleGatewayStreamBudget");
+    expect(src("packages/db/src/gateway-stream-pipeline.ts")).not.toContain(
+      "finalizeGatewayBudgetReservation",
+    );
+    expect(src("packages/db/src/gateway-stream-pipeline.ts")).not.toContain(
+      "releaseGatewayBudgetReservation",
+    );
   });
 
   it("centralizes gateway env readers and agent naming", () => {
     for (const file of [
       "gateway-streaming",
-      "gateway-budgets",
       "gateway-request-metadata",
       "gateway-stream-pipeline",
     ]) {

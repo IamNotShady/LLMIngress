@@ -82,7 +82,6 @@ const backupTableGroups: Record<BackupTableGroup, readonly string[]> = {
     "request_usage",
     "request_costs",
     "fallback_events",
-    "budget_reservations",
     "jobs",
     "job_attempts",
     "provider_health_events",

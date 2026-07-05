@@ -116,9 +116,9 @@
       "types": "./src/gateway-auth.ts",
       "default": "./src/gateway-auth.ts"
     },
-    "./gateway-budgets": {
-      "types": "./src/gateway-budgets.ts",
-      "default": "./src/gateway-budgets.ts"
+    "./gateway-agent-limits": {
+      "types": "./src/gateway-agent-limits.ts",
+      "default": "./src/gateway-agent-limits.ts"
     },
     "./gateway-chat-completions": {
       "types": "./src/gateway-chat-completions.ts",
@@ -247,10 +247,6 @@
     "./worker-retention-cleanup": {
       "types": "./src/worker-retention-cleanup.ts",
       "default": "./src/worker-retention-cleanup.ts"
-    },
-    "./worker-stale-reservations": {
-      "types": "./src/worker-stale-reservations.ts",
-      "default": "./src/worker-stale-reservations.ts"
     },
     "./worker-stale-concurrency": {
       "types": "./src/worker-stale-concurrency.ts",

@@ -432,6 +432,28 @@
   - `jq empty feature_list.json`
 - Remaining risks/non-goals: no new tracker feature was added; broader streaming/non-streaming adapter unification and Console/Worker DB pooling remain out of scope.
 
+## 2026-07-05 Gateway Agent Limits Unified Enforcement Follow-up
+
+- Replaced the split Gateway request-start limit path with `gateway-agent-limits`:
+  - `enforceGatewayAgentLimits` reads enabled `agent_limits` once and handles budget, per-request token, RPM, TPM, and concurrency checks in one transaction.
+  - JSON and streaming Gateway request paths no longer call `reserveGatewayBudget`, `finalizeGatewayBudgetReservation`, `releaseGatewayBudgetReservation`, `settleGatewayStreamBudget`, or `enforceGatewayRateLimits`.
+  - Budget start checks use current `budget_periods.cost_used_usd` only. Successful JSON/streaming responses schedule `recordGatewayBudgetUsage` in the background after completion; failures and aborted streams do not charge budget.
+- Deleted the legacy budget reservation runtime surface:
+  - Removed `packages/db/src/gateway-budgets.ts`, `packages/db/src/gateway-rate-limits.ts`, and `packages/db/src/worker-stale-reservations.ts`.
+  - Removed stale reservation worker scheduling/handler registration and package exports.
+  - Added migration `0003_remove_budget_reservations.sql` to drop `budget_reservations`, `budget_periods.reserved_*`, and `stale_reservation_cleanup` job type.
+  - Updated Console/Worker budget usage queries, backup table list, architecture docs, and settlement tests to the post-charge budget-period model.
+- Verification completed so far:
+  - `pnpm exec vitest run tests/features/gateway-cohesion-refactor.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts tests/features/gateway-recording-resilience.unit.test.ts`
+  - `pnpm exec vitest run tests/features/v1-platform.unit.test.ts`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm test:e2e tests/e2e/gateway-settlement-integrity.e2e.spec.ts`
+  - `pnpm run db:migrate:check`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 18 passing features re-verified.
+- Remaining risks/non-goals: budget now uses accepted post-charge semantics, so concurrent successful requests can briefly exceed the configured budget before their background usage writes land. Historical migrations still create then remove reservation schema via migration `0003`; old migrations were not rewritten to avoid checksum mismatch.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

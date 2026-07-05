@@ -2,10 +2,27 @@
 
 ## Current State
 
-- Date: 2026-07-03
-- Branch: `worktree-console-dark-restyle`
-- Base: `dev` at `d28e21ac`
-- Status: Console dark restyle verified; UI/UX review batches 1–4 implemented and verified (`console-p0-layout`, `console-semantic-status`, `console-shared-formatters`, `console-providers-ia-and-forms`).
+- Date: 2026-07-05
+- Branch: `worktree-gateway-pipeline-hardening`
+- Base: `585d5f30`
+- Status: Gateway cohesion refactor implemented and verified (`gateway-cohesion-refactor`).
+
+## 2026-07-05 Gateway Cohesion Refactor
+
+- Implemented `gateway-cohesion-refactor` as seven scoped commits:
+  - `951dd98c` extracted provider credential and OAuth loading from the chat endpoint module.
+  - `db25a1c6` unified Gateway endpoint error codes behind one `GatewayErrorCode` union.
+  - `93307302` split streaming usage collection from usage recording and moved budget actual-usage conversion to the budget owner.
+  - `9d7ce2a2` folded the four JSON protocol endpoints into `GatewayProtocolSpec` plus `executeGatewayProtocolRequest`.
+  - `b0f9ba1f` introduced the provider streaming dialect registry.
+  - `ae7e817b` centralized stream wrapper composition and stream budget settlement ownership.
+  - `f47ea659` centralized Gateway env readers and renamed runtime `agentApiKeyId` usage to `agentId`.
+- Behavior alignment was intentionally limited to two inconsistencies from the plan:
+  - `messages`, `responses`, and `embeddings` now match chat by passing sanitized non-retry provider 4xx failures through as `provider_rejected_request` with the upstream status.
+  - Chat all-subscription candidate failures now return `provider_protocol_unsupported` instead of the misleading `provider_credentials_missing`.
+- `tests/features/gateway-cohesion-refactor.unit.test.ts` is the structural fitness test for future changes. New code that moves credentials back into endpoint modules, reintroduces endpoint-local error unions/casts, bypasses the protocol template, branches streaming behavior on provider-key strings, or reintroduces `agentApiKeyId` naming will fail there before runtime behavior drifts.
+- Non-goals remain unchanged: splitting `packages/db` into a dedicated runtime/routing package is still a separate architecture plan, and provider adapter optional capability splitting stays deferred because S4 now centralizes the runtime capability check.
+- Final verification passed: `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 18 passing feature verifications re-run.
 
 ## 2026-07-04 PR #15 CI Fix
 

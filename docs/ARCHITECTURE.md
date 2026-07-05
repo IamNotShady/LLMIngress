@@ -192,6 +192,17 @@ Gateway Service
     `-- Periodic reconcile loop
 ```
 
+Gateway JSON protocol endpoints share the `GatewayProtocolSpec` extension point
+and execute through `executeGatewayProtocolRequest`. A new JSON protocol should
+add a spec object for normalization, metadata extraction, provider invocation,
+and protocol-specific unsupported-state errors instead of copying endpoint
+orchestration.
+
+Streaming provider differences are resolved through the provider dialect
+registry in `packages/provider/src/dialect.ts`. A new streaming dialect should
+register a `ProviderStreamingDialect` entry there, so Gateway streaming does not
+branch on provider-key strings.
+
 ### 4.1 Public API Layer
 
 Gateway exposes one unified endpoint surface to AI Agents, with priority support
@@ -1344,7 +1355,9 @@ domain rules must not live in `apps/gateway`. The current repository has not
 split out `packages/routing` yet: Gateway runtime domain modules currently live
 under the `gateway-*` prefix in `packages/db/src`, shared routing calculation
 lives in `packages/domain`, and provider adapters live in `packages/provider`.
-A dedicated routing/runtime package split is a separate plan.
+A dedicated routing/runtime package split is a separate plan. Gateway runtime
+structure invariants are enforced by
+`tests/features/gateway-cohesion-refactor.unit.test.ts`.
 
 ### 10.2 Console App Only Handles Control-Plane Experience
 

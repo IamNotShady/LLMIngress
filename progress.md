@@ -4,8 +4,15 @@
 
 - Date: 2026-07-05
 - Branch: `dev`
-- Base: `1f493c42`
-- Status: Gateway observability writes async follow-up implemented and verified.
+- Base: `3dab4dda`
+- Status: Gateway agent limits single-read follow-up implemented and verified.
+
+## 2026-07-05 Gateway Agent Limits Single-Read Follow-up
+
+- Added one shared Gateway enabled-limits reader for `agent_limits`; JSON and streaming request paths now read enabled Agent limits once and pass the same snapshot to rate-limit and budget execution.
+- Kept rate-limit window updates and budget reservation/finalization in their existing synchronous transactions; only the duplicated `agent_limits` lookup moved.
+- Added structural fitness coverage that keeps `from agent_limits` out of the separate rate-limit and budget executors.
+- Verification passed: `pnpm exec vitest run tests/features/gateway-cohesion-refactor.unit.test.ts`, focused settlement/error-fidelity unit tests, DB typecheck, Gateway typecheck, `pnpm run lint`, `pnpm run verify`, and `pnpm run verify:features` with all 18 passing features re-verified.
 
 ## 2026-07-05 Gateway Observability Writes Async Follow-up
 

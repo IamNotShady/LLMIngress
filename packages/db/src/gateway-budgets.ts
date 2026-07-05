@@ -5,6 +5,10 @@ import {
   type PostgresQueryResultRow,
   withPostgresTransaction,
 } from "@llmingress/db/client";
+import {
+  type GatewayEnabledAgentLimit,
+  readEnabledGatewayAgentLimits,
+} from "./gateway-agent-limits.ts";
 import { gatewayBudgetReservationTtlSeconds } from "./gateway-env.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import type { GatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
@@ -49,13 +53,6 @@ export type GatewayBudgetDecision =
       statusCode: 402;
     };
 
-type AgentBudgetLimitRow = PostgresQueryResultRow & {
-  limit_type: "budget" | "token";
-  limit_value: string;
-  period: string;
-  unit: string;
-};
-
 type BudgetPeriodRow = PostgresQueryResultRow & {
   cost_used_usd: string;
   id: string;
@@ -79,12 +76,19 @@ export class GatewayBudgetRejectedError extends Error {
 export async function reserveGatewayBudget(input: {
   agentId: string;
   databaseUrl?: string;
+  enabledLimits?: readonly GatewayEnabledAgentLimit[];
   price: ModelTokenPrice;
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayBudgetDecision> {
+  const enabledLimits =
+    input.enabledLimits ??
+    (await readEnabledGatewayAgentLimits({
+      agentId: input.agentId,
+      databaseUrl: input.databaseUrl,
+    }));
   return withPostgresTransaction(input.databaseUrl, async (client) => {
-    const limits = await readEnabledBudgetLimits(client, input.agentId);
+    const limits = readEnabledBudgetLimits(enabledLimits);
     const totalTokens =
       input.requestMetadata.estimatedInputTokens + input.requestMetadata.estimatedOutputTokens;
 
@@ -319,44 +323,36 @@ function budgetFailure(code: GatewayBudgetErrorCode, requestId: string): Gateway
   };
 }
 
-async function readEnabledBudgetLimits(
-  client: PostgresQueryClient,
-  agentId: string,
-): Promise<
-  Array<{
-    limitType: "budget" | "token";
-    limitValue: number;
-    period: string;
-    unit: string;
-  }>
-> {
-  const result = await client.query<AgentBudgetLimitRow>(
-    `
-      select limit_type,
-             period,
-             limit_value::text,
-             unit
-      from agent_limits
-      where agent_id = $1
-        and enabled = true
-        and limit_type in ('budget', 'token')
-      order by case period
-        when 'request' then 0
-        when 'hour' then 1
-        when 'day' then 2
-        when 'week' then 3
-        else 4
-      end
-    `,
-    [agentId],
-  );
+function readEnabledBudgetLimits(enabledLimits: readonly GatewayEnabledAgentLimit[]): Array<{
+  limitType: "budget" | "token";
+  limitValue: number;
+  period: string;
+  unit: string;
+}> {
+  return enabledLimits
+    .filter(
+      (limit): limit is GatewayEnabledAgentLimit & { limitType: "budget" | "token" } =>
+        limit.limitType === "budget" || limit.limitType === "token",
+    )
+    .sort((a, b) => budgetPeriodOrder(a.period) - budgetPeriodOrder(b.period))
+    .map((limit) => ({
+      limitType: limit.limitType,
+      limitValue: limit.limitValue,
+      period: limit.period,
+      unit: limit.unit,
+    }));
+}
 
-  return result.rows.map((row) => ({
-    limitType: row.limit_type,
-    limitValue: Number(row.limit_value),
-    period: row.period,
-    unit: row.unit,
-  }));
+function budgetPeriodOrder(period: string): number {
+  return period === "request"
+    ? 0
+    : period === "hour"
+      ? 1
+      : period === "day"
+        ? 2
+        : period === "week"
+          ? 3
+          : 4;
 }
 
 async function lockBudgetPeriod(

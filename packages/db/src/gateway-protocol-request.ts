@@ -1,6 +1,7 @@
 import { selectRouteAttempts } from "@llmingress/domain";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
+import { readEnabledGatewayAgentLimits } from "./gateway-agent-limits.ts";
 import {
   buildGatewayBudgetActualUsage,
   finalizeGatewayBudgetReservation,
@@ -111,10 +112,15 @@ export async function executeGatewayProtocolRequest<
     rawBody: input.requestBody,
     request: normalized.request,
   });
+  const enabledLimits = await readEnabledGatewayAgentLimits({
+    agentId: input.agentId,
+    databaseUrl: input.databaseUrl,
+  });
 
   const rateLimit = await enforceGatewayRateLimits({
     agentId: input.agentId,
     databaseUrl: input.databaseUrl,
+    enabledLimits,
     requestId: input.requestId,
     requestMetadata,
   });
@@ -211,6 +217,7 @@ export async function executeGatewayProtocolRequest<
         const reservation = await reserveGatewayBudget({
           agentId: input.agentId,
           databaseUrl: input.databaseUrl,
+          enabledLimits,
           price: candidate.price,
           requestId: input.requestId,
           requestMetadata,

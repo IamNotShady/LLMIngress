@@ -66,6 +66,16 @@ describe("gateway cohesion fitness", () => {
     }
   });
 
+  it("reads enabled gateway agent limits once for rate-limit and budget execution", () => {
+    expect(src("packages/db/src/gateway-agent-limits.ts")).toMatch(/from agent_limits/);
+    expect(src("packages/db/src/gateway-rate-limits.ts")).not.toMatch(/from agent_limits/);
+    expect(src("packages/db/src/gateway-budgets.ts")).not.toMatch(/from agent_limits/);
+    expect(src("packages/db/src/gateway-protocol-request.ts")).toContain(
+      "readEnabledGatewayAgentLimits",
+    );
+    expect(src("packages/db/src/gateway-streaming.ts")).toContain("readEnabledGatewayAgentLimits");
+  });
+
   it("resolves provider dialects through the registry, not string dispatch", () => {
     const streaming = src("packages/db/src/gateway-streaming.ts");
     expect(streaming).not.toMatch(/providerKey === "/);

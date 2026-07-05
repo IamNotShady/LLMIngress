@@ -5,10 +5,15 @@ import {
   type PostgresQueryResultRow,
   withPostgresTransaction,
 } from "@llmingress/db/client";
+import {
+  type GatewayAgentLimitEnforcementPolicy,
+  type GatewayEnabledAgentLimit,
+  readEnabledGatewayAgentLimits,
+} from "./gateway-agent-limits.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 
 export type GatewayRateLimitType = "concurrency" | "rpm" | "tpm";
-export type GatewayRateLimitEnforcementPolicy = "block" | "warn_only";
+export type GatewayRateLimitEnforcementPolicy = GatewayAgentLimitEnforcementPolicy;
 
 export type GatewayRateLimitErrorBody = {
   error: {
@@ -38,13 +43,6 @@ export type GatewayConcurrencyLease = {
   window: WindowBoundary;
 };
 
-type AgentLimitRow = PostgresQueryResultRow & {
-  enforcement_policy: GatewayRateLimitEnforcementPolicy;
-  limit_type: GatewayRateLimitType;
-  limit_value: string;
-  manual_bypass: boolean;
-};
-
 type RateLimitWindowRow = PostgresQueryResultRow & {
   active_count: number;
   request_count: number;
@@ -59,11 +57,18 @@ type WindowBoundary = {
 export async function enforceGatewayRateLimits(input: {
   agentId: string;
   databaseUrl?: string;
+  enabledLimits?: readonly GatewayEnabledAgentLimit[];
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayRateLimitDecision> {
+  const enabledLimits =
+    input.enabledLimits ??
+    (await readEnabledGatewayAgentLimits({
+      agentId: input.agentId,
+      databaseUrl: input.databaseUrl,
+    }));
   return withPostgresTransaction(input.databaseUrl, async (client) => {
-    const limits = await readEnabledGatewayRateLimits(client, input.agentId);
+    const limits = readEnabledGatewayRateLimits(enabledLimits);
     if (limits.length === 0) {
       return { ok: true };
     }
@@ -220,42 +225,32 @@ export function createGatewayRateLimitErrorBody(input: {
   };
 }
 
-async function readEnabledGatewayRateLimits(
-  client: PostgresQueryClient,
-  agentId: string,
-): Promise<
-  Array<{
-    enforcementPolicy: GatewayRateLimitEnforcementPolicy;
-    limitType: GatewayRateLimitType;
-    limitValue: number;
-    manualBypass: boolean;
-  }>
-> {
-  const result = await client.query<AgentLimitRow>(
-    `
-      select limit_type,
-             limit_value::text,
-             enforcement_policy,
-             manual_bypass
-      from agent_limits
-      where agent_id = $1
-        and enabled = true
-        and (
-          (limit_type = 'concurrency' and period = 'request' and unit = 'requests')
-          or (limit_type = 'rpm' and period = 'minute' and unit = 'requests')
-          or (limit_type = 'tpm' and period = 'minute' and unit = 'tokens')
-        )
-      order by case limit_type when 'concurrency' then 1 when 'rpm' then 2 else 3 end
-    `,
-    [agentId],
-  );
+function readEnabledGatewayRateLimits(enabledLimits: readonly GatewayEnabledAgentLimit[]): Array<{
+  enforcementPolicy: GatewayRateLimitEnforcementPolicy;
+  limitType: GatewayRateLimitType;
+  limitValue: number;
+  manualBypass: boolean;
+}> {
+  return enabledLimits
+    .filter(
+      (limit): limit is GatewayEnabledAgentLimit & { limitType: GatewayRateLimitType } =>
+        (limit.limitType === "concurrency" &&
+          limit.period === "request" &&
+          limit.unit === "requests") ||
+        (limit.limitType === "rpm" && limit.period === "minute" && limit.unit === "requests") ||
+        (limit.limitType === "tpm" && limit.period === "minute" && limit.unit === "tokens"),
+    )
+    .sort((a, b) => rateLimitOrder(a.limitType) - rateLimitOrder(b.limitType))
+    .map((limit) => ({
+      enforcementPolicy: limit.enforcementPolicy,
+      limitType: limit.limitType,
+      limitValue: limit.limitValue,
+      manualBypass: limit.manualBypass,
+    }));
+}
 
-  return result.rows.map((row) => ({
-    enforcementPolicy: row.enforcement_policy,
-    limitType: row.limit_type,
-    limitValue: Number(row.limit_value),
-    manualBypass: row.manual_bypass,
-  }));
+function rateLimitOrder(limitType: GatewayRateLimitType): number {
+  return limitType === "concurrency" ? 1 : limitType === "rpm" ? 2 : 3;
 }
 
 async function lockRateLimitWindow(

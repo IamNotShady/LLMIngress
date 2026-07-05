@@ -8,6 +8,7 @@ import {
   resolveProviderStreamingDialect,
 } from "@llmingress/provider/dialect";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
+import { readEnabledGatewayAgentLimits } from "./gateway-agent-limits.ts";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import {
   type GatewayBudgetReservation,
@@ -122,10 +123,15 @@ export async function executeGatewayStreamingRequest(input: {
   if (!normalized.ok) {
     return normalized;
   }
+  const enabledLimits = await readEnabledGatewayAgentLimits({
+    agentId: input.agentId,
+    databaseUrl: input.databaseUrl,
+  });
 
   const rateLimit = await enforceGatewayRateLimits({
     agentId: input.agentId,
     databaseUrl: input.databaseUrl,
+    enabledLimits,
     requestId: input.requestId,
     requestMetadata: normalized.requestMetadata,
   });
@@ -247,6 +253,7 @@ export async function executeGatewayStreamingRequest(input: {
         const budget = await reserveGatewayBudget({
           agentId: input.agentId,
           databaseUrl: input.databaseUrl,
+          enabledLimits,
           price: attemptedCandidate.price,
           requestId: input.requestId,
           requestMetadata: normalized.requestMetadata,

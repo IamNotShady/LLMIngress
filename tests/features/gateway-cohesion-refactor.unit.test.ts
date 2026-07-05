@@ -71,4 +71,13 @@ describe("gateway cohesion fitness", () => {
     expect(streaming).not.toMatch(/providerKey === "/);
     expect(streaming).toContain("resolveProviderStreamingDialect");
   });
+
+  it("owns stream wrapper composition in one module", () => {
+    const streaming = src("packages/db/src/gateway-streaming.ts");
+    expect(streaming).not.toContain("wrapProviderStreamWithErrorRecording(");
+    expect(streaming).toContain("composeGatewayProviderStreamPipeline");
+    const recording = src("apps/gateway/src/request-recording.ts");
+    expect(recording).not.toContain("finalizeGatewayBudgetReservation");
+    expect(recording).toContain("settleGatewayStreamBudget");
+  });
 });

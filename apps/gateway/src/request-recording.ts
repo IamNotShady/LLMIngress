@@ -6,16 +6,12 @@ import {
   type GatewayStartedRequestActivity,
   readGatewayActivityError,
 } from "@llmingress/db/gateway-activity-recorder";
-import {
-  buildGatewayBudgetActualUsage,
-  finalizeGatewayBudgetReservation,
-  releaseGatewayBudgetReservation,
-} from "@llmingress/db/gateway-budgets";
 import type { GatewayRequestMetadata } from "@llmingress/db/gateway-request-metadata";
 import {
-  type GatewayStreamingResult,
+  settleGatewayStreamBudget,
   wrapProviderStreamWithActivityCompletion,
-} from "@llmingress/db/gateway-streaming";
+} from "@llmingress/db/gateway-stream-pipeline";
+import type { GatewayStreamingResult } from "@llmingress/db/gateway-streaming";
 import { recordGatewayRequestTrace } from "@llmingress/db/gateway-tracing";
 import {
   buildGatewayProviderUsageResponseBody,
@@ -169,19 +165,12 @@ export async function executeRecordedGatewayStreamingRequest(input: {
       completeActivity: async ({ statusCode }) => {
         const providerUsage = usageCollector.readUsage();
         try {
-          if (statusCode < 400) {
-            await finalizeGatewayBudgetReservation({
-              actual: response.usageCost
-                ? buildGatewayBudgetActualUsage({
-                    price: response.usageCost.actualPrice,
-                    providerUsage,
-                  })
-                : undefined,
-              reservation: response.budgetReservation,
-            });
-          } else {
-            await releaseGatewayBudgetReservation({ reservation: response.budgetReservation });
-          }
+          await settleGatewayStreamBudget({
+            providerUsage,
+            reservation: response.budgetReservation,
+            statusCode,
+            usageCost: response.usageCost,
+          });
         } catch (error) {
           input.logger.error(
             { err: error, requestId: input.requestId },

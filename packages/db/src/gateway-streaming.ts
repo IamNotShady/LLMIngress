@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { PassThrough, Readable } from "node:stream";
+import type { Readable } from "node:stream";
 import { getPostgresPool } from "@llmingress/db/client";
-import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { selectRouteAttempts } from "@llmingress/domain";
 import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
-import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import {
   type ProviderStreamingDialect,
   resolveProviderStreamingDialect,
@@ -57,6 +55,11 @@ import {
   requireGatewayRoutePolicy,
   selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
+import {
+  composeGatewayProviderStreamPipeline,
+  type GatewayRuntimeStreamError,
+  readChunkWithTimeout,
+} from "./gateway-stream-pipeline.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
@@ -83,11 +86,6 @@ export type GatewayStreamingResult =
       requestMetadata?: GatewayRequestMetadata;
       statusCode: number;
     };
-
-export type GatewayRuntimeStreamError = {
-  errorCode: "provider_stream_error";
-  errorMessage: string;
-};
 
 type GatewayStreamingPayload = {
   estimatedInputTokens: number;
@@ -496,31 +494,24 @@ export async function executeGatewayStreamingRequest(input: {
           routeDecision,
         });
 
-        const body = wrapProviderStreamWithConcurrencyRelease(
-          wrapProviderStreamWithMidStreamHealthRecording(
-            wrapProviderStreamWithErrorRecording(createReadaheadStream(reader, firstValue), {
-              recordRuntimeError: (error) =>
-                recordGatewayRuntimeError({
-                  databaseUrl: input.databaseUrl,
-                  error,
-                  metadata: {
-                    protocol: input.protocol,
-                    providerModelId: attemptedCandidate.providerModelId,
-                    requestId: input.requestId,
-                    virtualModelId: input.virtualModel.id,
-                  },
-                }),
-            }),
-            {
+        const body = composeGatewayProviderStreamPipeline({
+          candidate: attemptedCandidate,
+          databaseUrl: input.databaseUrl,
+          firstValue,
+          lease: concurrencyLease,
+          reader,
+          recordRuntimeError: (error) =>
+            recordGatewayRuntimeError({
               databaseUrl: input.databaseUrl,
-              candidate: attemptedCandidate,
-            },
-          ),
-          {
-            databaseUrl: input.databaseUrl,
-            lease: concurrencyLease,
-          },
-        );
+              error,
+              metadata: {
+                protocol: input.protocol,
+                providerModelId: attemptedCandidate.providerModelId,
+                requestId: input.requestId,
+                virtualModelId: input.virtualModel.id,
+              },
+            }),
+        });
         const budgetReservation = currentReservation;
         // Transfer ownership to the caller/stream wrappers — clear so outer catch doesn't double-release.
         currentReservation = undefined;
@@ -597,243 +588,12 @@ export function streamConnectTimeoutMs(
   return readPositiveIntegerEnv(env.GATEWAY_STREAM_CONNECT_TIMEOUT_MS, 30_000);
 }
 
-export function streamIdleTimeoutMs(env: Record<string, string | undefined> = process.env): number {
-  return readPositiveIntegerEnv(env.GATEWAY_STREAM_IDLE_TIMEOUT_MS, 120_000);
-}
-
-async function readChunkWithTimeout(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  timeoutMs: number,
-  message: string,
-): Promise<ReadableStreamReadResult<Uint8Array>> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-    timer.unref?.();
-  });
-  try {
-    return await Promise.race([reader.read(), timeout]);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
-}
-
-// Re-emit the already-read first chunk, then pump the rest from the same reader
-// (the web stream is locked once getReader() is called, so Readable.fromWeb can
-// no longer be used). Backpressure-aware; cancels the reader if the consumer closes.
-export function createReadaheadStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  firstValue: Uint8Array,
-  options: { idleTimeoutMs?: number } = {},
-): Readable {
-  const idleTimeoutMs = options.idleTimeoutMs ?? streamIdleTimeoutMs();
-  let readerCanceled = false;
-
-  async function cancelReader(): Promise<void> {
-    if (readerCanceled) {
-      return;
-    }
-    readerCanceled = true;
-    await reader.cancel().catch(() => undefined);
-  }
-
-  async function* pump(): AsyncGenerator<Buffer> {
-    yield Buffer.from(firstValue);
-    try {
-      while (true) {
-        const { done, value } = await readChunkWithTimeout(
-          reader,
-          idleTimeoutMs,
-          "Provider stream stalled mid-response.",
-        );
-        if (done) {
-          return;
-        }
-        if (value) {
-          yield Buffer.from(value);
-        }
-      }
-    } finally {
-      // Consumer closed/destroyed (or stream ended) — release the upstream reader.
-      await cancelReader();
-    }
-  }
-  const stream = Readable.from(pump());
-  const destroy = stream.destroy.bind(stream);
-  stream.destroy = (error?: Error | null) => {
-    void cancelReader();
-    return destroy(error ?? undefined);
-  };
-  stream.once("close", () => {
-    void cancelReader();
-  });
-  return stream;
-}
-
-export function wrapProviderStreamWithActivityCompletion(
-  source: Readable,
-  input: {
-    collectChunk?: (chunk: Buffer | Uint8Array | string) => void;
-    completeActivity: (completion: { statusCode: number }) => Promise<void>;
-    errorStatusCode?: number;
-    statusCode: number;
-  },
-): Readable {
-  const output = new PassThrough({ highWaterMark: 16 * 1024 });
-  let settled = false;
-
-  if (input.collectChunk) {
-    source.on("data", input.collectChunk);
-  }
-  source.pipe(output, { end: false });
-  source.once("end", () => {
-    void settleActivity(input.statusCode)
-      .catch(() => undefined)
-      .finally(() => output.end());
-  });
-  source.once("error", (error) => {
-    void settleActivity(input.errorStatusCode ?? 502)
-      .catch(() => undefined)
-      .finally(() => {
-        output.destroy(error instanceof Error ? error : new Error("Provider stream failed."));
-      });
-  });
-  source.once("close", () => {
-    if (settled || source.readableEnded) {
-      return;
-    }
-    void settleActivity(input.errorStatusCode ?? 499)
-      .catch(() => undefined)
-      .finally(() => output.destroy());
-  });
-  output.once("close", () => {
-    if (!source.destroyed && !source.readableEnded) {
-      source.destroy();
-    }
-  });
-
-  async function settleActivity(statusCode: number): Promise<void> {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    await input.completeActivity({ statusCode });
-  }
-
-  return output;
-}
-
 function readPositiveIntegerEnv(value: string | undefined, fallback: number): number {
   if (value === undefined) {
     return fallback;
   }
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export function wrapProviderStreamWithErrorRecording(
-  source: Readable,
-  input: {
-    recordRuntimeError: (error: GatewayRuntimeStreamError) => Promise<void>;
-  },
-): Readable {
-  const output = new PassThrough();
-  let recorded = false;
-
-  source.on("error", (error) => {
-    const runtimeError: GatewayRuntimeStreamError = {
-      errorCode: "provider_stream_error",
-      errorMessage: error instanceof Error ? error.message : "Provider stream failed.",
-    };
-
-    const record = recorded
-      ? Promise.resolve()
-      : input.recordRuntimeError(runtimeError).catch(() => undefined);
-    recorded = true;
-    void record.finally(() => {
-      output.destroy(error instanceof Error ? error : new Error(runtimeError.errorMessage));
-    });
-  });
-  source.pipe(output);
-  output.once("close", () => {
-    if (!source.destroyed && !source.readableEnded) {
-      source.destroy();
-    }
-  });
-
-  return output;
-}
-
-/**
- * Records provider/model health when the stream errors AFTER at least one data chunk has
- * been received (bytesSent). A started-then-broken stream is a hard failure that cannot
- * be retried transparently, so we persist the health event via request_path trigger.
- * Health recording is best-effort (.catch(()=>undefined)) and must not crash the stream.
- */
-function wrapProviderStreamWithMidStreamHealthRecording(
-  source: Readable,
-  input: {
-    candidate: FallbackChainCandidate;
-    databaseUrl?: string;
-  },
-): Readable {
-  let bytesSent = false;
-
-  source.on("data", () => {
-    bytesSent = true;
-  });
-
-  source.once("error", (error) => {
-    const errorMessage = error instanceof Error ? error.message : "Provider stream failed.";
-    const healthStatus = classifyProviderFailureStatus({
-      errorCode: "provider_stream_error",
-      errorMessage,
-      // statusCode undefined → classifyProviderFailureStatus treats as runtime failure
-      statusCode: undefined,
-    });
-    const shared = {
-      databaseUrl: input.databaseUrl,
-      errorCode: "provider_stream_error",
-      errorMessage,
-      metadata: { failedBeforeFirstByte: !bytesSent },
-      status: healthStatus,
-      trigger: "request_path" as const,
-    };
-    void recordProviderHealthEvent({
-      ...shared,
-      providerId: input.candidate.providerId,
-    }).catch(() => undefined);
-    void recordProviderHealthEvent({
-      ...shared,
-      providerId: input.candidate.providerId,
-      providerModelId: input.candidate.providerModelId,
-    }).catch(() => undefined);
-  });
-
-  return source;
-}
-
-function wrapProviderStreamWithConcurrencyRelease(
-  source: Readable,
-  input: {
-    databaseUrl?: string;
-    lease: GatewayConcurrencyLease | undefined;
-  },
-): Readable {
-  let settled = false;
-  const release = () => {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    void releaseGatewayConcurrency(input);
-  };
-  source.once("end", release);
-  source.once("error", release);
-  source.once("close", release);
-  return source;
 }
 
 function buildStreamingPayload(input: {

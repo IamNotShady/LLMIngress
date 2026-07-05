@@ -1,10 +1,10 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
+  composeGatewayProviderStreamPipeline,
   createReadaheadStream,
   wrapProviderStreamWithActivityCompletion,
-  wrapProviderStreamWithErrorRecording,
-} from "../../packages/db/src/gateway-streaming";
+} from "../../packages/db/src/gateway-stream-pipeline";
 import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 import {
   createClaudeCodeProviderAdapter,
@@ -102,7 +102,7 @@ describe("streaming backpressure", () => {
     expect(source.destroyed).toBe(true);
   });
 
-  it("cancels the readahead reader through nested wrappers when the client side closes", async () => {
+  it("cancels the readahead reader through the composed stream pipeline when the client side closes", async () => {
     let cancelCalls = 0;
     let runtimeErrorRecords = 0;
     const stalled = new ReadableStream<Uint8Array>({
@@ -115,15 +115,34 @@ describe("streaming backpressure", () => {
     });
     const reader = stalled.getReader();
     const first = await reader.read();
-    const source = createReadaheadStream(reader, first.value as Uint8Array, {
+    const source = composeGatewayProviderStreamPipeline({
+      candidate: {
+        apiKey: "provider-key",
+        baseUrl: "http://provider.test/v1",
+        candidateOrder: 1,
+        displayName: "Fake Model",
+        healthStatus: "healthy",
+        modelId: "fake-model",
+        price: {
+          modelId: "fake-model",
+          priceVersion: "test",
+          providerKey: "openai",
+          reason: "no_current_price",
+          status: "unknown_price",
+        },
+        providerId: "provider-1",
+        providerKey: "openai",
+        providerModelId: "provider-model-1",
+      },
+      firstValue: first.value as Uint8Array,
       idleTimeoutMs: 10_000,
-    });
-    const recorded = wrapProviderStreamWithErrorRecording(source, {
+      lease: undefined,
+      reader,
       recordRuntimeError: async () => {
         runtimeErrorRecords += 1;
       },
     });
-    const wrapped = wrapProviderStreamWithActivityCompletion(recorded, {
+    const wrapped = wrapProviderStreamWithActivityCompletion(source, {
       completeActivity: async () => undefined,
       statusCode: 200,
     });

@@ -20,12 +20,7 @@ import {
   releaseGatewayBudgetReservation,
   reserveGatewayBudget,
 } from "./gateway-budgets.ts";
-import {
-  attachGatewayProviderCredentials,
-  normalizeOpenAIChatCompletionRequest,
-  readGatewayMasterKeySource,
-  recordGatewayProviderApiKeyLastUsed,
-} from "./gateway-chat-completions.ts";
+import { normalizeOpenAIChatCompletionRequest } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import { toGatewayErrorResponseParts, truncateProviderMessage } from "./gateway-errors.ts";
@@ -38,6 +33,11 @@ import {
   recordSucceededAttemptInDatabase,
 } from "./gateway-fallback-chain.ts";
 import { normalizeAnthropicMessagesRequest } from "./gateway-messages.ts";
+import {
+  attachGatewayProviderCredentials,
+  readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
+} from "./gateway-provider-credentials.ts";
 import {
   enforceGatewayRateLimits,
   type GatewayConcurrencyLease,

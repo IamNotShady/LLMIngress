@@ -190,6 +190,19 @@
       ],
       "status": "passing",
       "evidence": "2026-07-04: TDD red->green. Added configurable Gateway bodyLimit defaulting to 10 MiB, safe x-request-id validation, non-mutating baseline candidate selection, CJK-aware token estimation, optional /metrics bearer token enforcement, OpenAI chat passthrough whitelist with max_completion_tokens precedence, streaming payload passthrough parity, OAuth row-lock refresh single-flight, and OAuth request timeout. Documented chat passthrough scope, multimodal and TPM non-goals, and the current Gateway runtime module boundary. Focused unit and E2E passed; pnpm run lint plus @llmingress/db, @llmingress/provider, and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 16 previously passing features re-verified before status update. Follow-up OAuth credential read releases the outer pooled client before loading/refreshing subscription OAuth tokens and covers pool max=1 expired-token refresh; focused unit, db/provider typecheck, lint, pnpm run verify, and pnpm run verify:features passed with all 17 passing features re-verified."
+    },
+    {
+      "id": "gateway-cohesion-refactor",
+      "name": "Gateway Cohesion Refactor",
+      "description": "Gateway runtime modules hold single responsibilities behind enforced structural invariants: provider credentials live in their own module, one gateway error-code union with no casts, SSE usage parsing is separate from usage recording, all four JSON protocol endpoints share one orchestration template (with upstream 4xx passthrough aligned across endpoints), streaming provider dialects resolve through a registry instead of providerKey string dispatch, stream wrapper composition and budget settlement each have a single owner, and gateway env access plus agent naming are consolidated — all verified by a fitness test over module sources and by unchanged endpoint behavior.",
+      "verification": "pnpm exec vitest run tests/features/gateway-cohesion-refactor.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "gateway-error-fidelity",
+        "gateway-settlement-integrity",
+        "gateway-stream-robustness"
+      ],
+      "status": "failing",
+      "evidence": ""
     }
   ]
 }

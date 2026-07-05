@@ -21,6 +21,7 @@ const allowedFeatureIds = [
   "gateway-settlement-integrity",
   "gateway-error-fidelity",
   "gateway-request-hygiene",
+  "gateway-cohesion-refactor",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -30,6 +31,7 @@ const inProgressFeatureIds = new Set([
   "gateway-settlement-integrity",
   "gateway-error-fidelity",
   "gateway-request-hygiene",
+  "gateway-cohesion-refactor",
 ]);
 
 describe("v1 release guards milestone", () => {
@@ -46,7 +48,11 @@ describe("v1 release guards milestone", () => {
         expect(feature.status).toBe("passing");
       }
       expect(feature.verification).toContain(`tests/features/${feature.id}.unit.test.ts`);
-      expect(feature.verification).toContain(`tests/e2e/${feature.id}.e2e.spec.ts`);
+      if (feature.id === "gateway-cohesion-refactor") {
+        expect(feature.verification).toContain("tests/e2e/v1-gateway-routing.e2e.spec.ts");
+      } else {
+        expect(feature.verification).toContain(`tests/e2e/${feature.id}.e2e.spec.ts`);
+      }
     }
   });
 

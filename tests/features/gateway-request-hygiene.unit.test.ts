@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { closePostgresPools } from "../../packages/db/src/client";
 import { readGatewayRequestId } from "../../packages/db/src/gateway-auth";
+import { normalizeOpenAIChatCompletionRequest } from "../../packages/db/src/gateway-chat-completions";
+import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
 import {
   attachGatewayProviderCredentials,
-  normalizeOpenAIChatCompletionRequest,
   refreshProviderOAuthTokenWithLock,
-} from "../../packages/db/src/gateway-chat-completions";
-import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
+} from "../../packages/db/src/gateway-provider-credentials";
 import { estimateTextTokens } from "../../packages/db/src/gateway-request-metadata";
 import { selectGatewayBaselineCandidate } from "../../packages/db/src/gateway-usage-recorder";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";

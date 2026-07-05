@@ -124,6 +124,10 @@
       "types": "./src/gateway-chat-completions.ts",
       "default": "./src/gateway-chat-completions.ts"
     },
+    "./gateway-provider-credentials": {
+      "types": "./src/gateway-provider-credentials.ts",
+      "default": "./src/gateway-provider-credentials.ts"
+    },
     "./gateway-config-reload": {
       "types": "./src/gateway-config-reload.ts",
       "default": "./src/gateway-config-reload.ts"

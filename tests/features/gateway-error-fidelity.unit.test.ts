@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { closePostgresPools } from "../../packages/db/src/client";
-import {
-  attachGatewayProviderCredentialsLeniently,
-  readGatewayMasterKeySource,
-} from "../../packages/db/src/gateway-chat-completions";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
 import {
   toGatewayErrorResponseParts,
   truncateProviderMessage,
 } from "../../packages/db/src/gateway-errors";
 import { executeFallbackChain } from "../../packages/db/src/gateway-fallback-chain";
+import {
+  attachGatewayProviderCredentialsLeniently,
+  readGatewayMasterKeySource,
+} from "../../packages/db/src/gateway-provider-credentials";
 import { executeGatewayStreamingRequest } from "../../packages/db/src/gateway-streaming";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import type { OpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";

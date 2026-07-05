@@ -15,11 +15,6 @@ import {
   releaseGatewayBudgetReservation,
   reserveGatewayBudget,
 } from "./gateway-budgets.ts";
-import {
-  attachGatewayProviderCredentialsLeniently,
-  readGatewayMasterKeySource,
-  recordGatewayProviderApiKeyLastUsed,
-} from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
@@ -27,6 +22,11 @@ import {
   executeProviderFallbackAttempts,
   type FallbackFailedAttempt,
 } from "./gateway-fallback-chain.ts";
+import {
+  attachGatewayProviderCredentialsLeniently,
+  readGatewayMasterKeySource,
+  recordGatewayProviderApiKeyLastUsed,
+} from "./gateway-provider-credentials.ts";
 import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
 import {
   buildOpenAIResponsesRequestMetadata,

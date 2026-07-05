@@ -128,6 +128,10 @@
       "types": "./src/gateway-provider-credentials.ts",
       "default": "./src/gateway-provider-credentials.ts"
     },
+    "./gateway-protocol-request": {
+      "types": "./src/gateway-protocol-request.ts",
+      "default": "./src/gateway-protocol-request.ts"
+    },
     "./gateway-config-reload": {
       "types": "./src/gateway-config-reload.ts",
       "default": "./src/gateway-config-reload.ts"

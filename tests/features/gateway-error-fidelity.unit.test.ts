@@ -6,14 +6,13 @@ import {
   toGatewayErrorResponseParts,
   truncateProviderMessage,
 } from "../../packages/db/src/gateway-errors";
-import { executeFallbackChain } from "../../packages/db/src/gateway-fallback-chain";
+import { buildFallbackExhaustionError } from "../../packages/db/src/gateway-fallback-chain";
 import {
   attachGatewayProviderCredentialsLeniently,
   readGatewayMasterKeySource,
 } from "../../packages/db/src/gateway-provider-credentials";
 import { executeGatewayStreamingRequest } from "../../packages/db/src/gateway-streaming";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import type { OpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 describe("gateway error fidelity", () => {
@@ -22,13 +21,13 @@ describe("gateway error fidelity", () => {
   });
 
   it("throws provider_rejected_request with upstream status for non-retryable provider 4xx", async () => {
-    await expect(
-      executeFallbackChain({
-        adapter: adapterError(400, "context length exceeded"),
-        candidates: [candidateWithKey()],
-        request: { messages: [{ content: "hi", role: "user" }] },
+    expect(
+      buildFallbackExhaustionError({
+        errorCode: "provider_error",
+        errorMessage: "context length exceeded",
+        statusCode: 400,
       }),
-    ).rejects.toMatchObject({
+    ).toMatchObject({
       code: "provider_rejected_request",
       message: "context length exceeded",
       upstreamStatus: 400,
@@ -36,26 +35,26 @@ describe("gateway error fidelity", () => {
   });
 
   it("throws provider_rate_limited for upstream 429", async () => {
-    await expect(
-      executeFallbackChain({
-        adapter: adapterError(429, "slow down"),
-        candidates: [candidateWithKey()],
-        request: { messages: [{ content: "hi", role: "user" }] },
+    expect(
+      buildFallbackExhaustionError({
+        errorCode: "provider_error",
+        errorMessage: "slow down",
+        statusCode: 429,
       }),
-    ).rejects.toMatchObject({
+    ).toMatchObject({
       code: "provider_rate_limited",
       upstreamStatus: 429,
     });
   });
 
   it("throws provider_request_failed when retryable network failures exhaust the chain", async () => {
-    await expect(
-      executeFallbackChain({
-        adapter: adapterError(null, "socket hang up"),
-        candidates: [candidateWithKey({ providerId: randomUUID() }), candidateWithKey()],
-        request: { messages: [{ content: "hi", role: "user" }] },
+    expect(
+      buildFallbackExhaustionError({
+        errorCode: "provider_request_failed",
+        errorMessage: "socket hang up",
+        statusCode: null,
       }),
-    ).rejects.toMatchObject({
+    ).toMatchObject({
       code: "provider_request_failed",
       upstreamStatus: null,
     });
@@ -216,29 +215,6 @@ describe("gateway error fidelity", () => {
     }
   });
 });
-
-function adapterError(statusCode: number | null, message: string): OpenAIProviderAdapter {
-  return {
-    chatCompletion: async () => ({
-      body: null,
-      errorCode: "provider_error",
-      errorMessage: message,
-      ok: false,
-      retryable: statusCode === null || statusCode === 429 || (statusCode ?? 0) >= 500,
-      statusCode,
-    }),
-  };
-}
-
-function candidateWithKey(
-  overrides: Partial<GatewayRouteCandidateSnapshot> = {},
-): GatewayRouteCandidateSnapshot & { apiKey: string; baseUrl: string } {
-  return {
-    ...candidateSnapshot(overrides),
-    apiKey: "key",
-    baseUrl: "http://provider.test/v1",
-  };
-}
 
 function candidateSnapshot(
   overrides: Partial<GatewayRouteCandidateSnapshot> = {},

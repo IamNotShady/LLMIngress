@@ -1,57 +1,28 @@
-import { selectRouteAttempts } from "@llmingress/domain";
-import type {
-  NormalizedOpenAIChatMessage,
-  NormalizedOpenAIChatRequest,
-  OpenAIProviderAdapter,
+import {
+  createOpenAIProviderAdapter,
+  type NormalizedOpenAIChatMessage,
+  type NormalizedOpenAIChatRequest,
+  type OpenAIAdapterSuccess,
+  type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
+import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
-import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
-import {
-  buildGatewayBudgetActualUsage,
-  finalizeGatewayBudgetReservation,
-  GatewayBudgetRejectedError,
-  releaseGatewayBudgetReservation,
-  reserveGatewayBudget,
-} from "./gateway-budgets.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
-import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
   createGatewayErrorBody,
   type GatewayErrorBody,
   GatewayPipelineError,
-  toGatewayErrorResponseParts,
 } from "./gateway-errors.ts";
-import { executeFallbackChain, type FallbackFailedAttempt } from "./gateway-fallback-chain.ts";
 import {
-  attachGatewayProviderCredentialsLeniently,
-  readGatewayMasterKeySource,
-  recordGatewayProviderApiKeyLastUsed,
-} from "./gateway-provider-credentials.ts";
-import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
-import {
-  buildOpenAIChatCompletionRequestMetadata,
-  type GatewayRequestMetadata,
-} from "./gateway-request-metadata.ts";
-import {
-  buildGatewayRequestActivityRoute,
-  isRecord,
-  omitUndefined,
-  requireGatewayRoutePolicy,
-  selectGatewayBaselineCandidate,
-} from "./gateway-runtime-helpers.ts";
-import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
-import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
+  executeGatewayProtocolRequest,
+  type GatewayProtocolResponse,
+} from "./gateway-protocol-request.ts";
+import { buildOpenAIChatCompletionRequestMetadata } from "./gateway-request-metadata.ts";
+import { isRecord, omitUndefined } from "./gateway-runtime-helpers.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
-export type GatewayChatCompletionResponse = {
-  activity?: GatewayRequestActivityRoute;
-  body: unknown;
-  headers?: Record<string, string>;
-  requestMetadata?: GatewayRequestMetadata;
-  statusCode: number;
-  usageCost?: GatewayUsageCostDetails;
-};
+export type GatewayChatCompletionResponse = GatewayProtocolResponse;
 
 export type GatewayChatCompletionRequestSuccess = {
   ok: true;
@@ -146,165 +117,37 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
 }): Promise<GatewayChatCompletionResponse> {
-  const normalized = normalizeOpenAIChatCompletionRequest(input.requestBody, input.requestId);
-  if (!normalized.ok) {
-    return {
-      body: normalized.body,
-      statusCode: normalized.statusCode,
-    };
-  }
+  const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
+  const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
 
-  const requestMetadata = buildOpenAIChatCompletionRequestMetadata({
-    model: input.virtualModel.name,
-    rawBody: input.requestBody,
-    request: normalized.request,
-  });
-
-  const rateLimit = await enforceGatewayRateLimits({
-    agentApiKeyId: input.agentApiKeyId,
-    databaseUrl: input.databaseUrl,
-    requestId: input.requestId,
-    requestMetadata,
-  });
-  if (!rateLimit.ok) {
-    return {
-      body: rateLimit.body,
-      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
-      requestMetadata,
-      statusCode: rateLimit.statusCode,
-    };
-  }
-
-  const concurrencyLease = rateLimit.concurrencyLease;
-  let activity: GatewayRequestActivityRoute | undefined;
-  const fallbackAttempts: FallbackFailedAttempt[] = [];
-  try {
-    const routeResult = selectRouteAttempts({
-      estimatedInputTokens: requestMetadata.estimatedInputTokens,
-      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-      snapshot: input.snapshot,
-      usesTools: requestMetadata.usesTools,
-      virtualModelId: input.virtualModel.id,
-    });
-    if (!routeResult.decision || routeResult.chain.length === 0) {
-      return {
-        activity,
-        body: createGatewayErrorBody("provider_unavailable", input.requestId),
-        requestMetadata,
-        statusCode: mapGatewayErrorStatus("provider_unavailable"),
-      };
-    }
-    const routeDecision = routeResult.decision;
-    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const gatewayChain = routeResult.chain;
-
-    const selectedCandidate = gatewayChain[0];
-    if (!selectedCandidate) {
-      throw new Error("Selected route candidate was not found in route policy.");
-    }
-    activity = buildGatewayRequestActivityRoute({
-      candidate: selectedCandidate,
-      fallbackAttempts,
-      routeDecision,
-    });
-
-    const chatCompletionCandidates = gatewayChain.filter(
-      (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
-    );
-    if (chatCompletionCandidates.length === 0) {
-      throw new GatewayPipelineError(
-        "provider_credentials_missing",
-        "Provider credentials are missing for chat completions route.",
-      );
-    }
-    const candidates = await attachGatewayProviderCredentialsLeniently({
-      candidates: chatCompletionCandidates,
-      databaseUrl: input.databaseUrl,
-      masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
-    });
-    const result = await executeFallbackChain({
-      adapter: input.adapter,
-      candidates,
-      databaseUrl: input.databaseUrl,
-      finalizeAttempt: (r, success) =>
-        finalizeGatewayBudgetReservation({
-          actual: buildGatewayBudgetActualUsage({
-            price: success.candidate.price,
-            providerUsage: readGatewayProviderTokenUsage(success.body),
-          }),
-          databaseUrl: input.databaseUrl,
-          reservation: r,
-        }),
-      recordFailedAttempt: async (attempt) => {
-        fallbackAttempts.push(attempt);
-      },
-      releaseAttempt: (r) =>
-        releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
-      reserveAttempt: async (candidate) => {
-        const d = await reserveGatewayBudget({
-          agentApiKeyId: input.agentApiKeyId,
-          databaseUrl: input.databaseUrl,
-          price: candidate.price,
-          requestId: input.requestId,
-          requestMetadata,
+  return executeGatewayProtocolRequest<NormalizedOpenAIChatRequest, OpenAIAdapterSuccess>({
+    ...input,
+    spec: {
+      buildRequestMetadata: buildOpenAIChatCompletionRequestMetadata,
+      callProvider: ({ candidate, providerApiKey, request }) => {
+        const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
+        return adapter.chatCompletion({
+          request,
+          target: {
+            apiKey: providerApiKey.apiKey,
+            baseUrl: candidate.baseUrl,
+            modelId: candidate.modelId,
+          },
         });
-        if (!d.ok) {
-          throw new GatewayBudgetRejectedError(d.body, d.statusCode);
-        }
-        return d.reservation;
       },
-      request: normalized.request,
-      requestActivityId: input.requestActivityId,
-      requestId: input.requestId,
-    });
-    await recordGatewayProviderApiKeyLastUsed({
-      databaseUrl: input.databaseUrl,
-      providerApiKeyId: result.selectedCandidate.providerApiKeyId,
-    });
-    activity = buildGatewayRequestActivityRoute({
-      candidate: result.selectedCandidate,
-      fallbackAttempts: result.failedAttempts,
-      routeDecision,
-    });
-
-    return {
-      activity,
-      body: result.result.body,
-      requestMetadata,
-      statusCode: result.result.statusCode,
-      usageCost: {
-        actualPrice: result.selectedCandidate.price,
-        baselinePrice: baselineCandidate.price,
-        baselineProviderModelId: baselineCandidate.providerModelId,
-        estimatedInputTokens: requestMetadata.estimatedInputTokens,
-        estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-        providerUsage: readGatewayProviderTokenUsage(result.result.body),
-        providerModelId: result.selectedCandidate.providerModelId,
-      },
-    };
-  } catch (error) {
-    if (error instanceof GatewayBudgetRejectedError) {
-      return {
-        activity,
-        body: error.body,
-        requestMetadata,
-        statusCode: error.statusCode,
-      };
-    }
-    const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
-    return {
-      activity,
-      body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
-      requestMetadata,
-      statusCode: parts.statusCode,
-    };
-  } finally {
-    await releaseGatewayConcurrency({
-      databaseUrl: input.databaseUrl,
-      lease: concurrencyLease,
-    }).catch(() => undefined);
-  }
+      normalize: normalizeOpenAIChatCompletionRequest,
+      planCandidates: (candidates) => ({
+        noneSupportedError: () =>
+          new GatewayPipelineError(
+            "provider_protocol_unsupported",
+            "Chat completions cannot use subscription providers.",
+          ),
+        supported: candidates.filter(
+          (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
+        ),
+      }),
+    },
+  });
 }
 
 function invalidChatRequest(requestId: string): GatewayChatCompletionRequestFailure {

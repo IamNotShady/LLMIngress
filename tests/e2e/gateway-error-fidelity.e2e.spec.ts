@@ -61,6 +61,59 @@ test("gateway passes through non-retryable provider 4xx status and sanitized mes
   }
 });
 
+test("gateway messages endpoint passes through non-retryable provider 4xx status and sanitized message", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_error_messages_4xx_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const fakeProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const seeded = await seedOpenAIGatewayRoute({
+      agentApiKey: `${agentApiKey}_messages`,
+      fixture,
+      providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
+      virtualModelName: "vm-provider-messages-4xx",
+    });
+    await fixture.query("update providers set provider_key = 'anthropic' where id = $1", [
+      seeded.providerId,
+    ]);
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      const response = await fetch(`${baseUrl}/v1/messages`, {
+        body: JSON.stringify({
+          max_tokens: 64,
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-provider-messages-4xx",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}_messages`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.error.code).toBe("provider_rejected_request");
+      expect(body.error.message).toContain("context length exceeded");
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await fakeProvider.close();
+    await fixture.dispose();
+  }
+});
+
 test("gateway skips a fallback candidate with missing credentials", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_error_missing_key_${randomUUID().replaceAll("-", "_")}`,

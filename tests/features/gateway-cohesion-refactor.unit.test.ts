@@ -50,4 +50,19 @@ describe("gateway cohesion fitness", () => {
     expect(recorder).not.toContain("selectGatewayBaselineCandidate");
     expect(recorder).not.toContain("buildGatewayBudgetActualUsage");
   });
+
+  it("keeps orchestration calls only in the protocol template", () => {
+    for (const file of [
+      "gateway-chat-completions",
+      "gateway-embeddings",
+      "gateway-messages",
+      "gateway-responses",
+    ]) {
+      const content = src(`packages/db/src/${file}.ts`);
+      expect(content).not.toContain("enforceGatewayRateLimits");
+      expect(content).not.toContain("reserveGatewayBudget");
+      expect(content).not.toContain("selectRouteAttempts");
+      expect(content).not.toContain("releaseGatewayConcurrency");
+    }
+  });
 });

@@ -5,15 +5,10 @@ import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { selectRouteAttempts } from "@llmingress/domain";
 import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
-import { openRouterAttributionHeaders } from "@llmingress/provider/openrouter";
 import {
-  buildClaudeCodeMessagesUrl,
-  buildClaudeCodeSubscriptionHeaders,
-  buildCodexResponsesUrl,
-  buildCodexSubscriptionHeaders,
-  normalizeCodexResponsesInput,
-  withClaudeCodeSystemPrompt,
-} from "@llmingress/provider/subscription";
+  type ProviderStreamingDialect,
+  resolveProviderStreamingDialect,
+} from "@llmingress/provider/dialect";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
   type GatewayBudgetReservation,
@@ -225,13 +220,9 @@ export async function executeGatewayStreamingRequest(input: {
         continue;
       }
 
+      const providerDialect = resolveProviderStreamingDialect(candidate.providerKey);
       // Protocol check — if this candidate doesn't support the streaming protocol, skip it.
-      if (
-        !isStreamingProtocolSupportedByProvider({
-          pathSuffix: normalized.pathSuffix,
-          providerKey: candidate.providerKey,
-        })
-      ) {
+      if (!providerDialect.supportsPathSuffix(normalized.pathSuffix)) {
         // Not a real attempt — no budget reservation needed, just skip.
         continue;
       }
@@ -280,11 +271,10 @@ export async function executeGatewayStreamingRequest(input: {
         attemptOrder += 1;
         anyAttempted = true;
         const providerStartedAt = new Date();
-        const providerUrl = buildStreamingProviderUrl({
-          baseUrl: attemptedCandidate.baseUrl,
-          pathSuffix: normalized.pathSuffix,
-          providerKey: attemptedCandidate.providerKey,
-        });
+        const providerUrl = providerDialect.buildUrl(
+          attemptedCandidate.baseUrl,
+          normalized.pathSuffix,
+        );
 
         // --- Fetch with network-error catch ---
         let response: Response | undefined;
@@ -299,18 +289,17 @@ export async function executeGatewayStreamingRequest(input: {
         try {
           response = await (input.fetch ?? globalThis.fetch)(providerUrl, {
             body: JSON.stringify(
-              buildStreamingProviderRequestBody({
+              buildStreamingRequestBodyForDialect({
+                dialect: providerDialect,
                 modelId: attemptedCandidate.modelId,
                 pathSuffix: normalized.pathSuffix,
                 payload: normalized.payload,
-                providerKey: attemptedCandidate.providerKey,
               }),
             ),
-            headers: buildStreamingProviderHeaders({
-              apiKey: attemptedCandidate.apiKey,
-              headersWithApiKey: normalized.headersWithApiKey,
-              providerKey: attemptedCandidate.providerKey,
-            }),
+            headers: providerDialect.buildHeaders(
+              attemptedCandidate.apiKey,
+              normalized.headersWithApiKey,
+            ),
             method: "POST",
             signal: connectController.signal,
           });
@@ -994,47 +983,18 @@ async function recordGatewayRuntimeError(input: {
   );
 }
 
-function buildProviderUrl(baseUrl: string, suffix: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/${suffix}`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
-}
-
-export function buildStreamingProviderUrl(input: {
-  baseUrl: string;
-  pathSuffix: string;
-  providerKey: string;
-}): string {
-  if (input.providerKey === "openai_codex" && input.pathSuffix === "responses") {
-    return buildCodexResponsesUrl(input.baseUrl);
-  }
-  if (input.providerKey === "claude_code" && input.pathSuffix === "messages") {
-    return buildClaudeCodeMessagesUrl(input.baseUrl);
-  }
-  return buildProviderUrl(input.baseUrl, input.pathSuffix);
-}
-
-export function buildStreamingProviderRequestBody(input: {
+function buildStreamingRequestBodyForDialect(input: {
+  dialect: ProviderStreamingDialect;
   modelId: string;
   pathSuffix: string;
   payload: Record<string, unknown>;
-  providerKey: string;
 }): Record<string, unknown> {
   let body = buildProviderRequestBody(input.payload, input.modelId);
-  if (input.providerKey === "openai_codex" && input.pathSuffix === "responses") {
-    return buildCodexStreamingResponsesBody(body);
-  }
   if (input.pathSuffix === "messages") {
     body = omitUnsupportedAnthropicSamplingParameters(body, input.modelId);
   }
-  if (input.providerKey === "claude_code" && input.pathSuffix === "messages") {
-    return {
-      ...body,
-      system: withClaudeCodeSystemPrompt(body.system),
-    };
-  }
-  if (shouldRequestStreamingUsage(input)) {
+  body = input.dialect.transformBody(body, input.pathSuffix);
+  if (input.dialect.wantsStreamingUsage(input.pathSuffix)) {
     return {
       ...body,
       stream_options: {
@@ -1046,25 +1006,6 @@ export function buildStreamingProviderRequestBody(input: {
   return body;
 }
 
-function shouldRequestStreamingUsage(input: { pathSuffix: string; providerKey: string }): boolean {
-  return (
-    input.pathSuffix === "chat/completions" &&
-    (input.providerKey === "openai" ||
-      input.providerKey === "google" ||
-      input.providerKey === "lmstudio")
-  );
-}
-
-const codexUnsupportedResponsesParameters = [
-  "max_output_tokens",
-  "metadata",
-  "prompt_cache_retention",
-  "safety_identifier",
-  "temperature",
-  "top_p",
-  "truncation",
-];
-
 function buildProviderRequestBody(
   payload: Record<string, unknown>,
   modelId: string,
@@ -1074,54 +1015,6 @@ function buildProviderRequestBody(
     model: modelId,
     stream: true,
   };
-}
-
-function buildCodexStreamingResponsesBody(body: Record<string, unknown>): Record<string, unknown> {
-  const cleaned: Record<string, unknown> = { ...body, store: false, stream: true };
-  for (const key of codexUnsupportedResponsesParameters) {
-    delete cleaned[key];
-  }
-  cleaned.input = normalizeCodexResponsesInput(
-    cleaned.input as Parameters<typeof normalizeCodexResponsesInput>[0],
-  );
-  if (typeof cleaned.instructions !== "string" || !cleaned.instructions.trim()) {
-    cleaned.instructions = "You are a helpful assistant.";
-  }
-  return cleaned;
-}
-
-export function buildStreamingProviderHeaders(input: {
-  apiKey: string;
-  headersWithApiKey: (apiKey: string) => Record<string, string>;
-  providerKey: string;
-}): Record<string, string> {
-  if (input.providerKey === "openai_codex") {
-    return buildCodexSubscriptionHeaders(input.apiKey);
-  }
-  if (input.providerKey === "claude_code") {
-    return buildClaudeCodeSubscriptionHeaders(input.apiKey);
-  }
-  const headers = input.headersWithApiKey(input.apiKey);
-  if (input.providerKey === "openrouter") {
-    return {
-      ...headers,
-      ...openRouterAttributionHeaders,
-    };
-  }
-  return headers;
-}
-
-export function isStreamingProtocolSupportedByProvider(input: {
-  pathSuffix: string;
-  providerKey: string;
-}): boolean {
-  if (input.providerKey === "openai_codex") {
-    return input.pathSuffix === "responses";
-  }
-  if (input.providerKey === "claude_code") {
-    return input.pathSuffix === "messages";
-  }
-  return true;
 }
 
 async function readProviderErrorBody(response: Response): Promise<string | null> {

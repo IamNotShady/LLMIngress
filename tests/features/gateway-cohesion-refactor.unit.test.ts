@@ -65,4 +65,10 @@ describe("gateway cohesion fitness", () => {
       expect(content).not.toContain("releaseGatewayConcurrency");
     }
   });
+
+  it("resolves provider dialects through the registry, not string dispatch", () => {
+    const streaming = src("packages/db/src/gateway-streaming.ts");
+    expect(streaming).not.toMatch(/providerKey === "/);
+    expect(streaming).toContain("resolveProviderStreamingDialect");
+  });
 });

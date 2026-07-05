@@ -12,6 +12,10 @@
       "types": "./src/connectivity.ts",
       "default": "./src/connectivity.ts"
     },
+    "./dialect": {
+      "types": "./src/dialect.ts",
+      "default": "./src/dialect.ts"
+    },
     "./model-list": {
       "types": "./src/model-list.ts",
       "default": "./src/model-list.ts"

@@ -83,10 +83,8 @@ export type RoutePolicyEditorProviderHealth = {
 };
 
 export type RoutePolicyHealthWarningCandidate = {
-  modelHealthIsStale?: boolean;
   modelHealthStatus?: string | null;
   optionLabel: string;
-  providerHealthIsStale?: boolean;
   providerHealthStatus?: string | null;
 };
 
@@ -240,12 +238,6 @@ export function buildRoutePolicyHealthWarnings(
           candidate.modelHealthStatus,
         )}.`,
       );
-    }
-    if (candidate.providerHealthIsStale) {
-      warnings.push(`Health warning: ${candidate.optionLabel} provider health is stale.`);
-    }
-    if (candidate.modelHealthIsStale) {
-      warnings.push(`Health warning: ${candidate.optionLabel} model health is stale.`);
     }
   }
 

@@ -551,6 +551,23 @@
   - `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts`
   - Live local Gateway request to `POST /v1/messages` with `temperature` and `top_p` in the caller payload routed to `claude_code / claude-sonnet-5` and returned HTTP 200 with response text `ok`.
 
+## 2026-07-05 Route Warning Stale Noise Cleanup
+
+- Fixed misleading Virtual Model route warnings:
+  - Route policy health warnings no longer treat stale probe timestamps as route warnings.
+  - Route warnings still report non-healthy provider/model statuses such as quota limited or network error.
+  - Virtual Model detail candidate badges now label available candidates as `Available` instead of `Healthy`.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/console-route-policy-warnings.unit.test.ts` failed while stale flags still produced route warnings and the detail badge still said `Healthy`.
+- Verification completed so far:
+  - `pnpm exec vitest run tests/features/console-route-policy-warnings.unit.test.ts`
+  - `pnpm run typecheck`
+  - `pnpm run lint`
+  - `pnpm test`
+  - `pnpm run verify`
+  - `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` passed after the first `verify:features` attempt hit a transient Console startup conflict.
+  - Second `pnpm run verify:features` passed with all 21 passing features re-verified.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

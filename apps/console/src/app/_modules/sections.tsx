@@ -1603,7 +1603,7 @@ function VirtualModelViewDialog({
                     </span>
                   </div>
                   {candidate.availability === "available" ? (
-                    <span className="pill--ok pill">Healthy</span>
+                    <span className="pill--ok pill">Available</span>
                   ) : (
                     <span className="pill">Disabled</span>
                   )}
@@ -4335,10 +4335,8 @@ function buildRoutePolicyHealthWarningCandidates(
     const providerHealth = providerHealthByProviderId.get(candidate.providerId);
     const modelHealth = providerHealth?.models.find((model) => model.id === candidate.id);
     return {
-      modelHealthIsStale: modelHealth?.isStale ?? false,
       modelHealthStatus: modelHealth?.status ?? null,
       optionLabel: candidate.optionLabel,
-      providerHealthIsStale: providerHealth?.isStale ?? false,
       providerHealthStatus: providerHealth?.status ?? null,
     };
   });

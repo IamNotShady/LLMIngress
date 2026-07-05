@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildAnthropicMessagesPayload } from "../../packages/provider/src/adapters/anthropic";
 import {
   checkProviderConnectivity,
   selectProviderProbeModel,
@@ -103,6 +104,33 @@ describe("provider streaming dialects", () => {
         { text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.", type: "text" },
         { text: "Use terse replies.", type: "text" },
       ],
+    });
+  });
+});
+
+describe("Anthropic provider payloads", () => {
+  it("omits deprecated sampling parameters for Claude Sonnet 5 messages", () => {
+    const payload = buildAnthropicMessagesPayload(
+      {
+        maxOutputTokens: 64,
+        messages: [{ content: "ping", role: "user" }],
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.9,
+      },
+      {
+        apiKey: "sk-test",
+        baseUrl: "https://api.anthropic.com/v1",
+        modelId: "claude-sonnet-5",
+      },
+    );
+
+    expect(payload).not.toHaveProperty("temperature");
+    expect(payload).not.toHaveProperty("top_k");
+    expect(payload).not.toHaveProperty("top_p");
+    expect(payload).toMatchObject({
+      max_tokens: 64,
+      model: "claude-sonnet-5",
     });
   });
 });

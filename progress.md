@@ -540,6 +540,17 @@
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 21 passing features re-verified.
 
+## 2026-07-05 Anthropic Sonnet 5 Sampling Parameter Fix
+
+- Fixed Claude Sonnet 5 `/v1/messages` requests rejected with deprecated sampling parameters:
+  - Root cause: Playground/Gateway accepted common sampling inputs, but the shared Anthropic payload cleanup did not strip `temperature`, `top_p`, or `top_k` for `claude-sonnet-5`.
+  - `omitUnsupportedAnthropicSamplingParameters` now removes those fields for Sonnet 5 before non-streaming, streaming, and Claude Code messages requests reach the provider.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts` failed while `claude-sonnet-5` payloads still included `temperature`, then failed again after live verification showed `top_p` was also deprecated.
+- Verification completed so far:
+  - `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts`
+  - Live local Gateway request to `POST /v1/messages` with `temperature` and `top_p` in the caller payload routed to `claude_code / claude-sonnet-5` and returned HTTP 200 with response text `ok`.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

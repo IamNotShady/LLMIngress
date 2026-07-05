@@ -166,6 +166,12 @@ export function omitUnsupportedAnthropicSamplingParameters<T extends Record<stri
     return cleaned;
   }
 
+  if (normalizedModelId.includes("claude-sonnet-5")) {
+    delete cleaned.temperature;
+    delete cleaned.top_k;
+    delete cleaned.top_p;
+  }
+
   if (normalizedModelId.includes("claude-sonnet-4-6") && cleaned.temperature !== undefined) {
     delete cleaned.top_p;
   }

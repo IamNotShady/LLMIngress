@@ -35,12 +35,12 @@
       "id": "v1-worker-ops",
       "name": "V1 Worker Operations",
       "description": "Worker jobs cover usage breakdowns, JSONL and cost exports, webhook and notification dispatch, alerts, metrics, traces, backup, migration status, and retention cleanup.",
-      "verification": "pnpm exec vitest run tests/features/v1-worker-ops.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "verification": "pnpm exec vitest run tests/features/v1-worker-ops.unit.test.ts tests/features/provider-dialect.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
       "dependencies": [
         "v1-platform"
       ],
       "status": "passing",
-      "evidence": "2026-07-02: Consolidated Worker/ops feature history into the V1 daily operations smoke covering export, alert, notification, metrics, tracing, backup, migration, and retention behavior."
+      "evidence": "2026-07-02: Consolidated Worker/ops feature history into the V1 daily operations smoke covering export, alert, notification, metrics, tracing, backup, migration, and retention behavior. 2026-07-05 provider connectivity fix: OpenAI probes skip completion-only instruct models, use max_completion_tokens for GPT-5-style chat probes, and use a 16-token cap so live GPT-5 nano probes return healthy instead of false unhealthy. Verification passed: focused provider-dialect unit, live local OpenAI probe wrote provider_health_summary.status=healthy and provider_api_keys.last_test_status=healthy, pnpm run verify, and pnpm run verify:features with all 21 passing features re-verified."
     },
     {
       "id": "v1-release-guards",

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkProviderConnectivity,
+  selectProviderProbeModel,
+} from "../../packages/provider/src/connectivity";
+import {
   joinProviderStreamingUrl,
   resolveProviderStreamingDialect,
 } from "../../packages/provider/src/dialect";
@@ -100,5 +104,49 @@ describe("provider streaming dialects", () => {
         { text: "Use terse replies.", type: "text" },
       ],
     });
+  });
+});
+
+describe("provider connectivity probe model selection", () => {
+  it("skips OpenAI instruct models when choosing a chat-completions probe", () => {
+    expect(
+      selectProviderProbeModel([
+        {
+          contextWindow: 4096,
+          inputUsdPerMillionTokens: 1.5,
+          modelId: "gpt-3.5-turbo",
+          outputUsdPerMillionTokens: 2,
+        },
+        {
+          contextWindow: 4096,
+          inputUsdPerMillionTokens: 0.5,
+          modelId: "gpt-3.5-turbo-instruct",
+          outputUsdPerMillionTokens: 1.5,
+        },
+      ]),
+    ).toBe("gpt-3.5-turbo");
+  });
+
+  it("uses max_completion_tokens for OpenAI GPT-5 probes", async () => {
+    let requestBody: unknown;
+    const result = await checkProviderConnectivity({
+      apiKey: "sk-test",
+      fetch: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body));
+        return new Response("{}", { status: 200 });
+      },
+      nowMs: () => Date.parse("2026-07-05T00:00:00.000Z"),
+      provider: {
+        baseUrl: "https://api.openai.com/v1",
+        displayName: "OpenAI",
+        id: "provider-openai",
+        modelId: "gpt-5-nano-2025-08-07",
+        providerKey: "openai",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(requestBody).toMatchObject({ max_completion_tokens: 16 });
+    expect(requestBody).not.toHaveProperty("max_tokens");
   });
 });

@@ -443,7 +443,7 @@
   - Removed stale reservation worker scheduling/handler registration and package exports.
   - Added migration `0003_remove_budget_reservations.sql` to drop `budget_reservations`, `budget_periods.reserved_*`, and `stale_reservation_cleanup` job type.
   - Updated Console/Worker budget usage queries, backup table list, architecture docs, and settlement tests to the post-charge budget-period model.
-- Verification completed so far:
+- Verification completed:
   - `pnpm exec vitest run tests/features/gateway-cohesion-refactor.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts tests/features/gateway-recording-resilience.unit.test.ts`
   - `pnpm exec vitest run tests/features/v1-platform.unit.test.ts`
   - `pnpm --filter @llmingress/db typecheck`
@@ -525,6 +525,20 @@
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 21 passing features re-verified.
 - Remaining risks/non-goals: JSONL keeps the legacy `fallbackAttempts` output contract, but it is now reconstructed from `fallback_events`. `0007_drop_concurrency_windows` remains unimplemented pending the multi-instance Gateway product decision documented in `docs/SCHEMA_REFACTOR.md`.
+
+## 2026-07-05 Provider Connectivity Probe Model Fix
+
+- Fixed false unhealthy OpenAI provider probes:
+  - `selectProviderProbeModel` now skips completion-only `instruct` models for chat-completions probes.
+  - OpenAI GPT-5-style probes use `max_completion_tokens` and a small 16-token cap, avoiding both unsupported `max_tokens` and too-low output-limit failures.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts` first failed because `gpt-3.5-turbo-instruct` was selected ahead of `gpt-3.5-turbo`.
+  - The same focused test then failed because GPT-5 probes sent `max_tokens`, and again because `max_completion_tokens` was too low for the live probe behavior.
+- Verification completed so far:
+  - `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts`
+  - Local live OpenAI provider probe returned HTTP 200 and wrote `provider_health_summary.status=healthy` plus `provider_api_keys.last_test_status=healthy`.
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 21 passing features re-verified.
 
 ## Required Verification
 

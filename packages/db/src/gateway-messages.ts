@@ -19,7 +19,12 @@ import {
 } from "./gateway-budgets.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
-import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
+import {
+  createGatewayErrorBody,
+  type GatewayErrorBody,
+  GatewayPipelineError,
+  toGatewayErrorResponseParts,
+} from "./gateway-errors.ts";
 import {
   executeProviderFallbackAttempts,
   type FallbackFailedAttempt,
@@ -49,23 +54,6 @@ import {
 } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
-export type GatewayAnthropicMessagesErrorCode =
-  | "invalid_messages_request"
-  | "provider_credentials_missing"
-  | "provider_rate_limited"
-  | "provider_rejected_request"
-  | "provider_request_failed"
-  | "provider_unavailable"
-  | "route_not_found";
-
-export type GatewayAnthropicMessagesErrorBody = {
-  error: {
-    code: GatewayAnthropicMessagesErrorCode;
-    message: string;
-  };
-  requestId: string;
-};
-
 export type GatewayAnthropicMessagesResponse = {
   activity?: GatewayRequestActivityRoute;
   body: unknown;
@@ -81,7 +69,7 @@ export type GatewayAnthropicMessagesRequestSuccess = {
 };
 
 export type GatewayAnthropicMessagesRequestFailure = {
-  body: GatewayAnthropicMessagesErrorBody;
+  body: GatewayErrorBody;
   ok: false;
   statusCode: 400;
 };
@@ -228,7 +216,7 @@ export async function executeGatewayAnthropicMessages(input: {
     if (!routeResult.decision || routeResult.chain.length === 0) {
       return {
         activity,
-        body: createGatewayAnthropicMessagesErrorBody("provider_unavailable", input.requestId),
+        body: createGatewayErrorBody("provider_unavailable", input.requestId),
         requestMetadata,
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
       };
@@ -356,11 +344,7 @@ export async function executeGatewayAnthropicMessages(input: {
     const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,
-      body: createGatewayAnthropicMessagesErrorBody(
-        parts.code as GatewayAnthropicMessagesErrorCode,
-        input.requestId,
-        parts.message,
-      ),
+      body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
       requestMetadata,
       statusCode: parts.statusCode,
     };
@@ -370,20 +354,6 @@ export async function executeGatewayAnthropicMessages(input: {
       lease: concurrencyLease,
     });
   }
-}
-
-export function createGatewayAnthropicMessagesErrorBody(
-  code: GatewayAnthropicMessagesErrorCode,
-  requestId: string,
-  message = messagesErrorMessage(code),
-): GatewayAnthropicMessagesErrorBody {
-  return {
-    error: {
-      code,
-      message,
-    },
-    requestId,
-  };
 }
 
 function readAnthropicMessage(value: unknown): NormalizedAnthropicMessage | null {
@@ -525,30 +495,8 @@ function readOptionalToolChoice(value: unknown): Record<string, unknown> | null 
 
 function invalidMessagesRequest(requestId: string): GatewayAnthropicMessagesRequestFailure {
   return {
-    body: createGatewayAnthropicMessagesErrorBody("invalid_messages_request", requestId),
+    body: createGatewayErrorBody("invalid_messages_request", requestId),
     ok: false,
     statusCode: 400,
   };
-}
-
-function messagesErrorMessage(code: GatewayAnthropicMessagesErrorCode): string {
-  if (code === "invalid_messages_request") {
-    return "Anthropic messages request must include max_tokens and at least one message.";
-  }
-  if (code === "route_not_found") {
-    return "No route policy is available for the selected Virtual Model.";
-  }
-  if (code === "provider_credentials_missing") {
-    return "Provider credentials are not configured for the selected route.";
-  }
-  if (code === "provider_rate_limited") {
-    return "Provider rate limit exceeded.";
-  }
-  if (code === "provider_rejected_request") {
-    return "Provider rejected the request.";
-  }
-  if (code === "provider_unavailable") {
-    return "No eligible provider candidates are available for the selected route.";
-  }
-  return "Provider request failed.";
 }

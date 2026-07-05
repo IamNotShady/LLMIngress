@@ -15,7 +15,12 @@ import {
 } from "./gateway-budgets.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
-import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
+import {
+  createGatewayErrorBody,
+  type GatewayErrorBody,
+  GatewayPipelineError,
+  toGatewayErrorResponseParts,
+} from "./gateway-errors.ts";
 import { executeFallbackChain, type FallbackFailedAttempt } from "./gateway-fallback-chain.ts";
 import {
   attachGatewayProviderCredentialsLeniently,
@@ -41,23 +46,6 @@ import {
 } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
-export type GatewayChatCompletionErrorCode =
-  | "invalid_chat_request"
-  | "provider_credentials_missing"
-  | "provider_rate_limited"
-  | "provider_rejected_request"
-  | "provider_request_failed"
-  | "provider_unavailable"
-  | "route_not_found";
-
-export type GatewayChatCompletionErrorBody = {
-  error: {
-    code: GatewayChatCompletionErrorCode;
-    message: string;
-  };
-  requestId: string;
-};
-
 export type GatewayChatCompletionResponse = {
   activity?: GatewayRequestActivityRoute;
   body: unknown;
@@ -73,7 +61,7 @@ export type GatewayChatCompletionRequestSuccess = {
 };
 
 export type GatewayChatCompletionRequestFailure = {
-  body: GatewayChatCompletionErrorBody;
+  body: GatewayErrorBody;
   ok: false;
   statusCode: 400;
 };
@@ -203,7 +191,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     if (!routeResult.decision || routeResult.chain.length === 0) {
       return {
         activity,
-        body: createGatewayChatCompletionErrorBody("provider_unavailable", input.requestId),
+        body: createGatewayErrorBody("provider_unavailable", input.requestId),
         requestMetadata,
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
       };
@@ -309,11 +297,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,
-      body: createGatewayChatCompletionErrorBody(
-        parts.code as GatewayChatCompletionErrorCode,
-        input.requestId,
-        parts.message,
-      ),
+      body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
       requestMetadata,
       statusCode: parts.statusCode,
     };
@@ -325,23 +309,9 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   }
 }
 
-export function createGatewayChatCompletionErrorBody(
-  code: GatewayChatCompletionErrorCode,
-  requestId: string,
-  message = chatCompletionErrorMessage(code),
-): GatewayChatCompletionErrorBody {
-  return {
-    error: {
-      code,
-      message,
-    },
-    requestId,
-  };
-}
-
 function invalidChatRequest(requestId: string): GatewayChatCompletionRequestFailure {
   return {
-    body: createGatewayChatCompletionErrorBody("invalid_chat_request", requestId),
+    body: createGatewayErrorBody("invalid_chat_request", requestId),
     ok: false,
     statusCode: 400,
   };
@@ -468,26 +438,4 @@ function readOptionalOpenAIToolChoice(
     return value;
   }
   return null;
-}
-
-function chatCompletionErrorMessage(code: GatewayChatCompletionErrorCode): string {
-  if (code === "invalid_chat_request") {
-    return "Chat completion request must include at least one string-content message.";
-  }
-  if (code === "route_not_found") {
-    return "No route policy is available for the selected Virtual Model.";
-  }
-  if (code === "provider_credentials_missing") {
-    return "Provider credentials are not configured for the selected route.";
-  }
-  if (code === "provider_rate_limited") {
-    return "Provider rate limit exceeded.";
-  }
-  if (code === "provider_rejected_request") {
-    return "Provider rejected the request.";
-  }
-  if (code === "provider_unavailable") {
-    return "No eligible provider candidates are available for the selected route.";
-  }
-  return "Provider request failed.";
 }

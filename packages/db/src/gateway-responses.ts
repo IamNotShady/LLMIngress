@@ -17,7 +17,12 @@ import {
 } from "./gateway-budgets.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
-import { GatewayPipelineError, toGatewayErrorResponseParts } from "./gateway-errors.ts";
+import {
+  createGatewayErrorBody,
+  type GatewayErrorBody,
+  GatewayPipelineError,
+  toGatewayErrorResponseParts,
+} from "./gateway-errors.ts";
 import {
   executeProviderFallbackAttempts,
   type FallbackFailedAttempt,
@@ -47,25 +52,6 @@ import {
 } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
-export type GatewayResponsesErrorCode =
-  | "invalid_responses_request"
-  | "provider_credentials_missing"
-  | "provider_protocol_unsupported"
-  | "provider_request_failed"
-  | "provider_rate_limited"
-  | "provider_rejected_request"
-  | "provider_unavailable"
-  | "route_not_found"
-  | "unsupported_stateful_responses";
-
-export type GatewayResponsesErrorBody = {
-  error: {
-    code: GatewayResponsesErrorCode;
-    message: string;
-  };
-  requestId: string;
-};
-
 export type GatewayResponsesResponse = {
   activity?: GatewayRequestActivityRoute;
   body: unknown;
@@ -81,7 +67,7 @@ export type GatewayResponsesRequestSuccess = {
 };
 
 export type GatewayResponsesRequestFailure = {
-  body: GatewayResponsesErrorBody;
+  body: GatewayErrorBody;
   ok: false;
   statusCode: 400;
 };
@@ -197,7 +183,7 @@ export async function executeGatewayOpenAIResponse(input: {
     if (!routeResult.decision || routeResult.chain.length === 0) {
       return {
         activity,
-        body: createGatewayResponsesErrorBody("provider_unavailable", input.requestId),
+        body: createGatewayErrorBody("provider_unavailable", input.requestId),
         requestMetadata,
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
       };
@@ -347,11 +333,7 @@ export async function executeGatewayOpenAIResponse(input: {
     const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
       activity,
-      body: createGatewayResponsesErrorBody(
-        parts.code as GatewayResponsesErrorCode,
-        input.requestId,
-        parts.message,
-      ),
+      body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
       requestMetadata,
       statusCode: parts.statusCode,
     };
@@ -361,20 +343,6 @@ export async function executeGatewayOpenAIResponse(input: {
       lease: concurrencyLease,
     });
   }
-}
-
-export function createGatewayResponsesErrorBody(
-  code: GatewayResponsesErrorCode,
-  requestId: string,
-  message?: string,
-): GatewayResponsesErrorBody {
-  return {
-    error: {
-      code,
-      message: message ?? responsesErrorMessage(code),
-    },
-    requestId,
-  };
 }
 
 function readResponsesInput(
@@ -472,7 +440,7 @@ function readOptionalNonEmptyString(value: unknown): string | null | undefined {
 
 function invalidResponsesRequest(requestId: string): GatewayResponsesRequestFailure {
   return {
-    body: createGatewayResponsesErrorBody("invalid_responses_request", requestId),
+    body: createGatewayErrorBody("invalid_responses_request", requestId),
     ok: false,
     statusCode: 400,
   };
@@ -480,36 +448,8 @@ function invalidResponsesRequest(requestId: string): GatewayResponsesRequestFail
 
 function unsupportedStatefulResponses(requestId: string): GatewayResponsesRequestFailure {
   return {
-    body: createGatewayResponsesErrorBody("unsupported_stateful_responses", requestId),
+    body: createGatewayErrorBody("unsupported_stateful_responses", requestId),
     ok: false,
     statusCode: 400,
   };
-}
-
-function responsesErrorMessage(code: GatewayResponsesErrorCode): string {
-  if (code === "unsupported_stateful_responses") {
-    return "Stateful Responses API fields are not supported by this Gateway.";
-  }
-  if (code === "invalid_responses_request") {
-    return "Responses request must include stateless string input or message input.";
-  }
-  if (code === "route_not_found") {
-    return "No route policy is available for the selected Virtual Model.";
-  }
-  if (code === "provider_credentials_missing") {
-    return "Provider credentials are not configured for the selected route.";
-  }
-  if (code === "provider_rate_limited") {
-    return "Provider rate limit exceeded.";
-  }
-  if (code === "provider_rejected_request") {
-    return "Provider rejected the request.";
-  }
-  if (code === "provider_protocol_unsupported") {
-    return "The selected provider cannot serve Responses API requests.";
-  }
-  if (code === "provider_unavailable") {
-    return "No eligible provider candidates are available for the selected route.";
-  }
-  return "Provider request failed.";
 }

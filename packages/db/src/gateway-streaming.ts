@@ -23,7 +23,12 @@ import {
 import { normalizeOpenAIChatCompletionRequest } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
-import { toGatewayErrorResponseParts, truncateProviderMessage } from "./gateway-errors.ts";
+import {
+  createGatewayErrorBody,
+  type GatewayErrorCode,
+  toGatewayErrorResponseParts,
+  truncateProviderMessage,
+} from "./gateway-errors.ts";
 import {
   buildFallbackFailedAttempt,
   type FallbackChainCandidate,
@@ -90,15 +95,6 @@ export type GatewayRuntimeStreamError = {
   errorCode: "provider_stream_error";
   errorMessage: string;
 };
-
-type GatewayStreamingErrorCode =
-  | "provider_credentials_missing"
-  | "provider_protocol_unsupported"
-  | "provider_rate_limited"
-  | "provider_rejected_request"
-  | "provider_request_failed"
-  | "provider_unavailable"
-  | "route_not_found";
 
 type GatewayStreamingPayload = {
   estimatedInputTokens: number;
@@ -172,7 +168,11 @@ export async function executeGatewayStreamingRequest(input: {
       await releaseGatewayConcurrency({ databaseUrl: input.databaseUrl, lease: concurrencyLease });
       concurrencyLease = undefined;
       return {
-        body: createGatewayStreamingErrorBody("provider_unavailable", input.requestId),
+        body: createGatewayErrorBody(
+          "provider_unavailable",
+          input.requestId,
+          "No provider is available for the selected route.",
+        ),
         ok: false,
         requestMetadata: normalized.requestMetadata,
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
@@ -188,7 +188,11 @@ export async function executeGatewayStreamingRequest(input: {
       await releaseGatewayConcurrency({ databaseUrl: input.databaseUrl, lease: concurrencyLease });
       concurrencyLease = undefined;
       return {
-        body: createGatewayStreamingErrorBody("provider_unavailable", input.requestId),
+        body: createGatewayErrorBody(
+          "provider_unavailable",
+          input.requestId,
+          "No provider is available for the selected route.",
+        ),
         ok: false,
         requestMetadata: normalized.requestMetadata,
         statusCode: mapGatewayErrorStatus("provider_unavailable"),
@@ -198,7 +202,7 @@ export async function executeGatewayStreamingRequest(input: {
     const fallbackAttempts: FallbackFailedAttempt[] = [];
     let attemptOrder = 0;
     // Track outcome of last real (non-skipped) attempt for exhaustion error code.
-    let lastFailureCode: GatewayStreamingErrorCode | undefined;
+    let lastFailureCode: GatewayErrorCode | undefined;
     // Track whether any candidates were actually attempted (not just skipped as unsupported).
     let anyAttempted = false;
 
@@ -372,7 +376,7 @@ export async function executeGatewayStreamingRequest(input: {
             url: providerUrl,
           });
 
-          const errorCode: GatewayStreamingErrorCode =
+          const errorCode: GatewayErrorCode =
             response.status === 429
               ? "provider_rate_limited"
               : response.status >= 400 && response.status < 500
@@ -414,7 +418,7 @@ export async function executeGatewayStreamingRequest(input: {
           });
           concurrencyLease = undefined;
           return {
-            body: createGatewayStreamingErrorBody(
+            body: createGatewayErrorBody(
               errorCode,
               input.requestId,
               truncateProviderMessage(providerErrorBody ?? "Provider rejected the request."),
@@ -563,7 +567,7 @@ export async function executeGatewayStreamingRequest(input: {
     // anyAttempted is only true when at least one candidate was actually fetched.
     if (!anyAttempted) {
       return {
-        body: createGatewayStreamingErrorBody("provider_protocol_unsupported", input.requestId),
+        body: createGatewayErrorBody("provider_protocol_unsupported", input.requestId),
         ok: false,
         requestMetadata: normalized.requestMetadata,
         statusCode: mapGatewayErrorStatus("provider_protocol_unsupported"),
@@ -572,7 +576,7 @@ export async function executeGatewayStreamingRequest(input: {
     // Return error code reflecting the last real failure (FIX C2).
     const exhaustionCode = lastFailureCode ?? "provider_request_failed";
     return {
-      body: createGatewayStreamingErrorBody(exhaustionCode, input.requestId),
+      body: createGatewayErrorBody(exhaustionCode, input.requestId),
       ok: false,
       requestMetadata: normalized.requestMetadata,
       statusCode: mapGatewayErrorStatus(exhaustionCode),
@@ -590,11 +594,7 @@ export async function executeGatewayStreamingRequest(input: {
     });
     const parts = toGatewayErrorResponseParts(error, "provider_request_failed");
     return {
-      body: createGatewayStreamingErrorBody(
-        parts.code as GatewayStreamingErrorCode,
-        input.requestId,
-        parts.message,
-      ),
+      body: createGatewayErrorBody(parts.code, input.requestId, parts.message),
       ok: false,
       requestMetadata: normalized.requestMetadata,
       statusCode: parts.statusCode,
@@ -1133,40 +1133,4 @@ async function readProviderErrorBody(response: Response): Promise<string | null>
   } catch (error) {
     return error instanceof Error ? error.message : "Unable to read provider error body.";
   }
-}
-
-function createGatewayStreamingErrorBody(
-  code: GatewayStreamingErrorCode,
-  requestId: string,
-  message = streamingErrorMessage(code),
-) {
-  return {
-    error: {
-      code,
-      message,
-    },
-    requestId,
-  };
-}
-
-function streamingErrorMessage(code: GatewayStreamingErrorCode): string {
-  if (code === "route_not_found") {
-    return "No route policy is available for the selected Virtual Model.";
-  }
-  if (code === "provider_credentials_missing") {
-    return "Provider credentials are not configured for the selected route.";
-  }
-  if (code === "provider_rate_limited") {
-    return "Provider rate limit exceeded.";
-  }
-  if (code === "provider_rejected_request") {
-    return "Provider rejected the request.";
-  }
-  if (code === "provider_protocol_unsupported") {
-    return "Provider protocol is not supported for this endpoint.";
-  }
-  if (code === "provider_unavailable") {
-    return "No provider is available for the selected route.";
-  }
-  return "Provider request failed.";
 }

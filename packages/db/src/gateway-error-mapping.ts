@@ -1,6 +1,8 @@
 export const gatewayRequestIdHeader = "x-request-id";
 
-const gatewayErrorStatusByCode: Record<string, number> = {
+import type { GatewayErrorCode } from "./gateway-errors.ts";
+
+const gatewayErrorStatusByCode: Record<GatewayErrorCode, number> = {
   cost_budget_exceeded: 402,
   cost_budget_price_unavailable: 402,
   disabled_agent_api_key: 401,
@@ -25,7 +27,9 @@ const gatewayErrorStatusByCode: Record<string, number> = {
 };
 
 export function mapGatewayErrorStatus(code: string, fallbackStatus = 500): number {
-  return gatewayErrorStatusByCode[code] ?? fallbackStatus;
+  return code in gatewayErrorStatusByCode
+    ? gatewayErrorStatusByCode[code as GatewayErrorCode]
+    : fallbackStatus;
 }
 
 export function readGatewayErrorCode(body: unknown): string | null {

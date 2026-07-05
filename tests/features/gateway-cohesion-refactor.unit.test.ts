@@ -29,4 +29,18 @@ describe("gateway cohesion fitness", () => {
       .filter(Boolean);
     expect(imported).toEqual(["normalizeOpenAIChatCompletionRequest"]);
   });
+
+  it("uses one gateway error code union without casts", () => {
+    for (const file of [
+      "gateway-chat-completions",
+      "gateway-embeddings",
+      "gateway-messages",
+      "gateway-responses",
+      "gateway-streaming",
+    ]) {
+      const content = src(`packages/db/src/${file}.ts`);
+      expect(content).not.toMatch(/as Gateway\w+ErrorCode/);
+      expect(content).not.toMatch(/^export type Gateway\w+ErrorCode/m);
+    }
+  });
 });

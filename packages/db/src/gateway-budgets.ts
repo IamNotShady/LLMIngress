@@ -5,6 +5,7 @@ import {
   type PostgresQueryResultRow,
   withPostgresTransaction,
 } from "@llmingress/db/client";
+import { gatewayBudgetReservationTtlSeconds } from "./gateway-env.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import type { GatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 
@@ -76,14 +77,14 @@ export class GatewayBudgetRejectedError extends Error {
 }
 
 export async function reserveGatewayBudget(input: {
-  agentApiKeyId: string;
+  agentId: string;
   databaseUrl?: string;
   price: ModelTokenPrice;
   requestId: string;
   requestMetadata: GatewayRequestMetadata;
 }): Promise<GatewayBudgetDecision> {
   return withPostgresTransaction(input.databaseUrl, async (client) => {
-    const limits = await readEnabledBudgetLimits(client, input.agentApiKeyId);
+    const limits = await readEnabledBudgetLimits(client, input.agentId);
     const totalTokens =
       input.requestMetadata.estimatedInputTokens + input.requestMetadata.estimatedOutputTokens;
 
@@ -119,7 +120,7 @@ export async function reserveGatewayBudget(input: {
     const now = new Date();
     const period = getBudgetPeriodWindow(now, costLimit.period);
     const budgetPeriod = await lockBudgetPeriod(client, {
-      agentApiKeyId: input.agentApiKeyId,
+      agentId: input.agentId,
       period,
       periodType: costLimit.period,
     });
@@ -164,12 +165,12 @@ export async function reserveGatewayBudget(input: {
       `,
       [
         reservation.id,
-        input.agentApiKeyId,
+        input.agentId,
         reservation.budgetPeriodId,
         reservation.reservedInputTokens,
         reservation.reservedOutputTokens,
         reservation.reservedCostUsd,
-        readBudgetReservationTtlSeconds(),
+        gatewayBudgetReservationTtlSeconds(),
       ],
     );
 
@@ -320,7 +321,7 @@ function budgetFailure(code: GatewayBudgetErrorCode, requestId: string): Gateway
 
 async function readEnabledBudgetLimits(
   client: PostgresQueryClient,
-  agentApiKeyId: string,
+  agentId: string,
 ): Promise<
   Array<{
     limitType: "budget" | "token";
@@ -347,7 +348,7 @@ async function readEnabledBudgetLimits(
         else 4
       end
     `,
-    [agentApiKeyId],
+    [agentId],
   );
 
   return result.rows.map((row) => ({
@@ -361,7 +362,7 @@ async function readEnabledBudgetLimits(
 async function lockBudgetPeriod(
   client: PostgresQueryClient,
   input: {
-    agentApiKeyId: string;
+    agentId: string;
     period: PeriodWindow;
     periodType: GatewayBudgetPeriod;
   },
@@ -380,7 +381,7 @@ async function lockBudgetPeriod(
     `,
     [
       randomUUID(),
-      input.agentApiKeyId,
+      input.agentId,
       input.periodType,
       input.period.periodStart,
       input.period.periodEnd,
@@ -398,7 +399,7 @@ async function lockBudgetPeriod(
         and period_start = $3
       for update
     `,
-    [input.agentApiKeyId, input.periodType, input.period.periodStart],
+    [input.agentId, input.periodType, input.period.periodStart],
   );
   const row = result.rows[0];
   if (!row) {
@@ -511,11 +512,6 @@ async function updateGatewayBudgetReservation(
       );
     }
   });
-}
-
-function readBudgetReservationTtlSeconds(env: Record<string, string | undefined> = process.env) {
-  const parsed = Number(env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS ?? "");
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1_800;
 }
 
 function isBudgetPeriod(period: string): period is GatewayBudgetPeriod {

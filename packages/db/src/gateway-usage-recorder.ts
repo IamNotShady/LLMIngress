@@ -43,7 +43,7 @@ export type GatewayUsageCostRecords = {
 
 type RecordGatewayUsageCostInput = {
   activityId: string;
-  agentApiKeyId: string;
+  agentId: string;
   databaseUrl?: string;
   usageCost: GatewayUsageCostDetails;
   virtualModelId: string;
@@ -75,7 +75,7 @@ export async function recordGatewayUsageCostAndSavings(
       [
         randomUUID(),
         input.activityId,
-        input.agentApiKeyId,
+        input.agentId,
         input.virtualModelId,
         input.usageCost.providerModelId,
         records.requestUsage.inputTokens,
@@ -112,7 +112,7 @@ export async function recordGatewayUsageCostAndSavings(
       [
         randomUUID(),
         input.activityId,
-        input.agentApiKeyId,
+        input.agentId,
         input.usageCost.providerModelId,
         records.requestCost.inputCostUsd,
         records.requestCost.outputCostUsd,

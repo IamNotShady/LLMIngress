@@ -69,7 +69,7 @@ async function seedV1ProviderCoverageRoutes(
   scenarios: readonly V1ProviderCoverageScenario[],
 ): Promise<void> {
   const agentId = randomUUID();
-  const agentApiKeyId = randomUUID();
+  const seedAgentId = randomUUID();
   const encryptedKeys = scenarios.map((scenario) =>
     createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(scenario.providerApiKey),
   );
@@ -77,7 +77,7 @@ async function seedV1ProviderCoverageRoutes(
 
   await fixture.query(
     "insert into agents (id, name, agent_type, enabled) values ($1, 'V1 Provider Smoke Agent', 'coding', true)",
-    [agentId],
+    [seedAgentId],
   );
 
   for (const [index, scenario] of scenarios.entries()) {
@@ -169,8 +169,8 @@ async function seedV1ProviderCoverageRoutes(
       update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
-      agentApiKeyId,
       agentId,
+      seedAgentId,
       agentApiKey.slice(0, 12),
       buildGatewayAgentApiKeyHash(agentApiKey),
       seededVirtualModelIds[0],
@@ -183,7 +183,7 @@ async function seedV1ProviderCoverageRoutes(
         insert into agent_virtual_models (agent_id, virtual_model_id)
         values ($1, $2)
       `,
-      [agentApiKeyId, virtualModelId],
+      [agentId, virtualModelId],
     );
   }
   await fixture.query(

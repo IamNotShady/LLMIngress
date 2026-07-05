@@ -6,7 +6,7 @@ export type GatewayAuthErrorCode =
   | "invalid_agent_api_key"
   | "missing_agent_api_key";
 
-export type GatewayAuthenticatedAgentApiKey = {
+export type GatewayAuthenticatedAgent = {
   agentId: string;
   defaultVirtualModelId: string | null;
   id: string;
@@ -15,7 +15,7 @@ export type GatewayAuthenticatedAgentApiKey = {
 };
 
 export type GatewayAuthSuccess = {
-  agentApiKey: GatewayAuthenticatedAgentApiKey;
+  agentApiKey: GatewayAuthenticatedAgent;
   ok: true;
   requestId: string;
 };

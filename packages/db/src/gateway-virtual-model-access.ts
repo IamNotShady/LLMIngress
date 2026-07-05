@@ -98,7 +98,7 @@ export function readRequestedModelName(body: unknown): string | null {
 }
 
 export async function listAllowedGatewayVirtualModels(input: {
-  agentApiKeyId: string;
+  agentId: string;
   databaseUrl?: string;
 }): Promise<GatewayVirtualModel[]> {
   const result = await getPostgresPool(input.databaseUrl).query<VirtualModelRow>(
@@ -113,7 +113,7 @@ export async function listAllowedGatewayVirtualModels(input: {
         and virtual_models.deleted_at is null
       order by virtual_models.name
     `,
-    [input.agentApiKeyId],
+    [input.agentId],
   );
   return result.rows.map((row) => ({
     displayName: row.display_name,

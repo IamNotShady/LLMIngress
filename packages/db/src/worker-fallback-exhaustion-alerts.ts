@@ -55,7 +55,7 @@ type FallbackExhaustionCandidateRow = PostgresQueryResultRow & {
 
 type FallbackExhaustionCandidate = {
   activityId: string;
-  agentApiKeyId: string;
+  agentId: string;
   agentApiKeyPrefix: string;
   completedAt: Date | null;
   errorCode: string | null;
@@ -182,7 +182,7 @@ function buildFallbackExhaustionNotificationEvent(
 ) {
   const payload = {
     activityId: candidate.activityId,
-    agentApiKeyId: candidate.agentApiKeyId,
+    agentId: candidate.agentId,
     agentApiKeyPrefix: candidate.agentApiKeyPrefix,
     alertKey: `fallback_exhaustion:${candidate.activityId}`,
     completedAt: candidate.completedAt?.toISOString() ?? null,
@@ -290,7 +290,7 @@ function rowToFallbackExhaustionCandidate(
 ): FallbackExhaustionCandidate {
   return {
     activityId: row.activity_id,
-    agentApiKeyId: row.agent_id,
+    agentId: row.agent_id,
     agentApiKeyPrefix: row.agent_key_prefix,
     completedAt: row.completed_at,
     errorCode: row.error_code,

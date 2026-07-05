@@ -35,7 +35,7 @@ export type ConsoleActivity = {
 };
 
 export type ConsoleActivityFilters = {
-  agentApiKeyId?: string;
+  agentId?: string;
   from?: Date;
   protocol?: ConsoleActivityProtocol;
   providerId?: string;
@@ -55,7 +55,7 @@ export type ConsoleActivityListInput = {
 };
 
 export type ConsoleActivityFiltersInput = {
-  agentApiKeyId?: string | null;
+  agentId?: string | null;
   from?: Date | string | null;
   limit?: number | string | null;
   page?: number | string | null;
@@ -385,7 +385,7 @@ export function normalizeConsoleActivityFilters(
   const protocol = readEnum(input.protocol, activityProtocols);
 
   return {
-    agentApiKeyId: readTrimmed(input.agentApiKeyId),
+    agentId: readTrimmed(input.agentId),
     from: readDate(input.from),
     limit: normalizeLimit(input.limit),
     page: normalizePage(input.page),
@@ -440,8 +440,8 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
   if (filters.virtualModelId) {
     add("request_activity.virtual_model_id = ?::uuid", filters.virtualModelId);
   }
-  if (filters.agentApiKeyId) {
-    add("request_activity.agent_id = ?::uuid", filters.agentApiKeyId);
+  if (filters.agentId) {
+    add("request_activity.agent_id = ?::uuid", filters.agentId);
   }
   if (filters.requestId) {
     add("request_activity.request_id = ?", filters.requestId);

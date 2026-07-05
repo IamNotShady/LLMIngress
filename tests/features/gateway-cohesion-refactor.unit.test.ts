@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 function src(path: string): string {
@@ -80,4 +80,33 @@ describe("gateway cohesion fitness", () => {
     expect(recording).not.toContain("finalizeGatewayBudgetReservation");
     expect(recording).toContain("settleGatewayStreamBudget");
   });
+
+  it("centralizes gateway env readers and agent naming", () => {
+    for (const file of [
+      "gateway-streaming",
+      "gateway-budgets",
+      "gateway-request-metadata",
+      "gateway-stream-pipeline",
+    ]) {
+      expect(src(`packages/db/src/${file}.ts`)).not.toMatch(/process\.env\.(GATEWAY|LLMINGRESS)_/);
+    }
+    for (const file of allSourceFiles(["packages/db/src", "apps/gateway/src"])) {
+      expect(src(file)).not.toContain("agentApiKey" + "Id");
+    }
+  });
 });
+
+function allSourceFiles(directories: string[]): string[] {
+  const files: string[] = [];
+  for (const directory of directories) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) {
+        files.push(...allSourceFiles([path]));
+      } else if (entry.isFile() && path.endsWith(".ts")) {
+        files.push(path);
+      }
+    }
+  }
+  return files;
+}

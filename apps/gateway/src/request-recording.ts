@@ -47,7 +47,7 @@ export const defaultGatewayRequestRecorder: GatewayRequestRecorder = {
 };
 
 export async function executeRecordedGatewayJsonRequest(input: {
-  agentApiKeyId: string;
+  agentId: string;
   agentApiKeyPrefix: string;
   execute: (requestActivityId: string | undefined) => Promise<GatewayJsonEndpointResponse>;
   logger: FastifyBaseLogger;
@@ -89,7 +89,7 @@ export async function executeRecordedGatewayJsonRequest(input: {
       try {
         await recorder.recordUsageCost({
           activityId: activity.id,
-          agentApiKeyId: input.agentApiKeyId,
+          agentId: input.agentId,
           usageCost: response.usageCost,
           virtualModelId: input.virtualModelId,
         });
@@ -124,7 +124,7 @@ export async function executeRecordedGatewayJsonRequest(input: {
 }
 
 export async function executeRecordedGatewayStreamingRequest(input: {
-  agentApiKeyId: string;
+  agentId: string;
   agentApiKeyPrefix: string;
   execute: (requestActivityId: string | undefined) => Promise<GatewayStreamingResult>;
   logger: FastifyBaseLogger;
@@ -182,7 +182,7 @@ export async function executeRecordedGatewayStreamingRequest(input: {
           try {
             await recorder.recordUsageCost({
               activityId: activity.id,
-              agentApiKeyId: input.agentApiKeyId,
+              agentId: input.agentId,
               usageCost: {
                 ...response.usageCost,
                 ...(providerUsage ? { providerUsage } : {}),
@@ -216,7 +216,7 @@ export async function executeRecordedGatewayStreamingRequest(input: {
 
 async function createActivity(input: {
   input: {
-    agentApiKeyId: string;
+    agentId: string;
     agentApiKeyPrefix: string;
     logger: FastifyBaseLogger;
     model: string;
@@ -229,7 +229,7 @@ async function createActivity(input: {
 }): Promise<GatewayStartedRequestActivity | undefined> {
   try {
     return await input.recorder.createActivity({
-      agentApiKeyId: input.input.agentApiKeyId,
+      agentId: input.input.agentId,
       agentApiKeyPrefix: input.input.agentApiKeyPrefix,
       model: input.input.model,
       protocol: input.input.protocol,

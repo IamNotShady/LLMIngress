@@ -13,6 +13,14 @@ import {
   type GatewayConfigSnapshot,
 } from "@llmingress/db/gateway-config-reload";
 import { executeGatewayOpenAIEmbeddings } from "@llmingress/db/gateway-embeddings";
+import {
+  gatewayBodyLimitBytes,
+  gatewayConfigNotifications,
+  gatewayConfigReconcileIntervalMs,
+  gatewayHeartbeatIntervalMs,
+  gatewayInstanceId,
+  gatewayMetricsToken,
+} from "@llmingress/db/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/db/gateway-error-mapping";
 import { executeGatewayAnthropicMessages } from "@llmingress/db/gateway-messages";
 import { getPrometheusMetricsDocument } from "@llmingress/db/gateway-metrics";
@@ -48,7 +56,7 @@ type CreateGatewayAppOptions = {
 };
 
 type GatewayJsonEndpointExecutionInput = {
-  agentApiKeyId: string;
+  agentId: string;
   requestActivityId: string | undefined;
   requestBody: unknown;
   requestId: string;
@@ -74,7 +82,7 @@ type GatewayJsonEndpointDefinition = {
 
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   const app = Fastify({
-    bodyLimit: readNonNegativeIntegerEnv("GATEWAY_BODY_LIMIT_BYTES", 10_485_760),
+    bodyLimit: gatewayBodyLimitBytes(),
     logger: true,
   });
 
@@ -101,7 +109,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   });
 
   app.get("/metrics", async (request, reply) => {
-    const requiredToken = process.env.GATEWAY_METRICS_TOKEN?.trim();
+    const requiredToken = gatewayMetricsToken();
     if (requiredToken) {
       const authorization = firstRequestHeaderValue(request.headers.authorization);
       if (authorization !== `Bearer ${requiredToken}`) {
@@ -135,7 +143,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
+      agentId: auth.agentApiKey.id,
     });
 
     return reply.header(gatewayRequestIdHeader, auth.requestId).send({
@@ -180,10 +188,10 @@ export async function startGateway() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
   const configRuntime = createGatewayConfigRuntime({
-    enableNotifications: readBooleanEnv("GATEWAY_CONFIG_NOTIFICATIONS", true),
-    gatewayInstanceId: process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
-    heartbeatIntervalMs: readNonNegativeIntegerEnv("GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000),
-    reconcileIntervalMs: readNonNegativeIntegerEnv("GATEWAY_CONFIG_RECONCILE_INTERVAL_MS", 30_000),
+    enableNotifications: gatewayConfigNotifications(),
+    gatewayInstanceId: gatewayInstanceId(),
+    heartbeatIntervalMs: gatewayHeartbeatIntervalMs(),
+    reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
   });
   await configRuntime.start();
 
@@ -193,27 +201,6 @@ export async function startGateway() {
     host: "0.0.0.0",
     port: config.gatewayPort,
   });
-}
-
-function readBooleanEnv(name: string, fallback: boolean): boolean {
-  const value = process.env[name];
-  if (value === undefined) {
-    return fallback;
-  }
-  return value !== "false";
-}
-
-function readNonNegativeIntegerEnv(name: string, fallback: number): number {
-  const value = process.env[name];
-  if (value === undefined) {
-    return fallback;
-  }
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error(`${name} must be a non-negative integer.`);
-  }
-  return parsed;
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
@@ -239,7 +226,7 @@ function registerGatewayJsonEndpoint(
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
+      agentId: auth.agentApiKey.id,
     });
     const virtualModelAccess = resolveGatewayVirtualModelRequest({
       allowedVirtualModels,
@@ -272,11 +259,11 @@ function registerGatewayJsonEndpoint(
       return sendGatewayStreamingResponse(
         reply,
         await executeRecordedGatewayStreamingRequest({
-          agentApiKeyId: auth.agentApiKey.id,
+          agentId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
           execute: (requestActivityId) =>
             executeGatewayStreamingRequest({
-              agentApiKeyId: auth.agentApiKey.id,
+              agentId: auth.agentApiKey.id,
               protocol: streamingProtocol,
               requestActivityId,
               requestBody: request.body,
@@ -296,11 +283,11 @@ function registerGatewayJsonEndpoint(
     }
 
     const response = await executeRecordedGatewayJsonRequest({
-      agentApiKeyId: auth.agentApiKey.id,
+      agentId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
       execute: (requestActivityId) =>
         endpoint.execute({
-          agentApiKeyId: auth.agentApiKey.id,
+          agentId: auth.agentApiKey.id,
           requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,

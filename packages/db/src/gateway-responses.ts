@@ -93,7 +93,7 @@ export function normalizeOpenAIResponsesRequest(
 }
 
 export async function executeGatewayOpenAIResponse(input: {
-  agentApiKeyId: string;
+  agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   requestActivityId?: string;

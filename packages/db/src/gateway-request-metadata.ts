@@ -3,6 +3,7 @@ import type {
   NormalizedOpenAIChatRequest,
   NormalizedOpenAIResponsesRequest,
 } from "@llmingress/provider/openai";
+import { gatewayDebugRequestMetadata } from "./gateway-env.ts";
 
 export type GatewayRequestProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 
@@ -93,7 +94,7 @@ export function buildAnthropicMessagesRequestMetadata(input: {
 export function shouldExposeGatewayRequestMetadata(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
-  return env.GATEWAY_DEBUG_REQUEST_METADATA === "true";
+  return gatewayDebugRequestMetadata(env);
 }
 
 export function serializeGatewayRequestMetadata(metadata: GatewayRequestMetadata): string {

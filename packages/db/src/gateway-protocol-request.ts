@@ -88,7 +88,7 @@ export async function executeGatewayProtocolRequest<
   TNormalized,
   TSuccess extends ProviderFallbackAttemptSuccess,
 >(input: {
-  agentApiKeyId: string;
+  agentId: string;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;
   requestActivityId?: string;
@@ -113,7 +113,7 @@ export async function executeGatewayProtocolRequest<
   });
 
   const rateLimit = await enforceGatewayRateLimits({
-    agentApiKeyId: input.agentApiKeyId,
+    agentId: input.agentId,
     databaseUrl: input.databaseUrl,
     requestId: input.requestId,
     requestMetadata,
@@ -209,7 +209,7 @@ export async function executeGatewayProtocolRequest<
         releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation }),
       reserveAttempt: async (candidate) => {
         const reservation = await reserveGatewayBudget({
-          agentApiKeyId: input.agentApiKeyId,
+          agentId: input.agentId,
           databaseUrl: input.databaseUrl,
           price: candidate.price,
           requestId: input.requestId,

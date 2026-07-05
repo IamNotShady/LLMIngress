@@ -6,6 +6,7 @@ import {
   type GatewayBudgetReservation,
   releaseGatewayBudgetReservation,
 } from "./gateway-budgets.ts";
+import { gatewayStreamIdleTimeoutMs } from "./gateway-env.ts";
 import type { FallbackChainCandidate } from "./gateway-fallback-chain.ts";
 import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
 import type { GatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
@@ -18,7 +19,7 @@ export type GatewayRuntimeStreamError = {
 };
 
 export function streamIdleTimeoutMs(env: Record<string, string | undefined> = process.env): number {
-  return readPositiveIntegerEnv(env.GATEWAY_STREAM_IDLE_TIMEOUT_MS, 120_000);
+  return gatewayStreamIdleTimeoutMs(env);
 }
 
 export async function readChunkWithTimeout(
@@ -291,12 +292,4 @@ export async function settleGatewayStreamBudget(input: {
     databaseUrl: input.databaseUrl,
     reservation: input.reservation,
   });
-}
-
-function readPositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (value === undefined) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }

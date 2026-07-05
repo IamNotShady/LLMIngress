@@ -141,7 +141,7 @@ describe("gateway settlement integrity", () => {
         const before = Date.now();
 
         const decision = await reserveGatewayBudget({
-          agentApiKeyId: agentId,
+          agentId: agentId,
           databaseUrl: fixture.databaseUrl,
           price: pricedModel(),
           requestId: "req-ttl",

@@ -47,7 +47,7 @@ export type GatewayResponseMetadata = {
 };
 
 type CreateGatewayRequestActivityInput = {
-  agentApiKeyId: string;
+  agentId: string;
   agentApiKeyPrefix: string;
   databaseUrl?: string;
   model: string;
@@ -112,7 +112,7 @@ export async function createGatewayRequestActivity(
     [
       id,
       input.requestId,
-      input.agentApiKeyId,
+      input.agentId,
       input.virtualModelId,
       input.agentApiKeyPrefix,
       input.protocol,

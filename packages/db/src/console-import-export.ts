@@ -980,7 +980,7 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
     document.providers.flatMap((provider) => provider.models.map((model) => model.id)),
   );
   const virtualModelIds = new Set(document.virtualModels.map((model) => model.id));
-  const agentApiKeyIds = new Set(
+  const agentIds = new Set(
     document.agents.flatMap((agent) => (agent.apiKey ? [agent.apiKey.id] : [])),
   );
 
@@ -1009,7 +1009,7 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
     document.agents.map((agent) => agent.id),
     "Agent ids",
   );
-  assertUnique([...agentApiKeyIds], "Agent API key ids");
+  assertUnique([...agentIds], "Agent API key ids");
   assertUnique(
     document.agents.flatMap((agent) => (agent.apiKey ? [agent.apiKey.keyPrefix] : [])),
     "Agent API key prefixes",

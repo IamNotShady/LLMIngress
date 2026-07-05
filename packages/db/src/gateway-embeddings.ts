@@ -105,7 +105,7 @@ export function createGatewayEmbeddingsProviderAdapter(input: {
 }
 
 export async function executeGatewayOpenAIEmbeddings(input: {
-  agentApiKeyId: string;
+  agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Client, type ClientConfig, Pool } from "pg";
+import { llmingressDbPoolMax } from "./gateway-env.ts";
 
 type DatabaseUrlEnvironment = Record<string, string | undefined>;
 
@@ -76,7 +77,7 @@ export function getPostgresPool(databaseUrl?: string): Pool {
     connectionString,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,
-    max: readPostgresPoolMax(),
+    max: llmingressDbPoolMax(),
   });
   pool.on("error", () => undefined);
   postgresPools.set(connectionString, pool);
@@ -154,9 +155,4 @@ function readBootstrapConfigFile(path: string): BootstrapConfigFile {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`LLMINGRESS_BOOTSTRAP_CONFIG could not be read: ${message}`);
   }
-}
-
-function readPostgresPoolMax(env: DatabaseUrlEnvironment = process.env): number {
-  const parsed = Number(env.LLMINGRESS_DB_POOL_MAX ?? "10");
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 10;
 }

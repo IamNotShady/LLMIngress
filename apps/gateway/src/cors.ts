@@ -1,8 +1,10 @@
+import { gatewayCorsAllowedOrigins } from "@llmingress/db/gateway-env";
+
 const defaultLocalhostNames = new Set(["127.0.0.1", "localhost", "::1"]);
 
 export function isAllowedGatewayCorsOrigin(
   origin: string | undefined,
-  configuredOrigins = process.env.GATEWAY_CORS_ALLOWED_ORIGINS,
+  configuredOrigins = gatewayCorsAllowedOrigins(),
 ): boolean {
   if (!origin) {
     return false;

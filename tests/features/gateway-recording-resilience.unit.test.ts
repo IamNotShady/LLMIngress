@@ -9,7 +9,7 @@ function fakeLogger() {
 }
 
 const baseInput = {
-  agentApiKeyId: "agent-1",
+  agentId: "agent-1",
   agentApiKeyPrefix: "llmi_",
   model: "vm-a",
   protocol: "chat_completions" as const,

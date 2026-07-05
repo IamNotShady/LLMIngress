@@ -15,6 +15,7 @@ import {
 } from "./gateway-budgets.ts";
 import { normalizeOpenAIChatCompletionRequest } from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
+import { gatewayInstanceId, gatewayStreamConnectTimeoutMs } from "./gateway-env.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
   createGatewayErrorBody,
@@ -101,7 +102,7 @@ export function readGatewayStreamingFlag(body: unknown): boolean {
 }
 
 export async function executeGatewayStreamingRequest(input: {
-  agentApiKeyId: string;
+  agentId: string;
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   protocol: GatewayStreamingProtocol;
@@ -122,7 +123,7 @@ export async function executeGatewayStreamingRequest(input: {
   }
 
   const rateLimit = await enforceGatewayRateLimits({
-    agentApiKeyId: input.agentApiKeyId,
+    agentId: input.agentId,
     databaseUrl: input.databaseUrl,
     requestId: input.requestId,
     requestMetadata: normalized.requestMetadata,
@@ -243,7 +244,7 @@ export async function executeGatewayStreamingRequest(input: {
 
         // --- Reserve budget for this candidate ---
         const budget = await reserveGatewayBudget({
-          agentApiKeyId: input.agentApiKeyId,
+          agentId: input.agentId,
           databaseUrl: input.databaseUrl,
           price: attemptedCandidate.price,
           requestId: input.requestId,
@@ -585,15 +586,7 @@ const FIRST_CHUNK_TIMEOUT_MS = 30_000;
 export function streamConnectTimeoutMs(
   env: Record<string, string | undefined> = process.env,
 ): number {
-  return readPositiveIntegerEnv(env.GATEWAY_STREAM_CONNECT_TIMEOUT_MS, 30_000);
-}
-
-function readPositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (value === undefined) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  return gatewayStreamConnectTimeoutMs(env);
 }
 
 function buildStreamingPayload(input: {
@@ -735,7 +728,7 @@ async function recordGatewayRuntimeError(input: {
     `,
     [
       randomUUID(),
-      process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
+      gatewayInstanceId(),
       input.error.errorCode,
       input.error.errorMessage,
       JSON.stringify(input.metadata),

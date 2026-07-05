@@ -126,7 +126,7 @@ export function normalizeAnthropicMessagesRequest(
 }
 
 export async function executeGatewayAnthropicMessages(input: {
-  agentApiKeyId: string;
+  agentId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl?: string;
   requestActivityId?: string;

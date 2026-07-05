@@ -67,10 +67,8 @@ function fallbackCandidate(
 
 function recorder(overrides: Partial<GatewayRequestRecorder> = {}): GatewayRequestRecorder {
   return {
-    completeActivity: vi.fn(async () => undefined),
-    createActivity: vi.fn(async () => ({ id: "act-1", startedAt: new Date() })),
+    recordActivity: vi.fn(async () => undefined),
     recordTrace: vi.fn(async () => undefined),
-    recordUsageCost: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -129,57 +127,38 @@ describe("gateway recording resilience", () => {
     recordGatewayBudgetUsageMock.mockResolvedValue(undefined);
   });
 
-  it("returns the LLM response when activity creation fails", async () => {
+  it("returns the JSON LLM response before completed activity recording finishes", async () => {
     const logger = fakeLogger();
+    const recordStarted = deferred();
+    const recordBlocked = deferred();
     const execute = vi.fn(async () => ({ body: { ok: true }, statusCode: 200 }));
-    const response = await executeRecordedGatewayJsonRequest({
+    const responsePromise = executeRecordedGatewayJsonRequest({
       ...baseInput,
       execute,
       logger,
       recorder: recorder({
-        createActivity: vi.fn(async () => {
-          throw new Error("db down");
-        }),
-      }),
-    });
-    expect(response.statusCode).toBe(200);
-    expect(execute).toHaveBeenCalledWith(undefined);
-    expect(logger.error).toHaveBeenCalled();
-  });
-
-  it("returns the JSON LLM response before activity completion finishes", async () => {
-    const logger = fakeLogger();
-    const completionStarted = deferred();
-    const completionBlocked = deferred();
-    const responsePromise = executeRecordedGatewayJsonRequest({
-      ...baseInput,
-      execute: async () => ({ body: { ok: true }, statusCode: 200 }),
-      logger,
-      recorder: recorder({
-        completeActivity: vi.fn(async () => {
-          completionStarted.resolve();
-          await completionBlocked.promise;
+        recordActivity: vi.fn(async () => {
+          recordStarted.resolve();
+          await recordBlocked.promise;
         }),
       }),
     });
 
-    await completionStarted.promise;
+    await recordStarted.promise;
     const response = await expectResolvedBeforeRecording(responsePromise);
     expect(response.statusCode).toBe(200);
+    expect(execute).toHaveBeenCalledWith();
 
-    completionBlocked.resolve();
+    recordBlocked.resolve();
   });
 
-  it("logs background JSON usage and trace write failures after returning the LLM response", async () => {
+  it("logs background JSON activity and trace write failures after returning the LLM response", async () => {
     const logger = fakeLogger();
     const failing = recorder({
-      completeActivity: vi.fn(async () => {
+      recordActivity: vi.fn(async () => {
         throw new Error("write failed");
       }),
       recordTrace: vi.fn(async () => {
-        throw new Error("write failed");
-      }),
-      recordUsageCost: vi.fn(async () => {
         throw new Error("write failed");
       }),
     });
@@ -201,10 +180,10 @@ describe("gateway recording resilience", () => {
       recorder: failing,
     });
     expect(response.statusCode).toBe(200);
-    await waitForErrorLogs(logger, 3);
+    await waitForErrorLogs(logger, 2);
     expect(logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ activityId: "act-1", requestId: baseInput.requestId }),
-      "gateway usage recording failed",
+      expect.objectContaining({ activityId: expect.any(String), requestId: baseInput.requestId }),
+      "gateway activity recording failed",
     );
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ requestId: baseInput.requestId }),
@@ -214,8 +193,8 @@ describe("gateway recording resilience", () => {
 
   it("returns a streaming error response before activity completion finishes", async () => {
     const logger = fakeLogger();
-    const completionStarted = deferred();
-    const completionBlocked = deferred();
+    const recordStarted = deferred();
+    const recordBlocked = deferred();
     const responsePromise = executeRecordedGatewayStreamingRequest({
       ...baseInput,
       execute: async () => ({
@@ -225,27 +204,27 @@ describe("gateway recording resilience", () => {
       }),
       logger,
       recorder: recorder({
-        completeActivity: vi.fn(async () => {
-          completionStarted.resolve();
-          await completionBlocked.promise;
+        recordActivity: vi.fn(async () => {
+          recordStarted.resolve();
+          await recordBlocked.promise;
         }),
       }),
     });
 
-    await completionStarted.promise;
+    await recordStarted.promise;
     const response = await expectResolvedBeforeRecording(responsePromise);
     expect(response.ok).toBe(false);
     expect(response.statusCode).toBe(502);
 
-    completionBlocked.resolve();
+    recordBlocked.resolve();
   });
 
-  it("ends a successful stream without waiting for budget usage or activity completion", async () => {
+  it("ends a successful stream without waiting for budget usage or activity recording", async () => {
     const logger = fakeLogger();
     const budgetStarted = deferred();
     const budgetBlocked = deferred();
-    const completionStarted = deferred();
-    const completionBlocked = deferred();
+    const recordStarted = deferred();
+    const recordBlocked = deferred();
     const events: string[] = [];
     recordGatewayBudgetUsageMock.mockImplementationOnce(async () => {
       events.push("budget-started");
@@ -281,10 +260,10 @@ describe("gateway recording resilience", () => {
       }),
       logger,
       recorder: recorder({
-        completeActivity: vi.fn(async () => {
-          events.push("complete-started");
-          completionStarted.resolve();
-          await completionBlocked.promise;
+        recordActivity: vi.fn(async () => {
+          events.push("activity-started");
+          recordStarted.resolve();
+          await recordBlocked.promise;
         }),
       }),
     });
@@ -293,49 +272,31 @@ describe("gateway recording resilience", () => {
     const bodyPromise = readStreamBody(response.body);
 
     await budgetStarted.promise;
-    await completionStarted.promise;
+    await recordStarted.promise;
     const body = await expectResolvedBeforeRecording(bodyPromise);
     expect(body).toBe("streamed response");
-    expect(events).toEqual(["budget-started", "complete-started"]);
+    expect(events).toEqual(["budget-started", "activity-started"]);
 
     budgetBlocked.resolve();
-    completionBlocked.resolve();
+    recordBlocked.resolve();
   });
 
-  it("returns a successful fallback result before recording the succeeded attempt finishes", async () => {
-    const insertStarted = deferred();
-    const insertBlocked = deferred();
-    postgresQueryMock.mockImplementationOnce(async () => {
-      insertStarted.resolve();
-      await insertBlocked.promise;
-      return { rows: [] };
-    });
-
-    const resultPromise = executeProviderFallbackAttempts({
+  it("returns a successful fallback result without writing fallback events immediately", async () => {
+    const fallbackAttempts = [];
+    const result = await executeProviderFallbackAttempts({
       callProvider: vi.fn(async () => ({ body: { ok: true }, ok: true, statusCode: 200 })),
       candidates: [fallbackCandidate()],
-      fallbackAttempts: [],
-      requestActivityId: "activity-1",
+      fallbackAttempts,
       requestId: "req-1",
     });
 
-    await insertStarted.promise;
-    const result = await expectResolvedBeforeRecording(resultPromise);
     expect(result?.result.statusCode).toBe(200);
-
-    insertBlocked.resolve();
+    expect(fallbackAttempts).toEqual([]);
+    expect(postgresQueryMock).not.toHaveBeenCalled();
   });
 
-  it("continues fallback before recording the failed attempt finishes", async () => {
-    const failedInsertStarted = deferred();
-    const failedInsertBlocked = deferred();
-    postgresQueryMock
-      .mockImplementationOnce(async () => {
-        failedInsertStarted.resolve();
-        await failedInsertBlocked.promise;
-        return { rows: [] };
-      })
-      .mockResolvedValue({ rows: [] });
+  it("continues fallback after a failed attempt without writing fallback events immediately", async () => {
+    const fallbackAttempts = [];
     const callProvider = vi
       .fn()
       .mockResolvedValueOnce({
@@ -346,23 +307,20 @@ describe("gateway recording resilience", () => {
       })
       .mockResolvedValueOnce({ body: { ok: true }, ok: true, statusCode: 200 });
 
-    const resultPromise = executeProviderFallbackAttempts({
+    const result = await executeProviderFallbackAttempts({
       callProvider,
       candidates: [
         fallbackCandidate({ providerModelId: "provider-model-1" }),
         fallbackCandidate({ providerModelId: "provider-model-2" }),
       ],
-      fallbackAttempts: [],
-      requestActivityId: "activity-1",
+      fallbackAttempts,
       requestId: "req-1",
     });
 
-    await failedInsertStarted.promise;
-    const result = await expectResolvedBeforeRecording(resultPromise);
     expect(result?.candidate.providerModelId).toBe("provider-model-2");
     expect(callProvider).toHaveBeenCalledTimes(2);
-
-    failedInsertBlocked.resolve();
+    expect(fallbackAttempts).toHaveLength(1);
+    expect(postgresQueryMock).not.toHaveBeenCalled();
   });
 
   it("propagates stream runtime errors before runtime error recording finishes", async () => {
@@ -404,5 +362,6 @@ describe("gateway recording resilience", () => {
     expect(source).not.toMatch(/\bawait\s+recordSucceededAttemptInDatabase\(/);
     expect(source).not.toMatch(/\bawait\s+recordFailedAttemptInDatabase\(/);
     expect(source).not.toMatch(/\bawait\s+recordGatewayProviderApiKeyLastUsed\(/);
+    expect(source).not.toContain("requestActivityId");
   });
 });

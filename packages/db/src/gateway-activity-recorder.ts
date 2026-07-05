@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { getPostgresPool } from "@llmingress/db/client";
+import { type PostgresQueryClient, withPostgresTransaction } from "@llmingress/db/client";
+import type { FallbackFailedAttempt } from "./gateway-fallback-chain.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
+import {
+  type GatewayUsageCostDetails,
+  insertGatewayUsageCostAndSavings,
+} from "./gateway-usage-recorder.ts";
 
 export type GatewayRequestActivityProtocol =
   | "chat_completions"
@@ -19,11 +24,6 @@ export type GatewayRequestActivityRoute = {
   providerModelId?: string;
   routePolicyId?: string;
   routeReason?: unknown;
-};
-
-export type GatewayStartedRequestActivity = {
-  id: string;
-  startedAt: Date;
 };
 
 export type GatewayActivityCompletion = {
@@ -46,87 +46,28 @@ export type GatewayResponseMetadata = {
   };
 };
 
-type CreateGatewayRequestActivityInput = {
+type RecordCompletedGatewayRequestActivityInput = {
+  activityId: string;
   agentId: string;
   agentApiKeyPrefix: string;
   databaseUrl?: string;
   model: string;
   protocol: GatewayRequestActivityProtocol;
-  requestId: string;
-  startedAt?: Date;
-  stream: boolean;
-  virtualModelId: string;
-};
-
-type CompleteGatewayRequestActivityInput = {
-  activityId: string;
   completedAt?: Date;
-  databaseUrl?: string;
+  requestId: string;
   requestLoggingEnabled: boolean;
   requestMetadata?: GatewayRequestMetadata;
   responseBody: unknown;
   route?: GatewayRequestActivityRoute;
   startedAt: Date;
   statusCode: number;
+  stream: boolean;
+  usageCost?: GatewayUsageCostDetails;
+  virtualModelId: string;
 };
 
-export async function createGatewayRequestActivity(
-  input: CreateGatewayRequestActivityInput,
-): Promise<GatewayStartedRequestActivity> {
-  const startedAt = input.startedAt ?? new Date();
-  const id = randomUUID();
-
-  await getPostgresPool(input.databaseUrl).query(
-    `
-      insert into request_activity (
-        id,
-        request_id,
-        agent_id,
-        virtual_model_id,
-        agent_key_prefix,
-        protocol,
-        model,
-        stream,
-        agent_name_snapshot,
-        virtual_model_name_snapshot,
-        status,
-        started_at,
-        created_at
-      )
-      values (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        (select name from agents where id = $3),
-        (select name from virtual_models where id = $4),
-        'started',
-        $9,
-        $9
-      )
-    `,
-    [
-      id,
-      input.requestId,
-      input.agentId,
-      input.virtualModelId,
-      input.agentApiKeyPrefix,
-      input.protocol,
-      input.model,
-      input.stream,
-      startedAt.toISOString(),
-    ],
-  );
-
-  return { id, startedAt };
-}
-
-export async function completeGatewayRequestActivity(
-  input: CompleteGatewayRequestActivityInput,
+export async function recordCompletedGatewayRequestActivity(
+  input: RecordCompletedGatewayRequestActivityInput,
 ): Promise<void> {
   const completion = buildGatewayActivityCompletion({
     completedAt: input.completedAt ?? new Date(),
@@ -144,58 +85,194 @@ export async function completeGatewayRequestActivity(
     }),
     route: input.route,
   });
-  await getPostgresPool(input.databaseUrl).query(
+
+  await withPostgresTransaction(input.databaseUrl, async (client) => {
+    await client.query(
+      `
+        insert into request_activity (
+          id,
+          request_id,
+          agent_id,
+          virtual_model_id,
+          agent_key_prefix,
+          protocol,
+          model,
+          stream,
+          route_policy_id,
+          provider_id,
+          provider_model_id,
+          route_reason,
+          fallback_attempts,
+          request_metadata,
+          response_metadata,
+          provider_api_key_id,
+          provider_api_key_prefix,
+          agent_name_snapshot,
+          virtual_model_name_snapshot,
+          route_policy_strategy_snapshot,
+          provider_key_snapshot,
+          provider_display_name_snapshot,
+          provider_model_name_snapshot,
+          provider_model_display_name_snapshot,
+          status,
+          error_code,
+          error_message,
+          http_status,
+          latency_ms,
+          started_at,
+          completed_at,
+          created_at
+        )
+        values (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          $12::jsonb,
+          $13::jsonb,
+          $14::jsonb,
+          $15::jsonb,
+          $16,
+          $17,
+          (select name from agents where id = $3),
+          (select name from virtual_models where id = $4),
+          (select strategy::text from route_policies where id = $9),
+          (select provider_key from providers where id = $10),
+          (select display_name from providers where id = $10),
+          (select model_id from provider_models where id = $11),
+          (select display_name from provider_models where id = $11),
+          $18,
+          $19,
+          $20,
+          $21,
+          $22,
+          $23,
+          $24,
+          $23
+        )
+      `,
+      [
+        input.activityId,
+        input.requestId,
+        input.agentId,
+        input.virtualModelId,
+        input.agentApiKeyPrefix,
+        input.protocol,
+        input.model,
+        input.stream,
+        loggingPolicy.route?.routePolicyId ?? null,
+        loggingPolicy.route?.providerId ?? null,
+        loggingPolicy.route?.providerModelId ?? null,
+        JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
+        JSON.stringify(loggingPolicy.route?.fallbackAttempts ?? []),
+        JSON.stringify(loggingPolicy.requestMetadata),
+        JSON.stringify(loggingPolicy.responseMetadata),
+        loggingPolicy.route?.providerApiKeyId ?? null,
+        loggingPolicy.route?.providerApiKeyPrefix ?? null,
+        completion.status,
+        completion.errorCode,
+        loggingPolicy.errorMessage,
+        completion.httpStatus,
+        completion.latencyMs,
+        input.startedAt.toISOString(),
+        completion.completedAt.toISOString(),
+      ],
+    );
+
+    await insertFallbackEvents(client, {
+      activityId: input.activityId,
+      route: input.route,
+      succeeded: completion.status === "succeeded",
+    });
+
+    if (completion.status === "succeeded" && input.usageCost) {
+      await insertGatewayUsageCostAndSavings(client, {
+        activityId: input.activityId,
+        agentId: input.agentId,
+        usageCost: input.usageCost,
+        virtualModelId: input.virtualModelId,
+      });
+    }
+  });
+}
+
+async function insertFallbackEvents(
+  client: PostgresQueryClient,
+  input: {
+    activityId: string;
+    route?: GatewayRequestActivityRoute;
+    succeeded: boolean;
+  },
+): Promise<void> {
+  const failedAttempts = Array.isArray(input.route?.fallbackAttempts)
+    ? (input.route.fallbackAttempts as FallbackFailedAttempt[])
+    : [];
+
+  for (const attempt of failedAttempts) {
+    await client.query(
+      `
+        insert into fallback_events (
+          id,
+          request_activity_id,
+          provider_model_id,
+          provider_api_key_id,
+          provider_api_key_prefix,
+          attempt_order,
+          status,
+          error_code,
+          error_message,
+          failed_before_first_byte
+        )
+        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
+      `,
+      [
+        randomUUID(),
+        input.activityId,
+        attempt.providerModelId,
+        attempt.providerApiKeyId || null,
+        attempt.providerApiKeyPrefix || null,
+        attempt.attemptOrder,
+        attempt.errorCode,
+        attempt.errorMessage,
+        attempt.failedBeforeFirstByte,
+      ],
+    );
+  }
+
+  if (!input.succeeded || !input.route?.providerModelId) {
+    return;
+  }
+
+  const attemptOrder =
+    failedAttempts.reduce((highest, attempt) => Math.max(highest, attempt.attemptOrder), 0) + 1;
+  await client.query(
     `
-      update request_activity
-      set route_policy_id = $2,
-          provider_id = $3,
-          provider_model_id = $4,
-          route_reason = $5::jsonb,
-          fallback_attempts = $6::jsonb,
-          request_metadata = $7::jsonb,
-          response_metadata = $8::jsonb,
-          provider_api_key_id = $9,
-          provider_api_key_prefix = $10,
-          route_policy_strategy_snapshot = (
-            select strategy::text from route_policies where id = $2
-          ),
-          provider_key_snapshot = (
-            select provider_key from providers where id = $3
-          ),
-          provider_display_name_snapshot = (
-            select display_name from providers where id = $3
-          ),
-          provider_model_name_snapshot = (
-            select model_id from provider_models where id = $4
-          ),
-          provider_model_display_name_snapshot = (
-            select display_name from provider_models where id = $4
-          ),
-          status = $11,
-          error_code = $12,
-          error_message = $13,
-          http_status = $14,
-          latency_ms = $15,
-          completed_at = $16
-      where id = $1
+      insert into fallback_events (
+        id,
+        request_activity_id,
+        provider_model_id,
+        provider_api_key_id,
+        provider_api_key_prefix,
+        attempt_order,
+        status,
+        failed_before_first_byte
+      )
+      values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
     `,
     [
+      randomUUID(),
       input.activityId,
-      loggingPolicy.route?.routePolicyId ?? null,
-      loggingPolicy.route?.providerId ?? null,
-      loggingPolicy.route?.providerModelId ?? null,
-      JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
-      JSON.stringify(loggingPolicy.route?.fallbackAttempts ?? []),
-      JSON.stringify(loggingPolicy.requestMetadata),
-      JSON.stringify(loggingPolicy.responseMetadata),
-      loggingPolicy.route?.providerApiKeyId ?? null,
-      loggingPolicy.route?.providerApiKeyPrefix ?? null,
-      completion.status,
-      completion.errorCode,
-      loggingPolicy.errorMessage,
-      completion.httpStatus,
-      completion.latencyMs,
-      completion.completedAt.toISOString(),
+      input.route.providerModelId,
+      input.route.providerApiKeyId || null,
+      input.route.providerApiKeyPrefix || null,
+      attemptOrder,
     ],
   );
 }

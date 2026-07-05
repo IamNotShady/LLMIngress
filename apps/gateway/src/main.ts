@@ -57,7 +57,6 @@ type CreateGatewayAppOptions = {
 
 type GatewayJsonEndpointExecutionInput = {
   agentId: string;
-  requestActivityId: string | undefined;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -261,11 +260,10 @@ function registerGatewayJsonEndpoint(
         await executeRecordedGatewayStreamingRequest({
           agentId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          execute: (requestActivityId) =>
+          execute: () =>
             executeGatewayStreamingRequest({
               agentId: auth.agentApiKey.id,
               protocol: streamingProtocol,
-              requestActivityId,
               requestBody: request.body,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
@@ -285,10 +283,9 @@ function registerGatewayJsonEndpoint(
     const response = await executeRecordedGatewayJsonRequest({
       agentId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      execute: (requestActivityId) =>
+      execute: () =>
         endpoint.execute({
           agentId: auth.agentApiKey.id,
-          requestActivityId,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),

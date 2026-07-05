@@ -85,7 +85,7 @@ export function wrapProviderStreamWithActivityCompletion(
   source: Readable,
   input: {
     collectChunk?: (chunk: Buffer | Uint8Array | string) => void;
-    completeActivity: (completion: { statusCode: number }) => Promise<void>;
+    completeActivity: (completion: { statusCode: number }) => Promise<void> | void;
     errorStatusCode?: number;
     statusCode: number;
   },
@@ -98,24 +98,19 @@ export function wrapProviderStreamWithActivityCompletion(
   }
   source.pipe(output, { end: false });
   source.once("end", () => {
-    void settleActivity(input.statusCode)
-      .catch(() => undefined)
-      .finally(() => output.end());
+    settleActivity(input.statusCode);
+    output.end();
   });
   source.once("error", (error) => {
-    void settleActivity(input.errorStatusCode ?? 502)
-      .catch(() => undefined)
-      .finally(() => {
-        output.destroy(error instanceof Error ? error : new Error("Provider stream failed."));
-      });
+    settleActivity(input.errorStatusCode ?? 502);
+    output.destroy(error instanceof Error ? error : new Error("Provider stream failed."));
   });
   source.once("close", () => {
     if (settled || source.readableEnded) {
       return;
     }
-    void settleActivity(input.errorStatusCode ?? 499)
-      .catch(() => undefined)
-      .finally(() => output.destroy());
+    settleActivity(input.errorStatusCode ?? 499);
+    output.destroy();
   });
   output.once("close", () => {
     if (!source.destroyed && !source.readableEnded) {
@@ -123,12 +118,16 @@ export function wrapProviderStreamWithActivityCompletion(
     }
   });
 
-  async function settleActivity(statusCode: number): Promise<void> {
+  function settleActivity(statusCode: number): void {
     if (settled) {
       return;
     }
     settled = true;
-    await input.completeActivity({ statusCode });
+    try {
+      void Promise.resolve(input.completeActivity({ statusCode })).catch(() => undefined);
+    } catch {
+      // Activity recording is best-effort after the stream outcome is known.
+    }
   }
 
   return output;

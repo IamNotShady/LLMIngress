@@ -1,11 +1,8 @@
-import { randomUUID } from "node:crypto";
-import { getPostgresPool } from "@llmingress/db/client";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import {
   classifyProviderFailureStatus,
   shouldRecordProviderRequestPathHealthFailure,
 } from "@llmingress/provider/connectivity";
-import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
 
@@ -37,13 +34,6 @@ export type FallbackFailedAttempt = {
   statusCode: number | null;
 };
 
-export type FallbackSucceededAttempt = {
-  attemptOrder: number;
-  providerApiKeyId?: string;
-  providerApiKeyPrefix?: string;
-  providerModelId: string;
-};
-
 export type ProviderFallbackAttemptSuccess = {
   body: unknown;
   ok: true;
@@ -73,7 +63,6 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     fallbackAttempts: FallbackFailedAttempt[];
     recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void> | void;
     recordHealthEvent?: typeof recordProviderHealthEvent;
-    requestActivityId?: string;
     requestId?: string;
   };
 
@@ -117,14 +106,6 @@ export async function executeProviderFallbackAttempts<
       const result = await input.callProvider({ candidate, providerApiKey });
 
       if (result.ok) {
-        recordSucceededAttemptInDatabase(input, {
-          attemptOrder,
-          ...(providerApiKey.providerApiKeyId
-            ? { providerApiKeyId: providerApiKey.providerApiKeyId }
-            : {}),
-          ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
-          providerModelId: candidate.providerModelId,
-        });
         return {
           candidate: {
             ...candidate,
@@ -145,13 +126,9 @@ export async function executeProviderFallbackAttempts<
       input.fallbackAttempts.push(failedAttempt);
       candidateFailedAttempts.push(failedAttempt);
       await input.recordFailedAttempt?.(failedAttempt);
-      recordFailedAttemptInDatabase(input, failedAttempt);
     }
 
     if (candidateFailedAttempts.some((attempt) => !attempt.retryable)) {
-      if (!input.requestActivityId && !input.recordHealthEvent) {
-        return undefined;
-      }
       await recordCandidateHealthFailure(input, candidate, candidateFailedAttempts);
       return undefined;
     }
@@ -198,98 +175,6 @@ export function readFallbackProviderApiKeys(
       ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
     },
   ];
-}
-
-export function recordSucceededAttemptInDatabase(
-  input: { databaseUrl?: string; requestActivityId?: string },
-  attempt: FallbackSucceededAttempt,
-): void {
-  if (!input.requestActivityId) {
-    return;
-  }
-
-  runGatewayBackgroundTask({
-    message: "gateway fallback succeeded attempt recording failed",
-    metadata: {
-      attemptOrder: attempt.attemptOrder,
-      providerModelId: attempt.providerModelId,
-      requestActivityId: input.requestActivityId,
-    },
-    task: async () => {
-      await getPostgresPool(input.databaseUrl).query(
-        `
-          insert into fallback_events (
-            id,
-            request_activity_id,
-            provider_model_id,
-            provider_api_key_id,
-            provider_api_key_prefix,
-            attempt_order,
-            status,
-            failed_before_first_byte
-          )
-          values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
-        `,
-        [
-          randomUUID(),
-          input.requestActivityId,
-          attempt.providerModelId,
-          attempt.providerApiKeyId || null,
-          attempt.providerApiKeyPrefix || null,
-          attempt.attemptOrder,
-        ],
-      );
-    },
-  });
-}
-
-export function recordFailedAttemptInDatabase(
-  input: { databaseUrl?: string; requestActivityId?: string },
-  attempt: FallbackFailedAttempt,
-): void {
-  if (!input.requestActivityId) {
-    return;
-  }
-
-  runGatewayBackgroundTask({
-    message: "gateway fallback failed attempt recording failed",
-    metadata: {
-      attemptOrder: attempt.attemptOrder,
-      errorCode: attempt.errorCode,
-      providerModelId: attempt.providerModelId,
-      requestActivityId: input.requestActivityId,
-    },
-    task: async () => {
-      await getPostgresPool(input.databaseUrl).query(
-        `
-          insert into fallback_events (
-            id,
-            request_activity_id,
-            provider_model_id,
-            provider_api_key_id,
-            provider_api_key_prefix,
-            attempt_order,
-            status,
-            error_code,
-            error_message,
-            failed_before_first_byte
-          )
-          values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
-        `,
-        [
-          randomUUID(),
-          input.requestActivityId,
-          attempt.providerModelId,
-          attempt.providerApiKeyId || null,
-          attempt.providerApiKeyPrefix || null,
-          attempt.attemptOrder,
-          attempt.errorCode,
-          attempt.errorMessage,
-          attempt.failedBeforeFirstByte,
-        ],
-      );
-    },
-  });
 }
 
 export async function recordCandidateHealthFailure(

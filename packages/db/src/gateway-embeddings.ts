@@ -109,7 +109,6 @@ export async function executeGatewayOpenAIEmbeddings(input: {
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;

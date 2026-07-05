@@ -454,6 +454,26 @@
   - `pnpm run verify:features` passed with all 18 passing features re-verified.
 - Remaining risks/non-goals: budget now uses accepted post-charge semantics, so concurrent successful requests can briefly exceed the configured budget before their background usage writes land. Historical migrations still create then remove reservation schema via migration `0003`; old migrations were not rewritten to avoid checksum mismatch.
 
+## 2026-07-05 Gateway Completed Activity Recording Follow-up
+
+- Removed the Gateway request-start `request_activity` insert from the Activity recording path:
+  - Gateway now generates an in-memory Activity id and started timestamp before execution, then schedules one best-effort completed Activity transaction after JSON response or streaming completion/error.
+  - `recordCompletedGatewayRequestActivity` inserts `request_activity`, `fallback_events`, and successful `request_usage`/`request_costs` in order inside one transaction.
+  - Fallback execution no longer writes `fallback_events` immediately; failed attempts stay in memory for the Activity route summary and final timeline persistence.
+  - Streaming finalization no longer waits for Activity recording before ending or erroring the output stream.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts` failed on the old `createActivity`/`completeActivity` recorder API, old immediate fallback writes, and remaining `requestActivityId` runtime usage.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts`
+  - `pnpm exec vitest run tests/features/gateway-stream-robustness.unit.test.ts`
+  - `pnpm exec vitest run tests/features/gateway-cohesion-refactor.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts tests/features/gateway-recording-resilience.unit.test.ts`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 18 passing features re-verified.
+- Remaining risks/non-goals: Activity/usage/cost/fallback persistence is still in-process best-effort; a process crash immediately after response can lose these observability rows. DB schema is intentionally unchanged.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

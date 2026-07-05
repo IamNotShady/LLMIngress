@@ -96,7 +96,6 @@ export async function executeGatewayOpenAIResponse(input: {
   agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;

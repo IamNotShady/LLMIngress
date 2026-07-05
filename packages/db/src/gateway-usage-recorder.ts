@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing/price-registry";
-import { withPostgresTransaction } from "@llmingress/db/client";
+import { type PostgresQueryClient, withPostgresTransaction } from "@llmingress/db/client";
 import type { GatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 
 export type GatewayUsageCostDetails = {
@@ -52,11 +52,19 @@ type RecordGatewayUsageCostInput = {
 export async function recordGatewayUsageCostAndSavings(
   input: RecordGatewayUsageCostInput,
 ): Promise<void> {
+  await withPostgresTransaction(input.databaseUrl, async (client) => {
+    await insertGatewayUsageCostAndSavings(client, input);
+  });
+}
+
+export async function insertGatewayUsageCostAndSavings(
+  client: PostgresQueryClient,
+  input: Omit<RecordGatewayUsageCostInput, "databaseUrl">,
+): Promise<void> {
   const records = buildGatewayUsageCostRecords(input.usageCost);
 
-  await withPostgresTransaction(input.databaseUrl, async (client) => {
-    await client.query(
-      `
+  await client.query(
+    `
         insert into request_usage (
           id,
           request_activity_id,
@@ -72,22 +80,22 @@ export async function recordGatewayUsageCostAndSavings(
         )
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `,
-      [
-        randomUUID(),
-        input.activityId,
-        input.agentId,
-        input.virtualModelId,
-        input.usageCost.providerModelId,
-        records.requestUsage.inputTokens,
-        records.requestUsage.outputTokens,
-        records.requestUsage.totalTokens,
-        records.requestUsage.cachedInputTokens,
-        records.requestUsage.reasoningTokens,
-        records.requestUsage.tokenSource,
-      ],
-    );
-    await client.query(
-      `
+    [
+      randomUUID(),
+      input.activityId,
+      input.agentId,
+      input.virtualModelId,
+      input.usageCost.providerModelId,
+      records.requestUsage.inputTokens,
+      records.requestUsage.outputTokens,
+      records.requestUsage.totalTokens,
+      records.requestUsage.cachedInputTokens,
+      records.requestUsage.reasoningTokens,
+      records.requestUsage.tokenSource,
+    ],
+  );
+  await client.query(
+    `
         insert into request_costs (
           id,
           request_activity_id,
@@ -109,27 +117,26 @@ export async function recordGatewayUsageCostAndSavings(
         )
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       `,
-      [
-        randomUUID(),
-        input.activityId,
-        input.agentId,
-        input.usageCost.providerModelId,
-        records.requestCost.inputCostUsd,
-        records.requestCost.outputCostUsd,
-        records.requestCost.totalCostUsd,
-        records.requestCost.costSource,
-        records.requestCost.priceSource,
-        records.requestCost.priceVersion,
-        records.requestSavings.baselineProviderModelId,
-        records.requestSavings.actualCostUsd,
-        records.requestSavings.baselineCostUsd,
-        records.requestSavings.savingsUsd,
-        records.requestSavings.savingsPercent,
-        records.requestSavings.priceSource,
-        records.requestSavings.priceVersion,
-      ],
-    );
-  });
+    [
+      randomUUID(),
+      input.activityId,
+      input.agentId,
+      input.usageCost.providerModelId,
+      records.requestCost.inputCostUsd,
+      records.requestCost.outputCostUsd,
+      records.requestCost.totalCostUsd,
+      records.requestCost.costSource,
+      records.requestCost.priceSource,
+      records.requestCost.priceVersion,
+      records.requestSavings.baselineProviderModelId,
+      records.requestSavings.actualCostUsd,
+      records.requestSavings.baselineCostUsd,
+      records.requestSavings.savingsUsd,
+      records.requestSavings.savingsPercent,
+      records.requestSavings.priceSource,
+      records.requestSavings.priceVersion,
+    ],
+  );
 }
 
 export function buildGatewayUsageCostRecords(

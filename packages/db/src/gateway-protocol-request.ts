@@ -90,7 +90,6 @@ export async function executeGatewayProtocolRequest<
   agentId: string;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -202,7 +201,6 @@ export async function executeGatewayProtocolRequest<
       candidates,
       databaseUrl: input.databaseUrl,
       fallbackAttempts,
-      requestActivityId: input.requestActivityId,
       requestId: input.requestId,
     });
     if (!success) {

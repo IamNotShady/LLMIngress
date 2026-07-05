@@ -30,8 +30,6 @@ import {
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
   readFallbackProviderApiKeys,
-  recordFailedAttemptInDatabase,
-  recordSucceededAttemptInDatabase,
 } from "./gateway-fallback-chain.ts";
 import { normalizeAnthropicMessagesRequest } from "./gateway-messages.ts";
 import {
@@ -103,7 +101,6 @@ export async function executeGatewayStreamingRequest(input: {
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   protocol: GatewayStreamingProtocol;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -303,10 +300,6 @@ export async function executeGatewayStreamingRequest(input: {
             },
           });
           fallbackAttempts.push(failedAttempt);
-          recordFailedAttemptInDatabase(
-            { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-            failedAttempt,
-          );
           lastFailureCode = "provider_request_failed";
           continue; // retryable — advance to next candidate
         }
@@ -351,10 +344,6 @@ export async function executeGatewayStreamingRequest(input: {
             },
           });
           fallbackAttempts.push(failedAttempt);
-          recordFailedAttemptInDatabase(
-            { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-            failedAttempt,
-          );
           lastFailureCode = errorCode;
 
           if (retryable) {
@@ -420,29 +409,12 @@ export async function executeGatewayStreamingRequest(input: {
             },
           });
           fallbackAttempts.push(failedAttempt);
-          recordFailedAttemptInDatabase(
-            { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-            failedAttempt,
-          );
           lastFailureCode = "provider_request_failed";
           continue; // retryable — advance to next candidate
         }
         const firstValue = firstChunk.value;
 
         // --- SUCCESS — first chunk confirmed, this candidate wins ---
-        recordSucceededAttemptInDatabase(
-          { databaseUrl: input.databaseUrl, requestActivityId: input.requestActivityId },
-          {
-            attemptOrder,
-            ...(attemptedCandidate.providerApiKeyId
-              ? { providerApiKeyId: attemptedCandidate.providerApiKeyId }
-              : {}),
-            ...(attemptedCandidate.providerApiKeyPrefix
-              ? { providerApiKeyPrefix: attemptedCandidate.providerApiKeyPrefix }
-              : {}),
-            providerModelId: attemptedCandidate.providerModelId,
-          },
-        );
         recordGatewayProviderApiKeyLastUsed({
           databaseUrl: input.databaseUrl,
           providerApiKeyId: attemptedCandidate.providerApiKeyId,

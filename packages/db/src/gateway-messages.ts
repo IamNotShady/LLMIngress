@@ -129,7 +129,6 @@ export async function executeGatewayAnthropicMessages(input: {
   agentId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl?: string;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;

@@ -102,7 +102,6 @@ export async function recordCompletedGatewayRequestActivity(
           provider_id,
           provider_model_id,
           route_reason,
-          fallback_attempts,
           request_metadata,
           response_metadata,
           provider_api_key_id,
@@ -138,9 +137,8 @@ export async function recordCompletedGatewayRequestActivity(
           $12::jsonb,
           $13::jsonb,
           $14::jsonb,
-          $15::jsonb,
+          $15,
           $16,
-          $17,
           (select name from agents where id = $3),
           (select name from virtual_models where id = $4),
           (select strategy::text from route_policies where id = $9),
@@ -148,14 +146,14 @@ export async function recordCompletedGatewayRequestActivity(
           (select display_name from providers where id = $10),
           (select model_id from provider_models where id = $11),
           (select display_name from provider_models where id = $11),
+          $17,
           $18,
           $19,
           $20,
           $21,
           $22,
           $23,
-          $24,
-          $23
+          $22
         )
       `,
       [
@@ -171,7 +169,6 @@ export async function recordCompletedGatewayRequestActivity(
         loggingPolicy.route?.providerId ?? null,
         loggingPolicy.route?.providerModelId ?? null,
         JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
-        JSON.stringify(loggingPolicy.route?.fallbackAttempts ?? []),
         JSON.stringify(loggingPolicy.requestMetadata),
         JSON.stringify(loggingPolicy.responseMetadata),
         loggingPolicy.route?.providerApiKeyId ?? null,
@@ -228,9 +225,11 @@ async function insertFallbackEvents(
           status,
           error_code,
           error_message,
-          failed_before_first_byte
+          failed_before_first_byte,
+          retryable,
+          status_code
         )
-        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
+        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9, $10, $11)
       `,
       [
         randomUUID(),
@@ -242,6 +241,8 @@ async function insertFallbackEvents(
         attempt.errorCode,
         attempt.errorMessage,
         attempt.failedBeforeFirstByte,
+        attempt.retryable,
+        attempt.statusCode,
       ],
     );
   }

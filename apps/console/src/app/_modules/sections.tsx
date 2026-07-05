@@ -1107,7 +1107,7 @@ function ActivityReferenceDetail({
   const activity = detail?.activity ?? fallbackActivity;
   const metadataLines = buildActivityMetadataLines(activity, detail?.requestMetadata ?? {});
   const fallbackEvents = detail?.fallbackEvents ?? [];
-  const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(activity.fallbackAttempts);
+  const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(fallbackEvents);
 
   return (
     <>
@@ -4184,10 +4184,7 @@ function formatActivityModelDisplayLabel(activity: ConsoleActivity): string {
 }
 
 function activityFallbackCount(activity: ConsoleActivity): number {
-  if (Array.isArray(activity.fallbackAttempts)) {
-    return activity.fallbackAttempts.length;
-  }
-  return 0;
+  return activity.fallbackFailedAttemptCount;
 }
 
 type ActivityRange = "24h" | "7d" | "30d";

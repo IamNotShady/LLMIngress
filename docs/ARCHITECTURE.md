@@ -940,13 +940,12 @@ PostgreSQL database
 |
 |-- Provider / model config
 |   |-- providers
-|   |-- provider_keys
+|   |-- provider_api_keys
 |   `-- provider_models (including manual price fields)
 |
 |-- Routing config
 |   |-- virtual_models
-|   |-- route_policies
-|   |-- route_policy_rules
+|   |-- route_policies (including rules jsonb)
 |   `-- route_policy_candidates
 |
 |-- Limits
@@ -958,7 +957,7 @@ PostgreSQL database
 |   |-- request_activity (including request-level config label snapshots)
 |   |-- request_usage
 |   |-- request_costs (including baseline and savings fields)
-|   |-- fallback_events
+|   |-- fallback_events (retry-chain source)
 |   |-- provider_health_events
 |   |-- provider_health_summary
 |   |-- gateway_runtime_status
@@ -976,10 +975,6 @@ PostgreSQL database
 |-- Config lifecycle
 |   |-- config_versions
 |   `-- migration_history
-|
-`-- Optional content records
-    |-- request_prompts
-    `-- response_outputs
 ```
 
 Config tables use `deleted_at` for Console delete semantics. Agents, Providers,
@@ -988,6 +983,8 @@ when deleted instead of physically removed. Runtime history tables keep
 restrictive foreign keys to those config rows so request audit data remains
 referentially intact. Request activity also stores minimal label snapshots for
 Agent, Virtual Model, Route Policy strategy, Provider, and Provider Model.
+Prompt and response content tables are not part of the current V1 schema; adding
+them requires a separate content-recording schema change.
 Historical reports prefer those snapshots and fall back to joined config rows
 for older records.
 

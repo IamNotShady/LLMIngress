@@ -17,7 +17,6 @@ export type JsonlRequestLogActivityRow = PostgresQueryResultRow & {
   created_at: Date;
   error_code: string | null;
   error_message: string | null;
-  fallback_attempts: unknown;
   http_status: number | null;
   id: string;
   latency_ms: number | null;
@@ -63,11 +62,15 @@ export type JsonlRequestLogFallbackEventRow = PostgresQueryResultRow & {
   error_code: string | null;
   error_message: string | null;
   failed_before_first_byte: boolean;
+  provider_api_key_id: string | null;
+  provider_api_key_prefix: string | null;
   provider_key: string | null;
   provider_model_id: string | null;
   provider_model_model_id: string | null;
   request_activity_id?: string;
+  retryable: boolean | null;
   status: string;
+  status_code: number | null;
 };
 
 export type JsonlRequestLogRecordInput = {
@@ -158,7 +161,9 @@ export function buildJsonlRequestLogRecord(input: JsonlRequestLogRecordInput) {
             message: redactSecretString(activity.error_message),
           }
         : null,
-    fallbackAttempts: redactSecretsFromJsonlValue(activity.fallback_attempts),
+    fallbackAttempts: redactSecretsFromJsonlValue(
+      buildLegacyFallbackAttempts(input.fallbackEvents),
+    ),
     fallbackEvents: input.fallbackEvents.map((event) => ({
       attemptOrder: event.attempt_order,
       createdAt: event.created_at.toISOString(),
@@ -215,6 +220,22 @@ export function buildJsonlRequestLogRecord(input: JsonlRequestLogRecordInput) {
         }
       : null,
   };
+}
+
+function buildLegacyFallbackAttempts(events: readonly JsonlRequestLogFallbackEventRow[]) {
+  return events
+    .filter((event) => event.status === "failed")
+    .map((event) => ({
+      attemptOrder: event.attempt_order,
+      errorCode: event.error_code,
+      errorMessage: event.error_message,
+      failedBeforeFirstByte: event.failed_before_first_byte,
+      providerApiKeyId: event.provider_api_key_id,
+      providerApiKeyPrefix: event.provider_api_key_prefix,
+      providerModelId: event.provider_model_id,
+      retryable: event.retryable,
+      statusCode: event.status_code,
+    }));
 }
 
 export function redactSecretsFromJsonlValue(value: unknown): unknown {
@@ -299,7 +320,6 @@ async function readRequestLogRows(
         request_activity.model,
         request_activity.stream,
         request_activity.route_reason,
-        request_activity.fallback_attempts,
         request_activity.status,
         request_activity.error_code,
         request_activity.error_message,
@@ -404,6 +424,10 @@ async function readFallbackEventsByActivityId(
         fallback_events.error_message,
         fallback_events.failed_before_first_byte,
         fallback_events.created_at,
+        fallback_events.provider_api_key_id::text as provider_api_key_id,
+        fallback_events.provider_api_key_prefix,
+        fallback_events.retryable,
+        fallback_events.status_code,
         provider_models.id::text as provider_model_id,
         provider_models.model_id as provider_model_model_id,
         providers.provider_key

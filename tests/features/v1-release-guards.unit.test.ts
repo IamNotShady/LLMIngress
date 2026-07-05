@@ -24,6 +24,7 @@ const allowedFeatureIds = [
   "gateway-cohesion-refactor",
   "schema-vocab-checks-relaxed",
   "schema-notification-deliveries-removed",
+  "schema-fallback-single-source",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -36,6 +37,7 @@ const inProgressFeatureIds = new Set([
   "gateway-cohesion-refactor",
   "schema-vocab-checks-relaxed",
   "schema-notification-deliveries-removed",
+  "schema-fallback-single-source",
 ]);
 
 describe("v1 release guards milestone", () => {

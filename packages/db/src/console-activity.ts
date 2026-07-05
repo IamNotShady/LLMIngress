@@ -7,7 +7,7 @@ export type ConsoleActivity = {
   completedAt: Date | null;
   errorCode: string | null;
   errorMessage: string | null;
-  fallbackAttempts: unknown;
+  fallbackFailedAttemptCount: number;
   httpStatus: number | null;
   id: string;
   inputTokens: number | null;
@@ -80,7 +80,9 @@ export type ConsoleFallbackEvent = {
   providerModelDisplayName: string | null;
   providerModelId: string | null;
   providerModelName: string | null;
+  retryable: boolean | null;
   status: string;
+  statusCode: number | null;
 };
 
 export type ConsoleActivityDetail = {
@@ -99,7 +101,7 @@ type ActivityRow = PostgresQueryResultRow & {
   completed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
-  fallback_attempts: unknown;
+  fallback_failed_count: number;
   http_status: number | null;
   id: string;
   input_tokens: number | null;
@@ -139,7 +141,9 @@ type FallbackEventRow = PostgresQueryResultRow & {
   provider_model_display_name: string | null;
   provider_model_id: string | null;
   provider_model_name: string | null;
+  retryable: boolean | null;
   status: string;
+  status_code: number | null;
 };
 
 type NormalizedActivityListInput = {
@@ -189,7 +193,7 @@ export async function listConsoleActivities(
                request_activity.started_at,
                request_activity.completed_at,
                request_activity.route_reason,
-               request_activity.fallback_attempts,
+               coalesce(fallback_counts.failed_count, 0)::integer as fallback_failed_count,
                coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
                  as route_policy_strategy,
                request_activity.agent_key_prefix,
@@ -226,6 +230,12 @@ export async function listConsoleActivities(
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
         left join request_costs on request_costs.request_activity_id = request_activity.id
+        left join lateral (
+          select count(*)::integer as failed_count
+          from fallback_events
+          where fallback_events.request_activity_id = request_activity.id
+            and fallback_events.status = 'failed'
+        ) fallback_counts on true
         ${where.sql}
         order by request_activity.started_at desc,
                  request_activity.created_at desc
@@ -296,7 +306,7 @@ export async function getConsoleActivityDetail(input: {
                request_activity.started_at,
                request_activity.completed_at,
                request_activity.route_reason,
-               request_activity.fallback_attempts,
+               coalesce(fallback_counts.failed_count, 0)::integer as fallback_failed_count,
                request_activity.request_metadata,
                request_activity.response_metadata,
                coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
@@ -335,6 +345,12 @@ export async function getConsoleActivityDetail(input: {
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
         left join request_costs on request_costs.request_activity_id = request_activity.id
+        left join lateral (
+          select count(*)::integer as failed_count
+          from fallback_events
+          where fallback_events.request_activity_id = request_activity.id
+            and fallback_events.status = 'failed'
+        ) fallback_counts on true
         where ($1::uuid is null or request_activity.id = $1)
           and ($2::text is null or request_activity.request_id = $2)
         limit 1
@@ -358,6 +374,8 @@ export async function getConsoleActivityDetail(input: {
                fallback_events.provider_model_id::text as provider_model_id,
                provider_models.display_name as provider_model_display_name,
                provider_models.model_id as provider_model_name,
+               fallback_events.retryable,
+               fallback_events.status_code,
                fallback_events.created_at
         from fallback_events
         left join provider_models on provider_models.id = fallback_events.provider_model_id
@@ -489,29 +507,19 @@ export function formatConsoleActivityRouteReason(routeReason: unknown): string {
   return "No route reason recorded";
 }
 
-export function formatConsoleActivityFallbackAttempts(fallbackAttempts: unknown): string[] {
-  if (!Array.isArray(fallbackAttempts) || fallbackAttempts.length === 0) {
+export function formatConsoleActivityFallbackAttempts(
+  fallbackEvents: readonly ConsoleFallbackEvent[],
+): string[] {
+  const failedEvents = fallbackEvents.filter((event) => event.status === "failed");
+  if (failedEvents.length === 0) {
     return ["No fallback attempts"];
   }
 
-  return fallbackAttempts.map((attempt, index) => {
-    if (!isRecord(attempt)) {
-      return `Attempt ${index + 1}: unknown fallback result`;
-    }
-
-    const attemptOrder =
-      typeof attempt.attemptOrder === "number" && Number.isFinite(attempt.attemptOrder)
-        ? attempt.attemptOrder
-        : index + 1;
-    const errorCode =
-      typeof attempt.errorCode === "string" && attempt.errorCode.trim()
-        ? attempt.errorCode.trim()
-        : "unknown_error";
-    const providerModelId =
-      typeof attempt.providerModelId === "string" && attempt.providerModelId.trim()
-        ? attempt.providerModelId.trim()
-        : "unknown provider model";
-    const firstByte = attempt.failedBeforeFirstByte === true ? " before first byte" : "";
+  return failedEvents.map((event, index) => {
+    const attemptOrder = Number.isFinite(event.attemptOrder) ? event.attemptOrder : index + 1;
+    const errorCode = event.errorCode?.trim() || "unknown_error";
+    const providerModelId = event.providerModelId?.trim() || "unknown provider model";
+    const firstByte = event.failedBeforeFirstByte ? " before first byte" : "";
 
     return `Attempt ${attemptOrder}: ${errorCode}${firstByte} on ${providerModelId}`;
   });
@@ -530,7 +538,7 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     completedAt: row.completed_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,
-    fallbackAttempts: row.fallback_attempts,
+    fallbackFailedAttemptCount: Number(row.fallback_failed_count),
     httpStatus: row.http_status,
     id: row.id,
     inputTokens: row.input_tokens,
@@ -570,7 +578,9 @@ function rowToConsoleFallbackEvent(row: FallbackEventRow): ConsoleFallbackEvent 
     providerModelDisplayName: row.provider_model_display_name,
     providerModelId: row.provider_model_id,
     providerModelName: row.provider_model_name,
+    retryable: row.retryable,
     status: row.status,
+    statusCode: row.status_code,
   };
 }
 

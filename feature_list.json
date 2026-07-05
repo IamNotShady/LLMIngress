@@ -225,6 +225,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-05: TDD red->green. Added migration 0005_drop_notification_deliveries to remove the write-only notification_deliveries table, simplified notification dispatch recording to update notification_events only, and removed the table from backup artifacts while keeping webhook_deliveries unchanged. RED unit failed on missing notification_deliveries when simulating the dropped table plus schema/backup assertions; RED E2E failed because the table still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 20 passing features re-verified."
+    },
+    {
+      "id": "schema-fallback-single-source",
+      "name": "Schema Fallback Single Source",
+      "description": "fallback_events is the single source of truth for retry chains: fallback_events gains retryable/status_code, the request_activity.fallback_attempts jsonb column is dropped, Console activity list/detail, jsonl export (legacy fallbackAttempts shape preserved), and fallback exhaustion alerts all derive attempts from fallback_events rows.",
+      "verification": "pnpm exec vitest run tests/features/schema-fallback-single-source.unit.test.ts && pnpm test:e2e tests/e2e/schema-fallback-single-source.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing",
+        "gateway-recording-resilience"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-05: TDD red->green. Added migration 0006_fallback_single_source so fallback_events carries retryable/status_code and request_activity no longer stores fallback_attempts. Console activity counts/details, jsonl export legacy fallbackAttempts, and fallback exhaustion alerts now derive failed retry attempts from fallback_events rows. RED unit failed on the old request_activity.fallback_attempts column, missing retry metadata, recorder writes, Console counts, JSONL fallbackAttempts, and alert payloads; RED E2E failed because the dropped column still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 21 passing features re-verified."
     }
   ]
 }

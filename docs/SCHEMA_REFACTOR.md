@@ -1,6 +1,6 @@
 # 表结构过度设计改造实现方案
 
-版本：v2（详细实现规格）。状态：**待批准，未实施**。迁移编号按执行顺序分配。
+版本：v2（详细实现规格）。状态：**0004-0006 与文档对齐已实施；0007 待产品决策**。迁移编号按执行顺序分配。
 
 ## 1. 背景与结论
 
@@ -33,9 +33,9 @@
 | --- | --- | --- | --- |
 | 1 | 改造3：放宽产品词表 CHECK | 0004_relax_vocab_checks | ✅ |
 | 2 | 改造2：删除只写表 notification_deliveries | 0005_drop_notification_deliveries | ✅ |
-| 3 | 改造1：fallback 收敛到 fallback_events | 0006_fallback_single_source | ⬜ |
+| 3 | 改造1：fallback 收敛到 fallback_events | 0006_fallback_single_source | ✅ |
 | 4 | 改造4：并发计数出库（**待决策**） | 0007_drop_concurrency_windows | ⬜ |
-| 5 | 改造5：ARCHITECTURE.md 对齐（随最后一项） | — | ⬜ |
+| 5 | 改造5：ARCHITECTURE.md 对齐（当前 schema） | — | ✅ |
 
 顺序理由：0004/0005 只删约束/删无读表，风险最低；0006 删列不可逆、涉及 5 个文件的读者迁移，放后；0007 依赖用户决策。
 
@@ -285,6 +285,6 @@ jsonb 随请求完成同步落库；`fallback_events` 插入自 `3dab4dda` 起�
 ## 9. 全局验证
 
 - 每项：`pnpm run verify`（lint→typecheck→test→build）
-- 回归：`pnpm run verify:features`（18 个既有 passing feature 全部重跑 + 新增 feature）
+- 回归：`pnpm run verify:features`（全部 passing feature 全部重跑 + 新增 feature）
 - 改造 1/2 额外：Console Activity/Analytics 页面 E2E、jsonl/webhook 导出输出对比
 - 收尾：`./init.sh` 可直接启动（AGENTS.md 干净状态要求）

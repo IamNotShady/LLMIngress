@@ -256,7 +256,20 @@ async function readFallbackExhaustionCandidates(input: {
                request_activity.error_code,
                request_activity.error_message,
                request_activity.http_status,
-               request_activity.fallback_attempts,
+               jsonb_agg(
+                 jsonb_build_object(
+                   'attemptOrder', fallback_events.attempt_order,
+                   'errorCode', fallback_events.error_code,
+                   'errorMessage', fallback_events.error_message,
+                   'failedBeforeFirstByte', fallback_events.failed_before_first_byte,
+                   'providerApiKeyId', fallback_events.provider_api_key_id::text,
+                   'providerApiKeyPrefix', fallback_events.provider_api_key_prefix,
+                   'providerModelId', fallback_events.provider_model_id::text,
+                   'retryable', fallback_events.retryable,
+                   'statusCode', fallback_events.status_code
+                 )
+                 order by fallback_events.attempt_order
+               ) as fallback_attempts,
                request_activity.completed_at,
                count(fallback_events.id)::integer as fallback_event_count
         from request_activity

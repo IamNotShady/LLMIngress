@@ -507,6 +507,25 @@
   - `pnpm run verify:features` passed with all 20 passing features re-verified.
 - Remaining risks/non-goals: historical notification delivery audit rows are intentionally removed by the migration; retry status retained on `notification_events` is the surviving operational state.
 
+## 2026-07-05 Schema Refactor 0006 Fallback Single Source
+
+- Implemented `0006_fallback_single_source.sql`:
+  - Added `fallback_events.retryable` and `fallback_events.status_code`.
+  - Dropped `request_activity.fallback_attempts`; fallback retry chains now use `fallback_events` as the single persisted source.
+  - Gateway Activity recording writes retry metadata to `fallback_events` only.
+  - Console activity list/detail, JSONL export legacy `fallbackAttempts`, and fallback exhaustion alerts all derive failed attempts from `fallback_events`.
+  - `docs/ARCHITECTURE.md` table inventory was aligned with the current schema names and removed planned-only content tables from the current V1 data-group list.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/schema-fallback-single-source.unit.test.ts` failed on the old `request_activity.fallback_attempts` column, missing retry metadata, old recorder writes, Console fallback counts, JSONL legacy `fallbackAttempts`, and alert payload derivation.
+  - `pnpm test:e2e tests/e2e/schema-fallback-single-source.e2e.spec.ts` failed because migrated schema still exposed `request_activity.fallback_attempts`.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/schema-fallback-single-source.unit.test.ts tests/features/v1-platform.unit.test.ts tests/features/v1-release-guards.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/schema-fallback-single-source.e2e.spec.ts`
+  - `pnpm run db:migrate:check`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 21 passing features re-verified.
+- Remaining risks/non-goals: JSONL keeps the legacy `fallbackAttempts` output contract, but it is now reconstructed from `fallback_events`. `0007_drop_concurrency_windows` remains unimplemented pending the multi-instance Gateway product decision documented in `docs/SCHEMA_REFACTOR.md`.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

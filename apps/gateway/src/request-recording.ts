@@ -46,6 +46,25 @@ export const defaultGatewayRequestRecorder: GatewayRequestRecorder = {
   recordUsageCost: recordGatewayUsageCostAndSavings,
 };
 
+function runRecordingTask(input: {
+  activityId?: string;
+  logger: FastifyBaseLogger;
+  message: string;
+  requestId: string;
+  task: () => Promise<void>;
+}): void {
+  void input.task().catch((error) => {
+    input.logger.error(
+      {
+        ...(input.activityId ? { activityId: input.activityId } : {}),
+        err: error,
+        requestId: input.requestId,
+      },
+      input.message,
+    );
+  });
+}
+
 export async function executeRecordedGatewayJsonRequest(input: {
   agentId: string;
   agentApiKeyPrefix: string;
@@ -68,57 +87,50 @@ export async function executeRecordedGatewayJsonRequest(input: {
   const startedAt = activity?.startedAt ?? new Date();
 
   if (activity) {
-    try {
-      await recorder.completeActivity({
-        activityId: activity.id,
-        requestLoggingEnabled: input.requestLoggingEnabled,
-        requestMetadata: response.requestMetadata,
-        responseBody: response.body,
-        route: response.activity,
-        startedAt,
-        statusCode: response.statusCode,
-      });
-    } catch (error) {
-      input.logger.error(
-        { activityId: activity.id, err: error, requestId: input.requestId },
-        "gateway activity complete failed",
-      );
-    }
-
-    if (response.statusCode < 400 && response.usageCost) {
-      try {
-        await recorder.recordUsageCost({
-          activityId: activity.id,
-          agentId: input.agentId,
-          usageCost: response.usageCost,
-          virtualModelId: input.virtualModelId,
-        });
-      } catch (error) {
-        input.logger.error(
-          { activityId: activity.id, err: error, requestId: input.requestId },
-          "gateway usage recording failed",
-        );
-      }
-    }
-  }
-
-  try {
-    await recorder.recordTrace({
-      errorCode: readGatewayActivityError(response.body)?.errorCode ?? null,
-      httpStatus: response.statusCode,
-      modelId: response.activity?.modelId ?? null,
-      protocol: input.protocol,
-      providerKey: response.activity?.providerKey ?? null,
-      requestId: input.requestId,
-      startedAt,
-      status: response.statusCode < 400 ? "succeeded" : "failed",
+    scheduleCompleteActivity({
+      activity,
+      input,
+      recorder,
+      responseBody: response.body,
+      responseMetadata: response.requestMetadata,
+      route: response.activity,
+      statusCode: response.statusCode,
     });
-  } catch (error) {
-    input.logger.error(
-      { err: error, requestId: input.requestId },
-      "gateway trace recording failed",
-    );
+
+    const usageCost = response.usageCost;
+    if (response.statusCode < 400 && usageCost) {
+      runRecordingTask({
+        activityId: activity.id,
+        logger: input.logger,
+        message: "gateway usage recording failed",
+        requestId: input.requestId,
+        task: () =>
+          recorder.recordUsageCost({
+            activityId: activity.id,
+            agentId: input.agentId,
+            usageCost,
+            virtualModelId: input.virtualModelId,
+          }),
+      });
+    }
   }
+
+  runRecordingTask({
+    logger: input.logger,
+    message: "gateway trace recording failed",
+    requestId: input.requestId,
+    task: () =>
+      recorder.recordTrace({
+        errorCode: readGatewayActivityError(response.body)?.errorCode ?? null,
+        httpStatus: response.statusCode,
+        modelId: response.activity?.modelId ?? null,
+        protocol: input.protocol,
+        providerKey: response.activity?.providerKey ?? null,
+        requestId: input.requestId,
+        startedAt,
+        status: response.statusCode < 400 ? "succeeded" : "failed",
+      }),
+  });
 
   return response;
 }
@@ -144,7 +156,7 @@ export async function executeRecordedGatewayStreamingRequest(input: {
   const response = await input.execute(activity?.id);
   if (!response.ok) {
     if (activity) {
-      await completeActivitySafely({
+      scheduleCompleteActivity({
         activity,
         input,
         recorder,
@@ -178,27 +190,28 @@ export async function executeRecordedGatewayStreamingRequest(input: {
           );
         }
 
-        if (activity && response.usageCost) {
-          try {
-            await recorder.recordUsageCost({
-              activityId: activity.id,
-              agentId: input.agentId,
-              usageCost: {
-                ...response.usageCost,
-                ...(providerUsage ? { providerUsage } : {}),
-              },
-              virtualModelId: input.virtualModelId,
-            });
-          } catch (error) {
-            input.logger.error(
-              { activityId: activity.id, err: error, requestId: input.requestId },
-              "gateway stream usage recording failed",
-            );
-          }
+        const usageCost = response.usageCost;
+        if (activity && usageCost) {
+          runRecordingTask({
+            activityId: activity.id,
+            logger: input.logger,
+            message: "gateway stream usage recording failed",
+            requestId: input.requestId,
+            task: () =>
+              recorder.recordUsageCost({
+                activityId: activity.id,
+                agentId: input.agentId,
+                usageCost: {
+                  ...usageCost,
+                  ...(providerUsage ? { providerUsage } : {}),
+                },
+                virtualModelId: input.virtualModelId,
+              }),
+          });
         }
 
         if (activity) {
-          await completeActivitySafely({
+          scheduleCompleteActivity({
             activity,
             input,
             recorder,
@@ -246,7 +259,7 @@ async function createActivity(input: {
   }
 }
 
-async function completeActivitySafely(input: {
+function scheduleCompleteActivity(input: {
   activity: GatewayStartedRequestActivity;
   input: {
     logger: FastifyBaseLogger;
@@ -258,21 +271,21 @@ async function completeActivitySafely(input: {
   responseMetadata?: GatewayRequestMetadata;
   route?: GatewayRequestActivityRoute;
   statusCode: number;
-}): Promise<void> {
-  try {
-    await input.recorder.completeActivity({
-      activityId: input.activity.id,
-      requestLoggingEnabled: input.input.requestLoggingEnabled,
-      requestMetadata: input.responseMetadata,
-      responseBody: input.responseBody,
-      route: input.route,
-      startedAt: input.activity.startedAt,
-      statusCode: input.statusCode,
-    });
-  } catch (error) {
-    input.input.logger.error(
-      { activityId: input.activity.id, err: error, requestId: input.input.requestId },
-      "gateway activity complete failed",
-    );
-  }
+}): void {
+  runRecordingTask({
+    activityId: input.activity.id,
+    logger: input.input.logger,
+    message: "gateway activity complete failed",
+    requestId: input.input.requestId,
+    task: () =>
+      input.recorder.completeActivity({
+        activityId: input.activity.id,
+        requestLoggingEnabled: input.input.requestLoggingEnabled,
+        requestMetadata: input.responseMetadata,
+        responseBody: input.responseBody,
+        route: input.route,
+        startedAt: input.activity.startedAt,
+        statusCode: input.statusCode,
+      }),
+  });
 }

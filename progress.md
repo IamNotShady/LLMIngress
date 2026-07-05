@@ -3,9 +3,16 @@
 ## Current State
 
 - Date: 2026-07-05
-- Branch: `worktree-gateway-pipeline-hardening`
-- Base: `585d5f30`
-- Status: Gateway cohesion refactor implemented and verified; Activity agent filter regression fixed.
+- Branch: `dev`
+- Base: `9035e0d0`
+- Status: Gateway Activity recording async follow-up implemented and verified.
+
+## 2026-07-05 Gateway Activity Recording Async Follow-up
+
+- Kept `createActivity` synchronous, then scheduled JSON `completeActivity`, successful JSON usage/cost recording, and trace recording as best-effort background tasks with shared error logging by `requestId` and `activityId` where available.
+- Kept streaming budget settlement awaited before EOF, then scheduled successful stream usage/cost recording and Activity completion in the background; streaming non-ok Activity completion is also scheduled without blocking the error response.
+- Added resilience tests for blocked background completion, rejected usage/trace writes, streaming non-ok response latency, and successful stream EOF latency; added a real Gateway E2E with a 2s `request_activity` update trigger proving non-streaming HTTP 200 returns before Activity completion finishes.
+- Verification passed: `pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts`, `pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts`, `pnpm --filter @llmingress/gateway typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 18 passing features re-verified.
 
 ## 2026-07-05 Gateway Cohesion Follow-up
 

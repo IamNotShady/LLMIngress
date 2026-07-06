@@ -31,15 +31,19 @@ export function buildClaudeCodeSubscriptionHeaders(
   accessToken: string,
   requestHeaders?: Record<string, string>,
 ): Record<string, string> {
-  return mergeHttpHeaders(requestHeaders, {
+  // The subscription Bearer owns auth; drop any forwarded x-api-key (the streaming path
+  // injects `x-api-key: <credential>` for generic Anthropic) so it does not reach the
+  // provider alongside the OAuth Bearer.
+  const forwarded = stripHeader(requestHeaders, "x-api-key");
+  return mergeHttpHeaders(forwarded, {
     authorization: `Bearer ${accessToken}`,
     "anthropic-beta":
       mergeCommaSeparatedHeaderValues(
-        readHttpHeader(requestHeaders, "anthropic-beta"),
+        readHttpHeader(forwarded, "anthropic-beta"),
         claudeCodeBetaFlags,
       ) ?? claudeCodeBetaFlags,
     "anthropic-dangerous-direct-browser-access": "true",
-    "anthropic-version": readHttpHeader(requestHeaders, "anthropic-version") ?? "2023-06-01",
+    "anthropic-version": readHttpHeader(forwarded, "anthropic-version") ?? "2023-06-01",
     "content-type": "application/json",
     "user-agent": claudeCodeUserAgent,
     "x-app": "cli",
@@ -169,4 +173,16 @@ function removeHeader(headers: Record<string, string>, name: string): void {
       delete headers[headerName];
     }
   }
+}
+
+function stripHeader(
+  headers: Record<string, string> | undefined,
+  name: string,
+): Record<string, string> | undefined {
+  if (!headers) {
+    return headers;
+  }
+  const output = { ...headers };
+  removeHeader(output, name);
+  return output;
 }

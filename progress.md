@@ -762,6 +762,12 @@
   - `pnpm run verify:features` passed with all 22 passing features re-verified. The optimized E2E batch had one parallel `v1-gateway-routing` miss, then the built-in per-feature fallback passed and the command exited 0.
   - `git diff --check`
   - `jq empty feature_list.json`
+- Subscription-header regression fix (Claude Code streaming x-api-key leak):
+  - Root cause: streaming `messages` payload builder injects `x-api-key: <credential>` (`packages/db/src/gateway-streaming.ts:631`, correct for generic Anthropic). The `claude_code` dialect changed from replace to merge (`packages/provider/src/dialect.ts`), and `buildClaudeCodeSubscriptionHeaders` never stripped it — so `claude_code` streaming sent `x-api-key: <oauth-token>` alongside the subscription `authorization: Bearer <oauth-token>`, breaking CLI impersonation fidelity and risking a provider 401. Confirmed by an empirical dialect+builder header trace.
+  - Fix: `buildClaudeCodeSubscriptionHeaders` (`packages/provider/src/subscription.ts`) strips `x-api-key` from forwarded headers before merging impersonation headers (new local `stripHeader` reusing `removeHeader`). `authorization` already belonged to the impersonation set (merged last, so it wins) and codex never receives `x-api-key`, so line 631 and the codex builder stay untouched (surgical).
+  - Not affected: non-streaming Claude Code (its headers come from the ingress denylist where `x-api-key` is already stripped) and Codex streaming (injects `authorization`, not `x-api-key`).
+  - TDD: red `provider-dialect` unit failed with `expected 'claude-oauth-token' to be undefined`, then went green.
+  - Verification: `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts tests/features/gateway-request-hygiene.unit.test.ts`, empirical streaming header trace (x-api-key absent, Bearer + merged betas intact), `pnpm run verify`, and `pnpm run verify:features` passed with all 22 passing features re-verified (optimized E2E batch flaked once, then per-feature fallback passed).
 
 ## Required Verification
 

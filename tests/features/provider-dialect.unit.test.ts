@@ -119,6 +119,21 @@ describe("provider streaming dialects", () => {
       system: "Use terse replies.",
     });
   });
+
+  it("drops the streaming x-api-key from Claude Code subscription requests", () => {
+    const dialect = resolveProviderStreamingDialect("claude_code");
+    // The streaming messages path injects `x-api-key: <credential>` for generic Anthropic;
+    // for claude_code that credential is an OAuth token and must not reach the provider
+    // alongside the subscription Bearer.
+    const headers = dialect.buildHeaders("claude-oauth-token", (apiKey) => ({
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+    }));
+
+    expect(headers["x-api-key"]).toBeUndefined();
+    expect(headers.authorization).toBe("Bearer claude-oauth-token");
+  });
 });
 
 describe("provider adapter headers", () => {

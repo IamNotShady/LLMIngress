@@ -659,6 +659,22 @@
   - `pnpm run lint`
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Follow-up image input fix:
+  - Root cause: Hermes sends screenshot vision requests as Responses message content parts containing both `input_text` and `input_image`; the Gateway Responses normalizer only accepted string/text-only content, so it returned `invalid_responses_request` before the provider saw the image.
+  - Responses message content arrays now preserve raw content parts such as `input_image` and data URLs.
+  - Codex subscription normalization still converts plain string messages to `input_text`, but leaves multimodal content-part arrays unchanged.
+- Image fix TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts` failed because image content parts were rejected.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed because running Gateway returned HTTP 400 for a streaming Responses image input.
+- Image fix verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/provider typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
 
 ## Required Verification
 

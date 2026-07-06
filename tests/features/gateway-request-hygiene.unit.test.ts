@@ -114,6 +114,35 @@ describe("gateway request hygiene", () => {
     }
   });
 
+  it("normalizes Responses image content parts without rewriting them", () => {
+    const imagePart = {
+      image_url: "data:image/png;base64,iVBORw0KGgo=",
+      type: "input_image",
+    };
+    const normalized = normalizeOpenAIResponsesRequest(
+      {
+        input: [
+          {
+            content: [{ text: "describe this image", type: "input_text" }, imagePart],
+            role: "user",
+          },
+        ],
+        stream: true,
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.input).toEqual([
+        {
+          content: [{ text: "describe this image", type: "input_text" }, imagePart],
+          role: "user",
+        },
+      ]);
+    }
+  });
+
   it("rejects malformed Responses tool fields", () => {
     expect(normalizeOpenAIResponsesRequest({ input: "hi", tools: ["bad"] }, "req-1").ok).toBe(
       false,

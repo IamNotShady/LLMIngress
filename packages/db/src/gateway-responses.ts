@@ -219,30 +219,19 @@ function readResponsesInputMessage(value: unknown): NormalizedOpenAIResponsesInp
   };
 }
 
-function readResponsesMessageContent(value: unknown): string | null {
+function readResponsesMessageContent(
+  value: unknown,
+): NormalizedOpenAIResponsesInputMessage["content"] | null {
   if (typeof value === "string" && value.trim()) {
     return value;
   }
   if (!Array.isArray(value) || value.length === 0) {
     return null;
   }
-
-  const textParts = value.map(readResponsesTextContentPart);
-  if (textParts.some((part) => part === null)) {
+  if (value.some((part) => !isRecord(part))) {
     return null;
   }
-  const text = textParts.join("\n").trim();
-  return text || null;
-}
-
-function readResponsesTextContentPart(value: unknown): string | null {
-  if (!isRecord(value) || typeof value.text !== "string") {
-    return null;
-  }
-  if (value.type !== "input_text" && value.type !== "output_text") {
-    return null;
-  }
-  return value.text;
+  return value as Record<string, unknown>[];
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {

@@ -3,7 +3,7 @@ import type { AnthropicContentBlock } from "./adapters/anthropic.js";
 export type SubscriptionProviderKey = "claude_code" | "openai_codex";
 
 type OpenAIResponsesInputMessage = {
-  content: string;
+  content: string | Record<string, unknown>[];
   role: CodexResponsesInputMessage["role"];
 };
 

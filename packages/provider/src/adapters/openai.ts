@@ -27,7 +27,7 @@ export type NormalizedOpenAIChatRequest = {
 
 export type NormalizedOpenAIResponsesInputMessage = {
   role: "developer" | "system" | "user" | "assistant";
-  content: string;
+  content: string | Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIResponsesInputItem =

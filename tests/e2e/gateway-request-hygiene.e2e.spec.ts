@@ -112,6 +112,43 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         tool_choice: "required",
         tools: [tool],
       });
+
+      const imagePart = {
+        image_url: "data:image/png;base64,iVBORw0KGgo=",
+        type: "input_image",
+      };
+      const imageResponse = await fetch(`${baseUrl}/v1/responses`, {
+        body: JSON.stringify({
+          input: [
+            {
+              content: [{ text: "describe this image", type: "input_text" }, imagePart],
+              role: "user",
+            },
+          ],
+          model: "vm-request-hygiene",
+          stream: true,
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await imageResponse.text();
+
+      expect(imageResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(3);
+      const imageProviderBody = fakeProvider.requests[2]?.bodyJson;
+      expect(imageProviderBody).toMatchObject({
+        input: [
+          {
+            content: [{ text: "describe this image", type: "input_text" }, imagePart],
+            role: "user",
+          },
+        ],
+        model: "fake-model",
+        stream: true,
+      });
     } finally {
       await stopGatewayProcess(gateway);
     }

@@ -121,6 +121,10 @@ const chatCompletionsEndpoint: ProviderEndpoint = {
   method: "POST",
   path: "chat/completions",
 };
+const embeddingsEndpoint: ProviderEndpoint = {
+  method: "POST",
+  path: "embeddings",
+};
 const messagesEndpoint: ProviderEndpoint = {
   method: "POST",
   path: "messages",
@@ -137,6 +141,20 @@ const responsesEndpoint: ProviderEndpoint = {
 const openAICompatibleEndpoints: ProviderEndpoints = {
   chat_completions: chatCompletionsEndpoint,
   models: modelsEndpoint,
+};
+const openAICompatibleWithEmbeddingsEndpoints: ProviderEndpoints = {
+  ...openAICompatibleEndpoints,
+  embeddings: embeddingsEndpoint,
+};
+const openAICompatibleWithResponsesEndpoints: ProviderEndpoints = {
+  ...openAICompatibleEndpoints,
+  responses: responsesEndpoint,
+};
+const fullTextProviderEndpoints: ProviderEndpoints = {
+  ...openAICompatibleEndpoints,
+  embeddings: embeddingsEndpoint,
+  messages: messagesEndpoint,
+  responses: responsesEndpoint,
 };
 
 const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
@@ -164,7 +182,7 @@ const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
     auth: remoteTemplateAuth,
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     displayName: "Google Gemini",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: openAICompatibleWithEmbeddingsEndpoints,
     providerKey: "google",
     providerType: "api_key",
   },
@@ -172,7 +190,7 @@ const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
     auth: remoteTemplateAuth,
     baseUrl: "https://openrouter.ai/api/v1",
     displayName: "OpenRouter",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: fullTextProviderEndpoints,
     providerKey: "openrouter",
     providerType: "api_key",
   },
@@ -188,7 +206,7 @@ const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
     auth: remoteTemplateAuth,
     baseUrl: "https://api.x.ai/v1",
     displayName: "xAI",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: openAICompatibleWithResponsesEndpoints,
     providerKey: "xai",
     providerType: "api_key",
   },
@@ -196,7 +214,7 @@ const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
     auth: remoteTemplateAuth,
     baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     displayName: "Qwen",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: openAICompatibleWithResponsesEndpoints,
     providerKey: "qwen",
     providerType: "api_key",
   },
@@ -212,7 +230,7 @@ const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
     auth: remoteTemplateAuth,
     baseUrl: "https://api.minimax.io/v1",
     displayName: "MiniMax",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: openAICompatibleWithResponsesEndpoints,
     providerKey: "minimax",
     providerType: "api_key",
   },
@@ -227,21 +245,21 @@ const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
   ollama: {
     baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
     displayName: "Ollama",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: fullTextProviderEndpoints,
     providerKey: "ollama",
     providerType: "local",
   },
   lmstudio: {
     baseUrlPlaceholder: "http://127.0.0.1:1234/v1",
     displayName: "LM Studio",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: fullTextProviderEndpoints,
     providerKey: "lmstudio",
     providerType: "local",
   },
   llama_cpp: {
     baseUrlPlaceholder: "http://127.0.0.1:8080/v1",
     displayName: "llama.cpp",
-    endpoints: openAICompatibleEndpoints,
+    endpoints: fullTextProviderEndpoints,
     providerKey: "llama_cpp",
     providerType: "local",
   },

@@ -585,6 +585,25 @@
   - First `pnpm run verify:features` attempt hit an existing local Console dev process holding the Next dev workspace; `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` passed after stopping that Console process.
   - Second `pnpm run verify:features` passed with all 21 passing features re-verified.
 
+## 2026-07-06 Provider Endpoint Coverage Refresh
+
+- Updated Console provider template endpoint metadata from the provider docs traversal:
+  - Added `embeddings` endpoint metadata for Google Gemini templates.
+  - Added `responses` endpoint metadata for xAI, Qwen, and MiniMax templates.
+  - Added `embeddings`, `messages`, and `responses` endpoint metadata for OpenRouter and the local Ollama, LM Studio, and llama.cpp templates.
+  - Kept DeepSeek, Moonshot/Kimi, and Z.ai scoped to the same-base OpenAI-compatible chat/models endpoints already represented by the templates.
+- Scope note:
+  - Did not add unsupported Gateway protocol families such as legacy completions, images, videos, files, admin endpoints, or Anthropic-compatible alternate-base endpoints to templates whose base URL remains OpenAI-compatible.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/console-provider-templates.unit.test.ts` failed while the new provider endpoint expectations were not yet represented in `console-provider-templates.ts`.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/console-provider-templates.unit.test.ts`
+  - `pnpm exec vitest run tests/features/schema-vocab-checks-relaxed.unit.test.ts tests/features/v1-gateway-routing.unit.test.ts tests/features/console-provider-templates.unit.test.ts`
+  - `pnpm run typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 21 passing features re-verified.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

@@ -18,7 +18,7 @@
         "v1-platform"
       ],
       "status": "passing",
-      "evidence": "2026-07-02: Consolidated Gateway/provider feature history into the V1 provider coverage smoke. It covers OpenAI, Anthropic, Google, OpenRouter, Ollama, LM Studio, llama.cpp, provider request capture, auth headers, and request activity persistence."
+      "evidence": "2026-07-02: Consolidated Gateway/provider feature history into the V1 provider coverage smoke. It covers OpenAI, Anthropic, Google, OpenRouter, Ollama, LM Studio, llama.cpp, provider request capture, auth headers, and request activity persistence. 2026-07-06: Refactored Console provider templates into one provider endpoint registry keyed by provider id; provider-level capabilities were removed in favor of endpoints while model capabilities remain on provider_models. Verification passed: focused provider-template/schema-vocab/v1-routing unit tests, pnpm run typecheck, pnpm run lint, pnpm run verify, v1-console E2E after clearing an existing local Console dev lock, and pnpm run verify:features with all 21 passing features re-verified."
     },
     {
       "id": "v1-console",

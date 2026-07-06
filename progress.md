@@ -568,6 +568,23 @@
   - `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` passed after the first `verify:features` attempt hit a transient Console startup conflict.
   - Second `pnpm run verify:features` passed with all 21 passing features re-verified.
 
+## 2026-07-06 Provider Endpoint Registry Refactor
+
+- Refactored Console provider templates:
+  - `packages/db/src/console-provider-templates.ts` now uses one `providerTemplates: Record<ProviderTemplateId, ProviderInfo>` registry keyed by provider id.
+  - Provider-level `capabilities` were removed from templates and selector items.
+  - Provider API surface is represented as `endpoints` keyed by Gateway protocol names such as `chat_completions`, `responses`, `messages`, and `models`.
+  - Model-level capability fields remain on provider model data; this change does not expand actual provider support.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/console-provider-templates.unit.test.ts` failed while selector items lacked `endpoints` and still exposed the old capability-shaped contract.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/schema-vocab-checks-relaxed.unit.test.ts tests/features/v1-gateway-routing.unit.test.ts tests/features/console-provider-templates.unit.test.ts`
+  - `pnpm run typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - First `pnpm run verify:features` attempt hit an existing local Console dev process holding the Next dev workspace; `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` passed after stopping that Console process.
+  - Second `pnpm run verify:features` passed with all 21 passing features re-verified.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

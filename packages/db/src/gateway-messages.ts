@@ -140,6 +140,7 @@ export async function executeGatewayAnthropicMessages(input: {
   return executeGatewayProtocolRequest<NormalizedAnthropicMessagesRequest, AnthropicAdapterSuccess>(
     {
       ...input,
+      protocol: "messages",
       spec: {
         buildRequestMetadata: buildAnthropicMessagesRequestMetadata,
         callProvider: ({ candidate, providerApiKey, request }) => {

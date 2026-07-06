@@ -237,6 +237,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-05: TDD red->green. Added migration 0006_fallback_single_source so fallback_events carries retryable/status_code and request_activity no longer stores fallback_attempts. Console activity counts/details, jsonl export legacy fallbackAttempts, and fallback exhaustion alerts now derive failed retry attempts from fallback_events rows. RED unit failed on the old request_activity.fallback_attempts column, missing retry metadata, recorder writes, Console counts, JSONL fallbackAttempts, and alert payloads; RED E2E failed because the dropped column still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 21 passing features re-verified."
+    },
+    {
+      "id": "virtual-model-endpoint-routing",
+      "name": "Virtual Model Endpoint Routing",
+      "description": "Virtual Models and Route Policies require one endpoint protocol (chat_completions, responses, messages, or embeddings), candidate pickers only show provider models whose provider/template supports the selected endpoint, route-policy saves reject incompatible candidates, and Gateway requests are rejected when the request endpoint does not match the saved route policy endpoint while legacy policies without endpointProtocol still run.",
+      "verification": "pnpm exec vitest run tests/features/virtual-model-endpoint-routing.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing",
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-06: TDD red->green. Added route_policies.rules.endpointProtocol without a migration, derived supportedEndpoints from provider templates plus direct openai/anthropic providers, filtered Virtual Model and Route Policy candidate pickers by endpoint, rejected incompatible route-policy saves, and added Gateway runtime endpoint mismatch rejection for JSON and streaming paths while keeping legacy policies without endpointProtocol compatible. Verification passed: focused unit, focused E2E, v1-release-guards unit after adding this feature to the allowed tracker list, pnpm run typecheck, pnpm run lint, pnpm run verify, and pnpm run verify:features with all 22 passing features re-verified."
     }
   ]
 }

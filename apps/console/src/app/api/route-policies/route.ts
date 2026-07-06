@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     if (action === "create") {
       await createRoutePolicy({
         routePolicy: normalizeRoutePolicyFormInput({
+          endpointProtocol: readText(form, "endpointProtocol"),
           providerModelIds: readTextValues(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
           virtualModelId: readText(form, "virtualModelId"),
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
       await updateRoutePolicy({
         id: readRequiredText(form, "id"),
         routePolicy: normalizeRoutePolicyFormInput({
+          endpointProtocol: readText(form, "endpointProtocol"),
           providerModelIds: readTextValues(form, "providerModelIds"),
           strategy: readText(form, "strategy"),
           virtualModelId: readText(form, "virtualModelId"),

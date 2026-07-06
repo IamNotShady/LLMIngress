@@ -45,6 +45,7 @@ import {
 } from "./gateway-request-metadata.ts";
 import { normalizeOpenAIResponsesRequest } from "./gateway-responses.ts";
 import {
+  assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   isRecord,
   omitUndefined,
@@ -146,6 +147,10 @@ export async function executeGatewayStreamingRequest(input: {
 
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    assertGatewayRoutePolicyEndpointProtocol({
+      protocol: input.protocol,
+      routePolicy,
+    });
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const gatewayChain = routeResult.chain;
 

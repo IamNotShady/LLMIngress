@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       if (providerModelIds.length > 0) {
         await createRoutePolicy({
           routePolicy: normalizeRoutePolicyFormInput({
+            endpointProtocol: readText(form, "endpointProtocol"),
             providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: virtualModel.id,
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
         await updateRoutePolicy({
           id: routePolicyId,
           routePolicy: normalizeRoutePolicyFormInput({
+            endpointProtocol: readText(form, "endpointProtocol"),
             providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: readRequiredText(form, "id"),
@@ -77,6 +79,7 @@ export async function POST(request: NextRequest) {
       } else if (!routePolicyId && providerModelIds.length > 0) {
         await createRoutePolicy({
           routePolicy: normalizeRoutePolicyFormInput({
+            endpointProtocol: readText(form, "endpointProtocol"),
             providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: readRequiredText(form, "id"),

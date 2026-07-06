@@ -25,6 +25,7 @@ const allowedFeatureIds = [
   "schema-vocab-checks-relaxed",
   "schema-notification-deliveries-removed",
   "schema-fallback-single-source",
+  "virtual-model-endpoint-routing",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -38,6 +39,7 @@ const inProgressFeatureIds = new Set([
   "schema-vocab-checks-relaxed",
   "schema-notification-deliveries-removed",
   "schema-fallback-single-source",
+  "virtual-model-endpoint-routing",
 ]);
 
 describe("v1 release guards milestone", () => {

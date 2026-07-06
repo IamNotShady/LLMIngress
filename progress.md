@@ -604,6 +604,27 @@
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 21 passing features re-verified.
 
+## 2026-07-06 Virtual Model Endpoint Routing
+
+- Added endpoint selection for Virtual Models and Route Policies:
+  - Supported endpoint values are `chat_completions`, `responses`, `messages`, and `embeddings`.
+  - The selected endpoint is stored in `route_policies.rules.endpointProtocol`; no migration was added.
+  - Provider model options now expose `supportedEndpoints`, derived from provider templates plus direct OpenAI and Anthropic providers.
+  - Virtual Model and Route Policy candidate pickers filter out provider models that do not support the selected endpoint.
+  - `createRoutePolicy` and `updateRoutePolicy` reject candidates whose provider does not support the selected endpoint.
+  - Gateway JSON and streaming request paths reject requests whose endpoint does not match the saved route-policy endpoint.
+  - Existing policies without `endpointProtocol` remain runtime-compatible.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/virtual-model-endpoint-routing.unit.test.ts` failed while endpointProtocol was not preserved, provider endpoint support was not derived, candidate filtering did not apply, and Gateway mismatch requests still continued to provider execution.
+- Verification completed so far:
+  - `pnpm exec vitest run tests/features/virtual-model-endpoint-routing.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts --workers=1`
+  - `pnpm exec vitest run tests/features/v1-release-guards.unit.test.ts`
+  - `pnpm run typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

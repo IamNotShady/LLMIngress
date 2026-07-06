@@ -116,6 +116,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
 }): Promise<GatewayEmbeddingsResponse> {
   return executeGatewayProtocolRequest<NormalizedOpenAIEmbeddingsRequest, OpenAIAdapterSuccess>({
     ...input,
+    protocol: "embeddings",
     spec: {
       buildRequestMetadata: ({ model, request }) =>
         buildOpenAIEmbeddingsRequestMetadata({ model, request }),

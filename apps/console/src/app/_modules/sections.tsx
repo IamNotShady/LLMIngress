@@ -1562,6 +1562,10 @@ function VirtualModelViewDialog({
             <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : MISSING_VALUE}</dd>
           </div>
           <div>
+            <dt>Endpoint</dt>
+            <dd>{formatRouteEndpointProtocolLabel(routePolicy?.endpointProtocol ?? "")}</dd>
+          </div>
+          <div>
             <dt>Candidates</dt>
             <dd>{routePolicy ? `${routePolicy.candidates.length} models` : MISSING_VALUE}</dd>
           </div>
@@ -1671,6 +1675,7 @@ export async function RoutePoliciesSection({
   searchParams: ConsoleSearchParams;
 }) {
   const routePolicyEditorFilters = normalizeRoutePolicyEditorFilters({
+    endpointProtocol: readSingleSearchParam(searchParams.routeEndpointFilter) ?? "chat_completions",
     modelQuery: readSingleSearchParam(searchParams.routeModelFilter),
     providerKey: readSingleSearchParam(searchParams.routeProviderFilter),
   });
@@ -1698,6 +1703,18 @@ export async function RoutePoliciesSection({
     <section className="providers-panel" aria-label="Route policies">
       {providerModelOptions.length === 0 ? null : (
         <form className="provider-create-form" action="/routing" method="get">
+          <label htmlFor="route-endpoint-filter">Route endpoint filter</label>
+          <select
+            id="route-endpoint-filter"
+            name="routeEndpointFilter"
+            defaultValue={routePolicyEditorFilters.endpointProtocol ?? "chat_completions"}
+          >
+            {routeEndpointProtocolOptions.map((protocol) => (
+              <option key={protocol} value={protocol}>
+                {formatRouteEndpointProtocolLabel(protocol)}
+              </option>
+            ))}
+          </select>
           <label htmlFor="route-provider-filter">Route provider filter</label>
           <select
             id="route-provider-filter"
@@ -1753,6 +1770,19 @@ export async function RoutePoliciesSection({
                 </option>
               ))}
             </select>
+            <label htmlFor="route-policy-endpoint">Route policy endpoint</label>
+            <select
+              id="route-policy-endpoint"
+              name="endpointProtocol"
+              required
+              defaultValue={routePolicyEditorFilters.endpointProtocol ?? "chat_completions"}
+            >
+              {routeEndpointProtocolOptions.map((protocol) => (
+                <option key={protocol} value={protocol}>
+                  {formatRouteEndpointProtocolLabel(protocol)}
+                </option>
+              ))}
+            </select>
             <label htmlFor="route-policy-models">Provider models (in priority order)</label>
             <select
               id="route-policy-models"
@@ -1779,8 +1809,15 @@ export async function RoutePoliciesSection({
       ) : (
         <div className="row-list">
           {view.items.map((routePolicy) => {
+            const routePolicyEndpointProtocol =
+              routePolicy.endpointProtocol ??
+              routePolicyEditorFilters.endpointProtocol ??
+              "chat_completions";
             const routePolicyEditorOptions = mergeRoutePolicyEditorProviderModelOptions(
-              routePolicyCreateProviderModelOptions,
+              filterRoutePolicyEditorProviderModelOptions(providerModelOptions, {
+                ...routePolicyEditorFilters,
+                endpointProtocol: routePolicyEndpointProtocol,
+              }),
               routePolicy.candidates,
             );
             const routePolicyWarnings = [
@@ -1810,6 +1847,7 @@ export async function RoutePoliciesSection({
                   {routePolicy.virtualModelName})
                 </p>
                 <p>Strategy: {routePolicy.strategy}</p>
+                <p>Endpoint: {formatRouteEndpointProtocolLabel(routePolicyEndpointProtocol)}</p>
                 <p>Route reason: {routePolicy.routeReason}</p>
                 {routePolicyWarnings.map((warning) => (
                   <p className="route-warning" key={warning}>
@@ -1834,6 +1872,21 @@ export async function RoutePoliciesSection({
                     {routePolicyStrategies.map((strategy) => (
                       <option key={strategy} value={strategy}>
                         {strategy}
+                      </option>
+                    ))}
+                  </select>
+                  <label htmlFor={`route-policy-endpoint-${routePolicy.id}`}>
+                    Edit route policy endpoint
+                  </label>
+                  <select
+                    id={`route-policy-endpoint-${routePolicy.id}`}
+                    name="endpointProtocol"
+                    defaultValue={routePolicyEndpointProtocol}
+                    required
+                  >
+                    {routeEndpointProtocolOptions.map((protocol) => (
+                      <option key={protocol} value={protocol}>
+                        {formatRouteEndpointProtocolLabel(protocol)}
                       </option>
                     ))}
                   </select>
@@ -4298,6 +4351,29 @@ function formatRouteStrategyLabel(strategy: string): string {
     return "Random";
   }
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
+}
+
+const routeEndpointProtocolOptions = [
+  "chat_completions",
+  "responses",
+  "messages",
+  "embeddings",
+] as const;
+
+function formatRouteEndpointProtocolLabel(protocol: string): string {
+  if (protocol === "chat_completions") {
+    return "Chat Completions";
+  }
+  if (protocol === "responses") {
+    return "Responses";
+  }
+  if (protocol === "messages") {
+    return "Messages";
+  }
+  if (protocol === "embeddings") {
+    return "Embeddings";
+  }
+  return "Unspecified";
 }
 
 function formatRoutePolicyCandidateOrder(candidates: Array<{ optionLabel: string }>): string {

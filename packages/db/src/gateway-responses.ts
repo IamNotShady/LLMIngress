@@ -107,6 +107,7 @@ export async function executeGatewayOpenAIResponse(input: {
 
   return executeGatewayProtocolRequest<NormalizedOpenAIResponsesRequest, OpenAIAdapterSuccess>({
     ...input,
+    protocol: "responses",
     spec: {
       buildRequestMetadata: buildOpenAIResponsesRequestMetadata,
       callProvider: ({ candidate, providerApiKey, request }) => {

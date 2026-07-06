@@ -121,6 +121,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
 
   return executeGatewayProtocolRequest<NormalizedOpenAIChatRequest, OpenAIAdapterSuccess>({
     ...input,
+    protocol: "chat_completions",
     spec: {
       buildRequestMetadata: buildOpenAIChatCompletionRequestMetadata,
       callProvider: ({ candidate, providerApiKey, request }) => {

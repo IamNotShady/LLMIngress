@@ -1,4 +1,4 @@
-import { selectRouteAttempts } from "@llmingress/domain";
+import { type RouteEndpointProtocol, selectRouteAttempts } from "@llmingress/domain";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
@@ -35,6 +35,7 @@ import {
 } from "./gateway-provider-credentials.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import {
+  assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   requireGatewayRoutePolicy,
   selectGatewayBaselineCandidate,
@@ -92,6 +93,7 @@ export async function executeGatewayProtocolRequest<
   masterKeySource?: MasterKeySource;
   requestBody: unknown;
   requestId: string;
+  protocol: RouteEndpointProtocol;
   snapshot: GatewayConfigSnapshot;
   spec: GatewayProtocolSpec<TNormalized, TSuccess>;
   virtualModel: GatewayVirtualModel;
@@ -134,6 +136,10 @@ export async function executeGatewayProtocolRequest<
 
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    assertGatewayRoutePolicyEndpointProtocol({
+      protocol: input.protocol,
+      routePolicy,
+    });
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const selectedCandidate = routeResult.chain[0];
     if (!selectedCandidate) {

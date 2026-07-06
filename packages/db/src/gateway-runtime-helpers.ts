@@ -1,4 +1,4 @@
-import type { RouteDecision } from "@llmingress/domain";
+import type { RouteDecision, RouteEndpointProtocol } from "@llmingress/domain";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import type {
   GatewayConfigSnapshot,
@@ -47,6 +47,21 @@ export function selectGatewayBaselineCandidate(
     throw new Error(`Route policy ${routePolicy.id} has no baseline candidate.`);
   }
   return candidate;
+}
+
+export function assertGatewayRoutePolicyEndpointProtocol(input: {
+  protocol: RouteEndpointProtocol;
+  routePolicy: GatewayRoutePolicySnapshot;
+}): void {
+  const expectedProtocol = input.routePolicy.rules?.endpointProtocol;
+  if (!expectedProtocol || expectedProtocol === input.protocol) {
+    return;
+  }
+
+  throw new GatewayPipelineError(
+    "provider_protocol_unsupported",
+    `Virtual Model ${input.routePolicy.virtualModelName} is configured for ${expectedProtocol}, not ${input.protocol}.`,
+  );
 }
 
 export function buildGatewayRequestActivityRoute(input: {

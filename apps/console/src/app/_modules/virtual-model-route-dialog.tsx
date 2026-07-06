@@ -4,6 +4,7 @@ import { type DragEvent, useMemo, useState } from "react";
 import { FlatIcon } from "../_components/flat-icon";
 
 type Strategy = "fixed" | "cost_first" | "quality_first" | "random";
+type EndpointProtocol = "chat_completions" | "responses" | "messages" | "embeddings";
 
 type ProviderModelOption = {
   availability: string;
@@ -16,6 +17,7 @@ type ProviderModelOption = {
   outputUsdPerMillionTokens: number | null;
   providerDisplayName: string;
   providerKey: string;
+  supportedEndpoints: EndpointProtocol[];
   supportsStreaming: boolean;
   supportsTools: boolean;
 };
@@ -26,6 +28,7 @@ type Candidate = ProviderModelOption & {
 
 type RoutePolicy = {
   candidates: Candidate[];
+  endpointProtocol: EndpointProtocol | null;
   id: string;
   strategy: Strategy;
 };
@@ -37,6 +40,12 @@ type VirtualModel = {
 };
 
 const strategies: Strategy[] = ["fixed", "cost_first", "quality_first", "random"];
+const endpointProtocols: EndpointProtocol[] = [
+  "chat_completions",
+  "responses",
+  "messages",
+  "embeddings",
+];
 
 export function VirtualModelRouteDialogClient({
   closeHref,
@@ -52,6 +61,9 @@ export function VirtualModelRouteDialogClient({
   virtualModel: VirtualModel | null;
 }) {
   const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "random");
+  const [endpointProtocol, setEndpointProtocol] = useState<EndpointProtocol>(
+    readInitialEndpointProtocol(routePolicy),
+  );
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>(
     routePolicy?.candidates ?? [],
   );
@@ -75,6 +87,9 @@ export function VirtualModelRouteDialogClient({
     if (selectedIds.has(option.id)) {
       return false;
     }
+    if (!option.supportedEndpoints.includes(endpointProtocol)) {
+      return false;
+    }
     if (providerFilter !== "all" && option.providerKey !== providerFilter) {
       return false;
     }
@@ -90,6 +105,15 @@ export function VirtualModelRouteDialogClient({
   function addModel(option: ProviderModelOption) {
     setSelectedCandidates((current) => [...current, { ...option, candidateOrder: current.length }]);
     setPickerOpen(false);
+  }
+
+  function handleEndpointChange(nextEndpointProtocol: EndpointProtocol) {
+    setEndpointProtocol(nextEndpointProtocol);
+    setSelectedCandidates((current) =>
+      current
+        .filter((candidate) => candidate.supportedEndpoints.includes(nextEndpointProtocol))
+        .map((candidate, index) => ({ ...candidate, candidateOrder: index })),
+    );
   }
 
   function moveCandidate(fromIndex: number, toIndex: number) {
@@ -154,6 +178,24 @@ export function VirtualModelRouteDialogClient({
             <section className="chart-card">
               <h3 className="chart-card-title">Basic info</h3>
               <div className="vm-editor-fields">
+                <div>
+                  <label htmlFor="virtual-model-dialog-endpoint">Endpoint</label>
+                  <select
+                    id="virtual-model-dialog-endpoint"
+                    name="endpointProtocol"
+                    value={endpointProtocol}
+                    onChange={(event) =>
+                      handleEndpointChange(event.target.value as EndpointProtocol)
+                    }
+                    required
+                  >
+                    {endpointProtocols.map((protocol) => (
+                      <option key={protocol} value={protocol}>
+                        {formatEndpointProtocolLabel(protocol)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label htmlFor="virtual-model-dialog-name">Virtual Model name</label>
                   <input
@@ -397,6 +439,27 @@ function formatRouteStrategyLabel(strategy: Strategy): string {
     return "Random";
   }
   return strategy.charAt(0).toUpperCase() + strategy.slice(1);
+}
+
+function readInitialEndpointProtocol(routePolicy: RoutePolicy | null): EndpointProtocol {
+  return (
+    routePolicy?.endpointProtocol ??
+    routePolicy?.candidates[0]?.supportedEndpoints[0] ??
+    "chat_completions"
+  );
+}
+
+function formatEndpointProtocolLabel(protocol: EndpointProtocol): string {
+  if (protocol === "chat_completions") {
+    return "Chat Completions";
+  }
+  if (protocol === "responses") {
+    return "Responses";
+  }
+  if (protocol === "messages") {
+    return "Messages";
+  }
+  return "Embeddings";
 }
 
 function formatRouteStrategyDescription(strategy: Strategy): string {

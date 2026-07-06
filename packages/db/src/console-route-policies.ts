@@ -7,18 +7,26 @@ import {
 } from "@llmingress/billing/price-registry";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import {
+  normalizeRoutePolicyRules,
+  type RouteEndpointProtocol,
+  routeEndpointProtocols,
+} from "@llmingress/domain";
+import { listProviderTemplateEndpointProtocols } from "./console-provider-templates.ts";
 
 export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
 export type RoutePolicyFormInput = {
+  endpointProtocol?: string | null;
   providerModelIds?: readonly (string | null | undefined)[];
   strategy?: string | null;
   virtualModelId?: string | null;
 };
 
 export type NormalizedRoutePolicyFormInput = {
+  endpointProtocol: RouteEndpointProtocol;
   providerModelIds: string[];
   strategy: RoutePolicyStrategy;
   virtualModelId: string;
@@ -42,6 +50,7 @@ export type ConsoleProviderModelOption = {
   providerId: string;
   providerKey: string;
   providerEnabled: boolean;
+  supportedEndpoints: RouteEndpointProtocol[];
   supportsStreaming: boolean;
   supportsTools: boolean;
 };
@@ -52,6 +61,7 @@ export type ConsoleRoutePolicyCandidate = ConsoleProviderModelOption & {
 
 export type ConsoleRoutePolicy = {
   candidates: ConsoleRoutePolicyCandidate[];
+  endpointProtocol: RouteEndpointProtocol | null;
   id: string;
   routeReason: string;
   routeWarnings: string[];
@@ -68,11 +78,13 @@ export type RoutePolicyWarningCandidate = {
 };
 
 export type RoutePolicyEditorFilterInput = {
+  endpointProtocol?: string | null;
   modelQuery?: string | null;
   providerKey?: string | null;
 };
 
 export type RoutePolicyEditorFilters = {
+  endpointProtocol: RouteEndpointProtocol | null;
   modelQuery: string | null;
   providerKey: string | null;
 };
@@ -96,6 +108,7 @@ export type RouteReasonMetadataInput = {
 
 type RoutePolicyRow = PostgresQueryResultRow & {
   id: string;
+  rules: unknown;
   strategy: RoutePolicyStrategy;
   virtual_model_display_name: string;
   virtual_model_id: string;
@@ -123,6 +136,7 @@ type CandidateRow = PostgresQueryResultRow & {
   provider_enabled: boolean;
   provider_id: string;
   provider_key: string;
+  provider_template_id: string | null;
   route_policy_id: string;
   supports_streaming?: boolean | null;
   supports_tools?: boolean | null;
@@ -148,6 +162,7 @@ type ProviderModelOptionRow = PostgresQueryResultRow & {
   provider_enabled: boolean;
   provider_id: string;
   provider_key: string;
+  provider_template_id: string | null;
   supports_streaming?: boolean | null;
   supports_tools?: boolean | null;
 };
@@ -168,6 +183,7 @@ type QueryClient = {
 export function normalizeRoutePolicyFormInput(
   input: RoutePolicyFormInput,
 ): NormalizedRoutePolicyFormInput {
+  const endpointProtocol = normalizeRequiredEndpointProtocol(input.endpointProtocol);
   const virtualModelId = input.virtualModelId?.trim();
   const strategy = input.strategy?.trim();
   const providerModelIds = normalizeUuidList(input.providerModelIds);
@@ -187,6 +203,7 @@ export function normalizeRoutePolicyFormInput(
   }
 
   return {
+    endpointProtocol,
     providerModelIds,
     strategy,
     virtualModelId,
@@ -248,6 +265,7 @@ export function normalizeRoutePolicyEditorFilters(
   input: RoutePolicyEditorFilterInput,
 ): RoutePolicyEditorFilters {
   return {
+    endpointProtocol: normalizeOptionalEndpointProtocol(input.endpointProtocol),
     modelQuery: normalizeOptionalFilter(input.modelQuery),
     providerKey: normalizeOptionalFilter(input.providerKey),
   };
@@ -261,6 +279,9 @@ export function filterRoutePolicyEditorProviderModelOptions(
   const modelQuery = filters.modelQuery?.toLowerCase() ?? null;
 
   return options.filter((option) => {
+    if (filters.endpointProtocol && !option.supportedEndpoints.includes(filters.endpointProtocol)) {
+      return false;
+    }
     if (providerKey && option.providerKey.toLowerCase() !== providerKey) {
       return false;
     }
@@ -289,6 +310,25 @@ export function filterRoutePolicyEditorHealthyProviderModelOptions(
       .map((summary) => summary.id),
   );
   return options.filter((option) => !unhealthyProviderIds.has(option.providerId));
+}
+
+export function listProviderRouteEndpointProtocols(input: {
+  providerKey: string;
+  providerTemplateId?: string | null;
+}): RouteEndpointProtocol[] {
+  if (input.providerTemplateId) {
+    return listProviderTemplateEndpointProtocols(input.providerTemplateId).filter(
+      isRouteEndpointProtocol,
+    );
+  }
+
+  if (input.providerKey === "openai") {
+    return ["chat_completions", "responses", "embeddings"];
+  }
+  if (input.providerKey === "anthropic") {
+    return ["messages"];
+  }
+  return [];
 }
 
 export function mergeRoutePolicyEditorProviderModelOptions(
@@ -354,6 +394,7 @@ export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRo
       `
         select route_policies.id::text,
                route_policies.strategy,
+               route_policies.rules,
                virtual_models.id::text as virtual_model_id,
                virtual_models.name as virtual_model_name,
                virtual_models.description as virtual_model_display_name
@@ -375,6 +416,7 @@ export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRo
                        provider_models.id::text as id,
                        providers.id::text as provider_id,
                        providers.provider_key,
+                       providers.provider_template_id,
                        providers.display_name as provider_display_name,
                        providers.enabled as provider_enabled,
                        provider_models.model_id,
@@ -428,14 +470,16 @@ export async function createRoutePolicy(input: {
       await assertVirtualModelExists(client, input.routePolicy.virtualModelId);
       await assertVirtualModelHasNoRoutePolicy(client, input.routePolicy.virtualModelId);
       await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
+      await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
       await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
         `
-          insert into route_policies (id, virtual_model_id, strategy)
-          values ($1, $2, $3)
+          insert into route_policies (id, virtual_model_id, strategy, rules)
+          values ($1, $2, $3, $4::jsonb)
           returning id::text,
                     strategy,
+                    rules,
                     virtual_model_id::text,
                     (
                       select name
@@ -448,7 +492,12 @@ export async function createRoutePolicy(input: {
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_display_name
         `,
-        [routePolicyId, input.routePolicy.virtualModelId, input.routePolicy.strategy],
+        [
+          routePolicyId,
+          input.routePolicy.virtualModelId,
+          input.routePolicy.strategy,
+          JSON.stringify(routePolicyRulesJson(input.routePolicy)),
+        ],
       );
       const candidateRows = await writeRoutePolicyCandidates(
         client,
@@ -480,16 +529,19 @@ export async function updateRoutePolicy(input: {
         throw new Error("Route policy virtual model cannot be changed.");
       }
       await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
+      await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
       await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
         `
           update route_policies
           set strategy = $2,
+              rules = coalesce(rules, '{}'::jsonb) || $3::jsonb,
               updated_at = now()
           where id = $1
           returning id::text,
                     strategy,
+                    rules,
                     virtual_model_id::text,
                     (
                       select name
@@ -502,7 +554,11 @@ export async function updateRoutePolicy(input: {
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_display_name
         `,
-        [input.id, input.routePolicy.strategy],
+        [
+          input.id,
+          input.routePolicy.strategy,
+          JSON.stringify(routePolicyRulesJson(input.routePolicy)),
+        ],
       );
       await client.query("delete from route_policy_candidates where route_policy_id = $1", [
         input.id,
@@ -618,6 +674,25 @@ async function assertBudgetSafeRoutePolicyCandidates(
   );
 }
 
+async function assertEndpointSupportedRoutePolicyCandidates(
+  client: QueryClient,
+  routePolicy: NormalizedRoutePolicyFormInput,
+): Promise<void> {
+  const candidates = await readProviderModelOptionsById(client, routePolicy.providerModelIds);
+  const unsupportedCandidates = candidates.filter(
+    (candidate) => !candidate.supportedEndpoints.includes(routePolicy.endpointProtocol),
+  );
+  if (unsupportedCandidates.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Route policy endpoint ${routePolicy.endpointProtocol} is not supported by ${unsupportedCandidates
+      .map((candidate) => candidate.optionLabel)
+      .join(", ")}.`,
+  );
+}
+
 async function readBudgetedVirtualModelUsage(
   client: QueryClient,
   virtualModelId: string,
@@ -683,6 +758,7 @@ async function readRoutePolicyForUpdate(
     `
       select route_policies.id::text,
              route_policies.strategy,
+             route_policies.rules,
              route_policies.virtual_model_id::text,
              virtual_models.name as virtual_model_name,
              virtual_models.description as virtual_model_display_name
@@ -724,6 +800,7 @@ async function writeRoutePolicyCandidates(
                provider_models.id::text as id,
                providers.id::text as provider_id,
                providers.provider_key,
+               providers.provider_template_id,
                providers.display_name as provider_display_name,
                providers.enabled as provider_enabled,
                provider_models.model_id,
@@ -779,6 +856,35 @@ function isRoutePolicyStrategy(value: string | null | undefined): value is Route
   return routePolicyStrategies.includes(value as RoutePolicyStrategy);
 }
 
+function normalizeRequiredEndpointProtocol(
+  value: string | null | undefined,
+): RouteEndpointProtocol {
+  const protocol = normalizeOptionalEndpointProtocol(value);
+  if (!protocol) {
+    throw new Error("Route policy endpoint protocol is required.");
+  }
+  return protocol;
+}
+
+function normalizeOptionalEndpointProtocol(
+  value: string | null | undefined,
+): RouteEndpointProtocol | null {
+  const protocol = value?.trim();
+  if (!protocol) {
+    return null;
+  }
+  if (!isRouteEndpointProtocol(protocol)) {
+    throw new Error(
+      "Route policy endpoint protocol must be chat_completions, responses, messages, or embeddings.",
+    );
+  }
+  return protocol;
+}
+
+function isRouteEndpointProtocol(value: string): value is RouteEndpointProtocol {
+  return routeEndpointProtocols.includes(value as RouteEndpointProtocol);
+}
+
 function isWarningHealthStatus(value: string | null | undefined): value is string {
   return (
     value === "auth_failed" ||
@@ -823,6 +929,7 @@ function providerModelOptionsSelectSql(): string {
     select provider_models.id::text,
            providers.id::text as provider_id,
            providers.provider_key,
+           providers.provider_template_id,
            providers.display_name as provider_display_name,
            providers.enabled as provider_enabled,
            provider_models.model_id,
@@ -858,12 +965,20 @@ function groupCandidatesByPolicyId(
   return candidatesByPolicyId;
 }
 
+function routePolicyRulesJson(routePolicy: NormalizedRoutePolicyFormInput): {
+  endpointProtocol: RouteEndpointProtocol;
+} {
+  return { endpointProtocol: routePolicy.endpointProtocol };
+}
+
 function rowToConsoleRoutePolicy(
   row: RoutePolicyRow,
   candidates: ConsoleRoutePolicyCandidate[],
 ): ConsoleRoutePolicy {
+  const rules = normalizeRoutePolicyRules(row.rules);
   return {
     candidates,
+    endpointProtocol: rules.endpointProtocol ?? null,
     id: row.id,
     routeReason: buildRouteReasonMetadata({
       candidateCount: candidates.length,
@@ -921,6 +1036,10 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     providerEnabled: row.provider_enabled,
     providerId: row.provider_id,
     providerKey: row.provider_key,
+    supportedEndpoints: listProviderRouteEndpointProtocols({
+      providerKey: row.provider_key,
+      providerTemplateId: row.provider_template_id,
+    }),
     supportsStreaming: row.supports_streaming ?? false,
     supportsTools: row.supports_tools ?? false,
   };

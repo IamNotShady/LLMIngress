@@ -259,6 +259,33 @@ describe("gateway request hygiene", () => {
     }
   });
 
+  it("normalizes Responses reasoning-only assistant replay placeholders", () => {
+    const reasoningItem = {
+      encrypted_content: "encrypted-reasoning",
+      summary: [],
+      type: "reasoning",
+    };
+    const assistantPlaceholder = {
+      content: "",
+      role: "assistant",
+    };
+    const normalized = normalizeOpenAIResponsesRequest(
+      {
+        input: [reasoningItem, assistantPlaceholder],
+        store: false,
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.input).toEqual([reasoningItem, assistantPlaceholder]);
+    }
+    expect(
+      normalizeOpenAIResponsesRequest({ input: [{ content: "", role: "user" }] }, "req-1").ok,
+    ).toBe(false);
+  });
+
   it("normalizes Embeddings token inputs and passthrough fields", () => {
     const normalized = normalizeOpenAIEmbeddingsRequest(
       {

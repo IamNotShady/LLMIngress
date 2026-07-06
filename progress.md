@@ -691,6 +691,18 @@
   - `pnpm run typecheck`
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Hermes reasoning replay follow-up:
+  - Root cause: Hermes Responses turns can replay encrypted reasoning followed by an assistant placeholder item with `content: ""`; LLMIngress treated all empty string Responses message content as invalid and returned `invalid_responses_request` before provider execution.
+  - Responses input normalization now allows empty string content only for assistant replay messages. Empty user messages remain invalid.
+- Hermes reasoning replay TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts` failed while `[{type:"reasoning", encrypted_content:"..."}, {role:"assistant", content:""}]` was rejected.
+- Hermes reasoning replay verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
 
 ## Required Verification
 

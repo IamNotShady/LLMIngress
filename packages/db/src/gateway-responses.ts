@@ -195,10 +195,6 @@ function readResponsesInputMessage(value: unknown): NormalizedOpenAIResponsesInp
   if (!isRecord(value)) {
     return null;
   }
-  const content = readResponsesMessageContent(value.content);
-  if (!content) {
-    return null;
-  }
   if (
     value.role !== "developer" &&
     value.role !== "system" &&
@@ -207,14 +203,19 @@ function readResponsesInputMessage(value: unknown): NormalizedOpenAIResponsesInp
   ) {
     return null;
   }
+  const content = readResponsesMessageContent(value.content, value.role);
+  if (content === null) {
+    return null;
+  }
 
   return value as NormalizedOpenAIResponsesInputMessage;
 }
 
 function readResponsesMessageContent(
   value: unknown,
+  role: NormalizedOpenAIResponsesInputMessage["role"],
 ): NormalizedOpenAIResponsesInputMessage["content"] | null {
-  if (typeof value === "string" && value.trim()) {
+  if (typeof value === "string" && (value.trim() || role === "assistant")) {
     return value;
   }
   if (!Array.isArray(value) || value.length === 0) {

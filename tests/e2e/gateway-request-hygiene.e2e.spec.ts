@@ -186,6 +186,40 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         stream: true,
       });
 
+      const reasoningItem = {
+        encrypted_content: "encrypted-reasoning",
+        summary: [],
+        type: "reasoning",
+      };
+      const assistantPlaceholder = {
+        content: "",
+        role: "assistant",
+      };
+      const reasoningReplayResponse = await fetch(`${baseUrl}/v1/responses`, {
+        body: JSON.stringify({
+          input: [reasoningItem, assistantPlaceholder],
+          model: "vm-request-hygiene",
+          store: false,
+          stream: true,
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await reasoningReplayResponse.text();
+
+      expect(reasoningReplayResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(4);
+      const reasoningReplayProviderBody = fakeProvider.requests[3]?.bodyJson;
+      expect(reasoningReplayProviderBody).toMatchObject({
+        input: [reasoningItem, assistantPlaceholder],
+        model: "fake-model",
+        store: false,
+        stream: true,
+      });
+
       const messagesResponse = await fetch(`${baseUrl}/v1/messages`, {
         body: JSON.stringify({
           betas: ["mcp-client-2025-04-04"],
@@ -205,8 +239,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await messagesResponse.text();
 
       expect(messagesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(4);
-      const messagesProviderBody = fakeProvider.requests[3]?.bodyJson;
+      expect(fakeProvider.requests).toHaveLength(5);
+      const messagesProviderBody = fakeProvider.requests[4]?.bodyJson;
       expect(messagesProviderBody).toMatchObject({
         betas: ["mcp-client-2025-04-04"],
         container: { type: "auto" },

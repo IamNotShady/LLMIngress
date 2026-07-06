@@ -12,6 +12,7 @@ import {
 } from "@llmingress/db/console-virtual-models";
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText, readText, readTextValues } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -100,5 +101,5 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/models", request.url), { status: 303 });
+  return redirectToConsolePath("/models");
 }

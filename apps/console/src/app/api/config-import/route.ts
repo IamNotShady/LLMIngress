@@ -2,6 +2,7 @@ import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-
 import { importConsoleConfig } from "@llmingress/db/console-import-export";
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     });
     const redirectUrl = new URL("/settings", request.url);
     redirectUrl.searchParams.set("configImportVersion", String(result.version));
-    return NextResponse.redirect(redirectUrl, { status: 303 });
+    return redirectToConsolePath(redirectUrl);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Config import failed." },

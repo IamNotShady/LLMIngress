@@ -625,6 +625,21 @@
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 22 passing features re-verified.
 
+## 2026-07-06 Docker Console Relative Redirect Fix
+
+- Fixed Docker-hosted Console auth/form redirects:
+  - Root cause: API routes built absolute redirects from `request.url`; in the Docker container Next resolves that as the internal listener `http://0.0.0.0:3000`, so a host request to `http://127.0.0.1:13000` could jump to the wrong local process after login.
+  - Added `redirectToConsolePath()` for same-app redirects and switched Console API auth/form routes to relative `Location` headers.
+  - External OAuth authorization URLs remain untouched; only redirects back into the Console app were changed.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/v1-console.unit.test.ts`
+  - `pnpm --filter @llmingress/console typecheck`
+  - `pnpm run lint`
+  - Rebuilt and restarted Docker project `llmingress_docker_local`.
+  - `curl -I -X POST http://127.0.0.1:13000/api/auth/logout` now returns `location: /`.
+  - Docker Gateway `/health` returned HTTP 200 and Docker Console root returned HTTP 200.
+  - `pnpm run verify`
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

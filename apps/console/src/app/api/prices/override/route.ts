@@ -2,6 +2,7 @@ import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-
 import { saveManualPriceOverride } from "@llmingress/db/console-price-overrides";
 import { type NextRequest, NextResponse } from "next/server";
 import { readNumber, readText } from "../../_form";
+import { redirectToConsolePath } from "../../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -41,5 +42,5 @@ export async function POST(request: NextRequest) {
   if (redirectModel) {
     redirectUrl.searchParams.set("model", redirectModel);
   }
-  return NextResponse.redirect(redirectUrl, { status: 303 });
+  return redirectToConsolePath(redirectUrl);
 }

@@ -14,6 +14,7 @@ import {
 import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText, readText, readTextValues } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -68,10 +69,7 @@ export async function POST(request: NextRequest) {
         id,
         saveLimits: readText(form, "enableLimits") === "true",
       });
-      return NextResponse.redirect(
-        new URL(`/agents?selected=${encodeURIComponent(id)}`, request.url),
-        { status: 303 },
-      );
+      return redirectToConsolePath(`/agents?selected=${encodeURIComponent(id)}`);
     } else if (action === "delete") {
       await deleteAgent({
         id: readRequiredText(form, "id"),
@@ -94,7 +92,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
+  return redirectToConsolePath("/agents");
 }
 
 async function saveAgentRelatedSettings(input: {

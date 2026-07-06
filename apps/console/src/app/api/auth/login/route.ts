@@ -4,6 +4,7 @@ import {
   sessionCookieName,
 } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
+import { redirectToConsolePath } from "../../_redirect";
 
 export async function POST(request: NextRequest) {
   const password = await readPassword(request);
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid admin password." }, { status: 401 });
   }
 
-  const response = NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  const response = redirectToConsolePath("/");
   response.cookies.set(
     sessionCookieName,
     session.token,

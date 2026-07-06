@@ -4,6 +4,7 @@ import {
   consoleNavItems,
   findActiveNavItem,
 } from "../../apps/console/src/app/_lib/nav";
+import { redirectToConsolePath } from "../../apps/console/src/app/api/_redirect";
 
 const expectedRoutes = [
   "/",
@@ -44,5 +45,13 @@ describe("console module navigation config", () => {
   test("overview lives at the root so first-run login lands somewhere real", () => {
     const overview = consoleNavItems.find((item: ConsoleNavItem) => item.href === "/");
     expect(overview?.label).toBe("Overview");
+  });
+
+  test("api redirects stay relative behind Docker port mappings", () => {
+    const internalUrl = new URL("/providers?selected=abc#keys", "http://0.0.0.0:3000");
+    expect(redirectToConsolePath(internalUrl).headers.get("location")).toBe(
+      "/providers?selected=abc#keys",
+    );
+    expect(redirectToConsolePath("/").headers.get("location")).toBe("/");
   });
 });

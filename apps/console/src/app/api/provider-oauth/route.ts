@@ -12,6 +12,7 @@ import {
 } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
 import { readNullableText, readNumber, readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
       });
       await enqueueProviderModelRefreshJob({ providerId: result.providerId });
       await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
-      return redirectToProvider(request, result.providerId);
+      return redirectToProvider(result.providerId);
     }
 
     if (action === "delete") {
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
         masterKeySource: readConsoleMasterKeySource(),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      return redirectToProvider(request, result.providerId);
+      return redirectToProvider(result.providerId);
     }
 
     if (action === "enable" || action === "disable") {
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
       await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
-      return redirectToProvider(request, result.providerId);
+      return redirectToProvider(result.providerId);
     }
 
     const result = await startProviderOAuthConnection({
@@ -84,11 +85,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function redirectToProvider(request: NextRequest, providerId: string): NextResponse {
-  return NextResponse.redirect(
-    new URL(`/providers?selected=${encodeURIComponent(providerId)}`, request.url),
-    303,
-  );
+function redirectToProvider(providerId: string): NextResponse {
+  return redirectToConsolePath(`/providers?selected=${encodeURIComponent(providerId)}`);
 }
 
 function redirectToProviderOAuthDialog(
@@ -120,5 +118,5 @@ function redirectToProviderOAuthDialog(
   if (input.priority !== undefined) {
     url.searchParams.set("providerOAuthPriorityValue", String(input.priority));
   }
-  return NextResponse.redirect(url, 303);
+  return redirectToConsolePath(url);
 }

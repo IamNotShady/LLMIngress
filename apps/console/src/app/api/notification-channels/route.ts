@@ -5,6 +5,7 @@ import {
 } from "@llmingress/db/console-notification-channels";
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -34,7 +35,5 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/settings#notification-channels", request.url), {
-    status: 303,
-  });
+  return redirectToConsolePath("/settings#notification-channels");
 }

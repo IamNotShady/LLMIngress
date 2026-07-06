@@ -11,6 +11,7 @@ import {
 import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
       setSearchParam(redirectUrl, "providerKeyValue", readText(form, "providerKey"));
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return NextResponse.redirect(redirectUrl, { status: 303 });
+      return redirectToConsolePath(redirectUrl);
     }
     if (action === "update") {
       const redirectUrl = new URL("/providers", request.url);
@@ -86,12 +87,12 @@ export async function POST(request: NextRequest) {
       redirectUrl.searchParams.set("providerErrorField", "form");
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return NextResponse.redirect(redirectUrl, { status: 303 });
+      return redirectToConsolePath(redirectUrl);
     }
-    return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
+    return redirectToConsolePath("/providers");
   }
 
-  return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
+  return redirectToConsolePath("/providers");
 }
 
 function setSearchParam(url: URL, name: string, value: string | undefined): void {

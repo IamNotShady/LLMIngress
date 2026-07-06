@@ -7,6 +7,7 @@ import {
 } from "@llmingress/db/console-route-policies";
 import { type NextRequest, NextResponse } from "next/server";
 import { readRequiredText, readText, readTextValues } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
@@ -51,5 +52,5 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/routing", request.url), { status: 303 });
+  return redirectToConsolePath("/routing");
 }

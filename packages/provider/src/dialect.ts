@@ -1,4 +1,5 @@
 import { openRouterAttributionHeaders } from "./adapters/openrouter.js";
+import { mergeHttpHeaders } from "./headers.js";
 import {
   buildClaudeCodeMessagesUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -25,7 +26,8 @@ const defaultDialect: ProviderStreamingDialect = {
 
 const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
   claude_code: {
-    buildHeaders: (apiKey) => buildClaudeCodeSubscriptionHeaders(apiKey),
+    buildHeaders: (apiKey, protocolHeaders) =>
+      buildClaudeCodeSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
     buildUrl: (baseUrl, pathSuffix) =>
       pathSuffix === "messages"
         ? buildClaudeCodeMessagesUrl(baseUrl)
@@ -33,7 +35,8 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
     supportsPathSuffix: (pathSuffix) => pathSuffix === "messages",
   },
   openai_codex: {
-    buildHeaders: (apiKey) => buildCodexSubscriptionHeaders(apiKey),
+    buildHeaders: (apiKey, protocolHeaders) =>
+      buildCodexSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
     buildUrl: (baseUrl, pathSuffix) =>
       pathSuffix === "responses"
         ? buildCodexResponsesUrl(baseUrl)
@@ -41,10 +44,8 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
     supportsPathSuffix: (pathSuffix) => pathSuffix === "responses",
   },
   openrouter: {
-    buildHeaders: (apiKey, protocolHeaders) => ({
-      ...protocolHeaders(apiKey),
-      ...openRouterAttributionHeaders,
-    }),
+    buildHeaders: (apiKey, protocolHeaders) =>
+      mergeHttpHeaders(protocolHeaders(apiKey), openRouterAttributionHeaders),
   },
 };
 

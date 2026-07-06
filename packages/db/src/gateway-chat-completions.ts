@@ -81,6 +81,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;
+  providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -94,9 +95,10 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     protocol: "chat_completions",
     spec: {
       buildRequestMetadata: buildOpenAIChatCompletionRequestMetadata,
-      callProvider: ({ candidate, providerApiKey, request }) => {
+      callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
         const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
         return adapter.chatCompletion({
+          headers: providerRequestHeaders,
           request,
           target: {
             apiKey: providerApiKey.apiKey,

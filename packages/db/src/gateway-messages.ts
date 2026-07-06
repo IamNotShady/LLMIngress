@@ -105,6 +105,7 @@ export async function executeGatewayAnthropicMessages(input: {
   agentId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl?: string;
+  providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -119,12 +120,13 @@ export async function executeGatewayAnthropicMessages(input: {
       protocol: "messages",
       spec: {
         buildRequestMetadata: buildAnthropicMessagesRequestMetadata,
-        callProvider: ({ candidate, providerApiKey, request }) => {
+        callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
           const adapter =
             candidate.providerKey === "claude_code" && claudeCodeAdapter
               ? claudeCodeAdapter
               : genericAdapter;
           return adapter.messages({
+            headers: providerRequestHeaders,
             request,
             target: {
               apiKey: providerApiKey.apiKey,

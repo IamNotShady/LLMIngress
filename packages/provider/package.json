@@ -16,6 +16,10 @@
       "types": "./src/dialect.ts",
       "default": "./src/dialect.ts"
     },
+    "./headers": {
+      "types": "./src/headers.ts",
+      "default": "./src/headers.ts"
+    },
     "./model-list": {
       "types": "./src/model-list.ts",
       "default": "./src/model-list.ts"

@@ -80,6 +80,7 @@ export async function executeGatewayOpenAIResponse(input: {
   agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
+  providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -94,7 +95,7 @@ export async function executeGatewayOpenAIResponse(input: {
     protocol: "responses",
     spec: {
       buildRequestMetadata: buildOpenAIResponsesRequestMetadata,
-      callProvider: ({ candidate, providerApiKey, request }) => {
+      callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
         const adapter =
           candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : genericAdapter;
         if (!adapter.response) {
@@ -104,6 +105,7 @@ export async function executeGatewayOpenAIResponse(input: {
           );
         }
         return adapter.response({
+          headers: providerRequestHeaders,
           request,
           target: {
             apiKey: providerApiKey.apiKey,

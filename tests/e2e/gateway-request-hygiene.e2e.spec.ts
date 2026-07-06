@@ -36,6 +36,11 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
     try {
       const baseUrl = `http://127.0.0.1:${gateway.port}`;
       await waitForGateway(baseUrl, gateway);
+      const openAIHeaderProbe = {
+        "openai-beta": "responses=v1",
+        "openai-organization": "org_agent_123",
+        "openai-project": "proj_agent_123",
+      };
 
       const unauthorizedMetrics = await fetch(`${baseUrl}/metrics`);
       expect(unauthorizedMetrics.status).toBe(401);
@@ -63,6 +68,11 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         headers: {
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
+          cookie: "agent-session=secret",
+          ...openAIHeaderProbe,
+          "x-api-key": "agent-x-key-should-not-leak",
+          "x-client-request-id": "client-chat-1",
+          "x-request-id": "agent-chat-request",
         },
         method: "POST",
       });
@@ -72,7 +82,16 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       expect(body).toMatchObject({
         choices: [{ message: { content: "fake provider response", role: "assistant" } }],
       });
+      expect(response.headers.get("x-llmingress-request-id")).toBe("agent-chat-request");
+      expect(response.headers.get("x-request-id")).toBe("fake-provider-request");
+      expect(response.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(fakeProvider.requests).toHaveLength(1);
+      expectOpenAIProviderHeaders(fakeProvider.requests[0]?.headers);
+      expect(readHeader(fakeProvider.requests[0]?.headers, "authorization")).toBe(
+        "Bearer fake-provider-key",
+      );
+      expect(readHeader(fakeProvider.requests[0]?.headers, "x-api-key")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "cookie")).toBeUndefined();
       const providerBody = fakeProvider.requests[0]?.bodyJson;
       expect(isRecord(providerBody) ? providerBody.max_completion_tokens : undefined).toBe(64);
       expect(isRecord(providerBody) ? providerBody.max_tokens : undefined).toBe(12);
@@ -98,13 +117,21 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         headers: {
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
+          ...openAIHeaderProbe,
+          "x-client-request-id": "client-stream-chat-1",
         },
         method: "POST",
       });
       await streamingChatResponse.text();
 
       expect(streamingChatResponse.status).toBe(200);
+      expect(streamingChatResponse.headers.get("x-request-id")).toBe("fake-provider-request");
+      expect(streamingChatResponse.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(fakeProvider.requests).toHaveLength(2);
+      expectOpenAIProviderHeaders(fakeProvider.requests[1]?.headers);
+      expect(readHeader(fakeProvider.requests[1]?.headers, "x-client-request-id")).toBe(
+        "client-stream-chat-1",
+      );
       const streamingChatProviderBody = fakeProvider.requests[1]?.bodyJson;
       expect(streamingChatProviderBody).toMatchObject({
         messages: "provider-owned",
@@ -148,6 +175,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         headers: {
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
+          ...openAIHeaderProbe,
+          "x-client-request-id": "client-responses-1",
         },
         method: "POST",
       });
@@ -155,6 +184,10 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
 
       expect(responsesResponse.status).toBe(200);
       expect(fakeProvider.requests).toHaveLength(3);
+      expectOpenAIProviderHeaders(fakeProvider.requests[2]?.headers);
+      expect(readHeader(fakeProvider.requests[2]?.headers, "x-client-request-id")).toBe(
+        "client-responses-1",
+      );
       const responsesProviderBody = fakeProvider.requests[2]?.bodyJson;
       expect(responsesProviderBody).toMatchObject({
         background: true,
@@ -285,6 +318,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
           model: "vm-request-hygiene",
         }),
         headers: {
+          "anthropic-beta": "context-1m-2025-08-07",
+          "anthropic-version": "2024-01-01",
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
         },
@@ -294,6 +329,13 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
 
       expect(messagesResponse.status).toBe(200);
       expect(fakeProvider.requests).toHaveLength(7);
+      expect(readHeader(fakeProvider.requests[6]?.headers, "anthropic-beta")).toBe(
+        "context-1m-2025-08-07",
+      );
+      expect(readHeader(fakeProvider.requests[6]?.headers, "anthropic-version")).toBe("2024-01-01");
+      expect(readHeader(fakeProvider.requests[6]?.headers, "x-api-key")).toBe("fake-provider-key");
+      expect(messagesResponse.headers.get("request-id")).toBe("fake-provider-request");
+      expect(messagesResponse.headers.get("anthropic-ratelimit-requests-remaining")).toBe("88");
       const messagesProviderBody = fakeProvider.requests[6]?.bodyJson;
       expect(messagesProviderBody).toMatchObject({
         betas: ["mcp-client-2025-04-04"],
@@ -341,6 +383,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         headers: {
           authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
+          ...openAIHeaderProbe,
+          "x-client-request-id": "client-embeddings-1",
         },
         method: "POST",
       });
@@ -348,6 +392,10 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
 
       expect(providerOwnedEmbeddingsResponse.status).toBe(200);
       expect(fakeProvider.requests).toHaveLength(9);
+      expectOpenAIProviderHeaders(fakeProvider.requests[8]?.headers);
+      expect(readHeader(fakeProvider.requests[8]?.headers, "x-client-request-id")).toBe(
+        "client-embeddings-1",
+      );
       expect(fakeProvider.requests[8]?.bodyJson).toMatchObject({
         dimensions: "provider-owned",
         encoding_format: "provider-owned",
@@ -365,4 +413,20 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function expectOpenAIProviderHeaders(
+  headers: Record<string, string | string[] | undefined> | undefined,
+): void {
+  expect(readHeader(headers, "openai-beta")).toBe("responses=v1");
+  expect(readHeader(headers, "openai-organization")).toBe("org_agent_123");
+  expect(readHeader(headers, "openai-project")).toBe("proj_agent_123");
+}
+
+function readHeader(
+  headers: Record<string, string | string[] | undefined> | undefined,
+  name: string,
+): string | undefined {
+  const value = headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? value.join(", ") : value;
 }

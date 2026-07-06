@@ -75,6 +75,7 @@ export type GatewayProtocolSpec<TNormalized, TSuccess extends ProviderFallbackAt
   callProvider: (input: {
     candidate: FallbackChainCandidate;
     providerApiKey: FallbackProviderApiKey;
+    providerRequestHeaders: Record<string, string>;
     request: TNormalized;
   }) => Promise<ProviderFallbackAttemptResult<TSuccess>>;
   normalize: (body: unknown, requestId: string) => GatewayProtocolNormalizeResult<TNormalized>;
@@ -94,6 +95,7 @@ export async function executeGatewayProtocolRequest<
   requestBody: unknown;
   requestId: string;
   protocol: RouteEndpointProtocol;
+  providerRequestHeaders?: Record<string, string>;
   snapshot: GatewayConfigSnapshot;
   spec: GatewayProtocolSpec<TNormalized, TSuccess>;
   virtualModel: GatewayVirtualModel;
@@ -189,6 +191,7 @@ export async function executeGatewayProtocolRequest<
         const result = await input.spec.callProvider({
           candidate,
           providerApiKey,
+          providerRequestHeaders: input.providerRequestHeaders ?? {},
           request: normalized.request,
         });
         recordGatewayProviderTrace({
@@ -215,6 +218,7 @@ export async function executeGatewayProtocolRequest<
         return {
           activity,
           body: providerError.body,
+          headers: providerError.headers,
           requestMetadata,
           statusCode: providerError.statusCode,
         };
@@ -236,6 +240,7 @@ export async function executeGatewayProtocolRequest<
       activity,
       body: success.result.body,
       budgetSettlement,
+      headers: success.result.headers,
       requestMetadata,
       statusCode: success.result.statusCode,
       usageCost: {
@@ -264,11 +269,13 @@ export async function executeGatewayProtocolRequest<
   }
 }
 
-function buildProviderErrorPassthrough(
-  error: FallbackAttemptErrorLike | undefined,
-): { body: unknown; statusCode: number } | null {
+function buildProviderErrorPassthrough(error: FallbackAttemptErrorLike | undefined): {
+  body: unknown;
+  headers?: Record<string, string>;
+  statusCode: number;
+} | null {
   const statusCode = error?.statusCode;
-  if (statusCode === undefined || statusCode === null || statusCode === 429) {
+  if (statusCode === undefined || statusCode === null) {
     return null;
   }
   if (statusCode < 400 || statusCode >= 500) {
@@ -279,6 +286,7 @@ function buildProviderErrorPassthrough(
   }
   return {
     body: error.body ?? null,
+    headers: error.headers,
     statusCode,
   };
 }

@@ -98,6 +98,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;
+  providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -109,7 +110,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
     spec: {
       buildRequestMetadata: ({ model, request }) =>
         buildOpenAIEmbeddingsRequestMetadata({ model, request }),
-      callProvider: ({ candidate, providerApiKey, request }) => {
+      callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
         const adapter = createGatewayEmbeddingsProviderAdapter({
           adapter: input.adapter,
           providerKey: candidate.providerKey,
@@ -121,6 +122,7 @@ export async function executeGatewayOpenAIEmbeddings(input: {
           );
         }
         return adapter.embeddings({
+          headers: providerRequestHeaders,
           request,
           target: {
             apiKey: providerApiKey.apiKey,

@@ -744,6 +744,24 @@
   - `pnpm run typecheck`
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Gateway header transparency follow-up:
+  - Root cause: Gateway only used Agent request headers for auth/CORS; JSON adapters rebuilt upstream headers from provider auth plus content-type, streaming kept only content-type, and adapter results did not carry provider response headers back to Gateway.
+  - Gateway now filters inbound Agent headers with a denylist for auth/transport/body-owned headers, then forwards protocol headers through Chat Completions, Responses, Embeddings, and Messages JSON and streaming paths. Provider auth and JSON content-type remain Gateway-owned.
+  - OpenAI-compatible adapters merge forwarded protocol headers with provider auth; OpenRouter attribution remains Gateway-owned. Anthropic adapters respect Agent `anthropic-version` and forward `anthropic-beta`. Claude Code subscription merges Agent beta flags with required subscription flags and de-dupes them.
+  - Provider response headers are captured and returned for JSON and streaming success/error responses, excluding transport/body headers. Provider `x-request-id` / `request-id`, rate-limit headers, and `retry-after` can now reach Agents while Gateway correlation remains available as `x-llmingress-request-id`.
+  - Exhausted provider 429s keep fallback first, then return the last provider 429 body/status/headers instead of a Gateway `provider_rate_limited` envelope.
+- Gateway header transparency TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts` failed while the request-header helper was missing, OpenAI/Anthropic adapter inputs ignored protocol headers, and Claude Code beta/version headers were hardcoded.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1` failed while provider response headers were replaced by Gateway headers and exhausted provider 429 returned a Gateway envelope.
+- Gateway header transparency verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified. The optimized E2E batch had one parallel `v1-gateway-routing` miss, then the built-in per-feature fallback passed and the command exited 0.
+  - `git diff --check`
+  - `jq empty feature_list.json`
 
 ## Required Verification
 

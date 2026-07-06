@@ -15,21 +15,31 @@ export function isSubscriptionProviderKey(
   return providerKey === "openai_codex" || providerKey === "claude_code";
 }
 
-export function buildCodexSubscriptionHeaders(accessToken: string): Record<string, string> {
-  return {
+export function buildCodexSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  return mergeHttpHeaders(requestHeaders, {
     authorization: `Bearer ${accessToken}`,
     "content-type": "application/json",
     originator: codexOriginator,
     "user-agent": codexUserAgent,
-  };
+  });
 }
 
-export function buildClaudeCodeSubscriptionHeaders(accessToken: string): Record<string, string> {
-  return {
+export function buildClaudeCodeSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  return mergeHttpHeaders(requestHeaders, {
     authorization: `Bearer ${accessToken}`,
-    "anthropic-beta": claudeCodeBetaFlags,
+    "anthropic-beta":
+      mergeCommaSeparatedHeaderValues(
+        readHttpHeader(requestHeaders, "anthropic-beta"),
+        claudeCodeBetaFlags,
+      ) ?? claudeCodeBetaFlags,
     "anthropic-dangerous-direct-browser-access": "true",
-    "anthropic-version": "2023-06-01",
+    "anthropic-version": readHttpHeader(requestHeaders, "anthropic-version") ?? "2023-06-01",
     "content-type": "application/json",
     "user-agent": claudeCodeUserAgent,
     "x-app": "cli",
@@ -42,7 +52,7 @@ export function buildClaudeCodeSubscriptionHeaders(accessToken: string): Record<
     "x-stainless-runtime": "node",
     "x-stainless-runtime-version": claudeCodeStainlessRuntimeVersion,
     "x-stainless-timeout": "600",
-  };
+  });
 }
 
 export function buildCodexModelListUrl(baseUrl: string): string {
@@ -107,5 +117,56 @@ function readStainlessOs(): string {
       return "Windows";
     default:
       return `Other:${process.platform}`;
+  }
+}
+
+function mergeHttpHeaders(
+  ...headerSets: Array<Record<string, string> | undefined>
+): Record<string, string> {
+  const output: Record<string, string> = {};
+  for (const headers of headerSets) {
+    if (!headers) {
+      continue;
+    }
+    for (const [name, value] of Object.entries(headers)) {
+      removeHeader(output, name);
+      output[name] = value;
+    }
+  }
+  return output;
+}
+
+function readHttpHeader(
+  headers: Record<string, string> | undefined,
+  name: string,
+): string | undefined {
+  const normalizedName = name.toLowerCase();
+  return Object.entries(headers ?? {}).find(
+    ([headerName]) => headerName.toLowerCase() === normalizedName,
+  )?.[1];
+}
+
+function mergeCommaSeparatedHeaderValues(...values: Array<string | undefined>): string | undefined {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    for (const entry of (value ?? "").split(",")) {
+      const trimmed = entry.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      merged.push(trimmed);
+    }
+  }
+  return merged.length > 0 ? merged.join(",") : undefined;
+}
+
+function removeHeader(headers: Record<string, string>, name: string): void {
+  const normalizedName = name.toLowerCase();
+  for (const headerName of Object.keys(headers)) {
+    if (headerName.toLowerCase() === normalizedName) {
+      delete headers[headerName];
+    }
   }
 }

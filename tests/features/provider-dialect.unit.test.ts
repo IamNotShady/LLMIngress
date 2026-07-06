@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildAnthropicMessagesPayload } from "../../packages/provider/src/adapters/anthropic";
+import {
+  buildAnthropicMessagesPayload,
+  createAnthropicProviderAdapter,
+} from "../../packages/provider/src/adapters/anthropic";
+import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
+import { createClaudeCodeProviderAdapter } from "../../packages/provider/src/adapters/subscription";
 import {
   checkProviderConnectivity,
   selectProviderProbeModel,
@@ -8,6 +13,7 @@ import {
   joinProviderStreamingUrl,
   resolveProviderStreamingDialect,
 } from "../../packages/provider/src/dialect";
+import { claudeCodeBetaFlags } from "../../packages/provider/src/subscription";
 
 const protocolHeaders = (apiKey: string) => ({
   authorization: `Bearer ${apiKey}`,
@@ -86,21 +92,168 @@ describe("provider streaming dialects", () => {
 
   it("maps Claude Code subscriptions to the messages dialect", () => {
     const dialect = resolveProviderStreamingDialect("claude_code");
+    const headers = dialect.buildHeaders("claude-token", (apiKey) => ({
+      ...protocolHeaders(apiKey),
+      "anthropic-beta": "context-1m-2025-08-07,claude-code-20250219",
+      "anthropic-version": "2024-01-01",
+    }));
 
     expect(dialect.supportsPathSuffix("messages")).toBe(true);
     expect(dialect.supportsPathSuffix("responses")).toBe(false);
     expect(dialect.buildUrl("https://provider.test", "messages")).toBe(
       "https://provider.test/v1/messages",
     );
-    expect(dialect.buildHeaders("claude-token", protocolHeaders)).toMatchObject({
+    expect(headers).toMatchObject({
       authorization: "Bearer claude-token",
-      "anthropic-version": "2023-06-01",
+      "anthropic-version": "2024-01-01",
       "content-type": "application/json",
       "x-app": "cli",
     });
+    const betas = readCommaList(headers["anthropic-beta"]);
+    expect(betas).toContain("context-1m-2025-08-07");
+    for (const requiredBeta of readCommaList(claudeCodeBetaFlags)) {
+      expect(betas).toContain(requiredBeta);
+    }
+    expect(new Set(betas).size).toBe(betas.length);
     expect(dialect.transformBody({ system: "Use terse replies." }, "messages")).toEqual({
       system: "Use terse replies.",
     });
+  });
+});
+
+describe("provider adapter headers", () => {
+  it("forwards OpenAI protocol headers, keeps provider auth, and returns provider headers", async () => {
+    let upstreamHeaders = new Headers();
+    const adapter = createOpenAIProviderAdapter({
+      fetch: async (_url, init) => {
+        upstreamHeaders = new Headers(init?.headers);
+        return new Response(JSON.stringify({ id: "chatcmpl_123", object: "chat.completion" }), {
+          headers: {
+            "content-length": "999",
+            "content-type": "application/json",
+            "x-ratelimit-remaining-requests": "42",
+            "x-request-id": "provider-openai-request",
+          },
+          status: 200,
+        });
+      },
+      timeoutMs: 200,
+    });
+
+    const result = await adapter.chatCompletion({
+      headers: {
+        authorization: "Bearer agent-key",
+        "openai-beta": "responses=v1",
+        "openai-organization": "org_123",
+        "openai-project": "proj_123",
+        "x-client-request-id": "client-req-1",
+      },
+      request: {
+        messages: [{ content: "hi", role: "user" }],
+        payload: { messages: [{ content: "hi", role: "user" }] },
+      },
+      target: { apiKey: "provider-key", baseUrl: "https://provider.test/v1", modelId: "model-1" },
+    });
+
+    expect(upstreamHeaders.get("authorization")).toBe("Bearer provider-key");
+    expect(upstreamHeaders.get("openai-organization")).toBe("org_123");
+    expect(upstreamHeaders.get("openai-project")).toBe("proj_123");
+    expect(upstreamHeaders.get("openai-beta")).toBe("responses=v1");
+    expect(upstreamHeaders.get("x-client-request-id")).toBe("client-req-1");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.headers).toEqual({
+        "content-type": "application/json",
+        "x-ratelimit-remaining-requests": "42",
+        "x-request-id": "provider-openai-request",
+      });
+    }
+  });
+
+  it("forwards Anthropic beta/version headers, keeps provider auth, and returns provider headers", async () => {
+    let upstreamHeaders = new Headers();
+    const adapter = createAnthropicProviderAdapter({
+      fetch: async (_url, init) => {
+        upstreamHeaders = new Headers(init?.headers);
+        return new Response(JSON.stringify({ id: "msg_123", type: "message" }), {
+          headers: {
+            "content-encoding": "gzip",
+            "content-type": "application/json",
+            "request-id": "provider-anthropic-request",
+            "retry-after": "2",
+          },
+          status: 200,
+        });
+      },
+      timeoutMs: 200,
+    });
+
+    const result = await adapter.messages({
+      headers: {
+        "anthropic-beta": "context-1m-2025-08-07",
+        "anthropic-version": "2024-01-01",
+        "x-api-key": "agent-key",
+      },
+      request: {
+        maxOutputTokens: 128,
+        messages: [{ content: "hi", role: "user" }],
+        payload: { max_tokens: 128, messages: [{ content: "hi", role: "user" }] },
+      },
+      target: { apiKey: "provider-key", baseUrl: "https://provider.test/v1", modelId: "model-1" },
+    });
+
+    expect(upstreamHeaders.get("anthropic-beta")).toBe("context-1m-2025-08-07");
+    expect(upstreamHeaders.get("anthropic-version")).toBe("2024-01-01");
+    expect(upstreamHeaders.get("x-api-key")).toBe("provider-key");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.headers).toEqual({
+        "content-type": "application/json",
+        "request-id": "provider-anthropic-request",
+        "retry-after": "2",
+      });
+    }
+  });
+
+  it("merges Claude Code Agent beta headers with required subscription beta flags", async () => {
+    let upstreamHeaders = new Headers();
+    const adapter = createClaudeCodeProviderAdapter({
+      fetch: async (_url, init) => {
+        upstreamHeaders = new Headers(init?.headers);
+        return new Response(JSON.stringify({ id: "msg_123", type: "message" }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      },
+      timeoutMs: 200,
+    });
+
+    const result = await adapter.messages({
+      headers: {
+        "anthropic-beta": "context-1m-2025-08-07, claude-code-20250219",
+        "anthropic-version": "2024-01-01",
+      },
+      request: {
+        maxOutputTokens: 128,
+        messages: [{ content: "hi", role: "user" }],
+        payload: { max_tokens: 128, messages: [{ content: "hi", role: "user" }] },
+      },
+      target: {
+        apiKey: "subscription-token",
+        baseUrl: "https://provider.test",
+        modelId: "model-1",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(upstreamHeaders.get("authorization")).toBe("Bearer subscription-token");
+    expect(upstreamHeaders.get("anthropic-version")).toBe("2024-01-01");
+    const betas = readCommaList(upstreamHeaders.get("anthropic-beta"));
+    expect(betas).toContain("context-1m-2025-08-07");
+    for (const requiredBeta of readCommaList(claudeCodeBetaFlags)) {
+      expect(betas).toContain(requiredBeta);
+    }
+    expect(new Set(betas).size).toBe(betas.length);
   });
 });
 
@@ -137,6 +290,13 @@ describe("Anthropic provider payloads", () => {
     });
   });
 });
+
+function readCommaList(value: string | null | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
 
 describe("provider connectivity probe model selection", () => {
   it("skips OpenAI instruct models when choosing a chat-completions probe", () => {

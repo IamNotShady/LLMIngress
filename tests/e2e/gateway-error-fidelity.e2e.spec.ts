@@ -50,6 +50,8 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       const body = await response.json();
 
       expect(response.status).toBe(400);
+      expect(response.headers.get("x-request-id")).toBe("fake-provider-request");
+      expect(response.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(body).toEqual({
         error: {
           code: "context_length_exceeded",
@@ -72,6 +74,8 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       const streamingBody = await streamingResponse.json();
 
       expect(streamingResponse.status).toBe(400);
+      expect(streamingResponse.headers.get("x-request-id")).toBe("fake-provider-request");
+      expect(streamingResponse.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(streamingBody).toEqual(body);
 
       const responsesResponse = await fetch(`${baseUrl}/v1/responses`, {
@@ -88,6 +92,8 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       const responsesBody = await responsesResponse.json();
 
       expect(responsesResponse.status).toBe(400);
+      expect(responsesResponse.headers.get("x-request-id")).toBe("fake-provider-request");
+      expect(responsesResponse.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(responsesBody).toEqual(body);
 
       const embeddingsResponse = await fetch(`${baseUrl}/v1/embeddings`, {
@@ -104,6 +110,8 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       const embeddingsBody = await embeddingsResponse.json();
 
       expect(embeddingsResponse.status).toBe(400);
+      expect(embeddingsResponse.headers.get("x-request-id")).toBe("fake-provider-request");
+      expect(embeddingsResponse.headers.get("x-ratelimit-remaining-requests")).toBe("99");
       expect(embeddingsBody).toEqual(body);
     } finally {
       await stopGatewayProcess(gateway);
@@ -156,12 +164,70 @@ test("gateway messages endpoint passes through non-retryable provider 4xx body a
       const body = await response.json();
 
       expect(response.status).toBe(400);
+      expect(response.headers.get("request-id")).toBe("fake-provider-request");
+      expect(response.headers.get("anthropic-ratelimit-requests-remaining")).toBe("88");
       expect(body).toEqual({
         error: {
           code: "context_length_exceeded",
           message: "context length exceeded by fake provider",
         },
       });
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await fakeProvider.close();
+    await fixture.dispose();
+  }
+});
+
+test("gateway returns exhausted provider 429 body, status, and headers", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_error_429_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const fakeProvider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedOpenAIGatewayRoute({
+      agentApiKey: `${agentApiKey}_rate_limit`,
+      fixture,
+      providerBaseUrl: `${fakeProvider.url}?mode=rate-limit`,
+      virtualModelName: "vm-provider-429",
+    });
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-provider-429",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}_rate_limit`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      const body = await response.json();
+
+      expect(response.status).toBe(429);
+      expect(body).toEqual({
+        error: {
+          code: "rate_limit_error",
+          message: "Fake provider rate limit",
+        },
+      });
+      expect(response.headers.get("x-request-id")).toBe("fake-provider-request");
+      expect(response.headers.get("retry-after")).toBe("2");
+      expect(response.headers.get("x-ratelimit-remaining-requests")).toBe("0");
     } finally {
       await stopGatewayProcess(gateway);
     }

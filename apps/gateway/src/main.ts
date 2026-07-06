@@ -22,6 +22,7 @@ import {
   gatewayMetricsToken,
 } from "@llmingress/db/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/db/gateway-error-mapping";
+import { readGatewayProviderRequestHeaders } from "@llmingress/db/gateway-header-passthrough";
 import { executeGatewayAnthropicMessages } from "@llmingress/db/gateway-messages";
 import { getPrometheusMetricsDocument } from "@llmingress/db/gateway-metrics";
 import {
@@ -57,6 +58,7 @@ type CreateGatewayAppOptions = {
 
 type GatewayJsonEndpointExecutionInput = {
   agentId: string;
+  providerRequestHeaders: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -145,7 +147,8 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       agentId: auth.agentApiKey.id,
     });
 
-    return reply.header(gatewayRequestIdHeader, auth.requestId).send({
+    writeGatewayRequestIdHeader(reply, auth.requestId);
+    return reply.send({
       data: allowedVirtualModels.map((virtualModel) => ({
         id: virtualModel.name,
         object: "model",
@@ -223,6 +226,7 @@ function registerGatewayJsonEndpoint(
     if (!auth.ok) {
       return sendGatewayErrorResponse(reply, auth.statusCode, auth.body);
     }
+    const providerRequestHeaders = readGatewayProviderRequestHeaders(request.headers);
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
       agentId: auth.agentApiKey.id,
@@ -264,6 +268,7 @@ function registerGatewayJsonEndpoint(
             executeGatewayStreamingRequest({
               agentId: auth.agentApiKey.id,
               protocol: streamingProtocol,
+              providerRequestHeaders,
               requestBody: request.body,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
@@ -286,6 +291,7 @@ function registerGatewayJsonEndpoint(
       execute: () =>
         endpoint.execute({
           agentId: auth.agentApiKey.id,
+          providerRequestHeaders,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
@@ -345,6 +351,7 @@ function sendGatewayErrorResponse(
 
 function writeGatewayRequestIdHeader(reply: FastifyReply, requestId: string) {
   reply.header(gatewayRequestIdHeader, requestId);
+  reply.header("x-llmingress-request-id", requestId);
 }
 
 function writeGatewayResponseHeaders(

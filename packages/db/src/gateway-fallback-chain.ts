@@ -36,6 +36,7 @@ export type FallbackFailedAttempt = {
 
 export type ProviderFallbackAttemptSuccess = {
   body: unknown;
+  headers?: Record<string, string>;
   ok: true;
   statusCode: number;
 };
@@ -70,6 +71,7 @@ export type FallbackAttemptErrorLike = {
   body?: unknown;
   errorCode: string;
   errorMessage: string;
+  headers?: Record<string, string>;
   statusCode: number | null;
 };
 

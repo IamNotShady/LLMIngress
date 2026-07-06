@@ -1,3 +1,4 @@
+import { mergeHttpHeaders, readProviderResponseHeaders } from "../headers.js";
 import {
   isRecord,
   isRetryableHttpStatus,
@@ -67,6 +68,7 @@ export type OpenAIProviderTarget = {
 
 export type OpenAIAdapterSuccess = {
   body: unknown;
+  headers: Record<string, string>;
   ok: true;
   providerRequestId: string | null;
   statusCode: number;
@@ -76,6 +78,7 @@ export type OpenAIAdapterError = {
   body: unknown;
   errorCode: string;
   errorMessage: string;
+  headers: Record<string, string>;
   ok: false;
   retryable: boolean;
   statusCode: number | null;
@@ -85,14 +88,17 @@ export type OpenAIAdapterResult = OpenAIAdapterSuccess | OpenAIAdapterError;
 
 export type OpenAIProviderAdapter = {
   chatCompletion: (input: {
+    headers?: Record<string, string>;
     request: NormalizedOpenAIChatRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
   embeddings?: (input: {
+    headers?: Record<string, string>;
     request: NormalizedOpenAIEmbeddingsRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
   response?: (input: {
+    headers?: Record<string, string>;
     request: NormalizedOpenAIResponsesRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
@@ -101,7 +107,11 @@ export type OpenAIProviderAdapter = {
 type CreateOpenAIProviderAdapterOptions = {
   fetch?: typeof globalThis.fetch;
   headers?: Record<string, string>;
-  mapProviderError?: (statusCode: number, body: unknown) => OpenAIAdapterError;
+  mapProviderError?: (
+    statusCode: number,
+    body: unknown,
+    headers: Record<string, string>,
+  ) => OpenAIAdapterError;
   timeoutMs?: number;
 };
 
@@ -143,22 +153,24 @@ export function createOpenAIProviderAdapter(
   const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
-    chatCompletion: async ({ request, target }) => {
+    chatCompletion: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildChatCompletionsUrl(target.baseUrl), {
           body: JSON.stringify(buildChatCompletionsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers),
+          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapError(response.status, body);
+          return mapError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -167,22 +179,24 @@ export function createOpenAIProviderAdapter(
         return mapRequestFailure(error, timeoutMs);
       }
     },
-    embeddings: async ({ request, target }) => {
+    embeddings: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildEmbeddingsUrl(target.baseUrl), {
           body: JSON.stringify(buildEmbeddingsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers),
+          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapError(response.status, body);
+          return mapError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -191,22 +205,24 @@ export function createOpenAIProviderAdapter(
         return mapRequestFailure(error, timeoutMs);
       }
     },
-    response: async ({ request, target }) => {
+    response: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildResponsesUrl(target.baseUrl), {
           body: JSON.stringify(buildResponsesPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers),
+          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapError(response.status, body);
+          return mapError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -221,12 +237,14 @@ export function createOpenAIProviderAdapter(
 function buildProviderHeaders(
   apiKey: string | null | undefined,
   extraHeaders: Record<string, string> | undefined,
+  requestHeaders: Record<string, string> | undefined,
 ): Record<string, string> {
-  return {
-    ...extraHeaders,
-    "content-type": "application/json",
-    ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-  };
+  return mergeHttpHeaders(
+    requestHeaders,
+    extraHeaders,
+    { "content-type": "application/json" },
+    apiKey ? { authorization: `Bearer ${apiKey}` } : undefined,
+  );
 }
 
 function buildChatCompletionsPayload(
@@ -269,13 +287,18 @@ function buildProviderUrl(baseUrl: string, suffix: string): string {
   return joinProviderUrl(baseUrl, suffix);
 }
 
-function mapProviderError(statusCode: number, body: unknown): OpenAIAdapterError {
+function mapProviderError(
+  statusCode: number,
+  body: unknown,
+  headers: Record<string, string>,
+): OpenAIAdapterError {
   const providerError = readProviderError(body);
 
   return {
     body,
     errorCode: providerError.code,
     errorMessage: providerError.message,
+    headers,
     ok: false,
     retryable: isRetryableHttpStatus(statusCode),
     statusCode,
@@ -291,6 +314,7 @@ function mapRequestFailure(error: unknown, timeoutMs: number): OpenAIAdapterErro
       : error instanceof Error
         ? error.message
         : "Provider request failed.",
+    headers: {},
     ok: false,
     retryable: true,
     statusCode: null,

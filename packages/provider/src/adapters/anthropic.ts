@@ -1,3 +1,4 @@
+import { mergeHttpHeaders, readHttpHeader, readProviderResponseHeaders } from "../headers.js";
 import {
   isRecord,
   isRetryableHttpStatus,
@@ -44,6 +45,7 @@ export type AnthropicProviderTarget = {
 
 export type AnthropicAdapterSuccess = {
   body: unknown;
+  headers: Record<string, string>;
   ok: true;
   providerRequestId: string | null;
   statusCode: number;
@@ -53,6 +55,7 @@ export type AnthropicAdapterError = {
   body: unknown;
   errorCode: string;
   errorMessage: string;
+  headers: Record<string, string>;
   ok: false;
   retryable: boolean;
   statusCode: number | null;
@@ -62,6 +65,7 @@ export type AnthropicAdapterResult = AnthropicAdapterSuccess | AnthropicAdapterE
 
 export type AnthropicProviderAdapter = {
   messages: (input: {
+    headers?: Record<string, string>;
     request: NormalizedAnthropicMessagesRequest;
     target: AnthropicProviderTarget;
   }) => Promise<AnthropicAdapterResult>;
@@ -85,26 +89,24 @@ export function createAnthropicProviderAdapter(
   const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
-    messages: async ({ request, target }) => {
+    messages: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildMessagesUrl(target.baseUrl), {
           body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
-          headers: {
-            "anthropic-version": anthropicVersion,
-            "content-type": "application/json",
-            "x-api-key": target.apiKey,
-          },
+          headers: buildAnthropicProviderHeaders(target.apiKey, headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapProviderError(response.status, body);
+          return mapProviderError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -114,6 +116,17 @@ export function createAnthropicProviderAdapter(
       }
     },
   };
+}
+
+function buildAnthropicProviderHeaders(
+  apiKey: string,
+  requestHeaders: Record<string, string> | undefined,
+): Record<string, string> {
+  return mergeHttpHeaders(requestHeaders, {
+    "anthropic-version": readHttpHeader(requestHeaders, "anthropic-version") ?? anthropicVersion,
+    "content-type": "application/json",
+    "x-api-key": apiKey,
+  });
 }
 
 export function buildAnthropicMessagesPayload(
@@ -127,13 +140,18 @@ function buildMessagesUrl(baseUrl: string): string {
   return joinProviderUrl(baseUrl, "messages");
 }
 
-function mapProviderError(statusCode: number, body: unknown): AnthropicAdapterError {
+function mapProviderError(
+  statusCode: number,
+  body: unknown,
+  headers: Record<string, string>,
+): AnthropicAdapterError {
   const providerError = readProviderError(body);
 
   return {
     body,
     errorCode: providerError.code,
     errorMessage: providerError.message,
+    headers,
     ok: false,
     retryable: isRetryableHttpStatus(statusCode),
     statusCode,
@@ -149,6 +167,7 @@ function mapRequestFailure(error: unknown, timeoutMs: number): AnthropicAdapterE
       : error instanceof Error
         ? error.message
         : "Provider request failed.",
+    headers: {},
     ok: false,
     retryable: true,
     statusCode: null,

@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
+import { gatewayCorsHeaders } from "../../apps/gateway/src/cors";
 import { closePostgresPools } from "../../packages/db/src/client";
 import { readGatewayRequestId } from "../../packages/db/src/gateway-auth";
 import { normalizeOpenAIChatCompletionRequest } from "../../packages/db/src/gateway-chat-completions";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
 import { normalizeOpenAIEmbeddingsRequest } from "../../packages/db/src/gateway-embeddings";
+import { readGatewayProviderRequestHeaders } from "../../packages/db/src/gateway-header-passthrough";
 import { normalizeAnthropicMessagesRequest } from "../../packages/db/src/gateway-messages";
 import {
   attachGatewayProviderCredentials,
@@ -25,6 +27,48 @@ describe("gateway request hygiene", () => {
     expect(readGatewayRequestId({ "x-request-id": "abc-123._:id" })).toBe("abc-123._:id");
     expect(readGatewayRequestId({ "x-request-id": "bad id\n" })).toMatch(/^gw_/);
     expect(readGatewayRequestId({ "x-request-id": "x".repeat(200) })).toMatch(/^gw_/);
+  });
+
+  it("filters only transport-owned request headers before provider forwarding", () => {
+    expect(
+      readGatewayProviderRequestHeaders({
+        authorization: "Bearer agent-key",
+        "content-length": "999",
+        "content-type": "text/plain",
+        cookie: "session=secret",
+        host: "gateway.local",
+        "openai-beta": "responses=v1",
+        "openai-organization": "org_123",
+        "openai-project": "proj_123",
+        "proxy-authorization": "Basic secret",
+        "transfer-encoding": "chunked",
+        "x-api-key": "agent-x-key",
+        "x-client-request-id": "client-req-1",
+        "x-provider-feature": ["one", "two"],
+      }),
+    ).toEqual({
+      "openai-beta": "responses=v1",
+      "openai-organization": "org_123",
+      "openai-project": "proj_123",
+      "x-client-request-id": "client-req-1",
+      "x-provider-feature": "one, two",
+    });
+  });
+
+  it("allows and exposes provider protocol headers for browser clients", () => {
+    const headers = gatewayCorsHeaders("http://localhost:3000");
+
+    expect(headers["access-control-allow-headers"]).toContain("openai-organization");
+    expect(headers["access-control-allow-headers"]).toContain("openai-project");
+    expect(headers["access-control-allow-headers"]).toContain("openai-beta");
+    expect(headers["access-control-allow-headers"]).toContain("anthropic-version");
+    expect(headers["access-control-allow-headers"]).toContain("anthropic-beta");
+    expect(headers["access-control-expose-headers"]).toContain("x-llmingress-request-id");
+    expect(headers["access-control-expose-headers"]).toContain("x-ratelimit-remaining-requests");
+    expect(headers["access-control-expose-headers"]).toContain("request-id");
+    expect(headers["access-control-expose-headers"]).toContain(
+      "anthropic-ratelimit-requests-remaining",
+    );
   });
 
   it("estimates CJK text as one token per character", () => {

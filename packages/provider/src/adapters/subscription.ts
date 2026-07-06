@@ -1,3 +1,4 @@
+import { readProviderResponseHeaders } from "../headers.js";
 import {
   buildClaudeCodeMessagesUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -39,20 +40,22 @@ export function createCodexSubscriptionAdapter(
 
   return {
     chatCompletion: async () => unsupportedOpenAIAdapterResult("codex_chat_unsupported"),
-    response: async ({ request, target }) => {
+    response: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildCodexResponsesUrl(target.baseUrl), {
           body: JSON.stringify(buildCodexResponsesPayload(request, target.modelId)),
-          headers: buildCodexSubscriptionHeaders(target.apiKey ?? ""),
+          headers: buildCodexSubscriptionHeaders(target.apiKey ?? "", headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
         if (!response.ok) {
-          return mapOpenAIProviderError(response.status, body);
+          return mapOpenAIProviderError(response.status, body, responseHeaders);
         }
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -71,21 +74,23 @@ export function createClaudeCodeProviderAdapter(
   const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
-    messages: async ({ request, target }): Promise<AnthropicAdapterResult> => {
+    messages: async ({ headers, request, target }): Promise<AnthropicAdapterResult> => {
       try {
         const response = await fetchImpl(buildClaudeCodeMessagesUrl(target.baseUrl), {
           body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
-          headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? ""),
+          headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? "", headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
         if (!response.ok) {
-          const mapped = mapOpenAIProviderError(response.status, body);
+          const mapped = mapOpenAIProviderError(response.status, body, responseHeaders);
           return mapped;
         }
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -109,6 +114,7 @@ function unsupportedOpenAIAdapterResult(errorCode: string): OpenAIAdapterResult 
     body: null,
     errorCode,
     errorMessage: "Provider protocol is not supported for this endpoint.",
+    headers: {},
     ok: false,
     retryable: false,
     statusCode: 400,
@@ -124,6 +130,7 @@ function requestFailed(error: unknown, timeoutMs: number): OpenAIAdapterResult {
       : error instanceof Error
         ? error.message
         : "Provider request failed.",
+    headers: {},
     ok: false,
     retryable: true,
     statusCode: null,
@@ -134,12 +141,17 @@ function isTimeoutError(error: unknown): boolean {
   return error instanceof Error && error.name === "TimeoutError";
 }
 
-function mapOpenAIProviderError(statusCode: number, body: unknown): OpenAIAdapterResult {
+function mapOpenAIProviderError(
+  statusCode: number,
+  body: unknown,
+  headers: Record<string, string>,
+): OpenAIAdapterResult {
   const providerError = readProviderError(body);
   return {
     body,
     errorCode: providerError.code,
     errorMessage: providerError.message,
+    headers,
     ok: false,
     retryable: isRetryableHttpStatus(statusCode),
     statusCode,

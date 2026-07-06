@@ -157,7 +157,7 @@ Gateway Service
 |   |-- Agent-owned API key authentication
 |   |-- Agent permission check
 |   |-- Cheap RPM / concurrency check
-|   |-- Protocol normalization
+|   |-- Protocol passthrough with model replacement
 |   |-- Request metadata extraction
 |   |-- Token estimate
 |   `-- Agent limits check (RPM / TPM / concurrency / token / budget)
@@ -193,10 +193,10 @@ Gateway Service
 ```
 
 Gateway JSON protocol endpoints share the `GatewayProtocolSpec` extension point
-and execute through `executeGatewayProtocolRequest`. A new JSON protocol should
-add a spec object for normalization, metadata extraction, provider invocation,
-and protocol-specific unsupported-state errors instead of copying endpoint
-orchestration.
+and execute through `executeGatewayProtocolRequest`. Protocol specs read only the
+fields Gateway needs for routing, accounting, stream selection, and metadata.
+Provider request bodies are forwarded from the original Agent payload with only
+the virtual `model` replaced by the selected provider model.
 
 Streaming provider differences are resolved through the provider dialect
 registry in `packages/provider/src/dialect.ts`. A new streaming dialect should
@@ -227,26 +227,26 @@ the user must configure a browser-reachable Gateway Base URL.
 
 `/v1/responses` V1 support:
 
-- Gateway validates the minimum fields it needs for routing and accounting,
-  then passes official Responses request fields through to compatible providers.
+- Gateway reads the minimum fields it needs for routing and accounting, then
+  forwards the Agent's Responses request body to compatible providers with only
+  the virtual `model` replaced by the selected provider model.
 - Gateway does not own provider-side response state. Fields such as `store`,
   `previous_response_id`, and `conversation` are forwarded, but cross-provider
   state migration and replay remain the caller/provider responsibility.
 - Multimodal content parts, files, tool calls, hosted-tool options, metadata,
-  reasoning/text options, and future top-level fields are preserved unless they
-  conflict with Gateway-owned routing fields such as the virtual `model`.
+  reasoning/text options, and future top-level fields are not interpreted or
+  rewritten by Gateway.
 
 `/v1/chat/completions` V1 support:
 
-- Gateway normalizes the fields it needs for routing and accounting
-  (`messages`, `tools`, `tool_choice`, `temperature`, `stream`, and output token
-  limits), while preserving official Chat Completions request fields.
-- `max_completion_tokens` remains `max_completion_tokens` when sent to the
-  provider; legacy `max_tokens` remains supported. If both are supplied,
-  `max_completion_tokens` drives the Gateway output-token cap.
+- Gateway reads the fields it needs for routing and accounting while forwarding
+  the original Chat Completions request body to the provider with only the
+  virtual `model` replaced.
+- If both `max_completion_tokens` and legacy `max_tokens` are supplied, both are
+  sent to the provider exactly as received.
 - Multimodal, audio, file, custom-tool, function, and metadata fields are
-  passed through to compatible providers. Gateway does not translate those
-  features across providers that do not support them.
+  passed through to compatible providers. Gateway does not translate or delete
+  those features across providers that do not support them.
 
 ### 4.2 Routing Runtime
 

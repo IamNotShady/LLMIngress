@@ -22,6 +22,7 @@ export type NormalizedAnthropicMessagesRequest = {
   maxOutputTokens: number;
   metadata?: Record<string, unknown>;
   messages: NormalizedAnthropicMessage[];
+  payload: Record<string, unknown>;
   passthrough?: Record<string, unknown>;
   serviceTier?: string;
   stream?: boolean;
@@ -72,20 +73,7 @@ type CreateAnthropicProviderAdapterOptions = {
 };
 
 export type AnthropicMessagesPayload = Record<string, unknown> & {
-  max_tokens: number;
-  metadata?: Record<string, unknown>;
-  messages: NormalizedAnthropicMessage[];
   model: string;
-  service_tier?: string;
-  stream?: boolean;
-  stop_sequences?: string[];
-  system?: AnthropicMessageContent;
-  temperature?: number;
-  thinking?: Record<string, unknown>;
-  tool_choice?: unknown;
-  tools?: unknown[];
-  top_k?: number;
-  top_p?: number;
 };
 
 const anthropicVersion = "2023-06-01";
@@ -132,53 +120,7 @@ export function buildAnthropicMessagesPayload(
   request: NormalizedAnthropicMessagesRequest,
   target: AnthropicProviderTarget,
 ): AnthropicMessagesPayload {
-  return omitUnsupportedAnthropicSamplingParameters(
-    omitUndefined({
-      ...request.passthrough,
-      max_tokens: request.maxOutputTokens,
-      metadata: request.metadata,
-      messages: request.messages,
-      model: target.modelId,
-      service_tier: request.serviceTier,
-      stream: request.stream,
-      stop_sequences: request.stopSequences,
-      system: request.system,
-      temperature: request.temperature,
-      thinking: request.thinking,
-      tool_choice: request.toolChoice,
-      tools: request.tools,
-      top_k: request.topK,
-      top_p: request.topP,
-    }),
-    target.modelId,
-  ) as AnthropicMessagesPayload;
-}
-
-export function omitUnsupportedAnthropicSamplingParameters<T extends Record<string, unknown>>(
-  payload: T,
-  modelId: string,
-): T {
-  const normalizedModelId = modelId.toLowerCase();
-  const cleaned = { ...payload };
-
-  if (isOpus47OrNewer(normalizedModelId)) {
-    delete cleaned.temperature;
-    delete cleaned.top_k;
-    delete cleaned.top_p;
-    return cleaned;
-  }
-
-  if (normalizedModelId.includes("claude-sonnet-5")) {
-    delete cleaned.temperature;
-    delete cleaned.top_k;
-    delete cleaned.top_p;
-  }
-
-  if (normalizedModelId.includes("claude-sonnet-4-6") && cleaned.temperature !== undefined) {
-    delete cleaned.top_p;
-  }
-
-  return cleaned;
+  return omitUndefined({ ...request.payload, model: target.modelId }) as AnthropicMessagesPayload;
 }
 
 function buildMessagesUrl(baseUrl: string): string {
@@ -240,9 +182,4 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
   ) as T;
-}
-
-function isOpus47OrNewer(modelId: string): boolean {
-  const match = modelId.match(/\bclaude-opus-4[-.](\d+)/);
-  return match ? Number(match[1]) >= 7 : false;
 }

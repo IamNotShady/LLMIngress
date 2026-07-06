@@ -21,6 +21,7 @@ export type NormalizedOpenAIChatRequest = {
   maxOutputTokenField?: OpenAIChatMaxOutputTokenField;
   maxOutputTokens?: number;
   messages: NormalizedOpenAIChatMessage[];
+  payload: Record<string, unknown>;
   passthrough?: Record<string, unknown>;
   stream?: boolean;
   temperature?: number;
@@ -41,6 +42,7 @@ export type NormalizedOpenAIResponsesRequest = {
   input: string | NormalizedOpenAIResponsesInputItem[];
   instructions?: string | null;
   maxOutputTokens?: number;
+  payload: Record<string, unknown>;
   passthrough?: Record<string, unknown>;
   parallelToolCalls?: boolean;
   stream?: boolean;
@@ -53,6 +55,7 @@ export type NormalizedOpenAIEmbeddingsRequest = {
   dimensions?: number;
   encodingFormat?: "base64" | "float";
   input: string | string[] | number[] | number[][];
+  payload: Record<string, unknown>;
   passthrough?: Record<string, unknown>;
 };
 
@@ -230,21 +233,10 @@ function buildChatCompletionsPayload(
   request: NormalizedOpenAIChatRequest,
   target: OpenAIProviderTarget,
 ): OpenAIChatCompletionsPayload {
-  const payload = omitUndefined({
-    ...request.passthrough,
-    messages: request.messages,
+  return omitUndefined({
+    ...request.payload,
     model: target.modelId,
-    stream: request.stream,
-    temperature: request.temperature,
-    tool_choice: request.toolChoice,
-    tools: request.tools,
   }) as OpenAIChatCompletionsPayload;
-  delete payload.max_completion_tokens;
-  delete payload.max_tokens;
-  if (request.maxOutputTokenField && request.maxOutputTokens !== undefined) {
-    payload[request.maxOutputTokenField] = request.maxOutputTokens;
-  }
-  return payload;
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
@@ -255,22 +247,7 @@ function buildResponsesPayload(
   request: NormalizedOpenAIResponsesRequest,
   target: OpenAIProviderTarget,
 ): OpenAIResponsesPayload {
-  const payload = omitUndefined({
-    ...request.passthrough,
-    input: request.input,
-    instructions: request.instructions,
-    max_output_tokens: request.maxOutputTokens,
-    model: target.modelId,
-    parallel_tool_calls: request.parallelToolCalls,
-    stream: request.stream,
-    temperature: request.temperature,
-    tool_choice: request.toolChoice,
-    tools: request.tools,
-  }) as OpenAIResponsesPayload;
-  if (payload.store === undefined) {
-    payload.store = false;
-  }
-  return payload;
+  return omitUndefined({ ...request.payload, model: target.modelId }) as OpenAIResponsesPayload;
 }
 
 function buildResponsesUrl(baseUrl: string): string {
@@ -281,13 +258,7 @@ function buildEmbeddingsPayload(
   request: NormalizedOpenAIEmbeddingsRequest,
   target: OpenAIProviderTarget,
 ): OpenAIEmbeddingsPayload {
-  return omitUndefined({
-    ...request.passthrough,
-    dimensions: request.dimensions,
-    encoding_format: request.encodingFormat,
-    input: request.input,
-    model: target.modelId,
-  });
+  return omitUndefined({ ...request.payload, model: target.modelId }) as OpenAIEmbeddingsPayload;
 }
 
 function buildEmbeddingsUrl(baseUrl: string): string {

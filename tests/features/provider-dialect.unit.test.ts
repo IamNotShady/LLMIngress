@@ -78,10 +78,9 @@ describe("provider streaming dialects", () => {
         "responses",
       ),
     ).toMatchObject({
-      input: [{ content: [{ text: "hello", type: "input_text" }], role: "user" }],
-      instructions: "You are a helpful assistant.",
+      input: "hello",
       stream: true,
-      store: false,
+      temperature: 0.2,
     });
   });
 
@@ -99,21 +98,25 @@ describe("provider streaming dialects", () => {
       "content-type": "application/json",
       "x-app": "cli",
     });
-    expect(dialect.transformBody({ system: "Use terse replies." }, "messages")).toMatchObject({
-      system: [
-        { text: "You are a Claude agent, built on Anthropic's Claude Agent SDK.", type: "text" },
-        { text: "Use terse replies.", type: "text" },
-      ],
+    expect(dialect.transformBody({ system: "Use terse replies." }, "messages")).toEqual({
+      system: "Use terse replies.",
     });
   });
 });
 
 describe("Anthropic provider payloads", () => {
-  it("omits deprecated sampling parameters for Claude Sonnet 5 messages", () => {
+  it("forwards Anthropic message payloads unchanged except for the selected model", () => {
     const payload = buildAnthropicMessagesPayload(
       {
         maxOutputTokens: 64,
         messages: [{ content: "ping", role: "user" }],
+        payload: {
+          max_tokens: 64,
+          messages: [{ content: "ping", role: "user" }],
+          temperature: 0.7,
+          top_k: 40,
+          top_p: 0.9,
+        },
         temperature: 0.7,
         topK: 40,
         topP: 0.9,
@@ -125,12 +128,12 @@ describe("Anthropic provider payloads", () => {
       },
     );
 
-    expect(payload).not.toHaveProperty("temperature");
-    expect(payload).not.toHaveProperty("top_k");
-    expect(payload).not.toHaveProperty("top_p");
     expect(payload).toMatchObject({
       max_tokens: 64,
       model: "claude-sonnet-5",
+      temperature: 0.7,
+      top_k: 40,
+      top_p: 0.9,
     });
   });
 });

@@ -3,9 +3,6 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
-  type CodexResponsesInput,
-  normalizeCodexResponsesInput,
-  withClaudeCodeSystemPrompt,
 } from "../subscription.js";
 import {
   isRecord,
@@ -31,15 +28,7 @@ type CreateSubscriptionAdapterOptions = {
 };
 
 type CodexResponsesPayload = Record<string, unknown> & {
-  input: CodexResponsesInput;
-  instructions: string;
-  max_output_tokens?: number;
   model: string;
-  parallel_tool_calls?: boolean;
-  store?: unknown;
-  stream: boolean;
-  tool_choice?: NormalizedOpenAIResponsesRequest["toolChoice"];
-  tools?: Record<string, unknown>[];
 };
 
 export function createCodexSubscriptionAdapter(
@@ -63,7 +52,7 @@ export function createCodexSubscriptionAdapter(
           return mapOpenAIProviderError(response.status, body);
         }
         return {
-          body: normalizeCodexResponseBody(body),
+          body,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -84,12 +73,8 @@ export function createClaudeCodeProviderAdapter(
   return {
     messages: async ({ request, target }): Promise<AnthropicAdapterResult> => {
       try {
-        const payload = buildAnthropicMessagesPayload(request, target);
         const response = await fetchImpl(buildClaudeCodeMessagesUrl(target.baseUrl), {
-          body: JSON.stringify({
-            ...payload,
-            system: withClaudeCodeSystemPrompt(payload.system),
-          }),
+          body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
           headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? ""),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
@@ -116,94 +101,7 @@ function buildCodexResponsesPayload(
   request: NormalizedOpenAIResponsesRequest,
   modelId: string,
 ): CodexResponsesPayload {
-  return {
-    ...request.passthrough,
-    input: normalizeCodexResponsesInput(request.input),
-    instructions: request.instructions ?? "You are a helpful assistant.",
-    ...(request.maxOutputTokens === undefined
-      ? {}
-      : { max_output_tokens: request.maxOutputTokens }),
-    model: modelId,
-    ...(request.parallelToolCalls === undefined
-      ? {}
-      : { parallel_tool_calls: request.parallelToolCalls }),
-    store: request.passthrough?.store ?? false,
-    stream: true,
-    ...(request.toolChoice === undefined ? {} : { tool_choice: request.toolChoice }),
-    ...(request.tools === undefined ? {} : { tools: request.tools }),
-  };
-}
-
-function normalizeCodexResponseBody(body: unknown): unknown {
-  if (!isRecord(body) || typeof body.raw !== "string") {
-    return body;
-  }
-  const text = readCodexSseOutputText(body.raw);
-  if (!text) {
-    return body;
-  }
-  return {
-    output: [
-      {
-        content: [{ text, type: "output_text" }],
-        role: "assistant",
-        type: "message",
-      },
-    ],
-  };
-}
-
-function readCodexSseOutputText(raw: string): string | null {
-  let deltaText = "";
-  let completedText: string | null = null;
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("data:")) {
-      continue;
-    }
-    const data = trimmed.slice("data:".length).trim();
-    if (!data || data === "[DONE]") {
-      continue;
-    }
-    try {
-      const event = JSON.parse(data);
-      if (isRecord(event) && typeof event.delta === "string") {
-        deltaText += event.delta;
-      }
-      completedText = readCodexCompletedOutputText(event) ?? completedText;
-    } catch {
-      // Ignore non-JSON SSE payloads.
-    }
-  }
-  return completedText ?? (deltaText.trim() ? deltaText : null);
-}
-
-function readCodexCompletedOutputText(value: unknown): string | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  if (typeof value.output_text === "string" && value.output_text.trim()) {
-    return value.output_text.trim();
-  }
-  if (isRecord(value.response)) {
-    return readCodexCompletedOutputText(value.response);
-  }
-  if (!Array.isArray(value.output)) {
-    return null;
-  }
-  for (const output of value.output) {
-    if (!isRecord(output) || !Array.isArray(output.content)) {
-      continue;
-    }
-    const text = output.content
-      .map((content) => (isRecord(content) && typeof content.text === "string" ? content.text : ""))
-      .join("")
-      .trim();
-    if (text) {
-      return text;
-    }
-  }
-  return null;
+  return { ...request.payload, model: modelId };
 }
 
 function unsupportedOpenAIAdapterResult(errorCode: string): OpenAIAdapterResult {

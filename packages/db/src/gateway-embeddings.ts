@@ -67,6 +67,7 @@ export function normalizeOpenAIEmbeddingsRequest(
       dimensions,
       encodingFormat,
       input,
+      payload: body,
       passthrough: readPassthroughParameters(body, ["input", "model", "dimensions"]),
     }),
   };

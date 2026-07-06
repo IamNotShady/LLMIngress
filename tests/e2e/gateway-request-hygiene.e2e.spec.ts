@@ -49,6 +49,7 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         body: JSON.stringify({
           max_completion_tokens: 64,
+          max_tokens: 12,
           messages: [{ content: largeMessage, role: "user" }],
           metadata: { trace: "chat" },
           model: "vm-request-hygiene",
@@ -74,7 +75,7 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       expect(fakeProvider.requests).toHaveLength(1);
       const providerBody = fakeProvider.requests[0]?.bodyJson;
       expect(isRecord(providerBody) ? providerBody.max_completion_tokens : undefined).toBe(64);
-      expect(isRecord(providerBody) ? providerBody.max_tokens : undefined).toBeUndefined();
+      expect(isRecord(providerBody) ? providerBody.max_tokens : undefined).toBe(12);
       expect(isRecord(providerBody) ? providerBody.metadata : undefined).toEqual({ trace: "chat" });
       expect(isRecord(providerBody) ? providerBody.modalities : undefined).toEqual(["text"]);
       expect(isRecord(providerBody) ? providerBody.prediction : undefined).toEqual({
@@ -185,6 +186,7 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         model: "fake-model",
         stream: true,
       });
+      expect(isRecord(imageProviderBody) ? imageProviderBody.store : undefined).toBeUndefined();
 
       const reasoningItem = {
         encrypted_content: "encrypted-reasoning",

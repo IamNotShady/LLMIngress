@@ -40,8 +40,6 @@ export type GatewayAnthropicMessagesRequestResult =
   | GatewayAnthropicMessagesRequestFailure
   | GatewayAnthropicMessagesRequestSuccess;
 
-const maxMessagesOutputTokens = 16_384;
-
 export function normalizeAnthropicMessagesRequest(
   body: unknown,
   requestId: string,
@@ -111,6 +109,7 @@ export function normalizeAnthropicMessagesRequest(
       maxOutputTokens,
       messages: messages as NormalizedAnthropicMessage[],
       metadata,
+      payload: body,
       passthrough: readPassthroughParameters(body, [
         "max_tokens",
         "messages",
@@ -236,7 +235,7 @@ function readRequiredPositiveInteger(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return null;
   }
-  return Math.min(value, maxMessagesOutputTokens);
+  return value;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {

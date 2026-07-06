@@ -40,7 +40,6 @@ export type GatewayChatCompletionRequestResult =
   | GatewayChatCompletionRequestFailure
   | GatewayChatCompletionRequestSuccess;
 
-const maxChatCompletionOutputTokens = 16_384;
 export function normalizeOpenAIChatCompletionRequest(
   body: unknown,
   requestId: string,
@@ -85,6 +84,7 @@ export function normalizeOpenAIChatCompletionRequest(
       maxOutputTokens,
       maxOutputTokenField,
       messages: messages as NormalizedOpenAIChatMessage[],
+      payload: body,
       passthrough: readChatPassthroughParameters(body),
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       temperature,
@@ -212,7 +212,7 @@ function readOptionalPositiveInteger(value: unknown): number | null | undefined 
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return null;
   }
-  return Math.min(value, maxChatCompletionOutputTokens);
+  return value;
 }
 
 function readOptionalFiniteNumber(value: unknown): number | null | undefined {
@@ -263,11 +263,7 @@ function readPassthroughParameters(
 function readChatPassthroughParameters(
   body: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
-  const passthrough = readPassthroughParameters(body, ["messages", "model"]);
-  if (passthrough && body.max_completion_tokens !== undefined) {
-    delete passthrough.max_tokens;
-  }
-  return passthrough;
+  return readPassthroughParameters(body, ["messages", "model"]);
 }
 
 function readOptionalOpenAIToolChoice(

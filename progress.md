@@ -703,6 +703,18 @@
   - `pnpm run typecheck`
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Raw provider passthrough follow-up:
+  - Root cause: Gateway still rebuilt provider request bodies from normalized fields. That deleted fields such as paired Chat `max_tokens`, injected Responses `store:false`, converted Codex subscription Responses string messages into `input_text` parts, prepended Claude Code system content, and synthesized Codex subscription response bodies.
+  - Provider payload builders now forward the Agent body with only virtual model replacement. Gateway still reads fields needed for routing, stream selection, token estimates, and limits, but provider-owned request fields are not rewritten or rejected for local schema reasons.
+  - Removed Codex subscription input normalization, Codex response synthesis, Claude Code body system injection, and Anthropic sampling-parameter deletion.
+- Raw provider passthrough TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts tests/features/provider-dialect.unit.test.ts` failed while raw payloads were missing, malformed provider-owned Responses fields were rejected, Codex subscription bodies were rewritten, Claude Code bodies were prepended, Anthropic sampling fields were deleted, and Codex responses were synthesized.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed while Chat dropped `max_tokens` when `max_completion_tokens` was present.
+- Raw provider passthrough verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts tests/features/provider-dialect.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
 
 ## Required Verification
 

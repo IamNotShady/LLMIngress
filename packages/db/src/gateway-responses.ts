@@ -47,59 +47,34 @@ export function normalizeOpenAIResponsesRequest(
     return invalidResponsesRequest(requestId);
   }
 
-  if (body.store !== undefined && typeof body.store !== "boolean") {
-    return invalidResponsesRequest(requestId);
-  }
-
   const input = readResponsesInput(body.input);
   if (!input) {
     return invalidResponsesRequest(requestId);
   }
 
   const instructions = readOptionalStringOrNull(body.instructions);
-  if (instructions === false) {
-    return invalidResponsesRequest(requestId);
-  }
 
   const maxOutputTokens = readOptionalPositiveInteger(body.max_output_tokens);
-  if (maxOutputTokens === null) {
-    return invalidResponsesRequest(requestId);
-  }
 
   const temperature = readOptionalFiniteNumber(body.temperature);
-  if (temperature === null) {
-    return invalidResponsesRequest(requestId);
-  }
-
-  if (body.stream !== undefined && typeof body.stream !== "boolean") {
-    return invalidResponsesRequest(requestId);
-  }
-  if (body.parallel_tool_calls !== undefined && typeof body.parallel_tool_calls !== "boolean") {
-    return invalidResponsesRequest(requestId);
-  }
 
   const tools = readOptionalObjectArray(body.tools);
-  if (tools === null) {
-    return invalidResponsesRequest(requestId);
-  }
   const toolChoice = readOptionalOpenAIToolChoice(body.tool_choice);
-  if (toolChoice === null) {
-    return invalidResponsesRequest(requestId);
-  }
 
   return {
     ok: true,
     request: omitUndefined({
       input,
-      instructions,
-      maxOutputTokens,
+      instructions: instructions === false ? undefined : instructions,
+      maxOutputTokens: maxOutputTokens === null ? undefined : maxOutputTokens,
       passthrough: readPassthroughParameters(body, ["input", "model"]),
+      payload: body,
       parallelToolCalls:
         typeof body.parallel_tool_calls === "boolean" ? body.parallel_tool_calls : undefined,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
-      temperature,
-      toolChoice,
-      tools,
+      temperature: temperature === null ? undefined : temperature,
+      toolChoice: toolChoice === null ? undefined : toolChoice,
+      tools: tools === null ? undefined : tools,
     }),
   };
 }

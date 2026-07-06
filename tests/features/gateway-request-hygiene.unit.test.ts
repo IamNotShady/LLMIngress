@@ -49,23 +49,23 @@ describe("gateway request hygiene", () => {
   });
 
   it("normalizes whitelisted OpenAI passthrough parameters and max_completion_tokens", () => {
-    const normalized = normalizeOpenAIChatCompletionRequest(
-      {
-        max_completion_tokens: 2048,
-        max_tokens: 12,
-        messages: [{ content: "hi", role: "user" }],
-        seed: 7,
-        stop: ["END"],
-        top_p: 0.9,
-      },
-      "req-1",
-    );
+    const requestBody = {
+      max_completion_tokens: 2048,
+      max_tokens: 12,
+      messages: [{ content: "hi", role: "user" }],
+      seed: 7,
+      stop: ["END"],
+      top_p: 0.9,
+    };
+    const normalized = normalizeOpenAIChatCompletionRequest(requestBody, "req-1");
 
     expect(normalized.ok).toBe(true);
     if (normalized.ok) {
       expect(normalized.request.maxOutputTokens).toBe(2048);
+      expect(normalized.request.payload).toEqual(requestBody);
       expect(normalized.request.passthrough).toEqual({
         max_completion_tokens: 2048,
+        max_tokens: 12,
         seed: 7,
         stop: ["END"],
         top_p: 0.9,
@@ -286,6 +286,21 @@ describe("gateway request hygiene", () => {
     ).toBe(false);
   });
 
+  it("keeps provider-owned Responses fields in the raw provider payload", () => {
+    const requestBody = {
+      input: "hi",
+      parallel_tool_calls: "provider-owned",
+      tool_choice: "provider-owned",
+      tools: ["provider-owned"],
+    };
+    const normalized = normalizeOpenAIResponsesRequest(requestBody, "req-1");
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.payload).toEqual(requestBody);
+    }
+  });
+
   it("normalizes Embeddings token inputs and passthrough fields", () => {
     const normalized = normalizeOpenAIEmbeddingsRequest(
       {
@@ -343,18 +358,6 @@ describe("gateway request hygiene", () => {
         mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
       });
     }
-  });
-
-  it("rejects malformed Responses tool fields", () => {
-    expect(normalizeOpenAIResponsesRequest({ input: "hi", tools: ["bad"] }, "req-1").ok).toBe(
-      false,
-    );
-    expect(
-      normalizeOpenAIResponsesRequest({ input: "hi", tool_choice: "invalid" }, "req-1").ok,
-    ).toBe(false);
-    expect(
-      normalizeOpenAIResponsesRequest({ input: "hi", parallel_tool_calls: "yes" }, "req-1").ok,
-    ).toBe(false);
   });
 
   it("refreshes an expired OAuth token once under concurrent row-lock contention", async () => {

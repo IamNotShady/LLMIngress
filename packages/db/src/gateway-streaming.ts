@@ -2,10 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import { getPostgresPool } from "@llmingress/db/client";
 import { selectRouteAttempts } from "@llmingress/domain";
-import {
-  type NormalizedAnthropicMessagesRequest,
-  omitUnsupportedAnthropicSamplingParameters,
-} from "@llmingress/provider/anthropic";
+import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {
   type ProviderStreamingDialect,
   resolveProviderStreamingDialect,
@@ -55,7 +52,6 @@ import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   isRecord,
-  omitUndefined,
   requireGatewayRoutePolicy,
   selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
@@ -620,58 +616,19 @@ function buildStreamingPayload(input: {
 function buildOpenAIChatStreamingPayload(
   request: NormalizedOpenAIChatRequest,
 ): Record<string, unknown> {
-  const payload = omitUndefined({
-    ...request.passthrough,
-    messages: request.messages,
-    temperature: request.temperature,
-    tool_choice: request.toolChoice,
-    tools: request.tools,
-  }) as Record<string, unknown>;
-  delete payload.max_completion_tokens;
-  delete payload.max_tokens;
-  if (request.maxOutputTokenField && request.maxOutputTokens !== undefined) {
-    payload[request.maxOutputTokenField] = request.maxOutputTokens;
-  }
-  return payload;
+  return request.payload;
 }
 
 function buildOpenAIResponsesStreamingPayload(
   request: NormalizedOpenAIResponsesRequest,
 ): Record<string, unknown> {
-  const payload = omitUndefined({
-    ...request.passthrough,
-    input: request.input,
-    instructions: request.instructions,
-    max_output_tokens: request.maxOutputTokens,
-    parallel_tool_calls: request.parallelToolCalls,
-    temperature: request.temperature,
-    tool_choice: request.toolChoice,
-    tools: request.tools,
-  }) as Record<string, unknown>;
-  if (payload.store === undefined) {
-    payload.store = false;
-  }
-  return payload;
+  return request.payload;
 }
 
 function buildAnthropicMessagesStreamingPayload(
   request: NormalizedAnthropicMessagesRequest,
 ): Record<string, unknown> {
-  return omitUndefined({
-    ...request.passthrough,
-    max_tokens: request.maxOutputTokens,
-    metadata: request.metadata,
-    messages: request.messages,
-    service_tier: request.serviceTier,
-    stop_sequences: request.stopSequences,
-    system: request.system,
-    temperature: request.temperature,
-    thinking: request.thinking,
-    tool_choice: request.toolChoice,
-    tools: request.tools,
-    top_k: request.topK,
-    top_p: request.topP,
-  });
+  return request.payload;
 }
 
 function recordGatewayRuntimeError(input: {
@@ -718,9 +675,6 @@ function buildStreamingRequestBodyForDialect(input: {
   payload: Record<string, unknown>;
 }): Record<string, unknown> {
   let body = buildProviderRequestBody(input.payload, input.modelId);
-  if (input.pathSuffix === "messages") {
-    body = omitUnsupportedAnthropicSamplingParameters(body, input.modelId);
-  }
   body = input.dialect.transformBody(body, input.pathSuffix);
   if (input.dialect.wantsStreamingUsage(input.pathSuffix)) {
     return {
@@ -741,7 +695,6 @@ function buildProviderRequestBody(
   return {
     ...payload,
     model: modelId,
-    stream: true,
   };
 }
 

@@ -675,6 +675,22 @@
   - `pnpm run lint`
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Official field passthrough follow-up:
+  - Root cause: the endpoint normalizers and streaming payload builder still maintained narrow field copies. That made Gateway reject or drop official request fields beyond the small set it needed for routing.
+  - Responses now preserves official top-level fields such as `store`, `previous_response_id`, `conversation`, `include`, `metadata`, `reasoning`, `text`, `truncation`, and file/item input shapes across JSON, streaming, and Codex subscription payloads. Gateway still does not own cross-provider state migration; it forwards provider state fields.
+  - Chat Completions now preserves developer/function/tool messages, multimodal/audio/file content parts, metadata, prediction, modalities, stream options, service tier, and other official top-level fields. `max_completion_tokens` is no longer rewritten to `max_tokens` for provider requests.
+  - Embeddings now accepts string input, string-array input, token-array input, token-array batch input, and preserves `user`/format fields.
+  - Anthropic Messages now preserves extra provider fields such as `container`, `context_management`, `mcp_servers`, and `betas` through JSON and streaming payloads.
+- Official field passthrough TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts` failed while Chat dropped `max_completion_tokens` from passthrough, rejected official message/content shapes, Responses rejected stateful fields, Embeddings rejected token arrays, and Messages dropped extra top-level fields.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed while streaming Responses still dropped stateful/top-level fields and forced `store:false`.
+- Official field passthrough verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
 
 ## Required Verification
 

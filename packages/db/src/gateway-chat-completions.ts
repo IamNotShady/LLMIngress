@@ -3,6 +3,7 @@ import {
   type NormalizedOpenAIChatMessage,
   type NormalizedOpenAIChatRequest,
   type OpenAIAdapterSuccess,
+  type OpenAIChatMaxOutputTokenField,
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
@@ -40,19 +41,6 @@ export type GatewayChatCompletionRequestResult =
   | GatewayChatCompletionRequestSuccess;
 
 const maxChatCompletionOutputTokens = 16_384;
-const chatPassthroughParameterKeys = [
-  "frequency_penalty",
-  "logprobs",
-  "parallel_tool_calls",
-  "presence_penalty",
-  "response_format",
-  "seed",
-  "stop",
-  "top_logprobs",
-  "top_p",
-  "user",
-] as const;
-
 export function normalizeOpenAIChatCompletionRequest(
   body: unknown,
   requestId: string,
@@ -72,6 +60,7 @@ export function normalizeOpenAIChatCompletionRequest(
   if (maxOutputTokens === null) {
     return invalidChatRequest(requestId);
   }
+  const maxOutputTokenField = readMaxOutputTokenField(body);
 
   const temperature = readOptionalFiniteNumber(body.temperature);
   if (temperature === null) {
@@ -90,14 +79,13 @@ export function normalizeOpenAIChatCompletionRequest(
     return invalidChatRequest(requestId);
   }
 
-  const passthrough = readChatPassthroughParameters(body);
-
   return {
     ok: true,
     request: omitUndefined({
       maxOutputTokens,
+      maxOutputTokenField,
       messages: messages as NormalizedOpenAIChatMessage[],
-      passthrough,
+      passthrough: readChatPassthroughParameters(body),
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       temperature,
       toolChoice,
@@ -163,64 +151,58 @@ function readOpenAIChatMessage(value: unknown): NormalizedOpenAIChatMessage | nu
     return null;
   }
   const role = value.role;
-  if (role !== "system" && role !== "user" && role !== "assistant" && role !== "tool") {
+  if (
+    role !== "developer" &&
+    role !== "system" &&
+    role !== "user" &&
+    role !== "assistant" &&
+    role !== "tool" &&
+    role !== "function"
+  ) {
     return null;
   }
 
-  const content = readOpenAIChatMessageContent(value.content);
+  const hasContent = isOpenAIChatMessageContent(value.content);
   const toolCalls = readOptionalObjectArray(value.tool_calls);
   if (toolCalls === null) {
     return null;
   }
-  if (role === "assistant" && !content && (!toolCalls || toolCalls.length === 0)) {
+  if (
+    role === "assistant" &&
+    !hasContent &&
+    (!toolCalls || toolCalls.length === 0) &&
+    !isRecord(value.function_call) &&
+    !isRecord(value.audio)
+  ) {
     return null;
   }
-  if (role !== "assistant" && !content) {
+  if (role !== "assistant" && !hasContent) {
     return null;
   }
   if (role === "tool" && typeof value.tool_call_id !== "string") {
+    return null;
+  }
+  if (role === "function" && typeof value.name !== "string") {
     return null;
   }
   if (value.name !== undefined && typeof value.name !== "string") {
     return null;
   }
 
-  return omitUndefined({
-    content: content ?? null,
-    name: value.name,
-    role,
-    tool_call_id: role === "tool" ? value.tool_call_id : undefined,
-    tool_calls: toolCalls,
-  }) as NormalizedOpenAIChatMessage;
+  return value as NormalizedOpenAIChatMessage;
 }
 
-function readOpenAIChatMessageContent(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) {
-    return value;
+function isOpenAIChatMessageContent(value: unknown): boolean {
+  if (typeof value === "string") {
+    return true;
   }
   if (value === null || value === undefined) {
-    return null;
+    return false;
   }
   if (!Array.isArray(value) || value.length === 0) {
-    return null;
+    return false;
   }
-
-  const textParts = value.map(readOpenAIChatTextContentPart);
-  if (textParts.some((part) => part === null)) {
-    return null;
-  }
-  const text = textParts.join("\n").trim();
-  return text || null;
-}
-
-function readOpenAIChatTextContentPart(value: unknown): string | null {
-  if (!isRecord(value) || typeof value.text !== "string") {
-    return null;
-  }
-  if (value.type !== "text" && value.type !== "input_text" && value.type !== "output_text") {
-    return null;
-  }
-  return value.text;
+  return value.every(isRecord);
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {
@@ -253,16 +235,39 @@ function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | nu
   return value as Record<string, unknown>[];
 }
 
-function readChatPassthroughParameters(
+function readMaxOutputTokenField(
   body: Record<string, unknown>,
+): OpenAIChatMaxOutputTokenField | undefined {
+  if (body.max_completion_tokens !== undefined) {
+    return "max_completion_tokens";
+  }
+  if (body.max_tokens !== undefined) {
+    return "max_tokens";
+  }
+  return undefined;
+}
+
+function readPassthroughParameters(
+  body: Record<string, unknown>,
+  omittedKeys: readonly string[],
 ): Record<string, unknown> | undefined {
   const passthrough: Record<string, unknown> = {};
-  for (const key of chatPassthroughParameterKeys) {
-    if (body[key] !== undefined) {
-      passthrough[key] = body[key];
+  for (const [key, value] of Object.entries(body)) {
+    if (!omittedKeys.includes(key) && value !== undefined) {
+      passthrough[key] = value;
     }
   }
   return Object.keys(passthrough).length > 0 ? passthrough : undefined;
+}
+
+function readChatPassthroughParameters(
+  body: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const passthrough = readPassthroughParameters(body, ["messages", "model"]);
+  if (passthrough && body.max_completion_tokens !== undefined) {
+    delete passthrough.max_tokens;
+  }
+  return passthrough;
 }
 
 function readOptionalOpenAIToolChoice(

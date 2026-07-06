@@ -26,7 +26,7 @@ export function buildOpenAIChatCompletionRequestMetadata(input: {
 }): GatewayRequestMetadata {
   const toolTextParts = readToolTextParts(input.rawBody);
   const messageTextParts = input.request.messages.flatMap((message) =>
-    typeof message.content === "string" ? [message.content] : [],
+    readOpenAIChatMessageContentTextParts(message.content),
   );
 
   return {
@@ -183,6 +183,28 @@ function readResponsesContentTextParts(item: unknown): string[] {
     parts.push(item.content);
   }
   return parts;
+}
+
+function readOpenAIChatMessageContentTextParts(content: unknown): string[] {
+  if (typeof content === "string") {
+    return [content];
+  }
+  if (!Array.isArray(content)) {
+    return [];
+  }
+  return content.flatMap((part) => {
+    if (!isRecord(part)) {
+      return [];
+    }
+    const parts: string[] = [];
+    if (typeof part.text === "string") {
+      parts.push(part.text);
+    }
+    if (typeof part.content === "string") {
+      parts.push(part.content);
+    }
+    return parts;
+  });
 }
 
 function isResponsesToolInputItem(item: unknown): boolean {

@@ -13,7 +13,7 @@ export type AnthropicContentBlock = Record<string, unknown> & {
 
 export type AnthropicMessageContent = string | AnthropicContentBlock[];
 
-export type NormalizedAnthropicMessage = {
+export type NormalizedAnthropicMessage = Record<string, unknown> & {
   role: "user" | "assistant";
   content: AnthropicMessageContent;
 };
@@ -22,6 +22,7 @@ export type NormalizedAnthropicMessagesRequest = {
   maxOutputTokens: number;
   metadata?: Record<string, unknown>;
   messages: NormalizedAnthropicMessage[];
+  passthrough?: Record<string, unknown>;
   serviceTier?: string;
   stream?: boolean;
   stopSequences?: string[];
@@ -70,7 +71,7 @@ type CreateAnthropicProviderAdapterOptions = {
   timeoutMs?: number;
 };
 
-export type AnthropicMessagesPayload = {
+export type AnthropicMessagesPayload = Record<string, unknown> & {
   max_tokens: number;
   metadata?: Record<string, unknown>;
   messages: NormalizedAnthropicMessage[];
@@ -133,6 +134,7 @@ export function buildAnthropicMessagesPayload(
 ): AnthropicMessagesPayload {
   return omitUnsupportedAnthropicSamplingParameters(
     omitUndefined({
+      ...request.passthrough,
       max_tokens: request.maxOutputTokens,
       metadata: request.metadata,
       messages: request.messages,

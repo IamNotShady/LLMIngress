@@ -111,6 +111,22 @@ export function normalizeAnthropicMessagesRequest(
       maxOutputTokens,
       messages: messages as NormalizedAnthropicMessage[],
       metadata,
+      passthrough: readPassthroughParameters(body, [
+        "max_tokens",
+        "messages",
+        "metadata",
+        "model",
+        "service_tier",
+        "stop_sequences",
+        "stream",
+        "system",
+        "temperature",
+        "thinking",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p",
+      ]),
       serviceTier,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       stopSequences,
@@ -188,6 +204,7 @@ function readAnthropicMessage(value: unknown): NormalizedAnthropicMessage | null
   }
 
   return {
+    ...value,
     content,
     role: value.role,
   };
@@ -310,6 +327,19 @@ function readOptionalToolChoice(value: unknown): Record<string, unknown> | null 
     return null;
   }
   return value;
+}
+
+function readPassthroughParameters(
+  body: Record<string, unknown>,
+  omittedKeys: readonly string[],
+): Record<string, unknown> | undefined {
+  const passthrough: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!omittedKeys.includes(key) && value !== undefined) {
+      passthrough[key] = value;
+    }
+  }
+  return Object.keys(passthrough).length > 0 ? passthrough : undefined;
 }
 
 function invalidMessagesRequest(requestId: string): GatewayAnthropicMessagesRequestFailure {

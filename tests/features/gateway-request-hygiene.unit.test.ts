@@ -4,6 +4,8 @@ import { closePostgresPools } from "../../packages/db/src/client";
 import { readGatewayRequestId } from "../../packages/db/src/gateway-auth";
 import { normalizeOpenAIChatCompletionRequest } from "../../packages/db/src/gateway-chat-completions";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
+import { normalizeOpenAIEmbeddingsRequest } from "../../packages/db/src/gateway-embeddings";
+import { normalizeAnthropicMessagesRequest } from "../../packages/db/src/gateway-messages";
 import {
   attachGatewayProviderCredentials,
   refreshProviderOAuthTokenWithLock,
@@ -63,9 +65,70 @@ describe("gateway request hygiene", () => {
     if (normalized.ok) {
       expect(normalized.request.maxOutputTokens).toBe(2048);
       expect(normalized.request.passthrough).toEqual({
+        max_completion_tokens: 2048,
         seed: 7,
         stop: ["END"],
         top_p: 0.9,
+      });
+    }
+  });
+
+  it("preserves official OpenAI chat fields and message content parts", () => {
+    const messages = [
+      { content: [{ text: "Follow policy.", type: "text" }], name: "policy", role: "developer" },
+      {
+        content: [
+          { text: "Inspect these inputs.", type: "text" },
+          { image_url: { detail: "high", url: "data:image/png;base64,AAA=" }, type: "image_url" },
+          { input_audio: { data: "AAAA", format: "wav" }, type: "input_audio" },
+          { file: { file_id: "file_123" }, type: "file" },
+        ],
+        role: "user",
+      },
+      {
+        audio: { id: "audio_123" },
+        content: null,
+        role: "assistant",
+        tool_calls: [
+          {
+            function: { arguments: "{}", name: "run" },
+            id: "call_123",
+            type: "function",
+          },
+        ],
+      },
+      { content: [{ text: "ok", type: "text" }], role: "tool", tool_call_id: "call_123" },
+      { content: "legacy ok", name: "legacy_fn", role: "function" },
+    ];
+    const normalized = normalizeOpenAIChatCompletionRequest(
+      {
+        audio: { format: "wav", voice: "alloy" },
+        max_completion_tokens: 64,
+        messages,
+        metadata: { trace: "chat" },
+        modalities: ["text", "audio"],
+        prediction: { content: "expected", type: "content" },
+        service_tier: "priority",
+        store: true,
+        stream_options: { include_usage: true },
+        web_search_options: { search_context_size: "low" },
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.messages).toEqual(messages);
+      expect(normalized.request.passthrough).toMatchObject({
+        audio: { format: "wav", voice: "alloy" },
+        max_completion_tokens: 64,
+        metadata: { trace: "chat" },
+        modalities: ["text", "audio"],
+        prediction: { content: "expected", type: "content" },
+        service_tier: "priority",
+        store: true,
+        stream_options: { include_usage: true },
+        web_search_options: { search_context_size: "low" },
       });
     }
   });
@@ -140,6 +203,118 @@ describe("gateway request hygiene", () => {
           role: "user",
         },
       ]);
+    }
+  });
+
+  it("preserves official Responses state and top-level fields", () => {
+    const inputMessage = {
+      content: [
+        { text: "summarize", type: "input_text" },
+        { file_id: "file_123", type: "input_file" },
+      ],
+      phase: "request",
+      role: "user",
+      status: "completed",
+      type: "message",
+    };
+    const itemReference = { id: "item_123", type: "item_reference" };
+    const normalized = normalizeOpenAIResponsesRequest(
+      {
+        background: true,
+        conversation: "conv_123",
+        include: ["file_search_call.results"],
+        input: [inputMessage, itemReference],
+        max_tool_calls: 3,
+        metadata: { trace: "responses" },
+        previous_response_id: "resp_123",
+        prompt: { id: "pmpt_123", variables: { topic: "gateway" } },
+        reasoning: { effort: "medium" },
+        store: true,
+        text: { format: { type: "text" } },
+        top_p: 0.8,
+        truncation: "auto",
+        user: "end-user-123",
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.input).toEqual([inputMessage, itemReference]);
+      expect(normalized.request.passthrough).toMatchObject({
+        background: true,
+        conversation: "conv_123",
+        include: ["file_search_call.results"],
+        max_tool_calls: 3,
+        metadata: { trace: "responses" },
+        previous_response_id: "resp_123",
+        prompt: { id: "pmpt_123", variables: { topic: "gateway" } },
+        reasoning: { effort: "medium" },
+        store: true,
+        text: { format: { type: "text" } },
+        top_p: 0.8,
+        truncation: "auto",
+        user: "end-user-123",
+      });
+    }
+  });
+
+  it("normalizes Embeddings token inputs and passthrough fields", () => {
+    const normalized = normalizeOpenAIEmbeddingsRequest(
+      {
+        encoding_format: "base64",
+        input: [
+          [1, 2, 3],
+          [4, 5],
+        ],
+        user: "end-user-123",
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.input).toEqual([
+        [1, 2, 3],
+        [4, 5],
+      ]);
+      expect(normalized.request.passthrough).toEqual({
+        encoding_format: "base64",
+        user: "end-user-123",
+      });
+    }
+  });
+
+  it("preserves Anthropic Messages top-level provider fields", () => {
+    const normalized = normalizeAnthropicMessagesRequest(
+      {
+        betas: ["mcp-client-2025-04-04"],
+        container: { type: "auto" },
+        context_management: { edits: [{ type: "clear_tool_uses_20250919" }] },
+        max_tokens: 128,
+        mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
+        messages: [
+          {
+            content: [
+              { text: "Use the uploaded file.", type: "text" },
+              { file_id: "file_123", type: "container_upload" },
+            ],
+            role: "user",
+          },
+        ],
+        service_tier: "auto",
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.passthrough).toMatchObject({
+        betas: ["mcp-client-2025-04-04"],
+        container: { type: "auto" },
+        context_management: { edits: [{ type: "clear_tool_uses_20250919" }] },
+        mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
+      });
     }
   });
 

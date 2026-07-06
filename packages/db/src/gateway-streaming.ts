@@ -2,11 +2,18 @@ import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import { getPostgresPool } from "@llmingress/db/client";
 import { selectRouteAttempts } from "@llmingress/domain";
-import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
+import {
+  type NormalizedAnthropicMessagesRequest,
+  omitUnsupportedAnthropicSamplingParameters,
+} from "@llmingress/provider/anthropic";
 import {
   type ProviderStreamingDialect,
   resolveProviderStreamingDialect,
 } from "@llmingress/provider/dialect";
+import type {
+  NormalizedOpenAIChatRequest,
+  NormalizedOpenAIResponsesRequest,
+} from "@llmingress/provider/openai";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
   enforceGatewayAgentLimits,
@@ -553,14 +560,7 @@ function buildStreamingPayload(input: {
       }),
       ok: true,
       pathSuffix: "chat/completions",
-      payload: omitUndefined({
-        ...normalized.request.passthrough,
-        max_tokens: normalized.request.maxOutputTokens,
-        messages: normalized.request.messages,
-        temperature: normalized.request.temperature,
-        tool_choice: normalized.request.toolChoice,
-        tools: normalized.request.tools,
-      }),
+      payload: buildOpenAIChatStreamingPayload(normalized.request),
       requestMetadata,
     };
   }
@@ -586,16 +586,7 @@ function buildStreamingPayload(input: {
       }),
       ok: true,
       pathSuffix: "responses",
-      payload: omitUndefined({
-        input: normalized.request.input,
-        instructions: normalized.request.instructions,
-        max_output_tokens: normalized.request.maxOutputTokens,
-        parallel_tool_calls: normalized.request.parallelToolCalls,
-        store: false,
-        temperature: normalized.request.temperature,
-        tool_choice: normalized.request.toolChoice,
-        tools: normalized.request.tools,
-      }),
+      payload: buildOpenAIResponsesStreamingPayload(normalized.request),
       requestMetadata,
     };
   }
@@ -621,22 +612,66 @@ function buildStreamingPayload(input: {
     }),
     ok: true,
     pathSuffix: "messages",
-    payload: omitUndefined({
-      max_tokens: normalized.request.maxOutputTokens,
-      metadata: normalized.request.metadata,
-      messages: normalized.request.messages,
-      service_tier: normalized.request.serviceTier,
-      stop_sequences: normalized.request.stopSequences,
-      system: normalized.request.system,
-      temperature: normalized.request.temperature,
-      thinking: normalized.request.thinking,
-      tool_choice: normalized.request.toolChoice,
-      tools: normalized.request.tools,
-      top_k: normalized.request.topK,
-      top_p: normalized.request.topP,
-    }),
+    payload: buildAnthropicMessagesStreamingPayload(normalized.request),
     requestMetadata,
   };
+}
+
+function buildOpenAIChatStreamingPayload(
+  request: NormalizedOpenAIChatRequest,
+): Record<string, unknown> {
+  const payload = omitUndefined({
+    ...request.passthrough,
+    messages: request.messages,
+    temperature: request.temperature,
+    tool_choice: request.toolChoice,
+    tools: request.tools,
+  }) as Record<string, unknown>;
+  delete payload.max_completion_tokens;
+  delete payload.max_tokens;
+  if (request.maxOutputTokenField && request.maxOutputTokens !== undefined) {
+    payload[request.maxOutputTokenField] = request.maxOutputTokens;
+  }
+  return payload;
+}
+
+function buildOpenAIResponsesStreamingPayload(
+  request: NormalizedOpenAIResponsesRequest,
+): Record<string, unknown> {
+  const payload = omitUndefined({
+    ...request.passthrough,
+    input: request.input,
+    instructions: request.instructions,
+    max_output_tokens: request.maxOutputTokens,
+    parallel_tool_calls: request.parallelToolCalls,
+    temperature: request.temperature,
+    tool_choice: request.toolChoice,
+    tools: request.tools,
+  }) as Record<string, unknown>;
+  if (payload.store === undefined) {
+    payload.store = false;
+  }
+  return payload;
+}
+
+function buildAnthropicMessagesStreamingPayload(
+  request: NormalizedAnthropicMessagesRequest,
+): Record<string, unknown> {
+  return omitUndefined({
+    ...request.passthrough,
+    max_tokens: request.maxOutputTokens,
+    metadata: request.metadata,
+    messages: request.messages,
+    service_tier: request.serviceTier,
+    stop_sequences: request.stopSequences,
+    system: request.system,
+    temperature: request.temperature,
+    thinking: request.thinking,
+    tool_choice: request.toolChoice,
+    tools: request.tools,
+    top_k: request.topK,
+    top_p: request.topP,
+  });
 }
 
 function recordGatewayRuntimeError(input: {

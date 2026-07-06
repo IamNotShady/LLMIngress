@@ -30,12 +30,13 @@ type CreateSubscriptionAdapterOptions = {
   timeoutMs?: number;
 };
 
-type CodexResponsesPayload = {
+type CodexResponsesPayload = Record<string, unknown> & {
   input: CodexResponsesInput;
   instructions: string;
+  max_output_tokens?: number;
   model: string;
   parallel_tool_calls?: boolean;
-  store: false;
+  store?: unknown;
   stream: boolean;
   tool_choice?: NormalizedOpenAIResponsesRequest["toolChoice"];
   tools?: Record<string, unknown>[];
@@ -116,13 +117,17 @@ function buildCodexResponsesPayload(
   modelId: string,
 ): CodexResponsesPayload {
   return {
+    ...request.passthrough,
     input: normalizeCodexResponsesInput(request.input),
     instructions: request.instructions ?? "You are a helpful assistant.",
+    ...(request.maxOutputTokens === undefined
+      ? {}
+      : { max_output_tokens: request.maxOutputTokens }),
     model: modelId,
     ...(request.parallelToolCalls === undefined
       ? {}
       : { parallel_tool_calls: request.parallelToolCalls }),
-    store: false,
+    store: request.passthrough?.store ?? false,
     stream: true,
     ...(request.toolChoice === undefined ? {} : { tool_choice: request.toolChoice }),
     ...(request.tools === undefined ? {} : { tools: request.tools }),

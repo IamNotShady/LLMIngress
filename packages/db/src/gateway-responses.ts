@@ -47,12 +47,6 @@ export function normalizeOpenAIResponsesRequest(
     return invalidResponsesRequest(requestId);
   }
 
-  if (typeof body.previous_response_id === "string" && body.previous_response_id.trim()) {
-    return unsupportedStatefulResponses(requestId);
-  }
-  if (body.store === true) {
-    return unsupportedStatefulResponses(requestId);
-  }
   if (body.store !== undefined && typeof body.store !== "boolean") {
     return invalidResponsesRequest(requestId);
   }
@@ -62,8 +56,8 @@ export function normalizeOpenAIResponsesRequest(
     return invalidResponsesRequest(requestId);
   }
 
-  const instructions = readOptionalNonEmptyString(body.instructions);
-  if (instructions === null) {
+  const instructions = readOptionalStringOrNull(body.instructions);
+  if (instructions === false) {
     return invalidResponsesRequest(requestId);
   }
 
@@ -99,6 +93,7 @@ export function normalizeOpenAIResponsesRequest(
       input,
       instructions,
       maxOutputTokens,
+      passthrough: readPassthroughParameters(body, ["input", "model"]),
       parallelToolCalls:
         typeof body.parallel_tool_calls === "boolean" ? body.parallel_tool_calls : undefined,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
@@ -213,10 +208,7 @@ function readResponsesInputMessage(value: unknown): NormalizedOpenAIResponsesInp
     return null;
   }
 
-  return {
-    content,
-    role: value.role,
-  };
+  return value as NormalizedOpenAIResponsesInputMessage;
 }
 
 function readResponsesMessageContent(
@@ -280,11 +272,14 @@ function readOptionalOpenAIToolChoice(
   return null;
 }
 
-function readOptionalNonEmptyString(value: unknown): string | null | undefined {
+function readOptionalStringOrNull(value: unknown): string | null | false | undefined {
   if (value === undefined) {
     return undefined;
   }
-  return typeof value === "string" && value.trim() ? value : null;
+  if (value === null) {
+    return null;
+  }
+  return typeof value === "string" ? value : false;
 }
 
 function invalidResponsesRequest(requestId: string): GatewayResponsesRequestFailure {
@@ -295,10 +290,15 @@ function invalidResponsesRequest(requestId: string): GatewayResponsesRequestFail
   };
 }
 
-function unsupportedStatefulResponses(requestId: string): GatewayResponsesRequestFailure {
-  return {
-    body: createGatewayErrorBody("unsupported_stateful_responses", requestId),
-    ok: false,
-    statusCode: 400,
-  };
+function readPassthroughParameters(
+  body: Record<string, unknown>,
+  omittedKeys: readonly string[],
+): Record<string, unknown> | undefined {
+  const passthrough: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!omittedKeys.includes(key) && value !== undefined) {
+      passthrough[key] = value;
+    }
+  }
+  return Object.keys(passthrough).length > 0 ? passthrough : undefined;
 }

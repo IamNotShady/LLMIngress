@@ -67,6 +67,7 @@ export function normalizeOpenAIEmbeddingsRequest(
       dimensions,
       encodingFormat,
       input,
+      passthrough: readPassthroughParameters(body, ["input", "model", "dimensions"]),
     }),
   };
 }
@@ -75,14 +76,10 @@ export function buildOpenAIEmbeddingsRequestMetadata(input: {
   model: string;
   request: NormalizedOpenAIEmbeddingsRequest;
 }): GatewayRequestMetadata {
-  const inputParts = Array.isArray(input.request.input)
-    ? input.request.input
-    : [input.request.input];
-
   return {
-    estimatedInputTokens: estimateTextTokens(inputParts),
+    estimatedInputTokens: estimateEmbeddingsInputTokens(input.request.input),
     estimatedOutputTokens: 0,
-    messageCount: inputParts.length,
+    messageCount: countEmbeddingsInputs(input.request.input),
     model: input.model,
     protocol: "embeddings",
     stream: false,
@@ -163,7 +160,7 @@ function invalidEmbeddingsRequest(requestId: string): GatewayEmbeddingsRequestFa
   };
 }
 
-function readEmbeddingsInput(value: unknown): string | string[] | null {
+function readEmbeddingsInput(value: unknown): NormalizedOpenAIEmbeddingsRequest["input"] | null {
   if (typeof value === "string" && value.trim()) {
     return value;
   }
@@ -172,6 +169,9 @@ function readEmbeddingsInput(value: unknown): string | string[] | null {
     value.length > 0 &&
     value.every((entry) => typeof entry === "string" && entry.trim())
   ) {
+    return value;
+  }
+  if (isTokenArray(value) || isTokenArrayBatch(value)) {
     return value;
   }
   return null;
@@ -197,4 +197,49 @@ function readOptionalEncodingFormat(value: unknown): "base64" | "float" | null |
 function estimateTextTokens(parts: readonly string[]): number {
   const characterCount = parts.filter((part) => part.trim()).join("\n").length;
   return Math.max(1, Math.ceil(characterCount / 4));
+}
+
+function estimateEmbeddingsInputTokens(input: NormalizedOpenAIEmbeddingsRequest["input"]): number {
+  if (typeof input === "string") {
+    return estimateTextTokens([input]);
+  }
+  if (isTokenArray(input)) {
+    return input.length;
+  }
+  if (isTokenArrayBatch(input)) {
+    return input.reduce((total, entry) => total + entry.length, 0);
+  }
+  return estimateTextTokens(input);
+}
+
+function countEmbeddingsInputs(input: NormalizedOpenAIEmbeddingsRequest["input"]): number {
+  if (typeof input === "string" || isTokenArray(input)) {
+    return 1;
+  }
+  return input.length;
+}
+
+function isTokenArray(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isIntegerToken);
+}
+
+function isTokenArrayBatch(value: unknown): value is number[][] {
+  return Array.isArray(value) && value.length > 0 && value.every(isTokenArray);
+}
+
+function isIntegerToken(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value);
+}
+
+function readPassthroughParameters(
+  body: Record<string, unknown>,
+  omittedKeys: readonly string[],
+): Record<string, unknown> | undefined {
+  const passthrough: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!omittedKeys.includes(key) && value !== undefined) {
+      passthrough[key] = value;
+    }
+  }
+  return Object.keys(passthrough).length > 0 ? passthrough : undefined;
 }

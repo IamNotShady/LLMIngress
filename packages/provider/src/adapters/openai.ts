@@ -7,15 +7,18 @@ import {
   readResponseBody,
 } from "./adapter-http.js";
 
-export type NormalizedOpenAIChatMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content?: string | null;
+export type NormalizedOpenAIChatMessage = Record<string, unknown> & {
+  role: "assistant" | "developer" | "function" | "system" | "tool" | "user";
+  content?: unknown;
   name?: string;
   tool_call_id?: string;
   tool_calls?: Record<string, unknown>[];
 };
 
+export type OpenAIChatMaxOutputTokenField = "max_completion_tokens" | "max_tokens";
+
 export type NormalizedOpenAIChatRequest = {
+  maxOutputTokenField?: OpenAIChatMaxOutputTokenField;
   maxOutputTokens?: number;
   messages: NormalizedOpenAIChatMessage[];
   passthrough?: Record<string, unknown>;
@@ -25,9 +28,9 @@ export type NormalizedOpenAIChatRequest = {
   tools?: Record<string, unknown>[];
 };
 
-export type NormalizedOpenAIResponsesInputMessage = {
+export type NormalizedOpenAIResponsesInputMessage = Record<string, unknown> & {
   role: "developer" | "system" | "user" | "assistant";
-  content: string | Record<string, unknown>[];
+  content: unknown;
 };
 
 export type NormalizedOpenAIResponsesInputItem =
@@ -36,8 +39,9 @@ export type NormalizedOpenAIResponsesInputItem =
 
 export type NormalizedOpenAIResponsesRequest = {
   input: string | NormalizedOpenAIResponsesInputItem[];
-  instructions?: string;
+  instructions?: string | null;
   maxOutputTokens?: number;
+  passthrough?: Record<string, unknown>;
   parallelToolCalls?: boolean;
   stream?: boolean;
   temperature?: number;
@@ -48,7 +52,8 @@ export type NormalizedOpenAIResponsesRequest = {
 export type NormalizedOpenAIEmbeddingsRequest = {
   dimensions?: number;
   encodingFormat?: "base64" | "float";
-  input: string | string[];
+  input: string | string[] | number[] | number[][];
+  passthrough?: Record<string, unknown>;
 };
 
 export type OpenAIProviderTarget = {
@@ -107,23 +112,23 @@ type OpenAIChatCompletionsPayload = Record<string, unknown> & {
   tools?: Record<string, unknown>[];
 };
 
-type OpenAIResponsesPayload = {
+type OpenAIResponsesPayload = Record<string, unknown> & {
   input: NormalizedOpenAIResponsesRequest["input"];
-  instructions?: string;
+  instructions?: string | null;
   max_output_tokens?: number;
   model: string;
   parallel_tool_calls?: boolean;
-  store: false;
+  store?: boolean;
   stream?: boolean;
   temperature?: number;
   tool_choice?: NormalizedOpenAIResponsesRequest["toolChoice"];
   tools?: Record<string, unknown>[];
 };
 
-type OpenAIEmbeddingsPayload = {
+type OpenAIEmbeddingsPayload = Record<string, unknown> & {
   dimensions?: number;
   encoding_format?: NormalizedOpenAIEmbeddingsRequest["encodingFormat"];
-  input: string | string[];
+  input: NormalizedOpenAIEmbeddingsRequest["input"];
   model: string;
 };
 
@@ -225,16 +230,21 @@ function buildChatCompletionsPayload(
   request: NormalizedOpenAIChatRequest,
   target: OpenAIProviderTarget,
 ): OpenAIChatCompletionsPayload {
-  return omitUndefined({
+  const payload = omitUndefined({
     ...request.passthrough,
-    max_tokens: request.maxOutputTokens,
     messages: request.messages,
     model: target.modelId,
     stream: request.stream,
     temperature: request.temperature,
     tool_choice: request.toolChoice,
     tools: request.tools,
-  });
+  }) as OpenAIChatCompletionsPayload;
+  delete payload.max_completion_tokens;
+  delete payload.max_tokens;
+  if (request.maxOutputTokenField && request.maxOutputTokens !== undefined) {
+    payload[request.maxOutputTokenField] = request.maxOutputTokens;
+  }
+  return payload;
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
@@ -245,18 +255,22 @@ function buildResponsesPayload(
   request: NormalizedOpenAIResponsesRequest,
   target: OpenAIProviderTarget,
 ): OpenAIResponsesPayload {
-  return omitUndefined({
+  const payload = omitUndefined({
+    ...request.passthrough,
     input: request.input,
     instructions: request.instructions,
     max_output_tokens: request.maxOutputTokens,
     model: target.modelId,
     parallel_tool_calls: request.parallelToolCalls,
-    store: false,
     stream: request.stream,
     temperature: request.temperature,
     tool_choice: request.toolChoice,
     tools: request.tools,
-  });
+  }) as OpenAIResponsesPayload;
+  if (payload.store === undefined) {
+    payload.store = false;
+  }
+  return payload;
 }
 
 function buildResponsesUrl(baseUrl: string): string {
@@ -268,6 +282,7 @@ function buildEmbeddingsPayload(
   target: OpenAIProviderTarget,
 ): OpenAIEmbeddingsPayload {
   return omitUndefined({
+    ...request.passthrough,
     dimensions: request.dimensions,
     encoding_format: request.encodingFormat,
     input: request.input,

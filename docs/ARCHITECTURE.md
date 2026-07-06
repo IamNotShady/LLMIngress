@@ -227,22 +227,26 @@ the user must configure a browser-reachable Gateway Base URL.
 
 `/v1/responses` V1 support:
 
-- V1 supports a stateless Responses API subset for Agents that use the
-  OpenAI-compatible `/v1/responses` path.
-- V1 does not implement cross-provider `previous_response_id`, server-side
-  `store`, response state replay, or provider state migration by default.
-- If a request contains `previous_response_id` or requires `store = true`, V1
-  returns a clear unsupported error by default. Future single-provider
-  passthrough mode may extend this.
-- Gateway still normalizes stateless responses requests internally and routes
-  them to provider adapters that support the corresponding input and output
-  capabilities.
+- Gateway validates the minimum fields it needs for routing and accounting,
+  then passes official Responses request fields through to compatible providers.
+- Gateway does not own provider-side response state. Fields such as `store`,
+  `previous_response_id`, and `conversation` are forwarded, but cross-provider
+  state migration and replay remain the caller/provider responsibility.
+- Multimodal content parts, files, tool calls, hosted-tool options, metadata,
+  reasoning/text options, and future top-level fields are preserved unless they
+  conflict with Gateway-owned routing fields such as the virtual `model`.
 
-`/v1/chat/completions` 的 V1 透传范围：
+`/v1/chat/completions` V1 support:
 
-- Gateway 归一化 `messages`、`tools`、`tool_choice`、`temperature`、`stream` 和输出 token 上限，并把 `max_completion_tokens` 作为 `max_tokens` 的同义输入；两者同时出现时优先使用 `max_completion_tokens`。
-- Gateway 仅白名单透传 `frequency_penalty`、`logprobs`、`top_logprobs`、`parallel_tool_calls`、`presence_penalty`、`response_format`、`seed`、`stop`、`top_p`、`user`。
-- V1 不做 OpenAI chat completions 多模态 `image_url` 跨 Provider 兼容，收到不支持的 content shape 时返回明确 400；多模态支持另立协议适配方案。
+- Gateway normalizes the fields it needs for routing and accounting
+  (`messages`, `tools`, `tool_choice`, `temperature`, `stream`, and output token
+  limits), while preserving official Chat Completions request fields.
+- `max_completion_tokens` remains `max_completion_tokens` when sent to the
+  provider; legacy `max_tokens` remains supported. If both are supplied,
+  `max_completion_tokens` drives the Gateway output-token cap.
+- Multimodal, audio, file, custom-tool, function, and metadata fields are
+  passed through to compatible providers. Gateway does not translate those
+  features across providers that do not support them.
 
 ### 4.2 Routing Runtime
 

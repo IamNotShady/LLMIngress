@@ -50,9 +50,13 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         body: JSON.stringify({
           max_completion_tokens: 64,
           messages: [{ content: largeMessage, role: "user" }],
+          metadata: { trace: "chat" },
           model: "vm-request-hygiene",
+          modalities: ["text"],
+          prediction: { content: "expected", type: "content" },
           seed: 7,
           stop: ["END"],
+          stream_options: { include_usage: true },
           top_p: 0.9,
         }),
         headers: {
@@ -69,9 +73,19 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       });
       expect(fakeProvider.requests).toHaveLength(1);
       const providerBody = fakeProvider.requests[0]?.bodyJson;
-      expect(isRecord(providerBody) ? providerBody.max_tokens : undefined).toBe(64);
+      expect(isRecord(providerBody) ? providerBody.max_completion_tokens : undefined).toBe(64);
+      expect(isRecord(providerBody) ? providerBody.max_tokens : undefined).toBeUndefined();
+      expect(isRecord(providerBody) ? providerBody.metadata : undefined).toEqual({ trace: "chat" });
+      expect(isRecord(providerBody) ? providerBody.modalities : undefined).toEqual(["text"]);
+      expect(isRecord(providerBody) ? providerBody.prediction : undefined).toEqual({
+        content: "expected",
+        type: "content",
+      });
       expect(isRecord(providerBody) ? providerBody.seed : undefined).toBe(7);
       expect(isRecord(providerBody) ? providerBody.stop : undefined).toEqual(["END"]);
+      expect(isRecord(providerBody) ? providerBody.stream_options : undefined).toEqual({
+        include_usage: true,
+      });
       expect(isRecord(providerBody) ? providerBody.top_p : undefined).toBe(0.9);
 
       const tool = {
@@ -86,12 +100,23 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       };
       const responsesResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
+          background: true,
+          conversation: "conv_123",
+          include: ["file_search_call.results"],
           input: [{ content: "run pwd", role: "user" }, toolOutput],
+          max_tool_calls: 3,
+          metadata: { trace: "responses" },
           model: "vm-request-hygiene",
           parallel_tool_calls: false,
+          previous_response_id: "resp_123",
+          reasoning: { effort: "medium" },
+          store: true,
           stream: true,
+          text: { format: { type: "text" } },
           tool_choice: "required",
           tools: [tool],
+          truncation: "auto",
+          user: "end-user-123",
         }),
         headers: {
           authorization: `Bearer ${agentApiKey}`,
@@ -105,12 +130,23 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       expect(fakeProvider.requests).toHaveLength(2);
       const responsesProviderBody = fakeProvider.requests[1]?.bodyJson;
       expect(responsesProviderBody).toMatchObject({
+        background: true,
+        conversation: "conv_123",
+        include: ["file_search_call.results"],
         input: [{ content: "run pwd", role: "user" }, toolOutput],
+        max_tool_calls: 3,
+        metadata: { trace: "responses" },
         model: "fake-model",
         parallel_tool_calls: false,
+        previous_response_id: "resp_123",
+        reasoning: { effort: "medium" },
+        store: true,
         stream: true,
+        text: { format: { type: "text" } },
         tool_choice: "required",
         tools: [tool],
+        truncation: "auto",
+        user: "end-user-123",
       });
 
       const imagePart = {
@@ -148,6 +184,37 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         ],
         model: "fake-model",
         stream: true,
+      });
+
+      const messagesResponse = await fetch(`${baseUrl}/v1/messages`, {
+        body: JSON.stringify({
+          betas: ["mcp-client-2025-04-04"],
+          container: { type: "auto" },
+          context_management: { edits: [{ type: "clear_tool_uses_20250919" }] },
+          max_tokens: 128,
+          mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
+          messages: [{ content: "hello", role: "user" }],
+          model: "vm-request-hygiene",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await messagesResponse.text();
+
+      expect(messagesResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(4);
+      const messagesProviderBody = fakeProvider.requests[3]?.bodyJson;
+      expect(messagesProviderBody).toMatchObject({
+        betas: ["mcp-client-2025-04-04"],
+        container: { type: "auto" },
+        context_management: { edits: [{ type: "clear_tool_uses_20250919" }] },
+        max_tokens: 128,
+        mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
+        messages: [{ content: "hello", role: "user" }],
+        model: "fake-model",
       });
     } finally {
       await stopGatewayProcess(gateway);

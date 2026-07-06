@@ -34,8 +34,11 @@ type CodexResponsesPayload = {
   input: CodexResponsesInput;
   instructions: string;
   model: string;
+  parallel_tool_calls?: boolean;
   store: false;
   stream: boolean;
+  tool_choice?: NormalizedOpenAIResponsesRequest["toolChoice"];
+  tools?: Record<string, unknown>[];
 };
 
 export function createCodexSubscriptionAdapter(
@@ -116,8 +119,13 @@ function buildCodexResponsesPayload(
     input: normalizeCodexResponsesInput(request.input),
     instructions: request.instructions ?? "You are a helpful assistant.",
     model: modelId,
+    ...(request.parallelToolCalls === undefined
+      ? {}
+      : { parallel_tool_calls: request.parallelToolCalls }),
     store: false,
     stream: true,
+    ...(request.toolChoice === undefined ? {} : { tool_choice: request.toolChoice }),
+    ...(request.tools === undefined ? {} : { tools: request.tools }),
   };
 }
 

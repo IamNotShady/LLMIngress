@@ -640,6 +640,26 @@
   - Docker Gateway `/health` returned HTTP 200 and Docker Console root returned HTTP 200.
   - `pnpm run verify`
 
+## 2026-07-06 Responses Tool Passthrough Follow-up
+
+- Fixed Gateway `/v1/responses` tool passthrough for Hermes/Codex-style tool loops:
+  - `normalizeOpenAIResponsesRequest` now validates and preserves `tools`, `tool_choice`, and `parallel_tool_calls`.
+  - Responses `input` arrays now preserve raw typed items such as `function_call_output` instead of forcing every item into a text message shape.
+  - Generic OpenAI Responses, streaming Responses, and Codex subscription `/codex/responses` payloads now forward the tool fields.
+  - Codex subscription input normalization only converts plain string/text messages to `input_text`; typed Responses items remain unchanged.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts` failed while Responses tools were dropped, raw tool outputs were rejected/rewritten, and malformed tool fields were accepted.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed with `/v1/responses` returning HTTP 400 for a raw `function_call_output` input item.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/provider typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

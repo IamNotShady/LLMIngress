@@ -9,6 +9,7 @@ import {
   refreshProviderOAuthTokenWithLock,
 } from "../../packages/db/src/gateway-provider-credentials";
 import { estimateTextTokens } from "../../packages/db/src/gateway-request-metadata";
+import { normalizeOpenAIResponsesRequest } from "../../packages/db/src/gateway-responses";
 import { selectGatewayBaselineCandidate } from "../../packages/db/src/gateway-runtime-helpers";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
@@ -67,6 +68,62 @@ describe("gateway request hygiene", () => {
         top_p: 0.9,
       });
     }
+  });
+
+  it("normalizes Responses tools, tool_choice, and parallel_tool_calls", () => {
+    const tool = {
+      description: "Run a terminal command",
+      name: "terminal",
+      parameters: { properties: { command: { type: "string" } }, type: "object" },
+      type: "function",
+    };
+    const normalized = normalizeOpenAIResponsesRequest(
+      {
+        input: "pwd",
+        parallel_tool_calls: false,
+        tool_choice: "required",
+        tools: [tool],
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.tools).toEqual([tool]);
+      expect(normalized.request.toolChoice).toBe("required");
+      expect(normalized.request.parallelToolCalls).toBe(false);
+    }
+  });
+
+  it("normalizes raw Responses input items without rewriting tool outputs", () => {
+    const toolOutput = {
+      call_id: "call_terminal",
+      output: '{"stdout":"ok"}',
+      type: "function_call_output",
+    };
+    const normalized = normalizeOpenAIResponsesRequest(
+      {
+        input: [{ content: "run pwd", role: "user" }, toolOutput],
+      },
+      "req-1",
+    );
+
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(normalized.request.input).toEqual([{ content: "run pwd", role: "user" }, toolOutput]);
+    }
+  });
+
+  it("rejects malformed Responses tool fields", () => {
+    expect(normalizeOpenAIResponsesRequest({ input: "hi", tools: ["bad"] }, "req-1").ok).toBe(
+      false,
+    );
+    expect(
+      normalizeOpenAIResponsesRequest({ input: "hi", tool_choice: "invalid" }, "req-1").ok,
+    ).toBe(false);
+    expect(
+      normalizeOpenAIResponsesRequest({ input: "hi", parallel_tool_calls: "yes" }, "req-1").ok,
+    ).toBe(false);
   });
 
   it("refreshes an expired OAuth token once under concurrent row-lock contention", async () => {

@@ -1,5 +1,6 @@
 import {
   createOpenAIProviderAdapter,
+  type NormalizedOpenAIResponsesInputItem,
   type NormalizedOpenAIResponsesInputMessage,
   type NormalizedOpenAIResponsesRequest,
   type OpenAIAdapterSuccess,
@@ -79,6 +80,18 @@ export function normalizeOpenAIResponsesRequest(
   if (body.stream !== undefined && typeof body.stream !== "boolean") {
     return invalidResponsesRequest(requestId);
   }
+  if (body.parallel_tool_calls !== undefined && typeof body.parallel_tool_calls !== "boolean") {
+    return invalidResponsesRequest(requestId);
+  }
+
+  const tools = readOptionalObjectArray(body.tools);
+  if (tools === null) {
+    return invalidResponsesRequest(requestId);
+  }
+  const toolChoice = readOptionalOpenAIToolChoice(body.tool_choice);
+  if (toolChoice === null) {
+    return invalidResponsesRequest(requestId);
+  }
 
   return {
     ok: true,
@@ -86,8 +99,12 @@ export function normalizeOpenAIResponsesRequest(
       input,
       instructions,
       maxOutputTokens,
+      parallelToolCalls:
+        typeof body.parallel_tool_calls === "boolean" ? body.parallel_tool_calls : undefined,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
       temperature,
+      toolChoice,
+      tools,
     }),
   };
 }
@@ -154,9 +171,7 @@ export async function executeGatewayOpenAIResponse(input: {
   });
 }
 
-function readResponsesInput(
-  value: unknown,
-): string | NormalizedOpenAIResponsesInputMessage[] | null {
+function readResponsesInput(value: unknown): string | NormalizedOpenAIResponsesInputItem[] | null {
   if (typeof value === "string" && value.trim()) {
     return value;
   }
@@ -164,11 +179,21 @@ function readResponsesInput(
     return null;
   }
 
-  const messages = value.map(readResponsesInputMessage);
-  if (messages.some((message) => !message)) {
+  const items = value.map(readResponsesInputItem);
+  if (items.some((item) => !item)) {
     return null;
   }
-  return messages as NormalizedOpenAIResponsesInputMessage[];
+  return items as NormalizedOpenAIResponsesInputItem[];
+}
+
+function readResponsesInputItem(value: unknown): NormalizedOpenAIResponsesInputItem | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (typeof value.type === "string" && value.type.trim()) {
+    return value;
+  }
+  return readResponsesInputMessage(value);
 }
 
 function readResponsesInputMessage(value: unknown): NormalizedOpenAIResponsesInputMessage | null {
@@ -238,6 +263,32 @@ function readOptionalFiniteNumber(value: unknown): number | null | undefined {
     return null;
   }
   return value;
+}
+
+function readOptionalObjectArray(value: unknown): Record<string, unknown>[] | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.some((entry) => !isRecord(entry))) {
+    return null;
+  }
+  return value as Record<string, unknown>[];
+}
+
+function readOptionalOpenAIToolChoice(
+  value: unknown,
+): string | Record<string, unknown> | null | undefined {
+  if (value === undefined || value === false) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    const mode = value.trim();
+    return mode === "auto" || mode === "none" || mode === "required" ? mode : null;
+  }
+  if (isRecord(value)) {
+    return value;
+  }
+  return null;
 }
 
 function readOptionalNonEmptyString(value: unknown): string | null | undefined {

@@ -7,23 +7,29 @@ type OpenAIResponsesInputMessage = {
   role: CodexResponsesInputMessage["role"];
 };
 
+type OpenAIResponsesInputItem = OpenAIResponsesInputMessage | Record<string, unknown>;
+
 export type CodexResponsesInputMessage = {
   content: Array<{ text: string; type: "input_text" }>;
   role: "assistant" | "developer" | "system" | "user";
 };
 
-export type CodexResponsesInput = CodexResponsesInputMessage[];
+export type CodexResponsesInput = Array<CodexResponsesInputMessage | Record<string, unknown>>;
 
 export function normalizeCodexResponsesInput(
-  input: string | OpenAIResponsesInputMessage[],
+  input: string | OpenAIResponsesInputItem[],
 ): CodexResponsesInput {
   if (typeof input === "string") {
     return [{ content: [{ text: input, type: "input_text" }], role: "user" }];
   }
-  return input.map((message) => ({
-    content: [{ text: message.content, type: "input_text" }],
-    role: message.role,
-  }));
+  return input.map((item) =>
+    isPlainTextResponsesInputMessage(item)
+      ? {
+          content: [{ text: item.content, type: "input_text" }],
+          role: item.role,
+        }
+      : item,
+  );
 }
 
 // Subscription (OAuth) /v1/messages requires an agent-identity string as the first
@@ -58,6 +64,19 @@ export function withClaudeCodeSystemPrompt(system: unknown): AnthropicContentBlo
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPlainTextResponsesInputMessage(value: unknown): value is OpenAIResponsesInputMessage {
+  if (!isRecord(value) || typeof value.type === "string") {
+    return false;
+  }
+  return (
+    typeof value.content === "string" &&
+    (value.role === "assistant" ||
+      value.role === "developer" ||
+      value.role === "system" ||
+      value.role === "user")
+  );
 }
 
 export const codexClientVersion = "0.128.0";

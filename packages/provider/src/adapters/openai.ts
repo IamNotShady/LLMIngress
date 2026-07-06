@@ -30,12 +30,19 @@ export type NormalizedOpenAIResponsesInputMessage = {
   content: string;
 };
 
+export type NormalizedOpenAIResponsesInputItem =
+  | NormalizedOpenAIResponsesInputMessage
+  | Record<string, unknown>;
+
 export type NormalizedOpenAIResponsesRequest = {
-  input: string | NormalizedOpenAIResponsesInputMessage[];
+  input: string | NormalizedOpenAIResponsesInputItem[];
   instructions?: string;
   maxOutputTokens?: number;
+  parallelToolCalls?: boolean;
   stream?: boolean;
   temperature?: number;
+  toolChoice?: string | Record<string, unknown>;
+  tools?: Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIEmbeddingsRequest = {
@@ -101,13 +108,16 @@ type OpenAIChatCompletionsPayload = Record<string, unknown> & {
 };
 
 type OpenAIResponsesPayload = {
-  input: string | NormalizedOpenAIResponsesInputMessage[];
+  input: NormalizedOpenAIResponsesRequest["input"];
   instructions?: string;
   max_output_tokens?: number;
   model: string;
+  parallel_tool_calls?: boolean;
   store: false;
   stream?: boolean;
   temperature?: number;
+  tool_choice?: NormalizedOpenAIResponsesRequest["toolChoice"];
+  tools?: Record<string, unknown>[];
 };
 
 type OpenAIEmbeddingsPayload = {
@@ -240,9 +250,12 @@ function buildResponsesPayload(
     instructions: request.instructions,
     max_output_tokens: request.maxOutputTokens,
     model: target.modelId,
+    parallel_tool_calls: request.parallelToolCalls,
     store: false,
     stream: request.stream,
     temperature: request.temperature,
+    tool_choice: request.toolChoice,
+    tools: request.tools,
   });
 }
 

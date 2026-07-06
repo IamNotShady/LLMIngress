@@ -590,8 +590,11 @@ function buildStreamingPayload(input: {
         input: normalized.request.input,
         instructions: normalized.request.instructions,
         max_output_tokens: normalized.request.maxOutputTokens,
+        parallel_tool_calls: normalized.request.parallelToolCalls,
         store: false,
         temperature: normalized.request.temperature,
+        tool_choice: normalized.request.toolChoice,
+        tools: normalized.request.tools,
       }),
       requestMetadata,
     };

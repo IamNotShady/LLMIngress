@@ -73,6 +73,45 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       expect(isRecord(providerBody) ? providerBody.seed : undefined).toBe(7);
       expect(isRecord(providerBody) ? providerBody.stop : undefined).toEqual(["END"]);
       expect(isRecord(providerBody) ? providerBody.top_p : undefined).toBe(0.9);
+
+      const tool = {
+        name: "terminal",
+        parameters: { properties: { command: { type: "string" } }, type: "object" },
+        type: "function",
+      };
+      const toolOutput = {
+        call_id: "call_terminal",
+        output: '{"stdout":"ok"}',
+        type: "function_call_output",
+      };
+      const responsesResponse = await fetch(`${baseUrl}/v1/responses`, {
+        body: JSON.stringify({
+          input: [{ content: "run pwd", role: "user" }, toolOutput],
+          model: "vm-request-hygiene",
+          parallel_tool_calls: false,
+          stream: true,
+          tool_choice: "required",
+          tools: [tool],
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await responsesResponse.text();
+
+      expect(responsesResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(2);
+      const responsesProviderBody = fakeProvider.requests[1]?.bodyJson;
+      expect(responsesProviderBody).toMatchObject({
+        input: [{ content: "run pwd", role: "user" }, toolOutput],
+        model: "fake-model",
+        parallel_tool_calls: false,
+        stream: true,
+        tool_choice: "required",
+        tools: [tool],
+      });
     } finally {
       await stopGatewayProcess(gateway);
     }

@@ -1,12 +1,9 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
-import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
-import {
-  completeGatewayRequestActivity,
-  createGatewayRequestActivity,
-  type GatewayRequestActivityProtocol,
-  type GatewayRequestActivityRoute,
-  readGatewayActivityError,
+import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingress/db/client";
+import type {
+  GatewayRequestActivityProtocol,
+  GatewayRequestActivityRoute,
 } from "@llmingress/db/gateway-activity-recorder";
 import { authenticateGatewayRequest } from "@llmingress/db/gateway-auth";
 import { executeGatewayOpenAIChatCompletion } from "@llmingress/db/gateway-chat-completions";
@@ -16,6 +13,14 @@ import {
   type GatewayConfigSnapshot,
 } from "@llmingress/db/gateway-config-reload";
 import { executeGatewayOpenAIEmbeddings } from "@llmingress/db/gateway-embeddings";
+import {
+  gatewayBodyLimitBytes,
+  gatewayConfigNotifications,
+  gatewayConfigReconcileIntervalMs,
+  gatewayHeartbeatIntervalMs,
+  gatewayInstanceId,
+  gatewayMetricsToken,
+} from "@llmingress/db/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/db/gateway-error-mapping";
 import { executeGatewayAnthropicMessages } from "@llmingress/db/gateway-messages";
 import { getPrometheusMetricsDocument } from "@llmingress/db/gateway-metrics";
@@ -31,15 +36,8 @@ import {
   type GatewayStreamingProtocol,
   type GatewayStreamingResult,
   readGatewayStreamingFlag,
-  wrapProviderStreamWithActivityCompletion,
 } from "@llmingress/db/gateway-streaming";
-import { recordGatewayRequestTrace } from "@llmingress/db/gateway-tracing";
-import {
-  buildGatewayProviderUsageResponseBody,
-  createGatewayStreamingUsageCollector,
-  type GatewayUsageCostDetails,
-  recordGatewayUsageCostAndSavings,
-} from "@llmingress/db/gateway-usage-recorder";
+import type { GatewayUsageCostDetails } from "@llmingress/db/gateway-usage-recorder";
 import {
   type GatewayVirtualModel,
   listAllowedGatewayVirtualModels,
@@ -48,14 +46,17 @@ import {
 } from "@llmingress/db/gateway-virtual-model-access";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply } from "fastify";
 import { gatewayCorsHeaders } from "./cors.js";
+import {
+  executeRecordedGatewayJsonRequest,
+  executeRecordedGatewayStreamingRequest,
+} from "./request-recording.js";
 
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
 };
 
 type GatewayJsonEndpointExecutionInput = {
-  agentApiKeyId: string;
-  requestActivityId: string;
+  agentId: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -80,6 +81,7 @@ type GatewayJsonEndpointDefinition = {
 
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   const app = Fastify({
+    bodyLimit: gatewayBodyLimitBytes(),
     logger: true,
   });
 
@@ -105,7 +107,20 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     };
   });
 
-  app.get("/metrics", async (_request, reply) => {
+  app.get("/metrics", async (request, reply) => {
+    const requiredToken = gatewayMetricsToken();
+    if (requiredToken) {
+      const authorization = firstRequestHeaderValue(request.headers.authorization);
+      if (authorization !== `Bearer ${requiredToken}`) {
+        return reply.code(401).send({
+          error: {
+            code: "unauthorized_metrics_access",
+            message: "Metrics access requires a valid bearer token.",
+          },
+        });
+      }
+    }
+
     const document = await getPrometheusMetricsDocument({});
     return reply.header("content-type", document.contentType).send(document.body);
   });
@@ -127,7 +142,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
+      agentId: auth.agentApiKey.id,
     });
 
     return reply.header(gatewayRequestIdHeader, auth.requestId).send({
@@ -162,6 +177,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
   app.addHook("onClose", async () => {
     await options.configRuntime?.stop();
+    await closePostgresPools();
   });
 
   return app;
@@ -171,10 +187,10 @@ export async function startGateway() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
   const configRuntime = createGatewayConfigRuntime({
-    enableNotifications: readBooleanEnv("GATEWAY_CONFIG_NOTIFICATIONS", true),
-    gatewayInstanceId: process.env.GATEWAY_INSTANCE_ID?.trim() || "gateway",
-    heartbeatIntervalMs: readNonNegativeIntegerEnv("GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000),
-    reconcileIntervalMs: readNonNegativeIntegerEnv("GATEWAY_CONFIG_RECONCILE_INTERVAL_MS", 30_000),
+    enableNotifications: gatewayConfigNotifications(),
+    gatewayInstanceId: gatewayInstanceId(),
+    heartbeatIntervalMs: gatewayHeartbeatIntervalMs(),
+    reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
   });
   await configRuntime.start();
 
@@ -184,27 +200,6 @@ export async function startGateway() {
     host: "0.0.0.0",
     port: config.gatewayPort,
   });
-}
-
-function readBooleanEnv(name: string, fallback: boolean): boolean {
-  const value = process.env[name];
-  if (value === undefined) {
-    return fallback;
-  }
-  return value !== "false";
-}
-
-function readNonNegativeIntegerEnv(name: string, fallback: number): number {
-  const value = process.env[name];
-  if (value === undefined) {
-    return fallback;
-  }
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error(`${name} must be a non-negative integer.`);
-  }
-  return parsed;
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
@@ -230,7 +225,7 @@ function registerGatewayJsonEndpoint(
     }
 
     const allowedVirtualModels = await listAllowedGatewayVirtualModels({
-      agentApiKeyId: auth.agentApiKey.id,
+      agentId: auth.agentApiKey.id,
     });
     const virtualModelAccess = resolveGatewayVirtualModelRequest({
       allowedVirtualModels,
@@ -263,13 +258,12 @@ function registerGatewayJsonEndpoint(
       return sendGatewayStreamingResponse(
         reply,
         await executeRecordedGatewayStreamingRequest({
-          agentApiKeyId: auth.agentApiKey.id,
+          agentId: auth.agentApiKey.id,
           agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-          execute: (requestActivityId) =>
+          execute: () =>
             executeGatewayStreamingRequest({
-              agentApiKeyId: auth.agentApiKey.id,
+              agentId: auth.agentApiKey.id,
               protocol: streamingProtocol,
-              requestActivityId,
               requestBody: request.body,
               requestId: auth.requestId,
               snapshot: requireGatewayConfigSnapshot(options),
@@ -287,17 +281,17 @@ function registerGatewayJsonEndpoint(
     }
 
     const response = await executeRecordedGatewayJsonRequest({
-      agentApiKeyId: auth.agentApiKey.id,
+      agentId: auth.agentApiKey.id,
       agentApiKeyPrefix: auth.agentApiKey.keyPrefix,
-      execute: (requestActivityId) =>
+      execute: () =>
         endpoint.execute({
-          agentApiKeyId: auth.agentApiKey.id,
-          requestActivityId,
+          agentId: auth.agentApiKey.id,
           requestBody: request.body,
           requestId: auth.requestId,
           snapshot: requireGatewayConfigSnapshot(options),
           virtualModel: virtualModelAccess.virtualModel,
         }),
+      logger: request.log,
       model: virtualModelAccess.virtualModel.name,
       protocol: endpoint.protocol,
       requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
@@ -416,138 +410,6 @@ function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRe
     return;
   }
   logger.info(payload, "gateway agent request");
-}
-
-async function executeRecordedGatewayJsonRequest(input: {
-  agentApiKeyId: string;
-  agentApiKeyPrefix: string;
-  execute: (requestActivityId: string) => Promise<{
-    activity?: GatewayRequestActivityRoute;
-    body: unknown;
-    headers?: Record<string, string>;
-    requestMetadata?: GatewayRequestMetadata;
-    statusCode: number;
-    usageCost?: GatewayUsageCostDetails;
-  }>;
-  model: string;
-  protocol: GatewayRequestActivityProtocol;
-  requestLoggingEnabled: boolean;
-  requestId: string;
-  virtualModelId: string;
-}) {
-  const activity = await createGatewayRequestActivity({
-    agentApiKeyId: input.agentApiKeyId,
-    agentApiKeyPrefix: input.agentApiKeyPrefix,
-    model: input.model,
-    protocol: input.protocol,
-    requestId: input.requestId,
-    stream: false,
-    virtualModelId: input.virtualModelId,
-  });
-  const response = await input.execute(activity.id);
-  await completeGatewayRequestActivity({
-    activityId: activity.id,
-    requestLoggingEnabled: input.requestLoggingEnabled,
-    requestMetadata: response.requestMetadata,
-    responseBody: response.body,
-    route: response.activity,
-    startedAt: activity.startedAt,
-    statusCode: response.statusCode,
-  });
-  if (response.statusCode < 400 && response.usageCost) {
-    await recordGatewayUsageCostAndSavings({
-      activityId: activity.id,
-      agentApiKeyId: input.agentApiKeyId,
-      usageCost: response.usageCost,
-      virtualModelId: input.virtualModelId,
-    });
-  }
-  await recordGatewayRequestTrace({
-    errorCode: readGatewayActivityError(response.body)?.errorCode ?? null,
-    httpStatus: response.statusCode,
-    modelId: response.activity?.modelId ?? null,
-    protocol: input.protocol,
-    providerKey: response.activity?.providerKey ?? null,
-    requestId: input.requestId,
-    startedAt: activity.startedAt,
-    status: response.statusCode < 400 ? "succeeded" : "failed",
-  });
-  return response;
-}
-
-async function executeRecordedGatewayStreamingRequest(input: {
-  agentApiKeyId: string;
-  agentApiKeyPrefix: string;
-  execute: (requestActivityId: string) => Promise<GatewayStreamingResult>;
-  logger: FastifyBaseLogger;
-  model: string;
-  protocol: GatewayRequestActivityProtocol;
-  requestLoggingEnabled: boolean;
-  requestId: string;
-  virtualModelId: string;
-}): Promise<GatewayStreamingResult> {
-  const activity = await createGatewayRequestActivity({
-    agentApiKeyId: input.agentApiKeyId,
-    agentApiKeyPrefix: input.agentApiKeyPrefix,
-    model: input.model,
-    protocol: input.protocol,
-    requestId: input.requestId,
-    stream: true,
-    virtualModelId: input.virtualModelId,
-  });
-  const response = await input.execute(activity.id);
-  if (!response.ok) {
-    await completeGatewayRequestActivity({
-      activityId: activity.id,
-      requestLoggingEnabled: input.requestLoggingEnabled,
-      requestMetadata: response.requestMetadata,
-      responseBody: response.body,
-      route: response.activity,
-      startedAt: activity.startedAt,
-      statusCode: response.statusCode,
-    });
-    return response;
-  }
-
-  const usageCollector = createGatewayStreamingUsageCollector();
-  return {
-    ...response,
-    body: wrapProviderStreamWithActivityCompletion(response.body, {
-      collectChunk: (chunk) => usageCollector.collect(chunk),
-      completeActivity: async ({ statusCode }) => {
-        const providerUsage = usageCollector.readUsage();
-        try {
-          if (response.usageCost) {
-            await recordGatewayUsageCostAndSavings({
-              activityId: activity.id,
-              agentApiKeyId: input.agentApiKeyId,
-              usageCost: {
-                ...response.usageCost,
-                ...(providerUsage ? { providerUsage } : {}),
-              },
-              virtualModelId: input.virtualModelId,
-            });
-          }
-        } catch (error) {
-          input.logger.debug(
-            { activityId: activity.id, err: error, requestId: input.requestId },
-            "gateway stream usage accounting failed",
-          );
-        } finally {
-          await completeGatewayRequestActivity({
-            activityId: activity.id,
-            requestLoggingEnabled: input.requestLoggingEnabled,
-            requestMetadata: response.requestMetadata,
-            responseBody: providerUsage ? buildGatewayProviderUsageResponseBody(providerUsage) : {},
-            route: response.activity,
-            startedAt: activity.startedAt,
-            statusCode,
-          });
-        }
-      },
-      statusCode: response.statusCode,
-    }),
-  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

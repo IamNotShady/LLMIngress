@@ -160,7 +160,7 @@ Gateway Service
 |   |-- Protocol normalization
 |   |-- Request metadata extraction
 |   |-- Token estimate
-|   `-- TPM / budget reservation
+|   `-- Agent limits check (RPM / TPM / concurrency / token / budget)
 |
 |-- Routing Runtime
 |   |-- Config snapshot reader
@@ -191,6 +191,17 @@ Gateway Service
     |-- Runtime heartbeat writer
     `-- Periodic reconcile loop
 ```
+
+Gateway JSON protocol endpoints share the `GatewayProtocolSpec` extension point
+and execute through `executeGatewayProtocolRequest`. A new JSON protocol should
+add a spec object for normalization, metadata extraction, provider invocation,
+and protocol-specific unsupported-state errors instead of copying endpoint
+orchestration.
+
+Streaming provider differences are resolved through the provider dialect
+registry in `packages/provider/src/dialect.ts`. A new streaming dialect should
+register a `ProviderStreamingDialect` entry there, so Gateway streaming does not
+branch on provider-key strings.
 
 ### 4.1 Public API Layer
 
@@ -226,6 +237,12 @@ the user must configure a browser-reachable Gateway Base URL.
 - Gateway still normalizes stateless responses requests internally and routes
   them to provider adapters that support the corresponding input and output
   capabilities.
+
+`/v1/chat/completions` 的 V1 透传范围：
+
+- Gateway 归一化 `messages`、`tools`、`tool_choice`、`temperature`、`stream` 和输出 token 上限，并把 `max_completion_tokens` 作为 `max_tokens` 的同义输入；两者同时出现时优先使用 `max_completion_tokens`。
+- Gateway 仅白名单透传 `frequency_penalty`、`logprobs`、`top_logprobs`、`parallel_tool_calls`、`presence_penalty`、`response_format`、`seed`、`stop`、`top_p`、`user`。
+- V1 不做 OpenAI chat completions 多模态 `image_url` 跨 Provider 兼容，收到不支持的 content shape 时返回明确 400；多模态支持另立协议适配方案。
 
 ### 4.2 Routing Runtime
 
@@ -267,9 +284,9 @@ and avoids reading partially updated runtime configuration.
 ### 4.4 Runtime Counter And Health State
 
 Gateway owns mutable runtime state in the synchronous request path: rate-limit
-counters, budget reservations, concurrency counters, and the routing health
-view. These do not belong in the immutable config snapshot and must not be
-computed from full history on every request.
+windows, concurrency counters, budget-period admission checks, and the routing
+health view. These do not belong in the immutable config snapshot and must not
+be computed from full history on every request.
 
 Runtime state ownership:
 
@@ -279,13 +296,9 @@ Runtime state ownership:
 - Concurrency: Gateway keeps current process concurrency in memory and releases
   it when the request finishes or is canceled. After Gateway restart,
   concurrency naturally resets to zero.
-- Budget period: the database stores each Agent's current budget-period token,
-  cost, and reservation totals. Gateway reserves budget at request start and
-  settles with actual or estimated usage at request end.
-- Budget reservation: request start reserves from estimated input tokens and
-  available output limits. Streaming output tokens are unknown at request start,
-  so request end settles the delta using actual output tokens and actual or
-  estimated cost.
+- Budget period: the database stores each Agent's current budget-period token
+  and cost totals. Gateway checks the current period at request start and records
+  successful request usage after completion as best-effort background work.
 - Usage record: `request_usage` is an audit and analytics record. It is not the
   only source for synchronous limit checks.
 - Provider / Model health view: Gateway maintains an in-memory health view from
@@ -297,26 +310,32 @@ Recommended check order:
 
 ```text
 auth
-  -> cheap RPM / concurrency check
   -> protocol normalization
   -> request metadata extraction
   -> token estimate
-  -> TPM / budget reservation
   -> route decision
-```
+  -> unified agent limits check
+  ```
 
-RPM and concurrency checks do not depend on token estimation and should run
-early. TPM and budget checks depend on token estimation, so they run after
-protocol normalization and metadata extraction.
+The unified agent limits executor reads enabled `agent_limits` once and handles
+RPM, TPM, concurrency, per-request token, and cost budget checks in one request
+start decision. TPM windows keep request-start estimate semantics; provider
+actual tokens are not written back into TPM windows after completion. Actual
+usage drives request usage/cost records and budget-period usage after successful
+responses only.
 
-Budget reservation leak recovery:
+Concurrency leak recovery:
 
-- Gateway startup cleans stale reservations left by the same process after a
-  previous abnormal exit.
-- Gateway settles or releases reservations on request cancellation, timeout, or
-  all-provider fallback failure.
-- Worker Data Maintenance periodically scans and releases TTL-expired stale
-  reservations as a safety net.
+- Gateway releases the concurrency lease when a request ends or disconnects; the
+  release uses `greatest(active_count - 1, 0)` so duplicate releases cannot make
+  the count negative.
+- Worker `stale_concurrency_reconcile` only fixes quiet windows: by default,
+  windows untouched for five minutes are eligible for reconciliation.
+- Reconciliation uses recent `request_activity` rows still in `started` state
+  and not older than the default 15-minute in-flight window. Longer in-flight
+  requests can be temporarily under-counted; the later real release still lands
+  safely at zero. This is a crash-leak safety net, not a replacement for
+  request-path release.
 
 Provider health merge rules:
 
@@ -496,7 +515,6 @@ Background Worker / Scheduler
 |-- Data Maintenance
 |   |-- Request log retention
 |   |-- Optional content cleanup
-|   |-- Stale budget reservation cleanup
 |   |-- JSONL request log export
 |   `-- Cost report export
 |
@@ -763,9 +781,8 @@ can be created by Worker scheduler. Manual jobs can be triggered by Console.
 
 ```text
 Worker scheduler
-  |-- retention_cleanup
-  |-- stale_reservation_cleanup
-  `-- backup (trigger=scheduled)
+|-- retention_cleanup
+`-- backup (trigger=scheduled)
 
 Console API manual trigger
   |-- model_refresh
@@ -781,11 +798,10 @@ create job record
   |-- model_refresh
   |-- provider_connectivity_check
   |-- price_sync
-  |-- billing_reconciliation
-  |-- retention_cleanup
-  |-- stale_reservation_cleanup
-  |-- webhook_export
-  `-- backup
+|-- billing_reconciliation
+|-- retention_cleanup
+|-- webhook_export
+`-- backup
       |
       |-- pg_notify('job_created', job payload)
       v
@@ -908,7 +924,7 @@ Reasons:
   job wakeup, and health summary refresh without exposing a private Gateway
   control interface.
 - `SELECT ... FOR UPDATE SKIP LOCKED`, transactions, and advisory locks support
-  Worker job leases, budget reservations, and scheduled task deduplication.
+  Worker job leases, rate-limit windows, and scheduled task deduplication.
 - If the system later expands to multiple Gateways or Workers, Postgres can
   still be the default shared state layer. Redis is an optimization for
   high-frequency rate limiting or caching, not a required V1 component.
@@ -924,26 +940,24 @@ PostgreSQL database
 |
 |-- Provider / model config
 |   |-- providers
-|   |-- provider_keys
+|   |-- provider_api_keys
 |   `-- provider_models (including manual price fields)
 |
 |-- Routing config
 |   |-- virtual_models
-|   |-- route_policies
-|   |-- route_policy_rules
+|   |-- route_policies (including rules jsonb)
 |   `-- route_policy_candidates
 |
 |-- Limits
 |   |-- agent_limits
 |   |-- rate_limit_windows
-|   |-- budget_periods
-|   `-- budget_reservations
+|   `-- budget_periods
 |
 |-- Runtime records
 |   |-- request_activity (including request-level config label snapshots)
 |   |-- request_usage
 |   |-- request_costs (including baseline and savings fields)
-|   |-- fallback_events
+|   |-- fallback_events (retry-chain source)
 |   |-- provider_health_events
 |   |-- provider_health_summary
 |   |-- gateway_runtime_status
@@ -961,10 +975,6 @@ PostgreSQL database
 |-- Config lifecycle
 |   |-- config_versions
 |   `-- migration_history
-|
-`-- Optional content records
-    |-- request_prompts
-    `-- response_outputs
 ```
 
 Config tables use `deleted_at` for Console delete semantics. Agents, Providers,
@@ -973,6 +983,8 @@ when deleted instead of physically removed. Runtime history tables keep
 restrictive foreign keys to those config rows so request audit data remains
 referentially intact. Request activity also stores minimal label snapshots for
 Agent, Virtual Model, Route Policy strategy, Provider, and Provider Model.
+Prompt and response content tables are not part of the current V1 schema; adding
+them requires a separate content-recording schema change.
 Historical reports prefer those snapshots and fall back to joined config rows
 for older records.
 
@@ -1116,8 +1128,7 @@ LLMIngress/ # repository root for apps, shared packages, docs, and scripts
 |   |       |   |-- authorization.ts
 |   |       |   |-- protocol-normalizer.ts
 |   |       |   |-- token-estimator.ts
-|   |       |   |-- budget-reservation.ts
-|   |       |   `-- limits.ts
+|   |       |   `-- agent-limits.ts
 |   |       |-- runtime/ # Gateway request runtime core
 |   |       |   |-- config-snapshot.ts
 |   |       |   |-- config-loader.ts
@@ -1152,7 +1163,6 @@ LLMIngress/ # repository root for apps, shared packages, docs, and scripts
 |   |       |   |-- billing-reconciliation.job.ts
 |   |       |   |-- alert-evaluation.job.ts
 |   |       |   |-- retention-cleanup.job.ts
-|   |       |   |-- stale-reservation-cleanup.job.ts
 |   |       |   |-- jsonl-export.job.ts
 |   |       |   `-- backup.job.ts
 |   |       `-- dispatchers/ # async notification and external delivery
@@ -1312,10 +1322,14 @@ LLMIngress/ # repository root for apps, shared packages, docs, and scripts
 ### 10.1 Gateway App Only Orchestrates Runtime
 
 `apps/gateway` owns HTTP service, request pipeline, streaming, provider calls,
-Postgres-notification-driven hot reload, and runtime data writes. Domain rules
-should live in `packages/routing`, `packages/domain`, and `packages/providers`
-where possible, so the Gateway app does not become an all-in-one business
-bucket.
+Postgres-notification-driven hot reload, and runtime data writes. Reusable
+domain rules must not live in `apps/gateway`. The current repository has not
+split out `packages/routing` yet: Gateway runtime domain modules currently live
+under the `gateway-*` prefix in `packages/db/src`, shared routing calculation
+lives in `packages/domain`, and provider adapters live in `packages/provider`.
+A dedicated routing/runtime package split is a separate plan. Gateway runtime
+structure invariants are enforced by
+`tests/features/gateway-cohesion-refactor.unit.test.ts`.
 
 ### 10.2 Console App Only Handles Control-Plane Experience
 
@@ -1429,9 +1443,9 @@ configuration objects.
 - Playground tests through Gateway Public API. The user manually enters an Agent
   API key and selects a Virtual Model Name. Console backend does not proxy the
   request or store the key.
-- Gateway owns synchronous rate limiting, budget reservation, concurrency
-  counting, and the in-memory health view. The database stores recoverable
-  windows, budget period totals, health events, and health summaries.
+- Gateway owns synchronous agent-limit admission, concurrency counting, and the
+  in-memory health view. The database stores recoverable windows, budget period
+  totals, health events, and health summaries.
 - Gateway records baseline cost and request savings on the request path. Console
   aggregates and displays them. Worker only corrects actual cost / savings after
   cost reconciliation.

@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { getPostgresPool, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export type GatewayVirtualModel = {
   displayName: string;
@@ -98,34 +98,28 @@ export function readRequestedModelName(body: unknown): string | null {
 }
 
 export async function listAllowedGatewayVirtualModels(input: {
-  agentApiKeyId: string;
+  agentId: string;
   databaseUrl?: string;
 }): Promise<GatewayVirtualModel[]> {
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-  try {
-    const result = await client.query<VirtualModelRow>(
-      `
-        select virtual_models.id::text,
-               virtual_models.name,
-               virtual_models.description as display_name
-        from agent_virtual_models
-        join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
-        where agent_virtual_models.agent_id = $1
-          and virtual_models.enabled = true
-          and virtual_models.deleted_at is null
-        order by virtual_models.name
-      `,
-      [input.agentApiKeyId],
-    );
-    return result.rows.map((row) => ({
-      displayName: row.display_name,
-      id: row.id,
-      name: row.name,
-    }));
-  } finally {
-    await client.end();
-  }
+  const result = await getPostgresPool(input.databaseUrl).query<VirtualModelRow>(
+    `
+      select virtual_models.id::text,
+             virtual_models.name,
+             virtual_models.description as display_name
+      from agent_virtual_models
+      join virtual_models on virtual_models.id = agent_virtual_models.virtual_model_id
+      where agent_virtual_models.agent_id = $1
+        and virtual_models.enabled = true
+        and virtual_models.deleted_at is null
+      order by virtual_models.name
+    `,
+    [input.agentId],
+  );
+  return result.rows.map((row) => ({
+    displayName: row.display_name,
+    id: row.id,
+    name: row.name,
+  }));
 }
 
 function virtualModelAccessFailure(

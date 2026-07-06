@@ -1,21 +1,10 @@
-import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/client";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import {
   classifyProviderFailureStatus,
   shouldRecordProviderRequestPathHealthFailure,
 } from "@llmingress/provider/connectivity";
-import {
-  createOpenAIProviderAdapter,
-  type NormalizedOpenAIChatRequest,
-  type OpenAIAdapterError,
-  type OpenAIAdapterSuccess,
-  type OpenAIProviderAdapter,
-} from "@llmingress/provider/openai";
-import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
-import type { GatewayBudgetReservation } from "./gateway-budgets.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
-import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
+import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
@@ -45,19 +34,6 @@ export type FallbackFailedAttempt = {
   statusCode: number | null;
 };
 
-export type FallbackSucceededAttempt = {
-  attemptOrder: number;
-  providerApiKeyId?: string;
-  providerApiKeyPrefix?: string;
-  providerModelId: string;
-};
-
-export type FallbackChainResult = {
-  failedAttempts: FallbackFailedAttempt[];
-  result: OpenAIAdapterSuccess;
-  selectedCandidate: FallbackChainCandidate;
-};
-
 export type ProviderFallbackAttemptSuccess = {
   body: unknown;
   ok: true;
@@ -85,96 +61,36 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     candidates: readonly FallbackChainCandidate[];
     databaseUrl?: string;
     fallbackAttempts: FallbackFailedAttempt[];
-    finalizeAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-    recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void>;
+    recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void> | void;
     recordHealthEvent?: typeof recordProviderHealthEvent;
-    releaseAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-    reserveAttempt?: (
-      candidate: FallbackChainCandidate,
-    ) => Promise<GatewayBudgetReservation | undefined>;
-    requestActivityId?: string;
     requestId?: string;
   };
 
-export type ExecuteFallbackChainInput = {
-  adapter?: OpenAIProviderAdapter;
-  candidates: readonly FallbackChainCandidate[];
-  databaseUrl?: string;
-  finalizeAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-  recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void>;
-  recordHealthEvent?: typeof recordProviderHealthEvent;
-  releaseAttempt?: (reservation: GatewayBudgetReservation | undefined) => Promise<void>;
-  reserveAttempt?: (
-    candidate: FallbackChainCandidate,
-  ) => Promise<GatewayBudgetReservation | undefined>;
-  request: NormalizedOpenAIChatRequest;
-  requestActivityId?: string;
-  requestId?: string;
-};
-
-type FallbackAttemptErrorLike = {
+export type FallbackAttemptErrorLike = {
   errorCode: string;
   errorMessage: string;
   statusCode: number | null;
 };
 
-export async function executeFallbackChain(
-  input: ExecuteFallbackChainInput,
-): Promise<FallbackChainResult> {
-  if (input.candidates.length === 0) {
-    throw new Error("Fallback chain requires at least one candidate.");
+export function buildFallbackExhaustionError(
+  lastError: FallbackAttemptErrorLike | undefined,
+): GatewayPipelineError {
+  const status = lastError?.statusCode ?? null;
+  if (status !== null && status >= 400 && status < 500 && status !== 429) {
+    return new GatewayPipelineError(
+      "provider_rejected_request",
+      truncateProviderMessage(lastError?.errorMessage ?? "Provider rejected the request."),
+      status,
+    );
   }
-
-  const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
-  const openRouterAdapter = input.adapter ?? createOpenRouterProviderAdapter();
-  const failedAttempts: FallbackFailedAttempt[] = [];
-  let lastError: OpenAIAdapterError | undefined;
-
-  const fallbackResult = await executeProviderFallbackAttempts<OpenAIAdapterSuccess>({
-    callProvider: async ({ candidate, providerApiKey }) => {
-      const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
-      const providerStartedAt = new Date();
-      const result = await adapter.chatCompletion({
-        request: input.request,
-        target: {
-          apiKey: providerApiKey.apiKey,
-          baseUrl: candidate.baseUrl,
-          modelId: candidate.modelId,
-        },
-      });
-      await recordGatewayProviderTrace({
-        errorCode: result.ok ? null : result.errorCode,
-        modelId: candidate.modelId,
-        providerKey: candidate.providerKey,
-        requestId: input.requestId,
-        startedAt: providerStartedAt,
-        status: result.ok ? "succeeded" : "failed",
-      });
-      if (!result.ok) {
-        lastError = result;
-      }
-      return result;
-    },
-    candidates: input.candidates,
-    databaseUrl: input.databaseUrl,
-    fallbackAttempts: failedAttempts,
-    finalizeAttempt: input.finalizeAttempt,
-    recordFailedAttempt: input.recordFailedAttempt,
-    recordHealthEvent: input.recordHealthEvent,
-    releaseAttempt: input.releaseAttempt,
-    reserveAttempt: input.reserveAttempt,
-    requestActivityId: input.requestActivityId,
-    requestId: input.requestId,
-  });
-  if (fallbackResult) {
-    return {
-      failedAttempts,
-      result: fallbackResult.result,
-      selectedCandidate: fallbackResult.candidate,
-    };
+  if (status === 429) {
+    return new GatewayPipelineError("provider_rate_limited", "Provider rate limit exceeded.", 429);
   }
-
-  throw new Error(lastError?.errorMessage ?? "All fallback candidates failed.");
+  return new GatewayPipelineError(
+    "provider_request_failed",
+    lastError?.errorMessage ?? "All fallback candidates failed.",
+    status,
+  );
 }
 
 export async function executeProviderFallbackAttempts<
@@ -187,58 +103,32 @@ export async function executeProviderFallbackAttempts<
     const candidateFailedAttempts: FallbackFailedAttempt[] = [];
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
-      const reservation = await input.reserveAttempt?.(candidate);
-      let reservationSettled = false;
-      try {
-        const result = await input.callProvider({ candidate, providerApiKey });
+      const result = await input.callProvider({ candidate, providerApiKey });
 
-        if (result.ok) {
-          await recordSucceededAttemptInDatabase(input, {
-            attemptOrder,
-            ...(providerApiKey.providerApiKeyId
-              ? { providerApiKeyId: providerApiKey.providerApiKeyId }
-              : {}),
-            ...(providerApiKey.keyPrefix ? { providerApiKeyPrefix: providerApiKey.keyPrefix } : {}),
-            providerModelId: candidate.providerModelId,
-          });
-          reservationSettled = true;
-          await input.finalizeAttempt?.(reservation);
-          return {
-            candidate: {
-              ...candidate,
-              apiKey: providerApiKey.apiKey,
-              providerApiKeyId: providerApiKey.providerApiKeyId,
-              providerApiKeyPrefix: providerApiKey.keyPrefix,
-            },
-            result,
-          };
-        }
-
-        reservationSettled = true;
-        await input.releaseAttempt?.(reservation);
-        const failedAttempt = buildFallbackFailedAttempt({
-          attemptOrder,
-          providerApiKey,
-          providerModelId: candidate.providerModelId,
+      if (result.ok) {
+        return {
+          candidate: {
+            ...candidate,
+            apiKey: providerApiKey.apiKey,
+            providerApiKeyId: providerApiKey.providerApiKeyId,
+            providerApiKeyPrefix: providerApiKey.keyPrefix,
+          },
           result,
-        });
-        input.fallbackAttempts.push(failedAttempt);
-        candidateFailedAttempts.push(failedAttempt);
-        await input.recordFailedAttempt?.(failedAttempt);
-        await recordFailedAttemptInDatabase(input, failedAttempt);
-      } catch (error) {
-        if (!reservationSettled) {
-          reservationSettled = true;
-          await input.releaseAttempt?.(reservation);
-        }
-        throw error;
+        };
       }
+
+      const failedAttempt = buildFallbackFailedAttempt({
+        attemptOrder,
+        providerApiKey,
+        providerModelId: candidate.providerModelId,
+        result,
+      });
+      input.fallbackAttempts.push(failedAttempt);
+      candidateFailedAttempts.push(failedAttempt);
+      await input.recordFailedAttempt?.(failedAttempt);
     }
 
     if (candidateFailedAttempts.some((attempt) => !attempt.retryable)) {
-      if (!input.requestActivityId && !input.recordHealthEvent) {
-        return undefined;
-      }
       await recordCandidateHealthFailure(input, candidate, candidateFailedAttempts);
       return undefined;
     }
@@ -287,91 +177,11 @@ export function readFallbackProviderApiKeys(
   ];
 }
 
-export async function recordSucceededAttemptInDatabase(
-  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
-  attempt: FallbackSucceededAttempt,
-): Promise<void> {
-  if (!input.requestActivityId) {
-    return;
-  }
-
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-  try {
-    await client.query(
-      `
-        insert into fallback_events (
-          id,
-          request_activity_id,
-          provider_model_id,
-          provider_api_key_id,
-          provider_api_key_prefix,
-          attempt_order,
-          status,
-          failed_before_first_byte
-        )
-        values ($1, $2, $3, $4, $5, $6, 'succeeded', false)
-      `,
-      [
-        randomUUID(),
-        input.requestActivityId,
-        attempt.providerModelId,
-        attempt.providerApiKeyId || null,
-        attempt.providerApiKeyPrefix || null,
-        attempt.attemptOrder,
-      ],
-    );
-  } finally {
-    await client.end();
-  }
-}
-
-export async function recordFailedAttemptInDatabase(
-  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "requestActivityId">,
-  attempt: FallbackFailedAttempt,
-): Promise<void> {
-  if (!input.requestActivityId) {
-    return;
-  }
-
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-  try {
-    await client.query(
-      `
-        insert into fallback_events (
-          id,
-          request_activity_id,
-          provider_model_id,
-          provider_api_key_id,
-          provider_api_key_prefix,
-          attempt_order,
-          status,
-          error_code,
-          error_message,
-          failed_before_first_byte
-        )
-        values ($1, $2, $3, $4, $5, $6, 'failed', $7, $8, $9)
-      `,
-      [
-        randomUUID(),
-        input.requestActivityId,
-        attempt.providerModelId,
-        attempt.providerApiKeyId || null,
-        attempt.providerApiKeyPrefix || null,
-        attempt.attemptOrder,
-        attempt.errorCode,
-        attempt.errorMessage,
-        attempt.failedBeforeFirstByte,
-      ],
-    );
-  } finally {
-    await client.end();
-  }
-}
-
 export async function recordCandidateHealthFailure(
-  input: Pick<ExecuteFallbackChainInput, "databaseUrl" | "recordHealthEvent">,
+  input: {
+    databaseUrl?: string;
+    recordHealthEvent?: typeof recordProviderHealthEvent;
+  },
   candidate: FallbackChainCandidate,
   failedAttempts: FallbackFailedAttempt[],
 ): Promise<void> {

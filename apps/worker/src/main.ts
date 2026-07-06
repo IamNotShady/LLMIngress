@@ -19,7 +19,7 @@ import { createProviderConnectivityCheckJobHandler } from "@llmingress/db/worker
 import { createProviderFailureAlertsJobHandler } from "@llmingress/db/worker-provider-failure-alerts";
 import { createRateLimitAlertsJobHandler } from "@llmingress/db/worker-rate-limit-alerts";
 import { createRetentionCleanupJobHandler } from "@llmingress/db/worker-retention-cleanup";
-import { createStaleReservationCleanupJobHandler } from "@llmingress/db/worker-stale-reservations";
+import { createStaleConcurrencyReconcileJobHandler } from "@llmingress/db/worker-stale-concurrency";
 import { createWebhookEventExportJobHandler } from "@llmingress/db/worker-webhook-export";
 
 export async function startWorker() {
@@ -41,7 +41,7 @@ export async function startWorker() {
       rate_limit_alerts: createRateLimitAlertsJobHandler({}),
       webhook_export: createWebhookEventExportJobHandler({}),
       retention_cleanup: createRetentionCleanupJobHandler({}),
-      stale_reservation_cleanup: createStaleReservationCleanupJobHandler({}),
+      stale_concurrency_reconcile: createStaleConcurrencyReconcileJobHandler({}),
     },
     pollIntervalMs: config.workerHeartbeatMs,
     workerId: readWorkerId(),

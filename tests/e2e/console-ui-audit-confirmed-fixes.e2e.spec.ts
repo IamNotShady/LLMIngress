@@ -16,14 +16,18 @@ import { withProcessLock } from "../support/process-lock";
 
 async function seedAuditData(databaseUrl: string) {
   const agentId = randomUUID();
+  const otherAgentId = randomUUID();
   const virtualModelId = randomUUID();
   const activityId = randomUUID();
+  const otherActivityId = randomUUID();
 
   await withPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
-       values ($1, 'audit-old-agent', 'terminal', 'llmi_audit_old', 'test-hash', true)`,
-      [agentId],
+       values
+         ($1, 'audit-old-agent', 'terminal', 'llmi_audit_old', 'test-hash', true),
+         ($2, 'audit-other-agent', 'terminal', 'llmi_audit_other', 'test-hash-other', true)`,
+      [agentId, otherAgentId],
     );
     await client.query(
       `insert into virtual_models (id, name, description, enabled)
@@ -46,6 +50,21 @@ async function seedAuditData(databaseUrl: string) {
       [activityId, agentId, virtualModelId],
     );
     await client.query(
+      `insert into request_activity (
+         id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+         protocol, model, stream, status, http_status, latency_ms,
+         started_at, completed_at,
+         agent_name_snapshot, virtual_model_name_snapshot
+       )
+       values (
+         $1, 'gw_audit_other_request', $2, $3, 'llmi_audit_other',
+         'chat_completions', 'audit-model', false, 'succeeded', 200, 800,
+         now() - interval '3 days', now() - interval '3 days',
+         'audit-other-agent', 'audit-probe-vm'
+       )`,
+      [otherActivityId, otherAgentId, virtualModelId],
+    );
+    await client.query(
       `insert into request_usage (
          id, request_activity_id, agent_id, virtual_model_id,
          input_tokens, output_tokens, total_tokens, token_source
@@ -61,6 +80,8 @@ async function seedAuditData(databaseUrl: string) {
       [randomUUID(), activityId, agentId],
     );
   });
+
+  return { agentId };
 }
 
 async function expectActivityTimeCellContained(page: Page) {
@@ -93,7 +114,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedAuditData(fixture.databaseUrl);
+    const seeded = await seedAuditData(fixture.databaseUrl);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const consoleApp = startConsoleProcess({
@@ -155,6 +176,17 @@ test("console audit fixes keep time windows honest and prevent activity timestam
             ).toBeVisible();
             await expectActivityTimeCellContained(page);
           }
+
+          await page.goto(`${baseUrl}/activity?agentId=${seeded.agentId}`, {
+            waitUntil: "networkidle",
+          });
+          await expect(page.locator("#activity-agent")).toHaveValue(seeded.agentId);
+          await expect(
+            page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
+          ).toBeVisible();
+          await expect(
+            page.locator(".activity-table tbody tr", { hasText: "gw_audit_other_request" }),
+          ).toHaveCount(0);
         } finally {
           await context.close();
         }

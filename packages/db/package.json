@@ -116,9 +116,21 @@
       "types": "./src/gateway-auth.ts",
       "default": "./src/gateway-auth.ts"
     },
+    "./gateway-agent-limits": {
+      "types": "./src/gateway-agent-limits.ts",
+      "default": "./src/gateway-agent-limits.ts"
+    },
     "./gateway-chat-completions": {
       "types": "./src/gateway-chat-completions.ts",
       "default": "./src/gateway-chat-completions.ts"
+    },
+    "./gateway-provider-credentials": {
+      "types": "./src/gateway-provider-credentials.ts",
+      "default": "./src/gateway-provider-credentials.ts"
+    },
+    "./gateway-protocol-request": {
+      "types": "./src/gateway-protocol-request.ts",
+      "default": "./src/gateway-protocol-request.ts"
     },
     "./gateway-config-reload": {
       "types": "./src/gateway-config-reload.ts",
@@ -131,6 +143,10 @@
     "./gateway-error-mapping": {
       "types": "./src/gateway-error-mapping.ts",
       "default": "./src/gateway-error-mapping.ts"
+    },
+    "./gateway-env": {
+      "types": "./src/gateway-env.ts",
+      "default": "./src/gateway-env.ts"
     },
     "./gateway-messages": {
       "types": "./src/gateway-messages.ts",
@@ -148,6 +164,10 @@
       "types": "./src/gateway-responses.ts",
       "default": "./src/gateway-responses.ts"
     },
+    "./gateway-stream-pipeline": {
+      "types": "./src/gateway-stream-pipeline.ts",
+      "default": "./src/gateway-stream-pipeline.ts"
+    },
     "./gateway-streaming": {
       "types": "./src/gateway-streaming.ts",
       "default": "./src/gateway-streaming.ts"
@@ -155,6 +175,10 @@
     "./gateway-tracing": {
       "types": "./src/gateway-tracing.ts",
       "default": "./src/gateway-tracing.ts"
+    },
+    "./gateway-usage-collector": {
+      "types": "./src/gateway-usage-collector.ts",
+      "default": "./src/gateway-usage-collector.ts"
     },
     "./gateway-usage-recorder": {
       "types": "./src/gateway-usage-recorder.ts",
@@ -224,9 +248,9 @@
       "types": "./src/worker-retention-cleanup.ts",
       "default": "./src/worker-retention-cleanup.ts"
     },
-    "./worker-stale-reservations": {
-      "types": "./src/worker-stale-reservations.ts",
-      "default": "./src/worker-stale-reservations.ts"
+    "./worker-stale-concurrency": {
+      "types": "./src/worker-stale-concurrency.ts",
+      "default": "./src/worker-stale-concurrency.ts"
     },
     "./worker-webhook-export": {
       "types": "./src/worker-webhook-export.ts",

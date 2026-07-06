@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/client";
+import {
+  PostgresClient,
+  type PostgresQueryClient,
+  withPostgresTransaction,
+} from "@llmingress/db/client";
 import type { QueryResultRow } from "pg";
 
 export const HEALTH_SUMMARY_CHANGED_CHANNEL = "health_summary_changed";
@@ -127,11 +131,8 @@ export async function recordProviderHealthEvent(
   const observedAt = input.observedAt ?? new Date();
   const providerModelId = input.providerModelId ?? null;
   const eventId = randomUUID();
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
 
-  try {
-    await client.query("begin");
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [
       `${input.providerId}:${providerModelId ?? "provider"}`,
     ]);
@@ -181,23 +182,16 @@ export async function recordProviderHealthEvent(
       HEALTH_SUMMARY_CHANGED_CHANNEL,
       JSON.stringify(notification),
     ]);
-    await client.query("commit");
-
     return {
       eventId,
       notification,
       summaryId,
     };
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 async function readProviderHealthSummaryForUpdate(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   input: { providerId: string; providerModelId: string | null },
 ): Promise<ProviderHealthSummaryRow | null> {
   const result = await client.query<ProviderHealthSummaryRow>(
@@ -221,7 +215,7 @@ async function readProviderHealthSummaryForUpdate(
 }
 
 async function insertProviderHealthEvent(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   input: Omit<RecordProviderHealthEventInput, "databaseUrl"> & {
     eventId: string;
     observedAt: Date;
@@ -262,7 +256,7 @@ async function insertProviderHealthEvent(
 }
 
 async function upsertProviderHealthSummary(
-  client: PostgresClient,
+  client: PostgresQueryClient,
   input: {
     eventId: string;
     providerId: string;

@@ -1,4 +1,3 @@
-import { selectRouteAttempts } from "@llmingress/domain";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIResponsesInputMessage,
@@ -8,68 +7,21 @@ import {
 } from "@llmingress/provider/openai";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
-import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
-import {
-  finalizeGatewayBudgetReservation,
-  GatewayBudgetRejectedError,
-  releaseGatewayBudgetReservation,
-  reserveGatewayBudget,
-} from "./gateway-budgets.ts";
-import {
-  attachGatewayProviderCredentials,
-  readGatewayMasterKeySource,
-  recordGatewayProviderApiKeyLastUsed,
-} from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
-import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
-  executeProviderFallbackAttempts,
-  type FallbackFailedAttempt,
-} from "./gateway-fallback-chain.ts";
-import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
+  createGatewayErrorBody,
+  type GatewayErrorBody,
+  GatewayPipelineError,
+} from "./gateway-errors.ts";
 import {
-  buildOpenAIResponsesRequestMetadata,
-  type GatewayRequestMetadata,
-} from "./gateway-request-metadata.ts";
-import {
-  buildGatewayRequestActivityRoute,
-  isRecord,
-  omitUndefined,
-  requireGatewayRoutePolicy,
-} from "./gateway-runtime-helpers.ts";
-import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
-import {
-  type GatewayUsageCostDetails,
-  readGatewayProviderTokenUsage,
-  selectGatewayBaselineCandidate,
-} from "./gateway-usage-recorder.ts";
+  executeGatewayProtocolRequest,
+  type GatewayProtocolResponse,
+} from "./gateway-protocol-request.ts";
+import { buildOpenAIResponsesRequestMetadata } from "./gateway-request-metadata.ts";
+import { isRecord, omitUndefined } from "./gateway-runtime-helpers.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
-export type GatewayResponsesErrorCode =
-  | "invalid_responses_request"
-  | "provider_credentials_missing"
-  | "provider_protocol_unsupported"
-  | "provider_request_failed"
-  | "provider_unavailable"
-  | "route_not_found"
-  | "unsupported_stateful_responses";
-
-export type GatewayResponsesErrorBody = {
-  error: {
-    code: GatewayResponsesErrorCode;
-    message: string;
-  };
-  requestId: string;
-};
-
-export type GatewayResponsesResponse = {
-  activity?: GatewayRequestActivityRoute;
-  body: unknown;
-  headers?: Record<string, string>;
-  requestMetadata?: GatewayRequestMetadata;
-  statusCode: number;
-  usageCost?: GatewayUsageCostDetails;
-};
+export type GatewayResponsesResponse = GatewayProtocolResponse;
 
 export type GatewayResponsesRequestSuccess = {
   ok: true;
@@ -77,7 +29,7 @@ export type GatewayResponsesRequestSuccess = {
 };
 
 export type GatewayResponsesRequestFailure = {
-  body: GatewayResponsesErrorBody;
+  body: GatewayErrorBody;
   ok: false;
   statusCode: 400;
 };
@@ -141,225 +93,64 @@ export function normalizeOpenAIResponsesRequest(
 }
 
 export async function executeGatewayOpenAIResponse(input: {
-  agentApiKeyId: string;
+  agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
 }): Promise<GatewayResponsesResponse> {
-  const normalized = normalizeOpenAIResponsesRequest(input.requestBody, input.requestId);
-  if (!normalized.ok) {
-    return {
-      body: normalized.body,
-      statusCode: normalized.statusCode,
-    };
-  }
+  const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
+  const codexAdapter = input.adapter ? null : createCodexSubscriptionAdapter();
+  const unsupportedProviders = new Set<string>();
 
-  const requestMetadata = buildOpenAIResponsesRequestMetadata({
-    model: input.virtualModel.name,
-    rawBody: input.requestBody,
-    request: normalized.request,
-  });
-
-  const rateLimit = await enforceGatewayRateLimits({
-    agentApiKeyId: input.agentApiKeyId,
-    databaseUrl: input.databaseUrl,
-    requestId: input.requestId,
-    requestMetadata,
-  });
-  if (!rateLimit.ok) {
-    return {
-      body: rateLimit.body,
-      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
-      requestMetadata,
-      statusCode: rateLimit.statusCode,
-    };
-  }
-
-  const concurrencyLease = rateLimit.concurrencyLease;
-  let activity: GatewayRequestActivityRoute | undefined;
-  const fallbackAttempts: FallbackFailedAttempt[] = [];
-  try {
-    const routeResult = selectRouteAttempts({
-      estimatedInputTokens: requestMetadata.estimatedInputTokens,
-      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-      snapshot: input.snapshot,
-      usesTools: requestMetadata.usesTools,
-      virtualModelId: input.virtualModel.id,
-    });
-    if (!routeResult.decision || routeResult.chain.length === 0) {
-      return {
-        activity,
-        body: createGatewayResponsesErrorBody("provider_unavailable", input.requestId),
-        requestMetadata,
-        statusCode: mapGatewayErrorStatus("provider_unavailable"),
-      };
-    }
-    const routeDecision = routeResult.decision;
-    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const gatewayChain = routeResult.chain;
-
-    const selectedCandidate = gatewayChain[0];
-    if (!selectedCandidate) {
-      throw new Error("Selected route candidate was not found in route policy.");
-    }
-    activity = buildGatewayRequestActivityRoute({
-      candidate: selectedCandidate,
-      fallbackAttempts,
-      routeDecision,
-    });
-
-    const candidates = await attachGatewayProviderCredentials({
-      candidates: gatewayChain,
-      databaseUrl: input.databaseUrl,
-      masterKeySource: readGatewayMasterKeySource(),
-    });
-    const genericAdapter = input.adapter ?? createOpenAIProviderAdapter();
-    if (!genericAdapter.response) {
-      throw new Error("OpenAI responses provider adapter is not configured.");
-    }
-    const codexAdapter = input.adapter ? null : createCodexSubscriptionAdapter();
-    const unsupportedProviders = new Set<string>();
-    const supportedCandidates = candidates.filter((candidate) => {
-      if (
-        isSubscriptionProviderKey(candidate.providerKey) &&
-        candidate.providerKey !== "openai_codex"
-      ) {
-        unsupportedProviders.add(candidate.providerKey);
-        return false;
-      }
-      return true;
-    });
-    const success = await executeProviderFallbackAttempts<OpenAIAdapterSuccess>({
-      callProvider: async ({ candidate, providerApiKey }) => {
+  return executeGatewayProtocolRequest<NormalizedOpenAIResponsesRequest, OpenAIAdapterSuccess>({
+    ...input,
+    spec: {
+      buildRequestMetadata: buildOpenAIResponsesRequestMetadata,
+      callProvider: ({ candidate, providerApiKey, request }) => {
         const adapter =
           candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : genericAdapter;
         if (!adapter.response) {
-          throw new Error("OpenAI responses provider adapter is not configured.");
+          throw new GatewayPipelineError(
+            "provider_protocol_unsupported",
+            "OpenAI responses provider adapter is not configured.",
+          );
         }
-        const providerStartedAt = new Date();
-        const result = await adapter.response({
-          request: normalized.request,
+        return adapter.response({
+          request,
           target: {
             apiKey: providerApiKey.apiKey,
             baseUrl: candidate.baseUrl,
             modelId: candidate.modelId,
           },
         });
-        await recordGatewayProviderTrace({
-          errorCode: result.ok ? null : result.errorCode,
-          modelId: candidate.modelId,
-          providerKey: candidate.providerKey,
-          requestId: input.requestId,
-          startedAt: providerStartedAt,
-          status: result.ok ? "succeeded" : "failed",
+      },
+      normalize: normalizeOpenAIResponsesRequest,
+      planCandidates: (candidates) => {
+        unsupportedProviders.clear();
+        const supported = candidates.filter((candidate) => {
+          if (
+            isSubscriptionProviderKey(candidate.providerKey) &&
+            candidate.providerKey !== "openai_codex"
+          ) {
+            unsupportedProviders.add(candidate.providerKey);
+            return false;
+          }
+          return true;
         });
-        return result;
+        return {
+          noneSupportedError: () =>
+            new GatewayPipelineError(
+              "provider_protocol_unsupported",
+              `Responses API cannot use provider ${Array.from(unsupportedProviders).join(", ")}.`,
+            ),
+          supported,
+        };
       },
-      candidates: supportedCandidates,
-      databaseUrl: input.databaseUrl,
-      fallbackAttempts,
-      finalizeAttempt: (r) =>
-        finalizeGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
-      releaseAttempt: (r) =>
-        releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
-      reserveAttempt: async (candidate) => {
-        const d = await reserveGatewayBudget({
-          agentApiKeyId: input.agentApiKeyId,
-          databaseUrl: input.databaseUrl,
-          price: candidate.price,
-          requestId: input.requestId,
-          requestMetadata,
-        });
-        if (!d.ok) {
-          throw new GatewayBudgetRejectedError(d.body, d.statusCode);
-        }
-        return d.reservation;
-      },
-      requestActivityId: input.requestActivityId,
-      requestId: input.requestId,
-    });
-    if (!success && supportedCandidates.length === 0 && unsupportedProviders.size > 0) {
-      throw new Error(
-        `Responses API cannot use provider ${Array.from(unsupportedProviders).join(", ")}.`,
-      );
-    }
-    if (!success) {
-      throw new Error("Provider request failed.");
-    }
-
-    await recordGatewayProviderApiKeyLastUsed({
-      databaseUrl: input.databaseUrl,
-      providerApiKeyId: success.candidate.providerApiKeyId,
-    });
-    activity = buildGatewayRequestActivityRoute({
-      candidate: success.candidate,
-      fallbackAttempts,
-      routeDecision,
-    });
-
-    return {
-      activity,
-      body: success.result.body,
-      requestMetadata,
-      statusCode: success.result.statusCode,
-      usageCost: {
-        actualPrice: success.candidate.price,
-        baselinePrice: baselineCandidate.price,
-        baselineProviderModelId: baselineCandidate.providerModelId,
-        estimatedInputTokens: requestMetadata.estimatedInputTokens,
-        estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-        providerUsage: readGatewayProviderTokenUsage(success.result.body),
-        providerModelId: success.candidate.providerModelId,
-      },
-    };
-  } catch (error) {
-    if (error instanceof GatewayBudgetRejectedError) {
-      return {
-        activity,
-        body: error.body,
-        requestMetadata,
-        statusCode: error.statusCode,
-      };
-    }
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyResponsesError(message);
-    return {
-      activity,
-      body: createGatewayResponsesErrorBody(
-        code,
-        input.requestId,
-        code === "provider_protocol_unsupported" || code === "provider_request_failed"
-          ? message
-          : undefined,
-      ),
-      requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
-    };
-  } finally {
-    await releaseGatewayConcurrency({
-      databaseUrl: input.databaseUrl,
-      lease: concurrencyLease,
-    });
-  }
-}
-
-export function createGatewayResponsesErrorBody(
-  code: GatewayResponsesErrorCode,
-  requestId: string,
-  message?: string,
-): GatewayResponsesErrorBody {
-  return {
-    error: {
-      code,
-      message: message ?? responsesErrorMessage(code),
     },
-    requestId,
-  };
+  });
 }
 
 function readResponsesInput(
@@ -457,7 +248,7 @@ function readOptionalNonEmptyString(value: unknown): string | null | undefined {
 
 function invalidResponsesRequest(requestId: string): GatewayResponsesRequestFailure {
   return {
-    body: createGatewayResponsesErrorBody("invalid_responses_request", requestId),
+    body: createGatewayErrorBody("invalid_responses_request", requestId),
     ok: false,
     statusCode: 400,
   };
@@ -465,43 +256,8 @@ function invalidResponsesRequest(requestId: string): GatewayResponsesRequestFail
 
 function unsupportedStatefulResponses(requestId: string): GatewayResponsesRequestFailure {
   return {
-    body: createGatewayResponsesErrorBody("unsupported_stateful_responses", requestId),
+    body: createGatewayErrorBody("unsupported_stateful_responses", requestId),
     ok: false,
     statusCode: 400,
   };
-}
-
-function classifyResponsesError(message: string): GatewayResponsesErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  if (message.includes("Responses API cannot use provider")) {
-    return "provider_protocol_unsupported";
-  }
-  return "provider_request_failed";
-}
-
-function responsesErrorMessage(code: GatewayResponsesErrorCode): string {
-  if (code === "unsupported_stateful_responses") {
-    return "Stateful Responses API fields are not supported by this Gateway.";
-  }
-  if (code === "invalid_responses_request") {
-    return "Responses request must include stateless string input or message input.";
-  }
-  if (code === "route_not_found") {
-    return "No route policy is available for the selected Virtual Model.";
-  }
-  if (code === "provider_credentials_missing") {
-    return "Provider credentials are not configured for the selected route.";
-  }
-  if (code === "provider_protocol_unsupported") {
-    return "The selected provider cannot serve Responses API requests.";
-  }
-  if (code === "provider_unavailable") {
-    return "No eligible provider candidates are available for the selected route.";
-  }
-  return "Provider request failed.";
 }

@@ -1,4 +1,3 @@
-import { selectRouteAttempts } from "@llmingress/domain";
 import {
   type AnthropicAdapterSuccess,
   type AnthropicContentBlock,
@@ -10,66 +9,21 @@ import {
 } from "@llmingress/provider/anthropic";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import { createClaudeCodeProviderAdapter } from "@llmingress/provider/subscription-adapters";
-import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
-import {
-  finalizeGatewayBudgetReservation,
-  GatewayBudgetRejectedError,
-  releaseGatewayBudgetReservation,
-  reserveGatewayBudget,
-} from "./gateway-budgets.ts";
-import {
-  attachGatewayProviderCredentials,
-  readGatewayMasterKeySource,
-  recordGatewayProviderApiKeyLastUsed,
-} from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
-import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
-  executeProviderFallbackAttempts,
-  type FallbackFailedAttempt,
-} from "./gateway-fallback-chain.ts";
-import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
+  createGatewayErrorBody,
+  type GatewayErrorBody,
+  GatewayPipelineError,
+} from "./gateway-errors.ts";
 import {
-  buildAnthropicMessagesRequestMetadata,
-  type GatewayRequestMetadata,
-} from "./gateway-request-metadata.ts";
-import {
-  buildGatewayRequestActivityRoute,
-  isRecord,
-  omitUndefined,
-  requireGatewayRoutePolicy,
-} from "./gateway-runtime-helpers.ts";
-import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
-import {
-  type GatewayUsageCostDetails,
-  readGatewayProviderTokenUsage,
-  selectGatewayBaselineCandidate,
-} from "./gateway-usage-recorder.ts";
+  executeGatewayProtocolRequest,
+  type GatewayProtocolResponse,
+} from "./gateway-protocol-request.ts";
+import { buildAnthropicMessagesRequestMetadata } from "./gateway-request-metadata.ts";
+import { isRecord, omitUndefined } from "./gateway-runtime-helpers.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
-export type GatewayAnthropicMessagesErrorCode =
-  | "invalid_messages_request"
-  | "provider_credentials_missing"
-  | "provider_request_failed"
-  | "provider_unavailable"
-  | "route_not_found";
-
-export type GatewayAnthropicMessagesErrorBody = {
-  error: {
-    code: GatewayAnthropicMessagesErrorCode;
-    message: string;
-  };
-  requestId: string;
-};
-
-export type GatewayAnthropicMessagesResponse = {
-  activity?: GatewayRequestActivityRoute;
-  body: unknown;
-  headers?: Record<string, string>;
-  requestMetadata?: GatewayRequestMetadata;
-  statusCode: number;
-  usageCost?: GatewayUsageCostDetails;
-};
+export type GatewayAnthropicMessagesResponse = GatewayProtocolResponse;
 
 export type GatewayAnthropicMessagesRequestSuccess = {
   ok: true;
@@ -77,7 +31,7 @@ export type GatewayAnthropicMessagesRequestSuccess = {
 };
 
 export type GatewayAnthropicMessagesRequestFailure = {
-  body: GatewayAnthropicMessagesErrorBody;
+  body: GatewayErrorBody;
   ok: false;
   statusCode: 400;
 };
@@ -172,203 +126,52 @@ export function normalizeAnthropicMessagesRequest(
 }
 
 export async function executeGatewayAnthropicMessages(input: {
-  agentApiKeyId: string;
+  agentId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl?: string;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
 }): Promise<GatewayAnthropicMessagesResponse> {
-  const normalized = normalizeAnthropicMessagesRequest(input.requestBody, input.requestId);
-  if (!normalized.ok) {
-    return {
-      body: normalized.body,
-      statusCode: normalized.statusCode,
-    };
-  }
+  const genericAdapter = input.adapter ?? createAnthropicProviderAdapter();
+  const claudeCodeAdapter = input.adapter ? null : createClaudeCodeProviderAdapter();
 
-  const requestMetadata = buildAnthropicMessagesRequestMetadata({
-    model: input.virtualModel.name,
-    rawBody: input.requestBody,
-    request: normalized.request,
-  });
-
-  const rateLimit = await enforceGatewayRateLimits({
-    agentApiKeyId: input.agentApiKeyId,
-    databaseUrl: input.databaseUrl,
-    requestId: input.requestId,
-    requestMetadata,
-  });
-  if (!rateLimit.ok) {
-    return {
-      body: rateLimit.body,
-      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
-      requestMetadata,
-      statusCode: rateLimit.statusCode,
-    };
-  }
-
-  const concurrencyLease = rateLimit.concurrencyLease;
-  let activity: GatewayRequestActivityRoute | undefined;
-  const fallbackAttempts: FallbackFailedAttempt[] = [];
-  try {
-    const routeResult = selectRouteAttempts({
-      estimatedInputTokens: requestMetadata.estimatedInputTokens,
-      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-      snapshot: input.snapshot,
-      usesTools: requestMetadata.usesTools,
-      virtualModelId: input.virtualModel.id,
-    });
-    if (!routeResult.decision || routeResult.chain.length === 0) {
-      return {
-        activity,
-        body: createGatewayAnthropicMessagesErrorBody("provider_unavailable", input.requestId),
-        requestMetadata,
-        statusCode: mapGatewayErrorStatus("provider_unavailable"),
-      };
-    }
-    const routeDecision = routeResult.decision;
-    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const gatewayChain = routeResult.chain;
-
-    const selectedCandidate = gatewayChain[0];
-    if (!selectedCandidate) {
-      throw new Error("Selected route candidate was not found in route policy.");
-    }
-    activity = buildGatewayRequestActivityRoute({
-      candidate: selectedCandidate,
-      fallbackAttempts,
-      routeDecision,
-    });
-
-    const candidates = await attachGatewayProviderCredentials({
-      candidates: gatewayChain,
-      databaseUrl: input.databaseUrl,
-      masterKeySource: readGatewayMasterKeySource(),
-    });
-    const genericAdapter = input.adapter ?? createAnthropicProviderAdapter();
-    const claudeCodeAdapter = input.adapter ? null : createClaudeCodeProviderAdapter();
-    const supportedCandidates = candidates.filter(
-      (candidate) =>
-        !isSubscriptionProviderKey(candidate.providerKey) ||
-        candidate.providerKey === "claude_code",
-    );
-    const success = await executeProviderFallbackAttempts<AnthropicAdapterSuccess>({
-      callProvider: async ({ candidate, providerApiKey }) => {
-        const adapter =
-          candidate.providerKey === "claude_code" && claudeCodeAdapter
-            ? claudeCodeAdapter
-            : genericAdapter;
-        const providerStartedAt = new Date();
-        const result = await adapter.messages({
-          request: normalized.request,
-          target: {
-            apiKey: providerApiKey.apiKey,
-            baseUrl: candidate.baseUrl,
-            modelId: candidate.modelId,
-          },
-        });
-        await recordGatewayProviderTrace({
-          errorCode: result.ok ? null : result.errorCode,
-          modelId: candidate.modelId,
-          providerKey: candidate.providerKey,
-          requestId: input.requestId,
-          startedAt: providerStartedAt,
-          status: result.ok ? "succeeded" : "failed",
-        });
-        return result;
+  return executeGatewayProtocolRequest<NormalizedAnthropicMessagesRequest, AnthropicAdapterSuccess>(
+    {
+      ...input,
+      spec: {
+        buildRequestMetadata: buildAnthropicMessagesRequestMetadata,
+        callProvider: ({ candidate, providerApiKey, request }) => {
+          const adapter =
+            candidate.providerKey === "claude_code" && claudeCodeAdapter
+              ? claudeCodeAdapter
+              : genericAdapter;
+          return adapter.messages({
+            request,
+            target: {
+              apiKey: providerApiKey.apiKey,
+              baseUrl: candidate.baseUrl,
+              modelId: candidate.modelId,
+            },
+          });
+        },
+        normalize: normalizeAnthropicMessagesRequest,
+        planCandidates: (candidates) => ({
+          noneSupportedError: () =>
+            new GatewayPipelineError(
+              "provider_protocol_unsupported",
+              "Anthropic messages cannot use unsupported subscription providers.",
+            ),
+          supported: candidates.filter(
+            (candidate) =>
+              !isSubscriptionProviderKey(candidate.providerKey) ||
+              candidate.providerKey === "claude_code",
+          ),
+        }),
       },
-      candidates: supportedCandidates,
-      databaseUrl: input.databaseUrl,
-      fallbackAttempts,
-      finalizeAttempt: (r) =>
-        finalizeGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
-      releaseAttempt: (r) =>
-        releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
-      reserveAttempt: async (candidate) => {
-        const d = await reserveGatewayBudget({
-          agentApiKeyId: input.agentApiKeyId,
-          databaseUrl: input.databaseUrl,
-          price: candidate.price,
-          requestId: input.requestId,
-          requestMetadata,
-        });
-        if (!d.ok) {
-          throw new GatewayBudgetRejectedError(d.body, d.statusCode);
-        }
-        return d.reservation;
-      },
-      requestActivityId: input.requestActivityId,
-      requestId: input.requestId,
-    });
-    if (!success) {
-      throw new Error("Provider request failed.");
-    }
-
-    await recordGatewayProviderApiKeyLastUsed({
-      databaseUrl: input.databaseUrl,
-      providerApiKeyId: success.candidate.providerApiKeyId,
-    });
-    activity = buildGatewayRequestActivityRoute({
-      candidate: success.candidate,
-      fallbackAttempts,
-      routeDecision,
-    });
-
-    return {
-      activity,
-      body: success.result.body,
-      requestMetadata,
-      statusCode: success.result.statusCode,
-      usageCost: {
-        actualPrice: success.candidate.price,
-        baselinePrice: baselineCandidate.price,
-        baselineProviderModelId: baselineCandidate.providerModelId,
-        estimatedInputTokens: requestMetadata.estimatedInputTokens,
-        estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-        providerUsage: readGatewayProviderTokenUsage(success.result.body),
-        providerModelId: success.candidate.providerModelId,
-      },
-    };
-  } catch (error) {
-    if (error instanceof GatewayBudgetRejectedError) {
-      return {
-        activity,
-        body: error.body,
-        requestMetadata,
-        statusCode: error.statusCode,
-      };
-    }
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyMessagesError(message);
-    return {
-      activity,
-      body: createGatewayAnthropicMessagesErrorBody(code, input.requestId),
-      requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
-    };
-  } finally {
-    await releaseGatewayConcurrency({
-      databaseUrl: input.databaseUrl,
-      lease: concurrencyLease,
-    });
-  }
-}
-
-export function createGatewayAnthropicMessagesErrorBody(
-  code: GatewayAnthropicMessagesErrorCode,
-  requestId: string,
-): GatewayAnthropicMessagesErrorBody {
-  return {
-    error: {
-      code,
-      message: messagesErrorMessage(code),
     },
-    requestId,
-  };
+  );
 }
 
 function readAnthropicMessage(value: unknown): NormalizedAnthropicMessage | null {
@@ -510,34 +313,8 @@ function readOptionalToolChoice(value: unknown): Record<string, unknown> | null 
 
 function invalidMessagesRequest(requestId: string): GatewayAnthropicMessagesRequestFailure {
   return {
-    body: createGatewayAnthropicMessagesErrorBody("invalid_messages_request", requestId),
+    body: createGatewayErrorBody("invalid_messages_request", requestId),
     ok: false,
     statusCode: 400,
   };
-}
-
-function classifyMessagesError(message: string): GatewayAnthropicMessagesErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  return "provider_request_failed";
-}
-
-function messagesErrorMessage(code: GatewayAnthropicMessagesErrorCode): string {
-  if (code === "invalid_messages_request") {
-    return "Anthropic messages request must include max_tokens and at least one message.";
-  }
-  if (code === "route_not_found") {
-    return "No route policy is available for the selected Virtual Model.";
-  }
-  if (code === "provider_credentials_missing") {
-    return "Provider credentials are not configured for the selected route.";
-  }
-  if (code === "provider_unavailable") {
-    return "No eligible provider candidates are available for the selected route.";
-  }
-  return "Provider request failed.";
 }

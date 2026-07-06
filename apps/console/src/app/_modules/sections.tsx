@@ -921,7 +921,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
   const selectedActivityId = readSingleSearchParam(searchParams.activityId);
   const activityRange = parseActivityRange(readSingleSearchParam(searchParams.activityRange));
   const filters = {
-    agentApiKeyId: readSingleSearchParam(searchParams.agentId),
+    agentId: readSingleSearchParam(searchParams.agentId),
     from: getActivityWindowStart(new Date(), activityRange),
     providerId: readSingleSearchParam(searchParams.providerId),
     requestIdQuery: readSingleSearchParam(searchParams.q),
@@ -957,7 +957,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
       <form className="activity-filter-grid" action="/activity" method="get">
         <div className="console-field">
           <label htmlFor="activity-agent">Agent</label>
-          <select id="activity-agent" name="agentId" defaultValue={filters.agentApiKeyId ?? ""}>
+          <select id="activity-agent" name="agentId" defaultValue={filters.agentId ?? ""}>
             <option value="">All agents</option>
             {agents.map((agent) => (
               <option key={agent.id} value={agent.id}>
@@ -1107,7 +1107,7 @@ function ActivityReferenceDetail({
   const activity = detail?.activity ?? fallbackActivity;
   const metadataLines = buildActivityMetadataLines(activity, detail?.requestMetadata ?? {});
   const fallbackEvents = detail?.fallbackEvents ?? [];
-  const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(activity.fallbackAttempts);
+  const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(fallbackEvents);
 
   return (
     <>
@@ -1603,7 +1603,7 @@ function VirtualModelViewDialog({
                     </span>
                   </div>
                   {candidate.availability === "available" ? (
-                    <span className="pill--ok pill">Healthy</span>
+                    <span className="pill--ok pill">Available</span>
                   ) : (
                     <span className="pill">Disabled</span>
                   )}
@@ -4184,10 +4184,7 @@ function formatActivityModelDisplayLabel(activity: ConsoleActivity): string {
 }
 
 function activityFallbackCount(activity: ConsoleActivity): number {
-  if (Array.isArray(activity.fallbackAttempts)) {
-    return activity.fallbackAttempts.length;
-  }
-  return 0;
+  return activity.fallbackFailedAttemptCount;
 }
 
 type ActivityRange = "24h" | "7d" | "30d";
@@ -4338,10 +4335,8 @@ function buildRoutePolicyHealthWarningCandidates(
     const providerHealth = providerHealthByProviderId.get(candidate.providerId);
     const modelHealth = providerHealth?.models.find((model) => model.id === candidate.id);
     return {
-      modelHealthIsStale: modelHealth?.isStale ?? false,
       modelHealthStatus: modelHealth?.status ?? null,
       optionLabel: candidate.optionLabel,
-      providerHealthIsStale: providerHealth?.isStale ?? false,
       providerHealthStatus: providerHealth?.status ?? null,
     };
   });

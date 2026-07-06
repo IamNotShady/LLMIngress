@@ -188,7 +188,6 @@ export function createNotificationDispatchJobHandler(
 
     for (const event of events) {
       summary.processed += 1;
-      const startedAt = now();
       const payload: NotificationDeliveryPayload = {
         body: event.body,
         eventId: event.id,
@@ -210,13 +209,11 @@ export function createNotificationDispatchJobHandler(
       });
 
       await recordNotificationDelivery({
-        auditPayload: buildNotificationDeliveryAuditPayload(event, payload),
         completedAt,
         databaseUrl: options.databaseUrl,
         event,
         result,
         retryAt,
-        startedAt,
       });
 
       if (result.status === "sent") {
@@ -405,81 +402,33 @@ function rowToClaimedNotificationEvent(row: ClaimedNotificationEventRow): Claime
 }
 
 async function recordNotificationDelivery(input: {
-  auditPayload: unknown;
   completedAt: Date;
   databaseUrl?: string;
   event: ClaimedNotificationEvent;
   result: NotificationDeliveryResult;
   retryAt: Date | null;
-  startedAt: Date;
 }): Promise<void> {
   await withClient(input.databaseUrl, async (client) => {
-    await client.query("begin");
-
-    try {
-      await client.query(
-        `
-          insert into notification_deliveries (
-            id,
-            notification_event_id,
-            channel_id,
-            channel_type,
-            attempt_number,
-            status,
-            request_payload,
-            response_status,
-            response_body,
-            error_code,
-            error_message,
-            started_at,
-            completed_at
-          )
-          values (
-            $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11,
-            $12::timestamptz, $13::timestamptz
-          )
-        `,
-        [
-          randomUUID(),
-          input.event.id,
-          input.event.channelId,
-          input.event.channelType,
-          input.event.attemptNumber,
-          input.result.status,
-          stringifyJson(input.auditPayload),
-          input.result.responseStatus ?? null,
-          truncateResponseBody(input.result.responseBody),
-          input.result.status === "failed" ? input.result.errorCode : null,
-          input.result.status === "failed" ? input.result.errorMessage : null,
-          input.startedAt.toISOString(),
-          input.completedAt.toISOString(),
-        ],
-      );
-      await client.query(
-        `
-          update notification_events
-          set status = $2,
-              next_attempt_at = coalesce($3::timestamptz, next_attempt_at),
-              sent_at = case when $2 = 'sent' then $4::timestamptz else sent_at end,
-              last_error_code = $5,
-              last_error_message = $6,
-              updated_at = $4::timestamptz
-          where id = $1
-        `,
-        [
-          input.event.id,
-          readNextEventStatus(input.result, input.retryAt),
-          input.retryAt?.toISOString() ?? null,
-          input.completedAt.toISOString(),
-          input.result.status === "failed" ? input.result.errorCode : null,
-          input.result.status === "failed" ? input.result.errorMessage : null,
-        ],
-      );
-      await client.query("commit");
-    } catch (error) {
-      await client.query("rollback");
-      throw error;
-    }
+    await client.query(
+      `
+        update notification_events
+        set status = $2,
+            next_attempt_at = coalesce($3::timestamptz, next_attempt_at),
+            sent_at = case when $2 = 'sent' then $4::timestamptz else sent_at end,
+            last_error_code = $5,
+            last_error_message = $6,
+            updated_at = $4::timestamptz
+        where id = $1
+      `,
+      [
+        input.event.id,
+        readNextEventStatus(input.result, input.retryAt),
+        input.retryAt?.toISOString() ?? null,
+        input.completedAt.toISOString(),
+        input.result.status === "failed" ? input.result.errorCode : null,
+        input.result.status === "failed" ? input.result.errorMessage : null,
+      ],
+    );
   });
 }
 
@@ -589,43 +538,9 @@ async function defaultDeliverWebhook(
   }
 }
 
-function buildNotificationDeliveryAuditPayload(
-  event: ClaimedNotificationEvent,
-  payload: NotificationDeliveryPayload,
-) {
-  return {
-    channel: {
-      destination: readWebhookDestination(event.channelConfig),
-      type: event.channelType,
-    },
-    message: payload,
-  };
-}
-
-function readWebhookDestination(config: unknown) {
-  const url = readWebhookUrl(config);
-  return {
-    url: url ? redactWebhookUrl(url) : null,
-  };
-}
-
 function readWebhookUrl(config: unknown): string | null {
   const object = readObject(config);
   return typeof object.url === "string" ? object.url : null;
-}
-
-function redactWebhookUrl(rawUrl: string): string {
-  try {
-    const url = new URL(rawUrl);
-    url.username = "";
-    url.password = "";
-    if (url.search) {
-      url.search = "?redacted";
-    }
-    return url.toString();
-  } catch {
-    return "invalid-url";
-  }
 }
 
 function readObject(value: unknown): Record<string, unknown> {

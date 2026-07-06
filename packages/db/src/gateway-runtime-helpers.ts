@@ -5,6 +5,7 @@ import type {
   GatewayRouteCandidateSnapshot,
   GatewayRoutePolicySnapshot,
 } from "./gateway-config-reload.ts";
+import { GatewayPipelineError } from "./gateway-errors.ts";
 import type { FallbackFailedAttempt } from "./gateway-fallback-chain.ts";
 
 export type GatewayActivityRouteCandidate = GatewayRouteCandidateSnapshot & {
@@ -28,9 +29,24 @@ export function requireGatewayRoutePolicy(
 ): GatewayRoutePolicySnapshot {
   const routePolicy = snapshot.routePolicies.find((candidate) => candidate.id === routePolicyId);
   if (!routePolicy) {
-    throw new Error(`Route policy ${routePolicyId} was not found.`);
+    throw new GatewayPipelineError(
+      "route_not_found",
+      `Route policy ${routePolicyId} was not found.`,
+    );
   }
   return routePolicy;
+}
+
+export function selectGatewayBaselineCandidate(
+  routePolicy: GatewayRoutePolicySnapshot,
+): GatewayRouteCandidateSnapshot {
+  const candidate = [...routePolicy.candidates].sort(
+    (left, right) => left.candidateOrder - right.candidateOrder,
+  )[0];
+  if (!candidate) {
+    throw new Error(`Route policy ${routePolicy.id} has no baseline candidate.`);
+  }
+  return candidate;
 }
 
 export function buildGatewayRequestActivityRoute(input: {

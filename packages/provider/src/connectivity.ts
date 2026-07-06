@@ -323,14 +323,16 @@ function buildProbeTokenLimit(provider: ConnectivityCheckProvider): Record<strin
     provider.providerKey.toLowerCase() === "openai" &&
     isOpenAIReasoningStyleModel(provider.modelId)
   ) {
-    return { max_completion_tokens: 1 };
+    return { max_completion_tokens: 16 };
   }
   return { max_tokens: 1 };
 }
 
 function isOpenAIReasoningStyleModel(modelId: string): boolean {
+  const normalized = modelId.toLowerCase();
   const tokens = modelTokens(modelId);
   return (
+    normalized.startsWith("gpt-5") ||
     tokens.has("reasoning") ||
     tokens.has("thinking") ||
     [...tokens].some((token) => /^o[134]$/.test(token))
@@ -339,6 +341,7 @@ function isOpenAIReasoningStyleModel(modelId: string): boolean {
 
 function isObviouslyNonChatModel(modelId: string): boolean {
   const normalized = modelId.toLowerCase();
+  const tokens = modelTokens(normalized);
   if (
     /(embedding|image|audio|tts|speech|transcrib|whisper|moderation|sora|dall|veo|lyria|clip|rerank|ocr|realtime|vision|omni|search|deep-research|computer-use)/i.test(
       normalized,
@@ -346,7 +349,7 @@ function isObviouslyNonChatModel(modelId: string): boolean {
   ) {
     return true;
   }
-  return modelTokens(normalized).has("vl");
+  return tokens.has("instruct") || tokens.has("vl");
 }
 
 function isLightGeneralModel(modelId: string): boolean {

@@ -525,8 +525,7 @@ async function readAgentLimitBudgetUsage(client: QueryClient): Promise<AgentLimi
       select agent_limits.agent_id::text as agent_id,
              max(
                (
-                 (budget_periods.cost_used_usd + budget_periods.reserved_cost_usd)
-                 / nullif(agent_limits.limit_value, 0)
+                 budget_periods.cost_used_usd / nullif(agent_limits.limit_value, 0)
                ) * 100
              )::text as budget_usage_percent
       from agent_limits

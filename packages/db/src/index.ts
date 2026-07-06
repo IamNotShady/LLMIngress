@@ -13,7 +13,14 @@ export type {
   PostgresQueryResult,
   PostgresQueryResultRow,
 } from "./client.js";
-export { PostgresClient, withPostgresClient } from "./client.js";
+export {
+  closePostgresPools,
+  getPostgresPool,
+  PostgresClient,
+  withPooledPostgresClient,
+  withPostgresClient,
+  withPostgresTransaction,
+} from "./client.js";
 export type {
   ConfigChange,
   ConfigChangedNotification,

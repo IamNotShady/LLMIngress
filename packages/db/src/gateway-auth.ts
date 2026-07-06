@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { getPostgresPool, type PostgresQueryResultRow } from "@llmingress/db/client";
 
 export type GatewayAuthErrorCode =
   | "disabled_agent_api_key"
   | "invalid_agent_api_key"
   | "missing_agent_api_key";
 
-export type GatewayAuthenticatedAgentApiKey = {
+export type GatewayAuthenticatedAgent = {
   agentId: string;
   defaultVirtualModelId: string | null;
   id: string;
@@ -15,7 +15,7 @@ export type GatewayAuthenticatedAgentApiKey = {
 };
 
 export type GatewayAuthSuccess = {
-  agentApiKey: GatewayAuthenticatedAgentApiKey;
+  agentApiKey: GatewayAuthenticatedAgent;
   ok: true;
   requestId: string;
 };
@@ -46,6 +46,8 @@ type AgentApiKeyAuthRow = PostgresQueryResultRow & {
   key_prefix: string;
   request_logging_enabled: boolean;
 };
+
+const gatewayRequestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
 
 export function buildGatewayAgentApiKeyHash(plaintext: string): string {
   return `sha256:v1:${createHash("sha256")
@@ -111,8 +113,9 @@ export async function authenticateGatewayRequest(input: {
   };
 }
 
-function readGatewayRequestId(headers: GatewayAuthHeaders): string {
-  return firstHeaderValue(headers["x-request-id"])?.trim() || `gw_${randomUUID()}`;
+export function readGatewayRequestId(headers: GatewayAuthHeaders): string {
+  const value = firstHeaderValue(headers["x-request-id"])?.trim();
+  return value && gatewayRequestIdPattern.test(value) ? value : `gw_${randomUUID()}`;
 }
 
 function gatewayAuthFailure(code: GatewayAuthErrorCode, requestId: string): GatewayAuthFailure {
@@ -127,27 +130,21 @@ async function readAgentApiKeyByHash(
   databaseUrl: string | undefined,
   keyHash: string,
 ): Promise<AgentApiKeyAuthRow | undefined> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-  try {
-    const result = await client.query<AgentApiKeyAuthRow>(
-      `
-        select agents.id::text,
-               agents.id::text as agent_id,
-               agents.key_prefix,
-               agents.default_virtual_model_id::text,
-               agents.enabled,
-               agents.request_logging_enabled
-        from agents
-        where agents.key_hash = $1
-          and agents.deleted_at is null
-      `,
-      [keyHash],
-    );
-    return result.rows[0];
-  } finally {
-    await client.end();
-  }
+  const result = await getPostgresPool(databaseUrl).query<AgentApiKeyAuthRow>(
+    `
+      select agents.id::text,
+             agents.id::text as agent_id,
+             agents.key_prefix,
+             agents.default_virtual_model_id::text,
+             agents.enabled,
+             agents.request_logging_enabled
+      from agents
+      where agents.key_hash = $1
+        and agents.deleted_at is null
+    `,
+    [keyHash],
+  );
+  return result.rows[0];
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {

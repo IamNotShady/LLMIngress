@@ -216,7 +216,7 @@ test("v1 daily operations smoke verifies breakdowns exports alerts metrics trace
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
 type DailyOperationsSeed = {
-  agentApiKeyId: string;
+  agentId: string;
   budgetPeriodId: string;
   failedActivityId: string;
   failedRequestId: string;
@@ -247,7 +247,6 @@ async function seedDailyOperationsData(
   plan: ReturnType<typeof buildV1DailyOperationsSmokePlan>,
 ): Promise<DailyOperationsSeed> {
   const ids = {
-    agentApiKeyId: randomUUID(),
     agentId: randomUUID(),
     budgetPeriodId: randomUUID(),
     failedActivityId: randomUUID(),
@@ -260,6 +259,7 @@ async function seedDailyOperationsData(
     providerId: randomUUID(),
     providerModelId: randomUUID(),
     rateLimitWindowId: randomUUID(),
+    seedAgentId: randomUUID(),
     successActivityId: randomUUID(),
     virtualModelId: randomUUID(),
   };
@@ -293,20 +293,20 @@ async function seedDailyOperationsData(
   );
   await fixture.query(
     "insert into agents (id, name, agent_type, enabled) values ($1, 'Daily Ops Agent', 'coding', true)",
-    [ids.agentId],
+    [ids.seedAgentId],
   );
   await fixture.query(
     `
       update agents set id = $1, key_prefix = 'llmi_daily95', key_hash = 'sha256:v1:daily-ops-agent-key-hash-095', default_virtual_model_id = $3, enabled = true, updated_at = now() where id = $2
     `,
-    [ids.agentApiKeyId, ids.agentId, ids.virtualModelId],
+    [ids.agentId, ids.seedAgentId, ids.virtualModelId],
   );
   await fixture.query(
     `
       insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
       values ($1, $2, 'budget', 'month', 10.000000, 'usd', true)
     `,
-    [randomUUID(), ids.agentApiKeyId],
+    [randomUUID(), ids.agentId],
   );
   await fixture.query(
     `
@@ -319,19 +319,19 @@ async function seedDailyOperationsData(
     `
       insert into budget_periods (
         id, agent_id, period_type, period_start, period_end,
-        tokens_used, cost_used_usd, reserved_cost_usd, created_at, updated_at
+        tokens_used, cost_used_usd, created_at, updated_at
       )
       values (
         $1, $2, 'month',
         $3::timestamptz,
         $4::timestamptz,
-        160, 9.25000000, 0.00000000,
+        160, 9.25000000,
         $5::timestamptz, $5::timestamptz
       )
     `,
     [
       ids.budgetPeriodId,
-      ids.agentApiKeyId,
+      ids.agentId,
       monthStartIso(plan.now),
       nextMonthStartIso(plan.now),
       plan.now.toISOString(),
@@ -352,7 +352,7 @@ async function seedDailyOperationsData(
     `,
     [
       ids.rateLimitWindowId,
-      ids.agentApiKeyId,
+      ids.agentId,
       isoOffset(plan.now, -10 * 60 * 1000),
       isoOffset(plan.now, -9 * 60 * 1000),
       plan.now.toISOString(),
@@ -361,7 +361,7 @@ async function seedDailyOperationsData(
 
   await insertRequestActivity(fixture, {
     activityId: ids.successActivityId,
-    agentApiKeyId: ids.agentApiKeyId,
+    agentId: ids.agentId,
     completedAt: isoOffset(plan.now, -5 * 60 * 1000 + 1000),
     createdAt: isoOffset(plan.now, -5 * 60 * 1000),
     httpStatus: 200,
@@ -375,7 +375,7 @@ async function seedDailyOperationsData(
   });
   await insertUsageCostSavings(fixture, {
     activityId: ids.successActivityId,
-    agentApiKeyId: ids.agentApiKeyId,
+    agentId: ids.agentId,
     inputTokens: 100,
     outputTokens: 40,
     providerModelId: ids.providerModelId,
@@ -386,7 +386,7 @@ async function seedDailyOperationsData(
   });
   await insertRequestActivity(fixture, {
     activityId: ids.failedActivityId,
-    agentApiKeyId: ids.agentApiKeyId,
+    agentId: ids.agentId,
     completedAt: isoOffset(plan.now, -4 * 60 * 1000 + 1000),
     createdAt: isoOffset(plan.now, -4 * 60 * 1000),
     errorCode: "provider_request_failed",
@@ -402,7 +402,7 @@ async function seedDailyOperationsData(
   });
   await insertUsageCostSavings(fixture, {
     activityId: ids.failedActivityId,
-    agentApiKeyId: ids.agentApiKeyId,
+    agentId: ids.agentId,
     inputTokens: 15,
     outputTokens: 5,
     providerModelId: ids.providerModelId,
@@ -431,7 +431,7 @@ async function seedDailyOperationsData(
   for (let index = 0; index < 3; index += 1) {
     await insertRequestActivity(fixture, {
       activityId: randomUUID(),
-      agentApiKeyId: ids.agentApiKeyId,
+      agentId: ids.agentId,
       completedAt: isoOffset(plan.now, -3 * 60 * 1000 + index * 1000),
       createdAt: isoOffset(plan.now, -3 * 60 * 1000 + index * 1000),
       errorCode: "rate_limit_exceeded",
@@ -447,7 +447,7 @@ async function seedDailyOperationsData(
 
   await insertRequestActivity(fixture, {
     activityId: ids.oldActivityId,
-    agentApiKeyId: ids.agentApiKeyId,
+    agentId: ids.agentId,
     completedAt: isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000 + 1000),
     createdAt: isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000),
     httpStatus: 200,
@@ -518,7 +518,7 @@ async function seedDailyOperationsData(
   );
 
   return {
-    agentApiKeyId: ids.agentApiKeyId,
+    agentId: ids.agentId,
     budgetPeriodId: ids.budgetPeriodId,
     failedActivityId: ids.failedActivityId,
     failedRequestId: "req_daily_fallback_exhausted_095",
@@ -537,7 +537,7 @@ async function insertRequestActivity(
   fixture: Fixture,
   input: {
     activityId: string;
-    agentApiKeyId: string;
+    agentId: string;
     completedAt: string;
     createdAt: string;
     errorCode?: string;
@@ -569,7 +569,7 @@ async function insertRequestActivity(
     [
       input.activityId,
       input.requestId,
-      input.agentApiKeyId,
+      input.agentId,
       input.virtualModelId,
       input.providerId ?? null,
       input.providerModelId ?? null,
@@ -589,7 +589,7 @@ async function insertUsageCostSavings(
   fixture: Fixture,
   input: {
     activityId: string;
-    agentApiKeyId: string;
+    agentId: string;
     inputTokens: number;
     outputTokens: number;
     providerModelId: string;
@@ -610,7 +610,7 @@ async function insertUsageCostSavings(
     [
       randomUUID(),
       input.activityId,
-      input.agentApiKeyId,
+      input.agentId,
       input.virtualModelId,
       input.providerModelId,
       input.inputTokens,
@@ -630,7 +630,7 @@ async function insertUsageCostSavings(
     [
       randomUUID(),
       input.activityId,
-      input.agentApiKeyId,
+      input.agentId,
       input.providerModelId,
       input.totalCostUsd,
       String(Number(input.totalCostUsd) + Number(input.savingsUsd)),

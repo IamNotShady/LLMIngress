@@ -3,6 +3,7 @@ import type {
   NormalizedOpenAIChatRequest,
   NormalizedOpenAIResponsesRequest,
 } from "@llmingress/provider/openai";
+import { gatewayDebugRequestMetadata } from "./gateway-env.ts";
 
 export type GatewayRequestProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 
@@ -93,16 +94,40 @@ export function buildAnthropicMessagesRequestMetadata(input: {
 export function shouldExposeGatewayRequestMetadata(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
-  return env.GATEWAY_DEBUG_REQUEST_METADATA === "true";
+  return gatewayDebugRequestMetadata(env);
 }
 
 export function serializeGatewayRequestMetadata(metadata: GatewayRequestMetadata): string {
   return JSON.stringify(metadata);
 }
 
-function estimateTextTokens(parts: readonly string[]): number {
-  const characterCount = parts.filter((part) => part.trim()).join("\n").length;
-  return Math.max(1, Math.ceil(characterCount / 4));
+export function estimateTextTokens(parts: readonly string[]): number {
+  const text = parts.filter((part) => part.trim()).join("\n");
+  let cjkCount = 0;
+  let otherCount = 0;
+  for (const character of text) {
+    if (isCjkCharacter(character)) {
+      cjkCount += 1;
+    } else {
+      otherCount += 1;
+    }
+  }
+  return Math.max(1, cjkCount + Math.ceil(otherCount / 4));
+}
+
+function isCjkCharacter(character: string): boolean {
+  const codePoint = character.codePointAt(0);
+  if (codePoint === undefined) {
+    return false;
+  }
+
+  return (
+    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7af) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe30 && codePoint <= 0xffef)
+  );
 }
 
 function readAnthropicMessageContentTextParts(

@@ -1,4 +1,3 @@
-import { selectRouteAttempts } from "@llmingress/domain";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIEmbeddingsRequest,
@@ -8,63 +7,21 @@ import {
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
-import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
-import {
-  finalizeGatewayBudgetReservation,
-  GatewayBudgetRejectedError,
-  releaseGatewayBudgetReservation,
-  reserveGatewayBudget,
-} from "./gateway-budgets.ts";
-import {
-  attachGatewayProviderCredentials,
-  readGatewayMasterKeySource,
-  recordGatewayProviderApiKeyLastUsed,
-} from "./gateway-chat-completions.ts";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
-import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
-  executeProviderFallbackAttempts,
-  type FallbackFailedAttempt,
-} from "./gateway-fallback-chain.ts";
-import { enforceGatewayRateLimits, releaseGatewayConcurrency } from "./gateway-rate-limits.ts";
+  createGatewayErrorBody,
+  type GatewayErrorBody,
+  GatewayPipelineError,
+} from "./gateway-errors.ts";
+import {
+  executeGatewayProtocolRequest,
+  type GatewayProtocolResponse,
+} from "./gateway-protocol-request.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
-import {
-  buildGatewayRequestActivityRoute,
-  isRecord,
-  omitUndefined,
-  requireGatewayRoutePolicy,
-} from "./gateway-runtime-helpers.ts";
-import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
-import {
-  type GatewayUsageCostDetails,
-  readGatewayProviderTokenUsage,
-  selectGatewayBaselineCandidate,
-} from "./gateway-usage-recorder.ts";
+import { isRecord, omitUndefined } from "./gateway-runtime-helpers.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
-export type GatewayEmbeddingsErrorCode =
-  | "invalid_embeddings_request"
-  | "provider_credentials_missing"
-  | "provider_request_failed"
-  | "provider_unavailable"
-  | "route_not_found";
-
-export type GatewayEmbeddingsErrorBody = {
-  error: {
-    code: GatewayEmbeddingsErrorCode;
-    message: string;
-  };
-  requestId: string;
-};
-
-export type GatewayEmbeddingsResponse = {
-  activity?: GatewayRequestActivityRoute;
-  body: unknown;
-  headers?: Record<string, string>;
-  requestMetadata?: GatewayRequestMetadata;
-  statusCode: number;
-  usageCost?: GatewayUsageCostDetails;
-};
+export type GatewayEmbeddingsResponse = GatewayProtocolResponse;
 
 export type GatewayEmbeddingsRequestSuccess = {
   ok: true;
@@ -72,7 +29,7 @@ export type GatewayEmbeddingsRequestSuccess = {
 };
 
 export type GatewayEmbeddingsRequestFailure = {
-  body: GatewayEmbeddingsErrorBody;
+  body: GatewayErrorBody;
   ok: false;
   statusCode: 400;
 };
@@ -148,238 +105,61 @@ export function createGatewayEmbeddingsProviderAdapter(input: {
 }
 
 export async function executeGatewayOpenAIEmbeddings(input: {
-  agentApiKeyId: string;
+  agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;
-  requestActivityId?: string;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
   virtualModel: GatewayVirtualModel;
 }): Promise<GatewayEmbeddingsResponse> {
-  const normalized = normalizeOpenAIEmbeddingsRequest(input.requestBody, input.requestId);
-  if (!normalized.ok) {
-    return {
-      body: normalized.body,
-      statusCode: normalized.statusCode,
-    };
-  }
-
-  const requestMetadata = buildOpenAIEmbeddingsRequestMetadata({
-    model: input.virtualModel.name,
-    request: normalized.request,
-  });
-
-  const rateLimit = await enforceGatewayRateLimits({
-    agentApiKeyId: input.agentApiKeyId,
-    databaseUrl: input.databaseUrl,
-    requestId: input.requestId,
-    requestMetadata,
-  });
-  if (!rateLimit.ok) {
-    return {
-      body: rateLimit.body,
-      headers: { "retry-after": String(rateLimit.retryAfterSeconds) },
-      requestMetadata,
-      statusCode: rateLimit.statusCode,
-    };
-  }
-
-  const concurrencyLease = rateLimit.concurrencyLease;
-  let activity: GatewayRequestActivityRoute | undefined;
-  const fallbackAttempts: FallbackFailedAttempt[] = [];
-  try {
-    const routeResult = selectRouteAttempts({
-      estimatedInputTokens: requestMetadata.estimatedInputTokens,
-      estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
-      snapshot: input.snapshot,
-      usesTools: requestMetadata.usesTools,
-      virtualModelId: input.virtualModel.id,
-    });
-    if (!routeResult.decision || routeResult.chain.length === 0) {
-      return {
-        activity,
-        body: createGatewayEmbeddingsErrorBody("provider_unavailable", input.requestId),
-        requestMetadata,
-        statusCode: mapGatewayErrorStatus("provider_unavailable"),
-      };
-    }
-    const routeDecision = routeResult.decision;
-    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
-    const gatewayChain = routeResult.chain;
-
-    const selectedCandidate = gatewayChain[0];
-    if (!selectedCandidate) {
-      throw new Error("Selected route candidate was not found in route policy.");
-    }
-    activity = buildGatewayRequestActivityRoute({
-      candidate: selectedCandidate,
-      fallbackAttempts,
-      routeDecision,
-    });
-
-    const embeddingsCandidates = gatewayChain.filter(
-      (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
-    );
-    if (embeddingsCandidates.length === 0) {
-      throw new Error("Provider credentials are missing for embeddings route.");
-    }
-    const candidates = await attachGatewayProviderCredentials({
-      candidates: embeddingsCandidates,
-      databaseUrl: input.databaseUrl,
-      masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
-    });
-    const success = await executeProviderFallbackAttempts<OpenAIAdapterSuccess>({
-      callProvider: async ({ candidate, providerApiKey }) => {
+  return executeGatewayProtocolRequest<NormalizedOpenAIEmbeddingsRequest, OpenAIAdapterSuccess>({
+    ...input,
+    spec: {
+      buildRequestMetadata: ({ model, request }) =>
+        buildOpenAIEmbeddingsRequestMetadata({ model, request }),
+      callProvider: ({ candidate, providerApiKey, request }) => {
         const adapter = createGatewayEmbeddingsProviderAdapter({
           adapter: input.adapter,
           providerKey: candidate.providerKey,
         });
         if (!adapter.embeddings) {
-          throw new Error("OpenAI embeddings provider adapter is not configured.");
+          throw new GatewayPipelineError(
+            "provider_protocol_unsupported",
+            "OpenAI embeddings provider adapter is not configured.",
+          );
         }
-        const providerStartedAt = new Date();
-        const result = await adapter.embeddings({
-          request: normalized.request,
+        return adapter.embeddings({
+          request,
           target: {
             apiKey: providerApiKey.apiKey,
             baseUrl: candidate.baseUrl,
             modelId: candidate.modelId,
           },
         });
-        await recordGatewayProviderTrace({
-          errorCode: result.ok ? null : result.errorCode,
-          modelId: candidate.modelId,
-          providerKey: candidate.providerKey,
-          requestId: input.requestId,
-          startedAt: providerStartedAt,
-          status: result.ok ? "succeeded" : "failed",
-        });
-        return result;
       },
-      candidates,
-      databaseUrl: input.databaseUrl,
-      fallbackAttempts,
-      finalizeAttempt: (r) =>
-        finalizeGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
-      releaseAttempt: (r) =>
-        releaseGatewayBudgetReservation({ databaseUrl: input.databaseUrl, reservation: r }),
-      reserveAttempt: async (candidate) => {
-        const d = await reserveGatewayBudget({
-          agentApiKeyId: input.agentApiKeyId,
-          databaseUrl: input.databaseUrl,
-          price: candidate.price,
-          requestId: input.requestId,
-          requestMetadata,
-        });
-        if (!d.ok) {
-          throw new GatewayBudgetRejectedError(d.body, d.statusCode);
-        }
-        return d.reservation;
-      },
-      requestActivityId: input.requestActivityId,
-      requestId: input.requestId,
-    });
-    if (!success) {
-      throw new Error("Provider request failed.");
-    }
-    await recordGatewayProviderApiKeyLastUsed({
-      databaseUrl: input.databaseUrl,
-      providerApiKeyId: success.candidate.providerApiKeyId,
-    });
-    activity = buildGatewayRequestActivityRoute({
-      candidate: success.candidate,
-      fallbackAttempts,
-      routeDecision,
-    });
-
-    return {
-      activity,
-      body: success.result.body,
-      requestMetadata,
-      statusCode: success.result.statusCode,
-      usageCost: {
-        actualPrice: success.candidate.price,
-        baselinePrice: baselineCandidate.price,
-        baselineProviderModelId: baselineCandidate.providerModelId,
-        estimatedInputTokens: requestMetadata.estimatedInputTokens,
-        estimatedOutputTokens: 0,
-        providerUsage: readGatewayProviderTokenUsage(success.result.body),
-        providerModelId: success.candidate.providerModelId,
-      },
-    };
-  } catch (error) {
-    if (error instanceof GatewayBudgetRejectedError) {
-      return {
-        activity,
-        body: error.body,
-        requestMetadata,
-        statusCode: error.statusCode,
-      };
-    }
-    const message = error instanceof Error ? error.message : "Provider request failed.";
-    const code = classifyEmbeddingsError(message);
-    return {
-      activity,
-      body: createGatewayEmbeddingsErrorBody(code, input.requestId),
-      requestMetadata,
-      statusCode: mapGatewayErrorStatus(code),
-    };
-  } finally {
-    await releaseGatewayConcurrency({
-      databaseUrl: input.databaseUrl,
-      lease: concurrencyLease,
-    });
-  }
+      normalize: normalizeOpenAIEmbeddingsRequest,
+      planCandidates: (candidates) => ({
+        noneSupportedError: () =>
+          new GatewayPipelineError(
+            "provider_protocol_unsupported",
+            "Embeddings cannot use subscription providers.",
+          ),
+        supported: candidates.filter(
+          (candidate) => !isSubscriptionProviderKey(candidate.providerKey),
+        ),
+      }),
+    },
+  });
 }
 
 function invalidEmbeddingsRequest(requestId: string): GatewayEmbeddingsRequestFailure {
   return {
-    body: createGatewayEmbeddingsErrorBody("invalid_embeddings_request", requestId),
+    body: createGatewayErrorBody("invalid_embeddings_request", requestId),
     ok: false,
     statusCode: 400,
   };
-}
-
-function createGatewayEmbeddingsErrorBody(
-  code: GatewayEmbeddingsErrorCode,
-  requestId: string,
-): GatewayEmbeddingsErrorBody {
-  return {
-    error: {
-      code,
-      message: embeddingsErrorMessage(code),
-    },
-    requestId,
-  };
-}
-
-function embeddingsErrorMessage(code: GatewayEmbeddingsErrorCode): string {
-  if (code === "invalid_embeddings_request") {
-    return "Embeddings request must include non-empty input text.";
-  }
-  if (code === "route_not_found") {
-    return "No route policy is available for the selected Virtual Model.";
-  }
-  if (code === "provider_credentials_missing") {
-    return "Provider credentials are not configured for the selected route.";
-  }
-  if (code === "provider_unavailable") {
-    return "No eligible provider candidates are available for the selected route.";
-  }
-  return "Provider request failed.";
-}
-
-function classifyEmbeddingsError(message: string): GatewayEmbeddingsErrorCode {
-  if (message.includes("No route policy") || message.includes("Route policy")) {
-    return "route_not_found";
-  }
-  if (message.includes("Provider credentials") || message.includes("Provider base URL")) {
-    return "provider_credentials_missing";
-  }
-  return "provider_request_failed";
 }
 
 function readEmbeddingsInput(value: unknown): string | string[] | null {

@@ -45,7 +45,6 @@ type BudgetThresholdCandidateRow = PostgresQueryResultRow & {
   period_end: Date;
   period_start: Date;
   period_type: string;
-  reserved_cost_usd: string;
 };
 
 type BudgetThresholdCandidate = {
@@ -58,7 +57,6 @@ type BudgetThresholdCandidate = {
   periodEnd: Date;
   periodStart: Date;
   periodType: string;
-  reservedCostUsd: number;
 };
 
 const defaultBudgetThresholdAlertIntervalMs = 15 * 60 * 1000;
@@ -91,7 +89,7 @@ export async function evaluateBudgetThresholdAlerts(
   };
 
   for (const candidate of candidates) {
-    const usedCostUsd = candidate.costUsedUsd + candidate.reservedCostUsd;
+    const usedCostUsd = candidate.costUsedUsd;
     const usageRatio = usedCostUsd / candidate.budgetLimitUsd;
 
     for (const thresholdRatio of payload.thresholdRatios) {
@@ -177,7 +175,6 @@ function buildBudgetThresholdNotificationEvent(input: {
     periodEnd: input.candidate.periodEnd.toISOString(),
     periodStart: input.candidate.periodStart.toISOString(),
     periodType: input.candidate.periodType,
-    reservedCostUsd: roundUsd(input.candidate.reservedCostUsd),
     thresholdRatio: input.thresholdRatio,
     usageRatio: roundedUsageRatio,
     usedCostUsd: roundUsd(input.usedCostUsd),
@@ -209,7 +206,6 @@ async function readBudgetThresholdCandidates(
                budget_periods.period_start,
                budget_periods.period_end,
                budget_periods.cost_used_usd::text,
-               budget_periods.reserved_cost_usd::text,
                agent_limits.limit_value::text as budget_limit_usd,
                agents.key_prefix as agent_key_prefix,
                agents.id::text as agent_id,
@@ -246,7 +242,6 @@ function rowToBudgetThresholdCandidate(row: BudgetThresholdCandidateRow): Budget
     periodEnd: row.period_end,
     periodStart: row.period_start,
     periodType: row.period_type,
-    reservedCostUsd: Number(row.reserved_cost_usd),
   };
 }
 

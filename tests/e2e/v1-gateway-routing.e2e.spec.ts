@@ -1,11 +1,15 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:net";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
+import {
+  getFreePort,
+  startGatewayProcess,
+  stopGatewayProcess,
+  waitForGateway,
+} from "../support/gateway-process";
 import {
   buildV1ProviderCoverageSmokePlan,
   type V1ProviderCoverageScenario,
@@ -56,13 +60,6 @@ test("v1 provider coverage smoke routes core providers local providers and valid
 
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
 
-type GatewayProcess = {
-  child: ChildProcessWithoutNullStreams;
-  port: number;
-  stderr: string[];
-  stdout: string[];
-};
-
 type CapturedProviderRequest = Awaited<
   ReturnType<typeof createFakeProviderServer>
 >["requests"][number];
@@ -72,7 +69,7 @@ async function seedV1ProviderCoverageRoutes(
   scenarios: readonly V1ProviderCoverageScenario[],
 ): Promise<void> {
   const agentId = randomUUID();
-  const agentApiKeyId = randomUUID();
+  const seedAgentId = randomUUID();
   const encryptedKeys = scenarios.map((scenario) =>
     createSecretEncryption({ kind: "inline", value: masterKey }).encrypt(scenario.providerApiKey),
   );
@@ -80,7 +77,7 @@ async function seedV1ProviderCoverageRoutes(
 
   await fixture.query(
     "insert into agents (id, name, agent_type, enabled) values ($1, 'V1 Provider Smoke Agent', 'coding', true)",
-    [agentId],
+    [seedAgentId],
   );
 
   for (const [index, scenario] of scenarios.entries()) {
@@ -172,8 +169,8 @@ async function seedV1ProviderCoverageRoutes(
       update agents set id = $1, key_prefix = $3, key_hash = $4, default_virtual_model_id = $5, enabled = true, updated_at = now() where id = $2
     `,
     [
-      agentApiKeyId,
       agentId,
+      seedAgentId,
       agentApiKey.slice(0, 12),
       buildGatewayAgentApiKeyHash(agentApiKey),
       seededVirtualModelIds[0],
@@ -186,7 +183,7 @@ async function seedV1ProviderCoverageRoutes(
         insert into agent_virtual_models (agent_id, virtual_model_id)
         values ($1, $2)
       `,
-      [agentApiKeyId, virtualModelId],
+      [agentId, virtualModelId],
     );
   }
   await fixture.query(
@@ -338,86 +335,4 @@ function readHeader(
 ): string | undefined {
   const value = request?.headers[header];
   return Array.isArray(value) ? value.join(" ") : value;
-}
-
-async function getFreePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => reject(new Error("Failed to allocate TCP port.")));
-        return;
-      }
-      const port = address.port;
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-async function waitForGateway(baseUrl: string, gateway: GatewayProcess): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        if (gateway.child.exitCode !== null) {
-          return `exited:${gateway.child.exitCode}`;
-        }
-
-        try {
-          const response = await fetch(`${baseUrl}/health`);
-          return response.status;
-        } catch {
-          return "not-ready";
-        }
-      },
-      {
-        message: `Gateway did not start.\nstdout=${gateway.stdout.join("")}\nstderr=${gateway.stderr.join("")}`,
-        timeout: 15_000,
-      },
-    )
-    .toBe(200);
-}
-
-function startGatewayProcess(options: { databaseUrl: string; port: number }): GatewayProcess {
-  const child = spawn("pnpm", ["--filter", "@llmingress/gateway", "exec", "tsx", "src/main.ts"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      DATABASE_URL: options.databaseUrl,
-      GATEWAY_CONFIG_NOTIFICATIONS: "false",
-      GATEWAY_CONFIG_RECONCILE_INTERVAL_MS: "0",
-      GATEWAY_HOST: "127.0.0.1",
-      GATEWAY_PORT: String(options.port),
-      MASTER_KEY: masterKey,
-      NODE_ENV: "test",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const gateway: GatewayProcess = {
-    child,
-    port: options.port,
-    stderr: [],
-    stdout: [],
-  };
-  child.stderr.on("data", (chunk) => gateway.stderr.push(String(chunk)));
-  child.stdout.on("data", (chunk) => gateway.stdout.push(String(chunk)));
-  return gateway;
-}
-
-async function stopGatewayProcess(gateway: GatewayProcess): Promise<void> {
-  if (gateway.child.exitCode !== null) {
-    return;
-  }
-
-  gateway.child.kill("SIGTERM");
-  await new Promise<void>((resolve) => {
-    gateway.child.once("exit", () => resolve());
-    setTimeout(() => {
-      if (gateway.child.exitCode === null) {
-        gateway.child.kill("SIGKILL");
-      }
-      resolve();
-    }, 2_000);
-  });
 }

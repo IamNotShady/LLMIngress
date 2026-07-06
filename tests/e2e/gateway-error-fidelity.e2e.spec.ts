@@ -12,7 +12,7 @@ import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
 const agentApiKey = "llmi_gateway_error_fidelity_key_094";
 
-test("gateway passes through non-retryable provider 4xx status and sanitized message", async () => {
+test("gateway passes through non-retryable provider 4xx body and status", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_error_4xx_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -50,8 +50,61 @@ test("gateway passes through non-retryable provider 4xx status and sanitized mes
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error.code).toBe("provider_rejected_request");
-      expect(body.error.message).toContain("context length exceeded");
+      expect(body).toEqual({
+        error: {
+          code: "context_length_exceeded",
+          message: "context length exceeded by fake provider",
+        },
+      });
+
+      const streamingResponse = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-provider-4xx",
+          stream: true,
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      const streamingBody = await streamingResponse.json();
+
+      expect(streamingResponse.status).toBe(400);
+      expect(streamingBody).toEqual(body);
+
+      const responsesResponse = await fetch(`${baseUrl}/v1/responses`, {
+        body: JSON.stringify({
+          input: "ping",
+          model: "vm-provider-4xx",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      const responsesBody = await responsesResponse.json();
+
+      expect(responsesResponse.status).toBe(400);
+      expect(responsesBody).toEqual(body);
+
+      const embeddingsResponse = await fetch(`${baseUrl}/v1/embeddings`, {
+        body: JSON.stringify({
+          input: "ping",
+          model: "vm-provider-4xx",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      const embeddingsBody = await embeddingsResponse.json();
+
+      expect(embeddingsResponse.status).toBe(400);
+      expect(embeddingsBody).toEqual(body);
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -61,7 +114,7 @@ test("gateway passes through non-retryable provider 4xx status and sanitized mes
   }
 });
 
-test("gateway messages endpoint passes through non-retryable provider 4xx status and sanitized message", async () => {
+test("gateway messages endpoint passes through non-retryable provider 4xx body and status", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_error_messages_4xx_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -103,8 +156,12 @@ test("gateway messages endpoint passes through non-retryable provider 4xx status
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error.code).toBe("provider_rejected_request");
-      expect(body.error.message).toContain("context length exceeded");
+      expect(body).toEqual({
+        error: {
+          code: "context_length_exceeded",
+          message: "context length exceeded by fake provider",
+        },
+      });
     } finally {
       await stopGatewayProcess(gateway);
     }

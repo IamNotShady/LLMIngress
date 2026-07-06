@@ -44,71 +44,32 @@ export function normalizeAnthropicMessagesRequest(
   body: unknown,
   requestId: string,
 ): GatewayAnthropicMessagesRequestResult {
-  if (!isRecord(body) || !Array.isArray(body.messages) || body.messages.length === 0) {
+  if (!isRecord(body)) {
     return invalidMessagesRequest(requestId);
   }
 
-  const maxOutputTokens = readRequiredPositiveInteger(body.max_tokens);
-  if (maxOutputTokens === null) {
-    return invalidMessagesRequest(requestId);
-  }
+  const maxOutputTokens = readRequiredPositiveInteger(body.max_tokens) ?? 1024;
 
-  const messages = body.messages.map(readAnthropicMessage);
-  if (messages.some((message) => !message)) {
-    return invalidMessagesRequest(requestId);
-  }
+  const messages = readAnthropicMessages(body.messages);
 
   const temperature = readOptionalFiniteNumber(body.temperature);
-  if (temperature === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const topP = readOptionalFiniteNumber(body.top_p);
-  if (topP === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const topK = readOptionalPositiveInteger(body.top_k);
-  if (topK === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const stopSequences = readOptionalNonEmptyStringArray(body.stop_sequences);
-  if (stopSequences === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const metadata = readOptionalRecord(body.metadata);
-  if (metadata === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const thinking = readOptionalRecord(body.thinking);
-  if (thinking === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const serviceTier = readOptionalNonEmptyString(body.service_tier);
-  if (serviceTier === null) {
-    return invalidMessagesRequest(requestId);
-  }
 
-  if (body.stream !== undefined && typeof body.stream !== "boolean") {
-    return invalidMessagesRequest(requestId);
-  }
   const system = readOptionalSystemPrompt(body.system);
-  if (system === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const tools = readOptionalObjectArray(body.tools);
-  if (tools === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const toolChoice = readOptionalToolChoice(body.tool_choice);
-  if (toolChoice === null) {
-    return invalidMessagesRequest(requestId);
-  }
 
   return {
     ok: true,
     request: omitUndefined({
       maxOutputTokens,
-      messages: messages as NormalizedAnthropicMessage[],
-      metadata,
+      messages,
+      metadata: metadata === null ? undefined : metadata,
       payload: body,
       passthrough: readPassthroughParameters(body, [
         "max_tokens",
@@ -126,16 +87,16 @@ export function normalizeAnthropicMessagesRequest(
         "top_k",
         "top_p",
       ]),
-      serviceTier,
+      serviceTier: serviceTier === null ? undefined : serviceTier,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
-      stopSequences,
-      system,
-      temperature,
-      thinking,
-      toolChoice,
-      tools,
-      topK,
-      topP,
+      stopSequences: stopSequences === null ? undefined : stopSequences,
+      system: system === null ? undefined : system,
+      temperature: temperature === null ? undefined : temperature,
+      thinking: thinking === null ? undefined : thinking,
+      toolChoice: toolChoice === null ? undefined : toolChoice,
+      tools: tools === null ? undefined : tools,
+      topK: topK === null ? undefined : topK,
+      topP: topP === null ? undefined : topP,
     }),
   };
 }
@@ -188,6 +149,16 @@ export async function executeGatewayAnthropicMessages(input: {
       },
     },
   );
+}
+
+function readAnthropicMessages(value: unknown): NormalizedAnthropicMessage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((message) => {
+    const normalized = readAnthropicMessage(message);
+    return normalized ? [normalized] : [];
+  });
 }
 
 function readAnthropicMessage(value: unknown): NormalizedAnthropicMessage | null {

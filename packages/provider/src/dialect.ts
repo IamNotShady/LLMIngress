@@ -14,7 +14,6 @@ export type ProviderStreamingDialect = {
   buildUrl: (baseUrl: string, pathSuffix: string) => string;
   supportsPathSuffix: (pathSuffix: string) => boolean;
   transformBody: (body: Record<string, unknown>, pathSuffix: string) => Record<string, unknown>;
-  wantsStreamingUsage: (pathSuffix: string) => boolean;
 };
 
 const defaultDialect: ProviderStreamingDialect = {
@@ -22,7 +21,6 @@ const defaultDialect: ProviderStreamingDialect = {
   buildUrl: joinProviderStreamingUrl,
   supportsPathSuffix: () => true,
   transformBody: (body) => body,
-  wantsStreamingUsage: () => false,
 };
 
 const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
@@ -33,15 +31,6 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
         ? buildClaudeCodeMessagesUrl(baseUrl)
         : joinProviderStreamingUrl(baseUrl, pathSuffix),
     supportsPathSuffix: (pathSuffix) => pathSuffix === "messages",
-  },
-  google: {
-    wantsStreamingUsage: (pathSuffix) => pathSuffix === "chat/completions",
-  },
-  lmstudio: {
-    wantsStreamingUsage: (pathSuffix) => pathSuffix === "chat/completions",
-  },
-  openai: {
-    wantsStreamingUsage: (pathSuffix) => pathSuffix === "chat/completions",
   },
   openai_codex: {
     buildHeaders: (apiKey) => buildCodexSubscriptionHeaders(apiKey),

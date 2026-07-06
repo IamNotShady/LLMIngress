@@ -27,7 +27,6 @@ import {
   createGatewayErrorBody,
   type GatewayErrorCode,
   toGatewayErrorResponseParts,
-  truncateProviderMessage,
 } from "./gateway-errors.ts";
 import {
   buildFallbackFailedAttempt,
@@ -323,7 +322,7 @@ export async function executeGatewayStreamingRequest(input: {
 
         if (!response.ok || !response.body) {
           // HTTP-level error — determine retryability from status.
-          const providerErrorBody = await readProviderErrorBody(response);
+          const providerError = await readProviderErrorBody(response);
           console.error("gateway provider streaming request failed", {
             modelId: attemptedCandidate.modelId,
             providerKey: attemptedCandidate.providerKey,
@@ -347,7 +346,7 @@ export async function executeGatewayStreamingRequest(input: {
             providerModelId: attemptedCandidate.providerModelId,
             result: {
               errorCode,
-              errorMessage: providerErrorBody ?? "Provider request failed.",
+              errorMessage: providerError.message ?? "Provider request failed.",
               statusCode: response.status,
             },
           });
@@ -365,11 +364,7 @@ export async function executeGatewayStreamingRequest(input: {
           });
           concurrencyLease = undefined;
           return {
-            body: createGatewayErrorBody(
-              errorCode,
-              input.requestId,
-              truncateProviderMessage(providerErrorBody ?? "Provider rejected the request."),
-            ),
+            body: providerError.body,
             ok: false,
             requestMetadata: normalized.requestMetadata,
             statusCode: response.status,
@@ -676,15 +671,6 @@ function buildStreamingRequestBodyForDialect(input: {
 }): Record<string, unknown> {
   let body = buildProviderRequestBody(input.payload, input.modelId);
   body = input.dialect.transformBody(body, input.pathSuffix);
-  if (input.dialect.wantsStreamingUsage(input.pathSuffix)) {
-    return {
-      ...body,
-      stream_options: {
-        ...(isRecord(body.stream_options) ? body.stream_options : {}),
-        include_usage: true,
-      },
-    };
-  }
   return body;
 }
 
@@ -698,11 +684,38 @@ function buildProviderRequestBody(
   };
 }
 
-async function readProviderErrorBody(response: Response): Promise<string | null> {
+async function readProviderErrorBody(
+  response: Response,
+): Promise<{ body: unknown; message: string | null }> {
   try {
     const text = await response.text();
-    return text ? text.slice(0, 2000) : null;
+    if (!text) {
+      return { body: null, message: null };
+    }
+    try {
+      const body = JSON.parse(text) as unknown;
+      return {
+        body,
+        message: readProviderErrorMessage(body) ?? text.slice(0, 2000),
+      };
+    } catch {
+      return {
+        body: text,
+        message: text.slice(0, 2000),
+      };
+    }
   } catch (error) {
-    return error instanceof Error ? error.message : "Unable to read provider error body.";
+    const message = error instanceof Error ? error.message : "Unable to read provider error body.";
+    return {
+      body: { error: { message } },
+      message,
+    };
   }
+}
+
+function readProviderErrorMessage(body: unknown): string | null {
+  if (isRecord(body) && isRecord(body.error) && typeof body.error.message === "string") {
+    return body.error.message;
+  }
+  return null;
 }

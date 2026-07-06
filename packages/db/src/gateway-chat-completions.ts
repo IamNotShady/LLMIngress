@@ -44,52 +44,34 @@ export function normalizeOpenAIChatCompletionRequest(
   body: unknown,
   requestId: string,
 ): GatewayChatCompletionRequestResult {
-  if (!isRecord(body) || !Array.isArray(body.messages) || body.messages.length === 0) {
+  if (!isRecord(body)) {
     return invalidChatRequest(requestId);
   }
 
-  const messages = body.messages.map(readOpenAIChatMessage);
-  if (messages.some((message) => !message)) {
-    return invalidChatRequest(requestId);
-  }
+  const messages = readOpenAIChatMessages(body.messages);
 
   const maxOutputTokens = readOptionalPositiveInteger(
     body.max_completion_tokens ?? body.max_tokens,
   );
-  if (maxOutputTokens === null) {
-    return invalidChatRequest(requestId);
-  }
   const maxOutputTokenField = readMaxOutputTokenField(body);
 
   const temperature = readOptionalFiniteNumber(body.temperature);
-  if (temperature === null) {
-    return invalidChatRequest(requestId);
-  }
 
-  if (body.stream !== undefined && typeof body.stream !== "boolean") {
-    return invalidChatRequest(requestId);
-  }
   const tools = readOptionalObjectArray(body.tools);
-  if (tools === null) {
-    return invalidChatRequest(requestId);
-  }
   const toolChoice = readOptionalOpenAIToolChoice(body.tool_choice);
-  if (toolChoice === null) {
-    return invalidChatRequest(requestId);
-  }
 
   return {
     ok: true,
     request: omitUndefined({
-      maxOutputTokens,
+      maxOutputTokens: maxOutputTokens === null ? undefined : maxOutputTokens,
       maxOutputTokenField,
-      messages: messages as NormalizedOpenAIChatMessage[],
+      messages,
       payload: body,
       passthrough: readChatPassthroughParameters(body),
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
-      temperature,
-      toolChoice,
-      tools,
+      temperature: temperature === null ? undefined : temperature,
+      toolChoice: toolChoice === null ? undefined : toolChoice,
+      tools: tools === null ? undefined : tools,
     }),
   };
 }
@@ -144,6 +126,16 @@ function invalidChatRequest(requestId: string): GatewayChatCompletionRequestFail
     ok: false,
     statusCode: 400,
   };
+}
+
+function readOpenAIChatMessages(value: unknown): NormalizedOpenAIChatMessage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((message) => {
+    const normalized = readOpenAIChatMessage(message);
+    return normalized ? [normalized] : [];
+  });
 }
 
 function readOpenAIChatMessage(value: unknown): NormalizedOpenAIChatMessage | null {

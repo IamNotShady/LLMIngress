@@ -46,26 +46,17 @@ export function normalizeOpenAIEmbeddingsRequest(
     return invalidEmbeddingsRequest(requestId);
   }
 
-  const input = readEmbeddingsInput(body.input);
-  if (!input) {
-    return invalidEmbeddingsRequest(requestId);
-  }
+  const input = readEmbeddingsInput(body.input) ?? [];
 
   const dimensions = readOptionalPositiveInteger(body.dimensions);
-  if (dimensions === null) {
-    return invalidEmbeddingsRequest(requestId);
-  }
 
   const encodingFormat = readOptionalEncodingFormat(body.encoding_format);
-  if (encodingFormat === null) {
-    return invalidEmbeddingsRequest(requestId);
-  }
 
   return {
     ok: true,
     request: omitUndefined({
-      dimensions,
-      encodingFormat,
+      dimensions: dimensions === null ? undefined : dimensions,
+      encodingFormat: encodingFormat === null ? undefined : encodingFormat,
       input,
       payload: body,
       passthrough: readPassthroughParameters(body, ["input", "model", "dimensions"]),

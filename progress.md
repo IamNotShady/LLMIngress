@@ -2,10 +2,10 @@
 
 ## Current State
 
-- Date: 2026-07-05
+- Date: 2026-07-06
 - Branch: `dev`
-- Base: `3dab4dda`
-- Status: Gateway agent limits single-read follow-up implemented and verified.
+- Base: `27fd08b4`
+- Status: Gateway ingress and provider error passthrough follow-up implemented and verified.
 
 ## 2026-07-05 Gateway Agent Limits Single-Read Follow-up
 
@@ -715,6 +715,35 @@
   - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
   - `pnpm run lint`
   - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Read-only ingress follow-up:
+  - Audited `/v1/chat/completions`, `/v1/responses`, `/v1/messages`, and `/v1/embeddings`: request readers now preserve the raw Agent body as the provider payload and only extract local metadata best-effort for routing, token estimates, stream selection, and limits. Provider-owned request shapes no longer cause local schema rejection; the only provider-body mutation is virtual model replacement.
+  - Removed the streaming dialect usage mutation that injected `stream_options.include_usage`; streaming request bodies now follow the same Agent-body-plus-model-replacement rule.
+  - Provider responses are still read for status, provider request id, usage/cost extraction, and background recording, but success bodies are returned from the provider result and subscription adapters no longer synthesize response bodies.
+- Read-only ingress TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts` failed while provider-owned Chat, Responses, Messages, and Embeddings request shapes were rejected and streaming dialects still requested usage injection.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed while streaming Chat with provider-owned `messages` returned HTTP 400 before provider execution.
+- Read-only ingress verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Provider error passthrough follow-up:
+  - Root cause: successful provider responses were no longer synthesized, but non-retryable provider 4xx responses still passed through Gateway fallback error mapping, which replaced provider error codes with `provider_rejected_request` and added a Gateway `requestId`.
+  - JSON protocol execution now returns the provider body and upstream status directly for non-retryable provider 4xx results that include a body. Streaming execution now returns the parsed provider error body and upstream status for non-retryable provider 4xx instead of wrapping it in a Gateway error envelope.
+  - Retryable 429/5xx/network failures keep the existing fallback and Gateway error semantics.
+- Provider error passthrough TDD red phase:
+  - `pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1` failed while Chat and Messages 4xx responses returned `provider_rejected_request` envelopes instead of the provider body.
+- Provider error passthrough verification completed:
+  - `pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1`
+  - `pnpm exec vitest run tests/features/gateway-error-fidelity.unit.test.ts tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
 
 ## Required Verification
 

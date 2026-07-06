@@ -32,7 +32,6 @@ describe("provider streaming dialects", () => {
     expect(dialect.transformBody({ stream: true }, "chat/completions")).toEqual({
       stream: true,
     });
-    expect(dialect.wantsStreamingUsage("chat/completions")).toBe(false);
   });
 
   it("adds OpenRouter attribution headers", () => {
@@ -46,12 +45,13 @@ describe("provider streaming dialects", () => {
     });
   });
 
-  it("requests streaming usage for OpenAI-compatible usage dialects", () => {
+  it("does not define usage-request body mutations for OpenAI-compatible dialects", () => {
     for (const providerKey of ["google", "lmstudio", "openai"]) {
       const dialect = resolveProviderStreamingDialect(providerKey);
 
-      expect(dialect.wantsStreamingUsage("chat/completions")).toBe(true);
-      expect(dialect.wantsStreamingUsage("responses")).toBe(false);
+      expect(dialect.transformBody({ stream: true }, "chat/completions")).toEqual({
+        stream: true,
+      });
     }
   });
 

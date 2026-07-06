@@ -73,6 +73,56 @@ describe("gateway request hygiene", () => {
     }
   });
 
+  it("keeps provider-owned request shapes readable without local schema rejection", () => {
+    const chatBody = {
+      max_completion_tokens: "provider-owned",
+      messages: "provider-owned",
+      stream: "provider-owned",
+      tool_choice: "provider-owned",
+      tools: ["provider-owned"],
+    };
+    const responsesBody = {
+      input: { provider: "owned" },
+      parallel_tool_calls: "provider-owned",
+      tool_choice: "provider-owned",
+      tools: ["provider-owned"],
+    };
+    const embeddingsBody = {
+      dimensions: "provider-owned",
+      encoding_format: "provider-owned",
+      input: { provider: "owned" },
+    };
+    const messagesBody = {
+      max_tokens: "provider-owned",
+      messages: "provider-owned",
+      stream: "provider-owned",
+      system: { provider: "owned" },
+      tool_choice: "provider-owned",
+    };
+
+    const chat = normalizeOpenAIChatCompletionRequest(chatBody, "req-1");
+    const responses = normalizeOpenAIResponsesRequest(responsesBody, "req-1");
+    const embeddings = normalizeOpenAIEmbeddingsRequest(embeddingsBody, "req-1");
+    const messages = normalizeAnthropicMessagesRequest(messagesBody, "req-1");
+
+    expect(chat.ok).toBe(true);
+    expect(responses.ok).toBe(true);
+    expect(embeddings.ok).toBe(true);
+    expect(messages.ok).toBe(true);
+    if (chat.ok) {
+      expect(chat.request.payload).toEqual(chatBody);
+    }
+    if (responses.ok) {
+      expect(responses.request.payload).toEqual(responsesBody);
+    }
+    if (embeddings.ok) {
+      expect(embeddings.request.payload).toEqual(embeddingsBody);
+    }
+    if (messages.ok) {
+      expect(messages.request.payload).toEqual(messagesBody);
+    }
+  });
+
   it("preserves official OpenAI chat fields and message content parts", () => {
     const messages = [
       { content: [{ text: "Follow policy.", type: "text" }], name: "policy", role: "developer" },
@@ -283,7 +333,7 @@ describe("gateway request hygiene", () => {
     }
     expect(
       normalizeOpenAIResponsesRequest({ input: [{ content: "", role: "user" }] }, "req-1").ok,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("keeps provider-owned Responses fields in the raw provider payload", () => {

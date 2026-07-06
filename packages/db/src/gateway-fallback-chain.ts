@@ -67,6 +67,7 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
   };
 
 export type FallbackAttemptErrorLike = {
+  body?: unknown;
   errorCode: string;
   errorMessage: string;
   statusCode: number | null;

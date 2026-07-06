@@ -210,6 +210,15 @@ export async function executeGatewayProtocolRequest<
       requestId: input.requestId,
     });
     if (!success) {
+      const providerError = buildProviderErrorPassthrough(lastError);
+      if (providerError) {
+        return {
+          activity,
+          body: providerError.body,
+          requestMetadata,
+          statusCode: providerError.statusCode,
+        };
+      }
       throw buildFallbackExhaustionError(lastError);
     }
 
@@ -253,4 +262,23 @@ export async function executeGatewayProtocolRequest<
       lease: concurrencyLease,
     }).catch(() => undefined);
   }
+}
+
+function buildProviderErrorPassthrough(
+  error: FallbackAttemptErrorLike | undefined,
+): { body: unknown; statusCode: number } | null {
+  const statusCode = error?.statusCode;
+  if (statusCode === undefined || statusCode === null || statusCode === 429) {
+    return null;
+  }
+  if (statusCode < 400 || statusCode >= 500) {
+    return null;
+  }
+  if (!error || !("body" in error)) {
+    return null;
+  }
+  return {
+    body: error.body ?? null,
+    statusCode,
+  };
 }

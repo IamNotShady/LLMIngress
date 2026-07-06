@@ -47,10 +47,7 @@ export function normalizeOpenAIResponsesRequest(
     return invalidResponsesRequest(requestId);
   }
 
-  const input = readResponsesInput(body.input);
-  if (!input) {
-    return invalidResponsesRequest(requestId);
-  }
+  const input = readResponsesInput(body.input) ?? [];
 
   const instructions = readOptionalStringOrNull(body.instructions);
 

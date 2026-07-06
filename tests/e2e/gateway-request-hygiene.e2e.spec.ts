@@ -89,6 +89,32 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       });
       expect(isRecord(providerBody) ? providerBody.top_p : undefined).toBe(0.9);
 
+      const streamingChatResponse = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: "provider-owned",
+          model: "vm-request-hygiene",
+          stream: true,
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await streamingChatResponse.text();
+
+      expect(streamingChatResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(2);
+      const streamingChatProviderBody = fakeProvider.requests[1]?.bodyJson;
+      expect(streamingChatProviderBody).toMatchObject({
+        messages: "provider-owned",
+        model: "fake-model",
+        stream: true,
+      });
+      expect(
+        isRecord(streamingChatProviderBody) ? streamingChatProviderBody.stream_options : undefined,
+      ).toBeUndefined();
+
       const tool = {
         name: "terminal",
         parameters: { properties: { command: { type: "string" } }, type: "object" },
@@ -128,8 +154,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await responsesResponse.text();
 
       expect(responsesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(2);
-      const responsesProviderBody = fakeProvider.requests[1]?.bodyJson;
+      expect(fakeProvider.requests).toHaveLength(3);
+      const responsesProviderBody = fakeProvider.requests[2]?.bodyJson;
       expect(responsesProviderBody).toMatchObject({
         background: true,
         conversation: "conv_123",
@@ -174,8 +200,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await imageResponse.text();
 
       expect(imageResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(3);
-      const imageProviderBody = fakeProvider.requests[2]?.bodyJson;
+      expect(fakeProvider.requests).toHaveLength(4);
+      const imageProviderBody = fakeProvider.requests[3]?.bodyJson;
       expect(imageProviderBody).toMatchObject({
         input: [
           {
@@ -213,13 +239,39 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await reasoningReplayResponse.text();
 
       expect(reasoningReplayResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(4);
-      const reasoningReplayProviderBody = fakeProvider.requests[3]?.bodyJson;
+      expect(fakeProvider.requests).toHaveLength(5);
+      const reasoningReplayProviderBody = fakeProvider.requests[4]?.bodyJson;
       expect(reasoningReplayProviderBody).toMatchObject({
         input: [reasoningItem, assistantPlaceholder],
         model: "fake-model",
         store: false,
         stream: true,
+      });
+
+      const providerOwnedResponsesResponse = await fetch(`${baseUrl}/v1/responses`, {
+        body: JSON.stringify({
+          input: { provider: "owned" },
+          model: "vm-request-hygiene",
+          parallel_tool_calls: "provider-owned",
+          tool_choice: "provider-owned",
+          tools: ["provider-owned"],
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await providerOwnedResponsesResponse.text();
+
+      expect(providerOwnedResponsesResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(6);
+      expect(fakeProvider.requests[5]?.bodyJson).toMatchObject({
+        input: { provider: "owned" },
+        model: "fake-model",
+        parallel_tool_calls: "provider-owned",
+        tool_choice: "provider-owned",
+        tools: ["provider-owned"],
       });
 
       const messagesResponse = await fetch(`${baseUrl}/v1/messages`, {
@@ -241,8 +293,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await messagesResponse.text();
 
       expect(messagesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(5);
-      const messagesProviderBody = fakeProvider.requests[4]?.bodyJson;
+      expect(fakeProvider.requests).toHaveLength(7);
+      const messagesProviderBody = fakeProvider.requests[6]?.bodyJson;
       expect(messagesProviderBody).toMatchObject({
         betas: ["mcp-client-2025-04-04"],
         container: { type: "auto" },
@@ -250,6 +302,56 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         max_tokens: 128,
         mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
         messages: [{ content: "hello", role: "user" }],
+        model: "fake-model",
+      });
+
+      const providerOwnedMessagesResponse = await fetch(`${baseUrl}/v1/messages`, {
+        body: JSON.stringify({
+          max_tokens: "provider-owned",
+          messages: "provider-owned",
+          model: "vm-request-hygiene",
+          stream: "provider-owned",
+          system: { provider: "owned" },
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await providerOwnedMessagesResponse.text();
+
+      expect(providerOwnedMessagesResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(8);
+      expect(fakeProvider.requests[7]?.bodyJson).toMatchObject({
+        max_tokens: "provider-owned",
+        messages: "provider-owned",
+        model: "fake-model",
+        stream: "provider-owned",
+        system: { provider: "owned" },
+      });
+
+      const providerOwnedEmbeddingsResponse = await fetch(`${baseUrl}/v1/embeddings`, {
+        body: JSON.stringify({
+          dimensions: "provider-owned",
+          encoding_format: "provider-owned",
+          input: { provider: "owned" },
+          model: "vm-request-hygiene",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      await providerOwnedEmbeddingsResponse.text();
+
+      expect(providerOwnedEmbeddingsResponse.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(9);
+      expect(fakeProvider.requests[8]?.bodyJson).toMatchObject({
+        dimensions: "provider-owned",
+        encoding_format: "provider-owned",
+        input: { provider: "owned" },
         model: "fake-model",
       });
     } finally {

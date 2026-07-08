@@ -272,6 +272,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-08: TDD red->green. Pooled clients in providers/provider-jobs/worker-model-refresh/worker-connectivity, pool errors and lease-release failures logged, gateway SIGTERM/SIGINT graceful shutdown exits 0, worker stop closes pools, gateway-runtime-status renamed, dead packages/observability removed. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed."
+    },
+    {
+      "id": "console-api-hygiene",
+      "name": "Console API Hygiene",
+      "description": "Every guarded console API route authenticates through one shared withConsoleAuth wrapper, unexpected errors return 500 with a generic message and server-side log while deliberate validation errors keep 400 with their message, and the agent-created HTML page renders from a dedicated module instead of living inside the route handler.",
+      "verification": "pnpm exec vitest run tests/features/console-api-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/console-api-hygiene.e2e.spec.ts",
+      "dependencies": [
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. withConsoleAuth guard across 14 routes, consoleActionErrorResponse maps unexpected errors to 500 without leaking messages, agent-created HTML extracted to _created-page.ts. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed."
     }
   ]
 }

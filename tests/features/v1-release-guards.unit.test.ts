@@ -28,6 +28,7 @@ const allowedFeatureIds = [
   "virtual-model-endpoint-routing",
   "gateway-listen-host",
   "db-connection-hygiene",
+  "console-api-hygiene",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -44,6 +45,7 @@ const inProgressFeatureIds = new Set([
   "virtual-model-endpoint-routing",
   "gateway-listen-host",
   "db-connection-hygiene",
+  "console-api-hygiene",
 ]);
 
 describe("v1 release guards milestone", () => {

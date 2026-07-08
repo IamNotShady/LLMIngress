@@ -1,4 +1,3 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { readConsoleMasterKeySource } from "@llmingress/db/console-provider-keys";
 import {
   completeProviderOAuthAuthorization,
@@ -11,15 +10,11 @@ import {
   enqueueProviderModelRefreshJob,
 } from "@llmingress/db/provider-jobs";
 import { type NextRequest, NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
 import { readNullableText, readNumber, readRequiredText, readText } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const action = readText(form, "action") ?? "start";
 
@@ -83,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: message }, { status: 400 });
   }
-}
+});
 
 function redirectToProvider(providerId: string): NextResponse {
   return redirectToConsolePath(`/providers?selected=${encodeURIComponent(providerId)}`);

@@ -1,5 +1,5 @@
 import { PageHeader } from "../../_components/page-header";
-import { SettingsSection } from "../../_modules/sections";
+import { SettingsSection } from "../../_modules/settings-section";
 
 export default function SettingsPage() {
   return (

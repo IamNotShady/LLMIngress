@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { formatConsoleTimestamp } from "../../packages/db/src/console-format";
 import {
   createTestPostgresFixture,
   runMigrations,
@@ -22,6 +23,9 @@ async function seedFormatterData(databaseUrl: string) {
   const virtualModelId = randomUUID();
   const todayActivityId = randomUUID();
   const oldActivityId = randomUUID();
+  const now = new Date();
+  const todayStartedAt = new Date(now.getTime() - 30 * 60 * 1000);
+  const oldStartedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
   await withPostgresClient(databaseUrl, async (client) => {
     await client.query(
@@ -36,9 +40,14 @@ async function seedFormatterData(databaseUrl: string) {
     );
 
     const rows = [
-      { id: todayActivityId, minutesAgo: 30, status: "succeeded", httpStatus: 200 },
-      { id: oldActivityId, minutesAgo: 3 * 24 * 60, status: "succeeded", httpStatus: 200 },
-      { id: randomUUID(), minutesAgo: 45, status: "failed", httpStatus: 502 },
+      { id: todayActivityId, startedAt: todayStartedAt, status: "succeeded", httpStatus: 200 },
+      { id: oldActivityId, startedAt: oldStartedAt, status: "succeeded", httpStatus: 200 },
+      {
+        id: randomUUID(),
+        startedAt: new Date(now.getTime() - 45 * 60 * 1000),
+        status: "failed",
+        httpStatus: 502,
+      },
     ];
     for (const row of rows) {
       await client.query(
@@ -52,7 +61,7 @@ async function seedFormatterData(databaseUrl: string) {
            $1, $2, $3, $4, 'llmi_format_probe',
            'chat_completions', 'format-probe-model', false,
            $5, $6, 1200,
-           now() - make_interval(mins => $7), now() - make_interval(mins => $7),
+           $7, $7,
            'format-probe-agent', 'format-probe-vm'
          )`,
         [
@@ -62,7 +71,7 @@ async function seedFormatterData(databaseUrl: string) {
           virtualModelId,
           row.status,
           row.httpStatus,
-          row.minutesAgo,
+          row.startedAt,
         ],
       );
     }
@@ -88,6 +97,8 @@ async function seedFormatterData(databaseUrl: string) {
       );
     }
   });
+
+  return { oldStartedAt, todayStartedAt };
 }
 
 test("console formats counts, costs, missing values and timestamps consistently across pages", async ({
@@ -100,7 +111,7 @@ test("console formats counts, costs, missing values and timestamps consistently 
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedFormatterData(fixture.databaseUrl);
+    const formatterData = await seedFormatterData(fixture.databaseUrl);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const consoleApp = startConsoleProcess({
@@ -126,7 +137,9 @@ test("console formats counts, costs, missing values and timestamps consistently 
           const todayRow = recentTable.locator("tbody tr", { hasText: "92,535" });
           await expect(todayRow).toHaveCount(1);
           await expect(todayRow).toContainText("$0.0000843");
-          expect(await todayRow.locator("td").first().innerText()).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+          expect(await todayRow.locator("td").first().innerText()).toBe(
+            formatConsoleTimestamp(formatterData.todayStartedAt),
+          );
 
           const oldRow = recentTable.locator("tbody tr", { hasText: "81,269" });
           await expect(oldRow).toHaveCount(0);
@@ -143,8 +156,8 @@ test("console formats counts, costs, missing values and timestamps consistently 
           await expect(activityRow).toContainText("$0.0000843");
           const oldActivityRow = page.locator("tbody tr", { hasText: "81,269" });
           await expect(oldActivityRow).toContainText("$0.14");
-          expect(await oldActivityRow.locator("td").first().innerText()).toMatch(
-            /^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}$/,
+          expect(await oldActivityRow.locator("td").first().innerText()).toBe(
+            formatConsoleTimestamp(formatterData.oldStartedAt),
           );
           const failedActivityRow = page.locator("tbody tr", { hasText: "Failed" });
           await expect(failedActivityRow).toContainText("—");

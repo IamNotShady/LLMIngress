@@ -1,0 +1,946 @@
+import {
+  type ConsoleAgentLimit,
+  defaultAgentLimitFormValues,
+  listAgentLimits,
+} from "@llmingress/db/console-agent-limits";
+import {
+  type AgentDerivedStatus,
+  type AgentIntegrationPlatform,
+  type AgentType,
+  type AgentVirtualModelAccess,
+  agentIntegrationPlatforms,
+  type ConsoleAgent,
+  listAgents,
+  listAgentVirtualModelAccess,
+} from "@llmingress/db/console-agents";
+import { formatConsoleCompactCount, formatConsoleUsd } from "@llmingress/db/console-format";
+import { getConsoleUsageSummary } from "@llmingress/db/console-usage";
+import { type ConsoleVirtualModel, listVirtualModels } from "@llmingress/db/console-virtual-models";
+import { FlatIcon } from "../_components/flat-icon";
+import { StatCard } from "../_components/stat-card";
+import { buildQueryHref } from "../_lib/pagination";
+import {
+  type ConsoleSearchParams,
+  findAgentLimit,
+  groupByAgentId,
+  readAgentAlertThresholdPercent,
+  readSingleSearchParam,
+} from "./sections";
+
+function AgentViewDialog({
+  access,
+  agent,
+  closeHref,
+  limits,
+}: {
+  access: AgentVirtualModelAccess | null;
+  agent: ConsoleAgent;
+  closeHref: string;
+  limits: readonly ConsoleAgentLimit[];
+}) {
+  const budgetLimit = findAgentLimit(limits, "budget");
+  const rpmLimit = findAgentLimit(limits, "rpm");
+  const tokenLimit = findAgentLimit(limits, "token");
+  const tpmLimit = findAgentLimit(limits, "tpm");
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`agent-view-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog agent-view-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <div className="agent-view-dialog-title">
+            <h2 id={`agent-view-dialog-title-${agent.id}`}>{agent.name}</h2>
+            <AgentStatusPill status={agent.status} />
+          </div>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <dl className="agent-detail-fields">
+          <div>
+            <dt>Type</dt>
+            <dd>{formatAgentTypeLabel(agent.agentType)}</dd>
+          </div>
+          <div>
+            <dt>Platform</dt>
+            <dd>{formatAgentIntegrationPlatformLabel(agent.integrationPlatform)}</dd>
+          </div>
+          <div>
+            <dt>Created</dt>
+            <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
+          </div>
+          <div>
+            <dt>Default model</dt>
+            <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
+          </div>
+        </dl>
+        <section className="agent-detail-section">
+          <h3>Allowed Virtual Models</h3>
+          <div className="agent-chip-list">
+            {(access?.allowedVirtualModels ?? []).map((virtualModel) => (
+              <span className="agent-chip" key={virtualModel.id}>
+                {virtualModel.name}
+              </span>
+            ))}
+          </div>
+        </section>
+        <section className="agent-detail-section">
+          <h3>Budget / Limit</h3>
+          <div className="agent-limit-row">
+            <span>Budget</span>
+            <strong>{formatAgentBudgetLimit(budgetLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>RPM</span>
+            <strong>{formatAgentNumericLimit(rpmLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>TPM</span>
+            <strong>{formatAgentNumericLimit(tpmLimit)}</strong>
+          </div>
+          <div className="agent-limit-row">
+            <span>Token limit</span>
+            <strong>{formatAgentTokenLimit(tokenLimit)}</strong>
+          </div>
+        </section>
+      </section>
+    </>
+  );
+}
+
+function AgentCreateDialog({
+  closeHref,
+  virtualModels,
+}: {
+  closeHref: string;
+  virtualModels: readonly ConsoleVirtualModel[];
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="new-agent-dialog-title"
+        aria-modal="true"
+        className="console-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="new-agent-dialog-title">New agent</h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <form className="provider-create-form" action="/api/agents" id="new-agent" method="post">
+          <input type="hidden" name="action" value="create" />
+          <label htmlFor="agent-name">Agent name</label>
+          <input id="agent-name" name="name" required />
+          <label htmlFor="agent-type">Agent type</label>
+          <select id="agent-type" name="agentType" required defaultValue="coding">
+            <option value="coding">Coding</option>
+            <option value="desktop">Desktop</option>
+            <option value="terminal">Terminal</option>
+            <option value="ide">IDE</option>
+            <option value="other">Other</option>
+          </select>
+          <label htmlFor="agent-integration-platform">Integration platform</label>
+          <select
+            id="agent-integration-platform"
+            name="integrationPlatform"
+            required
+            defaultValue="other"
+          >
+            {agentIntegrationPlatforms.map((platform) => (
+              <option key={platform} value={platform}>
+                {formatAgentIntegrationPlatformLabel(platform)}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="agent-request-logging">Request logging</label>
+          <select
+            id="agent-request-logging"
+            name="requestLoggingEnabled"
+            required
+            defaultValue="true"
+          >
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
+          </select>
+          <span className="form-label" id="agent-allowed-virtual-models-label">
+            Allowed virtual models
+          </span>
+          <AgentAllowedVirtualModelsCheckboxes
+            labelId="agent-allowed-virtual-models-label"
+            selectedVirtualModelIds={[]}
+            virtualModels={virtualModels}
+          />
+          <label htmlFor="agent-default-virtual-model">Default virtual model</label>
+          <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
+            <option value="">No default virtual model</option>
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
+          <label className="checkbox-label agent-limit-toggle" htmlFor="agent-enable-limits">
+            <input id="agent-enable-limits" name="enableLimits" type="checkbox" value="true" />
+            <span>Enable limits</span>
+          </label>
+          <div className="agent-create-limit-fields">
+            <label htmlFor="agent-budget-usd">Budget USD limit</label>
+            <input
+              id="agent-budget-usd"
+              name="budgetUsd"
+              type="number"
+              min="0.000001"
+              step="0.000001"
+              defaultValue={defaultAgentLimitFormValues.budgetUsd}
+            />
+            <label htmlFor="agent-budget-period">Budget period</label>
+            <select
+              id="agent-budget-period"
+              name="budgetPeriod"
+              defaultValue={defaultAgentLimitFormValues.budgetPeriod}
+            >
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+            </select>
+            <label htmlFor="agent-alert-threshold">Alert threshold (%)</label>
+            <input
+              id="agent-alert-threshold"
+              name="alertThresholdPercent"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.alertThresholdPercent}
+            />
+            <label htmlFor="agent-rpm">RPM limit</label>
+            <input
+              id="agent-rpm"
+              name="rpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.rpm}
+            />
+            <label htmlFor="agent-tpm">TPM limit</label>
+            <input
+              id="agent-tpm"
+              name="tpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.tpm}
+            />
+            <label htmlFor="agent-concurrency">Concurrency limit</label>
+            <input
+              id="agent-concurrency"
+              name="concurrency"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.concurrency}
+            />
+            <label htmlFor="agent-token-limit">Token limit</label>
+            <input
+              id="agent-token-limit"
+              name="tokenLimit"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={defaultAgentLimitFormValues.tokenLimit}
+            />
+          </div>
+          <button type="submit">
+            <span>Create</span>
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function AgentEditDialog({
+  access,
+  agent,
+  closeHref,
+  limits,
+  virtualModels,
+}: {
+  access: AgentVirtualModelAccess;
+  agent: ConsoleAgent;
+  closeHref: string;
+  limits: readonly ConsoleAgentLimit[];
+  virtualModels: readonly ConsoleVirtualModel[];
+}) {
+  const budgetLimit = findAgentLimit(limits, "budget");
+  const concurrencyLimit = findAgentLimit(limits, "concurrency");
+  const rpmLimit = findAgentLimit(limits, "rpm");
+  const tokenLimit = findAgentLimit(limits, "token");
+  const tpmLimit = findAgentLimit(limits, "tpm");
+  const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
+  const limitsEnabled = limits.length > 0;
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`agent-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id={`agent-dialog-title-${agent.id}`}>Edit {agent.name}</h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <form className="provider-edit-form" action="/api/agents" method="post">
+          <input type="hidden" name="action" value="saveAll" />
+          <input type="hidden" name="id" value={agent.id} />
+          <label htmlFor={`agent-name-${agent.id}`}>Agent name</label>
+          <input id={`agent-name-${agent.id}`} name="name" defaultValue={agent.name} required />
+          <label htmlFor={`agent-type-${agent.id}`}>Agent type</label>
+          <select
+            id={`agent-type-${agent.id}`}
+            name="agentType"
+            defaultValue={agent.agentType}
+            required
+          >
+            <option value="coding">Coding</option>
+            <option value="desktop">Desktop</option>
+            <option value="terminal">Terminal</option>
+            <option value="ide">IDE</option>
+            <option value="other">Other</option>
+          </select>
+          <label htmlFor={`agent-integration-platform-${agent.id}`}>Integration platform</label>
+          <select
+            id={`agent-integration-platform-${agent.id}`}
+            name="integrationPlatform"
+            defaultValue={agent.integrationPlatform}
+            required
+          >
+            {agentIntegrationPlatforms.map((platform) => (
+              <option key={platform} value={platform}>
+                {formatAgentIntegrationPlatformLabel(platform)}
+              </option>
+            ))}
+          </select>
+          <label htmlFor={`agent-request-logging-${agent.id}`}>Request logging</label>
+          <select
+            id={`agent-request-logging-${agent.id}`}
+            name="requestLoggingEnabled"
+            defaultValue={String(agent.requestLoggingEnabled)}
+            required
+          >
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
+          </select>
+          <span className="form-label" id={`agent-allowed-virtual-models-label-${agent.id}`}>
+            Allowed virtual models
+          </span>
+          <AgentAllowedVirtualModelsCheckboxes
+            labelId={`agent-allowed-virtual-models-label-${agent.id}`}
+            selectedVirtualModelIds={access.allowedVirtualModels.map(
+              (virtualModel) => virtualModel.id,
+            )}
+            virtualModels={virtualModels}
+          />
+          <label htmlFor={`agent-default-virtual-model-${agent.id}`}>Default virtual model</label>
+          <select
+            id={`agent-default-virtual-model-${agent.id}`}
+            name="defaultVirtualModelId"
+            defaultValue={access.defaultVirtualModel?.id ?? ""}
+          >
+            <option value="">No default virtual model</option>
+            {virtualModels.map((virtualModel) => (
+              <option key={virtualModel.id} value={virtualModel.id}>
+                {formatVirtualModelOptionLabel(virtualModel)}
+              </option>
+            ))}
+          </select>
+          <label
+            className="checkbox-label agent-limit-toggle"
+            htmlFor={`agent-enable-limits-${agent.id}`}
+          >
+            <input
+              id={`agent-enable-limits-${agent.id}`}
+              name="enableLimits"
+              type="checkbox"
+              value="true"
+              defaultChecked={limitsEnabled}
+            />
+            <span>Enable limits</span>
+          </label>
+          <div className="agent-limit-fields">
+            <label htmlFor={`agent-budget-usd-${agent.id}`}>Budget USD limit</label>
+            <input
+              id={`agent-budget-usd-${agent.id}`}
+              name="budgetUsd"
+              type="number"
+              min="0.000001"
+              step="0.000001"
+              defaultValue={budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd}
+              required
+            />
+            <label htmlFor={`agent-budget-period-${agent.id}`}>Budget period</label>
+            <select
+              id={`agent-budget-period-${agent.id}`}
+              name="budgetPeriod"
+              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+              required
+            >
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+            </select>
+            <label htmlFor={`agent-alert-threshold-${agent.id}`}>Alert threshold (%)</label>
+            <input
+              id={`agent-alert-threshold-${agent.id}`}
+              name="alertThresholdPercent"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              defaultValue={alertThresholdPercent}
+              required
+            />
+            <label htmlFor={`agent-rpm-${agent.id}`}>RPM limit</label>
+            <input
+              id={`agent-rpm-${agent.id}`}
+              name="rpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
+              required
+            />
+            <label htmlFor={`agent-tpm-${agent.id}`}>TPM limit</label>
+            <input
+              id={`agent-tpm-${agent.id}`}
+              name="tpm"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
+              required
+            />
+            <label htmlFor={`agent-concurrency-${agent.id}`}>Concurrency limit</label>
+            <input
+              id={`agent-concurrency-${agent.id}`}
+              name="concurrency"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency}
+              required
+            />
+            <label htmlFor={`agent-token-limit-${agent.id}`}>Token limit</label>
+            <input
+              id={`agent-token-limit-${agent.id}`}
+              name="tokenLimit"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
+              required
+            />
+          </div>
+          <button type="submit">
+            <span>Save</span>
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function AgentAllowedVirtualModelsCheckboxes({
+  labelId,
+  selectedVirtualModelIds,
+  virtualModels,
+}: {
+  labelId: string;
+  selectedVirtualModelIds: readonly string[];
+  virtualModels: readonly ConsoleVirtualModel[];
+}) {
+  const selectedIds = new Set(selectedVirtualModelIds);
+  if (virtualModels.length === 0) {
+    return <p className="form-hint">No virtual models configured.</p>;
+  }
+  return (
+    <fieldset aria-labelledby={labelId} className="agent-vm-checkbox-list">
+      {virtualModels.map((virtualModel) => {
+        const inputId = `${labelId}-${virtualModel.id}`;
+        return (
+          <label className="checkbox-label" htmlFor={inputId} key={virtualModel.id}>
+            <input
+              defaultChecked={selectedIds.has(virtualModel.id)}
+              id={inputId}
+              name="allowedVirtualModelIds"
+              type="checkbox"
+              value={virtualModel.id}
+            />
+            <span>{formatVirtualModelOptionLabel(virtualModel)}</span>
+          </label>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHref: string }) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby={`agent-delete-dialog-title-${agent.id}`}
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id={`agent-delete-dialog-title-${agent.id}`}>Delete {agent.name}?</h2>
+        </div>
+        <p>This removes the Agent and its API key.</p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
+          </a>
+          <form action="/api/agents" method="post">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="id" value={agent.id} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete</span>
+            </button>
+          </form>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function formatAgentTypeLabel(agentType: string): string {
+  const labels: Record<string, string> = {
+    coding: "CLI",
+    desktop: "Agent",
+    ide: "IDE",
+    other: "Agent",
+    terminal: "Terminal",
+  };
+  return labels[agentType] ?? agentType;
+}
+
+type AgentTypeFilter = "all" | AgentType;
+
+type AgentStatusFilter = "all" | AgentDerivedStatus;
+
+type AgentPlatformFilter = "all" | AgentIntegrationPlatform;
+
+const agentTypeFilters: readonly AgentType[] = ["coding", "desktop", "terminal", "ide", "other"];
+
+const agentStatusFilters: readonly AgentDerivedStatus[] = ["online", "offline", "high-risk"];
+
+function readAgentTypeFilter(value: string | undefined): AgentTypeFilter {
+  return agentTypeFilters.includes(value as AgentType) ? (value as AgentType) : "all";
+}
+
+function readAgentStatusFilter(value: string | undefined): AgentStatusFilter {
+  return agentStatusFilters.includes(value as AgentDerivedStatus)
+    ? (value as AgentDerivedStatus)
+    : "all";
+}
+
+function readAgentPlatformFilter(value: string | undefined): AgentPlatformFilter {
+  return agentIntegrationPlatforms.includes(value as AgentIntegrationPlatform)
+    ? (value as AgentIntegrationPlatform)
+    : "all";
+}
+
+function filterAgents(
+  agents: ConsoleAgent[],
+  filters: {
+    agentPlatformFilter: AgentPlatformFilter;
+    agentSearch: string;
+    agentStatusFilter: AgentStatusFilter;
+    agentTypeFilter: AgentTypeFilter;
+  },
+): ConsoleAgent[] {
+  const normalizedSearch = filters.agentSearch.toLowerCase();
+  return agents.filter((agent) => {
+    if (filters.agentTypeFilter !== "all" && agent.agentType !== filters.agentTypeFilter) {
+      return false;
+    }
+    if (filters.agentStatusFilter !== "all" && agent.status !== filters.agentStatusFilter) {
+      return false;
+    }
+    if (
+      filters.agentPlatformFilter !== "all" &&
+      agent.integrationPlatform !== filters.agentPlatformFilter
+    ) {
+      return false;
+    }
+    if (!normalizedSearch) {
+      return true;
+    }
+    return [
+      agent.name,
+      agent.keyPrefix ?? "",
+      agent.agentType,
+      formatAgentTypeLabel(agent.agentType),
+      formatAgentIntegrationPlatformLabel(agent.integrationPlatform),
+    ].some((value) => value.toLowerCase().includes(normalizedSearch));
+  });
+}
+
+function formatAgentIntegrationPlatformLabel(platform: AgentIntegrationPlatform): string {
+  const labels: Record<AgentIntegrationPlatform, string> = {
+    "claude-code": "Claude Code",
+    codex: "Codex",
+    cursor: "Cursor",
+    "github-copilot": "GitHub Copilot",
+    hermes: "Hermes",
+    openclaw: "OpenClaw",
+    opencode: "OpenCode",
+    other: "Other",
+  };
+  return labels[platform];
+}
+
+function AgentStatusPill({ status }: { status: AgentDerivedStatus }) {
+  if (status === "online") {
+    return <span className="pill--ok pill">Online</span>;
+  }
+  if (status === "high-risk") {
+    return <span className="pill--danger pill">High risk</span>;
+  }
+  return <span className="pill--warn pill">Offline</span>;
+}
+
+function formatAgentKeyPrefixDisplay(keyPrefix: string): string {
+  return keyPrefix.length <= 8 ? keyPrefix : `${keyPrefix.slice(0, 6)}...${keyPrefix.slice(-4)}`;
+}
+
+function formatAgentDetailDate(value: Date): string {
+  return value.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatAgentBudgetLimit(limit: ConsoleAgentLimit | undefined): string {
+  if (!limit?.enabled) {
+    return "Not configured";
+  }
+  return `$${limit.limitValue.toLocaleString()} / ${limit.period}`;
+}
+
+function formatAgentNumericLimit(limit: ConsoleAgentLimit | undefined): string {
+  if (!limit?.enabled) {
+    return "Not configured";
+  }
+  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
+}
+
+function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
+  if (!limit?.enabled) {
+    return "Not configured";
+  }
+  return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
+}
+
+function formatVirtualModelOptionLabel(virtualModel: {
+  description?: string;
+  displayName?: string;
+  name: string;
+}): string {
+  return virtualModel.name;
+}
+export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
+  const usageToday = await getConsoleUsageSummary({ window: "24h" });
+  const agents = await listAgents();
+  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
+  const agentLimits = await listAgentLimits();
+  const virtualModels = await listVirtualModels();
+  const agentVirtualModelAccessByAgentId = new Map(
+    agentVirtualModelAccess.map((access) => [access.agentId, access]),
+  );
+  const agentLimitsByAgentId = groupByAgentId(agentLimits);
+  const onlineAgentCount = agents.filter((agent) => agent.status === "online").length;
+  const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
+  const agentTypeFilter = readAgentTypeFilter(readSingleSearchParam(searchParams.agentType));
+  const agentStatusFilter = readAgentStatusFilter(readSingleSearchParam(searchParams.agentStatus));
+  const agentPlatformFilter = readAgentPlatformFilter(
+    readSingleSearchParam(searchParams.agentPlatform),
+  );
+  const agentSearch = readSingleSearchParam(searchParams.agentSearch)?.trim() ?? "";
+  const visibleAgents = filterAgents(agents, {
+    agentSearch,
+    agentStatusFilter,
+    agentTypeFilter,
+    agentPlatformFilter,
+  });
+  const selectedAgentId = readSingleSearchParam(searchParams.selected);
+  const agentView = readSingleSearchParam(searchParams.agentView);
+  const viewDialogAgent = agents.find((agent) => agent.id === agentView) ?? null;
+  const viewDialogAccess = viewDialogAgent
+    ? (agentVirtualModelAccessByAgentId.get(viewDialogAgent.id) ?? null)
+    : null;
+  const viewDialogLimits = viewDialogAgent
+    ? (agentLimitsByAgentId.get(viewDialogAgent.id) ?? [])
+    : [];
+  const agentViewCloseHref = buildQueryHref(searchParams, { agentView: undefined });
+  const agentDialog = readSingleSearchParam(searchParams.agentDialog);
+  const editDialogAgent = agents.find((agent) => agent.id === agentDialog) ?? null;
+  const agentDialogCloseHref = buildQueryHref(searchParams, {
+    agentDialog: undefined,
+    agentView: undefined,
+  });
+  const deleteAgent = readSingleSearchParam(searchParams.deleteAgent);
+  const deleteDialogAgent = agents.find((agent) => agent.id === deleteAgent) ?? null;
+  const deleteDialogCloseHref = buildQueryHref(searchParams, {
+    agentView: undefined,
+    deleteAgent: undefined,
+  });
+
+  return (
+    <section className="agents-dashboard" aria-label="Agents">
+      <div className="agents-shell">
+        <div className="agents-main-column">
+          <div className="stat-grid agents-stat-grid">
+            <StatCard icon="AG" label="Agents" value={String(agents.length)} />
+            <StatCard icon="ON" label="Online" value={String(onlineAgentCount)} />
+            <StatCard
+              icon="RQ"
+              label="Requests 24h"
+              value={formatConsoleCompactCount(usageToday.requestCount)}
+            />
+            <StatCard icon="$" label="Cost 24h" value={formatConsoleUsd(usageToday.totalCostUsd)} />
+          </div>
+          <form action="/agents" method="get">
+            <fieldset className="agents-filter-bar">
+              <legend className="sr-only">Agent filters</legend>
+              <div className="console-field">
+                <label htmlFor="agent-filter-type">Type</label>
+                <select id="agent-filter-type" name="agentType" defaultValue={agentTypeFilter}>
+                  <option value="all">All</option>
+                  <option value="coding">Coding</option>
+                  <option value="terminal">Terminal</option>
+                  <option value="ide">IDE</option>
+                  <option value="desktop">Desktop</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="console-field">
+                <label htmlFor="agent-filter-status">Status</label>
+                <select
+                  id="agent-filter-status"
+                  name="agentStatus"
+                  defaultValue={agentStatusFilter}
+                >
+                  <option value="all">All</option>
+                  <option value="online">Online</option>
+                  <option value="offline">Offline</option>
+                  <option value="high-risk">High risk</option>
+                </select>
+              </div>
+              <div className="console-field">
+                <label htmlFor="agent-filter-platform">Platform</label>
+                <select
+                  id="agent-filter-platform"
+                  name="agentPlatform"
+                  defaultValue={agentPlatformFilter}
+                >
+                  <option value="all">All</option>
+                  {agentIntegrationPlatforms.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {formatAgentIntegrationPlatformLabel(platform)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="console-field agents-search-field">
+                <label htmlFor="agent-filter-search" className="sr-only">
+                  Search
+                </label>
+                <input
+                  id="agent-filter-search"
+                  name="agentSearch"
+                  defaultValue={agentSearch}
+                  placeholder="Search agent name or note"
+                />
+              </div>
+              <div className="agents-filter-actions">
+                <button type="submit">
+                  <span>Filter</span>
+                </button>
+              </div>
+            </fieldset>
+          </form>
+          <div className="chart-card agents-list-card">
+            <h2 className="chart-card-title">Agent list</h2>
+            {agents.length === 0 ? (
+              <p>No agents yet — create one below.</p>
+            ) : visibleAgents.length === 0 ? (
+              <p>No agents match the selected filters.</p>
+            ) : (
+              <div className="data-table-wrap">
+                <table className="data-table agents-table">
+                  <thead>
+                    <tr>
+                      <th>Agent</th>
+                      <th>Type</th>
+                      <th>API Key Prefix</th>
+                      <th>Default VM</th>
+                      <th className="num">Available VM</th>
+                      <th className="num">Requests 24h</th>
+                      <th className="num">24h Cost</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleAgents.map((agent) => {
+                      const access = agentVirtualModelAccessByAgentId.get(agent.id);
+                      const usage = usageTodayByAgentId.get(agent.id);
+                      const agentViewHref = buildQueryHref(searchParams, {
+                        agentDialog: undefined,
+                        agentView: agent.id,
+                        deleteAgent: undefined,
+                        selected: agent.id,
+                      });
+                      const isSelectedAgent =
+                        agent.id === selectedAgentId || agent.id === viewDialogAgent?.id;
+                      return (
+                        <tr
+                          className={isSelectedAgent ? "is-selected" : "is-clickable"}
+                          key={agent.id}
+                        >
+                          <td>
+                            <a className="table-row-link" href={agentViewHref}>
+                              {agent.name}
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={agentViewHref}>
+                              {formatAgentTypeLabel(agent.agentType)}
+                            </a>
+                          </td>
+                          <td className="mono">
+                            <a className="table-row-link" href={agentViewHref}>
+                              {agent.keyPrefix
+                                ? formatAgentKeyPrefixDisplay(agent.keyPrefix)
+                                : "No key"}
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={agentViewHref}>
+                              {access?.defaultVirtualModel?.name ?? "None"}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={agentViewHref}>
+                              {access?.allowedVirtualModels.length ?? 0}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={agentViewHref}>
+                              {formatConsoleCompactCount(usage?.requestCount ?? 0)}
+                            </a>
+                          </td>
+                          <td className="num">
+                            <a className="table-row-link" href={agentViewHref}>
+                              {formatConsoleUsd(usage?.totalCostUsd ?? null)}
+                            </a>
+                          </td>
+                          <td>
+                            <a className="table-row-link" href={agentViewHref}>
+                              <AgentStatusPill status={agent.status} />
+                            </a>
+                          </td>
+                          <td>
+                            <span className="agent-table-actions">
+                              <a
+                                aria-label={`Edit ${agent.name}`}
+                                className="link-button agent-action-edit row-action-button"
+                                href={buildQueryHref(searchParams, {
+                                  agentDialog: agent.id,
+                                  agentView: undefined,
+                                })}
+                                title="Edit"
+                              >
+                                <FlatIcon name="edit" />
+                              </a>
+                              <a
+                                aria-label={`Delete ${agent.name}`}
+                                className="link-button agent-action-delete row-action-button row-action-danger"
+                                href={buildQueryHref(searchParams, {
+                                  agentDialog: undefined,
+                                  agentView: undefined,
+                                  deleteAgent: agent.id,
+                                })}
+                                title="Delete"
+                              >
+                                <FlatIcon name="delete" />
+                              </a>
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {viewDialogAgent ? (
+        <AgentViewDialog
+          access={viewDialogAccess}
+          agent={viewDialogAgent}
+          closeHref={agentViewCloseHref}
+          limits={viewDialogLimits}
+        />
+      ) : null}
+      {agentDialog === "new" ? (
+        <AgentCreateDialog closeHref={agentDialogCloseHref} virtualModels={virtualModels} />
+      ) : null}
+      {editDialogAgent ? (
+        <AgentEditDialog
+          agent={editDialogAgent}
+          access={
+            agentVirtualModelAccessByAgentId.get(editDialogAgent.id) ?? {
+              agentId: editDialogAgent.id,
+              allowedVirtualModels: [],
+              defaultVirtualModel: null,
+            }
+          }
+          closeHref={agentDialogCloseHref}
+          limits={agentLimitsByAgentId.get(editDialogAgent.id) ?? []}
+          virtualModels={virtualModels}
+        />
+      ) : null}
+      {deleteDialogAgent ? (
+        <AgentDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
+      ) : null}
+    </section>
+  );
+}

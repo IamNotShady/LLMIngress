@@ -1,0 +1,576 @@
+import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
+import {
+  listProviderApiKeyMetadata,
+  type ProviderApiKeyMetadata,
+} from "@llmingress/db/console-provider-keys";
+import { listConsoleProviderOAuthConnections } from "@llmingress/db/console-provider-oauth";
+import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
+import { type ConsoleProvider, listProviders } from "@llmingress/db/console-providers";
+import { listProviderModelOptions } from "@llmingress/db/console-route-policies";
+import { FlatIcon } from "../_components/flat-icon";
+import { buildQueryHref } from "../_lib/pagination";
+import { ProviderCreateForm } from "./provider-create-form";
+import { ProvidersClientSection } from "./providers-client-section";
+import {
+  type ConsoleSearchParams,
+  getConsoleProviderOrder,
+  orderProviderModelsForConsole,
+  readSingleSearchParam,
+} from "./sections";
+
+const providerTemplateGroups = listProviderTemplateSelectorGroups();
+
+const directProviderCreateChoices = [
+  {
+    action: "create",
+    baseUrlMode: "fixed_create",
+    displayName: "OpenAI",
+    fixedBaseUrl: "https://api.openai.com/v1",
+    groupId: "remote_api_key",
+    groupLabel: "API Keys",
+    id: "openai",
+    providerKey: "openai",
+    providerType: "api_key",
+  },
+  {
+    action: "create",
+    baseUrlMode: "fixed_create",
+    displayName: "Anthropic",
+    fixedBaseUrl: "https://api.anthropic.com/v1",
+    groupId: "remote_api_key",
+    groupLabel: "API Keys",
+    id: "anthropic",
+    providerKey: "anthropic",
+    providerType: "api_key",
+  },
+] as const;
+
+const defaultProviderCreateChoice = directProviderCreateChoices[0];
+
+const providerCreateChoices = [
+  ...directProviderCreateChoices,
+  ...providerTemplateGroups.flatMap((group) =>
+    group.templates.map((template) => ({
+      action: "createFromTemplate",
+      baseUrlMode: template.baseUrlMode,
+      baseUrlPlaceholder: template.baseUrlPlaceholder,
+      displayName: template.displayName,
+      fixedBaseUrl: template.fixedBaseUrl,
+      groupId: group.id,
+      groupLabel: group.label,
+      id: template.id,
+      providerKey: template.providerKey,
+      providerType: template.providerType,
+    })),
+  ),
+];
+
+function ProviderCreateDialog({
+  closeHref,
+  error,
+  errorField,
+  formValues,
+}: {
+  closeHref: string;
+  error?: string;
+  errorField?: string;
+  formValues: { baseUrl: string; displayName: string; providerKey: string };
+}) {
+  const formError = error && errorField === "form" ? error : undefined;
+  const providerKeyError = errorField === "providerKey" ? error : undefined;
+  const displayNameError = errorField === "displayName" ? error : undefined;
+  const baseUrlError = errorField === "baseUrl" ? error : undefined;
+  const selectedChoice =
+    providerCreateChoices.find((choice) => choice.providerKey === formValues.providerKey) ??
+    defaultProviderCreateChoice;
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="new-provider-dialog-title"
+        aria-modal="true"
+        className="console-dialog provider-create-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="new-provider-dialog-title">Add Provider</h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <ProviderCreateForm
+          baseUrlError={baseUrlError}
+          choices={providerCreateChoices}
+          displayNameError={displayNameError}
+          formError={formError}
+          initialBaseUrl={formValues.baseUrl}
+          initialDisplayName={formValues.displayName}
+          initialProviderKey={selectedChoice.providerKey}
+          providerKeyError={providerKeyError}
+        />
+      </section>
+    </>
+  );
+}
+
+function ProviderEditDialog({
+  closeHref,
+  error,
+  errorField,
+  formValues,
+  provider,
+}: {
+  closeHref: string;
+  error?: string;
+  errorField?: string;
+  formValues: { baseUrl: string; displayName: string };
+  provider: ConsoleProvider;
+}) {
+  const formError = error && errorField === "form" ? error : undefined;
+  const displayNameError = errorField === "displayName" ? error : undefined;
+  const baseUrlError = errorField === "baseUrl" ? error : undefined;
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="edit-provider-dialog-title"
+        aria-modal="true"
+        className="console-dialog provider-edit-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="edit-provider-dialog-title">Edit {provider.displayName}</h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <form className="provider-create-form" action="/api/providers" method="post">
+          <input type="hidden" name="action" value="update" />
+          <input type="hidden" name="id" value={provider.id} />
+          {formError ? (
+            <p className="form-error" role="alert">
+              {formError}
+            </p>
+          ) : null}
+          <label htmlFor="provider-edit-display-name">Provider display name</label>
+          <input
+            aria-describedby="provider-edit-display-name-error"
+            aria-invalid={displayNameError ? true : undefined}
+            className={displayNameError ? "is-invalid" : undefined}
+            defaultValue={formValues.displayName}
+            id="provider-edit-display-name"
+            name="displayName"
+            required
+          />
+          <p
+            className={displayNameError ? "field-error is-visible" : "field-error"}
+            id="provider-edit-display-name-error"
+          >
+            {displayNameError}
+          </p>
+          <label htmlFor="provider-edit-base-url">Provider base URL</label>
+          <input
+            aria-describedby="provider-edit-base-url-error"
+            aria-invalid={baseUrlError ? true : undefined}
+            className={baseUrlError ? "is-invalid" : undefined}
+            defaultValue={formValues.baseUrl}
+            id="provider-edit-base-url"
+            name="baseUrl"
+            readOnly={Boolean(provider.providerTemplateId)}
+            type="url"
+          />
+          <p
+            className={baseUrlError ? "field-error is-visible" : "field-error"}
+            id="provider-edit-base-url-error"
+          >
+            {baseUrlError}
+          </p>
+          <button type="submit">
+            <span>Save</span>
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function ProviderKeyCreateDialog({
+  closeHref,
+  provider,
+}: {
+  closeHref: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-key-create-title"
+        aria-modal="true"
+        className="console-dialog provider-key-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="provider-key-create-title">New {provider.displayName} API key</h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        <form className="provider-create-form" action="/api/provider-keys" method="post">
+          <input type="hidden" name="providerId" value={provider.id} />
+          <label htmlFor="provider-key-create-value">Provider API key</label>
+          <input
+            autoComplete="off"
+            id="provider-key-create-value"
+            name="providerApiKey"
+            required
+            type="password"
+          />
+          <label htmlFor="provider-key-create-label">Label</label>
+          <input id="provider-key-create-label" maxLength={100} name="label" type="text" />
+          <label htmlFor="provider-key-create-priority">Priority</label>
+          <input
+            defaultValue={100}
+            id="provider-key-create-priority"
+            max={100}
+            min={0}
+            name="priority"
+            step={1}
+            type="number"
+          />
+          <button type="submit">
+            <span>Save</span>
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function ProviderOAuthCreateDialog({
+  authorizeUrl,
+  closeHref,
+  error,
+  labelValue,
+  provider,
+  providerOAuthId,
+  priorityValue,
+}: {
+  authorizeUrl?: string;
+  closeHref: string;
+  error?: string;
+  labelValue?: string;
+  provider: ConsoleProvider;
+  providerOAuthId?: string;
+  priorityValue?: string;
+}) {
+  const hasPendingAuthorization = Boolean(authorizeUrl && providerOAuthId);
+  const priorityDefaultValue = priorityValue ?? "100";
+
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-oauth-create-title"
+        aria-modal="true"
+        className="console-dialog provider-key-dialog"
+        role="dialog"
+      >
+        <div className="console-dialog-head">
+          <h2 id="provider-oauth-create-title">New {provider.displayName} OAuth connection</h2>
+          <a className="secondary-button" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Close</span>
+          </a>
+        </div>
+        {error ? <p className="form-error">{error}</p> : null}
+        {hasPendingAuthorization ? (
+          <>
+            <div className="provider-create-form">
+              <label htmlFor="provider-oauth-authorize-url">Authorization URL</label>
+              <textarea
+                id="provider-oauth-authorize-url"
+                readOnly
+                rows={4}
+                defaultValue={authorizeUrl}
+              />
+              <a
+                className="oauth-open-link secondary-button"
+                href={authorizeUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <FlatIcon name="view" />
+                <span>Open authorization URL</span>
+              </a>
+            </div>
+            <form className="provider-create-form" action="/api/provider-oauth" method="post">
+              <input type="hidden" name="action" value="complete" />
+              <input type="hidden" name="providerId" value={provider.id} />
+              <input type="hidden" name="providerOAuthId" value={providerOAuthId} />
+              <input type="hidden" name="providerAuthorizeUrl" value={authorizeUrl} />
+              <label htmlFor="provider-oauth-complete-label">Label</label>
+              <input
+                id="provider-oauth-complete-label"
+                maxLength={100}
+                name="label"
+                type="text"
+                defaultValue={labelValue ?? ""}
+              />
+              <label htmlFor="provider-oauth-complete-priority">Priority</label>
+              <input
+                defaultValue={priorityDefaultValue}
+                id="provider-oauth-complete-priority"
+                max={100}
+                min={0}
+                name="priority"
+                step={1}
+                type="number"
+              />
+              <label htmlFor="provider-oauth-callback-input">
+                Callback URL or authorization code
+              </label>
+              <textarea id="provider-oauth-callback-input" name="callbackInput" required rows={4} />
+              <button className="oauth-action-button" type="submit">
+                <FlatIcon name="confirm" />
+                <span>Connect OAuth</span>
+              </button>
+            </form>
+          </>
+        ) : null}
+      </section>
+    </>
+  );
+}
+
+function ProviderDeleteDialog({
+  closeHref,
+  provider,
+}: {
+  closeHref: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-delete-title"
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <h2 id="provider-delete-title">Delete provider?</h2>
+        <p>This removes {provider.displayName} from the provider list.</p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
+          </a>
+          <form action="/api/providers" method="post">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="id" value={provider.id} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete provider</span>
+            </button>
+          </form>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function ProviderKeyDeleteDialog({
+  closeHref,
+  keyPrefix,
+  providerApiKeyId,
+  provider,
+}: {
+  closeHref: string;
+  keyPrefix: string;
+  providerApiKeyId: string;
+  provider: ConsoleProvider;
+}) {
+  return (
+    <>
+      <div className="console-dialog-scrim" aria-hidden="true" />
+      <section
+        aria-labelledby="provider-key-delete-title"
+        aria-modal="true"
+        className="console-dialog agent-delete-dialog"
+        role="dialog"
+      >
+        <h2 id="provider-key-delete-title">Delete API key?</h2>
+        <p>
+          This removes key {keyPrefix} from {provider.displayName}.
+        </p>
+        <div className="agent-delete-actions">
+          <a className="agent-delete-cancel" href={closeHref}>
+            <FlatIcon name="cancel" />
+            <span>Cancel</span>
+          </a>
+          <form action="/api/provider-keys" method="post">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete key</span>
+            </button>
+          </form>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
+  const grouped = new Map<string, ProviderApiKeyMetadata[]>();
+
+  for (const providerKey of providerKeys) {
+    const keys = grouped.get(providerKey.providerId) ?? [];
+    keys.push(providerKey);
+    grouped.set(providerKey.providerId, keys);
+  }
+
+  return grouped;
+}
+
+function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider[] {
+  return [...providers].sort((left, right) => {
+    const leftOrder = getConsoleProviderOrder(left.providerKey);
+    const rightOrder = getConsoleProviderOrder(right.providerKey);
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    return left.displayName.localeCompare(right.displayName);
+  });
+}
+export async function ProvidersSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
+  const providers = orderProvidersForConsole(await listProviders());
+  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
+  const providerKeys = await listProviderApiKeyMetadata();
+  const providerOAuthConnections = await listConsoleProviderOAuthConnections();
+  const providerModelOptions = orderProviderModelsForConsole(await listProviderModelOptions());
+  const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
+  const providerDialog = readSingleSearchParam(searchParams.providerDialog);
+  const providerDelete = readSingleSearchParam(searchParams.providerDelete);
+  const providerError = readSingleSearchParam(searchParams.providerError);
+  const providerErrorField = readSingleSearchParam(searchParams.providerErrorField);
+  const providerDialogCloseHref = buildQueryHref(searchParams, {
+    providerBaseUrlValue: undefined,
+    providerDialog: undefined,
+    providerDisplayNameValue: undefined,
+    providerError: undefined,
+    providerErrorField: undefined,
+    providerKeyValue: undefined,
+  });
+  const providerDeleteCloseHref = buildQueryHref(searchParams, {
+    providerDelete: undefined,
+  });
+  const providerFormValues = {
+    baseUrl: readSingleSearchParam(searchParams.providerBaseUrlValue) ?? "",
+    displayName: readSingleSearchParam(searchParams.providerDisplayNameValue) ?? "",
+    providerKey: readSingleSearchParam(searchParams.providerKeyValue) ?? "",
+  };
+  const providerKeyDialog = readSingleSearchParam(searchParams.providerKeyDialog);
+  const providerKeyDelete = readSingleSearchParam(searchParams.providerKeyDelete);
+  const providerOAuthError = readSingleSearchParam(searchParams.providerOAuthError);
+  const providerOAuthId = readSingleSearchParam(searchParams.providerOAuthId);
+  const providerOAuthLabelValue = readSingleSearchParam(searchParams.providerOAuthLabelValue);
+  const providerOAuthPriorityValue = readSingleSearchParam(searchParams.providerOAuthPriorityValue);
+  const providerAuthorizeUrl = readSingleSearchParam(searchParams.providerAuthorizeUrl);
+  const providerKeyDialogCloseHref = buildQueryHref(searchParams, {
+    providerKeyDelete: undefined,
+    providerKeyDialog: undefined,
+    providerAuthorizeUrl: undefined,
+    providerOAuthError: undefined,
+    providerOAuthId: undefined,
+    providerOAuthLabelValue: undefined,
+    providerOAuthPriorityValue: undefined,
+  });
+  const editDialogProvider =
+    providerDialog && providerDialog !== "new"
+      ? (providers.find((provider) => provider.id === providerDialog) ?? null)
+      : null;
+  const deleteDialogProvider = providers.find((provider) => provider.id === providerDelete) ?? null;
+  const selectedProviderId = readSingleSearchParam(searchParams.selected);
+  const selectedProvider =
+    providers.find((provider) => provider.id === selectedProviderId) ??
+    providers.find((provider) => provider.providerKey === "openai") ??
+    providers[0] ??
+    null;
+  const selectedProviderKeys = selectedProvider
+    ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
+    : [];
+  const deleteProviderKey = selectedProviderKeys.find(
+    (providerKey) => providerKey.id === providerKeyDelete,
+  );
+
+  return (
+    <section className="providers-dashboard" aria-label="Providers & Models">
+      <ProvidersClientSection
+        initialSelectedProviderId={selectedProviderId ?? undefined}
+        providerHealthSummaries={providerHealthSummaries}
+        providerKeys={providerKeys}
+        providerModelOptions={providerModelOptions}
+        providerOAuthConnections={providerOAuthConnections}
+        providers={providers}
+        searchParams={searchParams}
+      />
+      {providerDialog === "new" ? (
+        <ProviderCreateDialog
+          closeHref={providerDialogCloseHref}
+          error={providerError}
+          errorField={providerErrorField}
+          formValues={providerFormValues}
+        />
+      ) : null}
+      {providerKeyDialog && selectedProvider ? (
+        selectedProvider.providerType === "subscription" ? (
+          <ProviderOAuthCreateDialog
+            authorizeUrl={providerAuthorizeUrl}
+            closeHref={providerKeyDialogCloseHref}
+            error={providerOAuthError}
+            labelValue={providerOAuthLabelValue}
+            provider={selectedProvider}
+            providerOAuthId={providerOAuthId}
+            priorityValue={providerOAuthPriorityValue}
+          />
+        ) : (
+          <ProviderKeyCreateDialog
+            closeHref={providerKeyDialogCloseHref}
+            provider={selectedProvider}
+          />
+        )
+      ) : null}
+      {deleteProviderKey && selectedProvider ? (
+        <ProviderKeyDeleteDialog
+          closeHref={providerKeyDialogCloseHref}
+          keyPrefix={deleteProviderKey.keyPrefix}
+          providerApiKeyId={deleteProviderKey.id}
+          provider={selectedProvider}
+        />
+      ) : null}
+      {deleteDialogProvider ? (
+        <ProviderDeleteDialog closeHref={providerDeleteCloseHref} provider={deleteDialogProvider} />
+      ) : null}
+      {editDialogProvider ? (
+        <ProviderEditDialog
+          closeHref={providerDialogCloseHref}
+          error={providerError}
+          errorField={providerErrorField}
+          formValues={{
+            baseUrl: providerFormValues.baseUrl || editDialogProvider.baseUrl || "",
+            displayName: providerFormValues.displayName || editDialogProvider.displayName,
+          }}
+          provider={editDialogProvider}
+        />
+      ) : null}
+    </section>
+  );
+}

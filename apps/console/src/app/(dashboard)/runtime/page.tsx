@@ -1,5 +1,5 @@
 import { PageHeader } from "../../_components/page-header";
-import { RuntimeSection } from "../../_modules/sections";
+import { RuntimeSection } from "../../_modules/runtime-section";
 
 export default function GatewayRuntimePage() {
   return (

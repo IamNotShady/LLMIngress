@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest";
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
 const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
-const sections = () => readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+const sectionSource = (file: string) => readFileSync(join(appDir, "_modules", file), "utf8");
 const providersSection = () =>
   readFileSync(join(appDir, "_modules/providers-client-section.tsx"), "utf8");
 const routeDialog = () =>
@@ -13,7 +13,7 @@ const routeDialog = () =>
 
 describe("console providers IA and form polish static contract", () => {
   test("providers page has one representation: the summary-card grid is gone", () => {
-    const source = sections();
+    const source = sectionSource("providers-section.tsx");
     expect(source).not.toContain("provider-card-grid");
     expect(source).not.toContain("provider-summary-card");
     expect(css()).not.toContain(".provider-card-grid");
@@ -38,7 +38,7 @@ describe("console providers IA and form polish static contract", () => {
   test("settings display-only selects look disabled and the webhook form guides input", () => {
     expect(css()).toMatch(/select:disabled,\s*textarea:disabled\s*\{[^}]*cursor:\s*not-allowed/s);
     expect(css()).toMatch(/select:disabled,\s*textarea:disabled\s*\{[^}]*opacity/s);
-    const source = sections();
+    const source = sectionSource("settings-section.tsx");
     const webhookForm = source.slice(
       source.indexOf('action="/api/notification-channels"'),
       source.indexOf("</form>", source.indexOf('action="/api/notification-channels"')),

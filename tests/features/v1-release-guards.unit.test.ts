@@ -29,6 +29,7 @@ const allowedFeatureIds = [
   "gateway-listen-host",
   "db-connection-hygiene",
   "console-api-hygiene",
+  "console-sections-split",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -46,6 +47,7 @@ const inProgressFeatureIds = new Set([
   "gateway-listen-host",
   "db-connection-hygiene",
   "console-api-hygiene",
+  "console-sections-split",
 ]);
 
 describe("v1 release guards milestone", () => {
@@ -116,18 +118,17 @@ describe("v1 release guards milestone", () => {
   });
 
   it("keeps retired Console UI complexity deleted", () => {
-    const sections = readFileSync(
-      join(repoRoot, "apps/console/src/app/_modules/sections.tsx"),
-      "utf8",
-    );
+    const consoleModules = listFiles(join(repoRoot, "apps/console/src/app/_modules"))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n");
     const globals = readFileSync(join(repoRoot, "apps/console/src/app/globals.css"), "utf8");
     const nav = readFileSync(join(repoRoot, "apps/console/src/app/_lib/nav.ts"), "utf8");
 
     expect(
       existsSync(join(repoRoot, "apps/console/src/app/_components/date-picker-input.tsx")),
     ).toBe(false);
-    expect(sections).not.toContain("DatePickerInput");
-    expect(sections).toContain('type="date"');
+    expect(consoleModules).not.toContain("DatePickerInput");
+    expect(consoleModules).toContain('type="date"');
     expect(globals).not.toContain("date-picker-");
     expect(nav).toContain("export const consoleNavItems");
     expect(nav).not.toContain("consoleNavGroups");

@@ -1,5 +1,6 @@
 import { PageHeader } from "../../_components/page-header";
-import { ActivitySection, type ConsoleSearchParams } from "../../_modules/sections";
+import { ActivitySection } from "../../_modules/activity-section";
+import type { ConsoleSearchParams } from "../../_modules/sections";
 
 export default async function ActivityPage({
   searchParams,

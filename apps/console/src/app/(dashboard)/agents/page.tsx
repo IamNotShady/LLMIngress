@@ -1,5 +1,6 @@
 import { PageHeader } from "../../_components/page-header";
-import { AgentsSection, type ConsoleSearchParams } from "../../_modules/sections";
+import { AgentsSection } from "../../_modules/agents-section";
+import type { ConsoleSearchParams } from "../../_modules/sections";
 
 export default async function AgentsPage({
   searchParams,

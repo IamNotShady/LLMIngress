@@ -1,5 +1,6 @@
 import { PageHeader } from "../../_components/page-header";
-import { type ConsoleSearchParams, UsageSection } from "../../_modules/sections";
+import type { ConsoleSearchParams } from "../../_modules/sections";
+import { UsageSection } from "../../_modules/usage-section";
 
 export default async function UsagePage({
   searchParams,

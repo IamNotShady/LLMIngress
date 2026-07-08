@@ -98,7 +98,7 @@
         "console-p0-layout"
       ],
       "status": "passing",
-      "evidence": "2026-07-03: TDD red->green. Unit (formatter behavior + call-site contracts) + E2E green: seeded sub-cent cost renders $0.0000843 identically on Overview and Activity, token cells show full 92,535 counts, failed request shows em dashes (no N/A/Unavailable), 3-day-old row carries a date-qualified timestamp while today's row is HH:MM:SS, Usage total cost has no 8-decimal noise. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified."
+      "evidence": "2026-07-03: TDD red->green. Unit (formatter behavior + call-site contracts) + E2E green: seeded sub-cent cost renders $0.0000843 identically on Overview and Activity, token cells show full 92,535 counts, failed request shows em dashes (no N/A/Unavailable), 3-day-old row carries a date-qualified timestamp while today's row is HH:MM:SS, Usage total cost has no 8-decimal noise. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. 2026-07-09: stabilized timestamp E2E seeding across local midnight by asserting rendered text against formatConsoleTimestamp; focused unit+E2E passed."
     },
     {
       "id": "console-providers-ia-and-forms",
@@ -283,6 +283,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-08: TDD red->green. withConsoleAuth guard across 14 routes, consoleActionErrorResponse maps unexpected errors to 500 without leaking messages, agent-created HTML extracted to _created-page.ts. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed."
+    },
+    {
+      "id": "console-sections-split",
+      "name": "Console Sections Split",
+      "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",
+      "verification": "pnpm exec vitest run tests/features/console-sections-split.unit.test.ts && pnpm test:e2e tests/e2e/console-sections-split.e2e.spec.ts",
+      "dependencies": [
+        "v1-console",
+        "console-p0-layout"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. Split console dashboard sections into per-section modules, kept sections.tsx as shared helpers under the line budget, and preserved signed-in dashboard rendering without horizontal overflow. Focused unit+E2E, pnpm run verify, and pnpm run verify:features passed."
     }
   ]
 }

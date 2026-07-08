@@ -249,6 +249,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-06: TDD red->green. Added route_policies.rules.endpointProtocol without a migration, derived supportedEndpoints from provider templates plus direct openai/anthropic providers, filtered Virtual Model and Route Policy candidate pickers by endpoint, rejected incompatible route-policy saves, and added Gateway runtime endpoint mismatch rejection for JSON and streaming paths while keeping legacy policies without endpointProtocol compatible. Verification passed: focused unit, focused E2E, v1-release-guards unit after adding this feature to the allowed tracker list, pnpm run typecheck, pnpm run lint, pnpm run verify, and pnpm run verify:features with all 22 passing features re-verified."
+    },
+    {
+      "id": "gateway-listen-host",
+      "name": "Gateway Listen Host",
+      "description": "Gateway binds 127.0.0.1 by default when the real process starts, honors a GATEWAY_HOST override, and the Docker compose deployment explicitly opts into 0.0.0.0.",
+      "verification": "pnpm exec vitest run tests/features/gateway-listen-host.unit.test.ts && pnpm test:e2e tests/e2e/gateway-listen-host.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. gatewayListenHost added to gateway-env, main.ts listen uses it, docker-compose pins GATEWAY_HOST=0.0.0.0. Focused unit+E2E, pnpm run verify, and pnpm run verify:features all passed."
     }
   ]
 }

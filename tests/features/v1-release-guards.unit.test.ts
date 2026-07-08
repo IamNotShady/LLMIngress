@@ -26,6 +26,7 @@ const allowedFeatureIds = [
   "schema-notification-deliveries-removed",
   "schema-fallback-single-source",
   "virtual-model-endpoint-routing",
+  "gateway-listen-host",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -40,6 +41,7 @@ const inProgressFeatureIds = new Set([
   "schema-notification-deliveries-removed",
   "schema-fallback-single-source",
   "virtual-model-endpoint-routing",
+  "gateway-listen-host",
 ]);
 
 describe("v1 release guards milestone", () => {

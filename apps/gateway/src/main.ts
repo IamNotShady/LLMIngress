@@ -19,6 +19,7 @@ import {
   gatewayConfigReconcileIntervalMs,
   gatewayHeartbeatIntervalMs,
   gatewayInstanceId,
+  gatewayListenHost,
   gatewayMetricsToken,
 } from "@llmingress/db/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/db/gateway-error-mapping";
@@ -200,7 +201,7 @@ export async function startGateway() {
   const app = createGatewayApp({ configRuntime });
 
   await app.listen({
-    host: "0.0.0.0",
+    host: gatewayListenHost(),
     port: config.gatewayPort,
   });
 }

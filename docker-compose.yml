@@ -8,6 +8,7 @@ x-llmingress-app: &llmingress-app
     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
     MASTER_KEY: ${MASTER_KEY:-test-master-key-change-me}
     GATEWAY_PORT: 4000
+    GATEWAY_HOST: 0.0.0.0
     CONSOLE_PORT: 3000
     CONSOLE_HOST: 0.0.0.0
     WORKER_HEARTBEAT_MS: 30000

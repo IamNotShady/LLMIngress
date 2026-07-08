@@ -24,6 +24,10 @@ export function gatewayInstanceId(env: GatewayEnvironment = process.env): string
   return readTrimmedEnv(env.GATEWAY_INSTANCE_ID) ?? "gateway";
 }
 
+export function gatewayListenHost(env: GatewayEnvironment = process.env): string {
+  return readTrimmedEnv(env.GATEWAY_HOST) ?? "127.0.0.1";
+}
+
 export function gatewayDebugRequestMetadata(env: GatewayEnvironment = process.env): boolean {
   return env.GATEWAY_DEBUG_REQUEST_METADATA === "true";
 }

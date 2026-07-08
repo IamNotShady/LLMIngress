@@ -769,6 +769,23 @@
   - TDD: red `provider-dialect` unit failed with `expected 'claude-oauth-token' to be undefined`, then went green.
   - Verification: `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts tests/features/gateway-request-hygiene.unit.test.ts`, empirical streaming header trace (x-api-key absent, Bearer + merged betas intact), `pnpm run verify`, and `pnpm run verify:features` passed with all 22 passing features re-verified (optimized E2E batch flaked once, then per-feature fallback passed).
 
+## 2026-07-08 Code Quality Hardening Baseline
+
+- Worktree: `.claude/worktrees/code-quality-hardening` on branch `worktree-code-quality-hardening`.
+- Baseline green before new scope: `pnpm install && pnpm run verify` exited 0.
+- Feature regression baseline: `pnpm run verify:features` exited 0 with all 22 passing features re-verified. The optimized E2E batch missed one `v1-gateway-routing` activity row, then the built-in per-feature fallback passed.
+
+## 2026-07-08 Code Quality Hardening Completion
+
+- Traceback: `docs/superpowers/plans/2026-07-08-code-quality-hardening.md`, covering the confirmed findings from the 2026-07-08 architecture audit.
+- `gateway-listen-host`: Gateway now binds `127.0.0.1` by default through `gatewayListenHost`, honors `GATEWAY_HOST`, and Docker explicitly opts into `0.0.0.0`.
+- `db-connection-hygiene`: Provider/worker DB paths use the shared pool, pool/release failures are logged, gateway/worker shutdown closes pools, and the runtime-status filename no longer stutters.
+- `console-api-hygiene`: Console API routes share `withConsoleAuth`, unexpected action errors return sanitized 500 responses, and the agent-created HTML page is extracted.
+- `console-sections-split`: Dashboard sections are split into 11 bounded modules; `sections.tsx` now holds only shared helpers under budget, and page/static tests were updated to the new module boundaries.
+- Regression note: `console-shared-formatters` E2E timestamp seeding was stabilized after a local-midnight boundary exposed a test-only assumption; focused unit+E2E passed after the fix.
+- Verification: `pnpm run verify` passed, and `pnpm run verify:features` passed with all 26 passing features re-verified.
+- Blockers: none open.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

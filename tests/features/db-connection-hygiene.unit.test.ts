@@ -1,0 +1,54 @@
+import { existsSync, readFileSync } from "node:fs";
+import { describe, expect, it, vi } from "vitest";
+import { closePostgresPools, getPostgresPool } from "../../packages/db/src/client";
+
+const pooledModules = [
+  "packages/db/src/providers.ts",
+  "packages/db/src/provider-jobs.ts",
+  "packages/db/src/worker-model-refresh.ts",
+  "packages/db/src/worker-provider-connectivity-check.ts",
+];
+
+describe("db connection hygiene", () => {
+  it("logs postgres pool background errors instead of swallowing them", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const pool = getPostgresPool("postgresql://postgres:postgres@127.0.0.1:1/never-connects");
+      pool.emit("error", new Error("boom"));
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining("postgres pool error"),
+        expect.any(Error),
+      );
+    } finally {
+      await closePostgresPools();
+      spy.mockRestore();
+    }
+  });
+
+  it("uses the pooled client in provider and worker modules", () => {
+    for (const file of pooledModules) {
+      const source = readFileSync(file, "utf8");
+      expect(source, file).not.toMatch(/\bwithPostgresClient\(/);
+      expect(source, file).toContain("withPooledPostgresClient");
+    }
+  });
+
+  it("does not silently swallow concurrency release failures", () => {
+    const source = readFileSync("packages/db/src/gateway-protocol-request.ts", "utf8");
+    expect(source).not.toContain("catch(() => undefined)");
+  });
+
+  it("installs gateway signal handlers and closes worker pools on stop", () => {
+    const gatewaySource = readFileSync("apps/gateway/src/main.ts", "utf8");
+    expect(gatewaySource).toContain('process.once("SIGTERM"');
+    expect(gatewaySource).toContain('process.once("SIGINT"');
+    const workerSource = readFileSync("apps/worker/src/main.ts", "utf8");
+    expect(workerSource).toContain("closePostgresPools");
+  });
+
+  it("renames the stuttering runtime-status module and drops the dead observability package", () => {
+    expect(existsSync("packages/db/src/gateway-gateway-runtime-status.ts")).toBe(false);
+    expect(existsSync("packages/db/src/gateway-runtime-status.ts")).toBe(true);
+    expect(existsSync(["packages", "observability"].join("/"))).toBe(false);
+  });
+});

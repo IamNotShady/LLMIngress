@@ -265,7 +265,9 @@ export async function executeGatewayProtocolRequest<
     await releaseGatewayConcurrency({
       databaseUrl: input.databaseUrl,
       lease: concurrencyLease,
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      console.error("[gateway] failed to release concurrency lease", error);
+    });
   }
 }
 

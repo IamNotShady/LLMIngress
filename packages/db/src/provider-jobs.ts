@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { withPostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 
 export type ProviderModelRefreshInput = {
   providerId?: string | null;
@@ -49,7 +49,7 @@ export async function enqueueProviderModelRefreshJob(input: {
   const jobPayload = buildModelRefreshJobPayload(providerId);
   const notificationPayload = buildJobCreatedNotificationPayload(jobId);
 
-  await withPostgresClient(input.databaseUrl, async (client) => {
+  await withPooledPostgresClient(input.databaseUrl, async (client) => {
     await client.query("begin");
 
     try {
@@ -101,7 +101,7 @@ export async function enqueueProviderConnectivityCheckJob(input: {
     providerId: input.providerId,
   };
 
-  await withPostgresClient(input.databaseUrl, async (client) => {
+  await withPooledPostgresClient(input.databaseUrl, async (client) => {
     await client.query(
       `
         insert into jobs (id, job_type, status, trigger, payload, max_attempts)

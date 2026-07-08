@@ -27,6 +27,7 @@ const allowedFeatureIds = [
   "schema-fallback-single-source",
   "virtual-model-endpoint-routing",
   "gateway-listen-host",
+  "db-connection-hygiene",
 ];
 
 const inProgressFeatureIds = new Set([
@@ -42,6 +43,7 @@ const inProgressFeatureIds = new Set([
   "schema-fallback-single-source",
   "virtual-model-endpoint-routing",
   "gateway-listen-host",
+  "db-connection-hygiene",
 ]);
 
 describe("v1 release guards milestone", () => {

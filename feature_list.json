@@ -260,6 +260,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-08: TDD red->green. gatewayListenHost added to gateway-env, main.ts listen uses it, docker-compose pins GATEWAY_HOST=0.0.0.0. Focused unit+E2E, pnpm run verify, and pnpm run verify:features all passed."
+    },
+    {
+      "id": "db-connection-hygiene",
+      "name": "DB Connection Hygiene",
+      "description": "Provider and worker db modules use the shared pg pool instead of one-off connections, pool errors and concurrency-release failures are logged instead of swallowed, the real gateway process exits cleanly (code 0) on SIGTERM after closing pools, worker stop closes pools, and the runtime-status module drops its stuttering filename.",
+      "verification": "pnpm exec vitest run tests/features/db-connection-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/db-connection-hygiene.e2e.spec.ts",
+      "dependencies": [
+        "gateway-db-pool",
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. Pooled clients in providers/provider-jobs/worker-model-refresh/worker-connectivity, pool errors and lease-release failures logged, gateway SIGTERM/SIGINT graceful shutdown exits 0, worker stop closes pools, gateway-runtime-status renamed, dead packages/observability removed. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed."
     }
   ]
 }

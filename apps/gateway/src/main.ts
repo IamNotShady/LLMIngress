@@ -204,6 +204,17 @@ export async function startGateway() {
     host: gatewayListenHost(),
     port: config.gatewayPort,
   });
+
+  const shutdown = async () => {
+    await app.close();
+    process.exit(0);
+  };
+  process.once("SIGTERM", () => {
+    void shutdown();
+  });
+  process.once("SIGINT", () => {
+    void shutdown();
+  });
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {

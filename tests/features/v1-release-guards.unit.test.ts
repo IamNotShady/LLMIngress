@@ -41,9 +41,11 @@ const allowedFeatureIds = [
   "refactor-branded-ids",
   "refactor-provider-descriptor",
   "refactor-shared-logger",
+  "console-section-data-split",
 ];
 
 const sharedE2EFeatureIds: Record<string, string> = {
+  "console-section-data-split": "tests/e2e/v1-console.e2e.spec.ts",
   "gateway-cohesion-refactor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
   "refactor-branded-ids": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
   "refactor-provider-descriptor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
@@ -84,6 +86,7 @@ const inProgressFeatureIds = new Set([
   "refactor-branded-ids",
   "refactor-provider-descriptor",
   "refactor-shared-logger",
+  "console-section-data-split",
 ]);
 
 describe("v1 release guards milestone", () => {

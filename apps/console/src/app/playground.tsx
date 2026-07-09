@@ -104,7 +104,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
         setStatusTone("error");
         return [];
       }
-      const body = await response.json().catch(() => null);
+      const body: unknown = await response.json().catch(() => null);
 
       if (!response.ok) {
         setStatus(readGatewayErrorMessage(body, "Failed to load allowed models."));
@@ -216,7 +216,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
       }
       const contentType = response.headers.get("content-type") ?? "";
       const isStreamResponse = contentType.includes("text/event-stream");
-      const body = isStreamResponse
+      const body: unknown = isStreamResponse
         ? response.ok
           ? null
           : await response.text().catch(() => "")
@@ -540,7 +540,7 @@ async function fetchPlaygroundRequestDetail(
   if (!response?.ok) {
     return null;
   }
-  const body = await response.json().catch(() => null);
+  const body: unknown = await response.json().catch(() => null);
   return readPlaygroundRequestDetail(body);
 }
 

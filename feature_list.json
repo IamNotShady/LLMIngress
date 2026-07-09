@@ -418,6 +418,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. Added packages/logging as a shared pino wrapper, replaced bare console.log/error/warn calls in apps and packages source with component loggers, and enabled Biome suspicious/noConsole with tests override coverage. Existing db pool logging coverage was updated to the shared logger contract. Focused unit, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 37 passing features re-verified."
+    },
+    {
+      "id": "console-section-data-split",
+      "name": "Console Section Data Split",
+      "description": "The agents section loads its five datasets through a dedicated _modules/agents-section-data.ts module instead of inline awaits in the component, and playground response bodies are typed unknown instead of any.",
+      "verification": "pnpm exec vitest run tests/features/console-section-data-split.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "console-sections-split"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Extracted Agents section's five sequential data reads into apps/console/src/app/_modules/agents-section-data.ts, left the section component focused on filtering/rendering, and explicitly typed Playground response body locals as unknown. Focused unit, v1-console E2E, typecheck, and pnpm run verify passed. pnpm run verify:features optimized E2E batch missed one v1-gateway-routing activity row, then the built-in per-feature fallback passed and the command exited 0 with all 38 passing features re-verified."
     }
   ]
 }

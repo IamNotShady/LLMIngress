@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 const pooledModules = [
   "packages/db/src/providers.ts",
   "packages/db/src/provider-jobs.ts",
-  "packages/db/src/worker-model-refresh.ts",
-  "packages/db/src/worker-provider-connectivity-check.ts",
+  "packages/worker-runtime/src/worker-model-refresh.ts",
+  "packages/worker-runtime/src/worker-provider-connectivity-check.ts",
 ];
 
 describe("db connection hygiene", () => {

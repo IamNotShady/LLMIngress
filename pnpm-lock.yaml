@@ -14,6 +14,9 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:packages/db
+      '@llmingress/worker-runtime':
+        specifier: workspace:*
+        version: link:packages/worker-runtime
       '@playwright/test':
         specifier: ^1.60.0
         version: 1.60.0
@@ -96,6 +99,9 @@ importers:
       '@llmingress/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@llmingress/worker-runtime':
+        specifier: workspace:*
+        version: link:../../packages/worker-runtime
 
   packages/billing: {}
 
@@ -147,6 +153,27 @@ importers:
   packages/provider: {}
 
   packages/security: {}
+
+  packages/worker-runtime:
+    dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@llmingress/db':
+        specifier: workspace:*
+        version: link:../db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../logging
+      '@llmingress/provider':
+        specifier: workspace:*
+        version: link:../provider
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../security
 
 packages:
 

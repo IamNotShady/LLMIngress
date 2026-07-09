@@ -4,7 +4,7 @@ import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/
 import {
   createNotificationDispatchJobHandler,
   queueNotificationEvent,
-} from "../../packages/db/src/worker-notification-dispatcher";
+} from "../../packages/worker-runtime/src/worker-notification-dispatcher";
 
 test("notification retry state survives without notification_deliveries", async () => {
   const fixture = await createTestPostgresFixture({

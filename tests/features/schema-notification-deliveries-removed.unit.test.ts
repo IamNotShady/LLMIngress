@@ -5,11 +5,11 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { createBackupArtifact } from "../../packages/db/src/worker-backup";
+import { createBackupArtifact } from "../../packages/worker-runtime/src/worker-backup";
 import {
   createNotificationDispatchJobHandler,
   queueNotificationEvent,
-} from "../../packages/db/src/worker-notification-dispatcher";
+} from "../../packages/worker-runtime/src/worker-notification-dispatcher";
 
 const createdDirectories: string[] = [];
 

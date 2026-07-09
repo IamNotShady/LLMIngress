@@ -1,0 +1,24 @@
+{
+  "name": "@llmingress/worker-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": {
+      "types": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@llmingress/billing": "workspace:*",
+    "@llmingress/db": "workspace:*",
+    "@llmingress/domain": "workspace:*",
+    "@llmingress/logging": "workspace:*",
+    "@llmingress/provider": "workspace:*",
+    "@llmingress/security": "workspace:*"
+  }
+}

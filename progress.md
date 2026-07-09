@@ -809,6 +809,9 @@
 - [x] 批次 12 console-section-data-split 完成
   - Extracted Agents section's five sequential data reads into `_modules/agents-section-data.ts`; Playground response body locals are explicitly typed `unknown`.
   - Verification passed: focused unit, `v1-console` E2E, typecheck, and `pnpm run verify`. `pnpm run verify:features` optimized E2E batch missed one `v1-gateway-routing` activity row, then the built-in per-feature fallback passed and the command exited 0 with all 38 passing features re-verified.
+- [x] 批次 13a refactor-db-package-split worker-runtime 完成
+  - Moved all 19 `worker-*` modules from `packages/db` into `packages/worker-runtime`, rewrote worker imports and test paths, removed db worker exports, and kept `refactor-db-package-split` status `failing` until 13b.
+  - Verification passed: `pnpm run verify` and `pnpm run verify:features` with all 38 currently passing features re-verified.
 - Blockers: none open.
 
 ## Required Verification

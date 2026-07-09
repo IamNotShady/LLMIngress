@@ -54,7 +54,10 @@ describe("refactor-provider-descriptor", () => {
       expect(source).not.toMatch(/providerKey(\?\.toLowerCase\(\))? === "/);
       expect(source).not.toMatch(/providerKey\.toLowerCase\(\) === "/);
     }
-    const modelRefresh = readFileSync("packages/db/src/worker-model-refresh.ts", "utf8");
+    const modelRefresh = readFileSync(
+      "packages/worker-runtime/src/worker-model-refresh.ts",
+      "utf8",
+    );
     expect(modelRefresh).not.toContain('normalized === "claude_code"');
     expect(modelRefresh).not.toContain("localProviderKeys");
     const consoleProviders = readFileSync("packages/db/src/console-providers.ts", "utf8");

@@ -4,7 +4,7 @@ import {
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
 import { PostgresClient } from "@llmingress/db/client";
-import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "@llmingress/db/price-rows";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type BillingReconciliationJobHandlerOptions = {

@@ -32,6 +32,10 @@
       "types": "./src/provider-jobs.ts",
       "default": "./src/provider-jobs.ts"
     },
+    "./traces": {
+      "types": "./src/traces.ts",
+      "default": "./src/traces.ts"
+    },
     "./migration-status": {
       "types": "./src/migration-status.ts",
       "default": "./src/migration-status.ts"
@@ -195,74 +199,6 @@
     "./gateway-virtual-model-access": {
       "types": "./src/gateway-virtual-model-access.ts",
       "default": "./src/gateway-virtual-model-access.ts"
-    },
-    "./worker-backup": {
-      "types": "./src/worker-backup.ts",
-      "default": "./src/worker-backup.ts"
-    },
-    "./worker-billing-reconciliation": {
-      "types": "./src/worker-billing-reconciliation.ts",
-      "default": "./src/worker-billing-reconciliation.ts"
-    },
-    "./worker-budget-threshold-alerts": {
-      "types": "./src/worker-budget-threshold-alerts.ts",
-      "default": "./src/worker-budget-threshold-alerts.ts"
-    },
-    "./worker-cost-report-export": {
-      "types": "./src/worker-cost-report-export.ts",
-      "default": "./src/worker-cost-report-export.ts"
-    },
-    "./worker-fallback-exhaustion-alerts": {
-      "types": "./src/worker-fallback-exhaustion-alerts.ts",
-      "default": "./src/worker-fallback-exhaustion-alerts.ts"
-    },
-    "./worker-job-runner": {
-      "types": "./src/worker-job-runner.ts",
-      "default": "./src/worker-job-runner.ts"
-    },
-    "./worker-jsonl-export": {
-      "types": "./src/worker-jsonl-export.ts",
-      "default": "./src/worker-jsonl-export.ts"
-    },
-    "./worker-model-refresh": {
-      "types": "./src/worker-model-refresh.ts",
-      "default": "./src/worker-model-refresh.ts"
-    },
-    "./worker-notification-dispatcher": {
-      "types": "./src/worker-notification-dispatcher.ts",
-      "default": "./src/worker-notification-dispatcher.ts"
-    },
-    "./worker-periodic-scheduler": {
-      "types": "./src/worker-periodic-scheduler.ts",
-      "default": "./src/worker-periodic-scheduler.ts"
-    },
-    "./worker-price-sync": {
-      "types": "./src/worker-price-sync.ts",
-      "default": "./src/worker-price-sync.ts"
-    },
-    "./worker-provider-connectivity-check": {
-      "types": "./src/worker-provider-connectivity-check.ts",
-      "default": "./src/worker-provider-connectivity-check.ts"
-    },
-    "./worker-provider-failure-alerts": {
-      "types": "./src/worker-provider-failure-alerts.ts",
-      "default": "./src/worker-provider-failure-alerts.ts"
-    },
-    "./worker-rate-limit-alerts": {
-      "types": "./src/worker-rate-limit-alerts.ts",
-      "default": "./src/worker-rate-limit-alerts.ts"
-    },
-    "./worker-retention-cleanup": {
-      "types": "./src/worker-retention-cleanup.ts",
-      "default": "./src/worker-retention-cleanup.ts"
-    },
-    "./worker-stale-concurrency": {
-      "types": "./src/worker-stale-concurrency.ts",
-      "default": "./src/worker-stale-concurrency.ts"
-    },
-    "./worker-webhook-export": {
-      "types": "./src/worker-webhook-export.ts",
-      "default": "./src/worker-webhook-export.ts"
     }
   },
   "scripts": {

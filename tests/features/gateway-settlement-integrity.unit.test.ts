@@ -6,8 +6,8 @@ import {
 } from "../../packages/db/src/gateway-agent-limits";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { createDefaultPeriodicTasks } from "../../packages/db/src/worker-periodic-scheduler";
-import { reconcileGatewayConcurrencyWindows } from "../../packages/db/src/worker-stale-concurrency";
+import { createDefaultPeriodicTasks } from "../../packages/worker-runtime/src/worker-periodic-scheduler";
+import { reconcileGatewayConcurrencyWindows } from "../../packages/worker-runtime/src/worker-stale-concurrency";
 
 describe("gateway settlement integrity", () => {
   it("rejects a cost budget without budget reservation state", async () => {

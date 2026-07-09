@@ -7,8 +7,8 @@ import {
 import { recordCompletedGatewayRequestActivity } from "../../packages/db/src/gateway-activity-recorder";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { evaluateFallbackExhaustionAlerts } from "../../packages/db/src/worker-fallback-exhaustion-alerts";
-import { buildJsonlRequestLogRecord } from "../../packages/db/src/worker-jsonl-export";
+import { evaluateFallbackExhaustionAlerts } from "../../packages/worker-runtime/src/worker-fallback-exhaustion-alerts";
+import { buildJsonlRequestLogRecord } from "../../packages/worker-runtime/src/worker-jsonl-export";
 
 describe("schema fallback single source", () => {
   it("migrated schema removes request_activity.fallback_attempts and adds retry columns", async () => {

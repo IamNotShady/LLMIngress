@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
-import { recordOpenTelemetrySpan } from "./traces.ts";
+import { recordOpenTelemetrySpan } from "@llmingress/db/traces";
 
 export const JOB_CREATED_CHANNEL = "job_created";
 

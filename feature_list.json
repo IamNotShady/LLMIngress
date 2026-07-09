@@ -429,6 +429,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. Extracted Agents section's five sequential data reads into apps/console/src/app/_modules/agents-section-data.ts, left the section component focused on filtering/rendering, and explicitly typed Playground response body locals as unknown. Focused unit, v1-console E2E, typecheck, and pnpm run verify passed. pnpm run verify:features optimized E2E batch missed one v1-gateway-routing activity row, then the built-in per-feature fallback passed and the command exited 0 with all 38 passing features re-verified."
+    },
+    {
+      "id": "refactor-db-package-split",
+      "name": "DB Package Split",
+      "description": "Gateway runtime modules live in packages/gateway-runtime and worker runtime modules in packages/worker-runtime as whole-file moves; packages/db keeps only shared data access, console modules, and migrations, with no gateway- or worker-prefixed files left.",
+      "verification": "pnpm exec vitest run tests/features/refactor-db-package-split.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "refactor-provider-descriptor",
+        "refactor-shared-logger"
+      ],
+      "status": "failing",
+      "evidence": "2026-07-09 13a: Moved all 19 worker-* modules from packages/db into packages/worker-runtime with whole-file git mv, rewrote worker-runtime imports and test paths, removed db worker exports, and kept the split feature failing until gateway-runtime moves in 13b. pnpm run verify passed; pnpm run verify:features passed with all 38 currently passing features re-verified."
     }
   ]
 }

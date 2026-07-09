@@ -12,6 +12,7 @@
   "dependencies": {
     "@llmingress/config": "workspace:*",
     "@llmingress/db": "workspace:*",
-    "@llmingress/logging": "workspace:*"
+    "@llmingress/logging": "workspace:*",
+    "@llmingress/worker-runtime": "workspace:*"
   }
 }

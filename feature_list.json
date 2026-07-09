@@ -295,6 +295,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-08: TDD red->green. Split console dashboard sections into per-section modules, kept sections.tsx as shared helpers under the line budget, and preserved signed-in dashboard rendering without horizontal overflow. Focused unit+E2E, pnpm run verify, and pnpm run verify:features passed."
+    },
+    {
+      "id": "refactor-route-strategy-registry",
+      "name": "Route Strategy Registry",
+      "description": "Route policy strategy ordering and decision messaging dispatch through one Record<RoutePolicyStrategy, handler> registry in packages/domain, with no strategy === string branches left in domain source.",
+      "verification": "pnpm exec vitest run tests/features/refactor-route-strategy-registry.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Route policy strategy ordering and decision messaging now dispatch through routeStrategyHandlers Record<RoutePolicyStrategy, RouteStrategyHandler>; focused unit, pnpm run verify, and pnpm run verify:features passed with all 26 prior passing features re-verified."
     }
   ]
 }

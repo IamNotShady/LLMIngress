@@ -10,6 +10,7 @@ import {
 import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
+import { classifyConsoleActionError } from "../_error-classify";
 import { readRequiredText, readText } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
 
@@ -62,9 +63,12 @@ export const POST = withConsoleAuth(async (request) => {
       return NextResponse.json({ error: "Unknown provider action." }, { status: 400 });
     }
   } catch (error) {
-    const message = normalizeProviderActionError(
-      error instanceof Error ? error.message : "Provider action failed.",
-    );
+    const rawMessage = error instanceof Error ? error.message : "Provider action failed.";
+    const normalized = normalizeProviderActionError(rawMessage);
+    const message =
+      normalized === rawMessage
+        ? classifyConsoleActionError(error, "Provider action failed.").message
+        : normalized;
     if (action === "create" || action === "createFromTemplate") {
       const redirectUrl = new URL("/providers", request.url);
       redirectUrl.searchParams.set("providerDialog", "new");

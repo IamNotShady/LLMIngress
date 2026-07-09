@@ -33,6 +33,14 @@ test("console api rejects unauthenticated API actions with 401", async () => {
         });
         expect(response.status).toBe(401);
         expect(await response.json()).toEqual({ error: "Authentication required." });
+
+        for (const path of ["/api/providers", "/api/provider-oauth"]) {
+          const routeResponse = await fetch(`${baseUrl}${path}`, {
+            body: new URLSearchParams({ action: "create" }),
+            method: "POST",
+          });
+          expect(routeResponse.status, path).toBe(401);
+        }
       } finally {
         await stopConsoleProcess(consoleApp);
       }

@@ -282,7 +282,7 @@
         "v1-console"
       ],
       "status": "passing",
-      "evidence": "2026-07-08: TDD red->green. withConsoleAuth guard across 14 routes, consoleActionErrorResponse maps unexpected errors to 500 without leaking messages, agent-created HTML extracted to _created-page.ts. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed."
+      "evidence": "2026-07-08: TDD red->green. withConsoleAuth guard across 14 routes, consoleActionErrorResponse maps unexpected errors to 500 without leaking messages, agent-created HTML extracted to _created-page.ts. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed. 2026-07-09: provider-oauth and providers routes sanitize surfaced errors via classifier / consoleActionErrorResponse, no longer exposing internal error.message; added static wiring coverage and unauthenticated E2E coverage."
     },
     {
       "id": "console-sections-split",

@@ -63,4 +63,12 @@ describe("console api hygiene", () => {
     expect(source).not.toContain("<!doctype");
     expect(source).toContain("renderOneTimeAgentResponse");
   });
+
+  it("sanitizes provider action errors before surfacing them", () => {
+    const providers = readFileSync("apps/console/src/app/api/providers/route.ts", "utf8");
+    expect(providers).toContain("classifyConsoleActionError");
+    const oauth = readFileSync("apps/console/src/app/api/provider-oauth/route.ts", "utf8");
+    expect(oauth).toContain("classifyConsoleActionError");
+    expect(oauth).toContain("consoleActionErrorResponse");
+  });
 });

@@ -9,8 +9,10 @@ import {
   enqueueProviderConnectivityCheckJob,
   enqueueProviderModelRefreshJob,
 } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
+import { classifyConsoleActionError } from "../_error-classify";
+import { consoleActionErrorResponse } from "../_errors";
 import { readNullableText, readNumber, readRequiredText, readText } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
 
@@ -63,12 +65,11 @@ export const POST = withConsoleAuth(async (request) => {
       providerOAuthId: result.connection.id,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Provider OAuth operation failed.";
     const providerId = readText(form, "providerId");
     if (providerId && (action === "start" || action === "complete")) {
       return redirectToProviderOAuthDialog(request, {
         authorizeUrl: readText(form, "providerAuthorizeUrl"),
-        error: message,
+        error: classifyConsoleActionError(error, "Provider OAuth operation failed.").message,
         label: readNullableText(form, "label"),
         priority: readNumber(form, "priority"),
         providerId,
@@ -76,7 +77,7 @@ export const POST = withConsoleAuth(async (request) => {
       });
     }
 
-    return NextResponse.json({ error: message }, { status: 400 });
+    return consoleActionErrorResponse(error, "Provider OAuth operation failed.");
   }
 });
 

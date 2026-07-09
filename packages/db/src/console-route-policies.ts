@@ -3,7 +3,7 @@ import {
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   normalizeRoutePolicyRules,
@@ -105,7 +105,7 @@ export type RouteReasonMetadataInput = {
   virtualModelName: string;
 };
 
-type RoutePolicyRow = PostgresQueryResultRow & {
+type RoutePolicyRow = {
   id: string;
   rules: unknown;
   strategy: RoutePolicyStrategy;
@@ -114,7 +114,7 @@ type RoutePolicyRow = PostgresQueryResultRow & {
   virtual_model_name: string;
 };
 
-type CandidateRow = PostgresQueryResultRow & {
+type CandidateRow = {
   availability: string;
   candidate_order: number;
   context_window?: number | null;
@@ -141,7 +141,7 @@ type CandidateRow = PostgresQueryResultRow & {
   supports_tools?: boolean | null;
 };
 
-type ProviderModelOptionRow = PostgresQueryResultRow & {
+type ProviderModelOptionRow = {
   availability: string;
   context_window?: number | null;
   id: string;
@@ -166,7 +166,7 @@ type ProviderModelOptionRow = PostgresQueryResultRow & {
   supports_tools?: boolean | null;
 };
 
-type BudgetedVirtualModelUsageRow = PostgresQueryResultRow & {
+type BudgetedVirtualModelUsageRow = {
   budgeted_agent_count: number;
   display_name: string;
   name: string;

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   normalizeProviderModelCapabilities,
@@ -108,7 +108,7 @@ type QueryClient = {
   ) => Promise<{ rows: T[] }>;
 };
 
-type ProviderRow = PostgresQueryResultRow & {
+type ProviderRow = {
   base_url: string | null;
   display_name: string;
   enabled: boolean;
@@ -118,7 +118,7 @@ type ProviderRow = PostgresQueryResultRow & {
   provider_type: "api_key" | "local";
 };
 
-type ProviderModelRow = PostgresQueryResultRow & {
+type ProviderModelRow = {
   availability: ExportedProviderModel["availability"];
   capability_metadata: unknown;
   context_window: number | null;
@@ -130,32 +130,32 @@ type ProviderModelRow = PostgresQueryResultRow & {
   supports_tools: boolean;
 };
 
-type ProviderApiKeyRow = PostgresQueryResultRow & {
+type ProviderApiKeyRow = {
   key_prefix: string;
   provider_id: string;
 };
 
-type VirtualModelRow = PostgresQueryResultRow & {
+type VirtualModelRow = {
   display_name: string;
   enabled: boolean;
   id: string;
   name: string;
 };
 
-type RoutePolicyRow = PostgresQueryResultRow & {
+type RoutePolicyRow = {
   id: string;
   rules: unknown;
   strategy: ExportedRoutePolicy["strategy"];
   virtual_model_id: string;
 };
 
-type RoutePolicyCandidateRow = PostgresQueryResultRow & {
+type RoutePolicyCandidateRow = {
   candidate_order: number;
   provider_model_id: string;
   route_policy_id: string;
 };
 
-type AgentRow = PostgresQueryResultRow & {
+type AgentRow = {
   agent_type: ExportedAgent["agentType"];
   default_virtual_model_id: string | null;
   enabled: boolean;
@@ -164,12 +164,12 @@ type AgentRow = PostgresQueryResultRow & {
   name: string;
 };
 
-type AgentVirtualModelRow = PostgresQueryResultRow & {
+type AgentVirtualModelRow = {
   agent_id: string;
   virtual_model_id: string;
 };
 
-type AgentLimitRow = PostgresQueryResultRow & {
+type AgentLimitRow = {
   alert_threshold: string | null;
   agent_id: string;
   enabled: boolean;

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { type NotificationChannelType, notificationChannelTypes } from "@llmingress/domain";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./worker-job-runner.ts";
 
@@ -65,12 +65,12 @@ export type NotificationDeliveryResult =
       status: "failed";
     };
 
-type NotificationChannelRow = PostgresQueryResultRow & {
+type NotificationChannelRow = {
   channel_type: NotificationChannelType;
   id: string;
 };
 
-type ClaimedNotificationEventRow = PostgresQueryResultRow & {
+type ClaimedNotificationEventRow = {
   attempt_number: number;
   body: string;
   channel_config: unknown;

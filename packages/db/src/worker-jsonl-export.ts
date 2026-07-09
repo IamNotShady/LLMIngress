@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type JsonlRequestLogExportJobHandlerOptions = {
@@ -8,7 +8,7 @@ export type JsonlRequestLogExportJobHandlerOptions = {
   now?: () => Date;
 };
 
-export type JsonlRequestLogActivityRow = PostgresQueryResultRow & {
+export type JsonlRequestLogActivityRow = {
   agent_id: string;
   agent_key_prefix: string;
   agent_name: string;
@@ -38,7 +38,7 @@ export type JsonlRequestLogActivityRow = PostgresQueryResultRow & {
   virtual_model_name: string | null;
 };
 
-export type JsonlRequestLogUsageRow = PostgresQueryResultRow & {
+export type JsonlRequestLogUsageRow = {
   cached_input_tokens: number;
   input_tokens: number;
   output_tokens: number;
@@ -47,7 +47,7 @@ export type JsonlRequestLogUsageRow = PostgresQueryResultRow & {
   total_tokens: number;
 };
 
-export type JsonlRequestLogCostRow = PostgresQueryResultRow & {
+export type JsonlRequestLogCostRow = {
   cost_source: string;
   input_cost_usd: string | null;
   output_cost_usd: string | null;
@@ -56,7 +56,7 @@ export type JsonlRequestLogCostRow = PostgresQueryResultRow & {
   total_cost_usd: string | null;
 };
 
-export type JsonlRequestLogFallbackEventRow = PostgresQueryResultRow & {
+export type JsonlRequestLogFallbackEventRow = {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -381,7 +381,7 @@ async function readRequestLogRows(
     cost:
       row.cost_source != null
         ? {
-            cost_source: row.cost_source as string,
+            cost_source: row.cost_source,
             input_cost_usd: row.input_cost_usd ?? null,
             output_cost_usd: row.output_cost_usd ?? null,
             price_source: row.price_source ?? null,
@@ -396,7 +396,7 @@ async function readRequestLogRows(
             input_tokens: row.input_tokens ?? 0,
             output_tokens: row.output_tokens ?? 0,
             reasoning_tokens: row.reasoning_tokens ?? 0,
-            token_source: row.token_source as string,
+            token_source: row.token_source,
             total_tokens: row.total_tokens ?? 0,
           }
         : null,

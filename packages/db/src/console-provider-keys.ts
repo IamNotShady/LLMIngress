@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
@@ -39,7 +39,7 @@ export type StoredProviderApiKey = {
   keyPrefix: string;
 };
 
-export type ProviderApiKeyStorageRow = PostgresQueryResultRow & {
+export type ProviderApiKeyStorageRow = {
   created_at: Date;
   enabled: boolean;
   id: string;

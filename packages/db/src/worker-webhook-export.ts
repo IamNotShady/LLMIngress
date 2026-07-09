@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 import { redactSecretsFromJsonlValue } from "./worker-jsonl-export.ts";
 
@@ -117,7 +117,7 @@ type NormalizedWebhookEventExportPayload = {
   webhookUrl: string;
 };
 
-type WebhookEventExportActivityRow = PostgresQueryResultRow & {
+type WebhookEventExportActivityRow = {
   agent_key_prefix: string;
   completed_at: Date | null;
   error_code: string | null;
@@ -137,7 +137,7 @@ type WebhookEventExportActivityRow = PostgresQueryResultRow & {
   virtual_model_name: string | null;
 };
 
-type WebhookEventExportFallbackRow = PostgresQueryResultRow & {
+type WebhookEventExportFallbackRow = {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;

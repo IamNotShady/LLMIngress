@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
+import { PostgresClient } from "@llmingress/db/providers";
 import {
   isKnownProviderTemplateKey,
   type ProviderTemplateCreateInput,
@@ -28,7 +28,7 @@ export type ConsoleProvider = NormalizedProviderFormInput & {
   providerTemplateId: string | null;
 };
 
-type ProviderRow = PostgresQueryResultRow & {
+type ProviderRow = {
   base_url: string | null;
   display_name: string;
   enabled: boolean;

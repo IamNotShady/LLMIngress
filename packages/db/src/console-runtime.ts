@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import {
   getMigrationStatusFromDatabase,
   type MigrationStatusSummary,
@@ -33,7 +33,7 @@ export type ConsoleRuntimeSnapshot = {
   migrations: MigrationStatusSummary;
 };
 
-type GatewayRuntimeRow = PostgresQueryResultRow & {
+type GatewayRuntimeRow = {
   applied_config_version: number | null;
   gateway_instance_id: string;
   heartbeat_at: Date | null;
@@ -46,7 +46,7 @@ type GatewayRuntimeRow = PostgresQueryResultRow & {
   updated_at: Date;
 };
 
-type RuntimeErrorRow = PostgresQueryResultRow & {
+type RuntimeErrorRow = {
   created_at: Date;
   error_code: string;
   error_message: string;

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { type NotificationChannelType, notificationChannelTypes } from "@llmingress/domain";
 
 export type { NotificationChannelType };
@@ -31,7 +31,7 @@ export type ConsoleNotificationChannel = NormalizedNotificationChannelFormInput 
   updatedAt: Date;
 };
 
-type NotificationChannelRow = PostgresQueryResultRow & {
+type NotificationChannelRow = {
   channel_type: NotificationChannelType;
   config: unknown;
   created_at: Date;

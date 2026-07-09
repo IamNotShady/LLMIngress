@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import {
   countEnabledNotificationChannels,
   notificationAlertAlreadyQueued,
@@ -39,7 +39,7 @@ type EvaluateRateLimitAlertsOptions = CreateRateLimitAlertsJobHandlerOptions & {
   payload: unknown;
 };
 
-type RateLimitAlertCandidateRow = PostgresQueryResultRow & {
+type RateLimitAlertCandidateRow = {
   agent_key_prefix: string;
   agent_id: string;
   agent_name: string;

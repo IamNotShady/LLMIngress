@@ -3,10 +3,7 @@ import {
   withPooledPostgresClient,
   withPostgresTransaction,
 } from "@llmingress/db/client";
-import {
-  type PostgresQueryResultRow,
-  readEnabledCompletedProviderOAuthConnections,
-} from "@llmingress/db/providers";
+import { readEnabledCompletedProviderOAuthConnections } from "@llmingress/db/providers";
 import {
   type ProviderOAuthTokenBlob,
   refreshProviderOAuthToken as refreshProviderOAuthTokenRequest,
@@ -26,7 +23,7 @@ import { GatewayPipelineError } from "./gateway-errors.ts";
 import type { FallbackChainCandidate, FallbackProviderApiKey } from "./gateway-fallback-chain.ts";
 import { isRecord } from "./gateway-runtime-helpers.ts";
 
-type ProviderCredentialRow = PostgresQueryResultRow & {
+type ProviderCredentialRow = {
   base_url: string | null;
   encrypted_key: unknown;
   key_prefix: string;
@@ -34,7 +31,7 @@ type ProviderCredentialRow = PostgresQueryResultRow & {
   provider_id: string;
 };
 
-type ProviderCredentialProviderRow = PostgresQueryResultRow & {
+type ProviderCredentialProviderRow = {
   base_url: string | null;
   provider_id: string;
   provider_key: string;
@@ -51,7 +48,7 @@ type ProviderOAuthTokenRefresh = (input: {
   refreshToken: string;
 }) => Promise<ProviderOAuthTokenBlob>;
 
-type ProviderCredentialOAuthLockRow = PostgresQueryResultRow & {
+type ProviderCredentialOAuthLockRow = {
   encrypted_token: unknown;
 };
 

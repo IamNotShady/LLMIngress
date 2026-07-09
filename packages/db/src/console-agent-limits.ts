@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
@@ -61,7 +61,7 @@ export type ConsoleAgentLimitRuntimeSnapshot = {
   rateLimitHits24h: number;
 };
 
-type AgentLimitRow = PostgresQueryResultRow & {
+type AgentLimitRow = {
   alert_threshold: string | null;
   agent_id: string;
   enabled: boolean;
@@ -74,7 +74,7 @@ type AgentLimitRow = PostgresQueryResultRow & {
   unit: AgentLimitUnit;
 };
 
-type AccessibleRouteCandidatePriceRow = PostgresQueryResultRow & {
+type AccessibleRouteCandidatePriceRow = {
   candidate_order: number;
   model_display_name: string;
   model_id: string;
@@ -94,19 +94,19 @@ type AccessibleRouteCandidatePriceRow = PostgresQueryResultRow & {
   virtual_model_name: string;
 };
 
-type AgentLimitBudgetUsageRow = PostgresQueryResultRow & {
+type AgentLimitBudgetUsageRow = {
   agent_id: string;
   budget_usage_percent: string | null;
 };
 
-type AgentLimitRateWindowRow = PostgresQueryResultRow & {
+type AgentLimitRateWindowRow = {
   agent_id: string;
   current_concurrency: number | null;
   current_rpm: number | null;
   current_tpm: number | null;
 };
 
-type AgentLimitErrorCountRow = PostgresQueryResultRow & {
+type AgentLimitErrorCountRow = {
   agent_id: string;
   over_limit_today_count: number;
   over_limit_yesterday_count: number;

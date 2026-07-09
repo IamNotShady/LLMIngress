@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 
 export const prometheusMetricsContentType = "text/plain; version=0.0.4; charset=utf-8";
 
@@ -11,7 +11,7 @@ type GetPrometheusMetricsDocumentInput = {
   databaseUrl?: string;
 };
 
-type GatewayRequestMetricRow = PostgresQueryResultRow & {
+type GatewayRequestMetricRow = {
   count: number;
   model: string;
   protocol: string;
@@ -19,20 +19,20 @@ type GatewayRequestMetricRow = PostgresQueryResultRow & {
   status: string;
 };
 
-type GatewayLatencyMetricRow = PostgresQueryResultRow & {
+type GatewayLatencyMetricRow = {
   count: number;
   protocol: string;
   status: string;
   sum_ms: number;
 };
 
-type GatewayCostMetricRow = PostgresQueryResultRow & {
+type GatewayCostMetricRow = {
   model: string;
   provider: string;
   total_cost_usd: string | null;
 };
 
-type GatewayFallbackMetricRow = PostgresQueryResultRow & {
+type GatewayFallbackMetricRow = {
   count: number;
   error_code: string;
   model: string;
@@ -40,21 +40,21 @@ type GatewayFallbackMetricRow = PostgresQueryResultRow & {
   status: string;
 };
 
-type ProviderHealthMetricRow = PostgresQueryResultRow & {
+type ProviderHealthMetricRow = {
   consecutive_failures: number;
   model: string;
   provider: string;
   status: string;
 };
 
-type WorkerJobMetricRow = PostgresQueryResultRow & {
+type WorkerJobMetricRow = {
   count: number;
   job_type: string;
   status: string;
   trigger: string;
 };
 
-type WorkerJobAttemptMetricRow = PostgresQueryResultRow & {
+type WorkerJobAttemptMetricRow = {
   count: number;
   job_type: string;
   status: string;

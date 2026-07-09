@@ -3,7 +3,6 @@ import { calculateTokenCostUsd, type ModelTokenPrice } from "@llmingress/billing
 import {
   getPostgresPool,
   type PostgresQueryClient,
-  type PostgresQueryResultRow,
   withPostgresTransaction,
 } from "@llmingress/db/client";
 import type {
@@ -72,7 +71,7 @@ export type GatewayAgentLimitDecision =
       statusCode: 402 | 429;
     };
 
-type AgentLimitRow = PostgresQueryResultRow & {
+type AgentLimitRow = {
   enforcement_policy: GatewayAgentLimitEnforcementPolicy;
   limit_type: GatewayAgentLimitType;
   limit_value: string;
@@ -81,13 +80,13 @@ type AgentLimitRow = PostgresQueryResultRow & {
   unit: string;
 };
 
-type RateLimitWindowRow = PostgresQueryResultRow & {
+type RateLimitWindowRow = {
   active_count: number;
   request_count: number;
   token_count: number;
 };
 
-type BudgetPeriodCostRow = PostgresQueryResultRow & {
+type BudgetPeriodCostRow = {
   cost_used_usd: string;
 };
 

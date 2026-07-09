@@ -1,9 +1,8 @@
 import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
-import type { PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { buildManualPriceOverride } from "./price-rows.ts";
 
-type PriceOverrideRow = PostgresQueryResultRow & {
+type PriceOverrideRow = {
   id: string;
   cached_input_usd_per_million_tokens: string | null;
   input_usd_per_million_tokens: string;

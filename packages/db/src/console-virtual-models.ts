@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 
 export type VirtualModelFormInput = {
@@ -35,7 +35,7 @@ type VirtualModelDependencyCounts = {
   routePolicyCount: number;
 };
 
-type VirtualModelRow = PostgresQueryResultRow & {
+type VirtualModelRow = {
   allowed_agent_count: number;
   cost_24h_usd: string | null;
   default_agent_count: number;
@@ -49,13 +49,13 @@ type VirtualModelRow = PostgresQueryResultRow & {
   route_policy_count: number;
 };
 
-type VirtualModelDependencyRow = PostgresQueryResultRow & {
+type VirtualModelDependencyRow = {
   allowed_agent_count: number;
   default_agent_count: number;
   route_policy_count: number;
 };
 
-type VirtualModelFallbackBreakdownRow = PostgresQueryResultRow & {
+type VirtualModelFallbackBreakdownRow = {
   name: string;
   value: number | string;
 };

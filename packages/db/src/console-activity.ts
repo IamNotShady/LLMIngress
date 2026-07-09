@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { formatConsoleUsd } from "@llmingress/db/console-format";
 
 export type ConsoleActivity = {
@@ -95,7 +95,7 @@ export type ConsoleActivityDetail = {
 type ConsoleActivityProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 type ConsoleActivityStatus = "canceled" | "failed" | "started" | "succeeded";
 
-type ActivityRow = PostgresQueryResultRow & {
+type ActivityRow = {
   agent_key_prefix: string | null;
   agent_name: string | null;
   completed_at: Date | null;
@@ -130,7 +130,7 @@ type ActivityRow = PostgresQueryResultRow & {
   virtual_model_name: string | null;
 };
 
-type FallbackEventRow = PostgresQueryResultRow & {
+type FallbackEventRow = {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -265,7 +265,7 @@ export async function countConsoleActivities(input: {
 
   try {
     const where = buildActivityWhereClause(filters);
-    const result = await client.query<PostgresQueryResultRow & { count: string }>(
+    const result = await client.query<{ count: string }>(
       `
         select count(*)::text as count
         from request_activity

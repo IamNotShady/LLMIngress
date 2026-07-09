@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { recordOpenTelemetrySpan } from "./traces.ts";
 
 export const JOB_CREATED_CHANNEL = "job_created";
@@ -83,7 +83,7 @@ type RunNextJobResult = {
   processed: boolean;
 };
 
-type JobRow = PostgresQueryResultRow & {
+type JobRow = {
   attempt_number: number;
   id: string;
   job_type: string;

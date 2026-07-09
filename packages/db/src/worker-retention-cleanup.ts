@@ -1,6 +1,6 @@
 import { unlink } from "node:fs/promises";
 import { isAbsolute } from "node:path";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type RetentionCleanupPayload = {
@@ -32,14 +32,14 @@ type CleanupExpiredDataOptions = CreateRetentionCleanupJobHandlerOptions & {
   payload: unknown;
 };
 
-type RetentionCleanupRow = PostgresQueryResultRow & {
+type RetentionCleanupRow = {
   deleted_export_task_count: number;
   deleted_request_activity_count: number;
   preserved_budget_period_count: number;
   preserved_rate_limit_window_count: number;
 };
 
-type ExpiredExportTaskRow = PostgresQueryResultRow & {
+type ExpiredExportTaskRow = {
   id: string;
   output_path: string;
 };

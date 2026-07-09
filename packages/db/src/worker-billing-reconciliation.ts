@@ -3,7 +3,7 @@ import {
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
 } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
@@ -59,7 +59,7 @@ type NormalizedBillingReconciliationPayload = {
   requestIds: string[];
 };
 
-type BillingReconciliationCandidateRow = PostgresQueryResultRow & {
+type BillingReconciliationCandidateRow = {
   activity_id: string;
   baseline_cost_usd: string | null;
   cached_input_tokens: number;

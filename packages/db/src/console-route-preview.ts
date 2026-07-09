@@ -1,5 +1,5 @@
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import {
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
@@ -27,7 +27,7 @@ export type RoutePreviewResult = {
   input: RoutePreviewInput;
 };
 
-type RoutePreviewRow = PostgresQueryResultRow & {
+type RoutePreviewRow = {
   cachedInputUsdPerMillionTokens: string | null;
   candidateOrder: number;
   capabilityMetadata: unknown;

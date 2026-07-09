@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 
 export type ConsoleAnalyticsBucket = "day" | "hour";
 
@@ -81,7 +81,7 @@ type AnalyticsRange = {
   start: Date;
 };
 
-type AnalyticsKpiRow = PostgresQueryResultRow & {
+type AnalyticsKpiRow = {
   failure_count: number;
   failure_rate: number | string | null;
   fallback_event_count: number | string | null;

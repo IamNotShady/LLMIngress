@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import {
   countEnabledNotificationChannels,
   notificationAlertAlreadyQueued,
@@ -36,7 +36,7 @@ type EvaluateProviderFailureAlertsOptions = CreateProviderFailureAlertsJobHandle
   payload: unknown;
 };
 
-type ProviderFailureAlertCandidateRow = PostgresQueryResultRow & {
+type ProviderFailureAlertCandidateRow = {
   consecutive_failures: number;
   last_failure_at: Date | null;
   model_display_name: string | null;

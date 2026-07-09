@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import {
   countEnabledNotificationChannels,
   notificationAlertAlreadyQueued,
@@ -35,7 +35,7 @@ type EvaluateBudgetThresholdAlertsOptions = CreateBudgetThresholdAlertsJobHandle
   payload: unknown;
 };
 
-type BudgetThresholdCandidateRow = PostgresQueryResultRow & {
+type BudgetThresholdCandidateRow = {
   agent_key_prefix: string;
   agent_id: string;
   agent_name: string;

@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import {
   countEnabledNotificationChannels,
   notificationAlertAlreadyQueued,
@@ -36,7 +36,7 @@ type EvaluateFallbackExhaustionAlertsOptions = CreateFallbackExhaustionAlertsJob
   payload: unknown;
 };
 
-type FallbackExhaustionCandidateRow = PostgresQueryResultRow & {
+type FallbackExhaustionCandidateRow = {
   activity_id: string;
   agent_id: string;
   agent_key_prefix: string;

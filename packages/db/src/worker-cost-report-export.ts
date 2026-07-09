@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type CostReportWindow = "24h" | "7d" | "30d";
@@ -87,7 +87,7 @@ type NormalizedCostReportPayload = {
   window: CostReportWindow;
 };
 
-type UsageSummaryRow = PostgresQueryResultRow & {
+type UsageSummaryRow = {
   avg_latency_ms: number | string | null;
   costed_request_count: number;
   failure_count: number;
@@ -100,7 +100,7 @@ type UsageSummaryRow = PostgresQueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageBreakdownRow = PostgresQueryResultRow & {
+type UsageBreakdownRow = {
   avg_latency_ms: number | string | null;
   failure_count: number;
   model_id: string | null;
@@ -113,7 +113,7 @@ type UsageBreakdownRow = PostgresQueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
+type UsageDimensionBreakdownRow = {
   avg_latency_ms: number | string | null;
   failure_count: number;
   id: string | null;

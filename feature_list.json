@@ -350,6 +350,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. packages/config now exports gatewayPublicBaseUrl(), BootstrapConfigFile, and readBootstrapConfigFile; console URL defaults use config and db/client reuses the config bootstrap reader. Focused unit, pnpm install, pnpm run verify, and pnpm run verify:features passed with all 30 passing features re-verified."
+    },
+    {
+      "id": "refactor-db-row-strict-types",
+      "name": "Strict DB Row Types",
+      "description": "DB row types are plain object type aliases without the Record<string, unknown> index-signature base, so undeclared column access is a compile error, and the former index-signature-driven as-string casts in jsonl export and model refresh are gone.",
+      "verification": "pnpm exec vitest run tests/features/refactor-db-row-strict-types.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. DB row types are now plain object aliases without PostgresQueryResultRow intersections, jsonl export no longer casts row.cost_source/token_source through the index-signature base, and model refresh validates provider base_url before using it. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 31 passing features re-verified."
     }
   ]
 }

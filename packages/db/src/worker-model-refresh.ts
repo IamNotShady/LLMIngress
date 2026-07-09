@@ -28,7 +28,7 @@ import {
   readProviderOAuthTokenBlob,
   readWorkerMasterKeySource,
 } from "./worker-credential-utils.ts";
-import { JOB_CREATED_CHANNEL, type JobHandler } from "./worker-job-runner.ts";
+import { JOB_CREATED_CHANNEL, type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type ProviderModelAvailability = "available" | "unavailable" | "not_listed" | "deprecated";
 export type { ListedProviderModel } from "@llmingress/provider/model-list";
@@ -103,6 +103,16 @@ type ProviderRow = {
   provider_key: string;
   provider_type: "api_key" | "local" | "subscription";
 };
+
+function requireProviderBaseUrl(provider: ProviderRow): string {
+  if (!provider.base_url) {
+    throw new JobHandlerError(
+      "provider_base_url_missing",
+      `Provider ${provider.provider_key} has no base URL for model refresh.`,
+    );
+  }
+  return provider.base_url;
+}
 
 type ProviderModelRow = {
   availability: ProviderModelAvailability;
@@ -441,7 +451,7 @@ export async function refreshProviderModels(
         : null;
   const rawListedModels = await fetchProviderModelList({
     apiKey,
-    baseUrl: provider.base_url as string,
+    baseUrl: requireProviderBaseUrl(provider),
     fetch: fetchImpl,
     providerKey: provider.provider_key,
   });

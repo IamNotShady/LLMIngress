@@ -1,4 +1,4 @@
-import { getPostgresPool, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { getPostgresPool } from "@llmingress/db/client";
 
 export type GatewayVirtualModel = {
   displayName: string;
@@ -32,7 +32,7 @@ export type GatewayVirtualModelAccessResult =
   | GatewayVirtualModelAccessFailure
   | GatewayVirtualModelAccessSuccess;
 
-type VirtualModelRow = PostgresQueryResultRow & {
+type VirtualModelRow = {
   display_name: string;
   id: string;
   name: string;

@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { formatConsoleUsd } from "@llmingress/db/console-format";
 
 export type ConsoleUsageWindow = "24h" | "7d" | "30d";
@@ -57,7 +57,7 @@ export type ConsoleUsageSummary = {
   window: ConsoleUsageWindow;
 };
 
-type UsageSummaryRow = PostgresQueryResultRow & {
+type UsageSummaryRow = {
   avg_latency_ms: number | string | null;
   costed_request_count: number;
   failure_count: number;
@@ -70,7 +70,7 @@ type UsageSummaryRow = PostgresQueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageBreakdownRow = PostgresQueryResultRow & {
+type UsageBreakdownRow = {
   avg_latency_ms: number | string | null;
   failure_count: number;
   model_id: string | null;
@@ -83,7 +83,7 @@ type UsageBreakdownRow = PostgresQueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
+type UsageDimensionBreakdownRow = {
   avg_latency_ms: number | string | null;
   failure_count: number;
   id: string | null;
@@ -94,7 +94,7 @@ type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
   total_tokens: string | null;
 };
 
-type UsageTrendRow = PostgresQueryResultRow & {
+type UsageTrendRow = {
   bucket_start: Date | string;
   input_tokens: string | null;
   output_tokens: string | null;

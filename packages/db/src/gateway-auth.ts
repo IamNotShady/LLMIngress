@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { getPostgresPool, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { getPostgresPool } from "@llmingress/db/client";
 
 export type GatewayAuthErrorCode =
   | "disabled_agent_api_key"
@@ -38,7 +38,7 @@ export type GatewayAuthErrorBody = {
 
 type GatewayAuthHeaders = Record<string, string | string[] | undefined>;
 
-type AgentApiKeyAuthRow = PostgresQueryResultRow & {
+type AgentApiKeyAuthRow = {
   agent_id: string;
   default_virtual_model_id: string | null;
   enabled: boolean;

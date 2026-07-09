@@ -32,6 +32,10 @@ const allowedFeatureIds = [
   "console-sections-split",
 ];
 
+const sharedE2EFeatureIds: Record<string, string> = {
+  "gateway-cohesion-refactor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+};
+
 const inProgressFeatureIds = new Set([
   "gateway-db-pool",
   "gateway-recording-resilience",
@@ -64,8 +68,9 @@ describe("v1 release guards milestone", () => {
         expect(feature.status).toBe("passing");
       }
       expect(feature.verification).toContain(`tests/features/${feature.id}.unit.test.ts`);
-      if (feature.id === "gateway-cohesion-refactor") {
-        expect(feature.verification).toContain("tests/e2e/v1-gateway-routing.e2e.spec.ts");
+      const sharedE2E = sharedE2EFeatureIds[feature.id];
+      if (sharedE2E) {
+        expect(feature.verification).toContain(sharedE2E);
       } else {
         expect(feature.verification).toContain(`tests/e2e/${feature.id}.e2e.spec.ts`);
       }

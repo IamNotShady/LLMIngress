@@ -144,6 +144,10 @@
       "types": "./src/gateway-error-mapping.ts",
       "default": "./src/gateway-error-mapping.ts"
     },
+    "./gateway-header-passthrough": {
+      "types": "./src/gateway-header-passthrough.ts",
+      "default": "./src/gateway-header-passthrough.ts"
+    },
     "./gateway-env": {
       "types": "./src/gateway-env.ts",
       "default": "./src/gateway-env.ts"

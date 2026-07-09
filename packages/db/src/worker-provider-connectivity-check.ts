@@ -3,7 +3,7 @@ import {
   completeProviderOAuthConnection,
   readEnabledCompletedProviderOAuthConnections,
   updateProviderOAuthTestResult,
-  withPostgresClient,
+  withPooledPostgresClient,
 } from "@llmingress/db/providers";
 import {
   type ConnectivityCheckProvider,
@@ -254,7 +254,7 @@ async function readProvider(
   databaseUrl: string | undefined,
   providerId: string,
 ): Promise<WorkerConnectivityProvider> {
-  return withPostgresClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const providerResult = await client.query<ProviderRow>(
       `
         select providers.id::text,
@@ -348,7 +348,7 @@ async function readEnabledProviderApiKeys(input: {
   masterKeySource: MasterKeySource;
   providerId: string;
 }): Promise<Array<{ apiKey: string; id: string; keyPrefix: string }>> {
-  const stored = await withPostgresClient(input.databaseUrl, async (client) => {
+  const stored = await withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderApiKeyRow>(
       `
         select id::text,
@@ -427,7 +427,7 @@ async function updateProviderApiKeyTestResult(input: {
     providerApiKeyPrefix: string;
   };
 }): Promise<void> {
-  await withPostgresClient(input.databaseUrl, async (client) => {
+  await withPooledPostgresClient(input.databaseUrl, async (client) => {
     await client.query(
       `
         update provider_api_keys

@@ -26,7 +26,7 @@ export function buildOpenAIChatCompletionRequestMetadata(input: {
 }): GatewayRequestMetadata {
   const toolTextParts = readToolTextParts(input.rawBody);
   const messageTextParts = input.request.messages.flatMap((message) =>
-    typeof message.content === "string" ? [message.content] : [],
+    readOpenAIChatMessageContentTextParts(message.content),
   );
 
   return {
@@ -52,7 +52,7 @@ export function buildOpenAIResponsesRequestMetadata(input: {
   const inputTextParts =
     typeof input.request.input === "string"
       ? [input.request.input]
-      : input.request.input.map((message) => message.content);
+      : input.request.input.flatMap(readResponsesInputItemTextParts);
   const messageCount = typeof input.request.input === "string" ? 1 : input.request.input.length;
   const toolTextParts = readToolTextParts(input.rawBody);
 
@@ -63,7 +63,9 @@ export function buildOpenAIResponsesRequestMetadata(input: {
     model: input.model,
     protocol: "responses",
     stream: input.request.stream ?? false,
-    usesTools: toolTextParts.length > 0,
+    usesTools:
+      toolTextParts.length > 0 ||
+      (Array.isArray(input.request.input) && input.request.input.some(isResponsesToolInputItem)),
   };
 }
 
@@ -147,6 +149,69 @@ function readAnthropicMessageContentTextParts(
     }
     return parts;
   });
+}
+
+function readResponsesInputItemTextParts(item: unknown): string[] {
+  if (!isRecord(item)) {
+    return [];
+  }
+  const parts: string[] = [];
+  if (typeof item.content === "string") {
+    parts.push(item.content);
+  }
+  if (Array.isArray(item.content)) {
+    parts.push(...item.content.flatMap(readResponsesContentTextParts));
+  }
+  if (typeof item.output === "string") {
+    parts.push(item.output);
+  }
+  if (typeof item.arguments === "string") {
+    parts.push(item.arguments);
+  }
+  return parts;
+}
+
+function readResponsesContentTextParts(item: unknown): string[] {
+  if (!isRecord(item)) {
+    return [];
+  }
+  const parts: string[] = [];
+  if (typeof item.text === "string") {
+    parts.push(item.text);
+  }
+  if (typeof item.content === "string") {
+    parts.push(item.content);
+  }
+  return parts;
+}
+
+function readOpenAIChatMessageContentTextParts(content: unknown): string[] {
+  if (typeof content === "string") {
+    return [content];
+  }
+  if (!Array.isArray(content)) {
+    return [];
+  }
+  return content.flatMap((part) => {
+    if (!isRecord(part)) {
+      return [];
+    }
+    const parts: string[] = [];
+    if (typeof part.text === "string") {
+      parts.push(part.text);
+    }
+    if (typeof part.content === "string") {
+      parts.push(part.content);
+    }
+    return parts;
+  });
+}
+
+function isResponsesToolInputItem(item: unknown): boolean {
+  if (!isRecord(item) || typeof item.type !== "string") {
+    return false;
+  }
+  return item.type === "function_call" || item.type === "function_call_output";
 }
 
 function readToolTextParts(rawBody: unknown): string[] {

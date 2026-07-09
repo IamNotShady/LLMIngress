@@ -1,64 +1,4 @@
-import type { AnthropicContentBlock } from "./adapters/anthropic.js";
-
 export type SubscriptionProviderKey = "claude_code" | "openai_codex";
-
-type OpenAIResponsesInputMessage = {
-  content: string;
-  role: CodexResponsesInputMessage["role"];
-};
-
-export type CodexResponsesInputMessage = {
-  content: Array<{ text: string; type: "input_text" }>;
-  role: "assistant" | "developer" | "system" | "user";
-};
-
-export type CodexResponsesInput = CodexResponsesInputMessage[];
-
-export function normalizeCodexResponsesInput(
-  input: string | OpenAIResponsesInputMessage[],
-): CodexResponsesInput {
-  if (typeof input === "string") {
-    return [{ content: [{ text: input, type: "input_text" }], role: "user" }];
-  }
-  return input.map((message) => ({
-    content: [{ text: message.content, type: "input_text" }],
-    role: message.role,
-  }));
-}
-
-// Subscription (OAuth) /v1/messages requires an agent-identity string as the first
-// system block, or Anthropic rejects/limits the request (observed as a 429
-// rate_limit_error; per mnfst/manifest it also gates sonnet/opus vs haiku-only).
-// Anthropic accepts either the Claude Code CLI identity or the Claude Agent SDK
-// identity; we send the Agent SDK string (matching mnfst/manifest) since the gateway
-// is a programmatic agent, not the CLI.
-export const claudeCodeSystemPrompt =
-  "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
-
-// Prepend the Claude Code identifier as the first system block. Idempotent: if the
-// caller already leads with the identifier (e.g. a real Claude Code client routed
-// through the gateway), the system is returned unchanged.
-export function withClaudeCodeSystemPrompt(system: unknown): AnthropicContentBlock[] {
-  const identifier: AnthropicContentBlock = { text: claudeCodeSystemPrompt, type: "text" };
-  if (Array.isArray(system)) {
-    const [first] = system;
-    if (isRecord(first) && first.text === claudeCodeSystemPrompt) {
-      return system as AnthropicContentBlock[];
-    }
-    return [identifier, ...(system as AnthropicContentBlock[])];
-  }
-  if (typeof system === "string" && system.trim().length > 0) {
-    if (system.trimStart().startsWith(claudeCodeSystemPrompt)) {
-      return [{ text: system, type: "text" }];
-    }
-    return [identifier, { text: system, type: "text" }];
-  }
-  return [identifier];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export const codexClientVersion = "0.128.0";
 export const codexOriginator = "codex_cli_rs";
@@ -75,21 +15,35 @@ export function isSubscriptionProviderKey(
   return providerKey === "openai_codex" || providerKey === "claude_code";
 }
 
-export function buildCodexSubscriptionHeaders(accessToken: string): Record<string, string> {
-  return {
+export function buildCodexSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  return mergeHttpHeaders(requestHeaders, {
     authorization: `Bearer ${accessToken}`,
     "content-type": "application/json",
     originator: codexOriginator,
     "user-agent": codexUserAgent,
-  };
+  });
 }
 
-export function buildClaudeCodeSubscriptionHeaders(accessToken: string): Record<string, string> {
-  return {
+export function buildClaudeCodeSubscriptionHeaders(
+  accessToken: string,
+  requestHeaders?: Record<string, string>,
+): Record<string, string> {
+  // The subscription Bearer owns auth; drop any forwarded x-api-key (the streaming path
+  // injects `x-api-key: <credential>` for generic Anthropic) so it does not reach the
+  // provider alongside the OAuth Bearer.
+  const forwarded = stripHeader(requestHeaders, "x-api-key");
+  return mergeHttpHeaders(forwarded, {
     authorization: `Bearer ${accessToken}`,
-    "anthropic-beta": claudeCodeBetaFlags,
+    "anthropic-beta":
+      mergeCommaSeparatedHeaderValues(
+        readHttpHeader(forwarded, "anthropic-beta"),
+        claudeCodeBetaFlags,
+      ) ?? claudeCodeBetaFlags,
     "anthropic-dangerous-direct-browser-access": "true",
-    "anthropic-version": "2023-06-01",
+    "anthropic-version": readHttpHeader(forwarded, "anthropic-version") ?? "2023-06-01",
     "content-type": "application/json",
     "user-agent": claudeCodeUserAgent,
     "x-app": "cli",
@@ -102,7 +56,7 @@ export function buildClaudeCodeSubscriptionHeaders(accessToken: string): Record<
     "x-stainless-runtime": "node",
     "x-stainless-runtime-version": claudeCodeStainlessRuntimeVersion,
     "x-stainless-timeout": "600",
-  };
+  });
 }
 
 export function buildCodexModelListUrl(baseUrl: string): string {
@@ -168,4 +122,67 @@ function readStainlessOs(): string {
     default:
       return `Other:${process.platform}`;
   }
+}
+
+function mergeHttpHeaders(
+  ...headerSets: Array<Record<string, string> | undefined>
+): Record<string, string> {
+  const output: Record<string, string> = {};
+  for (const headers of headerSets) {
+    if (!headers) {
+      continue;
+    }
+    for (const [name, value] of Object.entries(headers)) {
+      removeHeader(output, name);
+      output[name] = value;
+    }
+  }
+  return output;
+}
+
+function readHttpHeader(
+  headers: Record<string, string> | undefined,
+  name: string,
+): string | undefined {
+  const normalizedName = name.toLowerCase();
+  return Object.entries(headers ?? {}).find(
+    ([headerName]) => headerName.toLowerCase() === normalizedName,
+  )?.[1];
+}
+
+function mergeCommaSeparatedHeaderValues(...values: Array<string | undefined>): string | undefined {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    for (const entry of (value ?? "").split(",")) {
+      const trimmed = entry.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      merged.push(trimmed);
+    }
+  }
+  return merged.length > 0 ? merged.join(",") : undefined;
+}
+
+function removeHeader(headers: Record<string, string>, name: string): void {
+  const normalizedName = name.toLowerCase();
+  for (const headerName of Object.keys(headers)) {
+    if (headerName.toLowerCase() === normalizedName) {
+      delete headers[headerName];
+    }
+  }
+}
+
+function stripHeader(
+  headers: Record<string, string> | undefined,
+  name: string,
+): Record<string, string> | undefined {
+  if (!headers) {
+    return headers;
+  }
+  const output = { ...headers };
+  removeHeader(output, name);
+  return output;
 }

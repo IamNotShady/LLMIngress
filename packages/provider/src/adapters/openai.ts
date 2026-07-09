@@ -1,3 +1,4 @@
+import { mergeHttpHeaders, readProviderResponseHeaders } from "../headers.js";
 import {
   isRecord,
   isRetryableHttpStatus,
@@ -7,17 +8,21 @@ import {
   readResponseBody,
 } from "./adapter-http.js";
 
-export type NormalizedOpenAIChatMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content?: string | null;
+export type NormalizedOpenAIChatMessage = Record<string, unknown> & {
+  role: "assistant" | "developer" | "function" | "system" | "tool" | "user";
+  content?: unknown;
   name?: string;
   tool_call_id?: string;
   tool_calls?: Record<string, unknown>[];
 };
 
+export type OpenAIChatMaxOutputTokenField = "max_completion_tokens" | "max_tokens";
+
 export type NormalizedOpenAIChatRequest = {
+  maxOutputTokenField?: OpenAIChatMaxOutputTokenField;
   maxOutputTokens?: number;
   messages: NormalizedOpenAIChatMessage[];
+  payload: Record<string, unknown>;
   passthrough?: Record<string, unknown>;
   stream?: boolean;
   temperature?: number;
@@ -25,23 +30,34 @@ export type NormalizedOpenAIChatRequest = {
   tools?: Record<string, unknown>[];
 };
 
-export type NormalizedOpenAIResponsesInputMessage = {
+export type NormalizedOpenAIResponsesInputMessage = Record<string, unknown> & {
   role: "developer" | "system" | "user" | "assistant";
-  content: string;
+  content: unknown;
 };
 
+export type NormalizedOpenAIResponsesInputItem =
+  | NormalizedOpenAIResponsesInputMessage
+  | Record<string, unknown>;
+
 export type NormalizedOpenAIResponsesRequest = {
-  input: string | NormalizedOpenAIResponsesInputMessage[];
-  instructions?: string;
+  input: string | NormalizedOpenAIResponsesInputItem[];
+  instructions?: string | null;
   maxOutputTokens?: number;
+  payload: Record<string, unknown>;
+  passthrough?: Record<string, unknown>;
+  parallelToolCalls?: boolean;
   stream?: boolean;
   temperature?: number;
+  toolChoice?: string | Record<string, unknown>;
+  tools?: Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIEmbeddingsRequest = {
   dimensions?: number;
   encodingFormat?: "base64" | "float";
-  input: string | string[];
+  input: string | string[] | number[] | number[][];
+  payload: Record<string, unknown>;
+  passthrough?: Record<string, unknown>;
 };
 
 export type OpenAIProviderTarget = {
@@ -52,6 +68,7 @@ export type OpenAIProviderTarget = {
 
 export type OpenAIAdapterSuccess = {
   body: unknown;
+  headers: Record<string, string>;
   ok: true;
   providerRequestId: string | null;
   statusCode: number;
@@ -61,6 +78,7 @@ export type OpenAIAdapterError = {
   body: unknown;
   errorCode: string;
   errorMessage: string;
+  headers: Record<string, string>;
   ok: false;
   retryable: boolean;
   statusCode: number | null;
@@ -70,14 +88,17 @@ export type OpenAIAdapterResult = OpenAIAdapterSuccess | OpenAIAdapterError;
 
 export type OpenAIProviderAdapter = {
   chatCompletion: (input: {
+    headers?: Record<string, string>;
     request: NormalizedOpenAIChatRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
   embeddings?: (input: {
+    headers?: Record<string, string>;
     request: NormalizedOpenAIEmbeddingsRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
   response?: (input: {
+    headers?: Record<string, string>;
     request: NormalizedOpenAIResponsesRequest;
     target: OpenAIProviderTarget;
   }) => Promise<OpenAIAdapterResult>;
@@ -86,7 +107,11 @@ export type OpenAIProviderAdapter = {
 type CreateOpenAIProviderAdapterOptions = {
   fetch?: typeof globalThis.fetch;
   headers?: Record<string, string>;
-  mapProviderError?: (statusCode: number, body: unknown) => OpenAIAdapterError;
+  mapProviderError?: (
+    statusCode: number,
+    body: unknown,
+    headers: Record<string, string>,
+  ) => OpenAIAdapterError;
   timeoutMs?: number;
 };
 
@@ -100,20 +125,23 @@ type OpenAIChatCompletionsPayload = Record<string, unknown> & {
   tools?: Record<string, unknown>[];
 };
 
-type OpenAIResponsesPayload = {
-  input: string | NormalizedOpenAIResponsesInputMessage[];
-  instructions?: string;
+type OpenAIResponsesPayload = Record<string, unknown> & {
+  input: NormalizedOpenAIResponsesRequest["input"];
+  instructions?: string | null;
   max_output_tokens?: number;
   model: string;
-  store: false;
+  parallel_tool_calls?: boolean;
+  store?: boolean;
   stream?: boolean;
   temperature?: number;
+  tool_choice?: NormalizedOpenAIResponsesRequest["toolChoice"];
+  tools?: Record<string, unknown>[];
 };
 
-type OpenAIEmbeddingsPayload = {
+type OpenAIEmbeddingsPayload = Record<string, unknown> & {
   dimensions?: number;
   encoding_format?: NormalizedOpenAIEmbeddingsRequest["encodingFormat"];
-  input: string | string[];
+  input: NormalizedOpenAIEmbeddingsRequest["input"];
   model: string;
 };
 
@@ -125,22 +153,24 @@ export function createOpenAIProviderAdapter(
   const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
-    chatCompletion: async ({ request, target }) => {
+    chatCompletion: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildChatCompletionsUrl(target.baseUrl), {
           body: JSON.stringify(buildChatCompletionsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers),
+          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapError(response.status, body);
+          return mapError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -149,22 +179,24 @@ export function createOpenAIProviderAdapter(
         return mapRequestFailure(error, timeoutMs);
       }
     },
-    embeddings: async ({ request, target }) => {
+    embeddings: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildEmbeddingsUrl(target.baseUrl), {
           body: JSON.stringify(buildEmbeddingsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers),
+          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapError(response.status, body);
+          return mapError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -173,22 +205,24 @@ export function createOpenAIProviderAdapter(
         return mapRequestFailure(error, timeoutMs);
       }
     },
-    response: async ({ request, target }) => {
+    response: async ({ headers, request, target }) => {
       try {
         const response = await fetchImpl(buildResponsesUrl(target.baseUrl), {
           body: JSON.stringify(buildResponsesPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers),
+          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
         });
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapError(response.status, body);
+          return mapError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
@@ -203,12 +237,14 @@ export function createOpenAIProviderAdapter(
 function buildProviderHeaders(
   apiKey: string | null | undefined,
   extraHeaders: Record<string, string> | undefined,
+  requestHeaders: Record<string, string> | undefined,
 ): Record<string, string> {
-  return {
-    ...extraHeaders,
-    "content-type": "application/json",
-    ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-  };
+  return mergeHttpHeaders(
+    requestHeaders,
+    extraHeaders,
+    { "content-type": "application/json" },
+    apiKey ? { authorization: `Bearer ${apiKey}` } : undefined,
+  );
 }
 
 function buildChatCompletionsPayload(
@@ -216,15 +252,9 @@ function buildChatCompletionsPayload(
   target: OpenAIProviderTarget,
 ): OpenAIChatCompletionsPayload {
   return omitUndefined({
-    ...request.passthrough,
-    max_tokens: request.maxOutputTokens,
-    messages: request.messages,
+    ...request.payload,
     model: target.modelId,
-    stream: request.stream,
-    temperature: request.temperature,
-    tool_choice: request.toolChoice,
-    tools: request.tools,
-  });
+  }) as OpenAIChatCompletionsPayload;
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
@@ -235,15 +265,7 @@ function buildResponsesPayload(
   request: NormalizedOpenAIResponsesRequest,
   target: OpenAIProviderTarget,
 ): OpenAIResponsesPayload {
-  return omitUndefined({
-    input: request.input,
-    instructions: request.instructions,
-    max_output_tokens: request.maxOutputTokens,
-    model: target.modelId,
-    store: false,
-    stream: request.stream,
-    temperature: request.temperature,
-  });
+  return omitUndefined({ ...request.payload, model: target.modelId }) as OpenAIResponsesPayload;
 }
 
 function buildResponsesUrl(baseUrl: string): string {
@@ -254,12 +276,7 @@ function buildEmbeddingsPayload(
   request: NormalizedOpenAIEmbeddingsRequest,
   target: OpenAIProviderTarget,
 ): OpenAIEmbeddingsPayload {
-  return omitUndefined({
-    dimensions: request.dimensions,
-    encoding_format: request.encodingFormat,
-    input: request.input,
-    model: target.modelId,
-  });
+  return omitUndefined({ ...request.payload, model: target.modelId }) as OpenAIEmbeddingsPayload;
 }
 
 function buildEmbeddingsUrl(baseUrl: string): string {
@@ -270,13 +287,18 @@ function buildProviderUrl(baseUrl: string, suffix: string): string {
   return joinProviderUrl(baseUrl, suffix);
 }
 
-function mapProviderError(statusCode: number, body: unknown): OpenAIAdapterError {
+function mapProviderError(
+  statusCode: number,
+  body: unknown,
+  headers: Record<string, string>,
+): OpenAIAdapterError {
   const providerError = readProviderError(body);
 
   return {
     body,
     errorCode: providerError.code,
     errorMessage: providerError.message,
+    headers,
     ok: false,
     retryable: isRetryableHttpStatus(statusCode),
     statusCode,
@@ -292,6 +314,7 @@ function mapRequestFailure(error: unknown, timeoutMs: number): OpenAIAdapterErro
       : error instanceof Error
         ? error.message
         : "Provider request failed.",
+    headers: {},
     ok: false,
     retryable: true,
     statusCode: null,

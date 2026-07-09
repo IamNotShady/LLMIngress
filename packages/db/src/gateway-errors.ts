@@ -20,7 +20,6 @@ export type GatewayErrorCode =
   | "rate_limit_exceeded"
   | "route_not_found"
   | "token_budget_exceeded"
-  | "unsupported_stateful_responses"
   | "virtual_model_not_allowed";
 
 export type GatewayErrorBody = {
@@ -53,8 +52,6 @@ const defaultGatewayErrorMessage: Record<GatewayErrorCode, string> = {
   rate_limit_exceeded: "Agent API key exceeded its rate limit.",
   route_not_found: "No route policy is available for the selected Virtual Model.",
   token_budget_exceeded: "Agent API key token budget was exceeded.",
-  unsupported_stateful_responses:
-    "Stateful Responses API fields are not supported by this Gateway.",
   virtual_model_not_allowed: "Virtual Model is not allowed for this Agent API key.",
 };
 

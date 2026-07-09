@@ -1,4 +1,4 @@
-import { selectRouteAttempts } from "@llmingress/domain";
+import { type RouteEndpointProtocol, selectRouteAttempts } from "@llmingress/domain";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
@@ -35,6 +35,7 @@ import {
 } from "./gateway-provider-credentials.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import {
+  assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   requireGatewayRoutePolicy,
   selectGatewayBaselineCandidate,
@@ -74,6 +75,7 @@ export type GatewayProtocolSpec<TNormalized, TSuccess extends ProviderFallbackAt
   callProvider: (input: {
     candidate: FallbackChainCandidate;
     providerApiKey: FallbackProviderApiKey;
+    providerRequestHeaders: Record<string, string>;
     request: TNormalized;
   }) => Promise<ProviderFallbackAttemptResult<TSuccess>>;
   normalize: (body: unknown, requestId: string) => GatewayProtocolNormalizeResult<TNormalized>;
@@ -92,6 +94,8 @@ export async function executeGatewayProtocolRequest<
   masterKeySource?: MasterKeySource;
   requestBody: unknown;
   requestId: string;
+  protocol: RouteEndpointProtocol;
+  providerRequestHeaders?: Record<string, string>;
   snapshot: GatewayConfigSnapshot;
   spec: GatewayProtocolSpec<TNormalized, TSuccess>;
   virtualModel: GatewayVirtualModel;
@@ -134,6 +138,10 @@ export async function executeGatewayProtocolRequest<
 
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    assertGatewayRoutePolicyEndpointProtocol({
+      protocol: input.protocol,
+      routePolicy,
+    });
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const selectedCandidate = routeResult.chain[0];
     if (!selectedCandidate) {
@@ -183,6 +191,7 @@ export async function executeGatewayProtocolRequest<
         const result = await input.spec.callProvider({
           candidate,
           providerApiKey,
+          providerRequestHeaders: input.providerRequestHeaders ?? {},
           request: normalized.request,
         });
         recordGatewayProviderTrace({
@@ -204,6 +213,16 @@ export async function executeGatewayProtocolRequest<
       requestId: input.requestId,
     });
     if (!success) {
+      const providerError = buildProviderErrorPassthrough(lastError);
+      if (providerError) {
+        return {
+          activity,
+          body: providerError.body,
+          headers: providerError.headers,
+          requestMetadata,
+          statusCode: providerError.statusCode,
+        };
+      }
       throw buildFallbackExhaustionError(lastError);
     }
 
@@ -221,6 +240,7 @@ export async function executeGatewayProtocolRequest<
       activity,
       body: success.result.body,
       budgetSettlement,
+      headers: success.result.headers,
       requestMetadata,
       statusCode: success.result.statusCode,
       usageCost: {
@@ -245,6 +265,30 @@ export async function executeGatewayProtocolRequest<
     await releaseGatewayConcurrency({
       databaseUrl: input.databaseUrl,
       lease: concurrencyLease,
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      console.error("[gateway] failed to release concurrency lease", error);
+    });
   }
+}
+
+function buildProviderErrorPassthrough(error: FallbackAttemptErrorLike | undefined): {
+  body: unknown;
+  headers?: Record<string, string>;
+  statusCode: number;
+} | null {
+  const statusCode = error?.statusCode;
+  if (statusCode === undefined || statusCode === null) {
+    return null;
+  }
+  if (statusCode < 400 || statusCode >= 500) {
+    return null;
+  }
+  if (!error || !("body" in error)) {
+    return null;
+  }
+  return {
+    body: error.body ?? null,
+    headers: error.headers,
+    statusCode,
+  };
 }

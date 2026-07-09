@@ -4,7 +4,7 @@ import {
   completeProviderOAuthConnection,
   type PostgresQueryClient,
   readEnabledCompletedProviderOAuthConnections,
-  withPostgresClient,
+  withPooledPostgresClient,
 } from "@llmingress/db/providers";
 import {
   fetchListedProviderModels as fetchProviderModelList,
@@ -494,7 +494,7 @@ export async function refreshProviderModels(
     });
     publishedConfigVersion = result.version;
   } else {
-    await withPostgresClient(options.databaseUrl, async (client) => {
+    await withPooledPostgresClient(options.databaseUrl, async (client) => {
       await client.query("begin");
       try {
         await writePlan(client);
@@ -650,7 +650,7 @@ async function readProvider(
   databaseUrl: string | undefined,
   providerId: string,
 ): Promise<ProviderRow> {
-  return withPostgresClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
         select id::text, provider_type, provider_key, display_name, base_url
@@ -676,7 +676,7 @@ async function readExistingProviderModels(
   databaseUrl: string | undefined,
   providerId: string,
 ): Promise<ExistingProviderModel[]> {
-  return withPostgresClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderModelRow>(
       `
         select provider_models.id::text,
@@ -840,7 +840,7 @@ async function readProviderApiKey(input: {
   masterKeySource: MasterKeySource;
   providerId: string;
 }): Promise<string> {
-  const encrypted = await withPostgresClient(input.databaseUrl, async (client) => {
+  const encrypted = await withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<{ encrypted_key: unknown }>(
       `
         select encrypted_key

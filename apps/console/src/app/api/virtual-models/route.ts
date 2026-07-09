@@ -1,4 +1,3 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   createRoutePolicy,
   normalizeRoutePolicyFormInput,
@@ -10,15 +9,13 @@ import {
   normalizeVirtualModelFormInput,
   updateVirtualModel,
 } from "@llmingress/db/console-virtual-models";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText, readTextValues } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const action = readText(form, "action");
 
@@ -41,6 +38,7 @@ export async function POST(request: NextRequest) {
       if (providerModelIds.length > 0) {
         await createRoutePolicy({
           routePolicy: normalizeRoutePolicyFormInput({
+            endpointProtocol: readText(form, "endpointProtocol"),
             providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: virtualModel.id,
@@ -69,6 +67,7 @@ export async function POST(request: NextRequest) {
         await updateRoutePolicy({
           id: routePolicyId,
           routePolicy: normalizeRoutePolicyFormInput({
+            endpointProtocol: readText(form, "endpointProtocol"),
             providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: readRequiredText(form, "id"),
@@ -77,6 +76,7 @@ export async function POST(request: NextRequest) {
       } else if (!routePolicyId && providerModelIds.length > 0) {
         await createRoutePolicy({
           routePolicy: normalizeRoutePolicyFormInput({
+            endpointProtocol: readText(form, "endpointProtocol"),
             providerModelIds,
             strategy: readText(form, "strategy"),
             virtualModelId: readRequiredText(form, "id"),
@@ -91,11 +91,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unknown virtual model action." }, { status: 400 });
     }
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Virtual Model action failed." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Virtual Model action failed.");
   }
 
-  return NextResponse.redirect(new URL("/models", request.url), { status: 303 });
-}
+  return redirectToConsolePath("/models");
+});

@@ -1,4 +1,3 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { normalizeProviderTemplateFormInput } from "@llmingress/db/console-provider-templates";
 import {
   createProvider,
@@ -9,15 +8,13 @@ import {
   updateProvider,
 } from "@llmingress/db/console-providers";
 import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { classifyConsoleActionError } from "../_error-classify";
 import { readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const action = readText(form, "action");
 
@@ -66,9 +63,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unknown provider action." }, { status: 400 });
     }
   } catch (error) {
-    const message = normalizeProviderActionError(
-      error instanceof Error ? error.message : "Provider action failed.",
-    );
+    const rawMessage = error instanceof Error ? error.message : "Provider action failed.";
+    const normalized = normalizeProviderActionError(rawMessage);
+    const message =
+      normalized === rawMessage
+        ? classifyConsoleActionError(error, "Provider action failed.").message
+        : normalized;
     if (action === "create" || action === "createFromTemplate") {
       const redirectUrl = new URL("/providers", request.url);
       redirectUrl.searchParams.set("providerDialog", "new");
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       setSearchParam(redirectUrl, "providerKeyValue", readText(form, "providerKey"));
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return NextResponse.redirect(redirectUrl, { status: 303 });
+      return redirectToConsolePath(redirectUrl);
     }
     if (action === "update") {
       const redirectUrl = new URL("/providers", request.url);
@@ -86,13 +86,13 @@ export async function POST(request: NextRequest) {
       redirectUrl.searchParams.set("providerErrorField", "form");
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return NextResponse.redirect(redirectUrl, { status: 303 });
+      return redirectToConsolePath(redirectUrl);
     }
-    return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
+    return redirectToConsolePath("/providers");
   }
 
-  return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
-}
+  return redirectToConsolePath("/providers");
+});
 
 function setSearchParam(url: URL, name: string, value: string | undefined): void {
   if (value) {

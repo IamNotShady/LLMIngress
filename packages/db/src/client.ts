@@ -79,7 +79,9 @@ export function getPostgresPool(databaseUrl?: string): Pool {
     idleTimeoutMillis: 30_000,
     max: llmingressDbPoolMax(),
   });
-  pool.on("error", () => undefined);
+  pool.on("error", (error) => {
+    console.error("[db] postgres pool error", error);
+  });
   postgresPools.set(connectionString, pool);
   return pool;
 }

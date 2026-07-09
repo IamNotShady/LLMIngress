@@ -2,10 +2,10 @@
 
 ## Current State
 
-- Date: 2026-07-05
+- Date: 2026-07-06
 - Branch: `dev`
-- Base: `3dab4dda`
-- Status: Gateway agent limits single-read follow-up implemented and verified.
+- Base: `27fd08b4`
+- Status: Gateway ingress and provider error passthrough follow-up implemented and verified.
 
 ## 2026-07-05 Gateway Agent Limits Single-Read Follow-up
 
@@ -603,6 +603,188 @@
   - `pnpm run lint`
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 21 passing features re-verified.
+
+## 2026-07-06 Virtual Model Endpoint Routing
+
+- Added endpoint selection for Virtual Models and Route Policies:
+  - Supported endpoint values are `chat_completions`, `responses`, `messages`, and `embeddings`.
+  - The selected endpoint is stored in `route_policies.rules.endpointProtocol`; no migration was added.
+  - Provider model options now expose `supportedEndpoints`, derived from provider templates plus direct OpenAI and Anthropic providers.
+  - Virtual Model and Route Policy candidate pickers filter out provider models that do not support the selected endpoint.
+  - `createRoutePolicy` and `updateRoutePolicy` reject candidates whose provider does not support the selected endpoint.
+  - Gateway JSON and streaming request paths reject requests whose endpoint does not match the saved route-policy endpoint.
+  - Existing policies without `endpointProtocol` remain runtime-compatible.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/virtual-model-endpoint-routing.unit.test.ts` failed while endpointProtocol was not preserved, provider endpoint support was not derived, candidate filtering did not apply, and Gateway mismatch requests still continued to provider execution.
+- Verification completed so far:
+  - `pnpm exec vitest run tests/features/virtual-model-endpoint-routing.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts --workers=1`
+  - `pnpm exec vitest run tests/features/v1-release-guards.unit.test.ts`
+  - `pnpm run typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+
+## 2026-07-06 Docker Console Relative Redirect Fix
+
+- Fixed Docker-hosted Console auth/form redirects:
+  - Root cause: API routes built absolute redirects from `request.url`; in the Docker container Next resolves that as the internal listener `http://0.0.0.0:3000`, so a host request to `http://127.0.0.1:13000` could jump to the wrong local process after login.
+  - Added `redirectToConsolePath()` for same-app redirects and switched Console API auth/form routes to relative `Location` headers.
+  - External OAuth authorization URLs remain untouched; only redirects back into the Console app were changed.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/v1-console.unit.test.ts`
+  - `pnpm --filter @llmingress/console typecheck`
+  - `pnpm run lint`
+  - Rebuilt and restarted Docker project `llmingress_docker_local`.
+  - `curl -I -X POST http://127.0.0.1:13000/api/auth/logout` now returns `location: /`.
+  - Docker Gateway `/health` returned HTTP 200 and Docker Console root returned HTTP 200.
+  - `pnpm run verify`
+
+## 2026-07-06 Responses Tool Passthrough Follow-up
+
+- Fixed Gateway `/v1/responses` tool passthrough for Hermes/Codex-style tool loops:
+  - `normalizeOpenAIResponsesRequest` now validates and preserves `tools`, `tool_choice`, and `parallel_tool_calls`.
+  - Responses `input` arrays now preserve raw typed items such as `function_call_output` instead of forcing every item into a text message shape.
+  - Generic OpenAI Responses, streaming Responses, and Codex subscription `/codex/responses` payloads now forward the tool fields.
+  - Codex subscription input normalization only converts plain string/text messages to `input_text`; typed Responses items remain unchanged.
+- TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts` failed while Responses tools were dropped, raw tool outputs were rejected/rewritten, and malformed tool fields were accepted.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed with `/v1/responses` returning HTTP 400 for a raw `function_call_output` input item.
+- Verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/provider typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Follow-up image input fix:
+  - Root cause: Hermes sends screenshot vision requests as Responses message content parts containing both `input_text` and `input_image`; the Gateway Responses normalizer only accepted string/text-only content, so it returned `invalid_responses_request` before the provider saw the image.
+  - Responses message content arrays now preserve raw content parts such as `input_image` and data URLs.
+  - Codex subscription normalization still converts plain string messages to `input_text`, but leaves multimodal content-part arrays unchanged.
+- Image fix TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts` failed because image content parts were rejected.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed because running Gateway returned HTTP 400 for a streaming Responses image input.
+- Image fix verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm --filter @llmingress/db typecheck`
+  - `pnpm --filter @llmingress/provider typecheck`
+  - `pnpm --filter @llmingress/gateway typecheck`
+  - `pnpm run lint`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Official field passthrough follow-up:
+  - Root cause: the endpoint normalizers and streaming payload builder still maintained narrow field copies. That made Gateway reject or drop official request fields beyond the small set it needed for routing.
+  - Responses now preserves official top-level fields such as `store`, `previous_response_id`, `conversation`, `include`, `metadata`, `reasoning`, `text`, `truncation`, and file/item input shapes across JSON, streaming, and Codex subscription payloads. Gateway still does not own cross-provider state migration; it forwards provider state fields.
+  - Chat Completions now preserves developer/function/tool messages, multimodal/audio/file content parts, metadata, prediction, modalities, stream options, service tier, and other official top-level fields. `max_completion_tokens` is no longer rewritten to `max_tokens` for provider requests.
+  - Embeddings now accepts string input, string-array input, token-array input, token-array batch input, and preserves `user`/format fields.
+  - Anthropic Messages now preserves extra provider fields such as `container`, `context_management`, `mcp_servers`, and `betas` through JSON and streaming payloads.
+- Official field passthrough TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts` failed while Chat dropped `max_completion_tokens` from passthrough, rejected official message/content shapes, Responses rejected stateful fields, Embeddings rejected token arrays, and Messages dropped extra top-level fields.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed while streaming Responses still dropped stateful/top-level fields and forced `store:false`.
+- Official field passthrough verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Hermes reasoning replay follow-up:
+  - Root cause: Hermes Responses turns can replay encrypted reasoning followed by an assistant placeholder item with `content: ""`; LLMIngress treated all empty string Responses message content as invalid and returned `invalid_responses_request` before provider execution.
+  - Responses input normalization now allows empty string content only for assistant replay messages. Empty user messages remain invalid.
+- Hermes reasoning replay TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts` failed while `[{type:"reasoning", encrypted_content:"..."}, {role:"assistant", content:""}]` was rejected.
+- Hermes reasoning replay verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Raw provider passthrough follow-up:
+  - Root cause: Gateway still rebuilt provider request bodies from normalized fields. That deleted fields such as paired Chat `max_tokens`, injected Responses `store:false`, converted Codex subscription Responses string messages into `input_text` parts, prepended Claude Code system content, and synthesized Codex subscription response bodies.
+  - Provider payload builders now forward the Agent body with only virtual model replacement. Gateway still reads fields needed for routing, stream selection, token estimates, and limits, but provider-owned request fields are not rewritten or rejected for local schema reasons.
+  - Removed Codex subscription input normalization, Codex response synthesis, Claude Code body system injection, and Anthropic sampling-parameter deletion.
+- Raw provider passthrough TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts tests/features/provider-dialect.unit.test.ts` failed while raw payloads were missing, malformed provider-owned Responses fields were rejected, Codex subscription bodies were rewritten, Claude Code bodies were prepended, Anthropic sampling fields were deleted, and Codex responses were synthesized.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed while Chat dropped `max_tokens` when `max_completion_tokens` was present.
+- Raw provider passthrough verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-stream-robustness.unit.test.ts tests/features/provider-dialect.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Read-only ingress follow-up:
+  - Audited `/v1/chat/completions`, `/v1/responses`, `/v1/messages`, and `/v1/embeddings`: request readers now preserve the raw Agent body as the provider payload and only extract local metadata best-effort for routing, token estimates, stream selection, and limits. Provider-owned request shapes no longer cause local schema rejection; the only provider-body mutation is virtual model replacement.
+  - Removed the streaming dialect usage mutation that injected `stream_options.include_usage`; streaming request bodies now follow the same Agent-body-plus-model-replacement rule.
+  - Provider responses are still read for status, provider request id, usage/cost extraction, and background recording, but success bodies are returned from the provider result and subscription adapters no longer synthesize response bodies.
+- Read-only ingress TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts` failed while provider-owned Chat, Responses, Messages, and Embeddings request shapes were rejected and streaming dialects still requested usage injection.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts` failed while streaming Chat with provider-owned `messages` returned HTTP 400 before provider execution.
+- Read-only ingress verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Provider error passthrough follow-up:
+  - Root cause: successful provider responses were no longer synthesized, but non-retryable provider 4xx responses still passed through Gateway fallback error mapping, which replaced provider error codes with `provider_rejected_request` and added a Gateway `requestId`.
+  - JSON protocol execution now returns the provider body and upstream status directly for non-retryable provider 4xx results that include a body. Streaming execution now returns the parsed provider error body and upstream status for non-retryable provider 4xx instead of wrapping it in a Gateway error envelope.
+  - Retryable 429/5xx/network failures keep the existing fallback and Gateway error semantics.
+- Provider error passthrough TDD red phase:
+  - `pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1` failed while Chat and Messages 4xx responses returned `provider_rejected_request` envelopes instead of the provider body.
+- Provider error passthrough verification completed:
+  - `pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1`
+  - `pnpm exec vitest run tests/features/gateway-error-fidelity.unit.test.ts tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified.
+- Gateway header transparency follow-up:
+  - Root cause: Gateway only used Agent request headers for auth/CORS; JSON adapters rebuilt upstream headers from provider auth plus content-type, streaming kept only content-type, and adapter results did not carry provider response headers back to Gateway.
+  - Gateway now filters inbound Agent headers with a denylist for auth/transport/body-owned headers, then forwards protocol headers through Chat Completions, Responses, Embeddings, and Messages JSON and streaming paths. Provider auth and JSON content-type remain Gateway-owned.
+  - OpenAI-compatible adapters merge forwarded protocol headers with provider auth; OpenRouter attribution remains Gateway-owned. Anthropic adapters respect Agent `anthropic-version` and forward `anthropic-beta`. Claude Code subscription merges Agent beta flags with required subscription flags and de-dupes them.
+  - Provider response headers are captured and returned for JSON and streaming success/error responses, excluding transport/body headers. Provider `x-request-id` / `request-id`, rate-limit headers, and `retry-after` can now reach Agents while Gateway correlation remains available as `x-llmingress-request-id`.
+  - Exhausted provider 429s keep fallback first, then return the last provider 429 body/status/headers instead of a Gateway `provider_rate_limited` envelope.
+- Gateway header transparency TDD red phase:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts` failed while the request-header helper was missing, OpenAI/Anthropic adapter inputs ignored protocol headers, and Claude Code beta/version headers were hardcoded.
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1` failed while provider response headers were replaced by Gateway headers and exhausted provider 429 returned a Gateway envelope.
+- Gateway header transparency verification completed:
+  - `pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/provider-dialect.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts`
+  - `pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts --workers=1`
+  - `pnpm run lint`
+  - `pnpm run typecheck`
+  - `pnpm run verify`
+  - `pnpm run verify:features` passed with all 22 passing features re-verified. The optimized E2E batch had one parallel `v1-gateway-routing` miss, then the built-in per-feature fallback passed and the command exited 0.
+  - `git diff --check`
+  - `jq empty feature_list.json`
+- Subscription-header regression fix (Claude Code streaming x-api-key leak):
+  - Root cause: streaming `messages` payload builder injects `x-api-key: <credential>` (`packages/db/src/gateway-streaming.ts:631`, correct for generic Anthropic). The `claude_code` dialect changed from replace to merge (`packages/provider/src/dialect.ts`), and `buildClaudeCodeSubscriptionHeaders` never stripped it — so `claude_code` streaming sent `x-api-key: <oauth-token>` alongside the subscription `authorization: Bearer <oauth-token>`, breaking CLI impersonation fidelity and risking a provider 401. Confirmed by an empirical dialect+builder header trace.
+  - Fix: `buildClaudeCodeSubscriptionHeaders` (`packages/provider/src/subscription.ts`) strips `x-api-key` from forwarded headers before merging impersonation headers (new local `stripHeader` reusing `removeHeader`). `authorization` already belonged to the impersonation set (merged last, so it wins) and codex never receives `x-api-key`, so line 631 and the codex builder stay untouched (surgical).
+  - Not affected: non-streaming Claude Code (its headers come from the ingress denylist where `x-api-key` is already stripped) and Codex streaming (injects `authorization`, not `x-api-key`).
+  - TDD: red `provider-dialect` unit failed with `expected 'claude-oauth-token' to be undefined`, then went green.
+  - Verification: `pnpm exec vitest run tests/features/provider-dialect.unit.test.ts tests/features/gateway-request-hygiene.unit.test.ts`, empirical streaming header trace (x-api-key absent, Bearer + merged betas intact), `pnpm run verify`, and `pnpm run verify:features` passed with all 22 passing features re-verified (optimized E2E batch flaked once, then per-feature fallback passed).
+
+## 2026-07-08 Code Quality Hardening Baseline
+
+- Worktree: `.claude/worktrees/code-quality-hardening` on branch `worktree-code-quality-hardening`.
+- Baseline green before new scope: `pnpm install && pnpm run verify` exited 0.
+- Feature regression baseline: `pnpm run verify:features` exited 0 with all 22 passing features re-verified. The optimized E2E batch missed one `v1-gateway-routing` activity row, then the built-in per-feature fallback passed.
+
+## 2026-07-08 Code Quality Hardening Completion
+
+- Traceback: `docs/superpowers/plans/2026-07-08-code-quality-hardening.md`, covering the confirmed findings from the 2026-07-08 architecture audit.
+- `gateway-listen-host`: Gateway now binds `127.0.0.1` by default through `gatewayListenHost`, honors `GATEWAY_HOST`, and Docker explicitly opts into `0.0.0.0`.
+- `db-connection-hygiene`: Provider/worker DB paths use the shared pool, pool/release failures are logged, gateway/worker shutdown closes pools, and the runtime-status filename no longer stutters.
+- `console-api-hygiene`: Console API routes share `withConsoleAuth`, unexpected action errors return sanitized 500 responses, and the agent-created HTML page is extracted.
+- `console-sections-split`: Dashboard sections are split into 11 bounded modules; `sections.tsx` now holds only shared helpers under budget, and page/static tests were updated to the new module boundaries.
+- Regression note: `console-shared-formatters` E2E timestamp seeding was stabilized after a local-midnight boundary exposed a test-only assumption; focused unit+E2E passed after the fix.
+- Verification: `pnpm run verify` passed, and `pnpm run verify:features` passed with all 26 passing features re-verified.
+- Blockers: none open.
 
 ## Required Verification
 

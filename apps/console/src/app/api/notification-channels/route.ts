@@ -1,17 +1,14 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   createNotificationChannel,
   normalizeNotificationChannelFormInput,
 } from "@llmingress/db/console-notification-channels";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const action = readRequiredText(form, "action");
 
@@ -28,13 +25,8 @@ export async function POST(request: NextRequest) {
       }),
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Notification channel action failed." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Notification channel action failed.");
   }
 
-  return NextResponse.redirect(new URL("/settings#notification-channels", request.url), {
-    status: 303,
-  });
-}
+  return redirectToConsolePath("/settings#notification-channels");
+});

@@ -3,16 +3,13 @@ import {
   normalizeAgentLimitFormInput,
   saveAgentLimitRules,
 } from "@llmingress/db/console-agent-limits";
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
     const action = readRequiredText(form, "action");
@@ -20,7 +17,7 @@ export async function POST(request: NextRequest) {
       await deleteAgentLimitRules({
         agentId: readRequiredText(form, "agentId", "agentApiKeyId"),
       });
-      return NextResponse.redirect(new URL("/limits", request.url), { status: 303 });
+      return redirectToConsolePath("/limits");
     }
     if (action !== "saveLimitRules") {
       return NextResponse.json({ error: "Unknown Agent limit action." }, { status: 400 });
@@ -39,14 +36,8 @@ export async function POST(request: NextRequest) {
         tpm: readRequiredText(form, "tpm"),
       }),
     });
-    return NextResponse.redirect(
-      new URL(`/limits?selected=${encodeURIComponent(agentId)}`, request.url),
-      { status: 303 },
-    );
+    return redirectToConsolePath(`/limits?selected=${encodeURIComponent(agentId)}`);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Agent limit action failed." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Agent limit action failed.");
   }
-}
+});

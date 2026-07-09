@@ -1,19 +1,15 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   deleteProviderApiKey,
   readConsoleMasterKeySource,
   saveProviderApiKey,
 } from "@llmingress/db/console-provider-keys";
 import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { consoleActionErrorResponse } from "../_errors";
 import { readNumber, readRequiredText, readText } from "../_form";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
     const action = readText(form, "action") ?? "save";
@@ -56,12 +52,9 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Provider API key operation failed." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Provider API key operation failed.");
   }
-}
+});
 
 function renderOneTimeProviderKeyPage(input: {
   action: "created" | "rotated";

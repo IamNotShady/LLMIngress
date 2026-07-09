@@ -11,7 +11,24 @@ import {
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
-const sections = () => readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+const moduleSource = (file: string) => readFileSync(join(appDir, "_modules", file), "utf8");
+const consoleSectionSource = () =>
+  [
+    "sections.tsx",
+    "overview-section.tsx",
+    "runtime-section.tsx",
+    "usage-section.tsx",
+    "activity-section.tsx",
+    "virtual-models-section.tsx",
+    "route-policies-section.tsx",
+    "agents-section.tsx",
+    "limits-section.tsx",
+    "models-section.tsx",
+    "providers-section.tsx",
+    "settings-section.tsx",
+  ]
+    .map(moduleSource)
+    .join("\n");
 
 describe("shared console formatters", () => {
   test("USD uses smart precision: cents at 2 decimals, sub-cent at 3 significant digits", () => {
@@ -47,8 +64,8 @@ describe("shared console formatters", () => {
 });
 
 describe("console pages consume the shared formatters", () => {
-  test("sections.tsx imports the shared module and drops local look-alikes", () => {
-    const source = sections();
+  test("console section modules import the shared module and drop local look-alikes", () => {
+    const source = consoleSectionSource();
     expect(source).toContain('from "@llmingress/db/console-format"');
     for (const orphan of [
       "function formatCompactNumber",

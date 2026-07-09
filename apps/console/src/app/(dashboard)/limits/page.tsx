@@ -1,5 +1,6 @@
 import { PageHeader } from "../../_components/page-header";
-import { type ConsoleSearchParams, LimitsSection } from "../../_modules/sections";
+import { LimitsSection } from "../../_modules/limits-section";
+import type { ConsoleSearchParams } from "../../_modules/sections";
 
 export default async function LimitsPage({
   searchParams,

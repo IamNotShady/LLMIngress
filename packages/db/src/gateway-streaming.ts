@@ -2,11 +2,16 @@ import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import { getPostgresPool } from "@llmingress/db/client";
 import { selectRouteAttempts } from "@llmingress/domain";
-import { omitUnsupportedAnthropicSamplingParameters } from "@llmingress/provider/anthropic";
+import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {
   type ProviderStreamingDialect,
   resolveProviderStreamingDialect,
 } from "@llmingress/provider/dialect";
+import { readProviderResponseHeaders } from "@llmingress/provider/headers";
+import type {
+  NormalizedOpenAIChatRequest,
+  NormalizedOpenAIResponsesRequest,
+} from "@llmingress/provider/openai";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
   enforceGatewayAgentLimits,
@@ -23,7 +28,6 @@ import {
   createGatewayErrorBody,
   type GatewayErrorCode,
   toGatewayErrorResponseParts,
-  truncateProviderMessage,
 } from "./gateway-errors.ts";
 import {
   buildFallbackFailedAttempt,
@@ -31,6 +35,7 @@ import {
   type FallbackFailedAttempt,
   readFallbackProviderApiKeys,
 } from "./gateway-fallback-chain.ts";
+import { mergeGatewayHttpHeaders, readGatewayHeaderValue } from "./gateway-header-passthrough.ts";
 import { normalizeAnthropicMessagesRequest } from "./gateway-messages.ts";
 import {
   attachGatewayProviderCredentials,
@@ -45,9 +50,9 @@ import {
 } from "./gateway-request-metadata.ts";
 import { normalizeOpenAIResponsesRequest } from "./gateway-responses.ts";
 import {
+  assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   isRecord,
-  omitUndefined,
   requireGatewayRoutePolicy,
   selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
@@ -101,6 +106,7 @@ export async function executeGatewayStreamingRequest(input: {
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   protocol: GatewayStreamingProtocol;
+  providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -108,6 +114,7 @@ export async function executeGatewayStreamingRequest(input: {
 }): Promise<GatewayStreamingResult> {
   const normalized = buildStreamingPayload({
     protocol: input.protocol,
+    providerRequestHeaders: input.providerRequestHeaders,
     requestBody: input.requestBody,
     requestId: input.requestId,
     resolvedModelName: input.virtualModel.name,
@@ -146,6 +153,10 @@ export async function executeGatewayStreamingRequest(input: {
 
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
+    assertGatewayRoutePolicyEndpointProtocol({
+      protocol: input.protocol,
+      routePolicy,
+    });
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const gatewayChain = routeResult.chain;
 
@@ -168,6 +179,9 @@ export async function executeGatewayStreamingRequest(input: {
     let attemptOrder = 0;
     // Track outcome of last real (non-skipped) attempt for exhaustion error code.
     let lastFailureCode: GatewayErrorCode | undefined;
+    let lastProviderError:
+      | { body: unknown; headers?: Record<string, string>; statusCode: number }
+      | undefined;
     // Track whether any candidates were actually attempted (not just skipped as unsupported).
     let anyAttempted = false;
 
@@ -315,7 +329,12 @@ export async function executeGatewayStreamingRequest(input: {
 
         if (!response.ok || !response.body) {
           // HTTP-level error — determine retryability from status.
-          const providerErrorBody = await readProviderErrorBody(response);
+          const providerError = await readProviderErrorBody(response);
+          lastProviderError = {
+            body: providerError.body,
+            headers: providerError.headers,
+            statusCode: response.status,
+          };
           console.error("gateway provider streaming request failed", {
             modelId: attemptedCandidate.modelId,
             providerKey: attemptedCandidate.providerKey,
@@ -339,7 +358,8 @@ export async function executeGatewayStreamingRequest(input: {
             providerModelId: attemptedCandidate.providerModelId,
             result: {
               errorCode,
-              errorMessage: providerErrorBody ?? "Provider request failed.",
+              errorMessage: providerError.message ?? "Provider request failed.",
+              headers: providerError.headers,
               statusCode: response.status,
             },
           });
@@ -357,11 +377,8 @@ export async function executeGatewayStreamingRequest(input: {
           });
           concurrencyLease = undefined;
           return {
-            body: createGatewayErrorBody(
-              errorCode,
-              input.requestId,
-              truncateProviderMessage(providerErrorBody ?? "Provider rejected the request."),
-            ),
+            body: providerError.body,
+            headers: providerError.headers,
             ok: false,
             requestMetadata: normalized.requestMetadata,
             statusCode: response.status,
@@ -451,6 +468,7 @@ export async function executeGatewayStreamingRequest(input: {
           body,
           budgetSettlement,
           contentType: response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
+          headers: readProviderResponseHeaders(response.headers),
           ok: true,
           requestMetadata: normalized.requestMetadata,
           statusCode: response.status,
@@ -482,6 +500,15 @@ export async function executeGatewayStreamingRequest(input: {
     }
     // Return error code reflecting the last real failure (FIX C2).
     const exhaustionCode = lastFailureCode ?? "provider_request_failed";
+    if (lastProviderError?.statusCode === 429) {
+      return {
+        body: lastProviderError.body,
+        headers: lastProviderError.headers,
+        ok: false,
+        requestMetadata: normalized.requestMetadata,
+        statusCode: lastProviderError.statusCode,
+      };
+    }
     return {
       body: createGatewayErrorBody(exhaustionCode, input.requestId),
       ok: false,
@@ -514,6 +541,7 @@ export function streamConnectTimeoutMs(
 
 function buildStreamingPayload(input: {
   protocol: GatewayStreamingProtocol;
+  providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   resolvedModelName: string;
@@ -542,20 +570,14 @@ function buildStreamingPayload(input: {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       headers: { "content-type": "application/json" },
-      headersWithApiKey: (apiKey) => ({
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      }),
+      headersWithApiKey: (apiKey) =>
+        mergeGatewayHttpHeaders(input.providerRequestHeaders, {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+        }),
       ok: true,
       pathSuffix: "chat/completions",
-      payload: omitUndefined({
-        ...normalized.request.passthrough,
-        max_tokens: normalized.request.maxOutputTokens,
-        messages: normalized.request.messages,
-        temperature: normalized.request.temperature,
-        tool_choice: normalized.request.toolChoice,
-        tools: normalized.request.tools,
-      }),
+      payload: buildOpenAIChatStreamingPayload(normalized.request),
       requestMetadata,
     };
   }
@@ -575,19 +597,14 @@ function buildStreamingPayload(input: {
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       headers: { "content-type": "application/json" },
-      headersWithApiKey: (apiKey) => ({
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      }),
+      headersWithApiKey: (apiKey) =>
+        mergeGatewayHttpHeaders(input.providerRequestHeaders, {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+        }),
       ok: true,
       pathSuffix: "responses",
-      payload: omitUndefined({
-        input: normalized.request.input,
-        instructions: normalized.request.instructions,
-        max_output_tokens: normalized.request.maxOutputTokens,
-        store: false,
-        temperature: normalized.request.temperature,
-      }),
+      payload: buildOpenAIResponsesStreamingPayload(normalized.request),
       requestMetadata,
     };
   }
@@ -606,29 +623,36 @@ function buildStreamingPayload(input: {
     estimatedInputTokens: requestMetadata.estimatedInputTokens,
     estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
     headers: { "content-type": "application/json" },
-    headersWithApiKey: (apiKey) => ({
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-    }),
+    headersWithApiKey: (apiKey) =>
+      mergeGatewayHttpHeaders(input.providerRequestHeaders, {
+        "anthropic-version":
+          readGatewayHeaderValue(input.providerRequestHeaders, "anthropic-version") ?? "2023-06-01",
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+      }),
     ok: true,
     pathSuffix: "messages",
-    payload: omitUndefined({
-      max_tokens: normalized.request.maxOutputTokens,
-      metadata: normalized.request.metadata,
-      messages: normalized.request.messages,
-      service_tier: normalized.request.serviceTier,
-      stop_sequences: normalized.request.stopSequences,
-      system: normalized.request.system,
-      temperature: normalized.request.temperature,
-      thinking: normalized.request.thinking,
-      tool_choice: normalized.request.toolChoice,
-      tools: normalized.request.tools,
-      top_k: normalized.request.topK,
-      top_p: normalized.request.topP,
-    }),
+    payload: buildAnthropicMessagesStreamingPayload(normalized.request),
     requestMetadata,
   };
+}
+
+function buildOpenAIChatStreamingPayload(
+  request: NormalizedOpenAIChatRequest,
+): Record<string, unknown> {
+  return request.payload;
+}
+
+function buildOpenAIResponsesStreamingPayload(
+  request: NormalizedOpenAIResponsesRequest,
+): Record<string, unknown> {
+  return request.payload;
+}
+
+function buildAnthropicMessagesStreamingPayload(
+  request: NormalizedAnthropicMessagesRequest,
+): Record<string, unknown> {
+  return request.payload;
 }
 
 function recordGatewayRuntimeError(input: {
@@ -675,19 +699,7 @@ function buildStreamingRequestBodyForDialect(input: {
   payload: Record<string, unknown>;
 }): Record<string, unknown> {
   let body = buildProviderRequestBody(input.payload, input.modelId);
-  if (input.pathSuffix === "messages") {
-    body = omitUnsupportedAnthropicSamplingParameters(body, input.modelId);
-  }
   body = input.dialect.transformBody(body, input.pathSuffix);
-  if (input.dialect.wantsStreamingUsage(input.pathSuffix)) {
-    return {
-      ...body,
-      stream_options: {
-        ...(isRecord(body.stream_options) ? body.stream_options : {}),
-        include_usage: true,
-      },
-    };
-  }
   return body;
 }
 
@@ -698,15 +710,47 @@ function buildProviderRequestBody(
   return {
     ...payload,
     model: modelId,
-    stream: true,
   };
 }
 
-async function readProviderErrorBody(response: Response): Promise<string | null> {
+async function readProviderErrorBody(response: Response): Promise<{
+  body: unknown;
+  headers: Record<string, string>;
+  message: string | null;
+}> {
+  const headers = readProviderResponseHeaders(response.headers);
   try {
     const text = await response.text();
-    return text ? text.slice(0, 2000) : null;
+    if (!text) {
+      return { body: null, headers, message: null };
+    }
+    try {
+      const body = JSON.parse(text) as unknown;
+      return {
+        body,
+        headers,
+        message: readProviderErrorMessage(body) ?? text.slice(0, 2000),
+      };
+    } catch {
+      return {
+        body: text,
+        headers,
+        message: text.slice(0, 2000),
+      };
+    }
   } catch (error) {
-    return error instanceof Error ? error.message : "Unable to read provider error body.";
+    const message = error instanceof Error ? error.message : "Unable to read provider error body.";
+    return {
+      body: { error: { message } },
+      headers,
+      message,
+    };
   }
+}
+
+function readProviderErrorMessage(body: unknown): string | null {
+  if (isRecord(body) && isRecord(body.error) && typeof body.error.message === "string") {
+    return body.error.message;
+  }
+  return null;
 }

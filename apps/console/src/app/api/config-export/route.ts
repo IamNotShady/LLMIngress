@@ -1,13 +1,8 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { exportConsoleConfig } from "@llmingress/db/console-import-export";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
 
-export async function GET(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const GET = withConsoleAuth(async () => {
   const exported = await exportConsoleConfig();
   return new NextResponse(`${JSON.stringify(exported, null, 2)}\n`, {
     headers: {
@@ -17,4 +12,4 @@ export async function GET(request: NextRequest) {
     },
     status: 200,
   });
-}
+});

@@ -29,7 +29,7 @@
         "v1-platform"
       ],
       "status": "passing",
-      "evidence": "2026-07-02: Consolidated Console feature history into the V1 navigation and shell smoke. The retained checks cover first-run setup, sign-in, all main module routes, active navigation state, and theme switching. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified."
+      "evidence": "2026-07-02: Consolidated Console feature history into the V1 navigation and shell smoke. The retained checks cover first-run setup, sign-in, all main module routes, active navigation state, and theme switching. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. 2026-07-06 Docker redirect fix: Console API redirects now use relative Location headers so Docker host port mappings like 13000:3000 do not bounce auth/form submissions to the container's internal 0.0.0.0:3000 URL; focused v1-console unit, Console typecheck, lint, Docker rebuild, auth redirect header check, Gateway health, Console HTTP 200, and pnpm run verify passed."
     },
     {
       "id": "v1-worker-ops",
@@ -98,7 +98,7 @@
         "console-p0-layout"
       ],
       "status": "passing",
-      "evidence": "2026-07-03: TDD red->green. Unit (formatter behavior + call-site contracts) + E2E green: seeded sub-cent cost renders $0.0000843 identically on Overview and Activity, token cells show full 92,535 counts, failed request shows em dashes (no N/A/Unavailable), 3-day-old row carries a date-qualified timestamp while today's row is HH:MM:SS, Usage total cost has no 8-decimal noise. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified."
+      "evidence": "2026-07-03: TDD red->green. Unit (formatter behavior + call-site contracts) + E2E green: seeded sub-cent cost renders $0.0000843 identically on Overview and Activity, token cells show full 92,535 counts, failed request shows em dashes (no N/A/Unavailable), 3-day-old row carries a date-qualified timestamp while today's row is HH:MM:SS, Usage total cost has no 8-decimal noise. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. 2026-07-09: stabilized timestamp E2E seeding across local midnight by asserting rendered text against formatConsoleTimestamp; focused unit+E2E passed."
     },
     {
       "id": "console-providers-ia-and-forms",
@@ -171,25 +171,25 @@
     {
       "id": "gateway-error-fidelity",
       "name": "Gateway Error Fidelity",
-      "description": "Gateway error handling is typed instead of string-matched, non-retryable provider 4xx responses pass through sanitized provider messages with the upstream status code to the agent, a fallback candidate with missing credentials is skipped instead of failing the request, and streaming attempts iterate provider API keys like the non-streaming chain.",
+      "description": "Gateway error handling is typed instead of string-matched, non-retryable provider 4xx responses pass through the provider body with the upstream status code to the agent, a fallback candidate with missing credentials is skipped instead of failing the request, and streaming attempts iterate provider API keys like the non-streaming chain.",
       "verification": "pnpm exec vitest run tests/features/gateway-error-fidelity.unit.test.ts && pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts",
       "dependencies": [
         "gateway-stream-robustness"
       ],
       "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Added typed GatewayPipelineError handling, provider_rejected_request upstream 4xx status/message passthrough, provider_rate_limited mapping, sanitized provider-message truncation, lenient non-streaming credential attachment that skips missing-key candidates, and streaming provider API key retry iteration. Added fake provider bad-request mode plus focused unit and E2E coverage for typed fallback errors, missing credential fallback, provider 400 passthrough, and streaming multi-key retry. Focused unit and E2E passed; pnpm run lint plus @llmingress/db and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 15 previously passing features re-verified before status update."
+      "evidence": "2026-07-04: TDD red->green. Added typed GatewayPipelineError handling, provider_rejected_request upstream 4xx status/message passthrough, provider_rate_limited mapping, sanitized provider-message truncation, lenient non-streaming credential attachment that skips missing-key candidates, and streaming provider API key retry iteration. Added fake provider bad-request mode plus focused unit and E2E coverage for typed fallback errors, missing credential fallback, provider 400 passthrough, and streaming multi-key retry. Focused unit and E2E passed; pnpm run lint plus @llmingress/db and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 15 previously passing features re-verified before status update. 2026-07-06 provider response passthrough follow-up returns non-retryable provider 4xx bodies/status directly for Chat, streaming Chat, Responses, Embeddings, and Messages instead of wrapping them in provider_rejected_request; 429/5xx/network failures keep fallback semantics. Red E2E failed before implementation; focused E2E/unit, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 header/error fidelity follow-up returns provider response headers with provider 400 bodies/status and returns final exhausted provider 429 body/status/headers after fallback attempts instead of a Gateway provider_rate_limited envelope. Red E2E failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, pnpm run verify:features, git diff --check, and jq empty feature_list.json passed with all 22 passing features re-verified."
     },
     {
       "id": "gateway-request-hygiene",
       "name": "Gateway Request Hygiene",
-      "description": "A running gateway accepts 2MB chat bodies under a configurable body limit, rejects malformed client x-request-id values, estimates CJK tokens realistically, protects /metrics behind an optional bearer token, passes whitelisted OpenAI chat parameters (including max_completion_tokens) through to providers, and refreshes provider OAuth tokens under a row lock so concurrent requests refresh exactly once.",
+      "description": "A running gateway accepts 2MB chat bodies under a configurable body limit, rejects malformed client x-request-id values, estimates CJK tokens realistically, protects /metrics behind an optional bearer token, forwards OpenAI-compatible Responses, Chat Completions, Embeddings, and Anthropic Messages provider payloads from the Agent body with only virtual model replacement, and refreshes provider OAuth tokens under a row lock so concurrent requests refresh exactly once.",
       "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts",
       "dependencies": [
         "gateway-db-pool",
         "gateway-error-fidelity"
       ],
       "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Added configurable Gateway bodyLimit defaulting to 10 MiB, safe x-request-id validation, non-mutating baseline candidate selection, CJK-aware token estimation, optional /metrics bearer token enforcement, OpenAI chat passthrough whitelist with max_completion_tokens precedence, streaming payload passthrough parity, OAuth row-lock refresh single-flight, and OAuth request timeout. Documented chat passthrough scope, multimodal and TPM non-goals, and the current Gateway runtime module boundary. Focused unit and E2E passed; pnpm run lint plus @llmingress/db, @llmingress/provider, and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 16 previously passing features re-verified before status update. Follow-up OAuth credential read releases the outer pooled client before loading/refreshing subscription OAuth tokens and covers pool max=1 expired-token refresh; focused unit, db/provider typecheck, lint, pnpm run verify, and pnpm run verify:features passed with all 17 passing features re-verified."
+      "evidence": "2026-07-04: TDD red->green. Added configurable Gateway bodyLimit defaulting to 10 MiB, safe x-request-id validation, non-mutating baseline candidate selection, CJK-aware token estimation, optional /metrics bearer token enforcement, OpenAI chat passthrough whitelist with max_completion_tokens precedence, streaming payload passthrough parity, OAuth row-lock refresh single-flight, and OAuth request timeout. Documented chat passthrough scope, multimodal and TPM non-goals, and the current Gateway runtime module boundary. Focused unit and E2E passed; pnpm run lint plus @llmingress/db, @llmingress/provider, and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 16 previously passing features re-verified before status update. Follow-up OAuth credential read releases the outer pooled client before loading/refreshing subscription OAuth tokens and covers pool max=1 expired-token refresh; focused unit, db/provider typecheck, lint, pnpm run verify, and pnpm run verify:features passed with all 17 passing features re-verified. 2026-07-06 follow-up preserves Responses tools/tool_choice/parallel_tool_calls across normal, streaming, and Codex subscription payloads, validates malformed Responses tool fields, and keeps raw typed Responses input items such as function_call_output unchanged. Red unit/E2E failed before implementation; focused unit/E2E, db/provider/gateway typechecks, lint, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 image follow-up preserves Responses multimodal content-part arrays such as input_text plus input_image data URLs so Hermes vision requests reach the provider instead of failing Gateway normalization. Red unit/E2E failed first; focused unit/E2E, db/provider/gateway typechecks, lint, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 official field passthrough follow-up replaces endpoint-specific request whitelists with raw-field passthrough for OpenAI-compatible Responses, Chat Completions, Embeddings, and Anthropic Messages while keeping Gateway-owned model/routing fields normalized; Chat multimodal/audio/file/function/custom-tool fields, Responses store/previous_response_id/conversation/metadata/reasoning/text fields, Embeddings token-array input/user fields, and Messages container/context_management/mcp_servers/betas now reach providers in JSON and streaming paths. Red unit failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 Hermes reasoning replay follow-up allows Responses assistant replay placeholders with empty content after reasoning items while still rejecting empty user messages, fixing Hermes browser/navigation turns that failed before provider execution with invalid_responses_request. Red unit failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 raw passthrough follow-up stops rebuilding provider request bodies for OpenAI-compatible Chat, Responses, Embeddings, Anthropic Messages, Codex subscription Responses, and Claude Code Messages; provider payloads now come from the Agent body with only virtual model replacement, and Codex subscription responses are no longer synthesized. Red unit/E2E failed before implementation; focused unit/E2E, provider-dialect tests, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 read-only ingress follow-up relaxes Chat, Responses, Messages, and Embeddings request readers so provider-owned request shapes are not locally rejected, removes streaming stream_options usage injection, and keeps provider responses read-only for status/request-id/usage extraction without synthesized success bodies. Red unit/E2E failed before implementation; focused unit/E2E, provider-dialect tests, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 header transparency follow-up forwards safe Agent protocol headers to Chat, Responses, Embeddings, and Messages JSON and streaming paths while stripping Agent auth/transport headers; OpenAI/OpenRouter/Anthropic/Claude Code adapters now merge protocol headers with provider auth and subscription beta/version rules, and provider response headers including request ids and rate-limit headers are returned to Agents. Red unit/E2E failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, pnpm run verify:features, git diff --check, and jq empty feature_list.json passed with all 22 passing features re-verified. 2026-07-06 subscription-header regression fix stops the streaming Claude Code path from forwarding the injected x-api-key OAuth credential alongside the subscription Bearer; buildClaudeCodeSubscriptionHeaders now strips x-api-key from forwarded headers before merging impersonation headers (authorization was already owned by the impersonation set and codex never receives x-api-key, so both stay untouched). Red provider-dialect unit failed before implementation; focused provider-dialect/gateway-request-hygiene unit, empirical streaming header trace, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified."
     },
     {
       "id": "gateway-cohesion-refactor",
@@ -237,6 +237,64 @@
       ],
       "status": "passing",
       "evidence": "2026-07-05: TDD red->green. Added migration 0006_fallback_single_source so fallback_events carries retryable/status_code and request_activity no longer stores fallback_attempts. Console activity counts/details, jsonl export legacy fallbackAttempts, and fallback exhaustion alerts now derive failed retry attempts from fallback_events rows. RED unit failed on the old request_activity.fallback_attempts column, missing retry metadata, recorder writes, Console counts, JSONL fallbackAttempts, and alert payloads; RED E2E failed because the dropped column still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 21 passing features re-verified."
+    },
+    {
+      "id": "virtual-model-endpoint-routing",
+      "name": "Virtual Model Endpoint Routing",
+      "description": "Virtual Models and Route Policies require one endpoint protocol (chat_completions, responses, messages, or embeddings), candidate pickers only show provider models whose provider/template supports the selected endpoint, route-policy saves reject incompatible candidates, and Gateway requests are rejected when the request endpoint does not match the saved route policy endpoint while legacy policies without endpointProtocol still run.",
+      "verification": "pnpm exec vitest run tests/features/virtual-model-endpoint-routing.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing",
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-06: TDD red->green. Added route_policies.rules.endpointProtocol without a migration, derived supportedEndpoints from provider templates plus direct openai/anthropic providers, filtered Virtual Model and Route Policy candidate pickers by endpoint, rejected incompatible route-policy saves, and added Gateway runtime endpoint mismatch rejection for JSON and streaming paths while keeping legacy policies without endpointProtocol compatible. Verification passed: focused unit, focused E2E, v1-release-guards unit after adding this feature to the allowed tracker list, pnpm run typecheck, pnpm run lint, pnpm run verify, and pnpm run verify:features with all 22 passing features re-verified."
+    },
+    {
+      "id": "gateway-listen-host",
+      "name": "Gateway Listen Host",
+      "description": "Gateway binds 127.0.0.1 by default when the real process starts, honors a GATEWAY_HOST override, and the Docker compose deployment explicitly opts into 0.0.0.0.",
+      "verification": "pnpm exec vitest run tests/features/gateway-listen-host.unit.test.ts && pnpm test:e2e tests/e2e/gateway-listen-host.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. gatewayListenHost added to gateway-env, main.ts listen uses it, docker-compose pins GATEWAY_HOST=0.0.0.0. Focused unit+E2E, pnpm run verify, and pnpm run verify:features all passed."
+    },
+    {
+      "id": "db-connection-hygiene",
+      "name": "DB Connection Hygiene",
+      "description": "Provider and worker db modules use the shared pg pool instead of one-off connections, pool errors and concurrency-release failures are logged instead of swallowed, the real gateway process exits cleanly (code 0) on SIGTERM after closing pools, worker stop closes pools, and the runtime-status module drops its stuttering filename.",
+      "verification": "pnpm exec vitest run tests/features/db-connection-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/db-connection-hygiene.e2e.spec.ts",
+      "dependencies": [
+        "gateway-db-pool",
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. Pooled clients in providers/provider-jobs/worker-model-refresh/worker-connectivity, pool errors and lease-release failures logged, gateway SIGTERM/SIGINT graceful shutdown exits 0, worker stop closes pools, gateway-runtime-status renamed, dead packages/observability removed. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed."
+    },
+    {
+      "id": "console-api-hygiene",
+      "name": "Console API Hygiene",
+      "description": "Every guarded console API route authenticates through one shared withConsoleAuth wrapper, unexpected errors return 500 with a generic message and server-side log while deliberate validation errors keep 400 with their message, and the agent-created HTML page renders from a dedicated module instead of living inside the route handler.",
+      "verification": "pnpm exec vitest run tests/features/console-api-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/console-api-hygiene.e2e.spec.ts",
+      "dependencies": [
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. withConsoleAuth guard across 14 routes, consoleActionErrorResponse maps unexpected errors to 500 without leaking messages, agent-created HTML extracted to _created-page.ts. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed. 2026-07-09: provider-oauth and providers routes sanitize surfaced errors via classifier / consoleActionErrorResponse, no longer exposing internal error.message; added static wiring coverage and unauthenticated E2E coverage."
+    },
+    {
+      "id": "console-sections-split",
+      "name": "Console Sections Split",
+      "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",
+      "verification": "pnpm exec vitest run tests/features/console-sections-split.unit.test.ts && pnpm test:e2e tests/e2e/console-sections-split.e2e.spec.ts",
+      "dependencies": [
+        "v1-console",
+        "console-p0-layout"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-08: TDD red->green. Split console dashboard sections into per-section modules, kept sections.tsx as shared helpers under the line budget, and preserved signed-in dashboard rendering without horizontal overflow. Focused unit+E2E, pnpm run verify, and pnpm run verify:features passed."
     }
   ]
 }

@@ -40,87 +40,63 @@ export type GatewayAnthropicMessagesRequestResult =
   | GatewayAnthropicMessagesRequestFailure
   | GatewayAnthropicMessagesRequestSuccess;
 
-const maxMessagesOutputTokens = 16_384;
-
 export function normalizeAnthropicMessagesRequest(
   body: unknown,
   requestId: string,
 ): GatewayAnthropicMessagesRequestResult {
-  if (!isRecord(body) || !Array.isArray(body.messages) || body.messages.length === 0) {
+  if (!isRecord(body)) {
     return invalidMessagesRequest(requestId);
   }
 
-  const maxOutputTokens = readRequiredPositiveInteger(body.max_tokens);
-  if (maxOutputTokens === null) {
-    return invalidMessagesRequest(requestId);
-  }
+  const maxOutputTokens = readRequiredPositiveInteger(body.max_tokens) ?? 1024;
 
-  const messages = body.messages.map(readAnthropicMessage);
-  if (messages.some((message) => !message)) {
-    return invalidMessagesRequest(requestId);
-  }
+  const messages = readAnthropicMessages(body.messages);
 
   const temperature = readOptionalFiniteNumber(body.temperature);
-  if (temperature === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const topP = readOptionalFiniteNumber(body.top_p);
-  if (topP === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const topK = readOptionalPositiveInteger(body.top_k);
-  if (topK === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const stopSequences = readOptionalNonEmptyStringArray(body.stop_sequences);
-  if (stopSequences === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const metadata = readOptionalRecord(body.metadata);
-  if (metadata === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const thinking = readOptionalRecord(body.thinking);
-  if (thinking === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const serviceTier = readOptionalNonEmptyString(body.service_tier);
-  if (serviceTier === null) {
-    return invalidMessagesRequest(requestId);
-  }
 
-  if (body.stream !== undefined && typeof body.stream !== "boolean") {
-    return invalidMessagesRequest(requestId);
-  }
   const system = readOptionalSystemPrompt(body.system);
-  if (system === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const tools = readOptionalObjectArray(body.tools);
-  if (tools === null) {
-    return invalidMessagesRequest(requestId);
-  }
   const toolChoice = readOptionalToolChoice(body.tool_choice);
-  if (toolChoice === null) {
-    return invalidMessagesRequest(requestId);
-  }
 
   return {
     ok: true,
     request: omitUndefined({
       maxOutputTokens,
-      messages: messages as NormalizedAnthropicMessage[],
-      metadata,
-      serviceTier,
+      messages,
+      metadata: metadata === null ? undefined : metadata,
+      payload: body,
+      passthrough: readPassthroughParameters(body, [
+        "max_tokens",
+        "messages",
+        "metadata",
+        "model",
+        "service_tier",
+        "stop_sequences",
+        "stream",
+        "system",
+        "temperature",
+        "thinking",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p",
+      ]),
+      serviceTier: serviceTier === null ? undefined : serviceTier,
       stream: typeof body.stream === "boolean" ? body.stream : undefined,
-      stopSequences,
-      system,
-      temperature,
-      thinking,
-      toolChoice,
-      tools,
-      topK,
-      topP,
+      stopSequences: stopSequences === null ? undefined : stopSequences,
+      system: system === null ? undefined : system,
+      temperature: temperature === null ? undefined : temperature,
+      thinking: thinking === null ? undefined : thinking,
+      toolChoice: toolChoice === null ? undefined : toolChoice,
+      tools: tools === null ? undefined : tools,
+      topK: topK === null ? undefined : topK,
+      topP: topP === null ? undefined : topP,
     }),
   };
 }
@@ -129,6 +105,7 @@ export async function executeGatewayAnthropicMessages(input: {
   agentId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl?: string;
+  providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;
   snapshot: GatewayConfigSnapshot;
@@ -140,14 +117,16 @@ export async function executeGatewayAnthropicMessages(input: {
   return executeGatewayProtocolRequest<NormalizedAnthropicMessagesRequest, AnthropicAdapterSuccess>(
     {
       ...input,
+      protocol: "messages",
       spec: {
         buildRequestMetadata: buildAnthropicMessagesRequestMetadata,
-        callProvider: ({ candidate, providerApiKey, request }) => {
+        callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
           const adapter =
             candidate.providerKey === "claude_code" && claudeCodeAdapter
               ? claudeCodeAdapter
               : genericAdapter;
           return adapter.messages({
+            headers: providerRequestHeaders,
             request,
             target: {
               apiKey: providerApiKey.apiKey,
@@ -174,6 +153,16 @@ export async function executeGatewayAnthropicMessages(input: {
   );
 }
 
+function readAnthropicMessages(value: unknown): NormalizedAnthropicMessage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((message) => {
+    const normalized = readAnthropicMessage(message);
+    return normalized ? [normalized] : [];
+  });
+}
+
 function readAnthropicMessage(value: unknown): NormalizedAnthropicMessage | null {
   if (!isRecord(value)) {
     return null;
@@ -187,6 +176,7 @@ function readAnthropicMessage(value: unknown): NormalizedAnthropicMessage | null
   }
 
   return {
+    ...value,
     content,
     role: value.role,
   };
@@ -218,7 +208,7 @@ function readRequiredPositiveInteger(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return null;
   }
-  return Math.min(value, maxMessagesOutputTokens);
+  return value;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | null | undefined {
@@ -309,6 +299,19 @@ function readOptionalToolChoice(value: unknown): Record<string, unknown> | null 
     return null;
   }
   return value;
+}
+
+function readPassthroughParameters(
+  body: Record<string, unknown>,
+  omittedKeys: readonly string[],
+): Record<string, unknown> | undefined {
+  const passthrough: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!omittedKeys.includes(key) && value !== undefined) {
+      passthrough[key] = value;
+    }
+  }
+  return Object.keys(passthrough).length > 0 ? passthrough : undefined;
 }
 
 function invalidMessagesRequest(requestId: string): GatewayAnthropicMessagesRequestFailure {

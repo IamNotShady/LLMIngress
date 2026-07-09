@@ -7,6 +7,24 @@ const appDir = join(rootDir, "apps/console/src/app");
 const publicDir = join(rootDir, "apps/console/public");
 const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
 const layout = () => readFileSync(join(appDir, "layout.tsx"), "utf8");
+const moduleSource = (file: string) => readFileSync(join(appDir, "_modules", file), "utf8");
+const consoleSectionSource = () =>
+  [
+    "sections.tsx",
+    "overview-section.tsx",
+    "runtime-section.tsx",
+    "usage-section.tsx",
+    "activity-section.tsx",
+    "virtual-models-section.tsx",
+    "route-policies-section.tsx",
+    "agents-section.tsx",
+    "limits-section.tsx",
+    "models-section.tsx",
+    "providers-section.tsx",
+    "settings-section.tsx",
+  ]
+    .map(moduleSource)
+    .join("\n");
 
 describe("console dark restyle static contract", () => {
   test("globals.css defines a single dark-only token layer", () => {
@@ -69,12 +87,12 @@ describe("console dark restyle static contract", () => {
       expect(palette).toContain(`var(--chart-${n})`);
     }
     expect(palette).not.toContain("color-mix");
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = consoleSectionSource();
     expect(sections).not.toMatch(/"#[0-9a-fA-F]{6}"/);
   });
 
   test("overview gateway details live in the sidebar runtime card", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = consoleSectionSource();
     const sidebar = readFileSync(join(appDir, "_components/sidebar.tsx"), "utf8");
     expect(sections).not.toContain('<h2 className="detail-panel-title">Gateway status</h2>');
     expect(sidebar).toContain("Gateway URL");
@@ -104,7 +122,7 @@ describe("console dark restyle static contract", () => {
 
   test("agents filters use a compact filter button aligned with the controls", () => {
     const agentsPage = readFileSync(join(appDir, "(dashboard)/agents/page.tsx"), "utf8");
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("agents-section.tsx");
     const stylesheet = css();
 
     expect(sections).not.toContain("Apply filters");
@@ -130,7 +148,7 @@ describe("console dark restyle static contract", () => {
 
   test("virtual model actions use compact icon row actions", () => {
     const modelsPage = readFileSync(join(appDir, "(dashboard)/models/page.tsx"), "utf8");
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("virtual-models-section.tsx");
     const stylesheet = css();
     const vmFilterForm = sections.slice(
       sections.indexOf('<form className="vm-filter-bar"'),
@@ -174,7 +192,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("activity filters use a compact text-only filter button aligned with the controls", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("activity-section.tsx");
     const stylesheet = css();
     const activityFilterForm = sections.slice(
       sections.indexOf('<form className="activity-filter-grid"'),
@@ -192,7 +210,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("usage filters use a compact text-only filter button aligned with the controls", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("usage-section.tsx");
     const stylesheet = css();
     const usageFilterForm = sections.slice(
       sections.indexOf('<form className="usage-filter-bar"'),
@@ -231,7 +249,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("settings notification channel submit is a compact centered Save button", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("settings-section.tsx");
     const stylesheet = css();
     const notificationForm = sections.slice(
       sections.indexOf('action="/api/notification-channels"'),
@@ -249,7 +267,8 @@ describe("console dark restyle static contract", () => {
   });
 
   test("dialog form submit buttons stay compact and text-only", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const agentSection = moduleSource("agents-section.tsx");
+    const sections = consoleSectionSource();
     const providerCreateForm = readFileSync(
       join(appDir, "_modules/provider-create-form.tsx"),
       "utf8",
@@ -259,9 +278,9 @@ describe("console dark restyle static contract", () => {
       "utf8",
     );
     const stylesheet = css();
-    const agentCreateForm = sections.slice(
-      sections.indexOf('action="/api/agents" id="new-agent"'),
-      sections.indexOf("</form>", sections.indexOf('action="/api/agents" id="new-agent"')),
+    const agentCreateForm = agentSection.slice(
+      agentSection.indexOf('action="/api/agents" id="new-agent"'),
+      agentSection.indexOf("</form>", agentSection.indexOf('action="/api/agents" id="new-agent"')),
     );
     const providerCreateSubmit = providerCreateForm.slice(
       providerCreateForm.lastIndexOf('<button type="submit">'),
@@ -287,15 +306,15 @@ describe("console dark restyle static contract", () => {
   });
 
   test("limit rules open configuration in a dialog from row edit actions", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("limits-section.tsx");
     const stylesheet = css();
     const limitsSection = sections.slice(
       sections.indexOf("export async function LimitsSection"),
-      sections.indexOf("function LimitsConfigDialog"),
+      sections.length,
     );
     const limitsDialog = sections.slice(
       sections.indexOf("function LimitsConfigDialog"),
-      sections.indexOf("function getAgentLimitRuntimeSnapshot"),
+      sections.indexOf("function LimitsDeleteDialog"),
     );
     const limitsActions = limitsDialog.slice(
       limitsDialog.indexOf('<div className="limits-config-actions">'),
@@ -329,7 +348,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("virtual model details open in a read-only dialog instead of a side card", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("virtual-models-section.tsx");
     const stylesheet = css();
 
     expect(sections).not.toContain('<aside className="agent-detail-card vm-detail-card"');
@@ -365,7 +384,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("activity request details open in a dialog instead of a side panel", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("activity-section.tsx");
     const stylesheet = css();
 
     expect(sections).not.toContain("?? activities[0] ?? null");
@@ -378,7 +397,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("agents list opens read-only details in a dialog instead of a side card", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("agents-section.tsx");
     const stylesheet = css();
 
     expect(sections).not.toContain('<aside className="agent-detail-card"');
@@ -396,7 +415,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("provider default priority is removed from detail and schema", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = consoleSectionSource();
     const consoleProviders = readFileSync(
       join(rootDir, "packages/db/src/console-providers.ts"),
       "utf8",
@@ -419,7 +438,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("providers list changes selection locally without route navigation", () => {
-    const sections = readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+    const sections = moduleSource("providers-section.tsx");
     const providersClientSection = readFileSync(
       join(appDir, "_modules/providers-client-section.tsx"),
       "utf8",

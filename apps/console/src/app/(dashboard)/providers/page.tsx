@@ -1,5 +1,6 @@
 import { PageHeader } from "../../_components/page-header";
-import { type ConsoleSearchParams, ProvidersSection } from "../../_modules/sections";
+import { ProvidersSection } from "../../_modules/providers-section";
+import type { ConsoleSearchParams } from "../../_modules/sections";
 
 export default async function ProvidersPage({
   searchParams,

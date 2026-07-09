@@ -8,6 +8,8 @@ const routePolicies = () =>
   readFileSync(join(rootDir, "packages/db/src/console-route-policies.ts"), "utf8");
 const sections = () =>
   readFileSync(join(rootDir, "apps/console/src/app/_modules/sections.tsx"), "utf8");
+const virtualModelsSection = () =>
+  readFileSync(join(rootDir, "apps/console/src/app/_modules/virtual-models-section.tsx"), "utf8");
 
 function sliceBetween(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker);
@@ -27,7 +29,7 @@ describe("console route policy warnings", () => {
     const warningCandidates = sliceBetween(
       sections(),
       "function buildRoutePolicyHealthWarningCandidates",
-      "function groupProviderKeysByProviderId",
+      "function orderProviderModelsForConsole",
     );
 
     expect(warningFunction).not.toContain("stale");
@@ -63,7 +65,7 @@ describe("console route policy warnings", () => {
 
   test("virtual model detail candidate badge labels availability, not health", () => {
     const viewDialog = sliceBetween(
-      sections(),
+      virtualModelsSection(),
       "function VirtualModelViewDialog",
       "function VirtualModelRouteDialog",
     );

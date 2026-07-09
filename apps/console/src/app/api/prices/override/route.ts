@@ -1,14 +1,11 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { saveManualPriceOverride } from "@llmingress/db/console-price-overrides";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../../_auth";
+import { consoleActionErrorResponse } from "../../_errors";
 import { readNumber, readText } from "../../_form";
+import { redirectToConsolePath } from "../../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const providerKey = readText(form, "providerKey");
   const modelId = readText(form, "modelId");
@@ -31,15 +28,12 @@ export async function POST(request: NextRequest) {
       providerKey,
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to save price override." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Failed to save price override.");
   }
 
   const redirectUrl = new URL("/providers", request.url);
   if (redirectModel) {
     redirectUrl.searchParams.set("model", redirectModel);
   }
-  return NextResponse.redirect(redirectUrl, { status: 303 });
-}
+  return redirectToConsolePath(redirectUrl);
+});

@@ -1,5 +1,6 @@
 import { createAdminPassword } from "@llmingress/db/console-auth";
 import { type NextRequest, NextResponse } from "next/server";
+import { redirectToConsolePath } from "../../_redirect";
 
 export async function POST(request: NextRequest) {
   const password = await readPassword(request);
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  return redirectToConsolePath("/");
 }
 
 async function readPassword(request: NextRequest): Promise<string | undefined> {

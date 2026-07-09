@@ -1,5 +1,6 @@
 import { PageHeader } from "../../_components/page-header";
-import { type ConsoleSearchParams, VirtualModelsSection } from "../../_modules/sections";
+import type { ConsoleSearchParams } from "../../_modules/sections";
+import { VirtualModelsSection } from "../../_modules/virtual-models-section";
 
 export default async function VirtualModelsPage({
   searchParams,

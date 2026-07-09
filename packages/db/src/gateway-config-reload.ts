@@ -25,7 +25,7 @@ import {
   createGatewayRuntimeStatusRecorder,
   type GatewayRuntimeStatusEvent,
   type RecordGatewayRuntimeStatus,
-} from "./gateway-gateway-runtime-status.ts";
+} from "./gateway-runtime-status.ts";
 
 export type GatewayProviderSnapshot = {
   id: string;

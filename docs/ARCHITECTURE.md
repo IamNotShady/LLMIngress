@@ -157,7 +157,7 @@ Gateway Service
 |   |-- Agent-owned API key authentication
 |   |-- Agent permission check
 |   |-- Cheap RPM / concurrency check
-|   |-- Protocol normalization
+|   |-- Protocol passthrough with model replacement
 |   |-- Request metadata extraction
 |   |-- Token estimate
 |   `-- Agent limits check (RPM / TPM / concurrency / token / budget)
@@ -193,10 +193,10 @@ Gateway Service
 ```
 
 Gateway JSON protocol endpoints share the `GatewayProtocolSpec` extension point
-and execute through `executeGatewayProtocolRequest`. A new JSON protocol should
-add a spec object for normalization, metadata extraction, provider invocation,
-and protocol-specific unsupported-state errors instead of copying endpoint
-orchestration.
+and execute through `executeGatewayProtocolRequest`. Protocol specs read only the
+fields Gateway needs for routing, accounting, stream selection, and metadata.
+Provider request bodies are forwarded from the original Agent payload with only
+the virtual `model` replaced by the selected provider model.
 
 Streaming provider differences are resolved through the provider dialect
 registry in `packages/provider/src/dialect.ts`. A new streaming dialect should
@@ -227,22 +227,26 @@ the user must configure a browser-reachable Gateway Base URL.
 
 `/v1/responses` V1 support:
 
-- V1 supports a stateless Responses API subset for Agents that use the
-  OpenAI-compatible `/v1/responses` path.
-- V1 does not implement cross-provider `previous_response_id`, server-side
-  `store`, response state replay, or provider state migration by default.
-- If a request contains `previous_response_id` or requires `store = true`, V1
-  returns a clear unsupported error by default. Future single-provider
-  passthrough mode may extend this.
-- Gateway still normalizes stateless responses requests internally and routes
-  them to provider adapters that support the corresponding input and output
-  capabilities.
+- Gateway reads the minimum fields it needs for routing and accounting, then
+  forwards the Agent's Responses request body to compatible providers with only
+  the virtual `model` replaced by the selected provider model.
+- Gateway does not own provider-side response state. Fields such as `store`,
+  `previous_response_id`, and `conversation` are forwarded, but cross-provider
+  state migration and replay remain the caller/provider responsibility.
+- Multimodal content parts, files, tool calls, hosted-tool options, metadata,
+  reasoning/text options, and future top-level fields are not interpreted or
+  rewritten by Gateway.
 
-`/v1/chat/completions` 的 V1 透传范围：
+`/v1/chat/completions` V1 support:
 
-- Gateway 归一化 `messages`、`tools`、`tool_choice`、`temperature`、`stream` 和输出 token 上限，并把 `max_completion_tokens` 作为 `max_tokens` 的同义输入；两者同时出现时优先使用 `max_completion_tokens`。
-- Gateway 仅白名单透传 `frequency_penalty`、`logprobs`、`top_logprobs`、`parallel_tool_calls`、`presence_penalty`、`response_format`、`seed`、`stop`、`top_p`、`user`。
-- V1 不做 OpenAI chat completions 多模态 `image_url` 跨 Provider 兼容，收到不支持的 content shape 时返回明确 400；多模态支持另立协议适配方案。
+- Gateway reads the fields it needs for routing and accounting while forwarding
+  the original Chat Completions request body to the provider with only the
+  virtual `model` replaced.
+- If both `max_completion_tokens` and legacy `max_tokens` are supplied, both are
+  sent to the provider exactly as received.
+- Multimodal, audio, file, custom-tool, function, and metadata fields are
+  passed through to compatible providers. Gateway does not translate or delete
+  those features across providers that do not support them.
 
 ### 4.2 Routing Runtime
 

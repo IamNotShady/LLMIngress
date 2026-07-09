@@ -279,6 +279,7 @@ async function handleRequest(
       response.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
         "cache-control": "no-cache",
+        ...fakeProviderResponseHeaders(200),
       });
       response.write('data: {"delta":"fake"}\n\n');
       const streamEndMs = readPositiveIntegerQuery(url, "stream_end_ms", 700);
@@ -306,6 +307,7 @@ async function handleRequest(
       response.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
         "cache-control": "no-cache",
+        ...fakeProviderResponseHeaders(200),
       });
       response.write('data: {"delta":"fake"}\n\n');
       return;
@@ -315,6 +317,7 @@ async function handleRequest(
       response.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
         "cache-control": "no-cache",
+        ...fakeProviderResponseHeaders(200),
       });
       response.write('data: {"delta":"fake"}\n\n');
       const destroyTimer = setTimeout(() => {
@@ -450,8 +453,21 @@ function buildFakeStreamUsageEvents(usage: string | null): string {
 }
 
 function writeJson(response: ServerResponse<IncomingMessage>, status: number, body: unknown): void {
-  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    ...fakeProviderResponseHeaders(status),
+  });
   response.end(JSON.stringify(body));
+}
+
+function fakeProviderResponseHeaders(status: number): Record<string, string> {
+  return {
+    "anthropic-ratelimit-requests-remaining": status === 429 ? "0" : "88",
+    "request-id": "fake-provider-request",
+    ...(status === 429 ? { "retry-after": "2" } : {}),
+    "x-ratelimit-remaining-requests": status === 429 ? "0" : "99",
+    "x-request-id": "fake-provider-request",
+  };
 }
 
 async function readBody(request: IncomingMessage): Promise<string> {

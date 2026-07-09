@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
-import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
+import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingress/db/client";
 import { createBackupJobHandler } from "@llmingress/db/worker-backup";
 import { createBillingReconciliationJobHandler } from "@llmingress/db/worker-billing-reconciliation";
 import { createBudgetThresholdAlertsJobHandler } from "@llmingress/db/worker-budget-threshold-alerts";
@@ -59,6 +59,7 @@ export async function startWorker() {
     async stop() {
       await periodicScheduler.stop();
       await jobRunner.stop();
+      await closePostgresPools();
       console.log("[worker] stopped");
     },
   };

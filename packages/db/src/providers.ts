@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { type PostgresQueryResultRow, withPostgresClient } from "@llmingress/db/client";
+import { type PostgresQueryResultRow, withPooledPostgresClient } from "@llmingress/db/client";
 
 export type {
   PostgresQueryClient,
   PostgresQueryResult,
   PostgresQueryResultRow,
 } from "@llmingress/db/client";
-export { PostgresClient, withPostgresClient } from "@llmingress/db/client";
+export { PostgresClient, withPooledPostgresClient } from "@llmingress/db/client";
 
 export type ProviderOAuthTestStatus =
   | "auth_failed"
@@ -77,7 +77,7 @@ type ProviderOAuthRuntimeRow = ProviderOAuthRow & {
 export async function listProviderOAuthMetadata(
   databaseUrl: string | undefined,
 ): Promise<ProviderOAuthMetadata[]> {
-  return withPostgresClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         select id::text,
@@ -117,7 +117,7 @@ export async function createProviderOAuthPendingConnection(input: {
   providerId: string;
 }): Promise<ProviderOAuthMetadata> {
   const rowId = cryptoRandomUUID();
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         insert into provider_oauth (
@@ -164,7 +164,7 @@ export async function readProviderOAuthPendingConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<ProviderOAuthPendingConnection> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthPendingRow>(
       `
         select provider_oauth.id::text,
@@ -207,7 +207,7 @@ export async function completeProviderOAuthConnection(input: {
   const shouldUpdateLabel = Object.hasOwn(input, "label");
   const shouldUpdatePriority = input.priority !== undefined;
 
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         update provider_oauth
@@ -255,7 +255,7 @@ export async function setProviderOAuthConnectionEnabled(input: {
   enabled: boolean;
   providerOAuthId: string;
 }): Promise<ProviderOAuthMetadata> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         update provider_oauth
@@ -286,7 +286,7 @@ export async function deleteProviderOAuthConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<{ providerId: string }> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<{ provider_id: string }>(
       `
         delete from provider_oauth
@@ -307,7 +307,7 @@ export async function readProviderOAuthRuntimeConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<ProviderOAuthRuntimeConnection> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRuntimeRow>(
       `
         select provider_oauth.id::text,
@@ -342,7 +342,7 @@ export async function readEnabledCompletedProviderOAuthConnections(input: {
   databaseUrl?: string;
   providerId: string;
 }): Promise<ProviderOAuthRuntimeConnection[]> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRuntimeRow>(
       `
         select provider_oauth.id::text,
@@ -384,7 +384,7 @@ export async function updateProviderOAuthTestResult(input: {
   status: ProviderOAuthTestStatus;
   testedAt: string | Date;
 }): Promise<void> {
-  await withPostgresClient(input.databaseUrl, async (client) => {
+  await withPooledPostgresClient(input.databaseUrl, async (client) => {
     await client.query(
       `
         update provider_oauth

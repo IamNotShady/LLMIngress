@@ -16,7 +16,10 @@ describe("provider call timeouts", () => {
     const hangingFetch = createHangingFetch();
     const adapter = createOpenAIProviderAdapter({ fetch: hangingFetch, timeoutMs: 20 });
     const result = await adapter.chatCompletion({
-      request: { messages: [{ content: "hi", role: "user" }] },
+      request: {
+        messages: [{ content: "hi", role: "user" }],
+        payload: { messages: [{ content: "hi", role: "user" }] },
+      },
       target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
     });
     expect(result.ok).toBe(false);
@@ -32,7 +35,7 @@ describe("provider call timeouts", () => {
       timeoutMs: 20,
     });
     const result = await adapter.response?.({
-      request: { input: "hi" },
+      request: { input: "hi", payload: { input: "hi" } },
       target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
     });
 
@@ -49,7 +52,11 @@ describe("provider call timeouts", () => {
       timeoutMs: 20,
     });
     const result = await adapter.messages({
-      request: { maxOutputTokens: 128, messages: [{ content: "hi", role: "user" }] },
+      request: {
+        maxOutputTokens: 128,
+        messages: [{ content: "hi", role: "user" }],
+        payload: { max_tokens: 128, messages: [{ content: "hi", role: "user" }] },
+      },
       target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
     });
 
@@ -57,6 +64,114 @@ describe("provider call timeouts", () => {
     if (!result.ok) {
       expect(result.retryable).toBe(true);
       expect(result.errorMessage).toContain("timed out");
+    }
+  });
+});
+
+describe("responses tool passthrough", () => {
+  it("passes Responses tools to OpenAI-compatible providers", async () => {
+    const capture = createJsonCaptureFetch();
+    const adapter = createOpenAIProviderAdapter({ fetch: capture.fetch, timeoutMs: 200 });
+    const tool = {
+      name: "terminal",
+      parameters: { properties: { command: { type: "string" } }, type: "object" },
+      type: "function",
+    };
+    const toolOutput = {
+      call_id: "call_terminal",
+      output: '{"stdout":"ok"}',
+      type: "function_call_output",
+    };
+
+    const result = await adapter.response?.({
+      request: {
+        input: [{ content: "run pwd", role: "user" }, toolOutput],
+        payload: {
+          input: [{ content: "run pwd", role: "user" }, toolOutput],
+          parallel_tool_calls: false,
+          tool_choice: "auto",
+          tools: [tool],
+        },
+        parallelToolCalls: false,
+        toolChoice: "auto",
+        tools: [tool],
+      },
+      target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
+    });
+
+    expect(result?.ok).toBe(true);
+    expect(capture.calls[0]?.url).toBe("http://provider.test/v1/responses");
+    expect(capture.calls[0]?.body).toMatchObject({
+      input: [{ content: "run pwd", role: "user" }, toolOutput],
+      model: "m",
+      parallel_tool_calls: false,
+      tool_choice: "auto",
+      tools: [tool],
+    });
+  });
+
+  it("passes Responses tools and raw tool outputs to Codex subscriptions", async () => {
+    const capture = createJsonCaptureFetch();
+    const adapter = createCodexSubscriptionAdapter({ fetch: capture.fetch, timeoutMs: 200 });
+    const tool = {
+      name: "terminal",
+      parameters: { properties: { command: { type: "string" } }, type: "object" },
+      type: "function",
+    };
+    const toolOutput = {
+      call_id: "call_terminal",
+      output: '{"stdout":"ok"}',
+      type: "function_call_output",
+    };
+
+    const result = await adapter.response?.({
+      request: {
+        input: [{ content: "run pwd", role: "user" }, toolOutput],
+        payload: {
+          input: [{ content: "run pwd", role: "user" }, toolOutput],
+          parallel_tool_calls: false,
+          tool_choice: "required",
+          tools: [tool],
+        },
+        parallelToolCalls: false,
+        toolChoice: "required",
+        tools: [tool],
+      },
+      target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
+    });
+
+    expect(result?.ok).toBe(true);
+    expect(capture.calls[0]?.url).toBe("http://provider.test/v1/codex/responses");
+    expect(capture.calls[0]?.body).toMatchObject({
+      input: [{ content: "run pwd", role: "user" }, toolOutput],
+      model: "m",
+      parallel_tool_calls: false,
+      tool_choice: "required",
+      tools: [tool],
+    });
+    expect(capture.calls[0]?.body).not.toHaveProperty("store");
+    expect(capture.calls[0]?.body).not.toHaveProperty("stream");
+  });
+
+  it("does not synthesize a Codex subscription response body", async () => {
+    const raw = 'data: {"output_text":"provider text"}\n\n';
+    const adapter = createCodexSubscriptionAdapter({
+      fetch: (async () =>
+        new Response(raw, {
+          headers: { "content-type": "text/event-stream" },
+          status: 200,
+        })) as typeof fetch,
+      timeoutMs: 200,
+    });
+
+    const result = await adapter.response?.({
+      request: { input: "hi", payload: { input: "hi" } },
+      target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
+    });
+
+    expect(result?.ok).toBe(true);
+    if (result?.ok) {
+      expect(result.body).toEqual({ raw });
     }
   });
 });
@@ -161,6 +276,26 @@ function createHangingFetch(): typeof fetch {
     new Promise((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
     });
+}
+
+function createJsonCaptureFetch(): {
+  calls: Array<{ body: unknown; url: string }>;
+  fetch: typeof fetch;
+} {
+  const calls: Array<{ body: unknown; url: string }> = [];
+  return {
+    calls,
+    fetch: async (url, init) => {
+      calls.push({
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+        url: typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url,
+      });
+      return new Response(JSON.stringify({ output: [] }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    },
+  };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

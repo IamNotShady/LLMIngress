@@ -13,12 +13,20 @@ export const routeTaskTypes = [
   "reasoning",
 ] as const;
 export const routeCapabilities = ["coding", "reasoning", "tools"] as const;
+export const routeEndpointProtocols = [
+  "chat_completions",
+  "responses",
+  "messages",
+  "embeddings",
+] as const;
 
 export type RouteTaskType = (typeof routeTaskTypes)[number];
 export type RouteCapability = (typeof routeCapabilities)[number];
+export type RouteEndpointProtocol = (typeof routeEndpointProtocols)[number];
 export type RoutePolicyStrategy = "fixed" | "cost_first" | "quality_first" | "random";
 
 export type RoutePolicyRules = {
+  endpointProtocol?: RouteEndpointProtocol;
   taskTypes?: RouteTaskType[];
   requiredCapabilities?: RouteCapability[];
   maxContextTokens?: number;
@@ -207,6 +215,12 @@ export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(i
 export function normalizeRoutePolicyRules(value: unknown): RoutePolicyRules {
   const record = readOptionalRecord(value, "Route policy rules");
   return omitUndefined({
+    endpointProtocol: readOptionalEnum(
+      record.endpointProtocol,
+      routeEndpointProtocols,
+      "endpointProtocol",
+      "endpoint protocol",
+    ),
     maxContextTokens: readOptionalPositiveInteger(record.maxContextTokens, "maxContextTokens"),
     requiredCapabilities: readOptionalEnumArray(
       record.requiredCapabilities,
@@ -552,6 +566,21 @@ function readOptionalNonNegativeInteger(value: unknown, name: string): number | 
     throw new Error(`${name} must be a non-negative integer.`);
   }
   return value;
+}
+
+function readOptionalEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  name: string,
+  label: string,
+): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!allowed.includes(value as T)) {
+    throw new Error(`${name} contains invalid ${label}.`);
+  }
+  return value as T;
 }
 
 function readOptionalEnumArray<T extends string>(

@@ -1,4 +1,3 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { readConsoleMasterKeySource } from "@llmingress/db/console-provider-keys";
 import {
   completeProviderOAuthAuthorization,
@@ -10,15 +9,14 @@ import {
   enqueueProviderConnectivityCheckJob,
   enqueueProviderModelRefreshJob,
 } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { classifyConsoleActionError } from "../_error-classify";
+import { consoleActionErrorResponse } from "../_errors";
 import { readNullableText, readNumber, readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const action = readText(form, "action") ?? "start";
 
@@ -33,7 +31,7 @@ export async function POST(request: NextRequest) {
       });
       await enqueueProviderModelRefreshJob({ providerId: result.providerId });
       await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
-      return redirectToProvider(request, result.providerId);
+      return redirectToProvider(result.providerId);
     }
 
     if (action === "delete") {
@@ -41,7 +39,7 @@ export async function POST(request: NextRequest) {
         masterKeySource: readConsoleMasterKeySource(),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      return redirectToProvider(request, result.providerId);
+      return redirectToProvider(result.providerId);
     }
 
     if (action === "enable" || action === "disable") {
@@ -50,7 +48,7 @@ export async function POST(request: NextRequest) {
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
       await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
-      return redirectToProvider(request, result.providerId);
+      return redirectToProvider(result.providerId);
     }
 
     const result = await startProviderOAuthConnection({
@@ -67,12 +65,11 @@ export async function POST(request: NextRequest) {
       providerOAuthId: result.connection.id,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Provider OAuth operation failed.";
     const providerId = readText(form, "providerId");
     if (providerId && (action === "start" || action === "complete")) {
       return redirectToProviderOAuthDialog(request, {
         authorizeUrl: readText(form, "providerAuthorizeUrl"),
-        error: message,
+        error: classifyConsoleActionError(error, "Provider OAuth operation failed.").message,
         label: readNullableText(form, "label"),
         priority: readNumber(form, "priority"),
         providerId,
@@ -80,15 +77,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ error: message }, { status: 400 });
+    return consoleActionErrorResponse(error, "Provider OAuth operation failed.");
   }
-}
+});
 
-function redirectToProvider(request: NextRequest, providerId: string): NextResponse {
-  return NextResponse.redirect(
-    new URL(`/providers?selected=${encodeURIComponent(providerId)}`, request.url),
-    303,
-  );
+function redirectToProvider(providerId: string): NextResponse {
+  return redirectToConsolePath(`/providers?selected=${encodeURIComponent(providerId)}`);
 }
 
 function redirectToProviderOAuthDialog(
@@ -120,5 +114,5 @@ function redirectToProviderOAuthDialog(
   if (input.priority !== undefined) {
     url.searchParams.set("providerOAuthPriorityValue", String(input.priority));
   }
-  return NextResponse.redirect(url, 303);
+  return redirectToConsolePath(url);
 }

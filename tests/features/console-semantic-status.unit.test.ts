@@ -5,7 +5,24 @@ import { describe, expect, test } from "vitest";
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
 const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
-const sections = () => readFileSync(join(appDir, "_modules/sections.tsx"), "utf8");
+const sectionSource = (file: string) => readFileSync(join(appDir, "_modules", file), "utf8");
+const sections = () =>
+  [
+    "sections.tsx",
+    "overview-section.tsx",
+    "runtime-section.tsx",
+    "usage-section.tsx",
+    "activity-section.tsx",
+    "virtual-models-section.tsx",
+    "route-policies-section.tsx",
+    "agents-section.tsx",
+    "limits-section.tsx",
+    "models-section.tsx",
+    "providers-section.tsx",
+    "settings-section.tsx",
+  ]
+    .map(sectionSource)
+    .join("\n");
 const statCard = () => readFileSync(join(appDir, "_components/stat-card.tsx"), "utf8");
 const providersSection = () =>
   readFileSync(join(appDir, "_modules/providers-client-section.tsx"), "utf8");
@@ -95,13 +112,13 @@ describe("console semantic status static contract", () => {
   });
 
   test("limits row delete opens a confirm dialog instead of posting directly", () => {
-    const source = sections();
+    const source = sectionSource("limits-section.tsx");
     expect(source).toContain("function LimitsDeleteDialog");
     expect(source).toContain("limitDelete: row.agent.id");
     // The rules table row itself no longer submits the delete form.
     const limitsSection = source.slice(
       source.indexOf("export async function LimitsSection"),
-      source.indexOf("function LimitsConfigDialog"),
+      source.length,
     );
     expect(limitsSection).not.toContain('name="action" value="deleteLimitRules"');
     // The dialog posts the same API action with an explicit confirm.

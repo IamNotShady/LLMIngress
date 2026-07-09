@@ -430,6 +430,15 @@ export function isKnownProviderTemplateKey(providerKey: string): boolean {
   return isProviderTemplateId(providerKey);
 }
 
+export function listProviderTemplateEndpointProtocols(
+  templateId: string | null | undefined,
+): ProviderEndpointProtocol[] {
+  if (!isProviderTemplateId(templateId)) {
+    return [];
+  }
+  return Object.keys(readProviderTemplate(templateId).endpoints) as ProviderEndpointProtocol[];
+}
+
 function normalizeLocalTemplateFormInput(
   template: LocalProviderTemplate,
   rawBaseUrl: string | null | undefined,

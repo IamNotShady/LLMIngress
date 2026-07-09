@@ -8,7 +8,24 @@ const appDir = join(rootDir, "apps/console/src/app");
 
 const source = (path: string) => readFileSync(join(rootDir, path), "utf8");
 const appSource = (path: string) => readFileSync(join(appDir, path), "utf8");
-const sections = () => appSource("_modules/sections.tsx");
+const sectionSource = (file: string) => appSource(`_modules/${file}`);
+const consoleSectionSource = () =>
+  [
+    "sections.tsx",
+    "overview-section.tsx",
+    "runtime-section.tsx",
+    "usage-section.tsx",
+    "activity-section.tsx",
+    "virtual-models-section.tsx",
+    "route-policies-section.tsx",
+    "agents-section.tsx",
+    "limits-section.tsx",
+    "models-section.tsx",
+    "providers-section.tsx",
+    "settings-section.tsx",
+  ]
+    .map(sectionSource)
+    .join("\n");
 const css = () => appSource("globals.css");
 
 describe("console UI audit confirmed fixes static contract", () => {
@@ -31,10 +48,7 @@ describe("console UI audit confirmed fixes static contract", () => {
   });
 
   test("overview does not mix all-time recent activity into 24h cards", () => {
-    const overview = sections().slice(
-      sections().indexOf("export async function OverviewSection"),
-      sections().indexOf("function formatOverviewTrendPoint"),
-    );
+    const overview = sectionSource("overview-section.tsx");
     expect(overview).toContain("listConsoleActivities({");
     expect(overview).toContain("filters: { from: overviewStart }");
     expect(overview).toContain("limit: 8");
@@ -45,7 +59,7 @@ describe("console UI audit confirmed fixes static contract", () => {
   });
 
   test("stat labels describe the data they actually show", () => {
-    const sourceText = sections();
+    const sourceText = consoleSectionSource();
     expect(sourceText).toContain('label="Online"');
     expect(sourceText).toContain('label="Cost 24h"');
     expect(sourceText).toContain('label="Failure rate total"');
@@ -56,7 +70,7 @@ describe("console UI audit confirmed fixes static contract", () => {
   });
 
   test("agent forms use display labels and checkbox grants", () => {
-    const sourceText = sections();
+    const sourceText = sectionSource("agents-section.tsx");
     const agentFormsSource = sourceText.slice(
       sourceText.indexOf("function AgentCreateDialog"),
       sourceText.indexOf("function AgentDeleteDialog"),
@@ -83,7 +97,7 @@ describe("console UI audit confirmed fixes static contract", () => {
   });
 
   test("row actions share a compact icon-button contract", () => {
-    const sourceText = sections();
+    const sourceText = consoleSectionSource();
     const providerSource = appSource("_modules/providers-client-section.tsx");
     expect(css()).toContain(".row-action-button");
     expect(sourceText.match(/row-action-button/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
@@ -96,9 +110,10 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(source("apps/console/src/app/(dashboard)/usage/page.tsx")).not.toContain("eyebrow=");
     expect(source("apps/console/src/app/(dashboard)/runtime/page.tsx")).not.toContain("eyebrow=");
     expect(source("apps/console/src/app/(dashboard)/settings/page.tsx")).not.toContain("eyebrow=");
-    const limitsDialogHead = sections().slice(
-      sections().indexOf('className="console-dialog-head limits-config-head"'),
-      sections().indexOf('<form className="limits-config-form"'),
+    const limitsSource = sectionSource("limits-section.tsx");
+    const limitsDialogHead = limitsSource.slice(
+      limitsSource.indexOf('className="console-dialog-head limits-config-head"'),
+      limitsSource.indexOf('<form className="limits-config-form"'),
     );
     expect(limitsDialogHead).toContain('<FlatIcon name="cancel" />');
   });

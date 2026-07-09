@@ -44,10 +44,10 @@ describe("refactor-provider-descriptor", () => {
       "packages/provider/src/connectivity.ts",
       "packages/provider/src/subscription.ts",
       "packages/provider/src/oauth.ts",
-      "packages/db/src/gateway-chat-completions.ts",
-      "packages/db/src/gateway-messages.ts",
-      "packages/db/src/gateway-responses.ts",
-      "packages/db/src/gateway-embeddings.ts",
+      "packages/gateway-runtime/src/gateway-chat-completions.ts",
+      "packages/gateway-runtime/src/gateway-messages.ts",
+      "packages/gateway-runtime/src/gateway-responses.ts",
+      "packages/gateway-runtime/src/gateway-embeddings.ts",
     ];
     for (const file of files) {
       const source = readFileSync(file, "utf8");

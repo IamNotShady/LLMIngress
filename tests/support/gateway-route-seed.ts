@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
-import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
+import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 
 export type QueryableFixture = {
   query: (text: string, values?: readonly unknown[]) => Promise<unknown>;

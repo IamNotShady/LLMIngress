@@ -1,18 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { closePostgresPools } from "../../packages/db/src/client";
-import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
 import {
   toGatewayErrorResponseParts,
   truncateProviderMessage,
-} from "../../packages/db/src/gateway-errors";
-import { buildFallbackExhaustionError } from "../../packages/db/src/gateway-fallback-chain";
+} from "../../packages/gateway-runtime/src/gateway-errors";
+import { buildFallbackExhaustionError } from "../../packages/gateway-runtime/src/gateway-fallback-chain";
 import {
   attachGatewayProviderCredentialsLeniently,
   readGatewayMasterKeySource,
-} from "../../packages/db/src/gateway-provider-credentials";
-import { executeGatewayStreamingRequest } from "../../packages/db/src/gateway-streaming";
-import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+} from "../../packages/gateway-runtime/src/gateway-provider-credentials";
+import { executeGatewayStreamingRequest } from "../../packages/gateway-runtime/src/gateway-streaming";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 describe("gateway error fidelity", () => {

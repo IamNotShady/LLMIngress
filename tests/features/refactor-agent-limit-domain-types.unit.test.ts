@@ -14,7 +14,10 @@ describe("refactor-agent-limit-domain-types", () => {
 
   it("redeclares no string unions in console or gateway modules", () => {
     const consoleSource = readFileSync("packages/db/src/console-agent-limits.ts", "utf8");
-    const gatewaySource = readFileSync("packages/db/src/gateway-agent-limits.ts", "utf8");
+    const gatewaySource = readFileSync(
+      "packages/gateway-runtime/src/gateway-agent-limits.ts",
+      "utf8",
+    );
     expect(consoleSource).not.toMatch(/export type AgentLimitType =\s*"/);
     expect(consoleSource).not.toMatch(/export type AgentLimitEnforcementPolicy =\s*"/);
     expect(consoleSource).not.toMatch(/export type AgentLimitPeriod =\s*"/);

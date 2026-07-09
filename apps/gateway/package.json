@@ -12,6 +12,7 @@
   "dependencies": {
     "@llmingress/config": "workspace:*",
     "@llmingress/db": "workspace:*",
+    "@llmingress/gateway-runtime": "workspace:*",
     "@llmingress/logging": "workspace:*",
     "fastify": "^5.8.5"
   }

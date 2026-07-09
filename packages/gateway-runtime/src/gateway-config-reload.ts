@@ -7,6 +7,7 @@ import {
   type ConfigChangedNotification,
   createConfigChangedListener as createPostgresConfigChangedListener,
 } from "@llmingress/db/config-versions";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "@llmingress/db/price-rows";
 import {
   createHealthSummaryChangedListener as createPostgresHealthSummaryChangedListener,
   type HealthSummaryChangedPayload,
@@ -25,7 +26,6 @@ import {
   type GatewayRuntimeStatusEvent,
   type RecordGatewayRuntimeStatus,
 } from "./gateway-runtime-status.ts";
-import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 const logger = createLogger("gateway");
 

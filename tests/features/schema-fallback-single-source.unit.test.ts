@@ -4,9 +4,9 @@ import {
   formatConsoleActivityFallbackAttempts,
   listConsoleActivities,
 } from "../../packages/db/src/console-activity";
-import { recordCompletedGatewayRequestActivity } from "../../packages/db/src/gateway-activity-recorder";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { recordCompletedGatewayRequestActivity } from "../../packages/gateway-runtime/src/gateway-activity-recorder";
 import { evaluateFallbackExhaustionAlerts } from "../../packages/worker-runtime/src/worker-fallback-exhaustion-alerts";
 import { buildJsonlRequestLogRecord } from "../../packages/worker-runtime/src/worker-jsonl-export";
 

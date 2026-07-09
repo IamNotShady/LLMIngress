@@ -20,6 +20,7 @@ describe("refactor-db-row-strict-types", () => {
   it("intersects no row type with the index-signature base", () => {
     const offenders = [
       ...listSourceFiles("packages/db/src"),
+      ...listSourceFiles("packages/gateway-runtime/src"),
       ...listSourceFiles("packages/worker-runtime/src"),
       ...listSourceFiles("apps"),
     ].filter((file) => readFileSync(file, "utf8").includes("PostgresQueryResultRow & {"));

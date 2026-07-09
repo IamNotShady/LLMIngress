@@ -24,7 +24,7 @@ describe("db connection hygiene", () => {
   });
 
   it("does not silently swallow concurrency release failures", () => {
-    const source = readFileSync("packages/db/src/gateway-protocol-request.ts", "utf8");
+    const source = readFileSync("packages/gateway-runtime/src/gateway-protocol-request.ts", "utf8");
     expect(source).not.toContain("catch(() => undefined)");
   });
 
@@ -37,8 +37,10 @@ describe("db connection hygiene", () => {
   });
 
   it("renames the stuttering runtime-status module and drops the dead observability package", () => {
-    expect(existsSync("packages/db/src/gateway-gateway-runtime-status.ts")).toBe(false);
-    expect(existsSync("packages/db/src/gateway-runtime-status.ts")).toBe(true);
+    expect(existsSync("packages/gateway-runtime/src/gateway-gateway-runtime-status.ts")).toBe(
+      false,
+    );
+    expect(existsSync("packages/gateway-runtime/src/gateway-runtime-status.ts")).toBe(true);
     expect(existsSync(["packages", "observability"].join("/"))).toBe(false);
   });
 });

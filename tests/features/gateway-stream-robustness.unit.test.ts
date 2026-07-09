@@ -4,7 +4,7 @@ import {
   composeGatewayProviderStreamPipeline,
   createReadaheadStream,
   wrapProviderStreamWithActivityCompletion,
-} from "../../packages/db/src/gateway-stream-pipeline";
+} from "../../packages/gateway-runtime/src/gateway-stream-pipeline";
 import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 import {
   createClaudeCodeProviderAdapter,

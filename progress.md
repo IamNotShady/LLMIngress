@@ -812,6 +812,13 @@
 - [x] 批次 13a refactor-db-package-split worker-runtime 完成
   - Moved all 19 `worker-*` modules from `packages/db` into `packages/worker-runtime`, rewrote worker imports and test paths, removed db worker exports, and kept `refactor-db-package-split` status `failing` until 13b.
   - Verification passed: `pnpm run verify` and `pnpm run verify:features` with all 38 currently passing features re-verified.
+- [x] 批次 13b refactor-db-package-split gateway-runtime 完成
+  - Moved all 26 `gateway-*` modules from `packages/db` into `packages/gateway-runtime`, rewrote gateway imports and test paths, removed db gateway exports, localized `llmingressDbPoolMax` in db client, and updated architecture module-boundary guidance.
+  - Verification passed: focused unit, `v1-gateway-routing` E2E, `v1-worker-ops` E2E, `pnpm run verify`, and `pnpm run verify:features` with all 39 passing features re-verified.
+- Final completed feature ids: `refactor-route-strategy-registry`, `refactor-notification-transport-registry`, `refactor-price-row-mappers`, `refactor-agent-limit-domain-types`, `refactor-config-ownership`, `refactor-db-row-strict-types`, `refactor-filter-excess-property`, `refactor-zod-boundaries`, `refactor-branded-ids`, `refactor-provider-descriptor`, `refactor-shared-logger`, `console-section-data-split`, `refactor-db-package-split`.
+- Final verification passed: `pnpm run verify` and `pnpm run verify:features` with all 39 passing features re-verified.
+- Deferred non-blocker from scope ruling: `console-provider-templates.ts` template casts remain because each cast is guarded by provider-template id set membership; full typed template-map cleanup is a separate future refactor.
+- Implementation complete; waiting for human review before merging back to `dev`.
 - Blockers: none open.
 
 ## Required Verification

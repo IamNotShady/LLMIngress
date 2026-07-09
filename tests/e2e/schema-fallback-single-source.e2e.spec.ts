@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { listConsoleActivities } from "../../packages/db/src/console-activity";
-import { recordCompletedGatewayRequestActivity } from "../../packages/db/src/gateway-activity-recorder";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { recordCompletedGatewayRequestActivity } from "../../packages/gateway-runtime/src/gateway-activity-recorder";
 
 test("fallback_events is the persisted retry-chain source", async () => {
   const fixture = await createTestPostgresFixture({

@@ -10,8 +10,8 @@ import {
 import {
   executeProviderFallbackAttempts,
   type FallbackChainCandidate,
-} from "../../packages/db/src/gateway-fallback-chain";
-import { wrapProviderStreamWithErrorRecording } from "../../packages/db/src/gateway-stream-pipeline";
+} from "../../packages/gateway-runtime/src/gateway-fallback-chain";
+import { wrapProviderStreamWithErrorRecording } from "../../packages/gateway-runtime/src/gateway-stream-pipeline";
 
 const postgresQueryMock = vi.hoisted(() => vi.fn(async () => ({ rows: [] })));
 const recordGatewayBudgetUsageMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -26,8 +26,9 @@ vi.mock("@llmingress/db/client", async (importOriginal) => {
   };
 });
 
-vi.mock("@llmingress/db/gateway-agent-limits", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@llmingress/db/gateway-agent-limits")>();
+vi.mock("@llmingress/gateway-runtime/gateway-agent-limits", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@llmingress/gateway-runtime/gateway-agent-limits")>();
   return {
     ...actual,
     recordGatewayBudgetUsage: recordGatewayBudgetUsageMock,
@@ -350,9 +351,9 @@ describe("gateway recording resilience", () => {
 
   it("keeps gateway observability writes off the awaited request path", () => {
     const runtimeFiles = [
-      "packages/db/src/gateway-protocol-request.ts",
-      "packages/db/src/gateway-streaming.ts",
-      "packages/db/src/gateway-fallback-chain.ts",
+      "packages/gateway-runtime/src/gateway-protocol-request.ts",
+      "packages/gateway-runtime/src/gateway-streaming.ts",
+      "packages/gateway-runtime/src/gateway-fallback-chain.ts",
     ];
     const source = runtimeFiles
       .map((file) => readFileSync(join(process.cwd(), file), "utf8"))

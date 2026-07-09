@@ -14,6 +14,9 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:packages/db
+      '@llmingress/gateway-runtime':
+        specifier: workspace:*
+        version: link:packages/gateway-runtime
       '@llmingress/worker-runtime':
         specifier: workspace:*
         version: link:packages/worker-runtime
@@ -81,6 +84,9 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@llmingress/gateway-runtime':
+        specifier: workspace:*
+        version: link:../../packages/gateway-runtime
       '@llmingress/logging':
         specifier: workspace:*
         version: link:../../packages/logging
@@ -143,6 +149,27 @@ importers:
       '@llmingress/billing':
         specifier: workspace:*
         version: link:../billing
+
+  packages/gateway-runtime:
+    dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@llmingress/db':
+        specifier: workspace:*
+        version: link:../db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../logging
+      '@llmingress/provider':
+        specifier: workspace:*
+        version: link:../provider
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../security
 
   packages/logging:
     dependencies:

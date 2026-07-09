@@ -15,7 +15,6 @@ import { evaluateRateLimitAlerts } from "@llmingress/worker-runtime/worker-rate-
 import { createRetentionCleanupJobHandler } from "@llmingress/worker-runtime/worker-retention-cleanup";
 import { createWebhookEventExportJobHandler } from "@llmingress/worker-runtime/worker-webhook-export";
 import { expect, test } from "@playwright/test";
-import { getPrometheusMetricsDocument } from "../../packages/db/src/gateway-metrics";
 import {
   createTestPostgresFixture,
   runMigrations,
@@ -23,6 +22,7 @@ import {
 } from "../../packages/db/src/index";
 import { getMigrationStatusFromDatabase } from "../../packages/db/src/migration-status";
 import { buildOpenTelemetryTracePayload } from "../../packages/db/src/traces";
+import { getPrometheusMetricsDocument } from "../../packages/gateway-runtime/src/gateway-metrics";
 import { buildV1DailyOperationsSmokePlan } from "../support/v1-daily-operations-smoke";
 
 test("v1 daily operations smoke verifies breakdowns exports alerts metrics traces backup migration retention", async () => {

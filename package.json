@@ -22,6 +22,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
     "@llmingress/db": "workspace:*",
+    "@llmingress/gateway-runtime": "workspace:*",
     "@llmingress/worker-runtime": "workspace:*",
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.3",

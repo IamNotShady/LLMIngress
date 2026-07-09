@@ -1,5 +1,5 @@
+import { recordOpenTelemetrySpan } from "@llmingress/db/traces";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
-import { recordOpenTelemetrySpan } from "./traces.ts";
 
 export async function recordGatewayRequestTrace(input: {
   errorCode?: string | null;

@@ -439,8 +439,8 @@
         "refactor-provider-descriptor",
         "refactor-shared-logger"
       ],
-      "status": "failing",
-      "evidence": "2026-07-09 13a: Moved all 19 worker-* modules from packages/db into packages/worker-runtime with whole-file git mv, rewrote worker-runtime imports and test paths, removed db worker exports, and kept the split feature failing until gateway-runtime moves in 13b. pnpm run verify passed; pnpm run verify:features passed with all 38 currently passing features re-verified."
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green across 13a/13b. 13a moved all 19 worker-* modules from packages/db into packages/worker-runtime with whole-file git mv, rewrote worker-runtime imports and test paths, removed db worker exports, and kept the split feature failing until gateway-runtime moved. 13b moved all 26 gateway-* modules into packages/gateway-runtime, removed db gateway exports, rewrote gateway imports and tests, localized llmingressDbPoolMax in db client, and updated architecture module-boundary guidance. Focused unit, v1-gateway-routing E2E, v1-worker-ops E2E, pnpm run verify, and pnpm run verify:features passed with all 39 passing features re-verified."
     }
   ]
 }

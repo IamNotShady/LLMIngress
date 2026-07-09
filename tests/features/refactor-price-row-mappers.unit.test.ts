@@ -6,7 +6,7 @@ import {
 } from "../../packages/db/src/price-rows.ts";
 
 const formerMapperFiles = [
-  "packages/db/src/gateway-config-reload.ts",
+  "packages/gateway-runtime/src/gateway-config-reload.ts",
   "packages/db/src/console-route-policies.ts",
   "packages/db/src/console-agent-limits.ts",
   "packages/worker-runtime/src/worker-billing-reconciliation.ts",

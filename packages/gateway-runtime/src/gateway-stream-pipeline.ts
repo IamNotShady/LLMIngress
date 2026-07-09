@@ -1,9 +1,9 @@
 import { PassThrough, Readable } from "node:stream";
+import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-agent-limits.ts";
 import { gatewayStreamIdleTimeoutMs } from "./gateway-env.ts";
 import type { FallbackChainCandidate } from "./gateway-fallback-chain.ts";
-import { recordProviderHealthEvent } from "./provider-health.ts";
 
 export type GatewayRuntimeStreamError = {
   errorCode: "provider_stream_error";

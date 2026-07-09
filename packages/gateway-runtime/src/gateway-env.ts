@@ -50,10 +50,6 @@ export function gatewayHeartbeatIntervalMs(env: GatewayEnvironment = process.env
   return readNonNegativeIntegerEnv(env, "GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000);
 }
 
-export function llmingressDbPoolMax(env: GatewayEnvironment = process.env): number {
-  return readPositiveIntegerValue(env.LLMINGRESS_DB_POOL_MAX, 10);
-}
-
 function readTrimmedEnv(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;

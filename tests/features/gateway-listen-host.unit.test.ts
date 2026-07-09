@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { gatewayListenHost } from "../../packages/db/src/gateway-env";
+import { gatewayListenHost } from "../../packages/gateway-runtime/src/gateway-env";
 
 describe("gateway listen host", () => {
   it("defaults to loopback when GATEWAY_HOST is unset", () => {

@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 
 type BootstrapEnvironment = Record<string, string | undefined>;
 
-type BootstrapConfigFile = {
+export type BootstrapConfigFile = {
+  databaseUrl?: string;
   gatewayPort?: number;
   consolePort?: number;
   workerHeartbeatMs?: number;
@@ -52,7 +53,7 @@ export function loadBootstrapRuntimeConfig(
   };
 }
 
-function readBootstrapConfigFile(path: string): BootstrapConfigFile {
+export function readBootstrapConfigFile(path: string): BootstrapConfigFile {
   try {
     return JSON.parse(readFileSync(path, "utf8")) as BootstrapConfigFile;
   } catch (error) {
@@ -110,4 +111,10 @@ function readMasterKeySource(
   }
 
   throw new Error("MASTER_KEY or MASTER_KEY_FILE is required.");
+}
+
+export function gatewayPublicBaseUrl(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
 }

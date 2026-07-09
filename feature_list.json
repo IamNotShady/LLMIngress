@@ -339,6 +339,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. Agent limit type, enforcement policy, period, and unit unions now live in packages/domain; console-agent-limits re-exports/imports them and gateway-agent-limits aliases/extracts domain types. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 29 passing features re-verified."
+    },
+    {
+      "id": "refactor-config-ownership",
+      "name": "Config Ownership Consolidation",
+      "description": "packages/config owns gatewayPublicBaseUrl() and the single BootstrapConfigFile definition; console no longer inlines the GATEWAY_PUBLIC_BASE_URL default and db client reuses the config bootstrap file reader.",
+      "verification": "pnpm exec vitest run tests/features/refactor-config-ownership.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "v1-platform"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. packages/config now exports gatewayPublicBaseUrl(), BootstrapConfigFile, and readBootstrapConfigFile; console URL defaults use config and db/client reuses the config bootstrap reader. Focused unit, pnpm install, pnpm run verify, and pnpm run verify:features passed with all 30 passing features re-verified."
     }
   ]
 }

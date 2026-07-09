@@ -1,3 +1,4 @@
+import { gatewayPublicBaseUrl } from "@llmingress/config";
 import { readConsoleAuthState, sessionCookieName } from "@llmingress/db/console-auth";
 import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
 import {
@@ -63,7 +64,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 }
 
 function getGatewayBaseUrl(): string {
-  return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
+  return gatewayPublicBaseUrl();
 }
 
 function formatRuntimeAddress(value: string): string {

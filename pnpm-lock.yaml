@@ -97,6 +97,9 @@ importers:
       '@llmingress/billing':
         specifier: workspace:*
         version: link:../billing
+      '@llmingress/config':
+        specifier: workspace:*
+        version: link:../config
       '@llmingress/domain':
         specifier: workspace:*
         version: link:../domain

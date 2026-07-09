@@ -272,6 +272,7 @@
   "dependencies": {
     "pg": "^8.21.0",
     "@llmingress/billing": "workspace:*",
+    "@llmingress/config": "workspace:*",
     "@llmingress/domain": "workspace:*",
     "@llmingress/provider": "workspace:*",
     "@llmingress/security": "workspace:*"

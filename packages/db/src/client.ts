@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readBootstrapConfigFile } from "@llmingress/config";
 import { Client, type ClientConfig, Pool } from "pg";
 import { llmingressDbPoolMax } from "./gateway-env.ts";
 
@@ -7,10 +7,6 @@ type DatabaseUrlEnvironment = Record<string, string | undefined>;
 type ReadPostgresDatabaseUrlOptions = {
   configFilePath?: string;
   env?: DatabaseUrlEnvironment;
-};
-
-type BootstrapConfigFile = {
-  databaseUrl?: string;
 };
 
 export class PostgresClient extends Client {
@@ -147,14 +143,5 @@ export async function withPostgresClient<T>(
     return await operation(client);
   } finally {
     await client.end();
-  }
-}
-
-function readBootstrapConfigFile(path: string): BootstrapConfigFile {
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as BootstrapConfigFile;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`LLMINGRESS_BOOTSTRAP_CONFIG could not be read: ${message}`);
   }
 }

@@ -10,6 +10,7 @@ import {
   routeTaskTypes,
   selectRouteCandidate,
 } from "@llmingress/domain";
+import { z } from "zod";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export type RoutePreviewInput = {
@@ -72,31 +73,67 @@ export async function previewRoutePolicy(input: {
   };
 }
 
+const routePreviewInputSchema = z
+  .object({
+    estimatedInputTokens: nonNegativeFiniteNumber("estimatedInputTokens"),
+    estimatedOutputTokens: nonNegativeFiniteNumber("estimatedOutputTokens"),
+    taskType: optionalRouteTaskType(),
+    usesTools: z.custom<boolean>((value) => typeof value === "boolean", {
+      message: "usesTools must be a boolean.",
+    }),
+    virtualModelId: optionalNonEmptyText("virtualModelId"),
+    virtualModelName: optionalNonEmptyText("virtualModelName"),
+  })
+  .refine((value) => value.virtualModelId !== undefined || value.virtualModelName !== undefined, {
+    message: "Route preview requires virtualModelId or virtualModelName.",
+  });
+
 export function normalizeRoutePreviewInput(input: unknown): RoutePreviewInput {
   if (!isRecord(input)) {
     throw new Error("Route preview request must be a JSON object.");
   }
-
-  const virtualModelId = readOptionalText(input.virtualModelId, "virtualModelId");
-  const virtualModelName = readOptionalText(input.virtualModelName, "virtualModelName");
-  if (!virtualModelId && !virtualModelName) {
+  if (
+    (input.virtualModelId === undefined || input.virtualModelId === null) &&
+    (input.virtualModelName === undefined || input.virtualModelName === null)
+  ) {
     throw new Error("Route preview requires virtualModelId or virtualModelName.");
   }
 
-  return omitUndefined({
-    estimatedInputTokens: readNonNegativeFiniteNumber(
-      input.estimatedInputTokens,
-      "estimatedInputTokens",
-    ),
-    estimatedOutputTokens: readNonNegativeFiniteNumber(
-      input.estimatedOutputTokens,
-      "estimatedOutputTokens",
-    ),
-    taskType: readOptionalTaskType(input.taskType),
-    usesTools: readBoolean(input.usesTools, "usesTools"),
-    virtualModelId,
-    virtualModelName,
-  });
+  const parsed = routePreviewInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Route preview request is invalid.");
+  }
+  return omitUndefined(parsed.data);
+}
+
+function nonNegativeFiniteNumber(name: string) {
+  return z.custom<number>(
+    (value) => typeof value === "number" && Number.isFinite(value) && value >= 0,
+    { message: `${name} must be a non-negative finite number.` },
+  );
+}
+
+function optionalNonEmptyText(name: string) {
+  return z.preprocess(
+    (value) => (value === null ? undefined : value),
+    z
+      .custom<string>((value) => typeof value === "string" && value.trim() !== "", {
+        message: `${name} must be a non-empty string.`,
+      })
+      .transform((value) => value.trim())
+      .optional(),
+  );
+}
+
+function optionalRouteTaskType() {
+  return z.preprocess(
+    (value) => (value === null ? undefined : value),
+    z
+      .custom<RouteTaskType>((value) => routeTaskTypes.includes(value as RouteTaskType), {
+        message: "taskType must be a valid route task type.",
+      })
+      .optional(),
+  );
 }
 
 async function loadRoutePreviewPolicies(databaseUrl?: string): Promise<RoutePolicy[]> {
@@ -221,40 +258,6 @@ function rowToRouteCandidate(row: RoutePreviewRow): RouteCandidate {
     providerModelId: row.providerModelId,
     supportsTools: row.supportsTools,
   };
-}
-
-function readOptionalText(value: unknown, name: string): string | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${name} must be a non-empty string.`);
-  }
-  return value.trim();
-}
-
-function readBoolean(value: unknown, name: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`${name} must be a boolean.`);
-  }
-  return value;
-}
-
-function readNonNegativeFiniteNumber(value: unknown, name: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`${name} must be a non-negative finite number.`);
-  }
-  return value;
-}
-
-function readOptionalTaskType(value: unknown): RouteTaskType | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (!routeTaskTypes.includes(value as RouteTaskType)) {
-    throw new Error("taskType must be a valid route task type.");
-  }
-  return value as RouteTaskType;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -37,6 +37,7 @@ const allowedFeatureIds = [
   "refactor-config-ownership",
   "refactor-db-row-strict-types",
   "refactor-filter-excess-property",
+  "refactor-zod-boundaries",
 ];
 
 const sharedE2EFeatureIds: Record<string, string> = {
@@ -73,6 +74,7 @@ const inProgressFeatureIds = new Set([
   "refactor-config-ownership",
   "refactor-db-row-strict-types",
   "refactor-filter-excess-property",
+  "refactor-zod-boundaries",
 ]);
 
 describe("v1 release guards milestone", () => {

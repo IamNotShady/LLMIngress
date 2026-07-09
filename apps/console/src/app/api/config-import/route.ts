@@ -8,8 +8,9 @@ export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
     const configJson = readRequiredText(form, "configJson");
+    const document: unknown = JSON.parse(configJson);
     const result = await importConsoleConfig({
-      document: JSON.parse(configJson),
+      document,
     });
     const redirectUrl = new URL("/settings", request.url);
     redirectUrl.searchParams.set("configImportVersion", String(result.version));

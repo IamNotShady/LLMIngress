@@ -395,6 +395,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. packages/domain now exports Brand and branded route decision ID helpers; RouteDecision carries branded routePolicyId, virtualModelId, providerId, and providerModelId constructed inside createDecision while preserving runtime string values. Focused unit, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed; the optimized E2E batch failed once, then the built-in per-feature fallback passed with all 34 passing features re-verified."
+    },
+    {
+      "id": "refactor-provider-descriptor",
+      "name": "Provider Descriptor Registry",
+      "description": "Per-provider wire traits (model list style, connectivity probe style, subscription flags, fixed base urls, price sync support, metadata key) live in one packages/provider descriptor registry; consumer files dispatch on descriptor traits instead of providerKey string literals.",
+      "verification": "pnpm exec vitest run tests/features/refactor-provider-descriptor.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing",
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Added packages/provider descriptor registry for provider wire traits, exported it from @llmingress/provider/descriptor, and replaced model-list/connectivity/subscription/oauth/price-source plus Console/provider refresh/Gateway protocol providerKey literal dispatch with descriptor trait lookups. Focused unit, pnpm run lint, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 35 passing features re-verified."
     }
   ]
 }

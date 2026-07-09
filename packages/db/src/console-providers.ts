@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { PostgresClient } from "@llmingress/db/providers";
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   isKnownProviderTemplateKey,
   type ProviderTemplateCreateInput,
@@ -37,12 +38,6 @@ type ProviderRow = {
   provider_template_id: string | null;
   provider_type: ProviderType;
 };
-
-const fixedApiKeyProviderBaseUrls = new Map([
-  ["anthropic", "https://api.anthropic.com/v1"],
-  ["openai", "https://api.openai.com/v1"],
-  ["openrouter", "https://openrouter.ai/api/v1"],
-]);
 
 export function normalizeProviderFormInput(input: ProviderFormInput): NormalizedProviderFormInput {
   const providerKey = input.providerKey?.trim().toLowerCase();
@@ -386,7 +381,7 @@ function assertProviderBaseUrlAllowed(
     return;
   }
 
-  const fixedBaseUrl = fixedApiKeyProviderBaseUrls.get(providerKey);
+  const fixedBaseUrl = resolveProviderDescriptor(providerKey).fixedApiKeyBaseUrl;
   if (fixedBaseUrl && normalizeUrlForComparison(baseUrl) === fixedBaseUrl) {
     return;
   }

@@ -1,3 +1,4 @@
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIEmbeddingsRequest,
@@ -87,7 +88,7 @@ export function createGatewayEmbeddingsProviderAdapter(input: {
   if (input.adapter) {
     return input.adapter;
   }
-  if (input.providerKey === "openrouter") {
+  if (resolveProviderDescriptor(input.providerKey).openRouterAttribution === true) {
     return createOpenRouterProviderAdapter({ fetch: input.fetch });
   }
   return createOpenAIProviderAdapter({ fetch: input.fetch });

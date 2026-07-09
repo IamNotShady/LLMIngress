@@ -6,6 +6,7 @@ import {
   readEnabledCompletedProviderOAuthConnections,
   withPooledPostgresClient,
 } from "@llmingress/db/providers";
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   fetchListedProviderModels as fetchProviderModelList,
   type ListedProviderModel,
@@ -135,7 +136,6 @@ const workerManagedCapabilityMetadataKeys = [
   "registrySources",
   "streamingInferred",
 ] as const;
-const localProviderKeys = new Set(["ollama", "lmstudio", "llama_cpp"]);
 const defaultLocalProviderContextWindow = 4096;
 
 export function createModelRefreshJobHandler(
@@ -310,21 +310,14 @@ function findSyncedProviderModelPrice(
 
 function providerMetadataKey(providerKey: string): string {
   const normalized = providerKey.trim().toLowerCase();
-
-  if (normalized === "claude_code") {
-    return "anthropic";
-  }
-  if (normalized === "openai_codex") {
-    return "openai";
-  }
-  return normalized;
+  return resolveProviderDescriptor(normalized).metadataKey ?? normalized;
 }
 
 function withLocalProviderDefaults(
   model: ListedProviderModel,
   providerKey: string,
 ): ListedProviderModel {
-  if (!localProviderKeys.has(providerKey.trim().toLowerCase()) || model.contextWindow != null) {
+  if (resolveProviderDescriptor(providerKey).local !== true || model.contextWindow != null) {
     return model;
   }
   return { ...model, contextWindow: defaultLocalProviderContextWindow };

@@ -1,3 +1,4 @@
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIResponsesInputItem,
@@ -6,7 +7,6 @@ import {
   type OpenAIAdapterSuccess,
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
-import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import {
@@ -97,7 +97,10 @@ export async function executeGatewayOpenAIResponse(input: {
       buildRequestMetadata: buildOpenAIResponsesRequestMetadata,
       callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
         const adapter =
-          candidate.providerKey === "openai_codex" && codexAdapter ? codexAdapter : genericAdapter;
+          resolveProviderDescriptor(candidate.providerKey).subscriptionAdapter === "codex" &&
+          codexAdapter
+            ? codexAdapter
+            : genericAdapter;
         if (!adapter.response) {
           throw new GatewayPipelineError(
             "provider_protocol_unsupported",
@@ -118,10 +121,8 @@ export async function executeGatewayOpenAIResponse(input: {
       planCandidates: (candidates) => {
         unsupportedProviders.clear();
         const supported = candidates.filter((candidate) => {
-          if (
-            isSubscriptionProviderKey(candidate.providerKey) &&
-            candidate.providerKey !== "openai_codex"
-          ) {
+          const descriptor = resolveProviderDescriptor(candidate.providerKey);
+          if (descriptor.subscription === true && descriptor.subscriptionAdapter !== "codex") {
             unsupportedProviders.add(candidate.providerKey);
             return false;
           }

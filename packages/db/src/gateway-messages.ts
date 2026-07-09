@@ -7,7 +7,7 @@ import {
   type NormalizedAnthropicMessage,
   type NormalizedAnthropicMessagesRequest,
 } from "@llmingress/provider/anthropic";
-import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import { createClaudeCodeProviderAdapter } from "@llmingress/provider/subscription-adapters";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import {
@@ -122,7 +122,8 @@ export async function executeGatewayAnthropicMessages(input: {
         buildRequestMetadata: buildAnthropicMessagesRequestMetadata,
         callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
           const adapter =
-            candidate.providerKey === "claude_code" && claudeCodeAdapter
+            resolveProviderDescriptor(candidate.providerKey).subscriptionAdapter ===
+              "claude_code" && claudeCodeAdapter
               ? claudeCodeAdapter
               : genericAdapter;
           return adapter.messages({
@@ -142,11 +143,12 @@ export async function executeGatewayAnthropicMessages(input: {
               "provider_protocol_unsupported",
               "Anthropic messages cannot use unsupported subscription providers.",
             ),
-          supported: candidates.filter(
-            (candidate) =>
-              !isSubscriptionProviderKey(candidate.providerKey) ||
-              candidate.providerKey === "claude_code",
-          ),
+          supported: candidates.filter((candidate) => {
+            const descriptor = resolveProviderDescriptor(candidate.providerKey);
+            return (
+              descriptor.subscription !== true || descriptor.subscriptionAdapter === "claude_code"
+            );
+          }),
         }),
       },
     },

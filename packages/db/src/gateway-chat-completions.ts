@@ -1,3 +1,4 @@
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   createOpenAIProviderAdapter,
   type NormalizedOpenAIChatMessage,
@@ -96,7 +97,9 @@ export async function executeGatewayOpenAIChatCompletion(input: {
     spec: {
       buildRequestMetadata: buildOpenAIChatCompletionRequestMetadata,
       callProvider: ({ candidate, providerApiKey, providerRequestHeaders, request }) => {
-        const adapter = candidate.providerKey === "openrouter" ? openRouterAdapter : genericAdapter;
+        const adapter = resolveProviderDescriptor(candidate.providerKey).openRouterAttribution
+          ? openRouterAdapter
+          : genericAdapter;
         return adapter.chatCompletion({
           headers: providerRequestHeaders,
           request,

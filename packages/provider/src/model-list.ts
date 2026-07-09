@@ -7,6 +7,7 @@ export type ListedProviderModel = {
   supportsTools?: boolean | null;
 };
 
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   buildClaudeCodeModelListUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -49,9 +50,9 @@ export function buildProviderModelListRequest(input: {
   url: string;
 } {
   const init: RequestInit = { method: "GET" };
-  const providerKey = input.providerKey?.toLowerCase();
+  const style = resolveProviderDescriptor(input.providerKey).modelListStyle;
 
-  if (providerKey === "openai_codex" && input.apiKey) {
+  if (style === "codex" && input.apiKey) {
     init.headers = buildCodexSubscriptionHeaders(input.apiKey);
     return {
       init,
@@ -59,7 +60,7 @@ export function buildProviderModelListRequest(input: {
     };
   }
 
-  if (providerKey === "claude_code" && input.apiKey) {
+  if (style === "claude_code" && input.apiKey) {
     init.headers = buildClaudeCodeSubscriptionHeaders(input.apiKey);
     return {
       init,
@@ -67,14 +68,14 @@ export function buildProviderModelListRequest(input: {
     };
   }
 
-  if (providerKey === "lmstudio") {
+  if (style === "lmstudio") {
     return {
       init,
       url: buildLmStudioModelListUrl(input.baseUrl),
     };
   }
 
-  if (providerKey === "anthropic") {
+  if (style === "anthropic") {
     init.headers = input.apiKey
       ? {
           "anthropic-version": "2023-06-01",
@@ -85,7 +86,7 @@ export function buildProviderModelListRequest(input: {
           "anthropic-version": "2023-06-01",
           "content-type": "application/json",
         };
-  } else if (providerKey === "openrouter" && input.apiKey) {
+  } else if (style === "openrouter" && input.apiKey) {
     init.headers = {
       "HTTP-Referer": "https://llmingress.local",
       "X-OpenRouter-Title": "LLMIngress",

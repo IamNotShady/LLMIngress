@@ -802,6 +802,7 @@
   - New E2E covers invalid `/api/route-policies/preview` JSON after Console login. The valid-preview E2E was not added because the donor Console fixture only provides startup/login scaffolding and no route-policy data fixture.
 - [x] 批次 9 refactor-branded-ids 完成
   - `pnpm run verify:features` optimized E2E batch failed once, then the built-in per-feature fallback passed and the command exited 0.
+- [x] 批次 10 refactor-provider-descriptor 完成
 - Blockers: none open.
 
 ## Required Verification

@@ -31,10 +31,12 @@ const allowedFeatureIds = [
   "console-api-hygiene",
   "console-sections-split",
   "refactor-route-strategy-registry",
+  "refactor-notification-transport-registry",
 ];
 
 const sharedE2EFeatureIds: Record<string, string> = {
   "gateway-cohesion-refactor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-notification-transport-registry": "tests/e2e/v1-worker-ops.e2e.spec.ts",
   "refactor-route-strategy-registry": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
 };
 
@@ -55,6 +57,7 @@ const inProgressFeatureIds = new Set([
   "console-api-hygiene",
   "console-sections-split",
   "refactor-route-strategy-registry",
+  "refactor-notification-transport-registry",
 ]);
 
 describe("v1 release guards milestone", () => {

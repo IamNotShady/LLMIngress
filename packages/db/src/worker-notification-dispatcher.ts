@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { type NotificationChannelType, notificationChannelTypes } from "@llmingress/domain";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./worker-job-runner.ts";
 
-export type NotificationChannelType = "webhook";
+export type { NotificationChannelType };
+export { notificationChannelTypes };
+
+export type NotificationTransport = (
+  input: NotificationDeliveryTransportInput,
+) => Promise<NotificationDeliveryResult>;
 
 export type NotificationDeliveryPayload = {
   body: string;
@@ -32,12 +38,11 @@ export type QueueNotificationEventResult = {
 
 export type NotificationDispatchJobHandlerOptions = {
   databaseUrl?: string;
-  deliverWebhook?: (
-    input: NotificationDeliveryTransportInput,
-  ) => Promise<NotificationDeliveryResult>;
+  deliverWebhook?: NotificationTransport;
   maxBatchSize?: number;
   now?: () => Date;
   retryBackoffMs?: (input: { attemptNumber: number; eventId: string }) => number;
+  transports?: Partial<Record<NotificationChannelType, NotificationTransport>>;
 };
 
 export type NotificationDeliveryTransportInput = {
@@ -168,7 +173,9 @@ export function createNotificationDispatchJobHandler(
   const now = options.now ?? (() => new Date());
   const maxBatchSize = options.maxBatchSize ?? defaultMaxBatchSize;
   const retryBackoffMs = options.retryBackoffMs ?? defaultRetryBackoffMs;
-  const deliverWebhook = options.deliverWebhook ?? defaultDeliverWebhook;
+  const transports: Record<NotificationChannelType, NotificationTransport> = {
+    webhook: options.transports?.webhook ?? options.deliverWebhook ?? defaultDeliverWebhook,
+  };
 
   return async (job) => {
     const events = await claimDueNotificationEvents({
@@ -196,9 +203,9 @@ export function createNotificationDispatchJobHandler(
         subject: event.subject,
       };
       const result = await deliverNotification({
-        deliverWebhook,
         event,
         payload,
+        transports,
       });
       const completedAt = now();
       const retryAt = resolveRetryAt({
@@ -273,11 +280,11 @@ async function readEnabledNotificationChannels(
         select id::text, channel_type
         from notification_channels
         where enabled = true
-          and channel_type = 'webhook'
-          and id = any($1::uuid[])
+          and channel_type = any($1::text[])
+          and id = any($2::uuid[])
         order by channel_type, display_name
       `,
-      [channelIds],
+      [[...notificationChannelTypes], channelIds],
     );
     return result.rows;
   }
@@ -287,9 +294,10 @@ async function readEnabledNotificationChannels(
       select id::text, channel_type
       from notification_channels
       where enabled = true
-        and channel_type = 'webhook'
+        and channel_type = any($1::text[])
       order by channel_type, display_name
     `,
+    [[...notificationChannelTypes]],
   );
   return result.rows;
 }
@@ -341,7 +349,7 @@ async function claimDueNotificationEvents(input: {
           from notification_events
           join notification_channels on notification_channels.id = notification_events.channel_id
           where notification_channels.enabled = true
-            and notification_channels.channel_type = 'webhook'
+            and notification_channels.channel_type = any($3::text[])
             and notification_events.status in ('queued', 'retrying')
             and notification_events.next_attempt_at <= $1::timestamptz
           order by notification_events.next_attempt_at,
@@ -380,7 +388,7 @@ async function claimDueNotificationEvents(input: {
         join notification_channels on notification_channels.id = updated.channel_id::uuid
         order by notification_channels.channel_type, updated.id
       `,
-      [input.now.toISOString(), input.limit],
+      [input.now.toISOString(), input.limit, [...notificationChannelTypes]],
     );
     return result.rows.map(rowToClaimedNotificationEvent);
   });
@@ -467,19 +475,17 @@ function defaultRetryBackoffMs(input: { attemptNumber: number }): number {
 }
 
 async function deliverNotification(input: {
-  deliverWebhook: (
-    input: NotificationDeliveryTransportInput,
-  ) => Promise<NotificationDeliveryResult>;
   event: ClaimedNotificationEvent;
   payload: NotificationDeliveryPayload;
+  transports: Record<NotificationChannelType, NotificationTransport>;
 }): Promise<NotificationDeliveryResult> {
   try {
-    const transportInput = {
+    const transport = input.transports[input.event.channelType];
+    return await transport({
       channelConfig: input.event.channelConfig,
       channelType: input.event.channelType,
       payload: input.payload,
-    };
-    return await input.deliverWebhook(transportInput);
+    });
   } catch (error) {
     return {
       errorCode: "notification_transport_failed",

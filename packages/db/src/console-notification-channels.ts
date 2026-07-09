@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { type NotificationChannelType, notificationChannelTypes } from "@llmingress/domain";
 
-export type NotificationChannelType = "webhook";
+export type { NotificationChannelType };
+export { notificationChannelTypes };
 
 export type WebhookNotificationChannelConfig = {
   url: string;
@@ -48,9 +50,7 @@ export function normalizeNotificationChannelFormInput(
 
   return {
     channelType,
-    config: {
-      url: normalizeWebhookUrl(input.webhookUrl),
-    },
+    config: channelConfigNormalizers[channelType](input),
     displayName,
     enabled,
   };
@@ -70,9 +70,10 @@ export async function listNotificationChannels(
                created_at,
                updated_at
         from notification_channels
-        where channel_type = 'webhook'
+        where channel_type = any($1::text[])
         order by channel_type, display_name
       `,
+      [[...notificationChannelTypes]],
     );
     return result.rows.map(rowToConsoleNotificationChannel);
   });
@@ -127,12 +128,21 @@ function rowToConsoleNotificationChannel(row: NotificationChannelRow): ConsoleNo
   };
 }
 
+const channelConfigNormalizers: Record<
+  NotificationChannelType,
+  (input: NotificationChannelFormInput) => NotificationChannelConfig
+> = {
+  webhook: (input) => ({ url: normalizeWebhookUrl(input.webhookUrl) }),
+};
+
 function normalizeChannelType(value: string | null | undefined): NotificationChannelType {
-  const normalized = value?.trim().toLowerCase();
-  if (normalized === "webhook") {
-    return normalized;
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if ((notificationChannelTypes as readonly string[]).includes(normalized)) {
+    return normalized as NotificationChannelType;
   }
-  throw new Error("Notification channel type must be webhook.");
+  throw new Error(
+    `Notification channel type must be one of: ${notificationChannelTypes.join(", ")}.`,
+  );
 }
 
 function normalizeEnabled(value: boolean | string | null | undefined): boolean {

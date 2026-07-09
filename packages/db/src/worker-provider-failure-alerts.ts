@@ -1,6 +1,6 @@
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import {
-  countEnabledWebhookNotificationChannels,
+  countEnabledNotificationChannels,
   notificationAlertAlreadyQueued,
   readObject,
   readPositiveIntegerEnv,
@@ -88,7 +88,7 @@ export async function evaluateProviderFailureAlerts(
       databaseUrl: options.databaseUrl,
       thresholdCount: payload.thresholdCount,
     }),
-    countEnabledWebhookNotificationChannels(options.databaseUrl),
+    countEnabledNotificationChannels(options.databaseUrl),
   ]);
   const result: ProviderFailureAlertsResult = {
     evaluatedSummaryCount,

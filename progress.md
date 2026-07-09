@@ -792,6 +792,7 @@
 - Baseline: `pnpm install` passed. `pnpm run db:migrate` needs explicit process env in this shell; reran with `DATABASE_URL`, `TEST_DATABASE_URL`, and `MASTER_KEY`, applied 0 migrations and skipped 6. `pnpm run verify` passed. `pnpm run verify:features` passed with all 26 passing features re-verified.
 - [x] 批次 0 sharedE2E guard map 完成
 - [x] 批次 1 refactor-route-strategy-registry 完成
+- [x] 批次 2 refactor-notification-transport-registry 完成
 - Blockers: none open.
 
 ## Required Verification

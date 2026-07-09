@@ -1,6 +1,6 @@
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import {
-  countEnabledWebhookNotificationChannels,
+  countEnabledNotificationChannels,
   notificationAlertAlreadyQueued,
   readObject,
   readPositiveIntegerEnv,
@@ -78,7 +78,7 @@ export async function evaluateBudgetThresholdAlerts(
   const payload = readBudgetThresholdAlertPayload(options.payload);
   const now = options.now?.() ?? new Date();
   const candidates = await readBudgetThresholdCandidates(options.databaseUrl, now);
-  const enabledChannelCount = await countEnabledWebhookNotificationChannels(options.databaseUrl);
+  const enabledChannelCount = await countEnabledNotificationChannels(options.databaseUrl);
   const result: BudgetThresholdAlertsResult = {
     evaluatedBudgetCount: candidates.length,
     notificationEventCount: 0,

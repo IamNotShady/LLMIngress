@@ -1,15 +1,15 @@
 import { PostgresClient } from "@llmingress/db/client";
+import { notificationChannelTypes } from "@llmingress/domain";
 import { JobHandlerError } from "./worker-job-runner.ts";
 
-export async function countEnabledWebhookNotificationChannels(
-  databaseUrl?: string,
-): Promise<number> {
+export async function countEnabledNotificationChannels(databaseUrl?: string): Promise<number> {
   const client = new PostgresClient({ connectionString: databaseUrl });
   await client.connect();
 
   try {
     const result = await client.query<{ count: string }>(
-      "select count(*)::text as count from notification_channels where enabled = true and channel_type = 'webhook'",
+      "select count(*)::text as count from notification_channels where enabled = true and channel_type = any($1::text[])",
+      [[...notificationChannelTypes]],
     );
     return Number(result.rows[0]?.count ?? 0);
   } finally {

@@ -604,3 +604,6 @@ function readOptionalEnumArray<T extends string>(
 function omitUndefined<T extends Record<string, unknown>>(input: T): T {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as T;
 }
+
+export const notificationChannelTypes = ["webhook"] as const;
+export type NotificationChannelType = (typeof notificationChannelTypes)[number];

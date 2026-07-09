@@ -306,6 +306,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. Route policy strategy ordering and decision messaging now dispatch through routeStrategyHandlers Record<RoutePolicyStrategy, RouteStrategyHandler>; focused unit, pnpm run verify, and pnpm run verify:features passed with all 26 prior passing features re-verified."
+    },
+    {
+      "id": "refactor-notification-transport-registry",
+      "name": "Notification Transport Registry",
+      "description": "Notification channel types come from one packages/domain list, dispatcher delivery resolves through a channel-type transport registry, and no SQL hardcodes channel_type = 'webhook'.",
+      "verification": "pnpm exec vitest run tests/features/refactor-notification-transport-registry.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Notification channel types now come from packages/domain, dispatcher delivery resolves through a NotificationChannelType transport registry, and notification SQL uses parameterized channel type arrays instead of channel_type = 'webhook'. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 27 passing features re-verified."
     }
   ]
 }

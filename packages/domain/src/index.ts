@@ -607,3 +607,15 @@ function omitUndefined<T extends Record<string, unknown>>(input: T): T {
 
 export const notificationChannelTypes = ["webhook"] as const;
 export type NotificationChannelType = (typeof notificationChannelTypes)[number];
+
+export const agentLimitTypes = ["budget", "concurrency", "rpm", "token", "tpm"] as const;
+export type AgentLimitType = (typeof agentLimitTypes)[number];
+
+export const agentLimitEnforcementPolicies = ["block", "warn_only"] as const;
+export type AgentLimitEnforcementPolicy = (typeof agentLimitEnforcementPolicies)[number];
+
+export const agentLimitPeriods = ["day", "hour", "minute", "month", "request", "week"] as const;
+export type AgentLimitPeriod = (typeof agentLimitPeriods)[number];
+
+export const agentLimitUnits = ["requests", "tokens", "usd"] as const;
+export type AgentLimitUnit = (typeof agentLimitUnits)[number];

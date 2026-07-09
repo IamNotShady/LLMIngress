@@ -794,6 +794,7 @@
 - [x] 批次 1 refactor-route-strategy-registry 完成
 - [x] 批次 2 refactor-notification-transport-registry 完成
 - [x] 批次 3 refactor-price-row-mappers 完成
+- [x] 批次 4 refactor-agent-limit-domain-types 完成
 - Blockers: none open.
 
 ## Required Verification

@@ -328,6 +328,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. ManualPriceOverride and SyncedPriceSnapshot row construction moved to packages/db/src/price-rows.ts; the six former local mapper copies now delegate to shared builders. Focused unit, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 28 passing features re-verified."
+    },
+    {
+      "id": "refactor-agent-limit-domain-types",
+      "name": "Agent Limit Domain Types",
+      "description": "Agent limit type, enforcement policy, period, and unit unions are defined once in packages/domain; console-agent-limits re-exports them and gateway-agent-limits aliases them instead of redeclaring string unions.",
+      "verification": "pnpm exec vitest run tests/features/refactor-agent-limit-domain-types.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Agent limit type, enforcement policy, period, and unit unions now live in packages/domain; console-agent-limits re-exports/imports them and gateway-agent-limits aliases/extracts domain types. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 29 passing features re-verified."
     }
   ]
 }

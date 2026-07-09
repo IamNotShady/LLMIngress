@@ -4,10 +4,19 @@ import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/clie
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
-export type AgentLimitType = "budget" | "concurrency" | "rpm" | "token" | "tpm";
-export type AgentLimitEnforcementPolicy = "block" | "warn_only";
-export type AgentLimitPeriod = "day" | "hour" | "minute" | "month" | "request" | "week";
-export type AgentLimitUnit = "requests" | "tokens" | "usd";
+export type {
+  AgentLimitEnforcementPolicy,
+  AgentLimitPeriod,
+  AgentLimitType,
+  AgentLimitUnit,
+} from "@llmingress/domain";
+
+import type {
+  AgentLimitEnforcementPolicy,
+  AgentLimitPeriod,
+  AgentLimitType,
+  AgentLimitUnit,
+} from "@llmingress/domain";
 
 export type AgentLimitRuleInput = {
   alertThreshold?: number | null;

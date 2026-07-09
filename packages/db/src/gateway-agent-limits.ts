@@ -6,16 +6,21 @@ import {
   type PostgresQueryResultRow,
   withPostgresTransaction,
 } from "@llmingress/db/client";
+import type {
+  AgentLimitEnforcementPolicy,
+  AgentLimitPeriod,
+  AgentLimitType,
+} from "@llmingress/domain";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import {
   buildGatewayUsageCostRecords,
   type GatewayUsageCostDetails,
 } from "./gateway-usage-recorder.ts";
 
-export type GatewayAgentLimitType = "budget" | "concurrency" | "rpm" | "token" | "tpm";
-export type GatewayAgentLimitEnforcementPolicy = "block" | "warn_only";
-export type GatewayRateLimitType = "concurrency" | "rpm" | "tpm";
-export type GatewayBudgetPeriod = "day" | "hour" | "month" | "week";
+export type GatewayAgentLimitType = AgentLimitType;
+export type GatewayAgentLimitEnforcementPolicy = AgentLimitEnforcementPolicy;
+export type GatewayRateLimitType = Extract<AgentLimitType, "concurrency" | "rpm" | "tpm">;
+export type GatewayBudgetPeriod = Extract<AgentLimitPeriod, "day" | "hour" | "month" | "week">;
 
 export type GatewayAgentLimitErrorCode =
   | "cost_budget_exceeded"

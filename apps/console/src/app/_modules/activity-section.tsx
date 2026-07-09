@@ -1,6 +1,7 @@
 import {
   type ConsoleActivity,
   type ConsoleActivityDetail,
+  type ConsoleActivityFiltersInput,
   type ConsoleFallbackEvent,
   countConsoleActivities,
   formatConsoleActivityFallbackAttempts,
@@ -259,7 +260,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
     requestIdQuery: readSingleSearchParam(searchParams.q),
     status: readSingleSearchParam(searchParams.status),
     virtualModelId: readSingleSearchParam(searchParams.virtualModelId),
-  };
+  } satisfies ConsoleActivityFiltersInput;
   const [agents, virtualModels, providers, total, activities] = await Promise.all([
     listAgents(),
     listVirtualModels(),

@@ -361,6 +361,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. DB row types are now plain object aliases without PostgresQueryResultRow intersections, jsonl export no longer casts row.cost_source/token_source through the index-signature base, and model refresh validates provider base_url before using it. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 31 passing features re-verified."
+    },
+    {
+      "id": "refactor-filter-excess-property",
+      "name": "Filter Excess Property Guard",
+      "description": "Console filter objects built as named variables carry a satisfies FiltersInput annotation so renamed or typo'd filter keys fail compilation, and a structural test forbids future unguarded const filters builds.",
+      "verification": "pnpm exec vitest run tests/features/refactor-filter-excess-property.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Activity filters now use a ConsoleActivityFiltersInput satisfies guard so built-then-passed filter keys get excess-property checking, and the structural guard rejects future unguarded const filters builds. Focused unit, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 32 passing features re-verified."
     }
   ]
 }

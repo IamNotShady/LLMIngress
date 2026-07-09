@@ -36,6 +36,7 @@ const allowedFeatureIds = [
   "refactor-agent-limit-domain-types",
   "refactor-config-ownership",
   "refactor-db-row-strict-types",
+  "refactor-filter-excess-property",
 ];
 
 const sharedE2EFeatureIds: Record<string, string> = {
@@ -44,6 +45,7 @@ const sharedE2EFeatureIds: Record<string, string> = {
   "refactor-agent-limit-domain-types": "tests/e2e/v1-console.e2e.spec.ts",
   "refactor-config-ownership": "tests/e2e/v1-console.e2e.spec.ts",
   "refactor-db-row-strict-types": "tests/e2e/v1-worker-ops.e2e.spec.ts",
+  "refactor-filter-excess-property": "tests/e2e/v1-console.e2e.spec.ts",
   "refactor-price-row-mappers": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
   "refactor-route-strategy-registry": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
 };
@@ -70,6 +72,7 @@ const inProgressFeatureIds = new Set([
   "refactor-agent-limit-domain-types",
   "refactor-config-ownership",
   "refactor-db-row-strict-types",
+  "refactor-filter-excess-property",
 ]);
 
 describe("v1 release guards milestone", () => {

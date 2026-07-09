@@ -797,6 +797,7 @@
 - [x] 批次 4 refactor-agent-limit-domain-types 完成
 - [x] 批次 5 refactor-config-ownership 完成
 - [x] 批次 6 refactor-db-row-strict-types 完成
+- [x] 批次 7 refactor-filter-excess-property 完成
 - Blockers: none open.
 
 ## Required Verification

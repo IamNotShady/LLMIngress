@@ -800,6 +800,8 @@
 - [x] 批次 7 refactor-filter-excess-property 完成
 - [x] 批次 8 refactor-zod-boundaries 完成
   - New E2E covers invalid `/api/route-policies/preview` JSON after Console login. The valid-preview E2E was not added because the donor Console fixture only provides startup/login scaffolding and no route-policy data fixture.
+- [x] 批次 9 refactor-branded-ids 完成
+  - `pnpm run verify:features` optimized E2E batch failed once, then the built-in per-feature fallback passed and the command exited 0.
 - Blockers: none open.
 
 ## Required Verification

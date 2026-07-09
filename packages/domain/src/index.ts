@@ -107,13 +107,13 @@ export type RouteReason = {
 
 export type RouteDecision = {
   modelId: string;
-  providerId: string;
+  providerId: ProviderId;
   providerKey: string;
-  providerModelId: string;
-  routePolicyId: string;
+  providerModelId: ProviderModelId;
+  routePolicyId: RoutePolicyId;
   routeReason: RouteReason;
   strategy: RoutePolicyStrategy;
-  virtualModelId: string;
+  virtualModelId: VirtualModelId;
   virtualModelName: string;
 };
 
@@ -486,10 +486,10 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
 }): RouteDecision {
   return {
     modelId: input.candidate.modelId,
-    providerId: input.candidate.providerId,
+    providerId: asProviderId(input.candidate.providerId),
     providerKey: input.candidate.providerKey,
-    providerModelId: input.candidate.providerModelId,
-    routePolicyId: input.routePolicy.id,
+    providerModelId: asProviderModelId(input.candidate.providerModelId),
+    routePolicyId: asRoutePolicyId(input.routePolicy.id),
     routeReason: {
       appliedRules: input.routePolicy.rules ?? {},
       candidateExplanations: input.evaluated.map((evaluated) => ({
@@ -510,7 +510,7 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
       strategy: input.routePolicy.strategy,
     },
     strategy: input.routePolicy.strategy,
-    virtualModelId: input.routePolicy.virtualModelId,
+    virtualModelId: asVirtualModelId(input.routePolicy.virtualModelId),
     virtualModelName: input.routePolicy.virtualModelName,
   };
 }
@@ -619,3 +619,30 @@ export type AgentLimitPeriod = (typeof agentLimitPeriods)[number];
 
 export const agentLimitUnits = ["requests", "tokens", "usd"] as const;
 export type AgentLimitUnit = (typeof agentLimitUnits)[number];
+
+declare const brandSymbol: unique symbol;
+
+export type Brand<TValue, TBrand extends string> = TValue & {
+  readonly [brandSymbol]: TBrand;
+};
+
+export type RoutePolicyId = Brand<string, "RoutePolicyId">;
+export type VirtualModelId = Brand<string, "VirtualModelId">;
+export type ProviderId = Brand<string, "ProviderId">;
+export type ProviderModelId = Brand<string, "ProviderModelId">;
+
+export function asRoutePolicyId(value: string): RoutePolicyId {
+  return value as RoutePolicyId;
+}
+
+export function asVirtualModelId(value: string): VirtualModelId {
+  return value as VirtualModelId;
+}
+
+export function asProviderId(value: string): ProviderId {
+  return value as ProviderId;
+}
+
+export function asProviderModelId(value: string): ProviderModelId {
+  return value as ProviderModelId;
+}

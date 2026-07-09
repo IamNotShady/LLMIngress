@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { ManualPriceOverride, SyncedPriceSnapshot } from "@llmingress/billing/price-registry";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export type AgentLimitType = "budget" | "concurrency" | "rpm" | "token" | "tpm";
 export type AgentLimitEnforcementPolicy = "block" | "warn_only";
@@ -347,10 +347,27 @@ async function assertAccessibleRouteCandidatePricesKnown(
   const candidates = await readAccessibleRouteCandidatePrices(client, agentId);
   const missingPriceCandidates = candidates.filter((candidate) => {
     const price = resolveEffectiveModelTokenPrice({
-      manualOverride: rowToManualPriceOverride(candidate),
+      manualOverride: buildManualPriceOverride({
+        cachedInputUsdPerMillionTokens:
+          candidate.price_override_cached_input_usd_per_million_tokens,
+        inputUsdPerMillionTokens: candidate.price_override_input_usd_per_million_tokens,
+        modelId: candidate.model_id,
+        outputUsdPerMillionTokens: candidate.price_override_output_usd_per_million_tokens,
+        providerKey: candidate.provider_key,
+        updatedAt: candidate.price_override_updated_at,
+      }),
       modelId: candidate.model_id,
       providerKey: candidate.provider_key,
-      syncedPrice: rowToSyncedPriceSnapshot(candidate),
+      syncedPrice: buildSyncedPriceSnapshot({
+        cachedInputUsdPerMillionTokens: candidate.price_sync_cached_input_usd_per_million_tokens,
+        inputUsdPerMillionTokens: candidate.price_sync_input_usd_per_million_tokens,
+        modelId: candidate.model_id,
+        outputUsdPerMillionTokens: candidate.price_sync_output_usd_per_million_tokens,
+        priceVersion: candidate.price_sync_price_version,
+        providerKey: candidate.provider_key,
+        sourceUrl: candidate.price_sync_source_url,
+        syncedAt: candidate.price_sync_synced_at,
+      }),
     });
     return price.status === "unknown_price";
   });
@@ -430,57 +447,6 @@ async function readAccessibleRouteCandidatePrices(
     [agentId],
   );
   return result.rows;
-}
-
-function rowToManualPriceOverride(
-  row: AccessibleRouteCandidatePriceRow,
-): ManualPriceOverride | null {
-  if (
-    row.price_override_input_usd_per_million_tokens === null ||
-    row.price_override_output_usd_per_million_tokens === null ||
-    row.price_override_updated_at === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.price_override_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.price_override_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.price_override_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.price_override_output_usd_per_million_tokens),
-    providerKey: row.provider_key,
-    updatedAt: row.price_override_updated_at,
-  };
-}
-
-function rowToSyncedPriceSnapshot(
-  row: AccessibleRouteCandidatePriceRow,
-): SyncedPriceSnapshot | null {
-  if (
-    row.price_sync_input_usd_per_million_tokens === null ||
-    row.price_sync_output_usd_per_million_tokens === null ||
-    row.price_sync_price_version === null ||
-    row.price_sync_synced_at === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.price_sync_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.price_sync_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.price_sync_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.price_sync_output_usd_per_million_tokens),
-    priceVersion: row.price_sync_price_version,
-    providerKey: row.provider_key,
-    sourceUrl: row.price_sync_source_url,
-    syncedAt: row.price_sync_synced_at,
-  };
 }
 
 async function readAgentLimits(

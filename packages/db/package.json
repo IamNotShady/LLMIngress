@@ -24,6 +24,10 @@
       "types": "./src/provider-health.ts",
       "default": "./src/provider-health.ts"
     },
+    "./price-rows": {
+      "types": "./src/price-rows.ts",
+      "default": "./src/price-rows.ts"
+    },
     "./provider-jobs": {
       "types": "./src/provider-jobs.ts",
       "default": "./src/provider-jobs.ts"

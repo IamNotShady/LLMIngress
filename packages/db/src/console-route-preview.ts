@@ -1,8 +1,4 @@
-import {
-  type ManualPriceOverride,
-  resolveEffectiveModelTokenPrice,
-  type SyncedPriceSnapshot,
-} from "@llmingress/billing/price-registry";
+import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
 import {
   normalizeProviderModelCapabilities,
@@ -14,6 +10,7 @@ import {
   routeTaskTypes,
   selectRouteCandidate,
 } from "@llmingress/domain";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export type RoutePreviewInput = {
   estimatedInputTokens: number;
@@ -198,62 +195,31 @@ function rowToRouteCandidate(row: RoutePreviewRow): RouteCandidate {
     displayName: row.displayName,
     modelId: row.modelId,
     price: resolveEffectiveModelTokenPrice({
-      manualOverride: rowToManualPriceOverride(row),
+      manualOverride: buildManualPriceOverride({
+        cachedInputUsdPerMillionTokens: row.cachedInputUsdPerMillionTokens,
+        inputUsdPerMillionTokens: row.inputUsdPerMillionTokens,
+        modelId: row.modelId,
+        outputUsdPerMillionTokens: row.outputUsdPerMillionTokens,
+        providerKey: row.providerKey,
+        updatedAt: row.updatedAt,
+      }),
       modelId: row.modelId,
       providerKey: row.providerKey,
-      syncedPrice: rowToSyncedPriceSnapshot(row),
+      syncedPrice: buildSyncedPriceSnapshot({
+        cachedInputUsdPerMillionTokens: row.syncedCachedInputUsdPerMillionTokens,
+        inputUsdPerMillionTokens: row.syncedInputUsdPerMillionTokens,
+        modelId: row.modelId,
+        outputUsdPerMillionTokens: row.syncedOutputUsdPerMillionTokens,
+        priceVersion: row.syncedPriceVersion,
+        providerKey: row.providerKey,
+        sourceUrl: row.syncedSourceUrl,
+        syncedAt: row.syncedAt,
+      }),
     }),
     providerId: row.providerId,
     providerKey: row.providerKey,
     providerModelId: row.providerModelId,
     supportsTools: row.supportsTools,
-  };
-}
-
-function rowToManualPriceOverride(row: RoutePreviewRow): ManualPriceOverride | null {
-  if (
-    row.inputUsdPerMillionTokens === null ||
-    row.outputUsdPerMillionTokens === null ||
-    row.updatedAt === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.cachedInputUsdPerMillionTokens === null
-        ? null
-        : Number(row.cachedInputUsdPerMillionTokens),
-    inputUsdPerMillionTokens: Number(row.inputUsdPerMillionTokens),
-    modelId: row.modelId,
-    outputUsdPerMillionTokens: Number(row.outputUsdPerMillionTokens),
-    providerKey: row.providerKey,
-    updatedAt: row.updatedAt,
-  };
-}
-
-function rowToSyncedPriceSnapshot(row: RoutePreviewRow): SyncedPriceSnapshot | null {
-  if (
-    row.syncedInputUsdPerMillionTokens === null ||
-    row.syncedOutputUsdPerMillionTokens === null ||
-    row.syncedPriceVersion === null ||
-    row.syncedAt === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.syncedCachedInputUsdPerMillionTokens === null
-        ? null
-        : Number(row.syncedCachedInputUsdPerMillionTokens),
-    inputUsdPerMillionTokens: Number(row.syncedInputUsdPerMillionTokens),
-    modelId: row.modelId,
-    outputUsdPerMillionTokens: Number(row.syncedOutputUsdPerMillionTokens),
-    priceVersion: row.syncedPriceVersion,
-    providerKey: row.providerKey,
-    sourceUrl: row.syncedSourceUrl,
-    syncedAt: row.syncedAt,
   };
 }
 

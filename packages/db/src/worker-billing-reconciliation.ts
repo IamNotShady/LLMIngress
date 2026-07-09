@@ -1,11 +1,10 @@
 import {
   calculateTokenCostUsd,
-  type ManualPriceOverride,
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
-  type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
 import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
 export type BillingReconciliationJobHandlerOptions = {
@@ -286,10 +285,26 @@ async function reconcileCandidateRequests(
         totalCostUsd: parseNullableNumber(candidate.total_cost_usd),
       },
       price: resolveEffectiveModelTokenPrice({
-        manualOverride: rowToManualPriceOverride(candidate),
+        manualOverride: buildManualPriceOverride({
+          cachedInputUsdPerMillionTokens: candidate.manual_cached_input_usd_per_million_tokens,
+          inputUsdPerMillionTokens: candidate.manual_input_usd_per_million_tokens,
+          modelId: candidate.model_id,
+          outputUsdPerMillionTokens: candidate.manual_output_usd_per_million_tokens,
+          providerKey: candidate.provider_key,
+          updatedAt: candidate.manual_updated_at,
+        }),
         modelId: candidate.model_id,
         providerKey: candidate.provider_key,
-        syncedPrice: rowToSyncedPriceSnapshot(candidate),
+        syncedPrice: buildSyncedPriceSnapshot({
+          cachedInputUsdPerMillionTokens: candidate.synced_cached_input_usd_per_million_tokens,
+          inputUsdPerMillionTokens: candidate.synced_input_usd_per_million_tokens,
+          modelId: candidate.model_id,
+          outputUsdPerMillionTokens: candidate.synced_output_usd_per_million_tokens,
+          priceVersion: candidate.synced_price_version,
+          providerKey: candidate.provider_key,
+          sourceUrl: candidate.synced_source_url,
+          syncedAt: candidate.synced_at,
+        }),
       }),
       providerCost: input.payload.providerCostsByRequestId.get(candidate.request_id) ?? null,
       usage: {
@@ -461,57 +476,6 @@ function costsAreEqual(
     currentCost.priceSource === newCost.priceSource &&
     currentCost.priceVersion === newCost.priceVersion
   );
-}
-
-function rowToManualPriceOverride(
-  row: BillingReconciliationCandidateRow,
-): ManualPriceOverride | null {
-  if (
-    row.manual_input_usd_per_million_tokens === null ||
-    row.manual_output_usd_per_million_tokens === null ||
-    row.manual_updated_at === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.manual_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.manual_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.manual_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.manual_output_usd_per_million_tokens),
-    providerKey: row.provider_key,
-    updatedAt: row.manual_updated_at,
-  };
-}
-
-function rowToSyncedPriceSnapshot(
-  row: BillingReconciliationCandidateRow,
-): SyncedPriceSnapshot | null {
-  if (
-    row.synced_input_usd_per_million_tokens === null ||
-    row.synced_output_usd_per_million_tokens === null ||
-    row.synced_price_version === null ||
-    row.synced_at === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.synced_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.synced_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.synced_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.synced_output_usd_per_million_tokens),
-    priceVersion: row.synced_price_version,
-    providerKey: row.provider_key,
-    sourceUrl: row.synced_source_url,
-    syncedAt: row.synced_at,
-  };
 }
 
 function readObject(value: unknown): Record<string, unknown> {

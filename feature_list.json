@@ -317,6 +317,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. Notification channel types now come from packages/domain, dispatcher delivery resolves through a NotificationChannelType transport registry, and notification SQL uses parameterized channel type arrays instead of channel_type = 'webhook'. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 27 passing features re-verified."
+    },
+    {
+      "id": "refactor-price-row-mappers",
+      "name": "Shared Price Row Mappers",
+      "description": "ManualPriceOverride and SyncedPriceSnapshot row mapping lives in one packages/db/src/price-rows.ts module; the six former per-file mapper copies delegate to it.",
+      "verification": "pnpm exec vitest run tests/features/refactor-price-row-mappers.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. ManualPriceOverride and SyncedPriceSnapshot row construction moved to packages/db/src/price-rows.ts; the six former local mapper copies now delegate to shared builders. Focused unit, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 28 passing features re-verified."
     }
   ]
 }

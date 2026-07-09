@@ -1,8 +1,6 @@
 import {
-  type ManualPriceOverride,
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
-  type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
 import { PostgresClient } from "@llmingress/db/client";
 import {
@@ -26,6 +24,7 @@ import {
   type GatewayRuntimeStatusEvent,
   type RecordGatewayRuntimeStatus,
 } from "./gateway-runtime-status.ts";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export type GatewayProviderSnapshot = {
   id: string;
@@ -434,10 +433,26 @@ export function rowToRoutePolicySnapshots(
       healthStatus: row.healthStatus,
       modelId: row.modelId,
       price: resolveEffectiveModelTokenPrice({
-        manualOverride: rowToManualPriceOverride(row),
+        manualOverride: buildManualPriceOverride({
+          cachedInputUsdPerMillionTokens: row.cachedInputUsdPerMillionTokens,
+          inputUsdPerMillionTokens: row.inputUsdPerMillionTokens,
+          modelId: row.modelId,
+          outputUsdPerMillionTokens: row.outputUsdPerMillionTokens,
+          providerKey: row.providerKey,
+          updatedAt: row.updatedAt,
+        }),
         modelId: row.modelId,
         providerKey: row.providerKey,
-        syncedPrice: rowToSyncedPriceSnapshot(row),
+        syncedPrice: buildSyncedPriceSnapshot({
+          cachedInputUsdPerMillionTokens: row.syncedCachedInputUsdPerMillionTokens,
+          inputUsdPerMillionTokens: row.syncedInputUsdPerMillionTokens,
+          modelId: row.modelId,
+          outputUsdPerMillionTokens: row.syncedOutputUsdPerMillionTokens,
+          priceVersion: row.syncedPriceVersion,
+          providerKey: row.providerKey,
+          sourceUrl: row.syncedSourceUrl,
+          syncedAt: row.syncedAt,
+        }),
       }),
       providerId: row.providerId,
       providerKey: row.providerKey,
@@ -447,53 +462,6 @@ export function rowToRoutePolicySnapshots(
   }
 
   return [...routePolicies.values()];
-}
-
-function rowToManualPriceOverride(row: RoutePolicyCandidateRow): ManualPriceOverride | null {
-  if (
-    row.inputUsdPerMillionTokens === null ||
-    row.outputUsdPerMillionTokens === null ||
-    row.updatedAt === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.cachedInputUsdPerMillionTokens === null
-        ? null
-        : Number(row.cachedInputUsdPerMillionTokens),
-    inputUsdPerMillionTokens: Number(row.inputUsdPerMillionTokens),
-    modelId: row.modelId,
-    outputUsdPerMillionTokens: Number(row.outputUsdPerMillionTokens),
-    providerKey: row.providerKey,
-    updatedAt: row.updatedAt,
-  };
-}
-
-function rowToSyncedPriceSnapshot(row: RoutePolicyCandidateRow): SyncedPriceSnapshot | null {
-  if (
-    row.syncedInputUsdPerMillionTokens === null ||
-    row.syncedOutputUsdPerMillionTokens === null ||
-    row.syncedPriceVersion === null ||
-    row.syncedAt === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.syncedCachedInputUsdPerMillionTokens === null
-        ? null
-        : Number(row.syncedCachedInputUsdPerMillionTokens),
-    inputUsdPerMillionTokens: Number(row.syncedInputUsdPerMillionTokens),
-    modelId: row.modelId,
-    outputUsdPerMillionTokens: Number(row.syncedOutputUsdPerMillionTokens),
-    priceVersion: row.syncedPriceVersion,
-    providerKey: row.providerKey,
-    sourceUrl: row.syncedSourceUrl,
-    syncedAt: row.syncedAt,
-  };
 }
 
 function createPostgresSnapshotLoader(options: GatewayConfigRuntimeOptions) {

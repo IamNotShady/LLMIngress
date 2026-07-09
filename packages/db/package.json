@@ -273,6 +273,7 @@
     "@llmingress/billing": "workspace:*",
     "@llmingress/config": "workspace:*",
     "@llmingress/domain": "workspace:*",
+    "@llmingress/logging": "workspace:*",
     "@llmingress/provider": "workspace:*",
     "@llmingress/security": "workspace:*",
     "pg": "^8.21.0",

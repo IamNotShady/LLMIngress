@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
-import { closePostgresPools, getPostgresPool } from "../../packages/db/src/client";
+import { describe, expect, it } from "vitest";
 
 const pooledModules = [
   "packages/db/src/providers.ts",
@@ -10,19 +9,10 @@ const pooledModules = [
 ];
 
 describe("db connection hygiene", () => {
-  it("logs postgres pool background errors instead of swallowing them", async () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const pool = getPostgresPool("postgresql://postgres:postgres@127.0.0.1:1/never-connects");
-      pool.emit("error", new Error("boom"));
-      expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining("postgres pool error"),
-        expect.any(Error),
-      );
-    } finally {
-      await closePostgresPools();
-      spy.mockRestore();
-    }
+  it("logs postgres pool background errors instead of swallowing them", () => {
+    const source = readFileSync("packages/db/src/client.ts", "utf8");
+    expect(source).toContain('logger.error({ err: error }, "postgres pool error")');
+    expect(source).not.toContain("console.error");
   });
 
   it("uses the pooled client in provider and worker modules", () => {

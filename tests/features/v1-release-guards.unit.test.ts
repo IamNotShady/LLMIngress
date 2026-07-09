@@ -40,12 +40,14 @@ const allowedFeatureIds = [
   "refactor-zod-boundaries",
   "refactor-branded-ids",
   "refactor-provider-descriptor",
+  "refactor-shared-logger",
 ];
 
 const sharedE2EFeatureIds: Record<string, string> = {
   "gateway-cohesion-refactor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
   "refactor-branded-ids": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
   "refactor-provider-descriptor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-shared-logger": "tests/e2e/v1-worker-ops.e2e.spec.ts",
   "refactor-notification-transport-registry": "tests/e2e/v1-worker-ops.e2e.spec.ts",
   "refactor-agent-limit-domain-types": "tests/e2e/v1-console.e2e.spec.ts",
   "refactor-config-ownership": "tests/e2e/v1-console.e2e.spec.ts",
@@ -81,6 +83,7 @@ const inProgressFeatureIds = new Set([
   "refactor-zod-boundaries",
   "refactor-branded-ids",
   "refactor-provider-descriptor",
+  "refactor-shared-logger",
 ]);
 
 describe("v1 release guards milestone", () => {

@@ -407,6 +407,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. Added packages/provider descriptor registry for provider wire traits, exported it from @llmingress/provider/descriptor, and replaced model-list/connectivity/subscription/oauth/price-source plus Console/provider refresh/Gateway protocol providerKey literal dispatch with descriptor trait lookups. Focused unit, pnpm run lint, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 35 passing features re-verified."
+    },
+    {
+      "id": "refactor-shared-logger",
+      "name": "Shared Pino Logger",
+      "description": "A packages/logging pino wrapper owns structured logging, every bare console.log/error/warn call in apps and packages source is replaced with component loggers, and Biome suspicious/noConsole blocks regressions.",
+      "verification": "pnpm exec vitest run tests/features/refactor-shared-logger.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Added packages/logging as a shared pino wrapper, replaced bare console.log/error/warn calls in apps and packages source with component loggers, and enabled Biome suspicious/noConsole with tests override coverage. Existing db pool logging coverage was updated to the shared logger contract. Focused unit, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 37 passing features re-verified."
     }
   ]
 }

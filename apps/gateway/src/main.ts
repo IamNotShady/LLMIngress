@@ -46,12 +46,15 @@ import {
   readRequestedModelName,
   resolveGatewayVirtualModelRequest,
 } from "@llmingress/db/gateway-virtual-model-access";
+import { createLogger } from "@llmingress/logging";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply } from "fastify";
 import { gatewayCorsHeaders } from "./cors.js";
 import {
   executeRecordedGatewayJsonRequest,
   executeRecordedGatewayStreamingRequest,
 } from "./request-recording.js";
+
+const logger = createLogger("gateway");
 
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
@@ -433,7 +436,7 @@ function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRe
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   startGateway().catch((error: unknown) => {
-    console.error(error);
+    logger.error({ err: error }, "gateway startup failed");
     process.exit(1);
   });
 }

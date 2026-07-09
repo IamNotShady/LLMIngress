@@ -21,6 +21,9 @@ import { createRateLimitAlertsJobHandler } from "@llmingress/db/worker-rate-limi
 import { createRetentionCleanupJobHandler } from "@llmingress/db/worker-retention-cleanup";
 import { createStaleConcurrencyReconcileJobHandler } from "@llmingress/db/worker-stale-concurrency";
 import { createWebhookEventExportJobHandler } from "@llmingress/db/worker-webhook-export";
+import { createLogger } from "@llmingress/logging";
+
+const logger = createLogger("worker");
 
 export async function startWorker() {
   const config = loadBootstrapRuntimeConfig();
@@ -53,14 +56,14 @@ export async function startWorker() {
   await jobRunner.start();
   await periodicScheduler.start();
 
-  console.log("[worker] started");
+  logger.info("[worker] started");
 
   return {
     async stop() {
       await periodicScheduler.stop();
       await jobRunner.stop();
       await closePostgresPools();
-      console.log("[worker] stopped");
+      logger.info("[worker] stopped");
     },
   };
 }
@@ -77,7 +80,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
           .stop()
           .then(() => process.exit(0))
           .catch((error: unknown) => {
-            console.error(error);
+            logger.error({ err: error }, "worker shutdown failed");
             process.exit(1);
           });
       };
@@ -86,7 +89,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.on("SIGTERM", shutdown);
     })
     .catch((error: unknown) => {
-      console.error(error);
+      logger.error({ err: error }, "worker startup failed");
       process.exit(1);
     });
 }

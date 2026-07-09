@@ -803,6 +803,9 @@
 - [x] 批次 9 refactor-branded-ids 完成
   - `pnpm run verify:features` optimized E2E batch failed once, then the built-in per-feature fallback passed and the command exited 0.
 - [x] 批次 10 refactor-provider-descriptor 完成
+- [x] 批次 11 refactor-shared-logger 完成
+  - Added `packages/logging` as the shared pino wrapper, replaced bare `console.log/error/warn` in apps/packages source with component loggers, and enabled Biome `suspicious/noConsole` with test-file override.
+  - Verification passed: focused unit, lint, typecheck, `pnpm run verify`, and `pnpm run verify:features` with all 37 passing features re-verified.
 - Blockers: none open.
 
 ## Required Verification

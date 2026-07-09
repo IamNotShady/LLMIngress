@@ -19,12 +19,15 @@ import {
   type RoutePolicyRules,
   type RoutePolicyStrategy,
 } from "@llmingress/domain";
+import { createLogger } from "@llmingress/logging";
 import {
   createGatewayRuntimeStatusRecorder,
   type GatewayRuntimeStatusEvent,
   type RecordGatewayRuntimeStatus,
 } from "./gateway-runtime-status.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
+
+const logger = createLogger("gateway");
 
 export type GatewayProviderSnapshot = {
   id: string;
@@ -164,7 +167,7 @@ export function createGatewayConfigRuntime(
     try {
       await recordRuntimeStatus(event);
     } catch (error) {
-      console.error("[gateway] failed to record runtime status", error);
+      logger.error({ err: error }, "failed to record runtime status");
     }
   }
 

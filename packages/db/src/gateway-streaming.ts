@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import { getPostgresPool } from "@llmingress/db/client";
 import { selectRouteAttempts } from "@llmingress/domain";
+import { createLogger } from "@llmingress/logging";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {
   type ProviderStreamingDialect,
@@ -64,6 +65,8 @@ import {
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
+
+const logger = createLogger("gateway");
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";
 
@@ -335,13 +338,16 @@ export async function executeGatewayStreamingRequest(input: {
             headers: providerError.headers,
             statusCode: response.status,
           };
-          console.error("gateway provider streaming request failed", {
-            modelId: attemptedCandidate.modelId,
-            providerKey: attemptedCandidate.providerKey,
-            requestId: input.requestId,
-            statusCode: response.status,
-            url: providerUrl,
-          });
+          logger.error(
+            {
+              modelId: attemptedCandidate.modelId,
+              providerKey: attemptedCandidate.providerKey,
+              requestId: input.requestId,
+              statusCode: response.status,
+              url: providerUrl,
+            },
+            "gateway provider streaming request failed",
+          );
 
           const errorCode: GatewayErrorCode =
             response.status === 429

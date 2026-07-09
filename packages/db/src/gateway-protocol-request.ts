@@ -1,4 +1,5 @@
 import { type RouteEndpointProtocol, selectRouteAttempts } from "@llmingress/domain";
+import { createLogger } from "@llmingress/logging";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
@@ -42,6 +43,9 @@ import {
 } from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
+
+const logger = createLogger("gateway");
+
 import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
@@ -266,7 +270,7 @@ export async function executeGatewayProtocolRequest<
       databaseUrl: input.databaseUrl,
       lease: concurrencyLease,
     }).catch((error: unknown) => {
-      console.error("[gateway] failed to release concurrency lease", error);
+      logger.error({ err: error }, "failed to release concurrency lease");
     });
   }
 }

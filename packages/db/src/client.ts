@@ -1,6 +1,9 @@
 import { readBootstrapConfigFile } from "@llmingress/config";
+import { createLogger } from "@llmingress/logging";
 import { Client, type ClientConfig, Pool } from "pg";
 import { llmingressDbPoolMax } from "./gateway-env.ts";
+
+const logger = createLogger("db");
 
 type DatabaseUrlEnvironment = Record<string, string | undefined>;
 
@@ -76,7 +79,7 @@ export function getPostgresPool(databaseUrl?: string): Pool {
     max: llmingressDbPoolMax(),
   });
   pool.on("error", (error) => {
-    console.error("[db] postgres pool error", error);
+    logger.error({ err: error }, "postgres pool error");
   });
   postgresPools.set(connectionString, pool);
   return pool;

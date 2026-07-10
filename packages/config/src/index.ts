@@ -1,14 +1,38 @@
 import { readFileSync } from "node:fs";
+import { z } from "zod";
 
 type BootstrapEnvironment = Record<string, string | undefined>;
 
-type BootstrapConfigFile = {
-  gatewayPort?: number;
-  consolePort?: number;
-  workerHeartbeatMs?: number;
-  masterKey?: string;
-  masterKeyFile?: string;
-};
+const bootstrapConfigFileSchema = z.object({
+  consolePort: portLikeValue("consolePort"),
+  databaseUrl: optionalStringField("databaseUrl"),
+  gatewayPort: portLikeValue("gatewayPort"),
+  masterKey: optionalStringField("masterKey"),
+  masterKeyFile: optionalStringField("masterKeyFile"),
+  workerHeartbeatMs: portLikeValue("workerHeartbeatMs"),
+});
+
+export type BootstrapConfigFile = z.infer<typeof bootstrapConfigFileSchema>;
+
+const bootstrapDatabaseUrlConfigFileSchema = z.object({
+  databaseUrl: optionalStringField("databaseUrl"),
+});
+
+export type BootstrapDatabaseUrlConfigFile = z.infer<typeof bootstrapDatabaseUrlConfigFileSchema>;
+
+function portLikeValue(name: string) {
+  return z
+    .custom<number | string>((value) => typeof value === "number" || typeof value === "string", {
+      message: `${name} must be a number or numeric string.`,
+    })
+    .optional();
+}
+
+function optionalStringField(name: string) {
+  return z
+    .custom<string>((value) => typeof value === "string", { message: `${name} must be a string.` })
+    .optional();
+}
 
 type LoadBootstrapRuntimeConfigOptions = {
   env?: BootstrapEnvironment;
@@ -52,9 +76,28 @@ export function loadBootstrapRuntimeConfig(
   };
 }
 
-function readBootstrapConfigFile(path: string): BootstrapConfigFile {
+export function readBootstrapConfigFile(path: string): BootstrapConfigFile {
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as BootstrapConfigFile;
+    const parsed = bootstrapConfigFileSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? "bootstrap config file is invalid");
+    }
+    return parsed.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`LLMINGRESS_BOOTSTRAP_CONFIG could not be read: ${message}`);
+  }
+}
+
+export function readBootstrapDatabaseUrlConfigFile(path: string): BootstrapDatabaseUrlConfigFile {
+  try {
+    const parsed = bootstrapDatabaseUrlConfigFileSchema.safeParse(
+      JSON.parse(readFileSync(path, "utf8")),
+    );
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? "bootstrap databaseUrl is invalid");
+    }
+    return parsed.data;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`LLMINGRESS_BOOTSTRAP_CONFIG could not be read: ${message}`);
@@ -110,4 +153,10 @@ function readMasterKeySource(
   }
 
   throw new Error("MASTER_KEY or MASTER_KEY_FILE is required.");
+}
+
+export function gatewayPublicBaseUrl(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
 }

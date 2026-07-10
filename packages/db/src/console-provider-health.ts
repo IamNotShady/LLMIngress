@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 
 export type ConsoleStoredProviderHealthStatus =
   | "auth_failed"
@@ -40,11 +40,11 @@ export type ListConsoleProviderHealthSummariesInput = {
   staleAfterMs?: number;
 };
 
-type ActiveProviderConnectivityCheckJobRow = PostgresQueryResultRow & {
+type ActiveProviderConnectivityCheckJobRow = {
   provider_id: string | null;
 };
 
-type StoredProviderHealthSummaryRow = PostgresQueryResultRow & {
+type StoredProviderHealthSummaryRow = {
   consecutive_failures: number | null;
   display_name: string;
   id: string;
@@ -54,7 +54,7 @@ type StoredProviderHealthSummaryRow = PostgresQueryResultRow & {
   trigger: ConsoleProviderHealthTrigger | null;
 };
 
-type ProviderModelHealthSummaryRow = PostgresQueryResultRow & {
+type ProviderModelHealthSummaryRow = {
   consecutive_failures: number | null;
   display_name: string;
   id: string;

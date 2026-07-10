@@ -421,7 +421,7 @@ describe("console dark restyle static contract", () => {
       "utf8",
     );
     const gatewayChatCompletions = readFileSync(
-      join(rootDir, "packages/db/src/gateway-chat-completions.ts"),
+      join(rootDir, "packages/gateway-runtime/src/gateway-chat-completions.ts"),
       "utf8",
     );
     const baselineMigration = readFileSync(

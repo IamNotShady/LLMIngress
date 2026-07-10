@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 
 export type AgentType = "coding" | "desktop" | "terminal" | "ide" | "other";
@@ -78,7 +78,7 @@ export type NormalizedAgentVirtualModelAccessInput = {
   id: string;
 };
 
-type AgentRow = PostgresQueryResultRow & {
+type AgentRow = {
   agent_type: AgentType;
   created_at: Date;
   enabled: boolean;
@@ -108,14 +108,14 @@ type AgentQueryClient = {
   ) => Promise<{ rows: T[] }>;
 };
 
-type AgentVirtualModelAccessBaseRow = PostgresQueryResultRow & {
+type AgentVirtualModelAccessBaseRow = {
   agent_id: string;
   default_virtual_model_display_name: string | null;
   default_virtual_model_id: string | null;
   default_virtual_model_name: string | null;
 };
 
-type AgentAllowedVirtualModelRow = PostgresQueryResultRow & {
+type AgentAllowedVirtualModelRow = {
   agent_id: string;
   display_name: string;
   id: string;

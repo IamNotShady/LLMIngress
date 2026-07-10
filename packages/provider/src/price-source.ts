@@ -1,3 +1,5 @@
+import { listPriceSyncSupportedProviderKeys } from "@llmingress/provider/descriptor";
+
 export const MODELS_DEV_PRICE_SOURCE_URL = "https://models.dev/api.json";
 export const LITELLM_PRICE_SOURCE_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
@@ -58,21 +60,7 @@ type FetchProviderModelPricesOptions = {
 
 type FetchProviderModelRegistryOptions = FetchProviderModelPricesOptions;
 
-const supportedProviderKeys = new Set([
-  "anthropic",
-  "deepseek",
-  "google",
-  "llama_cpp",
-  "lmstudio",
-  "minimax",
-  "moonshot",
-  "ollama",
-  "openai",
-  "openrouter",
-  "qwen",
-  "xai",
-  "zai",
-]);
+const supportedProviderKeys = new Set(listPriceSyncSupportedProviderKeys());
 
 const providerKeyAliases = new Map<string, string>([
   ["alibaba", "qwen"],

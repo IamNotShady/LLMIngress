@@ -1,16 +1,14 @@
-import { readFileSync } from "node:fs";
+import { readBootstrapDatabaseUrlConfigFile } from "@llmingress/config";
+import { createLogger } from "@llmingress/logging";
 import { Client, type ClientConfig, Pool } from "pg";
-import { llmingressDbPoolMax } from "./gateway-env.ts";
+
+const logger = createLogger("db");
 
 type DatabaseUrlEnvironment = Record<string, string | undefined>;
 
 type ReadPostgresDatabaseUrlOptions = {
   configFilePath?: string;
   env?: DatabaseUrlEnvironment;
-};
-
-type BootstrapConfigFile = {
-  databaseUrl?: string;
 };
 
 export class PostgresClient extends Client {
@@ -41,7 +39,7 @@ const postgresPools = new Map<string, Pool>();
 export function readPostgresDatabaseUrl(options: ReadPostgresDatabaseUrlOptions = {}): string {
   const env = options.env ?? process.env;
   const configFilePath = options.configFilePath ?? env.LLMINGRESS_BOOTSTRAP_CONFIG;
-  const fileConfig = configFilePath ? readBootstrapConfigFile(configFilePath) : {};
+  const fileConfig = configFilePath ? readBootstrapDatabaseUrlConfigFile(configFilePath) : {};
   const databaseUrl = env.DATABASE_URL ?? fileConfig.databaseUrl;
 
   if (!databaseUrl?.trim()) {
@@ -80,7 +78,7 @@ export function getPostgresPool(databaseUrl?: string): Pool {
     max: llmingressDbPoolMax(),
   });
   pool.on("error", (error) => {
-    console.error("[db] postgres pool error", error);
+    logger.error({ err: error }, "postgres pool error");
   });
   postgresPools.set(connectionString, pool);
   return pool;
@@ -150,11 +148,7 @@ export async function withPostgresClient<T>(
   }
 }
 
-function readBootstrapConfigFile(path: string): BootstrapConfigFile {
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as BootstrapConfigFile;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`LLMINGRESS_BOOTSTRAP_CONFIG could not be read: ${message}`);
-  }
+function llmingressDbPoolMax(env: Record<string, string | undefined> = process.env): number {
+  const parsed = Number(env.LLMINGRESS_DB_POOL_MAX ?? "");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 10;
 }

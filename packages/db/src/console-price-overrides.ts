@@ -1,8 +1,8 @@
 import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
-import type { PostgresQueryResultRow } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { buildManualPriceOverride } from "./price-rows.ts";
 
-type PriceOverrideRow = PostgresQueryResultRow & {
+type PriceOverrideRow = {
   id: string;
   cached_input_usd_per_million_tokens: string | null;
   input_usd_per_million_tokens: string;
@@ -24,7 +24,7 @@ export async function saveManualPriceOverride(input: {
 
   const providerKey = normalizeProviderKey(input.providerKey);
   const modelId = input.modelId.trim();
-  let saved: ManualPriceOverride | undefined;
+  let saved: ManualPriceOverride | null | undefined;
 
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
@@ -62,7 +62,14 @@ export async function saveManualPriceOverride(input: {
       if (!row) {
         throw new Error("Manual price override was not saved.");
       }
-      saved = rowToManualPriceOverride(row);
+      saved = buildManualPriceOverride({
+        cachedInputUsdPerMillionTokens: row.cached_input_usd_per_million_tokens,
+        inputUsdPerMillionTokens: row.input_usd_per_million_tokens,
+        modelId: row.model_id,
+        outputUsdPerMillionTokens: row.output_usd_per_million_tokens,
+        providerKey: row.provider_key,
+        updatedAt: row.manual_price_updated_at,
+      });
     },
   });
 
@@ -70,20 +77,6 @@ export async function saveManualPriceOverride(input: {
     throw new Error("Manual price override was not saved.");
   }
   return saved;
-}
-
-function rowToManualPriceOverride(row: PriceOverrideRow): ManualPriceOverride {
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.output_usd_per_million_tokens),
-    providerKey: row.provider_key,
-    updatedAt: row.manual_price_updated_at,
-  };
 }
 
 function assertPrice(price: number): void {

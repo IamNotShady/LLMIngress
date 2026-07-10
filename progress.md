@@ -786,6 +786,50 @@
 - Verification: `pnpm run verify` passed, and `pnpm run verify:features` passed with all 26 passing features re-verified.
 - Blockers: none open.
 
+## 2026-07-09 Architecture Hardening
+
+- Worktree: `.claude/worktrees/arch-hardening` on branch `worktree-arch-hardening`.
+- Baseline: `pnpm install` passed. `pnpm run db:migrate` needs explicit process env in this shell; reran with `DATABASE_URL`, `TEST_DATABASE_URL`, and `MASTER_KEY`, applied 0 migrations and skipped 6. `pnpm run verify` passed. `pnpm run verify:features` passed with all 26 passing features re-verified.
+- [x] 批次 0 sharedE2E guard map 完成
+- [x] 批次 1 refactor-route-strategy-registry 完成
+- [x] 批次 2 refactor-notification-transport-registry 完成
+- [x] 批次 3 refactor-price-row-mappers 完成
+- [x] 批次 4 refactor-agent-limit-domain-types 完成
+- [x] 批次 5 refactor-config-ownership 完成
+- [x] 批次 6 refactor-db-row-strict-types 完成
+- [x] 批次 7 refactor-filter-excess-property 完成
+- [x] 批次 8 refactor-zod-boundaries 完成
+  - New E2E covers invalid `/api/route-policies/preview` JSON after Console login. The valid-preview E2E was not added because the donor Console fixture only provides startup/login scaffolding and no route-policy data fixture.
+- [x] 批次 9 refactor-branded-ids 完成
+  - `pnpm run verify:features` optimized E2E batch failed once, then the built-in per-feature fallback passed and the command exited 0.
+- [x] 批次 10 refactor-provider-descriptor 完成
+- [x] 批次 11 refactor-shared-logger 完成
+  - Added `packages/logging` as the shared pino wrapper, replaced bare `console.log/error/warn` in apps/packages source with component loggers, and enabled Biome `suspicious/noConsole` with test-file override.
+  - Verification passed: focused unit, lint, typecheck, `pnpm run verify`, and `pnpm run verify:features` with all 37 passing features re-verified.
+- [x] 批次 12 console-section-data-split 完成
+  - Extracted Agents section's five sequential data reads into `_modules/agents-section-data.ts`; Playground response body locals are explicitly typed `unknown`.
+  - Verification passed: focused unit, `v1-console` E2E, typecheck, and `pnpm run verify`. `pnpm run verify:features` optimized E2E batch missed one `v1-gateway-routing` activity row, then the built-in per-feature fallback passed and the command exited 0 with all 38 passing features re-verified.
+- [x] 批次 13a refactor-db-package-split worker-runtime 完成
+  - Moved all 19 `worker-*` modules from `packages/db` into `packages/worker-runtime`, rewrote worker imports and test paths, removed db worker exports, and kept `refactor-db-package-split` status `failing` until 13b.
+  - Verification passed: `pnpm run verify` and `pnpm run verify:features` with all 38 currently passing features re-verified.
+- [x] 批次 13b refactor-db-package-split gateway-runtime 完成
+  - Moved all 26 `gateway-*` modules from `packages/db` into `packages/gateway-runtime`, rewrote gateway imports and test paths, removed db gateway exports, localized `llmingressDbPoolMax` in db client, and updated architecture module-boundary guidance.
+  - Verification passed: focused unit, `v1-gateway-routing` E2E, `v1-worker-ops` E2E, `pnpm run verify`, and `pnpm run verify:features` with all 39 passing features re-verified.
+- Final completed feature ids: `refactor-route-strategy-registry`, `refactor-notification-transport-registry`, `refactor-price-row-mappers`, `refactor-agent-limit-domain-types`, `refactor-config-ownership`, `refactor-db-row-strict-types`, `refactor-filter-excess-property`, `refactor-zod-boundaries`, `refactor-branded-ids`, `refactor-provider-descriptor`, `refactor-shared-logger`, `console-section-data-split`, `refactor-db-package-split`.
+- Final verification passed: `pnpm run verify` and `pnpm run verify:features` with all 39 passing features re-verified.
+- Deferred non-blocker from scope ruling: `console-provider-templates.ts` template casts remain because each cast is guarded by provider-template id set membership; full typed template-map cleanup is a separate future refactor.
+- Implementation complete; waiting for human review before merging back to `dev`.
+- Blockers: none open.
+
+## 2026-07-10 Architecture Hardening Merge-Readiness Repairs
+
+- Fixed DB bootstrap URL resolution: `readPostgresDatabaseUrl` now reads only `databaseUrl` from `LLMINGRESS_BOOTSTRAP_CONFIG`; full runtime bootstrap config parsing remains strict for Gateway/Console/Worker startup.
+- Fixed route-preview validation ordering: blank `virtualModelId` now reports the id error before missing token fields, and the duplicate unreachable schema refine was removed.
+- Fixed `refactor-shared-logger` shared E2E mapping: release guard and `feature_list.json` now point to `tests/e2e/v1-gateway-routing.e2e.spec.ts`.
+- Deferred debt: provider descriptor/template duplicate facts, worker-runtime's unused logging dependency, compatibility re-exports with no direct consumers, repeated `listSourceFiles` test helpers, and small zod helper duplication.
+- Verification passed: `pnpm exec vitest run tests/features/refactor-zod-boundaries.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` with all 39 passing features re-verified.
+- Blockers: none open.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

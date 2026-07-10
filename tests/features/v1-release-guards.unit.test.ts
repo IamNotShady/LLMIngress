@@ -30,7 +30,36 @@ const allowedFeatureIds = [
   "db-connection-hygiene",
   "console-api-hygiene",
   "console-sections-split",
+  "refactor-route-strategy-registry",
+  "refactor-notification-transport-registry",
+  "refactor-price-row-mappers",
+  "refactor-agent-limit-domain-types",
+  "refactor-config-ownership",
+  "refactor-db-row-strict-types",
+  "refactor-filter-excess-property",
+  "refactor-zod-boundaries",
+  "refactor-branded-ids",
+  "refactor-provider-descriptor",
+  "refactor-shared-logger",
+  "console-section-data-split",
+  "refactor-db-package-split",
 ];
+
+const sharedE2EFeatureIds: Record<string, string> = {
+  "console-section-data-split": "tests/e2e/v1-console.e2e.spec.ts",
+  "gateway-cohesion-refactor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-branded-ids": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-provider-descriptor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-db-package-split": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-shared-logger": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-notification-transport-registry": "tests/e2e/v1-worker-ops.e2e.spec.ts",
+  "refactor-agent-limit-domain-types": "tests/e2e/v1-console.e2e.spec.ts",
+  "refactor-config-ownership": "tests/e2e/v1-console.e2e.spec.ts",
+  "refactor-db-row-strict-types": "tests/e2e/v1-worker-ops.e2e.spec.ts",
+  "refactor-filter-excess-property": "tests/e2e/v1-console.e2e.spec.ts",
+  "refactor-price-row-mappers": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+  "refactor-route-strategy-registry": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
+};
 
 const inProgressFeatureIds = new Set([
   "gateway-db-pool",
@@ -48,6 +77,19 @@ const inProgressFeatureIds = new Set([
   "db-connection-hygiene",
   "console-api-hygiene",
   "console-sections-split",
+  "refactor-route-strategy-registry",
+  "refactor-notification-transport-registry",
+  "refactor-price-row-mappers",
+  "refactor-agent-limit-domain-types",
+  "refactor-config-ownership",
+  "refactor-db-row-strict-types",
+  "refactor-filter-excess-property",
+  "refactor-zod-boundaries",
+  "refactor-branded-ids",
+  "refactor-provider-descriptor",
+  "refactor-shared-logger",
+  "console-section-data-split",
+  "refactor-db-package-split",
 ]);
 
 describe("v1 release guards milestone", () => {
@@ -64,8 +106,9 @@ describe("v1 release guards milestone", () => {
         expect(feature.status).toBe("passing");
       }
       expect(feature.verification).toContain(`tests/features/${feature.id}.unit.test.ts`);
-      if (feature.id === "gateway-cohesion-refactor") {
-        expect(feature.verification).toContain("tests/e2e/v1-gateway-routing.e2e.spec.ts");
+      const sharedE2E = sharedE2EFeatureIds[feature.id];
+      if (sharedE2E) {
+        expect(feature.verification).toContain(sharedE2E);
       } else {
         expect(feature.verification).toContain(`tests/e2e/${feature.id}.e2e.spec.ts`);
       }

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
+import { createLogger } from "@llmingress/logging";
 
 type ConsoleMode = "dev" | "start";
 type ConsoleChildProcess = Pick<ChildProcess, "kill" | "on">;
@@ -19,6 +20,8 @@ type ConsoleCommand = {
   args: string[];
   env: NodeJS.ProcessEnv;
 };
+
+const logger = createLogger("console");
 
 const shutdownSignals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 const consolePackageRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -135,7 +138,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     startConsole(readMode(process.argv[2]));
   } catch (error) {
-    console.error(error);
+    logger.error({ err: error }, "console startup failed");
     process.exit(1);
   }
 }

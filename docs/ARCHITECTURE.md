@@ -1327,12 +1327,13 @@ LLMIngress/ # repository root for apps, shared packages, docs, and scripts
 
 `apps/gateway` owns HTTP service, request pipeline, streaming, provider calls,
 Postgres-notification-driven hot reload, and runtime data writes. Reusable
-domain rules must not live in `apps/gateway`. The current repository has not
-split out `packages/routing` yet: Gateway runtime domain modules currently live
-under the `gateway-*` prefix in `packages/db/src`, shared routing calculation
-lives in `packages/domain`, and provider adapters live in `packages/provider`.
-A dedicated routing/runtime package split is a separate plan. Gateway runtime
-structure invariants are enforced by
+domain rules must not live in `apps/gateway`. Gateway runtime domain modules
+live in `packages/gateway-runtime`, Worker runtime modules live in
+`packages/worker-runtime`, shared routing calculation lives in
+`packages/domain`, and provider adapters live in `packages/provider`.
+`packages/db` keeps shared data access (client, config versions, migrations),
+Console read/write modules, and cross-plane tables. Gateway runtime structure
+invariants are enforced by
 `tests/features/gateway-cohesion-refactor.unit.test.ts`.
 
 ### 10.2 Console App Only Handles Control-Plane Experience

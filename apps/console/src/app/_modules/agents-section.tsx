@@ -1,7 +1,6 @@
 import {
   type ConsoleAgentLimit,
   defaultAgentLimitFormValues,
-  listAgentLimits,
 } from "@llmingress/db/console-agent-limits";
 import {
   type AgentDerivedStatus,
@@ -10,15 +9,13 @@ import {
   type AgentVirtualModelAccess,
   agentIntegrationPlatforms,
   type ConsoleAgent,
-  listAgents,
-  listAgentVirtualModelAccess,
 } from "@llmingress/db/console-agents";
 import { formatConsoleCompactCount, formatConsoleUsd } from "@llmingress/db/console-format";
-import { getConsoleUsageSummary } from "@llmingress/db/console-usage";
-import { type ConsoleVirtualModel, listVirtualModels } from "@llmingress/db/console-virtual-models";
+import type { ConsoleVirtualModel } from "@llmingress/db/console-virtual-models";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
+import { loadAgentsSectionData } from "./agents-section-data";
 import {
   type ConsoleSearchParams,
   findAgentLimit,
@@ -674,11 +671,8 @@ function formatVirtualModelOptionLabel(virtualModel: {
   return virtualModel.name;
 }
 export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const usageToday = await getConsoleUsageSummary({ window: "24h" });
-  const agents = await listAgents();
-  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
-  const agentLimits = await listAgentLimits();
-  const virtualModels = await listVirtualModels();
+  const { agentLimits, agentVirtualModelAccess, agents, usageToday, virtualModels } =
+    await loadAgentsSectionData();
   const agentVirtualModelAccessByAgentId = new Map(
     agentVirtualModelAccess.map((access) => [access.agentId, access]),
   );

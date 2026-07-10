@@ -295,6 +295,152 @@
       ],
       "status": "passing",
       "evidence": "2026-07-08: TDD red->green. Split console dashboard sections into per-section modules, kept sections.tsx as shared helpers under the line budget, and preserved signed-in dashboard rendering without horizontal overflow. Focused unit+E2E, pnpm run verify, and pnpm run verify:features passed."
+    },
+    {
+      "id": "refactor-route-strategy-registry",
+      "name": "Route Strategy Registry",
+      "description": "Route policy strategy ordering and decision messaging dispatch through one Record<RoutePolicyStrategy, handler> registry in packages/domain, with no strategy === string branches left in domain source.",
+      "verification": "pnpm exec vitest run tests/features/refactor-route-strategy-registry.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Route policy strategy ordering and decision messaging now dispatch through routeStrategyHandlers Record<RoutePolicyStrategy, RouteStrategyHandler>; focused unit, pnpm run verify, and pnpm run verify:features passed with all 26 prior passing features re-verified."
+    },
+    {
+      "id": "refactor-notification-transport-registry",
+      "name": "Notification Transport Registry",
+      "description": "Notification channel types come from one packages/domain list, dispatcher delivery resolves through a channel-type transport registry, and no SQL hardcodes channel_type = 'webhook'.",
+      "verification": "pnpm exec vitest run tests/features/refactor-notification-transport-registry.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Notification channel types now come from packages/domain, dispatcher delivery resolves through a NotificationChannelType transport registry, and notification SQL uses parameterized channel type arrays instead of channel_type = 'webhook'. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 27 passing features re-verified."
+    },
+    {
+      "id": "refactor-price-row-mappers",
+      "name": "Shared Price Row Mappers",
+      "description": "ManualPriceOverride and SyncedPriceSnapshot row mapping lives in one packages/db/src/price-rows.ts module; the six former per-file mapper copies delegate to it.",
+      "verification": "pnpm exec vitest run tests/features/refactor-price-row-mappers.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. ManualPriceOverride and SyncedPriceSnapshot row construction moved to packages/db/src/price-rows.ts; the six former local mapper copies now delegate to shared builders. Focused unit, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 28 passing features re-verified."
+    },
+    {
+      "id": "refactor-agent-limit-domain-types",
+      "name": "Agent Limit Domain Types",
+      "description": "Agent limit type, enforcement policy, period, and unit unions are defined once in packages/domain; console-agent-limits re-exports them and gateway-agent-limits aliases them instead of redeclaring string unions.",
+      "verification": "pnpm exec vitest run tests/features/refactor-agent-limit-domain-types.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Agent limit type, enforcement policy, period, and unit unions now live in packages/domain; console-agent-limits re-exports/imports them and gateway-agent-limits aliases/extracts domain types. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 29 passing features re-verified."
+    },
+    {
+      "id": "refactor-config-ownership",
+      "name": "Config Ownership Consolidation",
+      "description": "packages/config owns gatewayPublicBaseUrl() and the single BootstrapConfigFile definition; console no longer inlines the GATEWAY_PUBLIC_BASE_URL default and db client reuses the config bootstrap file reader.",
+      "verification": "pnpm exec vitest run tests/features/refactor-config-ownership.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "v1-platform"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. packages/config now exports gatewayPublicBaseUrl(), BootstrapConfigFile, and readBootstrapConfigFile; console URL defaults use config and db/client reuses the config bootstrap reader. Focused unit, pnpm install, pnpm run verify, and pnpm run verify:features passed with all 30 passing features re-verified."
+    },
+    {
+      "id": "refactor-db-row-strict-types",
+      "name": "Strict DB Row Types",
+      "description": "DB row types are plain object type aliases without the Record<string, unknown> index-signature base, so undeclared column access is a compile error, and the former index-signature-driven as-string casts in jsonl export and model refresh are gone.",
+      "verification": "pnpm exec vitest run tests/features/refactor-db-row-strict-types.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. DB row types are now plain object aliases without PostgresQueryResultRow intersections, jsonl export no longer casts row.cost_source/token_source through the index-signature base, and model refresh validates provider base_url before using it. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 31 passing features re-verified."
+    },
+    {
+      "id": "refactor-filter-excess-property",
+      "name": "Filter Excess Property Guard",
+      "description": "Console filter objects built as named variables carry a satisfies FiltersInput annotation so renamed or typo'd filter keys fail compilation, and a structural test forbids future unguarded const filters builds.",
+      "verification": "pnpm exec vitest run tests/features/refactor-filter-excess-property.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "v1-console"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Activity filters now use a ConsoleActivityFiltersInput satisfies guard so built-then-passed filter keys get excess-property checking, and the structural guard rejects future unguarded const filters builds. Focused unit, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 32 passing features re-verified."
+    },
+    {
+      "id": "refactor-zod-boundaries",
+      "name": "Zod Boundary Validation",
+      "description": "Route preview request bodies and the bootstrap config file are validated by zod schemas with the legacy error messages preserved, and console JSON routes type parsed bodies as unknown instead of leaking any.",
+      "verification": "pnpm exec vitest run tests/features/refactor-zod-boundaries.unit.test.ts && pnpm test:e2e tests/e2e/refactor-zod-boundaries.e2e.spec.ts",
+      "dependencies": [
+        "v1-console",
+        "refactor-config-ownership"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Route preview input and bootstrap config file parsing now use zod schemas while preserving legacy preview validation messages, and Console JSON routes type parsed bodies as unknown. New E2E covers the authenticated invalid-preview boundary response. Focused unit, focused E2E, pnpm run lint, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 33 passing features re-verified. 2026-07-10 merge-readiness repair: DB URL resolution now parses only bootstrap databaseUrl so malformed unrelated runtime fields do not break database clients, full runtime bootstrap parsing remains strict, and route preview validates blank virtualModelId before token fields. Focused zod/release-guard unit, v1-gateway-routing E2E, pnpm run verify, and pnpm run verify:features passed with all 39 passing features re-verified."
+    },
+    {
+      "id": "refactor-branded-ids",
+      "name": "Branded Route Decision Ids",
+      "description": "packages/domain exports Brand utility and branded RoutePolicyId, VirtualModelId, ProviderId, ProviderModelId types; RouteDecision carries branded ids constructed inside createDecision, assignable to string but not from string.",
+      "verification": "pnpm exec vitest run tests/features/refactor-branded-ids.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "refactor-route-strategy-registry"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. packages/domain now exports Brand and branded route decision ID helpers; RouteDecision carries branded routePolicyId, virtualModelId, providerId, and providerModelId constructed inside createDecision while preserving runtime string values. Focused unit, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed; the optimized E2E batch failed once, then the built-in per-feature fallback passed with all 34 passing features re-verified."
+    },
+    {
+      "id": "refactor-provider-descriptor",
+      "name": "Provider Descriptor Registry",
+      "description": "Per-provider wire traits (model list style, connectivity probe style, subscription flags, fixed base urls, price sync support, metadata key) live in one packages/provider descriptor registry; consumer files dispatch on descriptor traits instead of providerKey string literals.",
+      "verification": "pnpm exec vitest run tests/features/refactor-provider-descriptor.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing",
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Added packages/provider descriptor registry for provider wire traits, exported it from @llmingress/provider/descriptor, and replaced model-list/connectivity/subscription/oauth/price-source plus Console/provider refresh/Gateway protocol providerKey literal dispatch with descriptor trait lookups. Focused unit, pnpm run lint, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 35 passing features re-verified."
+    },
+    {
+      "id": "refactor-shared-logger",
+      "name": "Shared Pino Logger",
+      "description": "A packages/logging pino wrapper owns structured logging, every bare console.log/error/warn call in apps and packages source is replaced with component loggers, and Biome suspicious/noConsole blocks regressions.",
+      "verification": "pnpm exec vitest run tests/features/refactor-shared-logger.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
+      "dependencies": [
+        "v1-gateway-routing"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Added packages/logging as a shared pino wrapper, replaced bare console.log/error/warn calls in apps and packages source with component loggers, and enabled Biome suspicious/noConsole with tests override coverage. Existing db pool logging coverage was updated to the shared logger contract. Focused unit, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 37 passing features re-verified. 2026-07-10 merge-readiness repair: shared E2E mapping now protects the gateway routing surface touched by logger call sites. Focused zod/release-guard unit, v1-gateway-routing E2E, pnpm run verify, and pnpm run verify:features passed with all 39 passing features re-verified."
+    },
+    {
+      "id": "console-section-data-split",
+      "name": "Console Section Data Split",
+      "description": "The agents section loads its five datasets through a dedicated _modules/agents-section-data.ts module instead of inline awaits in the component, and playground response bodies are typed unknown instead of any.",
+      "verification": "pnpm exec vitest run tests/features/console-section-data-split.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": [
+        "console-sections-split"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green. Extracted Agents section's five sequential data reads into apps/console/src/app/_modules/agents-section-data.ts, left the section component focused on filtering/rendering, and explicitly typed Playground response body locals as unknown. Focused unit, v1-console E2E, typecheck, and pnpm run verify passed. pnpm run verify:features optimized E2E batch missed one v1-gateway-routing activity row, then the built-in per-feature fallback passed and the command exited 0 with all 38 passing features re-verified."
+    },
+    {
+      "id": "refactor-db-package-split",
+      "name": "DB Package Split",
+      "description": "Gateway runtime modules live in packages/gateway-runtime and worker runtime modules in packages/worker-runtime as whole-file moves; packages/db keeps only shared data access, console modules, and migrations, with no gateway- or worker-prefixed files left.",
+      "verification": "pnpm exec vitest run tests/features/refactor-db-package-split.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "refactor-provider-descriptor",
+        "refactor-shared-logger"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-09: TDD red->green across 13a/13b. 13a moved all 19 worker-* modules from packages/db into packages/worker-runtime with whole-file git mv, rewrote worker-runtime imports and test paths, removed db worker exports, and kept the split feature failing until gateway-runtime moved. 13b moved all 26 gateway-* modules into packages/gateway-runtime, removed db gateway exports, rewrote gateway imports and tests, localized llmingressDbPoolMax in db client, and updated architecture module-boundary guidance. Focused unit, v1-gateway-routing E2E, v1-worker-ops E2E, pnpm run verify, and pnpm run verify:features passed with all 39 passing features re-verified."
     }
   ]
 }

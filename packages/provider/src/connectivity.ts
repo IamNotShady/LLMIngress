@@ -6,6 +6,7 @@ export type ConnectivityCheckProvider = {
   providerKey: string;
 };
 
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   buildClaudeCodeMessagesUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -155,9 +156,9 @@ function buildProviderConnectivityRequest(input: {
   apiKey?: string | null;
   provider: ConnectivityCheckProvider;
 }): { init: RequestInit; url: string } {
-  const providerKey = input.provider.providerKey.toLowerCase();
+  const descriptor = resolveProviderDescriptor(input.provider.providerKey);
 
-  if (providerKey === "openai_codex") {
+  if (descriptor.connectivityProbeStyle === "codex") {
     return {
       init: {
         body: JSON.stringify({
@@ -174,7 +175,7 @@ function buildProviderConnectivityRequest(input: {
     };
   }
 
-  if (providerKey === "claude_code") {
+  if (descriptor.connectivityProbeStyle === "claude_code") {
     return {
       init: {
         body: JSON.stringify({
@@ -320,7 +321,7 @@ function compareProbeModelRank(left: ProbeModelRank, right: ProbeModelRank): num
 
 function buildProbeTokenLimit(provider: ConnectivityCheckProvider): Record<string, number> {
   if (
-    provider.providerKey.toLowerCase() === "openai" &&
+    resolveProviderDescriptor(provider.providerKey).reasoningAwareProbe === true &&
     isOpenAIReasoningStyleModel(provider.modelId)
   ) {
     return { max_completion_tokens: 16 };

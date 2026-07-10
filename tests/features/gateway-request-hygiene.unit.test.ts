@@ -2,20 +2,20 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { gatewayCorsHeaders } from "../../apps/gateway/src/cors";
 import { closePostgresPools } from "../../packages/db/src/client";
-import { readGatewayRequestId } from "../../packages/db/src/gateway-auth";
-import { normalizeOpenAIChatCompletionRequest } from "../../packages/db/src/gateway-chat-completions";
-import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
-import { normalizeOpenAIEmbeddingsRequest } from "../../packages/db/src/gateway-embeddings";
-import { readGatewayProviderRequestHeaders } from "../../packages/db/src/gateway-header-passthrough";
-import { normalizeAnthropicMessagesRequest } from "../../packages/db/src/gateway-messages";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { readGatewayRequestId } from "../../packages/gateway-runtime/src/gateway-auth";
+import { normalizeOpenAIChatCompletionRequest } from "../../packages/gateway-runtime/src/gateway-chat-completions";
+import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
+import { normalizeOpenAIEmbeddingsRequest } from "../../packages/gateway-runtime/src/gateway-embeddings";
+import { readGatewayProviderRequestHeaders } from "../../packages/gateway-runtime/src/gateway-header-passthrough";
+import { normalizeAnthropicMessagesRequest } from "../../packages/gateway-runtime/src/gateway-messages";
 import {
   attachGatewayProviderCredentials,
   refreshProviderOAuthTokenWithLock,
-} from "../../packages/db/src/gateway-provider-credentials";
-import { estimateTextTokens } from "../../packages/db/src/gateway-request-metadata";
-import { normalizeOpenAIResponsesRequest } from "../../packages/db/src/gateway-responses";
-import { selectGatewayBaselineCandidate } from "../../packages/db/src/gateway-runtime-helpers";
-import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+} from "../../packages/gateway-runtime/src/gateway-provider-credentials";
+import { estimateTextTokens } from "../../packages/gateway-runtime/src/gateway-request-metadata";
+import { normalizeOpenAIResponsesRequest } from "../../packages/gateway-runtime/src/gateway-responses";
+import { selectGatewayBaselineCandidate } from "../../packages/gateway-runtime/src/gateway-runtime-helpers";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 describe("gateway request hygiene", () => {

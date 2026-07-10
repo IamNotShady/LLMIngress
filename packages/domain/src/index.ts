@@ -107,13 +107,13 @@ export type RouteReason = {
 
 export type RouteDecision = {
   modelId: string;
-  providerId: string;
+  providerId: ProviderId;
   providerKey: string;
-  providerModelId: string;
-  routePolicyId: string;
+  providerModelId: ProviderModelId;
+  routePolicyId: RoutePolicyId;
   routeReason: RouteReason;
   strategy: RoutePolicyStrategy;
-  virtualModelId: string;
+  virtualModelId: VirtualModelId;
   virtualModelName: string;
 };
 
@@ -135,6 +135,72 @@ const INELIGIBLE_HEALTH: ReadonlySet<string> = new Set([
   "quota_limited",
   "network_error",
 ]);
+
+type RouteStrategyContext = {
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  random: () => number;
+};
+
+type RouteStrategyHandler = {
+  decisionMessage: (input: { selectedCandidateOrder: number; virtualModelName: string }) => string;
+  orderCandidates: <TCandidate extends RouteCandidate>(
+    candidates: TCandidate[],
+    context: RouteStrategyContext,
+  ) => TCandidate[];
+  usesEstimatedCost: boolean;
+};
+
+const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> = {
+  cost_first: {
+    decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
+      `cost_first route for ${virtualModelName} selected cheapest eligible candidate ${selectedCandidateOrder}.`,
+    orderCandidates: (candidates, context) =>
+      buildCostCandidates(candidates, context)
+        .sort((a, b) => {
+          if (a.estimatedCostUsd !== b.estimatedCostUsd) {
+            return a.estimatedCostUsd - b.estimatedCostUsd;
+          }
+          return a.candidate.candidateOrder - b.candidate.candidateOrder;
+        })
+        .map((entry) => entry.candidate),
+    usesEstimatedCost: true,
+  },
+  fixed: {
+    decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
+      `fixed route for ${virtualModelName} selected configured candidate ${selectedCandidateOrder}.`,
+    orderCandidates: (candidates) => candidates,
+    usesEstimatedCost: false,
+  },
+  quality_first: {
+    decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
+      `quality_first route for ${virtualModelName} selected highest-priced eligible candidate ${selectedCandidateOrder}.`,
+    orderCandidates: (candidates, context) =>
+      buildCostCandidates(candidates, context)
+        .sort((a, b) => {
+          if (a.estimatedCostUsd !== b.estimatedCostUsd) {
+            return b.estimatedCostUsd - a.estimatedCostUsd;
+          }
+          return a.candidate.candidateOrder - b.candidate.candidateOrder;
+        })
+        .map((entry) => entry.candidate),
+    usesEstimatedCost: true,
+  },
+  random: {
+    decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
+      `random route for ${virtualModelName} selected eligible candidate ${selectedCandidateOrder}.`,
+    orderCandidates: (candidates, context) => {
+      const shuffled = [...candidates];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(context.random() * (i + 1));
+        // biome-ignore lint/style/noNonNullAssertion: i and j are valid indices
+        [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+      }
+      return shuffled;
+    },
+    usesEstimatedCost: false,
+  },
+};
 
 export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(input: {
   routePolicy: RoutePolicy<TCandidate>;
@@ -172,44 +238,11 @@ export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(i
     return [];
   }
 
-  if (routePolicy.strategy === "fixed") {
-    // Already sorted by candidateOrder asc
-    return ruleEligible;
-  }
-
-  if (routePolicy.strategy === "cost_first") {
-    const priced = buildCostCandidates(ruleEligible, selectionRequest);
-    return priced
-      .sort((a, b) => {
-        if (a.estimatedCostUsd !== b.estimatedCostUsd) {
-          return a.estimatedCostUsd - b.estimatedCostUsd;
-        }
-        return a.candidate.candidateOrder - b.candidate.candidateOrder;
-      })
-      .map((c) => c.candidate);
-  }
-
-  if (routePolicy.strategy === "quality_first") {
-    const priced = buildCostCandidates(ruleEligible, selectionRequest);
-    return priced
-      .sort((a, b) => {
-        if (a.estimatedCostUsd !== b.estimatedCostUsd) {
-          return b.estimatedCostUsd - a.estimatedCostUsd;
-        }
-        return a.candidate.candidateOrder - b.candidate.candidateOrder;
-      })
-      .map((c) => c.candidate);
-  }
-
-  // random: Fisher–Yates shuffle using provided random function
-  const randomFn = random ?? Math.random;
-  const shuffled = [...ruleEligible];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(randomFn() * (i + 1));
-    // biome-ignore lint/style/noNonNullAssertion: i and j are valid indices
-    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-  }
-  return shuffled;
+  return routeStrategyHandlers[routePolicy.strategy].orderCandidates(ruleEligible, {
+    estimatedInputTokens: input.estimatedInputTokens,
+    estimatedOutputTokens: input.estimatedOutputTokens,
+    random: random ?? Math.random,
+  });
 }
 
 export function normalizeRoutePolicyRules(value: unknown): RoutePolicyRules {
@@ -283,72 +316,32 @@ export function selectRouteAttempts<TCandidate extends RouteCandidate>(
   // biome-ignore lint/style/noNonNullAssertion: chain.length > 0 checked above
   const selectedCandidate = chain[0]!;
 
-  if (routePolicy.strategy === "fixed") {
-    return {
-      chain,
-      decision: createDecision({
-        candidate: selectedCandidate,
-        evaluated,
-        message: `fixed route for ${routePolicy.virtualModelName} selected configured candidate ${selectedCandidate.candidateOrder}.`,
-        routePolicy,
-      }),
-    };
-  }
-
-  if (routePolicy.strategy === "cost_first") {
+  const handler = routeStrategyHandlers[routePolicy.strategy];
+  let estimatedCostUsd: number | undefined;
+  let priceSource: PricedModelTokenPrice["source"] | undefined;
+  if (handler.usesEstimatedCost) {
     const costResult = calculateTokenCostUsd(selectedCandidate.price, {
       inputTokens: input.estimatedInputTokens,
       outputTokens: input.estimatedOutputTokens,
     });
-    const estimatedCostUsd =
-      costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
-    const priceSource =
+    estimatedCostUsd = costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
+    priceSource =
       selectedCandidate.price.status !== "unknown_price"
         ? selectedCandidate.price.source
         : undefined;
-    return {
-      chain,
-      decision: createDecision({
-        candidate: selectedCandidate,
-        estimatedCostUsd,
-        evaluated,
-        message: `cost_first route for ${routePolicy.virtualModelName} selected cheapest eligible candidate ${selectedCandidate.candidateOrder}.`,
-        priceSource,
-        routePolicy,
-      }),
-    };
-  }
-
-  if (routePolicy.strategy === "quality_first") {
-    const costResult = calculateTokenCostUsd(selectedCandidate.price, {
-      inputTokens: input.estimatedInputTokens,
-      outputTokens: input.estimatedOutputTokens,
-    });
-    const estimatedCostUsd =
-      costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
-    const priceSource =
-      selectedCandidate.price.status !== "unknown_price"
-        ? selectedCandidate.price.source
-        : undefined;
-    return {
-      chain,
-      decision: createDecision({
-        candidate: selectedCandidate,
-        estimatedCostUsd,
-        evaluated,
-        message: `quality_first route for ${routePolicy.virtualModelName} selected highest-priced eligible candidate ${selectedCandidate.candidateOrder}.`,
-        priceSource,
-        routePolicy,
-      }),
-    };
   }
 
   return {
     chain,
     decision: createDecision({
       candidate: selectedCandidate,
+      estimatedCostUsd,
       evaluated,
-      message: `random route for ${routePolicy.virtualModelName} selected eligible candidate ${selectedCandidate.candidateOrder}.`,
+      message: handler.decisionMessage({
+        selectedCandidateOrder: selectedCandidate.candidateOrder,
+        virtualModelName: routePolicy.virtualModelName,
+      }),
+      priceSource,
       routePolicy,
     }),
   };
@@ -493,10 +486,10 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
 }): RouteDecision {
   return {
     modelId: input.candidate.modelId,
-    providerId: input.candidate.providerId,
+    providerId: asProviderId(input.candidate.providerId),
     providerKey: input.candidate.providerKey,
-    providerModelId: input.candidate.providerModelId,
-    routePolicyId: input.routePolicy.id,
+    providerModelId: asProviderModelId(input.candidate.providerModelId),
+    routePolicyId: asRoutePolicyId(input.routePolicy.id),
     routeReason: {
       appliedRules: input.routePolicy.rules ?? {},
       candidateExplanations: input.evaluated.map((evaluated) => ({
@@ -517,7 +510,7 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
       strategy: input.routePolicy.strategy,
     },
     strategy: input.routePolicy.strategy,
-    virtualModelId: input.routePolicy.virtualModelId,
+    virtualModelId: asVirtualModelId(input.routePolicy.virtualModelId),
     virtualModelName: input.routePolicy.virtualModelName,
   };
 }
@@ -610,4 +603,46 @@ function readOptionalEnumArray<T extends string>(
 
 function omitUndefined<T extends Record<string, unknown>>(input: T): T {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as T;
+}
+
+export const notificationChannelTypes = ["webhook"] as const;
+export type NotificationChannelType = (typeof notificationChannelTypes)[number];
+
+export const agentLimitTypes = ["budget", "concurrency", "rpm", "token", "tpm"] as const;
+export type AgentLimitType = (typeof agentLimitTypes)[number];
+
+export const agentLimitEnforcementPolicies = ["block", "warn_only"] as const;
+export type AgentLimitEnforcementPolicy = (typeof agentLimitEnforcementPolicies)[number];
+
+export const agentLimitPeriods = ["day", "hour", "minute", "month", "request", "week"] as const;
+export type AgentLimitPeriod = (typeof agentLimitPeriods)[number];
+
+export const agentLimitUnits = ["requests", "tokens", "usd"] as const;
+export type AgentLimitUnit = (typeof agentLimitUnits)[number];
+
+declare const brandSymbol: unique symbol;
+
+export type Brand<TValue, TBrand extends string> = TValue & {
+  readonly [brandSymbol]: TBrand;
+};
+
+export type RoutePolicyId = Brand<string, "RoutePolicyId">;
+export type VirtualModelId = Brand<string, "VirtualModelId">;
+export type ProviderId = Brand<string, "ProviderId">;
+export type ProviderModelId = Brand<string, "ProviderModelId">;
+
+export function asRoutePolicyId(value: string): RoutePolicyId {
+  return value as RoutePolicyId;
+}
+
+export function asVirtualModelId(value: string): VirtualModelId {
+  return value as VirtualModelId;
+}
+
+export function asProviderId(value: string): ProviderId {
+  return value as ProviderId;
+}
+
+export function asProviderModelId(value: string): ProviderModelId {
+  return value as ProviderModelId;
 }

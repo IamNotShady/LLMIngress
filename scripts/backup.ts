@@ -2,7 +2,7 @@ import {
   buildBackupOutputPath,
   createBackupArtifact,
   readBackupSettings,
-} from "@llmingress/db/worker-backup";
+} from "@llmingress/worker-runtime/worker-backup";
 
 type BackupCliOptions = {
   databaseUrl: string;

@@ -1,13 +1,22 @@
 import { randomUUID } from "node:crypto";
-import type { ManualPriceOverride, SyncedPriceSnapshot } from "@llmingress/billing/price-registry";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
-export type AgentLimitType = "budget" | "concurrency" | "rpm" | "token" | "tpm";
-export type AgentLimitEnforcementPolicy = "block" | "warn_only";
-export type AgentLimitPeriod = "day" | "hour" | "minute" | "month" | "request" | "week";
-export type AgentLimitUnit = "requests" | "tokens" | "usd";
+export type {
+  AgentLimitEnforcementPolicy,
+  AgentLimitPeriod,
+  AgentLimitType,
+  AgentLimitUnit,
+} from "@llmingress/domain";
+
+import type {
+  AgentLimitEnforcementPolicy,
+  AgentLimitPeriod,
+  AgentLimitType,
+  AgentLimitUnit,
+} from "@llmingress/domain";
 
 export type AgentLimitRuleInput = {
   alertThreshold?: number | null;
@@ -52,7 +61,7 @@ export type ConsoleAgentLimitRuntimeSnapshot = {
   rateLimitHits24h: number;
 };
 
-type AgentLimitRow = PostgresQueryResultRow & {
+type AgentLimitRow = {
   alert_threshold: string | null;
   agent_id: string;
   enabled: boolean;
@@ -65,7 +74,7 @@ type AgentLimitRow = PostgresQueryResultRow & {
   unit: AgentLimitUnit;
 };
 
-type AccessibleRouteCandidatePriceRow = PostgresQueryResultRow & {
+type AccessibleRouteCandidatePriceRow = {
   candidate_order: number;
   model_display_name: string;
   model_id: string;
@@ -85,19 +94,19 @@ type AccessibleRouteCandidatePriceRow = PostgresQueryResultRow & {
   virtual_model_name: string;
 };
 
-type AgentLimitBudgetUsageRow = PostgresQueryResultRow & {
+type AgentLimitBudgetUsageRow = {
   agent_id: string;
   budget_usage_percent: string | null;
 };
 
-type AgentLimitRateWindowRow = PostgresQueryResultRow & {
+type AgentLimitRateWindowRow = {
   agent_id: string;
   current_concurrency: number | null;
   current_rpm: number | null;
   current_tpm: number | null;
 };
 
-type AgentLimitErrorCountRow = PostgresQueryResultRow & {
+type AgentLimitErrorCountRow = {
   agent_id: string;
   over_limit_today_count: number;
   over_limit_yesterday_count: number;
@@ -347,10 +356,27 @@ async function assertAccessibleRouteCandidatePricesKnown(
   const candidates = await readAccessibleRouteCandidatePrices(client, agentId);
   const missingPriceCandidates = candidates.filter((candidate) => {
     const price = resolveEffectiveModelTokenPrice({
-      manualOverride: rowToManualPriceOverride(candidate),
+      manualOverride: buildManualPriceOverride({
+        cachedInputUsdPerMillionTokens:
+          candidate.price_override_cached_input_usd_per_million_tokens,
+        inputUsdPerMillionTokens: candidate.price_override_input_usd_per_million_tokens,
+        modelId: candidate.model_id,
+        outputUsdPerMillionTokens: candidate.price_override_output_usd_per_million_tokens,
+        providerKey: candidate.provider_key,
+        updatedAt: candidate.price_override_updated_at,
+      }),
       modelId: candidate.model_id,
       providerKey: candidate.provider_key,
-      syncedPrice: rowToSyncedPriceSnapshot(candidate),
+      syncedPrice: buildSyncedPriceSnapshot({
+        cachedInputUsdPerMillionTokens: candidate.price_sync_cached_input_usd_per_million_tokens,
+        inputUsdPerMillionTokens: candidate.price_sync_input_usd_per_million_tokens,
+        modelId: candidate.model_id,
+        outputUsdPerMillionTokens: candidate.price_sync_output_usd_per_million_tokens,
+        priceVersion: candidate.price_sync_price_version,
+        providerKey: candidate.provider_key,
+        sourceUrl: candidate.price_sync_source_url,
+        syncedAt: candidate.price_sync_synced_at,
+      }),
     });
     return price.status === "unknown_price";
   });
@@ -430,57 +456,6 @@ async function readAccessibleRouteCandidatePrices(
     [agentId],
   );
   return result.rows;
-}
-
-function rowToManualPriceOverride(
-  row: AccessibleRouteCandidatePriceRow,
-): ManualPriceOverride | null {
-  if (
-    row.price_override_input_usd_per_million_tokens === null ||
-    row.price_override_output_usd_per_million_tokens === null ||
-    row.price_override_updated_at === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.price_override_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.price_override_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.price_override_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.price_override_output_usd_per_million_tokens),
-    providerKey: row.provider_key,
-    updatedAt: row.price_override_updated_at,
-  };
-}
-
-function rowToSyncedPriceSnapshot(
-  row: AccessibleRouteCandidatePriceRow,
-): SyncedPriceSnapshot | null {
-  if (
-    row.price_sync_input_usd_per_million_tokens === null ||
-    row.price_sync_output_usd_per_million_tokens === null ||
-    row.price_sync_price_version === null ||
-    row.price_sync_synced_at === null
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.price_sync_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.price_sync_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.price_sync_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.price_sync_output_usd_per_million_tokens),
-    priceVersion: row.price_sync_price_version,
-    providerKey: row.provider_key,
-    sourceUrl: row.price_sync_source_url,
-    syncedAt: row.price_sync_synced_at,
-  };
 }
 
 async function readAgentLimits(

@@ -1,11 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
-  type ManualPriceOverride,
   type ModelTokenPrice,
   resolveEffectiveModelTokenPrice,
-  type SyncedPriceSnapshot,
 } from "@llmingress/billing/price-registry";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   normalizeRoutePolicyRules,
@@ -13,6 +11,7 @@ import {
   routeEndpointProtocols,
 } from "@llmingress/domain";
 import { listProviderTemplateEndpointProtocols } from "./console-provider-templates.ts";
+import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
 
@@ -106,7 +105,7 @@ export type RouteReasonMetadataInput = {
   virtualModelName: string;
 };
 
-type RoutePolicyRow = PostgresQueryResultRow & {
+type RoutePolicyRow = {
   id: string;
   rules: unknown;
   strategy: RoutePolicyStrategy;
@@ -115,7 +114,7 @@ type RoutePolicyRow = PostgresQueryResultRow & {
   virtual_model_name: string;
 };
 
-type CandidateRow = PostgresQueryResultRow & {
+type CandidateRow = {
   availability: string;
   candidate_order: number;
   context_window?: number | null;
@@ -142,7 +141,7 @@ type CandidateRow = PostgresQueryResultRow & {
   supports_tools?: boolean | null;
 };
 
-type ProviderModelOptionRow = PostgresQueryResultRow & {
+type ProviderModelOptionRow = {
   availability: string;
   context_window?: number | null;
   id: string;
@@ -167,7 +166,7 @@ type ProviderModelOptionRow = PostgresQueryResultRow & {
   supports_tools?: boolean | null;
 };
 
-type BudgetedVirtualModelUsageRow = PostgresQueryResultRow & {
+type BudgetedVirtualModelUsageRow = {
   budgeted_agent_count: number;
   display_name: string;
   name: string;
@@ -1002,10 +1001,26 @@ function rowToConsoleRoutePolicyCandidate(row: CandidateRow): ConsoleRoutePolicy
 
 function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderModelOption {
   const price = resolveEffectiveModelTokenPrice({
-    manualOverride: rowToManualPriceOverride(row),
+    manualOverride: buildManualPriceOverride({
+      cachedInputUsdPerMillionTokens: row.price_override_cached_input_usd_per_million_tokens,
+      inputUsdPerMillionTokens: row.price_override_input_usd_per_million_tokens,
+      modelId: row.model_id,
+      outputUsdPerMillionTokens: row.price_override_output_usd_per_million_tokens,
+      providerKey: row.provider_key,
+      updatedAt: row.price_override_updated_at,
+    }),
     modelId: row.model_id,
     providerKey: row.provider_key,
-    syncedPrice: rowToSyncedPriceSnapshot(row),
+    syncedPrice: buildSyncedPriceSnapshot({
+      cachedInputUsdPerMillionTokens: row.price_sync_cached_input_usd_per_million_tokens,
+      inputUsdPerMillionTokens: row.price_sync_input_usd_per_million_tokens,
+      modelId: row.model_id,
+      outputUsdPerMillionTokens: row.price_sync_output_usd_per_million_tokens,
+      priceVersion: row.price_sync_price_version,
+      providerKey: row.provider_key,
+      sourceUrl: row.price_sync_source_url,
+      syncedAt: row.price_sync_synced_at,
+    }),
   });
   const priceStatusLabel = formatProviderModelPriceStatusLabel(price);
 
@@ -1042,53 +1057,6 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     }),
     supportsStreaming: row.supports_streaming ?? false,
     supportsTools: row.supports_tools ?? false,
-  };
-}
-
-function rowToManualPriceOverride(row: ProviderModelOptionRow): ManualPriceOverride | null {
-  if (
-    !row.price_override_input_usd_per_million_tokens ||
-    !row.price_override_output_usd_per_million_tokens ||
-    !row.price_override_updated_at
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.price_override_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.price_override_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.price_override_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.price_override_output_usd_per_million_tokens),
-    providerKey: row.provider_key,
-    updatedAt: row.price_override_updated_at,
-  };
-}
-
-function rowToSyncedPriceSnapshot(row: ProviderModelOptionRow): SyncedPriceSnapshot | null {
-  if (
-    !row.price_sync_input_usd_per_million_tokens ||
-    !row.price_sync_output_usd_per_million_tokens ||
-    !row.price_sync_price_version ||
-    !row.price_sync_synced_at
-  ) {
-    return null;
-  }
-
-  return {
-    cachedInputUsdPerMillionTokens:
-      row.price_sync_cached_input_usd_per_million_tokens === null
-        ? null
-        : Number(row.price_sync_cached_input_usd_per_million_tokens),
-    inputUsdPerMillionTokens: Number(row.price_sync_input_usd_per_million_tokens),
-    modelId: row.model_id,
-    outputUsdPerMillionTokens: Number(row.price_sync_output_usd_per_million_tokens),
-    priceVersion: row.price_sync_price_version,
-    providerKey: row.provider_key,
-    sourceUrl: row.price_sync_source_url,
-    syncedAt: row.price_sync_synced_at,
   };
 }
 

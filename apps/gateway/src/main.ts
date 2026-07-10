@@ -4,15 +4,15 @@ import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingres
 import type {
   GatewayRequestActivityProtocol,
   GatewayRequestActivityRoute,
-} from "@llmingress/db/gateway-activity-recorder";
-import { authenticateGatewayRequest } from "@llmingress/db/gateway-auth";
-import { executeGatewayOpenAIChatCompletion } from "@llmingress/db/gateway-chat-completions";
+} from "@llmingress/gateway-runtime/gateway-activity-recorder";
+import { authenticateGatewayRequest } from "@llmingress/gateway-runtime/gateway-auth";
+import { executeGatewayOpenAIChatCompletion } from "@llmingress/gateway-runtime/gateway-chat-completions";
 import {
   createGatewayConfigRuntime,
   type GatewayConfigRuntime,
   type GatewayConfigSnapshot,
-} from "@llmingress/db/gateway-config-reload";
-import { executeGatewayOpenAIEmbeddings } from "@llmingress/db/gateway-embeddings";
+} from "@llmingress/gateway-runtime/gateway-config-reload";
+import { executeGatewayOpenAIEmbeddings } from "@llmingress/gateway-runtime/gateway-embeddings";
 import {
   gatewayBodyLimitBytes,
   gatewayConfigNotifications,
@@ -21,37 +21,40 @@ import {
   gatewayInstanceId,
   gatewayListenHost,
   gatewayMetricsToken,
-} from "@llmingress/db/gateway-env";
-import { gatewayRequestIdHeader } from "@llmingress/db/gateway-error-mapping";
-import { readGatewayProviderRequestHeaders } from "@llmingress/db/gateway-header-passthrough";
-import { executeGatewayAnthropicMessages } from "@llmingress/db/gateway-messages";
-import { getPrometheusMetricsDocument } from "@llmingress/db/gateway-metrics";
+} from "@llmingress/gateway-runtime/gateway-env";
+import { gatewayRequestIdHeader } from "@llmingress/gateway-runtime/gateway-error-mapping";
+import { readGatewayProviderRequestHeaders } from "@llmingress/gateway-runtime/gateway-header-passthrough";
+import { executeGatewayAnthropicMessages } from "@llmingress/gateway-runtime/gateway-messages";
+import { getPrometheusMetricsDocument } from "@llmingress/gateway-runtime/gateway-metrics";
 import {
   type GatewayRequestMetadata,
   gatewayRequestMetadataHeader,
   serializeGatewayRequestMetadata,
   shouldExposeGatewayRequestMetadata,
-} from "@llmingress/db/gateway-request-metadata";
-import { executeGatewayOpenAIResponse } from "@llmingress/db/gateway-responses";
+} from "@llmingress/gateway-runtime/gateway-request-metadata";
+import { executeGatewayOpenAIResponse } from "@llmingress/gateway-runtime/gateway-responses";
 import {
   executeGatewayStreamingRequest,
   type GatewayStreamingProtocol,
   type GatewayStreamingResult,
   readGatewayStreamingFlag,
-} from "@llmingress/db/gateway-streaming";
-import type { GatewayUsageCostDetails } from "@llmingress/db/gateway-usage-recorder";
+} from "@llmingress/gateway-runtime/gateway-streaming";
+import type { GatewayUsageCostDetails } from "@llmingress/gateway-runtime/gateway-usage-recorder";
 import {
   type GatewayVirtualModel,
   listAllowedGatewayVirtualModels,
   readRequestedModelName,
   resolveGatewayVirtualModelRequest,
-} from "@llmingress/db/gateway-virtual-model-access";
+} from "@llmingress/gateway-runtime/gateway-virtual-model-access";
+import { createLogger } from "@llmingress/logging";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply } from "fastify";
 import { gatewayCorsHeaders } from "./cors.js";
 import {
   executeRecordedGatewayJsonRequest,
   executeRecordedGatewayStreamingRequest,
 } from "./request-recording.js";
+
+const logger = createLogger("gateway");
 
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
@@ -433,7 +436,7 @@ function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRe
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   startGateway().catch((error: unknown) => {
-    console.error(error);
+    logger.error({ err: error }, "gateway startup failed");
     process.exit(1);
   });
 }

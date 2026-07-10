@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
-import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 import { createFakeProviderServer } from "../support/fake-provider";
 import {
   getFreePort,

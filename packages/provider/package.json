@@ -12,6 +12,10 @@
       "types": "./src/connectivity.ts",
       "default": "./src/connectivity.ts"
     },
+    "./descriptor": {
+      "types": "./src/descriptor.ts",
+      "default": "./src/descriptor.ts"
+    },
     "./dialect": {
       "types": "./src/dialect.ts",
       "default": "./src/dialect.ts"

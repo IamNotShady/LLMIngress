@@ -1,3 +1,4 @@
+import { gatewayPublicBaseUrl } from "@llmingress/config";
 import {
   formatGatewayConfigVersion,
   formatGatewayHeartbeatStatus,
@@ -15,7 +16,7 @@ const runtimeSecurityNotes = [
 ];
 
 function getPlaygroundGatewayBaseUrl(): string {
-  return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
+  return gatewayPublicBaseUrl();
 }
 
 function formatConfigVersion(value: number | null): string {

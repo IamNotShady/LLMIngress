@@ -7,8 +7,8 @@ import {
   normalizeRoutePolicyEditorFilters,
   normalizeRoutePolicyFormInput,
 } from "../../packages/db/src/console-route-policies";
-import { executeGatewayOpenAIChatCompletion } from "../../packages/db/src/gateway-chat-completions";
-import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
+import { executeGatewayOpenAIChatCompletion } from "../../packages/gateway-runtime/src/gateway-chat-completions";
+import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
 
 const virtualModelId = "00000000-0000-4000-8000-000000000001";
 const providerModelId = "00000000-0000-4000-8000-000000000002";

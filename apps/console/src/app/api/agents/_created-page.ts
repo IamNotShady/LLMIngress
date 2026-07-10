@@ -1,3 +1,4 @@
+import { gatewayPublicBaseUrl } from "@llmingress/config";
 import { NextResponse } from "next/server";
 
 export function renderOneTimeAgentResponse(input: {
@@ -6,7 +7,7 @@ export function renderOneTimeAgentResponse(input: {
 }): NextResponse {
   const connectionDetails = buildAgentConnectionDetails({
     apiKey: input.plaintext,
-    gatewayBaseUrl: process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000",
+    gatewayBaseUrl: gatewayPublicBaseUrl(),
     model: "<Virtual Model Name>",
   });
 

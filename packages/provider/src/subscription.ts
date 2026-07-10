@@ -1,3 +1,5 @@
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+
 export type SubscriptionProviderKey = "claude_code" | "openai_codex";
 
 export const codexClientVersion = "0.128.0";
@@ -12,7 +14,7 @@ export const claudeCodeUserAgent = "claude-cli/2.1.92 (external, sdk-cli)";
 export function isSubscriptionProviderKey(
   providerKey: string | null | undefined,
 ): providerKey is SubscriptionProviderKey {
-  return providerKey === "openai_codex" || providerKey === "claude_code";
+  return resolveProviderDescriptor(providerKey).subscription === true;
 }
 
 export function buildCodexSubscriptionHeaders(

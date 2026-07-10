@@ -5,7 +5,7 @@ import { consoleActionErrorResponse } from "../../_errors";
 
 export const POST = withConsoleAuth(async (request) => {
   try {
-    const body = await request.json();
+    const body: unknown = await request.json();
     return NextResponse.json(await previewRoutePolicy({ request: body }));
   } catch (error) {
     return consoleActionErrorResponse(error, "Route preview failed.");

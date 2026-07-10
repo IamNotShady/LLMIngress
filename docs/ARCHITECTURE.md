@@ -591,7 +591,7 @@ Triggers:
 Gateway `GET /v1/models` does not run provider discovery. It only returns the
 Virtual Model Names authorized for the Agent from the current config snapshot.
 
-Provider-derived model data referential integrity:
+Provider-derived model relationship integrity:
 
 - Worker refresh only upserts and marks status. It does not hard-delete
   `provider_models` rows directly.
@@ -983,12 +983,12 @@ PostgreSQL database
 
 Config tables use `deleted_at` for Console delete semantics. Agents, Providers,
 Provider Models, Virtual Models, and Route Policies are hidden and disabled
-when deleted instead of physically removed. Runtime history tables keep
-restrictive foreign keys to those config rows so request audit data remains
-referentially intact. Request activity also stores minimal label snapshots for
-Agent, Virtual Model, Route Policy strategy, Provider, and Provider Model.
-Prompt and response content tables are not part of the current V1 schema; adding
-them requires a separate content-recording schema change.
+when deleted instead of physically removed. The schema does not use database
+foreign keys; Console and Worker paths enforce dependency checks and explicit
+cleanup where rows are physically removed. Request activity also stores minimal
+label snapshots for Agent, Virtual Model, Route Policy strategy, Provider, and
+Provider Model. Prompt and response content tables are not part of the current
+V1 schema; adding them requires a separate content-recording schema change.
 Historical reports prefer those snapshots and fall back to joined config rows
 for older records.
 
@@ -1430,9 +1430,10 @@ configuration objects.
 - Console delete operations default to `deleted_at` soft deletes. Active queries
   for Agents, Providers, Provider Models, Virtual Models, and Route Policies
   filter deleted rows.
-- Runtime history tables keep restrictive foreign keys. They do not cascade or
-  set null. Hard delete is a maintenance operation and must first confirm there
-  are no active config dependencies and no runtime history references.
+- Runtime history tables do not use database foreign keys. Hard delete remains
+  a maintenance operation and must first confirm there are no active config
+  dependencies or runtime history references; code paths that physically delete
+  rows perform their own cleanup or reference clearing.
 - Provider-derived model data uses availability markers to represent refresh
   results. Soft-deleted Provider Models do not participate in active routing,
   price sync, or health checks.

@@ -201,7 +201,13 @@ test("v1 daily operations smoke verifies breakdowns exports alerts metrics trace
       currentRequestCount: 5,
       oldExportFileDeletedMarkers: 1,
       oldExportJobCount: 1,
+      oldFallbackEventCount: 0,
       oldRequestCount: 0,
+      oldRequestCostCount: 0,
+      oldRequestUsageCount: 0,
+      oldRuntimeErrorLinkedCount: 0,
+      oldRuntimeErrorRecordCount: 1,
+      oldWebhookDeliveryCount: 0,
       preservedBudgetPeriodCount: 1,
       preservedRateLimitWindowCount: 1,
     });
@@ -222,6 +228,7 @@ type DailyOperationsSeed = {
   failedRequestId: string;
   oldActivityId: string;
   oldExportJobId: string;
+  oldRuntimeErrorId: string;
   providerId: string;
   providerModelId: string;
   rateLimitWindowId: string;
@@ -255,6 +262,9 @@ async function seedDailyOperationsData(
     healthSummaryId: randomUUID(),
     oldActivityId: randomUUID(),
     oldExportJobId: randomUUID(),
+    oldFallbackEventId: randomUUID(),
+    oldRuntimeErrorId: randomUUID(),
+    oldWebhookDeliveryId: randomUUID(),
     providerApiKeyId: randomUUID(),
     providerId: randomUUID(),
     providerModelId: randomUUID(),
@@ -459,6 +469,68 @@ async function seedDailyOperationsData(
     status: "succeeded",
     virtualModelId: ids.virtualModelId,
   });
+  await insertUsageCostSavings(fixture, {
+    activityId: ids.oldActivityId,
+    agentId: ids.agentId,
+    inputTokens: 10,
+    outputTokens: 2,
+    providerModelId: ids.providerModelId,
+    savingsUsd: "0.00100000",
+    totalCostUsd: "0.00100000",
+    totalTokens: 12,
+    virtualModelId: ids.virtualModelId,
+  });
+  await fixture.query(
+    `
+      insert into fallback_events (
+        id, request_activity_id, provider_model_id, attempt_order, status,
+        error_code, error_message, failed_before_first_byte, created_at
+      )
+      values ($1, $2, $3, 1, 'failed', 'provider_request_failed',
+              'old fallback failed', true, $4::timestamptz)
+    `,
+    [
+      ids.oldFallbackEventId,
+      ids.oldActivityId,
+      ids.providerModelId,
+      isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000 + 500),
+    ],
+  );
+  await fixture.query(
+    `
+      insert into webhook_deliveries (
+        id, event_type, request_activity_id, fallback_event_id, webhook_url,
+        status, request_payload, response_status, started_at, completed_at
+      )
+      values (
+        $1, 'fallback', $2, $3, $4, 'sent', '{}'::jsonb, 204,
+        $5::timestamptz, $6::timestamptz
+      )
+    `,
+    [
+      ids.oldWebhookDeliveryId,
+      ids.oldActivityId,
+      ids.oldFallbackEventId,
+      plan.webhookUrl,
+      isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000 + 600),
+      isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000 + 700),
+    ],
+  );
+  await fixture.query(
+    `
+      insert into runtime_errors (
+        id, process_type, process_id, request_activity_id, severity,
+        error_code, error_message, created_at
+      )
+      values ($1, 'gateway', 'gateway-daily-ops', $2, 'error',
+              'old_runtime_error', 'old runtime error', $3::timestamptz)
+    `,
+    [
+      ids.oldRuntimeErrorId,
+      ids.oldActivityId,
+      isoOffset(plan.now, -45 * 24 * 60 * 60 * 1000 + 800),
+    ],
+  );
   await fixture.query(
     `
       insert into provider_health_events (
@@ -524,6 +596,7 @@ async function seedDailyOperationsData(
     failedRequestId: "req_daily_fallback_exhausted_095",
     oldActivityId: ids.oldActivityId,
     oldExportJobId: ids.oldExportJobId,
+    oldRuntimeErrorId: ids.oldRuntimeErrorId,
     providerId: ids.providerId,
     providerModelId: ids.providerModelId,
     rateLimitWindowId: ids.rateLimitWindowId,
@@ -782,7 +855,13 @@ async function readRetentionState(
   currentRequestCount: number;
   oldExportFileDeletedMarkers: number;
   oldExportJobCount: number;
+  oldFallbackEventCount: number;
   oldRequestCount: number;
+  oldRequestCostCount: number;
+  oldRequestUsageCount: number;
+  oldRuntimeErrorLinkedCount: number;
+  oldRuntimeErrorRecordCount: number;
+  oldWebhookDeliveryCount: number;
   preservedBudgetPeriodCount: number;
   preservedRateLimitWindowCount: number;
 }> {
@@ -790,7 +869,13 @@ async function readRetentionState(
     current_request_count: string;
     old_export_file_deleted_markers: string;
     old_export_job_count: string;
+    old_fallback_event_count: string;
     old_request_count: string;
+    old_request_cost_count: string;
+    old_request_usage_count: string;
+    old_runtime_error_linked_count: string;
+    old_runtime_error_record_count: string;
+    old_webhook_delivery_count: string;
     preserved_budget_period_count: string;
     preserved_rate_limit_window_count: string;
   }>(
@@ -800,6 +885,18 @@ async function readRetentionState(
           as current_request_count,
         (select count(*)::text from request_activity where id = $1)
           as old_request_count,
+        (select count(*)::text from request_usage where request_activity_id = $1)
+          as old_request_usage_count,
+        (select count(*)::text from request_costs where request_activity_id = $1)
+          as old_request_cost_count,
+        (select count(*)::text from fallback_events where request_activity_id = $1)
+          as old_fallback_event_count,
+        (select count(*)::text from webhook_deliveries where request_activity_id = $1)
+          as old_webhook_delivery_count,
+        (select count(*)::text from runtime_errors where id = $5)
+          as old_runtime_error_record_count,
+        (select count(*)::text from runtime_errors where id = $5 and request_activity_id = $1)
+          as old_runtime_error_linked_count,
         (select count(*)::text from jobs where id = $2)
           as old_export_job_count,
         (select count(*)::text from jobs where id = $2 and result ? 'exportFileDeletedAt')
@@ -809,14 +906,26 @@ async function readRetentionState(
         (select count(*)::text from rate_limit_windows where id = $4)
           as preserved_rate_limit_window_count
     `,
-    [seeded.oldActivityId, seeded.oldExportJobId, seeded.budgetPeriodId, seeded.rateLimitWindowId],
+    [
+      seeded.oldActivityId,
+      seeded.oldExportJobId,
+      seeded.budgetPeriodId,
+      seeded.rateLimitWindowId,
+      seeded.oldRuntimeErrorId,
+    ],
   );
   const row = result.rows[0];
   return {
     currentRequestCount: Number(row?.current_request_count ?? 0),
     oldExportFileDeletedMarkers: Number(row?.old_export_file_deleted_markers ?? 0),
     oldExportJobCount: Number(row?.old_export_job_count ?? 0),
+    oldFallbackEventCount: Number(row?.old_fallback_event_count ?? 0),
     oldRequestCount: Number(row?.old_request_count ?? 0),
+    oldRequestCostCount: Number(row?.old_request_cost_count ?? 0),
+    oldRequestUsageCount: Number(row?.old_request_usage_count ?? 0),
+    oldRuntimeErrorLinkedCount: Number(row?.old_runtime_error_linked_count ?? 0),
+    oldRuntimeErrorRecordCount: Number(row?.old_runtime_error_record_count ?? 0),
+    oldWebhookDeliveryCount: Number(row?.old_webhook_delivery_count ?? 0),
     preservedBudgetPeriodCount: Number(row?.preserved_budget_period_count ?? 0),
     preservedRateLimitWindowCount: Number(row?.preserved_rate_limit_window_count ?? 0),
   };

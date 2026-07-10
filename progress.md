@@ -2,10 +2,21 @@
 
 ## Current State
 
-- Date: 2026-07-06
+- Date: 2026-07-10
 - Branch: `dev`
 - Base: `27fd08b4`
-- Status: Gateway ingress and provider error passthrough follow-up implemented and verified.
+- Status: Database foreign key constraints removed from the final migrated schema and verified.
+
+## 2026-07-10 Drop Database Foreign Keys
+
+- Added `0007_drop_foreign_keys.sql`, dropping all 46 foreign key constraints that remained after the current migration chain.
+- Updated migration tracking and platform coverage so the migrated public schema must have zero `pg_constraint` foreign keys.
+- Replaced behavior that previously depended on FK cascade/set-null:
+  - retention cleanup now explicitly removes expired request usage, cost, fallback, and webhook rows and clears runtime error request links;
+  - Provider API key deletion now explicitly clears historical `request_activity` and `fallback_events` key references before deleting keys.
+- Updated architecture docs to state that schema integrity is now enforced by application dependency checks, soft deletes, and explicit cleanup rather than database foreign keys.
+- Applied `0007` to the local `127.0.0.1:55432/postgres` development database; migration status is up to date and `pg_constraint` reports `0` public-schema foreign keys.
+- Verification passed: `pnpm run db:migrate:check`, focused v1-platform unit/E2E, focused v1-worker-ops unit/E2E, `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 39 passing features re-verified.
 
 ## 2026-07-05 Gateway Agent Limits Single-Read Follow-up
 

@@ -96,6 +96,7 @@ describe("v1 platform milestone", () => {
       { id: "0004", name: "relax_vocab_checks" },
       { id: "0005", name: "drop_notification_deliveries" },
       { id: "0006", name: "fallback_single_source" },
+      { id: "0007", name: "drop_foreign_keys" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

@@ -94,9 +94,45 @@ export async function cleanupExpiredOperationalData(
           where id = any($2::uuid[])
           returning id
         ),
+        expired_request_activity as (
+          select id
+          from request_activity
+          where created_at < $1::timestamptz
+        ),
+        deleted_webhook_deliveries as (
+          delete from webhook_deliveries
+          where request_activity_id in (select id from expired_request_activity)
+             or fallback_event_id in (
+               select id
+               from fallback_events
+               where request_activity_id in (select id from expired_request_activity)
+             )
+          returning id
+        ),
+        deleted_fallback_events as (
+          delete from fallback_events
+          where request_activity_id in (select id from expired_request_activity)
+          returning id
+        ),
+        deleted_request_costs as (
+          delete from request_costs
+          where request_activity_id in (select id from expired_request_activity)
+          returning id
+        ),
+        deleted_request_usage as (
+          delete from request_usage
+          where request_activity_id in (select id from expired_request_activity)
+          returning id
+        ),
+        cleared_runtime_errors as (
+          update runtime_errors
+          set request_activity_id = null
+          where request_activity_id in (select id from expired_request_activity)
+          returning id
+        ),
         deleted_request_activity as (
           delete from request_activity
-          where created_at < $1::timestamptz
+          where id in (select id from expired_request_activity)
           returning id
         )
         select

@@ -77,6 +77,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0006",
     name: "fallback_single_source",
   },
+  {
+    checksum: "9cf3cd316246b7813211d04a35a764724b19c8bca3ad8aeaecc4112d0378ea78",
+    id: "0007",
+    name: "drop_foreign_keys",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

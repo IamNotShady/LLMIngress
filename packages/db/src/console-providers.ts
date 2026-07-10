@@ -326,6 +326,30 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
       if (!result.rows[0]) {
         throw new Error("Provider was not found.");
       }
+      await client.query(
+        `
+          update request_activity
+          set provider_api_key_id = null
+          where provider_api_key_id in (
+            select id
+            from provider_api_keys
+            where provider_id = $1
+          )
+        `,
+        [input.id],
+      );
+      await client.query(
+        `
+          update fallback_events
+          set provider_api_key_id = null
+          where provider_api_key_id in (
+            select id
+            from provider_api_keys
+            where provider_id = $1
+          )
+        `,
+        [input.id],
+      );
       await client.query("delete from provider_api_keys where provider_id = $1", [input.id]);
       await client.query(
         `

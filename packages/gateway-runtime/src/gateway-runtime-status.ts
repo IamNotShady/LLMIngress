@@ -55,7 +55,7 @@ async function writeRuntimeStatusEvent(
         [
           randomUUID(),
           gatewayInstanceId,
-          toForeignKeyVersion(event.appliedConfigVersion),
+          toConfigVersionReference(event.appliedConfigVersion),
           event.startedAt.toISOString(),
         ],
       );
@@ -74,7 +74,7 @@ async function writeRuntimeStatusEvent(
             heartbeat_at = excluded.heartbeat_at,
             updated_at = excluded.updated_at
         `,
-        [randomUUID(), gatewayInstanceId, toForeignKeyVersion(event.appliedConfigVersion)],
+        [randomUUID(), gatewayInstanceId, toConfigVersionReference(event.appliedConfigVersion)],
       );
       return;
     case "reload-succeeded":
@@ -98,14 +98,14 @@ async function writeRuntimeStatusEvent(
         [
           randomUUID(),
           gatewayInstanceId,
-          toForeignKeyVersion(event.appliedConfigVersion),
-          toForeignKeyVersion(event.targetConfigVersion),
+          toConfigVersionReference(event.appliedConfigVersion),
+          toConfigVersionReference(event.targetConfigVersion),
         ],
       );
       return;
     case "reload-failed":
-      // Leave applied/target config version untouched: the target version may not exist in
-      // config_versions yet, and writing it would violate the foreign key.
+      // Leave applied/target config version untouched: a failed reload may point at
+      // a version that was never published as a durable config row.
       await client.query(
         `
           insert into gateway_runtime_status (
@@ -127,7 +127,7 @@ async function writeRuntimeStatusEvent(
   }
 }
 
-function toForeignKeyVersion(version: number): number | null {
+function toConfigVersionReference(version: number): number | null {
   // config version 0 is the empty snapshot sentinel and has no config_versions row.
   return version > 0 ? version : null;
 }

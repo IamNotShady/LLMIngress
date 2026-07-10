@@ -243,6 +243,22 @@ export async function deleteProviderApiKey(input: {
     description: `Delete provider API key ${input.providerApiKeyId}`,
     changes: [{ table: "provider_api_keys", recordId: input.providerApiKeyId }],
     write: async (client) => {
+      await client.query(
+        `
+          update request_activity
+          set provider_api_key_id = null
+          where provider_api_key_id = $1
+        `,
+        [input.providerApiKeyId],
+      );
+      await client.query(
+        `
+          update fallback_events
+          set provider_api_key_id = null
+          where provider_api_key_id = $1
+        `,
+        [input.providerApiKeyId],
+      );
       const result = await client.query<{ provider_id: string }>(
         `
           delete from provider_api_keys

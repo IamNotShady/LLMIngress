@@ -173,8 +173,8 @@ pre { margin: 0; }
 /* ============ hero ============ */
 .hero { padding-block: clamp(72px, 9vw, 128px) var(--section-pad); overflow: hidden; }
 .hero-grid {
-  display: grid; grid-template-columns: 7fr 5fr;
-  gap: clamp(32px, 5vw, 72px); align-items: center;
+  display: grid; grid-template-columns: 6fr 5fr;
+  gap: clamp(32px, 4vw, 56px); align-items: center;
 }
 .hero .eyebrow { margin-bottom: var(--s-6); }
 .hero h1 { font-size: var(--t-hero); max-width: 13ch; }
@@ -200,7 +200,7 @@ pre { margin: 0; }
 .topo-frame {
   border: 1px solid var(--line-soft); border-radius: var(--r-lg);
   background: var(--bg-raised);
-  padding: clamp(12px, 2vw, 24px);
+  padding: clamp(10px, 1.6vw, 18px);
 }
 .topo-frame svg { display: block; width: 100%; height: auto; }
 .topo .chip { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
@@ -209,8 +209,6 @@ pre { margin: 0; }
 .topo .rail-label { fill: var(--text-3); font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.16em; }
 .topo .path { fill: none; stroke: var(--line); stroke-width: 1.25; }
 .topo .path-hot { fill: none; stroke: var(--accent-deep); stroke-width: 1.8; }
-.topo .path-dead { fill: none; stroke: var(--line); stroke-width: 1.25; stroke-dasharray: 3 5; opacity: 0.7; }
-.topo .path-detour { fill: none; stroke: var(--warn); stroke-width: 1.4; stroke-dasharray: 5 4; opacity: 0.85; }
 .topo .core-panel { fill: oklch(0.19 0.018 292); stroke: oklch(0.5 0.16 292 / 0.85); stroke-width: 1.5; }
 .topo .core-inner { fill: none; stroke: var(--line); stroke-width: 1; opacity: 0.5; }
 .topo .core-slot { fill: var(--accent); }
@@ -219,13 +217,8 @@ pre { margin: 0; }
 .topo .core-label { fill: var(--text); font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
 .topo .core-port { fill: var(--text-3); font-family: var(--f-mono); font-size: 11px; }
 .topo .caption { fill: var(--accent-bright); font-family: var(--f-mono); font-size: 11px; }
-.topo .caption-warn { fill: var(--warn); opacity: 0.9; }
-.topo .badge-429 { fill: oklch(0.79 0.115 75 / 0.14); stroke: var(--warn); stroke-width: 1; }
-.topo .badge-429-text { fill: var(--warn); font-family: var(--f-mono); font-size: 10.5px; font-weight: 500; }
-.topo .detour-label { fill: var(--warn); font-family: var(--f-mono); font-size: 10px; }
 .topo .dot-ok { fill: var(--ok); }
 .topo .pulse { fill: var(--accent-bright); }
-.topo .pulse-warn { fill: var(--warn); }
 .topo-glow { filter: drop-shadow(0 0 22px oklch(0.63 0.19 292 / 0.45)); }
 
 /* ============ pain strip ============ */
@@ -330,13 +323,15 @@ pre { margin: 0; }
 
 /* ============ ecosystem ============ */
 .eco { padding-block: var(--section-pad); }
-.eco-row { display: grid; grid-template-columns: 120px 1fr; gap: var(--s-6); align-items: baseline; }
-.eco-row + .eco-row { margin-top: var(--s-8); padding-top: var(--s-8); border-top: 1px solid var(--line-soft); }
-.eco-label {
-  font-family: var(--f-mono); font-size: var(--t-mono); letter-spacing: 0.14em;
-  color: var(--text-3);
+.eco-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: var(--s-16); margin-top: var(--s-16);
 }
-.chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.eco-col { border-top: 1px solid var(--line); padding-top: var(--s-6); }
+.eco-col h3 { font-size: var(--t-h3); }
+.eco-col h3 .dir { color: var(--text-3); font-weight: 400; font-stretch: 100%; }
+.eco-col > p { margin-top: var(--s-2); font-size: var(--t-small); color: var(--text-2); max-width: 46ch; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-6); }
 .chip-t {
   font-family: var(--f-mono); font-size: var(--t-mono); color: var(--text-2);
   border: 1px solid var(--line); border-radius: 999px;
@@ -442,7 +437,13 @@ pre { margin: 0; }
 
 /* ============ faq ============ */
 .faq { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
-.faq-list { max-width: 760px; margin-top: var(--s-12); }
+.faq-grid {
+  display: grid; grid-template-columns: 4fr 7fr;
+  gap: clamp(32px, 6vw, 96px); align-items: start;
+}
+.faq-head { position: sticky; top: 96px; }
+.faq-head .lede { margin-top: var(--s-4); font-size: var(--t-small); color: var(--text-2); max-width: 34ch; }
+.faq-list { min-width: 0; }
 .faq-item { border-top: 1px solid var(--line); }
 .faq-item:last-child { border-bottom: 1px solid var(--line); }
 .faq-item summary {
@@ -495,6 +496,8 @@ pre { margin: 0; }
   .how-grid { grid-template-columns: 1fr; }
   .code-panel { position: static; }
   .console-grid { grid-template-columns: 1fr; }
+  .faq-grid { grid-template-columns: 1fr; gap: var(--s-12); }
+  .faq-head { position: static; }
 }
 @media (max-width: 768px) {
   .nav-links { display: none; }
@@ -502,7 +505,7 @@ pre { margin: 0; }
   .pain-row { grid-template-columns: 1fr; gap: var(--s-6); }
   .spec-grid { grid-template-columns: 1fr; row-gap: var(--s-8); }
   .shapes { grid-template-columns: 1fr; }
-  .eco-row { grid-template-columns: 1fr; gap: var(--s-3); }
+  .eco-grid { grid-template-columns: 1fr; gap: var(--s-8); }
   .footer-grid { grid-template-columns: 1fr; gap: var(--s-8); }
 }
 
@@ -572,11 +575,11 @@ pre { margin: 0; }
 
     <div class="topo rise rise-6">
       <div class="topo-frame">
-        <svg viewBox="0 0 560 470" role="img" aria-labelledby="topo-t topo-d">
+        <svg viewBox="0 0 560 448" role="img" aria-labelledby="topo-t topo-d">
           <title id="topo-t">LLMIngress routing topology</title>
-          <desc id="topo-d">Five AI agents connect to one LLMIngress gateway.
-            The gateway routes a Claude Code request to Anthropic, and reroutes
-            around an OpenAI 429 rate limit to OpenRouter in under a second.</desc>
+          <desc id="topo-d">Five AI agents connect to one LLMIngress gateway,
+            which routes each request to the right provider — here a Claude
+            Code coding request is routed to Anthropic.</desc>
 
           <!-- rail labels -->
           <text class="rail-label" x="12" y="18">AGENTS</text>
@@ -590,17 +593,11 @@ pre { margin: 0; }
           <path class="path"     d="M148 404 C 200 404, 188 265, 226 260"/>
 
           <!-- core -> providers -->
-          <path class="path-dead" d="M334 211 C 372 205, 366 52, 412 52"/>
+          <path class="path"      d="M334 211 C 372 205, 366 52, 412 52"/>
           <path class="path-hot"  d="M334 224 C 372 222, 366 140, 412 140" id="p-out-hot"/>
           <path class="path"      d="M334 236 C 366 235, 372 228, 412 228"/>
           <path class="path"      d="M334 248 C 372 250, 366 316, 412 316"/>
           <path class="path"      d="M334 260 C 372 265, 360 404, 412 404"/>
-          <!-- 429 detour: bends from the dead OpenAI path into OpenRouter -->
-          <path class="path-detour" d="M366 130 C 392 150, 380 300, 412 308"/>
-
-          <!-- 429 badge on the dead path -->
-          <rect class="badge-429" x="358" y="98" width="36" height="20" rx="6"/>
-          <text class="badge-429-text" x="376" y="112" text-anchor="middle">429</text>
 
           <!-- agent chips -->
           <g>
@@ -645,7 +642,6 @@ pre { margin: 0; }
           <text class="core-label" x="280" y="312" text-anchor="middle">LLMIngress</text>
           <text class="core-port" x="280" y="330" text-anchor="middle">:4000</text>
           <text class="caption" x="280" y="356" text-anchor="middle">coding · ctx 12k → claude-sonnet-4-5</text>
-          <text class="caption caption-warn" x="280" y="376" text-anchor="middle">openai 429 → rerouted via openrouter &lt; 1 s</text>
 
           <!-- traveling pulses (hidden when reduced motion) -->
           <g aria-hidden="true">
@@ -664,10 +660,6 @@ pre { margin: 0; }
             <circle class="pulse" r="2" opacity="0.7">
               <animateMotion dur="5.4s" begin="2.4s" repeatCount="indefinite"
                 path="M148 316 C 196 316, 190 250, 226 248"/>
-            </circle>
-            <circle class="pulse-warn" r="2.5">
-              <animateMotion dur="4s" begin="1.2s" repeatCount="indefinite"
-                path="M366 130 C 392 150, 380 300, 412 308"/>
             </circle>
           </g>
         </svg>
@@ -830,18 +822,28 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
 </section>
 
 <!-- ================= ecosystem ================= -->
-<section class="eco" aria-label="Supported agents and providers">
+<section class="eco" aria-labelledby="eco-h">
   <div class="wrap">
-    <div class="eco-row">
-      <span class="eco-label">AGENTS</span>
-      <div class="chips">
-        <span class="chip-t">Codex</span><span class="chip-t">Claude Code</span><span class="chip-t">Cursor</span><span class="chip-t">OpenCode</span><span class="chip-t">Hermes</span><span class="chip-t">OpenClaw</span><span class="chip-t">GitHub Copilot</span><span class="chip-t more">any OpenAI-compatible agent</span>
-      </div>
+    <div class="section-head">
+      <p class="eyebrow"><b>//</b> COMPATIBILITY</p>
+      <h2 id="eco-h">Works with what you already run.</h2>
     </div>
-    <div class="eco-row">
-      <span class="eco-label">PROVIDERS</span>
-      <div class="chips">
-        <span class="chip-t">OpenAI</span><span class="chip-t">Anthropic</span><span class="chip-t">Google Gemini</span><span class="chip-t">OpenRouter</span><span class="chip-t">DeepSeek</span><span class="chip-t">xAI</span><span class="chip-t">Qwen</span><span class="chip-t">Moonshot</span><span class="chip-t">MiniMax</span><span class="chip-t">Z.ai</span><span class="chip-t">Ollama</span><span class="chip-t">LM Studio</span><span class="chip-t more">llama.cpp + more</span>
+    <div class="eco-grid">
+      <div class="eco-col">
+        <h3>Agents that connect <span class="dir">→ in</span></h3>
+        <p>Any agent that lets you set an OpenAI- or Anthropic-compatible
+          endpoint plugs in with a base URL and a key.</p>
+        <div class="chips">
+          <span class="chip-t">Codex</span><span class="chip-t">Claude Code</span><span class="chip-t">Cursor</span><span class="chip-t">OpenCode</span><span class="chip-t">Hermes</span><span class="chip-t">OpenClaw</span><span class="chip-t">GitHub Copilot</span><span class="chip-t more">any OpenAI-compatible agent</span>
+        </div>
+      </div>
+      <div class="eco-col">
+        <h3>Providers it routes to <span class="dir">out →</span></h3>
+        <p>API keys, personal subscriptions, and local runtimes — configured
+          once, shared by every agent.</p>
+        <div class="chips">
+          <span class="chip-t">OpenAI</span><span class="chip-t">Anthropic</span><span class="chip-t">Google Gemini</span><span class="chip-t">OpenRouter</span><span class="chip-t">DeepSeek</span><span class="chip-t">xAI</span><span class="chip-t">Qwen</span><span class="chip-t">Moonshot</span><span class="chip-t">MiniMax</span><span class="chip-t">Z.ai</span><span class="chip-t">Ollama</span><span class="chip-t">LM Studio</span><span class="chip-t more">llama.cpp + more</span>
+        </div>
       </div>
     </div>
   </div>
@@ -966,13 +968,15 @@ docker compose up --build</pre>
 
 <!-- ================= faq ================= -->
 <section class="faq" id="faq" aria-labelledby="faq-h">
-  <div class="wrap">
-    <div class="section-head">
+  <div class="wrap faq-grid">
+    <div class="faq-head">
       <p class="eyebrow"><b>05</b> FAQ</p>
       <h2 id="faq-h">Fair questions.</h2>
+      <p class="lede">The things developers actually check before running
+        someone else's gateway.</p>
     </div>
     <div class="faq-list">
-      <details class="faq-item">
+      <details class="faq-item" open>
         <summary>Is it open source? <span class="m">+</span></summary>
         <p class="a">Yes — Apache-2.0, self-hosted, built for a single user.
           No SaaS, no telemetry, no account.</p>

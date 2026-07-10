@@ -120,8 +120,7 @@ The hero is the exception: its eyebrow uses a `//` marker instead of an index.
 - Entrance: hero children stagger in (60ms steps), `translateY(12px)` +
   opacity, 600ms `cubic-bezier(0.22, 1, 0.36, 1)` (ease-out-quint).
 - Topology: 2px light dots travel agent→core→provider paths via SVG
-  `animateMotion` (6s loop, staggered); the 429 path pulses amber once per
-  loop. Purely narrative, not decorative.
+  `animateMotion` (staggered loops). Purely narrative, not decorative.
 - Hover: buttons/links 150ms; transform/opacity only, no layout animation.
 - `prefers-reduced-motion: reduce` disables entrances and hides traveling
   dots (static diagram remains fully legible).
@@ -157,7 +156,7 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
 
 ### 4.1 Hero
 
-Two-column grid (7/5) at ≥1024px; stacks text-then-diagram below.
+Two-column grid (6/5) at ≥1024px; stacks text-then-diagram below.
 
 Left column:
 
@@ -173,7 +172,7 @@ Left column:
 - Trust line (mono 13px, `--text-3`):
   `Apache-2.0 · Single-user by design · Keys never leave your box`
 
-Right column — topology diagram (inline SVG, ~560×470):
+Right column — topology diagram (inline SVG, ~560×448):
 
 - Left rail: 5 agent chips — Codex, Claude Code, Cursor, OpenCode, Copilot
   (rounded rects, `--surface`, mono labels).
@@ -182,14 +181,12 @@ Right column — topology diagram (inline SVG, ~560×470):
 - Right rail: 5 provider chips — OpenAI, Anthropic, Google, OpenRouter,
   Ollama (`Ollama · local` gets a `--ok` dot).
 - Curved paths agent→core (violet-deep, 1.5px) and core→provider.
-- Story beats drawn into the diagram:
-  - Active route: `Claude Code → core → Anthropic` path highlighted.
-  - Fallback: `core → OpenAI` path broken with amber `429` badge; a dashed
-    amber detour bends into `OpenRouter`.
-  - Two mono caption lines under the core narrate both beats:
-    `coding · ctx 12k → claude-sonnet-4-5` (violet) and
-    `openai 429 → rerouted via openrouter < 1 s` (amber). Captions stay off
-    the paths — labels never sit on top of a line.
+- Story beat drawn into the diagram: the `Claude Code → core → Anthropic`
+  route is highlighted, with one mono caption line under the core:
+  `coding · ctx 12k → claude-sonnet-4-5` (violet). Captions stay off the
+  paths — labels never sit on top of a line. The fallback/429 story is told
+  in the Console showcase (§4.6) instead of the hero, keeping the diagram
+  clean.
 - Traveling dots per §3.4. Diagram framed in `--r-lg` panel with hairline.
 - Mobile: SVG scales to container width (`max-width: 100%; height: auto`),
   min legible width 340px content.
@@ -271,16 +268,24 @@ curl http://localhost:4000/v1/chat/completions \
 
 Tab switching is the page's only stateful JS (~15 lines vanilla).
 
-### 4.5 Ecosystem Strip
+### 4.5 Ecosystem / Compatibility
 
-Two labeled rows of mono chips (hairline border, `--surface`, 13px):
+Eyebrow `// COMPATIBILITY`. H2: **Works with what you already run.**
+Two-column grid (1 column ≤768px); each column opens with a hairline top
+border, an H3, and a one-line explanation so the chip walls read as a
+concrete compatibility claim, not decoration:
 
-- `AGENTS` — Codex · Claude Code · Cursor · OpenCode · Hermes · OpenClaw ·
+- **Agents that connect `→ in`** — "Any agent that lets you set an OpenAI-
+  or Anthropic-compatible endpoint plugs in with a base URL and a key."
+  Chips: Codex · Claude Code · Cursor · OpenCode · Hermes · OpenClaw ·
   GitHub Copilot · any OpenAI-compatible agent
-- `PROVIDERS` — OpenAI · Anthropic · Google Gemini · OpenRouter · DeepSeek ·
-  xAI · Qwen · Moonshot · MiniMax · Z.ai · Ollama · LM Studio · llama.cpp
+- **Providers it routes to `out →`** — "API keys, personal subscriptions,
+  and local runtimes — configured once, shared by every agent."
+  Chips: OpenAI · Anthropic · Google Gemini · OpenRouter · DeepSeek · xAI ·
+  Qwen · Moonshot · MiniMax · Z.ai · Ollama · LM Studio · llama.cpp
 
-Chips wrap; final chip in each row is a `--text-3` "+ more" style entry.
+Chips are mono 13px with hairline border on `--surface`; the final chip in
+each group is a dashed `--text-3` "+ more" entry.
 
 ### 4.6 Console Showcase
 
@@ -330,8 +335,12 @@ Below, three shape cards (equal row, stacks ≤768px) — title + 2 lines:
 
 ### 4.8 FAQ
 
-Eyebrow `05 — FAQ`. Native `<details>/<summary>` items, hairline dividers,
-`+` marker rotating to `×` when open. Five items:
+Two-column grid (4/7, stacks ≤1024px): left column is a sticky head —
+eyebrow `05 — FAQ`, H2 **Fair questions.**, lede "The things developers
+actually check before running someone else's gateway." Right column is the
+question list: native `<details>/<summary>` items, hairline dividers, `+`
+marker rotating to `×` when open. The first item starts open so the band
+never reads as an empty list. Five items:
 
 1. **Is it open source?** Yes — Apache-2.0, self-hosted, built for a single
    user. No SaaS, no telemetry, no account.
@@ -364,8 +373,8 @@ Eyebrow `05 — FAQ`. Native `<details>/<summary>` items, hairline dividers,
 | Breakpoint | Changes |
 | --- | --- |
 | ≥1280 | Reference design. Content column 1120px |
-| ≤1024 | Hero stacks (text → diagram); console panels stack 1-col; how-it-works stacks (steps → code, sticky disabled) |
-| ≤768 | Nav links → `Menu` disclosure; pain strip, features, deploy cards single column; section padding tightens |
+| ≤1024 | Hero stacks (text → diagram); console panels stack 1-col; how-it-works stacks (steps → code, sticky disabled); FAQ stacks (head → list, sticky disabled) |
+| ≤768 | Nav links → `Menu` disclosure; pain strip, features, compatibility, deploy cards single column; section padding tightens |
 | ≤390 | H1 ≈ 40px; code blocks `overflow-x: auto`; chips wrap; **no horizontal page scroll** (hard requirement) |
 
 ## 6. Accessibility

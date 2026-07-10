@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLMIngress — One gateway for every AI agent</title>
+<meta name="description" content="LLMIngress is a self-hosted AI gateway. Point Codex, Claude Code, Cursor — any OpenAI-compatible agent — at one endpoint: automatic model routing, fallback, budgets, and cost tracking. Your machine, your keys.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e0c14'/%3E%3Crect x='10' y='10' width='44' height='44' rx='11' fill='%2318161f' stroke='%23755bd6' stroke-width='1.5'/%3E%3Crect x='16' y='27' width='13' height='11' rx='3.5' fill='%238b6cff'/%3E%3Crect x='31' y='16' width='11' height='12' rx='3.5' fill='%23393747'/%3E%3Crect x='31' y='36' width='11' height='12' rx='3.5' fill='%23393747'/%3E%3Crect x='42' y='27' width='12' height='11' rx='3.5' fill='%23393747'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Onest:wght@300..800&family=Spline+Sans+Mono:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   LLMIngress marketing site — high-fidelity prototype
+   Spec: docs/website/DESIGN.md
+   ============================================================ */
+
+/* ----- tokens ----- */
+:root {
+  /* color — brand hue 292, all neutrals tinted toward it */
+  --bg:            oklch(0.15 0.012 292);
+  --bg-raised:     oklch(0.18 0.015 292);
+  --surface:       oklch(0.21 0.017 292);
+  --surface-2:     oklch(0.25 0.019 292);
+  --line:          oklch(0.32 0.02 292);
+  --line-soft:     oklch(0.25 0.018 292);
+  --text:          oklch(0.93 0.008 292);
+  --text-2:        oklch(0.74 0.018 292);
+  --text-3:        oklch(0.58 0.024 292);
+  --accent:        oklch(0.66 0.175 292);
+  --accent-bright: oklch(0.78 0.11 292);
+  --accent-deep:   oklch(0.5 0.19 292);
+  --ok:            oklch(0.74 0.11 158);
+  --warn:          oklch(0.79 0.115 75);
+  --ink:           oklch(0.13 0.02 292);
+  --glow: 0 0 48px oklch(0.63 0.19 292 / 0.25);
+
+  /* type */
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Onest", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --t-hero: clamp(2.5rem, 1.2rem + 4.5vw, 4.25rem);
+  --t-h2: clamp(1.8rem, 1.1rem + 2.4vw, 2.75rem);
+  --t-h3: 1.25rem;
+  --t-body: 1.0625rem;
+  --t-small: 0.9375rem;
+  --t-mono: 0.8125rem;
+
+  /* space (4pt scale) */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px; --s-6: 24px;
+  --s-8: 32px; --s-12: 48px; --s-16: 64px; --s-24: 96px; --s-32: 128px;
+  --section-pad: clamp(96px, 12vw, 160px);
+  --gutter: clamp(20px, 4vw, 48px);
+
+  --r-sm: 8px; --r-md: 14px; --r-lg: 24px;
+}
+
+/* ----- base ----- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-2);
+  font-family: var(--f-body);
+  font-size: var(--t-body);
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: 0.004em;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 {
+  font-family: var(--f-display);
+  font-stretch: 118%;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  color: var(--text);
+  margin: 0;
+}
+p { margin: 0; max-width: 62ch; }
+a { color: var(--text); text-decoration: none; }
+code, pre, .mono { font-family: var(--f-mono); font-variant-ligatures: none; }
+pre { margin: 0; }
+:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+::selection { background: oklch(0.5 0.19 292 / 0.45); color: var(--text); }
+
+.wrap { max-width: 1120px; margin-inline: auto; padding-inline: var(--gutter); }
+
+.skip {
+  position: absolute; left: -9999px; top: 12px; z-index: 100;
+  background: var(--accent); color: var(--ink);
+  padding: 10px 18px; border-radius: var(--r-sm);
+  font-family: var(--f-mono); font-size: var(--t-mono);
+}
+.skip:focus-visible { left: 12px; }
+
+/* eyebrow: mono index + label */
+.eyebrow {
+  display: flex; align-items: baseline; gap: var(--s-3);
+  font-family: var(--f-mono); font-size: var(--t-mono);
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: var(--s-6);
+}
+.eyebrow b { font-weight: 500; color: var(--accent-bright); }
+
+.section-head h2 { max-width: 22ch; }
+.section-head .lede { margin-top: var(--s-4); font-size: var(--t-body); color: var(--text-2); }
+
+/* ----- buttons ----- */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--f-body); font-weight: 560; font-size: 0.9375rem;
+  padding: 13px 22px; border-radius: var(--r-md);
+  border: 1px solid transparent;
+  cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease,
+    background-color 150ms ease, border-color 150ms ease;
+}
+.btn-primary { background: var(--accent); color: var(--ink); }
+.btn-primary:hover { background: var(--accent-bright); box-shadow: 0 0 32px oklch(0.63 0.19 292 / 0.28); }
+.btn-primary:active { background: var(--accent-deep); transform: translateY(1px); }
+.btn-ghost { border-color: var(--line); color: var(--text); background: transparent; }
+.btn-ghost:hover { border-color: var(--text-3); background: var(--surface); }
+.btn .ext { color: var(--text-3); font-size: 0.85em; }
+.btn-primary .ext { color: var(--ink); opacity: 0.7; }
+
+/* ============ navbar ============ */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  background: oklch(0.15 0.012 292 / 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.nav-in {
+  height: 64px; display: flex; align-items: center; gap: var(--s-8);
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand svg { display: block; }
+.brand .wordmark {
+  font-family: var(--f-display); font-stretch: 112%; font-weight: 620;
+  font-size: 1.0625rem; letter-spacing: -0.01em; color: var(--text);
+}
+.nav-links { display: flex; gap: var(--s-6); margin-left: auto; }
+.nav-links a { font-size: 0.9375rem; color: var(--text-2); transition: color 150ms ease; }
+.nav-links a:hover { color: var(--text); }
+.nav-gh { margin-left: var(--s-2); }
+.nav-gh .btn { padding: 8px 16px; font-size: 0.875rem; }
+.nav-menu { display: none; margin-left: auto; position: relative; }
+.nav-menu summary {
+  list-style: none; cursor: pointer;
+  font-family: var(--f-mono); font-size: var(--t-mono);
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-2);
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.nav-menu summary::-webkit-details-marker { display: none; }
+.nav-menu[open] summary { background: var(--surface); color: var(--text); }
+.nav-menu .sheet {
+  position: absolute; right: 0; top: calc(100% + 10px);
+  min-width: 200px; padding: var(--s-2);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  display: flex; flex-direction: column;
+}
+.nav-menu .sheet a { padding: 10px 14px; border-radius: var(--r-sm); font-size: 0.9375rem; color: var(--text-2); }
+.nav-menu .sheet a:hover { background: var(--surface-2); color: var(--text); }
+
+/* ============ hero ============ */
+.hero { padding-block: clamp(72px, 9vw, 128px) var(--section-pad); overflow: hidden; }
+.hero-grid {
+  display: grid; grid-template-columns: 7fr 5fr;
+  gap: clamp(32px, 5vw, 72px); align-items: center;
+}
+.hero .eyebrow { margin-bottom: var(--s-6); }
+.hero h1 { font-size: var(--t-hero); max-width: 13ch; }
+.hero .lede {
+  margin-top: var(--s-6); font-size: 1.125rem; line-height: 1.7;
+  max-width: 58ch; color: var(--text-2);
+}
+.hero .lede strong { color: var(--text); font-weight: 560; }
+.cta-row { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-8); }
+.trust {
+  margin-top: var(--s-6); font-family: var(--f-mono); font-size: var(--t-mono);
+  color: var(--text-3); letter-spacing: 0.02em; max-width: none;
+}
+
+/* hero entrance stagger */
+.rise { animation: rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.rise-1 { animation-delay: 40ms; } .rise-2 { animation-delay: 100ms; }
+.rise-3 { animation-delay: 160ms; } .rise-4 { animation-delay: 220ms; }
+.rise-5 { animation-delay: 280ms; } .rise-6 { animation-delay: 360ms; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* topology diagram */
+.topo-frame {
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  background: var(--bg-raised);
+  padding: clamp(12px, 2vw, 24px);
+}
+.topo-frame svg { display: block; width: 100%; height: auto; }
+.topo .chip { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.topo .chip-label { fill: var(--text-2); font-family: var(--f-mono); font-size: 12.5px; }
+.topo .chip-sub { fill: var(--text-3); font-family: var(--f-mono); font-size: 10px; }
+.topo .rail-label { fill: var(--text-3); font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.16em; }
+.topo .path { fill: none; stroke: var(--line); stroke-width: 1.25; }
+.topo .path-hot { fill: none; stroke: var(--accent-deep); stroke-width: 1.8; }
+.topo .path-dead { fill: none; stroke: var(--line); stroke-width: 1.25; stroke-dasharray: 3 5; opacity: 0.7; }
+.topo .path-detour { fill: none; stroke: var(--warn); stroke-width: 1.4; stroke-dasharray: 5 4; opacity: 0.85; }
+.topo .core-panel { fill: oklch(0.19 0.018 292); stroke: oklch(0.5 0.16 292 / 0.85); stroke-width: 1.5; }
+.topo .core-inner { fill: none; stroke: var(--line); stroke-width: 1; opacity: 0.5; }
+.topo .core-slot { fill: var(--accent); }
+.topo .core-socket { fill: oklch(0.32 0.06 292); }
+.topo .core-quiet { fill: var(--surface-2); }
+.topo .core-label { fill: var(--text); font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
+.topo .core-port { fill: var(--text-3); font-family: var(--f-mono); font-size: 11px; }
+.topo .caption { fill: var(--accent-bright); font-family: var(--f-mono); font-size: 11px; }
+.topo .caption-warn { fill: var(--warn); opacity: 0.9; }
+.topo .badge-429 { fill: oklch(0.79 0.115 75 / 0.14); stroke: var(--warn); stroke-width: 1; }
+.topo .badge-429-text { fill: var(--warn); font-family: var(--f-mono); font-size: 10.5px; font-weight: 500; }
+.topo .detour-label { fill: var(--warn); font-family: var(--f-mono); font-size: 10px; }
+.topo .dot-ok { fill: var(--ok); }
+.topo .pulse { fill: var(--accent-bright); }
+.topo .pulse-warn { fill: var(--warn); }
+.topo-glow { filter: drop-shadow(0 0 22px oklch(0.63 0.19 292 / 0.45)); }
+
+/* ============ pain strip ============ */
+.pain {
+  background: var(--bg-raised);
+  border-block: 1px solid var(--line-soft);
+  padding-block: var(--s-16);
+}
+.pain h3 {
+  font-size: clamp(1.25rem, 1rem + 1.2vw, 1.625rem);
+  max-width: 30ch; margin-bottom: var(--s-12);
+}
+.pain-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-12); }
+.pain-item { border-top: 1px solid var(--line); padding-top: var(--s-4); }
+.pain-code {
+  font-family: var(--f-mono); font-size: var(--t-mono); font-weight: 500;
+  letter-spacing: 0.08em; color: var(--warn);
+}
+.pain-item p { margin-top: var(--s-3); font-size: var(--t-small); color: var(--text-2); }
+
+/* ============ features — spec sheet ============ */
+.features { padding-block: var(--section-pad); }
+.spec-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  column-gap: var(--s-16); row-gap: var(--s-12);
+  margin-top: var(--s-16);
+}
+.spec {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-6);
+}
+.spec-id {
+  display: flex; gap: var(--s-3); align-items: baseline;
+  font-family: var(--f-mono); font-size: var(--t-mono);
+}
+.spec-id .n { color: var(--accent-bright); font-weight: 500; }
+.spec-id .code { color: var(--text-3); letter-spacing: 0.08em; }
+.spec h3 { font-size: var(--t-h3); margin-top: var(--s-3); }
+.spec p { margin-top: var(--s-3); font-size: var(--t-small); }
+.spec p code {
+  font-size: 0.85em; color: var(--accent-bright);
+  background: var(--surface); padding: 1px 6px; border-radius: 5px;
+}
+.spec-line {
+  margin-top: var(--s-4);
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.spec-line b { font-weight: 500; color: var(--accent-bright); }
+
+/* ============ how it works ============ */
+.how { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
+.how-grid {
+  display: grid; grid-template-columns: 5fr 6fr;
+  gap: clamp(32px, 6vw, 88px); margin-top: var(--s-16);
+  align-items: start;
+}
+.steps { display: flex; flex-direction: column; gap: var(--s-12); }
+.step { display: grid; grid-template-columns: 44px 1fr; gap: var(--s-4); }
+.step-n {
+  width: 44px; height: 44px; border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  display: grid; place-items: center;
+  font-family: var(--f-mono); font-size: 1rem; color: var(--accent-bright);
+}
+.step h3 { font-size: var(--t-h3); }
+.step p { margin-top: var(--s-2); font-size: var(--t-small); }
+.step p code { font-size: 0.85em; color: var(--accent-bright); background: var(--surface); padding: 1px 6px; border-radius: 5px; }
+
+.code-panel {
+  position: sticky; top: 88px;
+  background: oklch(0.13 0.012 292);
+  border: 1px solid var(--line-soft); border-radius: var(--r-md);
+  overflow: hidden;
+}
+.tabbar { display: flex; border-bottom: 1px solid var(--line-soft); }
+.tab {
+  appearance: none; background: none; border: none;
+  font-family: var(--f-mono); font-size: var(--t-mono); color: var(--text-3);
+  padding: 12px 18px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 150ms ease;
+}
+.tab:hover { color: var(--text-2); }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.code-body { position: relative; }
+.code-body pre {
+  padding: var(--s-6); overflow-x: auto;
+  font-size: var(--t-mono); line-height: 1.75; color: var(--text-2);
+}
+.code-body pre .c { color: var(--text-3); }
+.code-body pre .k { color: var(--accent-bright); }
+.code-body pre .s { color: oklch(0.78 0.09 158); }
+.copy-btn {
+  position: absolute; top: 10px; right: 10px;
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text-3);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 6px 12px; cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.copy-btn:hover { color: var(--text); border-color: var(--text-3); }
+
+/* ============ ecosystem ============ */
+.eco { padding-block: var(--section-pad); }
+.eco-row { display: grid; grid-template-columns: 120px 1fr; gap: var(--s-6); align-items: baseline; }
+.eco-row + .eco-row { margin-top: var(--s-8); padding-top: var(--s-8); border-top: 1px solid var(--line-soft); }
+.eco-label {
+  font-family: var(--f-mono); font-size: var(--t-mono); letter-spacing: 0.14em;
+  color: var(--text-3);
+}
+.chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.chip-t {
+  font-family: var(--f-mono); font-size: var(--t-mono); color: var(--text-2);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; background: var(--surface);
+  white-space: nowrap;
+}
+.chip-t.more { color: var(--text-3); border-style: dashed; background: none; }
+
+/* ============ console showcase ============ */
+.console { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
+.console-grid {
+  display: grid; grid-template-columns: 5fr 4fr 3fr;
+  gap: var(--s-4); margin-top: var(--s-16); align-items: stretch;
+}
+.panel {
+  background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--r-md); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.panel-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
+  font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.panel-bar .live { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.panel-body { padding: var(--s-4); flex: 1; }
+
+/* activity rows */
+.act { display: flex; flex-direction: column; }
+.act-row { padding: 10px 4px; }
+.act-row + .act-row { border-top: 1px solid var(--line-soft); }
+.act-l1 {
+  display: flex; justify-content: space-between; gap: var(--s-3);
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text);
+}
+.act-l1 .agent { color: var(--text-3); }
+.act-l1 .warn { color: var(--warn); }
+.act-l2 {
+  margin-top: 3px; display: flex; gap: 10px;
+  font-family: var(--f-mono); font-size: 0.7rem; color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.st { display: inline-flex; align-items: center; gap: 5px; }
+.st::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
+.st.rr::before { background: var(--warn); }
+.st.rr { color: var(--warn); }
+
+/* usage chart */
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 132px; padding-top: var(--s-2); }
+.chart .bar {
+  flex: 1; border-radius: 4px 4px 2px 2px;
+  background: oklch(0.35 0.055 292);
+  min-width: 10px;
+}
+.chart .bar.today { background: var(--accent); }
+.chart-days {
+  display: flex; gap: 6px; margin-top: 8px;
+  font-family: var(--f-mono); font-size: 0.65rem; color: var(--text-3);
+}
+.chart-days span { flex: 1; text-align: center; min-width: 10px; }
+.savings { margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--line-soft); }
+.savings .big {
+  font-family: var(--f-mono); font-size: 1.125rem; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.savings .big b { color: var(--ok); font-weight: 500; }
+.savings .note { margin-top: 4px; font-family: var(--f-mono); font-size: 0.7rem; color: var(--text-3); }
+
+/* route reason */
+.route-kv { font-family: var(--f-mono); font-size: 0.75rem; }
+.route-kv .kv { display: flex; justify-content: space-between; padding: 6px 4px; color: var(--text-2); }
+.route-kv .kv .k { color: var(--text-3); }
+.route-kv .div { border-top: 1px solid var(--line-soft); margin: 8px 0; }
+.route-kv .pick { color: var(--text); }
+.route-kv .pick .tick { color: var(--ok); }
+.route-kv .fb { color: var(--text-3); line-height: 1.7; padding: 6px 4px; }
+
+/* ============ deploy ============ */
+.deploy { padding-block: var(--section-pad); }
+.deploy-cmd {
+  max-width: 680px; margin-top: var(--s-16);
+  background: oklch(0.13 0.012 292);
+  border: 1px solid var(--line-soft); border-radius: var(--r-md);
+  position: relative;
+}
+.deploy-cmd pre { padding: var(--s-6); overflow-x: auto; font-size: var(--t-mono); line-height: 1.8; color: var(--text-2); }
+.deploy-cmd .c { color: var(--text-3); }
+.deploy-cmd .k { color: var(--accent-bright); }
+.deploy-cap {
+  margin-top: var(--s-3); font-family: var(--f-mono); font-size: 0.75rem;
+  color: var(--text-3); letter-spacing: 0.02em; max-width: none;
+}
+.shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-4); margin-top: var(--s-16); }
+.shape {
+  border: 1px solid var(--line-soft); border-radius: var(--r-md);
+  padding: var(--s-6); background: var(--surface);
+}
+.shape .tag { font-family: var(--f-mono); font-size: 0.7rem; letter-spacing: 0.1em; color: var(--accent-bright); }
+.shape h3 { font-size: 1.125rem; margin-top: var(--s-2); }
+.shape p { margin-top: var(--s-2); font-size: var(--t-small); color: var(--text-2); }
+.shape p code { font-size: 0.85em; color: var(--accent-bright); }
+
+/* ============ faq ============ */
+.faq { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
+.faq-list { max-width: 760px; margin-top: var(--s-12); }
+.faq-item { border-top: 1px solid var(--line); }
+.faq-item:last-child { border-bottom: 1px solid var(--line); }
+.faq-item summary {
+  list-style: none; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-6);
+  padding: var(--s-6) var(--s-1);
+  font-family: var(--f-display); font-stretch: 112%; font-weight: 560;
+  font-size: 1.125rem; color: var(--text);
+  transition: color 150ms ease;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary:hover { color: var(--accent-bright); }
+.faq-item summary .m {
+  font-family: var(--f-mono); font-weight: 400; color: var(--text-3);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.faq-item[open] summary .m { transform: rotate(45deg); }
+.faq-item .a { padding: 0 var(--s-1) var(--s-6); font-size: var(--t-small); max-width: 66ch; }
+.faq-item .a code { font-size: 0.85em; color: var(--accent-bright); }
+
+/* ============ final cta + footer ============ */
+.cta-final { padding-block: var(--section-pad); text-align: left; }
+.cta-final h2 { font-size: var(--t-h2); max-width: 16ch; }
+.cta-final .cta-row { margin-top: var(--s-8); }
+.cta-final .one-liner {
+  margin-top: var(--s-8); font-family: var(--f-mono); font-size: var(--t-mono);
+  color: var(--text-3); overflow-x: auto; white-space: nowrap; padding-bottom: 4px;
+}
+.cta-final .one-liner b { color: var(--text-2); font-weight: 400; }
+
+.footer { border-top: 1px solid var(--line-soft); padding-block: var(--s-16) var(--s-12); }
+.footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--s-12); }
+.footer .brand-col p { margin-top: var(--s-4); font-size: var(--t-small); color: var(--text-3); max-width: 32ch; }
+.footer h4 {
+  margin: 0 0 var(--s-4); font-family: var(--f-mono); font-size: 0.7rem;
+  font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-3);
+}
+.footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.footer ul a { font-size: var(--t-small); color: var(--text-2); }
+.footer ul a:hover { color: var(--text); }
+.footer .legal {
+  margin-top: var(--s-16); padding-top: var(--s-6); border-top: 1px solid var(--line-soft);
+  font-family: var(--f-mono); font-size: 0.75rem; color: var(--text-3);
+}
+
+/* ============ responsive ============ */
+@media (max-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr; }
+  .topo-frame { max-width: 640px; }
+  .how-grid { grid-template-columns: 1fr; }
+  .code-panel { position: static; }
+  .console-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .nav-menu { display: block; }
+  .pain-row { grid-template-columns: 1fr; gap: var(--s-6); }
+  .spec-grid { grid-template-columns: 1fr; row-gap: var(--s-8); }
+  .shapes { grid-template-columns: 1fr; }
+  .eco-row { grid-template-columns: 1fr; gap: var(--s-3); }
+  .footer-grid { grid-template-columns: 1fr; gap: var(--s-8); }
+}
+
+/* ============ motion safety ============ */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .rise { animation: none; }
+  .topo .pulse, .topo .pulse-warn { display: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- ================= navbar ================= -->
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#" aria-label="LLMIngress home">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="4" y="4" width="56" height="56" rx="14" fill="oklch(0.19 0.018 292)" stroke="oklch(0.5 0.16 292 / 0.85)" stroke-width="2"/>
+        <rect x="14" y="27" width="15" height="12" rx="4" fill="oklch(0.66 0.175 292)"/>
+        <rect x="33" y="14" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+        <rect x="33" y="37" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+        <rect x="45" y="27" width="12" height="12" rx="4" fill="oklch(0.32 0.03 292)"/>
+      </svg>
+      <span class="wordmark">LLMIngress</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#deploy">Deploy</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <details class="nav-menu">
+      <summary>Menu</summary>
+      <div class="sheet">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#deploy">Deploy</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </details>
+    <span class="nav-gh"><a class="btn btn-ghost" href="#" rel="noopener">GitHub <span class="ext">↗</span></a></span>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================= hero ================= -->
+<section class="hero" aria-labelledby="hero-h">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow rise rise-1"><b>//</b> SELF-HOSTED AI GATEWAY</p>
+      <h1 id="hero-h" class="rise rise-2">One gateway for every AI&nbsp;agent.</h1>
+      <p class="lede rise rise-3">LLMIngress sits between your coding agents and your model
+        providers. Point Codex, Claude Code, Cursor — any OpenAI-compatible
+        agent — at a single endpoint. It picks the right model for each
+        request, falls back when a provider fails, and meters every token.
+        <strong>On your machine, with your keys.</strong></p>
+      <div class="cta-row rise rise-4">
+        <a class="btn btn-primary" href="#deploy">Deploy locally</a>
+        <a class="btn btn-ghost" href="#" rel="noopener">View on GitHub <span class="ext">↗</span></a>
+      </div>
+      <p class="trust rise rise-5">Apache-2.0 · Single-user by design · Keys never leave your box</p>
+    </div>
+
+    <div class="topo rise rise-6">
+      <div class="topo-frame">
+        <svg viewBox="0 0 560 470" role="img" aria-labelledby="topo-t topo-d">
+          <title id="topo-t">LLMIngress routing topology</title>
+          <desc id="topo-d">Five AI agents connect to one LLMIngress gateway.
+            The gateway routes a Claude Code request to Anthropic, and reroutes
+            around an OpenAI 429 rate limit to OpenRouter in under a second.</desc>
+
+          <!-- rail labels -->
+          <text class="rail-label" x="12" y="18">AGENTS</text>
+          <text class="rail-label" x="412" y="18">PROVIDERS</text>
+
+          <!-- connection paths: agents -> core -->
+          <path class="path"     d="M148 52  C 196 52, 190 205, 226 211"/>
+          <path class="path-hot" d="M148 140 C 196 140, 190 222, 226 224" id="p-in-hot"/>
+          <path class="path"     d="M148 228 C 190 228, 196 235, 226 236"/>
+          <path class="path"     d="M148 316 C 196 316, 190 250, 226 248"/>
+          <path class="path"     d="M148 404 C 200 404, 188 265, 226 260"/>
+
+          <!-- core -> providers -->
+          <path class="path-dead" d="M334 211 C 372 205, 366 52, 412 52"/>
+          <path class="path-hot"  d="M334 224 C 372 222, 366 140, 412 140" id="p-out-hot"/>
+          <path class="path"      d="M334 236 C 366 235, 372 228, 412 228"/>
+          <path class="path"      d="M334 248 C 372 250, 366 316, 412 316"/>
+          <path class="path"      d="M334 260 C 372 265, 360 404, 412 404"/>
+          <!-- 429 detour: bends from the dead OpenAI path into OpenRouter -->
+          <path class="path-detour" d="M366 130 C 392 150, 380 300, 412 308"/>
+
+          <!-- 429 badge on the dead path -->
+          <rect class="badge-429" x="358" y="98" width="36" height="20" rx="6"/>
+          <text class="badge-429-text" x="376" y="112" text-anchor="middle">429</text>
+
+          <!-- agent chips -->
+          <g>
+            <rect class="chip" x="8"  y="30"  width="140" height="44" rx="10"/>
+            <text class="chip-label" x="24" y="57">codex</text>
+            <rect class="chip" x="8"  y="118" width="140" height="44" rx="10" stroke="oklch(0.5 0.16 292 / 0.8)"/>
+            <text class="chip-label" x="24" y="145" fill="oklch(0.93 0.008 292)">claude-code</text>
+            <rect class="chip" x="8"  y="206" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="24" y="233">cursor</text>
+            <rect class="chip" x="8"  y="294" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="24" y="321">opencode</text>
+            <rect class="chip" x="8"  y="382" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="24" y="409">copilot</text>
+          </g>
+
+          <!-- provider chips -->
+          <g>
+            <rect class="chip" x="412" y="30"  width="140" height="44" rx="10"/>
+            <text class="chip-label" x="428" y="57">openai</text>
+            <rect class="chip" x="412" y="118" width="140" height="44" rx="10" stroke="oklch(0.5 0.16 292 / 0.8)"/>
+            <text class="chip-label" x="428" y="145" fill="oklch(0.93 0.008 292)">anthropic</text>
+            <rect class="chip" x="412" y="206" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="428" y="233">google</text>
+            <rect class="chip" x="412" y="294" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="428" y="321">openrouter</text>
+            <rect class="chip" x="412" y="382" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="428" y="409">ollama</text>
+            <circle class="dot-ok" cx="524" cy="399" r="3"/>
+            <text class="chip-sub" x="428" y="421">local · $0</text>
+          </g>
+
+          <!-- gateway core (echoes brand icon) -->
+          <g class="topo-glow">
+            <rect class="core-panel" x="226" y="181" width="108" height="108" rx="24"/>
+            <rect class="core-inner" x="234" y="189" width="92" height="92" rx="18"/>
+            <!-- active slot + sockets, from the brand icon -->
+            <rect class="core-slot" x="246" y="226" width="28" height="22" rx="7"/>
+            <rect class="core-socket" x="278" y="232" width="11" height="10" rx="5"/>
+            <rect class="core-quiet" x="294" y="202" width="20" height="22" rx="7"/>
+            <rect class="core-quiet" x="294" y="246" width="20" height="22" rx="7"/>
+          </g>
+          <text class="core-label" x="280" y="312" text-anchor="middle">LLMIngress</text>
+          <text class="core-port" x="280" y="330" text-anchor="middle">:4000</text>
+          <text class="caption" x="280" y="356" text-anchor="middle">coding · ctx 12k → claude-sonnet-4-5</text>
+          <text class="caption caption-warn" x="280" y="376" text-anchor="middle">openai 429 → rerouted via openrouter &lt; 1 s</text>
+
+          <!-- traveling pulses (hidden when reduced motion) -->
+          <g aria-hidden="true">
+            <circle class="pulse" r="2.5">
+              <animateMotion dur="3.2s" repeatCount="indefinite"
+                path="M148 140 C 196 140, 190 222, 226 224"/>
+            </circle>
+            <circle class="pulse" r="2.5">
+              <animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite"
+                path="M334 224 C 372 222, 366 140, 412 140"/>
+            </circle>
+            <circle class="pulse" r="2" opacity="0.7">
+              <animateMotion dur="4.8s" begin="0.8s" repeatCount="indefinite"
+                path="M148 52 C 196 52, 190 205, 226 211"/>
+            </circle>
+            <circle class="pulse" r="2" opacity="0.7">
+              <animateMotion dur="5.4s" begin="2.4s" repeatCount="indefinite"
+                path="M148 316 C 196 316, 190 250, 226 248"/>
+            </circle>
+            <circle class="pulse-warn" r="2.5">
+              <animateMotion dur="4s" begin="1.2s" repeatCount="indefinite"
+                path="M366 130 C 392 150, 380 300, 412 308"/>
+            </circle>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= pain strip ================= -->
+<section class="pain" aria-labelledby="pain-h">
+  <div class="wrap">
+    <h3 id="pain-h">Running three agents shouldn’t feel like running three billing departments.</h3>
+    <div class="pain-row">
+      <div class="pain-item">
+        <span class="pain-code">KEY_SPRAWL</span>
+        <p>Every agent wants its own provider keys, base URLs, and model
+          lists. You maintain N copies of the same config.</p>
+      </div>
+      <div class="pain-item">
+        <span class="pain-code">COST_BLINDSPOT</span>
+        <p>Which agent burned $14 yesterday? Without a shared ledger, nobody
+          knows until the invoice arrives.</p>
+      </div>
+      <div class="pain-item">
+        <span class="pain-code">PROVIDER_DOWN</span>
+        <p>One 429 and your whole session stalls. Retrying by hand is not a
+          fallback strategy.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= features ================= -->
+<section class="features" id="features" aria-labelledby="feat-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>01</b> CAPABILITIES</p>
+      <h2 id="feat-h">Everything between the agent and the model.</h2>
+    </div>
+    <div class="spec-grid">
+      <article class="spec">
+        <p class="spec-id"><span class="n">01</span> <span class="code">ONE_ENDPOINT</span></p>
+        <h3>Unified ingress</h3>
+        <p>OpenAI- and Anthropic-compatible APIs from one port. Chat,
+          responses, messages, embeddings — every agent speaks to the same
+          door, each with its own scoped key.</p>
+        <p class="spec-line"><b>spec:</b> /v1/chat/completions · /v1/messages · /v1/responses · /v1/embeddings</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">02</span> <span class="code">VIRTUAL_MODELS</span></p>
+        <h3>Routing that reads the request</h3>
+        <p>Agents ask for <code>code-fast</code>. A deterministic rule engine
+          resolves the real model from task type, context length, and tool
+          use. Same request, same route — no LLM judge in the loop.</p>
+        <p class="spec-line"><b>spec:</b> p95 routing overhead &lt; 100 ms</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">03</span> <span class="code">FALLBACK_CHAIN</span></p>
+        <h3>Failure is a routing event</h3>
+        <p>429s, 5xx, timeouts — the request moves to the next model in the
+          chain, up to five deep, across providers and local models. Your
+          agent never sees the outage.</p>
+        <p class="spec-line"><b>spec:</b> triggers before first streamed chunk</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">04</span> <span class="code">COST_LEDGER</span></p>
+        <h3>Every token accounted</h3>
+        <p>Tokens, cost, and latency per agent, per virtual model, per
+          provider — plus savings measured against a fixed baseline model.</p>
+        <p class="spec-line"><b>spec:</b> cache + reasoning tokens tracked separately</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">05</span> <span class="code">HARD_LIMITS</span></p>
+        <h3>Budgets with teeth</h3>
+        <p>Per-agent budgets from hourly to monthly, RPM / TPM / concurrency
+          caps. Block or notify at threshold. A runaway loop dies at the
+          gate, not on your card.</p>
+        <p class="spec-line"><b>spec:</b> block · notify · webhook</p>
+      </article>
+      <article class="spec">
+        <p class="spec-id"><span class="n">06</span> <span class="code">YOUR_METAL</span></p>
+        <h3>Self-hosted, single-user</h3>
+        <p>Runs on your laptop or server, binds to localhost by default.
+          Provider keys encrypted at rest; prompts recorded only if you opt
+          in.</p>
+        <p class="spec-line"><b>spec:</b> Node + Postgres · one compose file</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= how it works ================= -->
+<section class="how" id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>02</b> SETUP</p>
+      <h2 id="how-h">Three steps, one endpoint.</h2>
+    </div>
+    <div class="how-grid">
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">1</div>
+          <div>
+            <h3>Connect your providers</h3>
+            <p>Paste API keys for OpenAI, Anthropic, Google, OpenRouter — or
+              point at local Ollama. Keys are encrypted at rest and never
+              shown again.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">2</div>
+          <div>
+            <h3>Define virtual models</h3>
+            <p>Name a policy like <code>code-fast</code> or
+              <code>deep-reasoning</code>; set its model scope, cost
+              preference, and a fallback chain.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">3</div>
+          <div>
+            <h3>Point your agents at the gateway</h3>
+            <p>Each agent gets the base URL, its own <code>llmi_</code> key,
+              and a budget. Done — every request now routes, falls back, and
+              gets metered.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-panel">
+        <div class="tabbar" role="tablist" aria-label="Agent configuration examples">
+          <button class="tab" role="tab" aria-selected="true" aria-controls="tp-cc" id="tab-cc">claude-code</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="tp-cx" id="tab-cx">codex</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="tp-curl" id="tab-curl">curl</button>
+        </div>
+        <div class="code-body">
+          <button class="copy-btn" data-copy-target="tp-cc">copy</button>
+          <pre id="tp-cc" role="tabpanel" aria-labelledby="tab-cc" tabindex="0"><span class="c"># Claude Code → LLMIngress</span>
+export ANTHROPIC_BASE_URL=<span class="s">"http://localhost:4000"</span>
+export ANTHROPIC_AUTH_TOKEN=<span class="s">"llmi_cc_4f8a…"</span>
+
+claude   <span class="c"># model: code-fast (virtual)</span></pre>
+          <pre id="tp-cx" role="tabpanel" aria-labelledby="tab-cx" tabindex="0" hidden><span class="c"># Codex — ~/.codex/config.toml</span>
+<span class="k">model</span> = <span class="s">"code-fast"</span>
+<span class="k">model_provider</span> = <span class="s">"llmingress"</span>
+
+[model_providers.llmingress]
+<span class="k">name</span>     = <span class="s">"LLMIngress"</span>
+<span class="k">base_url</span> = <span class="s">"http://localhost:4000/v1"</span>
+<span class="k">env_key</span>  = <span class="s">"LLMINGRESS_API_KEY"</span>  <span class="c"># llmi_cx_9b2e…</span></pre>
+          <pre id="tp-curl" role="tabpanel" aria-labelledby="tab-curl" tabindex="0" hidden>curl http://localhost:4000/v1/chat/completions \
+  -H <span class="s">"Authorization: Bearer llmi_dev_a1c3…"</span> \
+  -d <span class="s">'{ "model": "code-fast",
+        "messages": [{ "role": "user",
+                       "content": "…" }] }'</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ecosystem ================= -->
+<section class="eco" aria-label="Supported agents and providers">
+  <div class="wrap">
+    <div class="eco-row">
+      <span class="eco-label">AGENTS</span>
+      <div class="chips">
+        <span class="chip-t">Codex</span><span class="chip-t">Claude Code</span><span class="chip-t">Cursor</span><span class="chip-t">OpenCode</span><span class="chip-t">Hermes</span><span class="chip-t">OpenClaw</span><span class="chip-t">GitHub Copilot</span><span class="chip-t more">any OpenAI-compatible agent</span>
+      </div>
+    </div>
+    <div class="eco-row">
+      <span class="eco-label">PROVIDERS</span>
+      <div class="chips">
+        <span class="chip-t">OpenAI</span><span class="chip-t">Anthropic</span><span class="chip-t">Google Gemini</span><span class="chip-t">OpenRouter</span><span class="chip-t">DeepSeek</span><span class="chip-t">xAI</span><span class="chip-t">Qwen</span><span class="chip-t">Moonshot</span><span class="chip-t">MiniMax</span><span class="chip-t">Z.ai</span><span class="chip-t">Ollama</span><span class="chip-t">LM Studio</span><span class="chip-t more">llama.cpp + more</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= console showcase ================= -->
+<section class="console" aria-labelledby="con-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>03</b> OBSERVABILITY</p>
+      <h2 id="con-h">The Console shows its work.</h2>
+      <p class="lede">Every request explains itself: which model, why, and
+        what it cost. No black-box routing.</p>
+    </div>
+    <div class="console-grid">
+
+      <div class="panel">
+        <div class="panel-bar"><span class="live"></span> activity — live</div>
+        <div class="panel-body act">
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">codex&nbsp;&nbsp;</span>code-fast → gpt-5-mini</span></div>
+            <div class="act-l2"><span>412 ms</span><span>$0.0021</span><span class="st">ok</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">claude-code&nbsp;&nbsp;</span>deep-reasoning → claude-opus-4-8</span></div>
+            <div class="act-l2"><span>2.1 s</span><span>$0.0834</span><span class="st">ok</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">cursor&nbsp;&nbsp;</span>code-fast → deepseek-v3</span></div>
+            <div class="act-l2"><span>388 ms</span><span>$0.0007</span><span class="st">ok</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">opencode&nbsp;&nbsp;</span>code-fast <span class="warn">⚠ 429</span> → qwen3-coder</span></div>
+            <div class="act-l2"><span>903 ms</span><span>$0.0004</span><span class="st rr">rerouted</span></div>
+          </div>
+          <div class="act-row">
+            <div class="act-l1"><span><span class="agent">claude-code&nbsp;&nbsp;</span>long-context → gemini-2.5-pro</span></div>
+            <div class="act-l2"><span>1.4 s</span><span>$0.0179</span><span class="st">ok</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-bar">usage — 7 days</div>
+        <div class="panel-body">
+          <div class="chart" role="img" aria-label="Daily cost, last 7 days, between 1 and 5 dollars per day">
+            <div class="bar" style="height:46%"></div>
+            <div class="bar" style="height:72%"></div>
+            <div class="bar" style="height:38%"></div>
+            <div class="bar" style="height:88%"></div>
+            <div class="bar" style="height:57%"></div>
+            <div class="bar" style="height:24%"></div>
+            <div class="bar today" style="height:64%"></div>
+          </div>
+          <div class="chart-days" aria-hidden="true">
+            <span>Th</span><span>Fr</span><span>Sa</span><span>Su</span><span>Mo</span><span>Tu</span><span>We</span>
+          </div>
+          <div class="savings">
+            <p class="big">saved <b>$31.40</b> (−62%)</p>
+            <p class="note">auto-routing vs claude-opus-4-8 baseline</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-bar">route — reason</div>
+        <div class="panel-body route-kv">
+          <div class="kv"><span class="k">ctx_est</span><span>9.4k</span></div>
+          <div class="kv"><span class="k">tools</span><span>yes</span></div>
+          <div class="kv"><span class="k">task</span><span>coding</span></div>
+          <div class="div" role="presentation"></div>
+          <div class="kv pick"><span class="k">tier 1</span><span>deepseek-v3 <span class="tick">✓</span></span></div>
+          <p class="fb">fallbacks:<br>qwen3-coder,<br>gpt-5-mini</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= deploy ================= -->
+<section class="deploy" id="deploy" aria-labelledby="dep-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>04</b> DEPLOY</p>
+      <h2 id="dep-h">Runs where you work.</h2>
+    </div>
+
+    <div class="deploy-cmd">
+      <button class="copy-btn" data-copy-target="deploy-pre">copy</button>
+      <pre id="deploy-pre"><span class="c"># secrets are required — no public defaults</span>
+export <span class="k">MASTER_KEY</span>=$(openssl rand -base64 32)
+export <span class="k">POSTGRES_PASSWORD</span>=$(openssl rand -base64 32)
+export <span class="k">CONSOLE_SETUP_TOKEN</span>=$(openssl rand -base64 32)
+
+docker compose up --build</pre>
+    </div>
+    <p class="deploy-cap">Gateway :4000 · Console :3000 · bound to 127.0.0.1 by default</p>
+
+    <div class="shapes">
+      <div class="shape">
+        <span class="tag">RECOMMENDED</span>
+        <h3>Docker Compose</h3>
+        <p>Postgres included, migrations run once, secrets required up
+          front. Nothing listens publicly unless you say so.</p>
+      </div>
+      <div class="shape">
+        <span class="tag">FOR HACKING</span>
+        <h3>Local Node</h3>
+        <p><code>pnpm install && ./init.sh</code> against your own Postgres.
+          The full dev loop for contributing.</p>
+      </div>
+      <div class="shape">
+        <span class="tag">ALWAYS ON</span>
+        <h3>Server / VPS</h3>
+        <p>Same compose file. Expose the Console deliberately, set
+          <code>CONSOLE_PUBLIC_BASE_URL</code>, keep the Gateway private.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= faq ================= -->
+<section class="faq" id="faq" aria-labelledby="faq-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow"><b>05</b> FAQ</p>
+      <h2 id="faq-h">Fair questions.</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary>Is it open source? <span class="m">+</span></summary>
+        <p class="a">Yes — Apache-2.0, self-hosted, built for a single user.
+          No SaaS, no telemetry, no account.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Which agents can connect? <span class="m">+</span></summary>
+        <p class="a">Anything that lets you set an OpenAI-compatible base URL
+          — Codex, Cursor, OpenCode, and GitHub Copilot among them. Claude
+          Code connects natively through the Anthropic-compatible
+          <code>/v1/messages</code> endpoint.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Are my prompts stored? <span class="m">+</span></summary>
+        <p class="a">By default, no — the gateway records metadata only
+          (model, tokens, cost, latency). Content recording is per-agent
+          opt-in, and you can delete any record.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Do my provider keys ever leave my machine? <span class="m">+</span></summary>
+        <p class="a">No. Agents only ever hold their own <code>llmi_</code>
+          gateway keys. Provider keys stay on your deployment, encrypted at
+          rest.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What does it cost to run? <span class="m">+</span></summary>
+        <p class="a">The software is free. You pay providers directly, at
+          their prices — and the Usage page shows what auto-routing saved you
+          against a fixed baseline model.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= final cta ================= -->
+<section class="cta-final" aria-labelledby="cta-h">
+  <div class="wrap">
+    <h2 id="cta-h">Give your agents one door.</h2>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#deploy">Deploy locally</a>
+      <a class="btn btn-ghost" href="#" rel="noopener">Read the docs <span class="ext">↗</span></a>
+    </div>
+    <p class="one-liner">$ <b>docker compose up --build</b>&nbsp;&nbsp;# Gateway :4000 · Console :3000</p>
+  </div>
+</section>
+
+<!-- ================= footer ================= -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="brand-col">
+        <a class="brand" href="#" aria-label="LLMIngress home">
+          <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true">
+            <rect x="4" y="4" width="56" height="56" rx="14" fill="oklch(0.19 0.018 292)" stroke="oklch(0.5 0.16 292 / 0.85)" stroke-width="2"/>
+            <rect x="14" y="27" width="15" height="12" rx="4" fill="oklch(0.66 0.175 292)"/>
+            <rect x="33" y="14" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+            <rect x="33" y="37" width="12" height="13" rx="4" fill="oklch(0.32 0.03 292)"/>
+            <rect x="45" y="27" width="12" height="12" rx="4" fill="oklch(0.32 0.03 292)"/>
+          </svg>
+          <span class="wordmark">LLMIngress</span>
+        </a>
+        <p>A self-hosted AI gateway for AI agents. One endpoint, every
+          model, your keys.</p>
+      </div>
+      <nav aria-label="Product">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#deploy">Deploy</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="#" rel="noopener">GitHub ↗</a></li>
+          <li><a href="#" rel="noopener">Docs ↗</a></li>
+          <li><a href="#" rel="noopener">License · Apache-2.0</a></li>
+          <li><a href="#" rel="noopener">Changelog ↗</a></li>
+        </ul>
+      </nav>
+    </div>
+    <p class="legal">© 2026 LLMIngress · not affiliated with any model provider</p>
+  </div>
+</footer>
+
+</main>
+
+<script>
+/* tabs */
+document.querySelectorAll('[role="tablist"]').forEach(function (list) {
+  var tabs = list.querySelectorAll('[role="tab"]');
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) {
+        t.setAttribute('aria-selected', String(t === tab));
+        var panel = document.getElementById(t.getAttribute('aria-controls'));
+        if (panel) panel.hidden = t !== tab;
+      });
+      var copyBtn = list.parentElement.querySelector('.copy-btn');
+      if (copyBtn) copyBtn.dataset.copyTarget = tab.getAttribute('aria-controls');
+    });
+  });
+});
+
+/* copy buttons */
+document.querySelectorAll('.copy-btn').forEach(function (btn) {
+  var live = document.createElement('span');
+  live.setAttribute('aria-live', 'polite');
+  live.className = 'sr-live';
+  btn.after(live);
+  btn.addEventListener('click', function () {
+    var pre = document.getElementById(btn.dataset.copyTarget);
+    if (!pre) return;
+    navigator.clipboard.writeText(pre.textContent.trim()).then(function () {
+      btn.textContent = 'copied';
+      live.textContent = 'Copied to clipboard';
+      setTimeout(function () { btn.textContent = 'copy'; live.textContent = ''; }, 1600);
+    });
+  });
+});
+
+/* close mobile menu on link click */
+document.querySelectorAll('.nav-menu .sheet a').forEach(function (a) {
+  a.addEventListener('click', function () {
+    a.closest('details').removeAttribute('open');
+  });
+});
+</script>
+</body>
+</html>

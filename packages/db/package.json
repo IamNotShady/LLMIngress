@@ -72,6 +72,10 @@
       "types": "./src/console-notification-channels.ts",
       "default": "./src/console-notification-channels.ts"
     },
+    "./console-operation-error": {
+      "types": "./src/console-operation-error.ts",
+      "default": "./src/console-operation-error.ts"
+    },
     "./console-price-overrides": {
       "types": "./src/console-price-overrides.ts",
       "default": "./src/console-price-overrides.ts"

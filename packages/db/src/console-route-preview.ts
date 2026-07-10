@@ -11,6 +11,7 @@ import {
   selectRouteCandidate,
 } from "@llmingress/domain";
 import { z } from "zod";
+import { consoleValidationError } from "./console-operation-error.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export type RoutePreviewInput = {
@@ -86,18 +87,27 @@ const routePreviewInputSchema = z.object({
 
 export function normalizeRoutePreviewInput(input: unknown): RoutePreviewInput {
   if (!isRecord(input)) {
-    throw new Error("Route preview request must be a JSON object.");
+    throw consoleValidationError(
+      "Route preview request must be a JSON object.",
+      "route_preview_invalid",
+    );
   }
   if (
     (input.virtualModelId === undefined || input.virtualModelId === null) &&
     (input.virtualModelName === undefined || input.virtualModelName === null)
   ) {
-    throw new Error("Route preview requires virtualModelId or virtualModelName.");
+    throw consoleValidationError(
+      "Route preview requires virtualModelId or virtualModelName.",
+      "route_preview_missing_virtual_model",
+    );
   }
 
   const parsed = routePreviewInputSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Route preview request is invalid.");
+    throw consoleValidationError(
+      parsed.error.issues[0]?.message ?? "Route preview request is invalid.",
+      "route_preview_invalid",
+    );
   }
   return omitUndefined(parsed.data);
 }

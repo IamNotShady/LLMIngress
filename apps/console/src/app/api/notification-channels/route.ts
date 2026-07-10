@@ -14,7 +14,13 @@ export const POST = withConsoleAuth(async (request) => {
 
   try {
     if (action !== "create") {
-      return NextResponse.json({ error: "Unknown notification channel action." }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Unknown notification channel action.",
+          code: "notification_channel_action_unknown",
+        },
+        { status: 400 },
+      );
     }
 
     await createNotificationChannel({

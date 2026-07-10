@@ -1,4 +1,5 @@
 import { PostgresClient } from "@llmingress/db/client";
+import { consoleValidationError } from "./console-operation-error.ts";
 
 export type ConsoleAnalyticsBucket = "day" | "hour";
 
@@ -117,10 +118,16 @@ export function normalizeConsoleAnalyticsInput(
   const start = readDate(input.start);
   const end = readDate(input.end);
   if (!start || !end) {
-    throw new Error("Analytics start and end dates are required.");
+    throw consoleValidationError(
+      "Analytics start and end dates are required.",
+      "analytics_dates_required",
+    );
   }
   if (end.getTime() <= start.getTime()) {
-    throw new Error("Analytics end date must be after start date.");
+    throw consoleValidationError(
+      "Analytics end date must be after start date.",
+      "analytics_date_range_invalid",
+    );
   }
 
   const durationMs = end.getTime() - start.getTime();

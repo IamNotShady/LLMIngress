@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
 import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export type {
@@ -345,7 +346,7 @@ export async function deleteAgentLimitRules(input: {
 async function assertAgentExists(client: QueryClient, id: string): Promise<void> {
   const result = await client.query("select 1 from agents where id = $1 for update", [id]);
   if (!result.rows[0]) {
-    throw new Error("Agent was not found.");
+    throw consoleNotFoundError("Agent was not found.", "agent_not_found", { agentId: id });
   }
 }
 
@@ -390,8 +391,9 @@ async function assertAccessibleRouteCandidatePricesKnown(
       return `${candidate.virtual_model_display_name} (${candidate.virtual_model_name}) candidate ${candidate.provider_display_name} - ${candidate.model_display_name} (${candidate.model_id})`;
     })
     .join("; ");
-  throw new Error(
+  throw consoleValidationError(
     `Cannot enable cost budget because the Agent can reach route candidates with unknown price: ${candidateLabels}. Save a manual price override, sync prices, or choose priced replacements before enabling the budget.`,
+    "agent_budget_unknown_price_candidates",
   );
 }
 
@@ -586,7 +588,10 @@ function formatLimitSummary(limit: ConsoleAgentLimit | undefined): string {
 function normalizeBudgetPeriod(value: string | null | undefined): (typeof budgetPeriods)[number] {
   const period = normalizeRequiredText(value, "Budget period");
   if (!budgetPeriods.includes(period as (typeof budgetPeriods)[number])) {
-    throw new Error("Budget period must be day, week, or month.");
+    throw consoleValidationError(
+      "Budget period must be day, week, or month.",
+      "budget_period_invalid",
+    );
   }
   return period as (typeof budgetPeriods)[number];
 }
@@ -594,7 +599,13 @@ function normalizeBudgetPeriod(value: string | null | undefined): (typeof budget
 function normalizePositiveNumber(value: string | number | null | undefined, label: string): number {
   const numberValue = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numberValue) || numberValue <= 0) {
-    throw new Error(`${label} must be greater than zero.`);
+    throw consoleValidationError(
+      `${label} must be greater than zero.`,
+      "agent_limit_value_invalid",
+      {
+        field: label,
+      },
+    );
   }
   return numberValue;
 }
@@ -603,7 +614,10 @@ function normalizeAlertThresholdPercent(value: string | number | null | undefine
   const rawValue = value ?? defaultAgentLimitFormValues.alertThresholdPercent;
   const numberValue = typeof rawValue === "number" ? rawValue : Number(rawValue);
   if (!Number.isFinite(numberValue) || numberValue <= 0 || numberValue > 100) {
-    throw new Error("Alert threshold must be greater than zero and no more than 100.");
+    throw consoleValidationError(
+      "Alert threshold must be greater than zero and no more than 100.",
+      "agent_limit_alert_threshold_invalid",
+    );
   }
   return numberValue / 100;
 }
@@ -611,7 +625,7 @@ function normalizeAlertThresholdPercent(value: string | number | null | undefine
 function normalizeRequiredText(value: string | null | undefined, label: string): string {
   const normalized = value?.trim();
   if (!normalized) {
-    throw new Error(`${label} is required.`);
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field: label });
   }
   return normalized;
 }

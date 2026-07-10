@@ -285,6 +285,17 @@
       "evidence": "2026-07-08: TDD red->green. withConsoleAuth guard across 14 routes, consoleActionErrorResponse maps unexpected errors to 500 without leaking messages, agent-created HTML extracted to _created-page.ts. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed. 2026-07-09: provider-oauth and providers routes sanitize surfaced errors via classifier / consoleActionErrorResponse, no longer exposing internal error.message; added static wiring coverage and unauthenticated E2E coverage."
     },
     {
+      "id": "console-request-security-contract",
+      "name": "Console Request Security Contract",
+      "description": "All mutating Console requests, including setup, login, and logout, require an Origin header that exactly matches CONSOLE_PUBLIC_BASE_URL or the current request origin when no public URL is configured; safe methods skip CSRF checks. Console business errors use explicit ConsoleOperationError kinds mapped to 400/404/409, JSON errors preserve the legacy string error field while adding code/details/errorId, and unknown exceptions return internal_error with a server-side-only original error.",
+      "verification": "pnpm exec vitest run tests/features/console-request-security-contract.unit.test.ts && pnpm test:e2e tests/e2e/console-request-security-contract.e2e.spec.ts",
+      "dependencies": [
+        "console-api-hygiene"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Added shared Console Origin guard for all mutating routes including setup/login/logout, CONSOLE_PUBLIC_BASE_URL exact-origin matching, explicit ConsoleOperationError validation/not_found/conflict mapping, generic internal_error responses with errorId, stable config-import validation code, and static coverage that direct Console JSON errors include code. Focused unit+E2E, pnpm run verify, and pnpm run verify:features passed; the final optimized E2E batch hit a v1-gateway-routing activity-row flake, fallback re-ran all 40 passing features successfully."
+    },
+    {
       "id": "console-sections-split",
       "name": "Console Sections Split",
       "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",

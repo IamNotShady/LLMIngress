@@ -31,12 +31,16 @@ test("console api rejects unauthenticated API actions with 401", async () => {
           body: new URLSearchParams({ action: "create" }),
           method: "POST",
         });
-        expect(response.status).toBe(401);
-        expect(await response.json()).toEqual({ error: "Authentication required." });
+        expect(response.status).toBe(403);
+        expect(await response.json()).toMatchObject({
+          code: "csrf_origin_mismatch",
+          error: "Request origin is not allowed.",
+        });
 
         for (const path of ["/api/providers", "/api/provider-oauth"]) {
           const routeResponse = await fetch(`${baseUrl}${path}`, {
             body: new URLSearchParams({ action: "create" }),
+            headers: { origin: baseUrl },
             method: "POST",
           });
           expect(routeResponse.status, path).toBe(401);
@@ -74,6 +78,7 @@ test("console api keeps validation errors as 400 with their message", async ({ b
           await signInFromFirstRun(page, baseUrl);
           const response = await page.request.post(`${baseUrl}/api/agents`, {
             form: { action: "create" },
+            headers: { origin: baseUrl },
           });
           expect(response.status()).toBe(400);
           const body = await response.json();

@@ -10,6 +10,11 @@ import {
   type RouteEndpointProtocol,
   routeEndpointProtocols,
 } from "@llmingress/domain";
+import {
+  consoleConflictError,
+  consoleNotFoundError,
+  consoleValidationError,
+} from "./console-operation-error.ts";
 import { listProviderTemplateEndpointProtocols } from "./console-provider-templates.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
@@ -188,17 +193,33 @@ export function normalizeRoutePolicyFormInput(
   const providerModelIds = normalizeUuidList(input.providerModelIds);
 
   if (!virtualModelId || !isUuid(virtualModelId)) {
-    throw new Error("Route policy virtual model is required.");
+    throw consoleValidationError(
+      "Route policy virtual model is required.",
+      "route_policy_virtual_model_required",
+      { field: "virtualModelId" },
+    );
   }
   if (!isRoutePolicyStrategy(strategy)) {
-    throw new Error("Route policy strategy must be fixed, cost_first, quality_first, or random.");
+    throw consoleValidationError(
+      "Route policy strategy must be fixed, cost_first, quality_first, or random.",
+      "route_policy_strategy_invalid",
+      { field: "strategy" },
+    );
   }
   if (providerModelIds.length === 0) {
-    throw new Error("Route policy requires at least one provider model.");
+    throw consoleValidationError(
+      "Route policy requires at least one provider model.",
+      "route_policy_candidates_required",
+      { field: "providerModelIds" },
+    );
   }
 
   if (new Set(providerModelIds).size !== providerModelIds.length) {
-    throw new Error("Route policy candidates must not contain duplicate provider models.");
+    throw consoleValidationError(
+      "Route policy candidates must not contain duplicate provider models.",
+      "route_policy_candidates_duplicate",
+      { field: "providerModelIds" },
+    );
   }
 
   return {
@@ -525,7 +546,11 @@ export async function updateRoutePolicy(input: {
     write: async (client) => {
       const existing = await readRoutePolicyForUpdate(client, input.id);
       if (existing.virtual_model_id !== input.routePolicy.virtualModelId) {
-        throw new Error("Route policy virtual model cannot be changed.");
+        throw consoleConflictError(
+          "Route policy virtual model cannot be changed.",
+          "route_policy_virtual_model_immutable",
+          { routePolicyId: input.id },
+        );
       }
       await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
       await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
@@ -608,7 +633,9 @@ async function assertVirtualModelExists(
     [virtualModelId],
   );
   if (!result.rows[0]) {
-    throw new Error("Virtual Model was not found.");
+    throw consoleNotFoundError("Virtual Model was not found.", "virtual_model_not_found", {
+      virtualModelId,
+    });
   }
 }
 
@@ -621,7 +648,11 @@ async function assertVirtualModelHasNoRoutePolicy(
     [virtualModelId],
   );
   if (result.rows[0]) {
-    throw new Error("Virtual Model already has a route policy.");
+    throw consoleConflictError(
+      "Virtual Model already has a route policy.",
+      "route_policy_virtual_model_conflict",
+      { virtualModelId },
+    );
   }
 }
 
@@ -643,7 +674,11 @@ async function assertProviderModelsExist(
   const foundIds = new Set(result.rows.map((row) => row.id));
   const missingIds = providerModelIds.filter((id) => !foundIds.has(id));
   if (missingIds.length > 0) {
-    throw new Error("Route policy candidate provider model was not found.");
+    throw consoleValidationError(
+      "Route policy candidate provider model was not found.",
+      "route_policy_provider_model_not_found",
+      { providerModelIds: missingIds },
+    );
   }
 }
 
@@ -668,8 +703,9 @@ async function assertBudgetSafeRoutePolicyCandidates(
     .map((candidate) => `${candidate.modelDisplayName} (${candidate.modelId})`)
     .join(", ");
   const modelLabel = `${budgetedUsage.display_name} (${budgetedUsage.name})`;
-  throw new Error(
+  throw consoleValidationError(
     `Cannot save Route Policy for ${modelLabel} because ${candidateLabels} has unknown price. Save a manual price override or choose a priced replacement.`,
+    "route_policy_candidate_unknown_price",
   );
 }
 
@@ -685,10 +721,12 @@ async function assertEndpointSupportedRoutePolicyCandidates(
     return;
   }
 
-  throw new Error(
+  throw consoleValidationError(
     `Route policy endpoint ${routePolicy.endpointProtocol} is not supported by ${unsupportedCandidates
       .map((candidate) => candidate.optionLabel)
       .join(", ")}.`,
+    "route_policy_endpoint_unsupported",
+    { endpointProtocol: routePolicy.endpointProtocol },
   );
 }
 
@@ -845,7 +883,10 @@ function normalizeUuidList(input?: readonly (string | null | undefined)[]): stri
     .filter((value): value is string => Boolean(value))
     .map((value) => {
       if (!isUuid(value)) {
-        throw new Error("Route policy candidate provider model id is invalid.");
+        throw consoleValidationError(
+          "Route policy candidate provider model id is invalid.",
+          "route_policy_provider_model_id_invalid",
+        );
       }
       return value;
     });
@@ -860,7 +901,11 @@ function normalizeRequiredEndpointProtocol(
 ): RouteEndpointProtocol {
   const protocol = normalizeOptionalEndpointProtocol(value);
   if (!protocol) {
-    throw new Error("Route policy endpoint protocol is required.");
+    throw consoleValidationError(
+      "Route policy endpoint protocol is required.",
+      "route_policy_endpoint_required",
+      { field: "endpointProtocol" },
+    );
   }
   return protocol;
 }
@@ -873,8 +918,10 @@ function normalizeOptionalEndpointProtocol(
     return null;
   }
   if (!isRouteEndpointProtocol(protocol)) {
-    throw new Error(
+    throw consoleValidationError(
       "Route policy endpoint protocol must be chat_completions, responses, messages, or embeddings.",
+      "route_policy_endpoint_invalid",
+      { field: "endpointProtocol" },
     );
   }
   return protocol;
@@ -1066,7 +1113,7 @@ function pluralize(word: string, count: number): string {
 
 function requireRow<T>(row: T | undefined): T {
   if (!row) {
-    throw new Error("Route Policy was not found.");
+    throw consoleNotFoundError("Route Policy was not found.", "route_policy_not_found");
   }
   return row;
 }

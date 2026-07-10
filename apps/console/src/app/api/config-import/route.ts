@@ -1,4 +1,5 @@
 import { importConsoleConfig } from "@llmingress/db/console-import-export";
+import { consoleValidationError } from "@llmingress/db/console-operation-error";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText } from "../_form";
@@ -8,7 +9,7 @@ export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
     const configJson = readRequiredText(form, "configJson");
-    const document: unknown = JSON.parse(configJson);
+    const document: unknown = parseConfigImportJson(configJson);
     const result = await importConsoleConfig({
       document,
     });
@@ -19,3 +20,16 @@ export const POST = withConsoleAuth(async (request) => {
     return consoleActionErrorResponse(error, "Config import failed.");
   }
 });
+
+function parseConfigImportJson(configJson: string): unknown {
+  try {
+    return JSON.parse(configJson);
+  } catch (error) {
+    throw consoleValidationError(
+      "Config import JSON is invalid.",
+      "config_import_invalid_json",
+      undefined,
+      error,
+    );
+  }
+}

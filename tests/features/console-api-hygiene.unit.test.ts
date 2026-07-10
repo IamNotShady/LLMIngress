@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleActionError } from "../../apps/console/src/app/api/_error-classify";
 
@@ -22,29 +23,46 @@ const guardedRoutes = [
 class FakeDatabaseError extends Error {}
 
 describe("console api hygiene", () => {
-  it("maps deliberate validation errors to 400 with their message", () => {
-    expect(classifyConsoleActionError(new Error("name is required."), "fallback")).toEqual({
+  it("maps explicit validation errors to 400 with their message and code", () => {
+    expect(
+      classifyConsoleActionError(
+        new ConsoleOperationError("validation", "name is required.", {
+          code: "name_required",
+        }),
+        "fallback",
+      ),
+    ).toEqual({
+      code: "name_required",
       message: "name is required.",
       status: 400,
     });
   });
 
-  it("maps error subclasses, non-errors, and empty messages to 500 with the fallback", () => {
+  it("maps plain errors, error subclasses, non-errors, and empty messages to 500 with the fallback", () => {
+    expect(classifyConsoleActionError(new Error("name is required."), "fallback")).toEqual({
+      code: "internal_error",
+      message: "fallback",
+      status: 500,
+    });
     expect(
       classifyConsoleActionError(new FakeDatabaseError("relation missing"), "fallback"),
     ).toEqual({
+      code: "internal_error",
       message: "fallback",
       status: 500,
     });
     expect(classifyConsoleActionError(new TypeError("x is not a function"), "fallback")).toEqual({
+      code: "internal_error",
       message: "fallback",
       status: 500,
     });
     expect(classifyConsoleActionError("string throw", "fallback")).toEqual({
+      code: "internal_error",
       message: "fallback",
       status: 500,
     });
     expect(classifyConsoleActionError(new Error(""), "fallback")).toEqual({
+      code: "internal_error",
       message: "fallback",
       status: 500,
     });

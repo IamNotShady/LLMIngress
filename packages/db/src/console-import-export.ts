@@ -7,6 +7,7 @@ import {
   type ProviderModelCapabilities,
   type RoutePolicyRules,
 } from "@llmingress/domain";
+import { consoleValidationError } from "./console-operation-error.ts";
 import { listProviderTemplateSelectorGroups } from "./console-provider-templates.ts";
 
 export type LlmIngressConfigExport = {
@@ -760,10 +761,10 @@ async function writeRoutePolicyCandidate(
 
 function normalizeConfigDocument(document: unknown): LlmIngressConfigExport {
   if (!isRecord(document)) {
-    throw new Error("Config import JSON must be an object.");
+    throw invalidConfigImport("Config import JSON must be an object.");
   }
   if (document.kind !== "llmingress.config.export" || document.version !== 1) {
-    throw new Error("Config import JSON must be a supported LLMIngress config export.");
+    throw invalidConfigImport("Config import JSON must be a supported LLMIngress config export.");
   }
 
   return {
@@ -780,7 +781,7 @@ function normalizeConfigDocument(document: unknown): LlmIngressConfigExport {
 function normalizeProviders(value: unknown): ExportedProvider[] {
   return normalizeArray(value, "providers").map((input, index) => {
     if (!isRecord(input)) {
-      throw new Error(`providers[${index}] must be an object.`);
+      throw invalidConfigImport(`providers[${index}] must be an object.`);
     }
     return {
       baseUrl: normalizeNullableText(input.baseUrl, `providers[${index}].baseUrl`),
@@ -809,7 +810,7 @@ function normalizeProviders(value: unknown): ExportedProvider[] {
 function normalizeProviderModels(value: unknown, path: string): ExportedProviderModel[] {
   return normalizeArray(value, path).map((input, index) => {
     if (!isRecord(input)) {
-      throw new Error(`${path}[${index}] must be an object.`);
+      throw invalidConfigImport(`${path}[${index}] must be an object.`);
     }
     return {
       availability: normalizeEnum(
@@ -817,7 +818,9 @@ function normalizeProviderModels(value: unknown, path: string): ExportedProvider
         ["available", "deprecated", "not_listed", "unavailable"],
         `${path}[${index}].availability`,
       ),
-      capabilityMetadata: normalizeProviderModelCapabilities(input.capabilityMetadata ?? {}),
+      capabilityMetadata: normalizeImportedProviderModelCapabilities(
+        input.capabilityMetadata ?? {},
+      ),
       contextWindow: normalizeNullablePositiveInteger(
         input.contextWindow,
         `${path}[${index}].contextWindow`,
@@ -837,10 +840,10 @@ function normalizeProviderModels(value: unknown, path: string): ExportedProvider
 function normalizeProviderApiKeys(value: unknown, path: string): ExportedProviderApiKey[] {
   return normalizeArray(value, path).map((input, index) => {
     if (!isRecord(input)) {
-      throw new Error(`${path}[${index}] must be an object.`);
+      throw invalidConfigImport(`${path}[${index}] must be an object.`);
     }
     if (input.secret !== "redacted") {
-      throw new Error(`${path}[${index}].secret must be redacted.`);
+      throw invalidConfigImport(`${path}[${index}].secret must be redacted.`);
     }
     return {
       keyPrefix: normalizeText(input.keyPrefix, `${path}[${index}].keyPrefix`),
@@ -852,7 +855,7 @@ function normalizeProviderApiKeys(value: unknown, path: string): ExportedProvide
 function normalizeVirtualModels(value: unknown): ExportedVirtualModel[] {
   return normalizeArray(value, "virtualModels").map((input, index) => {
     if (!isRecord(input)) {
-      throw new Error(`virtualModels[${index}] must be an object.`);
+      throw invalidConfigImport(`virtualModels[${index}] must be an object.`);
     }
     return {
       displayName: normalizeText(input.displayName, `virtualModels[${index}].displayName`),
@@ -866,7 +869,7 @@ function normalizeVirtualModels(value: unknown): ExportedVirtualModel[] {
 function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
   return normalizeArray(value, "routePolicies").map((input, index) => {
     if (!isRecord(input)) {
-      throw new Error(`routePolicies[${index}] must be an object.`);
+      throw invalidConfigImport(`routePolicies[${index}] must be an object.`);
     }
     return {
       id: normalizeUuid(input.id, `routePolicies[${index}].id`),
@@ -874,7 +877,7 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
         input.providerModelIds,
         `routePolicies[${index}].providerModelIds`,
       ),
-      rules: normalizeRoutePolicyRules(input.rules ?? {}),
+      rules: normalizeImportedRoutePolicyRules(input.rules ?? {}),
       strategy: normalizeEnum(
         input.strategy,
         ["cost_first", "fixed", "quality_first", "random"],
@@ -888,7 +891,7 @@ function normalizeRoutePolicies(value: unknown): ExportedRoutePolicy[] {
 function normalizeAgents(value: unknown): ExportedAgent[] {
   return normalizeArray(value, "agents").map((input, index) => {
     if (!isRecord(input)) {
-      throw new Error(`agents[${index}] must be an object.`);
+      throw invalidConfigImport(`agents[${index}] must be an object.`);
     }
     return {
       agentType: normalizeEnum(
@@ -909,10 +912,10 @@ function normalizeAgents(value: unknown): ExportedAgent[] {
 
 function normalizeAgentApiKey(value: unknown, path: string): ExportedAgentApiKey {
   if (!isRecord(value)) {
-    throw new Error(`${path} must be an object.`);
+    throw invalidConfigImport(`${path} must be an object.`);
   }
   if (value.secret !== "redacted") {
-    throw new Error(`${path}.secret must be redacted.`);
+    throw invalidConfigImport(`${path}.secret must be redacted.`);
   }
   return {
     allowedVirtualModelIds: normalizeUuidArray(
@@ -931,10 +934,26 @@ function normalizeAgentApiKey(value: unknown, path: string): ExportedAgentApiKey
   };
 }
 
+function normalizeImportedProviderModelCapabilities(value: unknown): ProviderModelCapabilities {
+  try {
+    return normalizeProviderModelCapabilities(value);
+  } catch (error) {
+    throw invalidConfigImport("Imported provider model capabilities are invalid.", error);
+  }
+}
+
+function normalizeImportedRoutePolicyRules(value: unknown): RoutePolicyRules {
+  try {
+    return normalizeRoutePolicyRules(value);
+  } catch (error) {
+    throw invalidConfigImport("Imported route policy rules are invalid.", error);
+  }
+}
+
 function normalizeAgentLimits(value: unknown, path: string): ExportedAgentLimit[] {
   return normalizeArray(value, path).map((input, index) => {
     if (!isRecord(input)) {
-      throw new Error(`${path}[${index}] must be an object.`);
+      throw invalidConfigImport(`${path}[${index}] must be an object.`);
     }
     return {
       alertThreshold:
@@ -1018,7 +1037,7 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
   for (const provider of document.providers) {
     if (provider.providerTemplateId) {
       if (!providerTemplateIds.has(provider.providerTemplateId)) {
-        throw new Error("Imported provider must use a whitelisted provider template.");
+        throw invalidConfigImport("Imported provider must use a whitelisted provider template.");
       }
       validateTemplateProvider(provider, providerTemplateIds);
     } else {
@@ -1026,23 +1045,23 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
     }
     for (const model of provider.models) {
       if (!providerIds.has(provider.id)) {
-        throw new Error(`Provider model ${model.id} references an unknown provider.`);
+        throw invalidConfigImport(`Provider model ${model.id} references an unknown provider.`);
       }
     }
   }
 
   for (const routePolicy of document.routePolicies) {
     if (!virtualModelIds.has(routePolicy.virtualModelId)) {
-      throw new Error("Route Policy references an unknown Virtual Model.");
+      throw invalidConfigImport("Route Policy references an unknown Virtual Model.");
     }
     if (routePolicy.providerModelIds.length === 0) {
-      throw new Error("Route Policy requires at least one provider model.");
+      throw invalidConfigImport("Route Policy requires at least one provider model.");
     }
     const candidateIds = routePolicy.providerModelIds;
     assertUnique(candidateIds, "Route Policy candidate ids");
     for (const candidateId of candidateIds) {
       if (!providerModelIds.has(candidateId)) {
-        throw new Error("Route Policy references an unknown Provider Model.");
+        throw invalidConfigImport("Route Policy references an unknown Provider Model.");
       }
     }
   }
@@ -1053,17 +1072,17 @@ function validateConfigDocument(document: LlmIngressConfigExport): void {
       continue;
     }
     if (apiKey.defaultVirtualModelId && !virtualModelIds.has(apiKey.defaultVirtualModelId)) {
-      throw new Error("Agent default Virtual Model was not found.");
+      throw invalidConfigImport("Agent default Virtual Model was not found.");
     }
     if (
       apiKey.defaultVirtualModelId &&
       !apiKey.allowedVirtualModelIds.includes(apiKey.defaultVirtualModelId)
     ) {
-      throw new Error("Agent default Virtual Model must be allowed.");
+      throw invalidConfigImport("Agent default Virtual Model must be allowed.");
     }
     for (const virtualModelId of apiKey.allowedVirtualModelIds) {
       if (!virtualModelIds.has(virtualModelId)) {
-        throw new Error("Agent allowed Virtual Model was not found.");
+        throw invalidConfigImport("Agent allowed Virtual Model was not found.");
       }
     }
   }
@@ -1074,31 +1093,33 @@ function validateTemplateProvider(
   providerTemplateIds: ReadonlySet<string>,
 ): void {
   if (!provider.providerTemplateId || !providerTemplateIds.has(provider.providerTemplateId)) {
-    throw new Error("Imported provider must use a whitelisted provider template.");
+    throw invalidConfigImport("Imported provider must use a whitelisted provider template.");
   }
   if (provider.providerTemplateId !== provider.providerKey) {
-    throw new Error("Imported provider template id must match provider key.");
+    throw invalidConfigImport("Imported provider template id must match provider key.");
   }
 
   const template = readKnownProviderTemplates().get(provider.providerTemplateId);
   if (!template) {
-    throw new Error("Imported provider must use a whitelisted provider template.");
+    throw invalidConfigImport("Imported provider must use a whitelisted provider template.");
   }
   if (provider.providerType !== template.providerType) {
-    throw new Error("Imported provider template type does not match provider type.");
+    throw invalidConfigImport("Imported provider template type does not match provider type.");
   }
   if (
     template.fixedBaseUrl &&
     normalizeUrl(provider.baseUrl) !== normalizeUrl(template.fixedBaseUrl)
   ) {
-    throw new Error("Imported provider template base URL does not match the fixed template URL.");
+    throw invalidConfigImport(
+      "Imported provider template base URL does not match the fixed template URL.",
+    );
   }
 }
 
 function validateUntemplatedProvider(provider: ExportedProvider): void {
   const fixedBaseUrl = fixedUntemplatedProviderBaseUrls.get(provider.providerKey);
   if (!fixedBaseUrl || normalizeUrl(provider.baseUrl) !== normalizeUrl(fixedBaseUrl)) {
-    throw new Error("Imported provider must use a whitelisted provider template.");
+    throw invalidConfigImport("Imported provider must use a whitelisted provider template.");
   }
 }
 
@@ -1157,7 +1178,7 @@ async function withClient<T>(
 
 function normalizeArray(value: unknown, path: string): unknown[] {
   if (!Array.isArray(value)) {
-    throw new Error(`${path} must be an array.`);
+    throw invalidConfigImport(`${path} must be an array.`);
   }
   return value;
 }
@@ -1168,7 +1189,7 @@ function normalizeUuidArray(value: unknown, path: string): string[] {
 
 function normalizeText(value: unknown, path: string): string {
   if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${path} must be a non-empty string.`);
+    throw invalidConfigImport(`${path} must be a non-empty string.`);
   }
   return value.trim();
 }
@@ -1183,7 +1204,7 @@ function normalizeNullableText(value: unknown, path: string): string | null {
 function normalizeUuid(value: unknown, path: string): string {
   const text = normalizeText(value, path);
   if (!isUuid(text)) {
-    throw new Error(`${path} must be a UUID.`);
+    throw invalidConfigImport(`${path} must be a UUID.`);
   }
   return text;
 }
@@ -1198,14 +1219,16 @@ function normalizeNullableUuid(value: unknown, path: string): string | null {
 function normalizeIdentifier(value: unknown, path: string): string {
   const text = normalizeText(value, path);
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(text)) {
-    throw new Error(`${path} must use lowercase letters, numbers, dashes, or underscores.`);
+    throw invalidConfigImport(
+      `${path} must use lowercase letters, numbers, dashes, or underscores.`,
+    );
   }
   return text;
 }
 
 function normalizeBoolean(value: unknown, path: string): boolean {
   if (typeof value !== "boolean") {
-    throw new Error(`${path} must be a boolean.`);
+    throw invalidConfigImport(`${path} must be a boolean.`);
   }
   return value;
 }
@@ -1216,7 +1239,7 @@ function normalizeEnum<const T extends readonly string[]>(
   path: string,
 ): T[number] {
   if (typeof value !== "string" || !allowedValues.includes(value)) {
-    throw new Error(`${path} is not supported.`);
+    throw invalidConfigImport(`${path} is not supported.`);
   }
   return value as T[number];
 }
@@ -1226,7 +1249,7 @@ function normalizeNullablePositiveInteger(value: unknown, path: string): number 
     return null;
   }
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${path} must be a positive integer or null.`);
+    throw invalidConfigImport(`${path} must be a positive integer or null.`);
   }
   return value;
 }
@@ -1240,14 +1263,14 @@ function normalizeNullablePositiveNumber(value: unknown, path: string): number |
 
 function normalizePositiveNumber(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    throw new Error(`${path} must be a positive number.`);
+    throw invalidConfigImport(`${path} must be a positive number.`);
   }
   return value;
 }
 
 function assertUnique(values: readonly string[], label: string): void {
   if (new Set(values).size !== values.length) {
-    throw new Error(`${label} must be unique.`);
+    throw invalidConfigImport(`${label} must be unique.`);
   }
 }
 
@@ -1263,10 +1286,19 @@ function normalizeUrl(value: string | null): string | null {
   if (!value) {
     return null;
   }
-  const url = new URL(value);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw invalidConfigImport("Imported provider base URL must be a valid URL.", error);
+  }
   const pathname =
     url.pathname.length > 1 && url.pathname.endsWith("/")
       ? url.pathname.slice(0, -1)
       : url.pathname;
   return `${url.origin}${pathname}`;
+}
+
+function invalidConfigImport(message: string, cause?: unknown) {
+  return consoleValidationError(message, "config_import_invalid", undefined, cause);
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
 import { type NotificationChannelType, notificationChannelTypes } from "@llmingress/domain";
+import { consoleValidationError } from "./console-operation-error.ts";
 
 export type { NotificationChannelType };
 export { notificationChannelTypes };
@@ -140,8 +141,9 @@ function normalizeChannelType(value: string | null | undefined): NotificationCha
   if ((notificationChannelTypes as readonly string[]).includes(normalized)) {
     return normalized as NotificationChannelType;
   }
-  throw new Error(
+  throw consoleValidationError(
     `Notification channel type must be one of: ${notificationChannelTypes.join(", ")}.`,
+    "notification_channel_type_invalid",
   );
 }
 
@@ -161,7 +163,7 @@ function normalizeEnabled(value: boolean | string | null | undefined): boolean {
 function normalizeRequiredText(value: string | null | undefined, label: string): string {
   const text = value?.trim();
   if (!text) {
-    throw new Error(`${label} is required.`);
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field: label });
   }
   return text;
 }
@@ -173,11 +175,11 @@ function normalizeWebhookUrl(value: string | null | undefined): string {
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new Error("Webhook URL must be a valid URL.");
+    throw consoleValidationError("Webhook URL must be a valid URL.", "webhook_url_invalid");
   }
 
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("Webhook URL must use http or https.");
+    throw consoleValidationError("Webhook URL must use http or https.", "webhook_url_invalid");
   }
 
   return url.toString();

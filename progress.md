@@ -3,9 +3,19 @@
 ## Current State
 
 - Date: 2026-07-10
-- Branch: `dev`
-- Base: `27fd08b4`
-- Status: Database foreign key constraints removed from the final migrated schema and verified.
+- Branch: `codex/high-priority-hardening`
+- Base: `9a80b4b8`
+- Status: High-priority hardening plan restarted from clean HEAD. Feature 1 `console-request-security-contract` is implemented and verified; feature 2 has not started.
+
+## 2026-07-10 High Priority Hardening 1 - Console Request Security Contract
+
+- Added a shared Console Origin guard for all mutating API requests, including setup, login, and logout. `GET`/`HEAD`/`OPTIONS` skip CSRF checks; unsafe methods require an exact `Origin` match against `CONSOLE_PUBLIC_BASE_URL` or the current request origin when no public URL is configured.
+- Introduced explicit `ConsoleOperationError` kinds (`validation`, `not_found`, `conflict`) and mapped them to stable 400/404/409 JSON responses while preserving the legacy string `error` field and adding `code`, optional `details`, and `errorId` for unknown 500s.
+- Removed constructor-based generic `Error` classification; unexpected exceptions now return `internal_error` and log the original error server-side only.
+- Converted Console-facing DB validation/not-found/conflict paths used by guarded API routes to typed operation errors, including provider, route policy, agent, config import, OAuth, key, price, notification, activity, and analytics validation.
+- Updated docs and `.env.example` for `CONSOLE_PUBLIC_BASE_URL` and reverse-proxy Origin requirements.
+- Verification passed: `pnpm exec vitest run tests/features/console-request-security-contract.unit.test.ts`, `pnpm test:e2e tests/e2e/console-request-security-contract.e2e.spec.ts`, focused Console E2Es, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`, `pnpm run verify`, and `pnpm run verify:features`.
+- Note: the final optimized `verify:features` E2E batch hit the known `v1-gateway-routing` activity-row timing flake; the runner fell back to original per-feature verification and all 40 passing features re-verified successfully.
 
 ## 2026-07-10 Drop Database Foreign Keys
 

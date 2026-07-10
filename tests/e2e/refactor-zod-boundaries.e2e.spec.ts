@@ -38,6 +38,7 @@ test("console route preview rejects invalid JSON bodies with the boundary error"
 
           const response = await page.request.post(`${baseUrl}/api/route-policies/preview`, {
             data: {},
+            headers: { origin: baseUrl },
           });
           expect(response.status()).toBeGreaterThanOrEqual(400);
           await expect(await response.text()).toContain("Route preview");

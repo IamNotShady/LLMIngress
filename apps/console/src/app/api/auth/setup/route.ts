@@ -1,24 +1,26 @@
 import { createAdminPassword } from "@llmingress/db/console-auth";
-import { type NextRequest, NextResponse } from "next/server";
+import { consoleValidationError } from "@llmingress/db/console-operation-error";
+import type { NextRequest } from "next/server";
+import { withConsoleOrigin } from "../../_auth";
+import { consoleActionErrorResponse } from "../../_errors";
 import { redirectToConsolePath } from "../../_redirect";
 
-export async function POST(request: NextRequest) {
+export const POST = withConsoleOrigin(async (request: NextRequest) => {
   const password = await readPassword(request);
   if (!password) {
-    return NextResponse.json({ error: "Admin password is required." }, { status: 400 });
+    throw consoleValidationError("Admin password is required.", "form_field_required", {
+      field: "password",
+    });
   }
 
   try {
     await createAdminPassword(password);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create admin." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Failed to create admin.");
   }
 
   return redirectToConsolePath("/");
-}
+}, "Failed to create admin.");
 
 async function readPassword(request: NextRequest): Promise<string | undefined> {
   const form = await request.formData();

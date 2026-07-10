@@ -88,7 +88,10 @@ export const POST = withConsoleAuth(async (request) => {
         id: readRequiredText(form, "id"),
       });
     } else {
-      return NextResponse.json({ error: "Unknown virtual model action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown virtual model action.", code: "virtual_model_action_unknown" },
+        { status: 400 },
+      );
     }
   } catch (error) {
     return consoleActionErrorResponse(error, "Virtual Model action failed.");

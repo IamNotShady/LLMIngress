@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient } from "@llmingress/db/client";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
 export type ProviderModelRefreshInput = {
   providerId?: string | null;
@@ -27,7 +28,9 @@ export function normalizeProviderModelRefreshInput(
 ): NormalizedProviderModelRefreshInput {
   const providerId = input.providerId?.trim();
   if (!providerId) {
-    throw new Error("Provider id is required.");
+    throw consoleValidationError("Provider id is required.", "provider_id_required", {
+      field: "providerId",
+    });
   }
   return { providerId };
 }
@@ -59,10 +62,16 @@ export async function enqueueProviderModelRefreshJob(input: {
       );
       const row = provider.rows[0];
       if (!row) {
-        throw new Error("Provider was not found.");
+        throw consoleNotFoundError("Provider was not found.", "provider_not_found", {
+          providerId,
+        });
       }
       if (!row.enabled) {
-        throw new Error("Provider must be enabled before refreshing models.");
+        throw consoleValidationError(
+          "Provider must be enabled before refreshing models.",
+          "provider_disabled",
+          { providerId },
+        );
       }
 
       await client.query(

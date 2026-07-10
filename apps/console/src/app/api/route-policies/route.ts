@@ -39,7 +39,10 @@ export const POST = withConsoleAuth(async (request) => {
         id: readRequiredText(form, "id"),
       });
     } else {
-      return NextResponse.json({ error: "Unknown route policy action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown route policy action.", code: "route_policy_action_unknown" },
+        { status: 400 },
+      );
     }
   } catch (error) {
     return consoleActionErrorResponse(error, "Route Policy action failed.");

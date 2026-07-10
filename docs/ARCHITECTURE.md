@@ -826,6 +826,13 @@ V1 can run one Worker. Future multi-instance Workers can use Postgres
 
 ### 7.5 Playground Public API Test Path
 
+Console Route Handlers enforce CSRF at the route boundary for every mutating
+method. `POST`, `PUT`, `PATCH`, and `DELETE` requests must carry an `Origin`
+header that exactly matches `CONSOLE_PUBLIC_BASE_URL`; if that variable is not
+configured, the expected origin is the current request URL origin. This is
+intentionally not derived from forwarded headers, so reverse proxy deployments
+must provide the browser-facing public Console URL explicitly.
+
 Playground uses Gateway Public API for real request testing. Console backend
 does not proxy Playground requests and does not store, read, or recover
 plaintext Agent API keys. The user manually enters an Agent API key in the

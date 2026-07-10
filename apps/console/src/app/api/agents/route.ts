@@ -80,7 +80,10 @@ export const POST = withConsoleAuth(async (request) => {
         }),
       });
     } else {
-      return NextResponse.json({ error: "Unknown agent action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown agent action.", code: "agent_action_unknown" },
+        { status: 400 },
+      );
     }
   } catch (error) {
     return consoleActionErrorResponse(error, "Agent action failed.");

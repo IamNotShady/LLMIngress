@@ -1,5 +1,6 @@
 import { PostgresClient } from "@llmingress/db/client";
 import { formatConsoleUsd } from "@llmingress/db/console-format";
+import { consoleValidationError } from "./console-operation-error.ts";
 
 export type ConsoleActivity = {
   agentKeyPrefix: string | null;
@@ -285,7 +286,10 @@ export async function getConsoleActivityDetail(input: {
   requestId?: string;
 }): Promise<ConsoleActivityDetail | null> {
   if (!input.activityId && !input.requestId) {
-    throw new Error("Activity detail requires activityId or requestId.");
+    throw consoleValidationError(
+      "Activity detail requires activityId or requestId.",
+      "activity_detail_key_required",
+    );
   }
 
   const client = new PostgresClient({ connectionString: input.databaseUrl });

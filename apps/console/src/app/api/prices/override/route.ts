@@ -15,7 +15,10 @@ export const POST = withConsoleAuth(async (request) => {
 
   if (!providerKey || !modelId || inputPrice === undefined || outputPrice === undefined) {
     return NextResponse.json(
-      { error: "Provider, model, input price, and output price are required." },
+      {
+        error: "Provider, model, input price, and output price are required.",
+        code: "price_override_required_fields",
+      },
       { status: 400 },
     );
   }

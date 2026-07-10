@@ -1012,6 +1012,9 @@ default.
 - Personal computer deployments listen only on `127.0.0.1` by default. Server
   deployments can explicitly configure the listen address.
 - LAN or public access is allowed only after explicit user configuration.
+- Console mutating requests require an `Origin` header that exactly matches the
+  configured public Console origin. Reverse proxy deployments must set
+  `CONSOLE_PUBLIC_BASE_URL`; forwarded headers are not trusted to infer it.
 - Cloud provider requests are sent only to providers configured by the user.
 
 ### 16.4 Console Authentication
@@ -1023,6 +1026,8 @@ deployments.
 - Non-localhost listeners must enable Console login.
 - Admin password setup is supported.
 - Public access can be disabled.
+- Setup, login, logout, and authenticated Console API mutations use the same
+  Origin guard. Safe methods such as GET and HEAD do not perform CSRF checks.
 - All Provider Key, Subscription Token, and Agent credential operations require
   authentication.
 

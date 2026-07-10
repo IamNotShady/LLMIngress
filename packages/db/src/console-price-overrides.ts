@@ -1,5 +1,6 @@
 import type { ManualPriceOverride } from "@llmingress/billing/price-registry";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 import { buildManualPriceOverride } from "./price-rows.ts";
 
 type PriceOverrideRow = {
@@ -60,7 +61,10 @@ export async function saveManualPriceOverride(input: {
       );
       const row = result.rows[0];
       if (!row) {
-        throw new Error("Manual price override was not saved.");
+        throw consoleNotFoundError(
+          "Provider model was not found for manual price override.",
+          "price_override_model_not_found",
+        );
       }
       saved = buildManualPriceOverride({
         cachedInputUsdPerMillionTokens: row.cached_input_usd_per_million_tokens,
@@ -74,14 +78,17 @@ export async function saveManualPriceOverride(input: {
   });
 
   if (!saved) {
-    throw new Error("Manual price override was not saved.");
+    throw consoleNotFoundError(
+      "Provider model was not found for manual price override.",
+      "price_override_model_not_found",
+    );
   }
   return saved;
 }
 
 function assertPrice(price: number): void {
   if (!Number.isFinite(price) || price < 0) {
-    throw new Error("Price must be a non-negative number.");
+    throw consoleValidationError("Price must be a non-negative number.", "price_invalid");
   }
 }
 

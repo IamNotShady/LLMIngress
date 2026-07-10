@@ -67,9 +67,14 @@ export const POST = withConsoleAuth(async (request) => {
   } catch (error) {
     const providerId = readText(form, "providerId");
     if (providerId && (action === "start" || action === "complete")) {
+      const verdict = classifyConsoleActionError(error, "Provider OAuth operation failed.");
+      if (verdict.status === 500) {
+        return consoleActionErrorResponse(error, "Provider OAuth operation failed.");
+      }
       return redirectToProviderOAuthDialog(request, {
         authorizeUrl: readText(form, "providerAuthorizeUrl"),
-        error: classifyConsoleActionError(error, "Provider OAuth operation failed.").message,
+        error: verdict.message,
+        errorCode: verdict.code,
         label: readNullableText(form, "label"),
         priority: readNumber(form, "priority"),
         providerId,
@@ -90,6 +95,7 @@ function redirectToProviderOAuthDialog(
   input: {
     authorizeUrl?: string;
     error?: string;
+    errorCode?: string;
     label?: string | null;
     priority?: number;
     providerId: string;
@@ -104,6 +110,9 @@ function redirectToProviderOAuthDialog(
   }
   if (input.error) {
     url.searchParams.set("providerOAuthError", input.error);
+  }
+  if (input.errorCode) {
+    url.searchParams.set("providerOAuthErrorCode", input.errorCode);
   }
   if (input.providerOAuthId) {
     url.searchParams.set("providerOAuthId", input.providerOAuthId);

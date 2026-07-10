@@ -1,3 +1,4 @@
+import { consoleValidationError } from "./console-operation-error.ts";
 import type { ProviderType } from "./console-providers.ts";
 
 export type OpenAICompatibleProviderTemplateId =
@@ -339,7 +340,7 @@ export function getOpenAICompatibleProviderTemplate(
   templateId: string | null | undefined,
 ): OpenAICompatibleProviderTemplate {
   if (!isOpenAICompatibleProviderTemplateId(templateId)) {
-    throw new Error("Provider must use a whitelisted provider template.");
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
   }
 
   return readProviderTemplate(templateId) as OpenAICompatibleProviderTemplate;
@@ -349,7 +350,7 @@ export function getOllamaProviderTemplate(
   templateId: string | null | undefined,
 ): OllamaProviderTemplate {
   if (templateId !== "ollama") {
-    throw new Error("Provider must use a whitelisted provider template.");
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
   }
 
   return readProviderTemplate(templateId) as OllamaProviderTemplate;
@@ -359,7 +360,7 @@ export function getOpenRouterProviderTemplate(
   templateId: string | null | undefined,
 ): OpenRouterProviderTemplate {
   if (templateId !== "openrouter") {
-    throw new Error("Provider must use a whitelisted provider template.");
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
   }
 
   return readProviderTemplate(templateId) as OpenRouterProviderTemplate;
@@ -369,7 +370,7 @@ export function getGoogleProviderTemplate(
   templateId: string | null | undefined,
 ): GoogleProviderTemplate {
   if (templateId !== "google") {
-    throw new Error("Provider must use a whitelisted provider template.");
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
   }
 
   return readProviderTemplate(templateId) as GoogleProviderTemplate;
@@ -379,7 +380,7 @@ export function getLocalProviderTemplate(
   templateId: string | null | undefined,
 ): LocalProviderTemplate {
   if (!isLocalProviderTemplateId(templateId)) {
-    throw new Error("Provider must use a whitelisted provider template.");
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
   }
 
   return readProviderTemplate(templateId) as LocalProviderTemplate;
@@ -389,7 +390,7 @@ export function getSubscriptionProviderTemplate(
   templateId: string | null | undefined,
 ): SubscriptionProviderTemplate {
   if (!isSubscriptionProviderTemplateId(templateId)) {
-    throw new Error("Provider must use a whitelisted provider template.");
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
   }
 
   return readProviderTemplate(templateId) as SubscriptionProviderTemplate;
@@ -399,7 +400,7 @@ export function normalizeProviderTemplateFormInput(
   input: ProviderTemplateFormInput,
 ): ProviderTemplateCreateInput {
   if (!isProviderTemplateId(input.templateId)) {
-    throw new Error("Provider must use a whitelisted provider template.");
+    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
   }
 
   const template = readProviderTemplate(input.templateId);
@@ -408,15 +409,15 @@ export function normalizeProviderTemplateFormInput(
   }
 
   if (!template.baseUrl) {
-    throw new Error("Provider must use a fixed provider template URL.");
+    throw providerTemplateValidation("Provider must use a fixed provider template URL.");
   }
 
   const baseUrl = input.baseUrl?.trim();
   if (baseUrl && normalizeUrl(baseUrl) !== normalizeUrl(template.baseUrl)) {
     if (template.providerType === "subscription") {
-      throw new Error("Custom subscription endpoints are not allowed.");
+      throw providerTemplateValidation("Custom subscription endpoints are not allowed.");
     }
-    throw new Error(
+    throw providerTemplateValidation(
       template.id === "google"
         ? "Custom Gemini endpoints are not allowed."
         : "Custom OpenAI-compatible endpoints are not allowed.",
@@ -446,7 +447,7 @@ function normalizeLocalTemplateFormInput(
   const baseUrl = rawBaseUrl?.trim();
 
   if (!baseUrl) {
-    throw new Error(`${template.displayName} base URL is required.`);
+    throw providerTemplateValidation(`${template.displayName} base URL is required.`);
   }
 
   readHttpUrl(baseUrl);
@@ -531,11 +532,11 @@ function readHttpUrl(value: string): URL {
   try {
     url = new URL(value);
   } catch {
-    throw new Error("Provider base URL must be a valid URL.");
+    throw providerTemplateValidation("Provider base URL must be a valid URL.");
   }
 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Provider base URL must use http or https.");
+    throw providerTemplateValidation("Provider base URL must use http or https.");
   }
 
   return url;
@@ -550,6 +551,10 @@ function normalizeUrl(value: string): string {
         ? url.pathname.slice(0, -1)
         : url.pathname;
   return `${url.origin}${pathname}${url.search}`;
+}
+
+function providerTemplateValidation(message: string) {
+  return consoleValidationError(message, "provider_template_invalid");
 }
 
 function omitUndefined<T extends Record<string, unknown>>(value: T): T {

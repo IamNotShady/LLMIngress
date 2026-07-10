@@ -20,7 +20,10 @@ export const POST = withConsoleAuth(async (request) => {
       return redirectToConsolePath("/limits");
     }
     if (action !== "saveLimitRules") {
-      return NextResponse.json({ error: "Unknown Agent limit action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown Agent limit action.", code: "agent_limit_action_unknown" },
+        { status: 400 },
+      );
     }
 
     const agentId = readRequiredText(form, "agentId", "agentApiKeyId");

@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import {
+  consoleConflictError,
+  consoleNotFoundError,
+  consoleValidationError,
+} from "./console-operation-error.ts";
 
 export type VirtualModelFormInput = {
   description?: string | null;
@@ -74,15 +79,23 @@ export function normalizeVirtualModelFormInput(
   const name = input.name?.trim().toLowerCase().replaceAll(/\s+/g, "-");
 
   if (!name) {
-    throw new Error("Virtual model name is required.");
+    throw consoleValidationError("Virtual model name is required.", "virtual_model_name_required", {
+      field: "name",
+    });
   }
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
-    throw new Error(
+    throw consoleValidationError(
       "Virtual model name must use lowercase letters, numbers, dashes, or underscores.",
+      "virtual_model_name_invalid",
+      { field: "name" },
     );
   }
   if (!description) {
-    throw new Error("Virtual model description is required.");
+    throw consoleValidationError(
+      "Virtual model description is required.",
+      "virtual_model_description_required",
+      { field: "description" },
+    );
   }
 
   return { description, name };
@@ -291,7 +304,9 @@ export async function deleteVirtualModel(input: {
         await readVirtualModelDependencyCounts(client, input.id),
       );
       if (dependencyError) {
-        throw new Error(dependencyError);
+        throw consoleConflictError(dependencyError, "virtual_model_dependency_conflict", {
+          virtualModelId: input.id,
+        });
       }
 
       const result = await client.query<{ id: string }>(
@@ -319,7 +334,9 @@ async function assertVirtualModelExists(client: QueryClient, id: string): Promis
     [id],
   );
   if (!result.rows[0]) {
-    throw new Error("Virtual Model was not found.");
+    throw consoleNotFoundError("Virtual Model was not found.", "virtual_model_not_found", {
+      virtualModelId: id,
+    });
   }
 }
 
@@ -340,7 +357,13 @@ async function assertVirtualModelNameAvailable(
     [name, excludingId ?? null],
   );
   if (result.rows[0]) {
-    throw new Error("Virtual Model name already exists.");
+    throw consoleConflictError(
+      "Virtual Model name already exists.",
+      "virtual_model_name_conflict",
+      {
+        name,
+      },
+    );
   }
 }
 
@@ -454,7 +477,7 @@ function rowToConsoleVirtualModel(row: VirtualModelRow): ConsoleVirtualModel {
 
 function requireRow<T>(row: T | undefined): T {
   if (!row) {
-    throw new Error("Virtual Model was not found.");
+    throw consoleNotFoundError("Virtual Model was not found.", "virtual_model_not_found");
   }
   return row;
 }

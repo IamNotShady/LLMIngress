@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
 import { PostgresClient } from "@llmingress/db/providers";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import {
+  consoleConflictError,
+  consoleNotFoundError,
+  consoleValidationError,
+} from "./console-operation-error.ts";
 import {
   isKnownProviderTemplateKey,
   type ProviderTemplateCreateInput,
@@ -46,28 +51,50 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
   const baseUrl = input.baseUrl?.trim() || null;
 
   if (!providerKey) {
-    throw new Error("Provider key is required.");
+    throw consoleValidationError("Provider key is required.", "provider_key_required", {
+      field: "providerKey",
+    });
   }
 
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(providerKey)) {
-    throw new Error("Provider key must use lowercase letters, numbers, dashes, or underscores.");
+    throw consoleValidationError(
+      "Provider key must use lowercase letters, numbers, dashes, or underscores.",
+      "provider_key_invalid",
+      { field: "providerKey" },
+    );
   }
 
   if (!displayName) {
-    throw new Error("Provider display name is required.");
+    throw consoleValidationError(
+      "Provider display name is required.",
+      "provider_display_name_required",
+      {
+        field: "displayName",
+      },
+    );
   }
 
   if (isKnownProviderTemplateKey(providerKey)) {
-    throw new Error(`${displayName} providers must be created from their provider template.`);
+    throw consoleValidationError(
+      `${displayName} providers must be created from their provider template.`,
+      "provider_template_required",
+      { providerKey },
+    );
   }
 
   if (!isProviderType(providerType)) {
-    throw new Error("Provider type must be api_key, local, or subscription.");
+    throw consoleValidationError(
+      "Provider type must be api_key, local, or subscription.",
+      "provider_type_invalid",
+      { field: "providerType" },
+    );
   }
 
   if (providerType === "local" || providerType === "subscription") {
-    throw new Error(
+    throw consoleValidationError(
       "Local providers and subscription providers must be created from a provider template.",
+      "provider_template_required",
+      { providerType },
     );
   }
 
@@ -117,6 +144,7 @@ export async function createProvider(input: {
     description: `Create provider ${input.provider.providerKey}`,
     changes: [{ table: "providers", recordId: providerId }],
     write: async (client) => {
+      await assertProviderKeyAvailable(client, input.provider.providerKey);
       const result = await client.query<ProviderRow>(
         `
           insert into providers (
@@ -164,6 +192,7 @@ export async function createProviderFromTemplate(input: {
     description: `Create provider template ${input.template.id}`,
     changes: [{ table: "providers", recordId: providerId }],
     write: async (client) => {
+      await assertProviderKeyAvailable(client, input.template.providerKey);
       const result = await client.query<ProviderRow>(
         `
           insert into providers (
@@ -209,7 +238,13 @@ export async function updateProvider(input: {
   const displayName = input.displayName.trim();
   const baseUrl = input.baseUrl?.trim() || null;
   if (!displayName) {
-    throw new Error("Provider display name is required.");
+    throw consoleValidationError(
+      "Provider display name is required.",
+      "provider_display_name_required",
+      {
+        field: "displayName",
+      },
+    );
   }
   if (baseUrl) {
     assertUrl(baseUrl);
@@ -324,7 +359,9 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
         [input.id],
       );
       if (!result.rows[0]) {
-        throw new Error("Provider was not found.");
+        throw consoleNotFoundError("Provider was not found.", "provider_not_found", {
+          providerId: input.id,
+        });
       }
       await client.query(
         `
@@ -383,7 +420,11 @@ function resolveUpdatedBaseUrl(
 ): string | null {
   if (existing.provider_template_id) {
     if (requestedBaseUrl && requestedBaseUrl !== existing.base_url) {
-      throw new Error("Template provider base URL cannot be changed.");
+      throw consoleValidationError(
+        "Template provider base URL cannot be changed.",
+        "provider_template_base_url_immutable",
+        { providerId: existing.id },
+      );
     }
 
     return existing.base_url;
@@ -410,7 +451,11 @@ function assertProviderBaseUrlAllowed(
     return;
   }
 
-  throw new Error("Custom OpenAI-compatible endpoints are not allowed.");
+  throw consoleValidationError(
+    "Custom OpenAI-compatible endpoints are not allowed.",
+    "provider_base_url_not_allowed",
+    { providerKey },
+  );
 }
 
 function normalizeUrlForComparison(value: string): string {
@@ -424,7 +469,7 @@ function normalizeUrlForComparison(value: string): string {
 
 function requireRow(row: ProviderRow | undefined): ProviderRow {
   if (!row) {
-    throw new Error("Provider was not found.");
+    throw consoleNotFoundError("Provider was not found.", "provider_not_found");
   }
   return row;
 }
@@ -444,7 +489,37 @@ function assertUrl(value: string): void {
   try {
     new URL(value);
   } catch {
-    throw new Error("Provider base URL must be a valid URL.");
+    throw consoleValidationError(
+      "Provider base URL must be a valid URL.",
+      "provider_base_url_invalid",
+      {
+        field: "baseUrl",
+      },
+    );
+  }
+}
+
+async function assertProviderKeyAvailable(
+  client: ConfigPublishClient,
+  providerKey: string,
+): Promise<void> {
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `provider-key:${providerKey}`,
+  ]);
+  const existing = await client.query<{ id: string }>(
+    `
+      select id::text
+      from providers
+      where provider_key = $1
+        and deleted_at is null
+      limit 1
+    `,
+    [providerKey],
+  );
+  if (existing.rows[0]) {
+    throw consoleConflictError("Provider type already exists.", "provider_key_conflict", {
+      providerKey,
+    });
   }
 }
 

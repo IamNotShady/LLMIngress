@@ -7,6 +7,7 @@ import {
 } from "node:crypto";
 import { promisify } from "node:util";
 import { PostgresClient, readPostgresDatabaseUrl } from "@llmingress/db/client";
+import { consoleConflictError, consoleValidationError } from "./console-operation-error.ts";
 
 export const sessionCookieName = "llmingress_console_session";
 
@@ -130,15 +131,24 @@ export async function createAdminPassword(
   const databaseUrl = maybePassword ? databaseUrlOrPassword : undefined;
   const password = maybePassword ?? databaseUrlOrPassword;
   if (!password) {
-    throw new Error("Admin password is required.");
+    throw consoleValidationError("Admin password is required.", "form_field_required", {
+      field: "password",
+    });
   }
   const passwordHash = await hashAdminPassword(password);
 
-  await withClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
-    await client.query("insert into console_admins (id, password_hash) values (1, $1)", [
-      passwordHash,
-    ]);
-  });
+  try {
+    await withClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
+      await client.query("insert into console_admins (id, password_hash) values (1, $1)", [
+        passwordHash,
+      ]);
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw consoleConflictError("Console is already initialized.", "console_already_initialized");
+    }
+    throw error;
+  }
 }
 
 export async function loginConsoleAdmin(password: string): Promise<ConsoleSession | null>;
@@ -153,7 +163,9 @@ export async function loginConsoleAdmin(
   const databaseUrl = maybePassword ? databaseUrlOrPassword : undefined;
   const password = maybePassword ?? databaseUrlOrPassword;
   if (!password) {
-    throw new Error("Admin password is required.");
+    throw consoleValidationError("Admin password is required.", "form_field_required", {
+      field: "password",
+    });
   }
   const admin = await withClient(databaseUrl, async (client) => {
     const result = await client.query<AdminRow>(
@@ -238,8 +250,20 @@ export function getSessionCookieOptions(expiresAt: Date) {
 
 function assertUsablePassword(password: string): void {
   if (password.length < 8) {
-    throw new Error("Admin password must be at least 8 characters.");
+    throw consoleValidationError(
+      "Admin password must be at least 8 characters.",
+      "admin_password_too_short",
+    );
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
 }
 
 async function createConsoleSession(databaseUrl: string | undefined): Promise<ConsoleSession> {

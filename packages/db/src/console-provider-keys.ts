@@ -6,6 +6,7 @@ import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
 export type ProviderApiKeyTestStatus =
   | "auth_failed"
@@ -272,7 +273,7 @@ export async function deleteProviderApiKey(input: {
   });
 
   if (!providerId) {
-    throw new Error("Provider API key was not found.");
+    throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found");
   }
   return { providerId };
 }
@@ -280,10 +281,13 @@ export async function deleteProviderApiKey(input: {
 function normalizeProviderApiKeyPlaintext(value: string): string {
   const plaintext = value.trim();
   if (!plaintext) {
-    throw new Error("Provider API key is required.");
+    throw consoleValidationError("Provider API key is required.", "provider_api_key_required");
   }
   if (plaintext.length <= providerKeyPrefixLength) {
-    throw new Error("Provider API key must be longer than the stored prefix.");
+    throw consoleValidationError(
+      "Provider API key must be longer than the stored prefix.",
+      "provider_api_key_too_short",
+    );
   }
   return plaintext;
 }
@@ -295,7 +299,10 @@ function buildProviderKeyPrefix(plaintext: string): string {
 function normalizeOptionalLabel(value: string | null | undefined): string | null {
   const label = value?.trim();
   if (label && label.length > providerApiKeyLabelMaxLength) {
-    throw new Error("Provider API key label must be at most 100 characters.");
+    throw consoleValidationError(
+      "Provider API key label must be at most 100 characters.",
+      "provider_api_key_label_too_long",
+    );
   }
   return label || null;
 }
@@ -305,7 +312,10 @@ function normalizePriority(value: number | undefined): number {
     return 100;
   }
   if (!Number.isInteger(value) || value < 0 || value > providerApiKeyPriorityMax) {
-    throw new Error("Provider API key priority must be between 0 and 100.");
+    throw consoleValidationError(
+      "Provider API key priority must be between 0 and 100.",
+      "provider_api_key_priority_invalid",
+    );
   }
   return value;
 }
@@ -314,7 +324,7 @@ function requireProviderApiKeyRow(
   row: ProviderApiKeyStorageRow | undefined,
 ): ProviderApiKeyStorageRow {
   if (!row) {
-    throw new Error("Provider API key was not found.");
+    throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found");
   }
   return row;
 }

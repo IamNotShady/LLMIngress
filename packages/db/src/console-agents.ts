@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
 export type AgentType = "coding" | "desktop" | "terminal" | "ide" | "other";
 export type AgentIntegrationPlatform =
@@ -154,14 +155,22 @@ export function normalizeAgentFormInput(input: AgentFormInput): NormalizedAgentF
   const integrationPlatform = (input.integrationPlatform ?? "other").trim().toLowerCase();
 
   if (!name) {
-    throw new Error("Agent name is required.");
+    throw consoleValidationError("Agent name is required.", "agent_name_required", {
+      field: "name",
+    });
   }
   if (!isAgentType(agentType)) {
-    throw new Error("Agent type must be coding, desktop, terminal, ide, or other.");
+    throw consoleValidationError(
+      "Agent type must be coding, desktop, terminal, ide, or other.",
+      "agent_type_invalid",
+      { field: "agentType" },
+    );
   }
   if (!isAgentIntegrationPlatform(integrationPlatform)) {
-    throw new Error(
+    throw consoleValidationError(
       "Agent integration platform must be codex, claude-code, cursor, opencode, hermes, openclaw, github-copilot, or other.",
+      "agent_integration_platform_invalid",
+      { field: "integrationPlatform" },
     );
   }
 
@@ -623,7 +632,7 @@ async function assertAgentExists(client: AgentQueryClient, agentId: string): Pro
     [agentId],
   );
   if (!result.rows[0]) {
-    throw new Error("Agent was not found.");
+    throw consoleNotFoundError("Agent was not found.", "agent_not_found", { agentId });
   }
 }
 
@@ -648,7 +657,11 @@ async function assertVirtualModelsAvailable(
   const availableIds = new Set(result.rows.map((row) => row.id));
   const missingId = virtualModelIds.find((id) => !availableIds.has(id));
   if (missingId) {
-    throw new Error(`Allowed Virtual Model was not found or is disabled: ${missingId}`);
+    throw consoleValidationError(
+      `Allowed Virtual Model was not found or is disabled: ${missingId}`,
+      "agent_virtual_model_not_available",
+      { virtualModelId: missingId },
+    );
   }
 }
 
@@ -776,16 +789,23 @@ function normalizeRequestLoggingEnabled(value: boolean | string | null | undefin
   if (["0", "disabled", "false", "no", "off"].includes(normalized)) {
     return false;
   }
-  throw new Error("Request logging setting must be enabled or disabled.");
+  throw consoleValidationError(
+    "Request logging setting must be enabled or disabled.",
+    "request_logging_invalid",
+    { field: "requestLoggingEnabled" },
+  );
 }
 
 function normalizeAgentApiKeyPlaintext(value: string): string {
   const plaintext = value.trim();
   if (!plaintext) {
-    throw new Error("Agent API key plaintext is required.");
+    throw consoleValidationError("Agent API key plaintext is required.", "agent_api_key_required");
   }
   if (plaintext.length <= agentApiKeyPrefixLength) {
-    throw new Error("Agent API key must be longer than the stored prefix.");
+    throw consoleValidationError(
+      "Agent API key must be longer than the stored prefix.",
+      "agent_api_key_too_short",
+    );
   }
   return plaintext;
 }
@@ -798,7 +818,11 @@ function assertDefaultVirtualModelIsAllowed(input: {
     input.defaultVirtualModelId &&
     !input.allowedVirtualModelIds.includes(input.defaultVirtualModelId)
   ) {
-    throw new Error("Default Virtual Model must be included in the allowed Virtual Models.");
+    throw consoleValidationError(
+      "Default Virtual Model must be included in the allowed Virtual Models.",
+      "agent_default_virtual_model_not_allowed",
+      { defaultVirtualModelId: input.defaultVirtualModelId },
+    );
   }
 }
 
@@ -809,7 +833,7 @@ function formatVirtualModelLabel(virtualModel: AgentVirtualModel): string {
 function normalizeRequiredText(value: string | null | undefined, label: string): string {
   const normalized = normalizeOptionalText(value);
   if (!normalized) {
-    throw new Error(`${label} is required.`);
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field: label });
   }
   return normalized;
 }
@@ -842,7 +866,7 @@ function readNumber(value: number | string | null | undefined): number {
 
 function requireRow<T>(row: T | undefined): T {
   if (!row) {
-    throw new Error("Agent was not found.");
+    throw consoleNotFoundError("Agent was not found.", "agent_not_found");
   }
   return row;
 }

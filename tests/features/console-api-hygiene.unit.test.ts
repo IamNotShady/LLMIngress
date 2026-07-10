@@ -6,8 +6,6 @@ import { classifyConsoleActionError } from "../../apps/console/src/app/api/_erro
 const guardedRoutes = [
   "apps/console/src/app/api/agent-limits/route.ts",
   "apps/console/src/app/api/agents/route.ts",
-  "apps/console/src/app/api/config-export/route.ts",
-  "apps/console/src/app/api/config-import/route.ts",
   "apps/console/src/app/api/notification-channels/route.ts",
   "apps/console/src/app/api/playground/result/route.ts",
   "apps/console/src/app/api/prices/override/route.ts",

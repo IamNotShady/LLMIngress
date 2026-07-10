@@ -52,6 +52,7 @@ const allowedFeatureIds = [
   "refactor-shared-logger",
   "console-section-data-split",
   "refactor-db-package-split",
+  "console-config-transfer-removal",
 ];
 
 const sharedE2EFeatureIds: Record<string, string> = {

@@ -21,9 +21,6 @@ describe("refactor-zod-boundaries", () => {
     expect(
       readFileSync("apps/console/src/app/api/route-policies/preview/route.ts", "utf8"),
     ).toContain("const body: unknown");
-    expect(readFileSync("apps/console/src/app/api/config-import/route.ts", "utf8")).toContain(
-      "const document: unknown",
-    );
   });
 
   it("keeps the legacy preview validation messages", () => {

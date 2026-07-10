@@ -41,7 +41,7 @@ describe("console request security contract", () => {
     const safeGet = validateConsoleOrigin({
       method: "GET",
       originHeader: null,
-      requestUrl: "http://console.local/api/config-export",
+      requestUrl: "http://console.local/api/playground/result",
     });
     expect(safeGet).toEqual({ ok: true });
   });

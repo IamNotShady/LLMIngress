@@ -936,6 +936,16 @@
 - Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/worker-webhook-egress-hardening.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm run test:e2e -- tests/e2e/worker-webhook-egress-hardening.e2e.spec.ts --workers=1`, related Worker E2Es, `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 48 passing features re-verified.
 - Blockers: none open.
 
+## 2026-07-10 P1 Feature 1 - Console Config Transfer Removal
+
+- `console-config-transfer-removal`: Console configuration import/export has been removed. `/api/config-import` and `/api/config-export` now fall through to the framework 404, and `@llmingress/db/console-import-export` no longer exists.
+- Worker-owned backup and operational export paths remain in place: database backup, JSONL request export, cost report export, and webhook export.
+- Product and architecture docs no longer advertise Console config transfer as a current capability.
+- TDD red evidence: focused unit first failed because the old route files, db module/package export, and docs still existed; focused E2E first failed because authenticated `GET /api/config-export` returned 200 instead of 404.
+- Focused verification passed: `pnpm exec vitest run tests/features/console-config-transfer-removal.unit.test.ts tests/features/console-api-hygiene.unit.test.ts tests/features/refactor-zod-boundaries.unit.test.ts tests/features/console-request-security-contract.unit.test.ts` and `pnpm test:e2e tests/e2e/console-config-transfer-removal.e2e.spec.ts tests/e2e/console-request-security-contract.e2e.spec.ts`.
+- Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/console-config-transfer-removal.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm test:e2e tests/e2e/console-config-transfer-removal.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` with all 49 passing features re-verified.
+- Blockers: none open.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

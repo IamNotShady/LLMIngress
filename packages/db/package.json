@@ -64,10 +64,6 @@
       "types": "./src/console-format.ts",
       "default": "./src/console-format.ts"
     },
-    "./console-import-export": {
-      "types": "./src/console-import-export.ts",
-      "default": "./src/console-import-export.ts"
-    },
     "./console-notification-channels": {
       "types": "./src/console-notification-channels.ts",
       "default": "./src/console-notification-channels.ts"

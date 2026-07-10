@@ -476,8 +476,8 @@ Console responsibilities:
 - Encrypt Provider Keys and hash Agent-owned API keys.
 - Generate Agent onboarding instructions and copyable configuration snippets.
 - Display Activity, Usage, Cost, Fallback, and error data written by Gateway.
-- Manage Gateway Runtime settings such as listen address, port, log retention,
-  and data import/export.
+- Manage Gateway Runtime settings such as listen address, port, and log
+  retention.
 - Create background jobs for model refresh, provider connectivity checks, price
   sync, backup, log cleanup, and other asynchronous actions instead of running
   long provider calls inside Console requests.
@@ -1385,9 +1385,9 @@ invariants are enforced by
 ### 10.2 Console App Only Handles Control-Plane Experience
 
 `apps/console` owns pages, forms, configuration actions, Activity / Usage
-display, Worker job status, and Runtime status views. Dependency checks, shared
-config publisher calls, and import/export entry points can live in the Console
-server layer, but shared types and domain rules should stay in packages.
+display, Worker job status, and Runtime status views. Dependency checks and
+shared config publisher calls can live in the Console server layer, but shared
+types and domain rules should stay in packages.
 
 ### 10.3 Worker App Owns Async Tasks
 

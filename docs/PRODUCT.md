@@ -225,8 +225,6 @@ Top-level Console modules:
 - Playground: live test requests through the Gateway Public API, including the
   selected provider/model and selection reason.
 - Settings: Console preferences, security hints, and notification channels.
-  Config import/export remains an authenticated Console API capability and is
-  not shown as a Settings page feature.
 
 ### 5.3 Module Relationships
 
@@ -988,8 +986,6 @@ default.
 
 - Export request records.
 - Export cost reports.
-- Export Provider / Model / Route Policy configuration.
-- Import configuration backups.
 - Automatically back up the configuration database before upgrades.
 - Provide data migration.
 - Support log retention period and log rotation.

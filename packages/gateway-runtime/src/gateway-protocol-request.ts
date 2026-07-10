@@ -39,10 +39,15 @@ import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   requireGatewayRoutePolicy,
+  requireGatewayRoutePolicyForVirtualModel,
   selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
+import {
+  assertGatewayRequestWithinVirtualModelContract,
+  assertGatewayVirtualModelCapabilityContract,
+} from "./gateway-virtual-model-capabilities.ts";
 
 const logger = createLogger("gateway");
 
@@ -124,6 +129,17 @@ export async function executeGatewayProtocolRequest<
   const fallbackAttempts: FallbackFailedAttempt[] = [];
   let lastError: FallbackAttemptErrorLike | undefined;
   try {
+    const configuredRoutePolicy = requireGatewayRoutePolicyForVirtualModel(
+      input.snapshot,
+      input.virtualModel.id,
+    );
+    assertGatewayRoutePolicyEndpointProtocol({
+      protocol: input.protocol,
+      routePolicy: configuredRoutePolicy,
+    });
+    const capabilityContract = assertGatewayVirtualModelCapabilityContract(configuredRoutePolicy);
+    assertGatewayRequestWithinVirtualModelContract(capabilityContract, requestMetadata);
+
     const routeResult = selectRouteAttempts({
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
@@ -142,10 +158,6 @@ export async function executeGatewayProtocolRequest<
 
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    assertGatewayRoutePolicyEndpointProtocol({
-      protocol: input.protocol,
-      routePolicy,
-    });
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const selectedCandidate = routeResult.chain[0];
     if (!selectedCandidate) {

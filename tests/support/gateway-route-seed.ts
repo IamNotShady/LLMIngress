@@ -87,12 +87,16 @@ export async function seedOpenAIGatewayRoute(
         provider_id,
         model_id,
         display_name,
+        input_modalities,
+        output_modalities,
         context_window,
+        max_output_tokens,
         supports_streaming,
         supports_function_calling,
+        supports_reasoning,
         availability
       )
-      values ($1, $2, $3, 'Fake Model', 128000, true, true, 'available')
+      values ($1, $2, $3, 'Fake Model', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
     `,
     [providerModelId, providerId, input.modelId ?? "fake-model"],
   );

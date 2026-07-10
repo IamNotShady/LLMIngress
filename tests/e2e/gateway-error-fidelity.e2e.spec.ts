@@ -26,6 +26,9 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
       virtualModelName: "vm-provider-4xx",
     });
+    await fixture.query(
+      "update provider_models set output_modalities = array['text', 'embedding']::text[]",
+    );
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
@@ -324,12 +327,16 @@ async function seedMissingCredentialCandidate(
         provider_id,
         model_id,
         display_name,
+        input_modalities,
+        output_modalities,
         context_window,
+        max_output_tokens,
         supports_streaming,
         supports_function_calling,
+        supports_reasoning,
         availability
       )
-      values ($1, $2, 'fake-model', 'Fake Model Missing Key', 128000, true, true, 'available')
+      values ($1, $2, 'fake-model', 'Fake Model Missing Key', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
     `,
     [providerModelId, providerId],
   );

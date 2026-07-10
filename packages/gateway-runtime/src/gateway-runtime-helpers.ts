@@ -37,6 +37,22 @@ export function requireGatewayRoutePolicy(
   return routePolicy;
 }
 
+export function requireGatewayRoutePolicyForVirtualModel(
+  snapshot: GatewayConfigSnapshot,
+  virtualModelId: string,
+): GatewayRoutePolicySnapshot {
+  const routePolicy = snapshot.routePolicies.find(
+    (candidate) => candidate.virtualModelId === virtualModelId,
+  );
+  if (!routePolicy) {
+    throw new GatewayPipelineError(
+      "route_not_found",
+      `Route policy for Virtual Model ${virtualModelId} was not found.`,
+    );
+  }
+  return routePolicy;
+}
+
 export function selectGatewayBaselineCandidate(
   routePolicy: GatewayRoutePolicySnapshot,
 ): GatewayRouteCandidateSnapshot {

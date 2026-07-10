@@ -72,10 +72,13 @@ export function buildOpenAIEmbeddingsRequestMetadata(input: {
   return {
     estimatedInputTokens: estimateEmbeddingsInputTokens(input.request.input),
     estimatedOutputTokens: 0,
+    inputModalities: ["text"],
     messageCount: countEmbeddingsInputs(input.request.input),
     model: input.model,
+    outputModalities: ["embedding"],
     protocol: "embeddings",
     stream: false,
+    usesReasoning: false,
     usesTools: false,
   };
 }

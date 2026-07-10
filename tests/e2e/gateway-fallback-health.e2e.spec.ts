@@ -162,12 +162,16 @@ async function seedFallbackProviderCandidate(input: {
         provider_id,
         model_id,
         display_name,
+        input_modalities,
+        output_modalities,
         context_window,
+        max_output_tokens,
         supports_streaming,
         supports_function_calling,
+        supports_reasoning,
         availability
       )
-      values ($1, $2, 'fake-model', 'Fake Fallback Model', 128000, true, true, 'available')
+      values ($1, $2, 'fake-model', 'Fake Fallback Model', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
     `,
     [providerModelId, providerId],
   );

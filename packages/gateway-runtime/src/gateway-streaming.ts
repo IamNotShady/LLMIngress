@@ -66,6 +66,7 @@ import {
   buildGatewayRequestActivityRoute,
   isRecord,
   requireGatewayRoutePolicy,
+  requireGatewayRoutePolicyForVirtualModel,
   selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
 import {
@@ -76,6 +77,10 @@ import {
 import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
+import {
+  assertGatewayRequestWithinVirtualModelContract,
+  assertGatewayVirtualModelCapabilityContract,
+} from "./gateway-virtual-model-capabilities.ts";
 
 const logger = createLogger("gateway");
 
@@ -142,6 +147,17 @@ export async function executeGatewayStreamingRequest(input: {
   let limitsEnforced = false;
 
   try {
+    const configuredRoutePolicy = requireGatewayRoutePolicyForVirtualModel(
+      input.snapshot,
+      input.virtualModel.id,
+    );
+    assertGatewayRoutePolicyEndpointProtocol({
+      protocol: input.protocol,
+      routePolicy: configuredRoutePolicy,
+    });
+    const capabilityContract = assertGatewayVirtualModelCapabilityContract(configuredRoutePolicy);
+    assertGatewayRequestWithinVirtualModelContract(capabilityContract, normalized.requestMetadata);
+
     const routeResult = selectRouteAttempts({
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
@@ -167,10 +183,6 @@ export async function executeGatewayStreamingRequest(input: {
 
     const routeDecision = routeResult.decision;
     const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    assertGatewayRoutePolicyEndpointProtocol({
-      protocol: input.protocol,
-      routePolicy,
-    });
     const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const gatewayChain = routeResult.chain;
 

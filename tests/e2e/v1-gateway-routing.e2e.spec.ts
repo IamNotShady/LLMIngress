@@ -130,12 +130,16 @@ async function seedV1ProviderCoverageRoutes(
           provider_id,
           model_id,
           display_name,
+          input_modalities,
+          output_modalities,
           context_window,
+          max_output_tokens,
           supports_streaming,
           supports_function_calling,
+          supports_reasoning,
           availability
         )
-        values ($1, $2, $3, $4, 128000, true, true, 'available')
+        values ($1, $2, $3, $4, array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
       `,
       [providerModelId, providerId, scenario.modelId, scenario.modelDisplayName],
     );

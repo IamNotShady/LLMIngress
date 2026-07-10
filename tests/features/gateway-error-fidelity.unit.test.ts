@@ -221,9 +221,13 @@ function candidateSnapshot(
 ): GatewayRouteCandidateSnapshot {
   return {
     candidateOrder: 1,
+    contextWindow: 128_000,
     displayName: "Fake Model",
     healthStatus: "healthy",
+    inputModalities: ["text"],
+    maxOutputTokens: 8_192,
     modelId: "fake-model",
+    outputModalities: ["text"],
     price: {
       modelId: "fake-model",
       priceVersion: "test",
@@ -234,6 +238,9 @@ function candidateSnapshot(
     providerId: overrides.providerId ?? randomUUID(),
     providerKey: "openai",
     providerModelId: randomUUID(),
+    supportsFunctionCalling: true,
+    supportsReasoning: false,
+    supportsTools: true,
     ...overrides,
   };
 }

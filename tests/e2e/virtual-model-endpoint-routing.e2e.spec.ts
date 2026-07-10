@@ -122,14 +122,18 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
           provider_id,
           model_id,
           display_name,
+          input_modalities,
+          output_modalities,
           context_window,
+          max_output_tokens,
           supports_streaming,
           supports_function_calling,
+          supports_reasoning,
           availability
         )
-        values ($1, $2, 'gpt-chat', 'GPT Chat', 128000, true, true, 'available'),
-               ($3, $4, 'claude-msg', 'Claude Messages', 200000, true, true, 'available'),
-               ($5, $6, 'codex-resp', 'Codex Responses', 128000, true, true, 'available')
+        values ($1, $2, 'gpt-chat', 'GPT Chat', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available'),
+               ($3, $4, 'claude-msg', 'Claude Messages', array['text']::text[], array['text']::text[], 200000, 8192, true, true, false, 'available'),
+               ($5, $6, 'codex-resp', 'Codex Responses', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
       `,
       [
         openAiModelId,

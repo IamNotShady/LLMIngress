@@ -23,6 +23,8 @@ const gatewayErrorStatusByCode: Record<GatewayErrorCode, number> = {
   rate_limit_exceeded: 429,
   route_not_found: 404,
   token_budget_exceeded: 402,
+  virtual_model_capability_mismatch: 400,
+  virtual_model_configuration_invalid: 503,
   virtual_model_not_allowed: 403,
 };
 

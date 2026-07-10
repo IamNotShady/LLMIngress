@@ -564,6 +564,17 @@
       ],
       "status": "passing",
       "evidence": "2026-07-10: TDD red->green. Added 0010_provider_model_capabilities to rename supports_tools to nullable supports_function_calling and add modality/max-output/reasoning columns with constraints; extended models.dev, OpenRouter, LiteLLM, and Vercel registry parsers with stable capability extraction, conflict tracking, and manual override resolution. Worker refresh now writes effective independent columns plus capability_metadata, preserves manual overrides, and publishes config changes; Console provider model rows display capability/source status and expose save/clear override actions. Focused unit and E2E passed; pnpm run db:migrate:check passed; pnpm run verify passed; pnpm run verify:features passed with all 50 passing features re-verified."
+    },
+    {
+      "id": "virtual-model-capability-contract",
+      "name": "Virtual Model Capability Contract",
+      "description": "Route Policy create/update requires every candidate provider model to have complete and identical stable capabilities, and Gateway validates each request against the resulting Virtual Model capability contract before selecting providers or emitting fallback/health side effects.",
+      "verification": "pnpm exec vitest run tests/features/virtual-model-capability-contract.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-capability-contract.e2e.spec.ts",
+      "dependencies": [
+        "provider-model-capability-sync"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Added shared Virtual Model capability contract helpers for completeness, set-equality, mismatch, and request validation. Console Route Policy create/update now rejects incomplete or mismatched provider model candidates inside the config-publisher transaction with stable route_policy_candidate_capability_incomplete / route_policy_candidate_capability_mismatch errors. Gateway snapshots carry all six capability fields, JSON and Streaming paths validate Virtual Model config before route selection, and request capabilities are rejected with 400 virtual_model_capability_mismatch before provider calls. Focused unit and E2E passed; focused fallback/logging/request-hygiene Gateway E2Es passed; pnpm run db:migrate:check passed; pnpm run verify passed; pnpm run verify:features passed with all 51 passing features re-verified."
     }
   ]
 }

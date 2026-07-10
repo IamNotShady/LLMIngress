@@ -5,7 +5,16 @@
 - Date: 2026-07-10
 - Branch: `codex/high-priority-hardening`
 - Base: `9a80b4b8`
-- Status: P1 capability plan is in progress on `codex/high-priority-hardening`. Console config transfer removal is committed; Provider model capability sync is implemented and verified; Virtual Model capability contract has not started.
+- Status: P1 capability plan is implemented, verified, and committed on `codex/high-priority-hardening`.
+
+## 2026-07-10 P1 Capability Plan 3 - Virtual Model Capability Contract
+
+- Added a shared `VirtualModelCapabilityContract` and domain helpers that reject incomplete candidate fields, compare multi-candidate contracts using normalized set semantics for modalities, and validate request capabilities against the selected Virtual Model contract.
+- Console Route Policy create/update now validates candidate capabilities inside the config-publisher transaction after provider locks and endpoint checks; incomplete candidates return `route_policy_candidate_capability_incomplete`, mismatched candidates return `route_policy_candidate_capability_mismatch`.
+- Gateway config snapshots now carry input/output modalities, max output tokens, function calling, and reasoning support for each candidate.
+- Gateway JSON and Streaming paths validate route endpoint, Virtual Model configuration, and request capabilities before route selection, provider credentials, fallback attempts, health updates, or Provider calls. Request contract violations return 400 `virtual_model_capability_mismatch`; invalid historical configs return 503 `virtual_model_configuration_invalid`.
+- Request metadata now identifies text/image/audio/video/document inputs, text/embedding outputs, function-calling usage, reasoning usage, and token estimates.
+- Final verification passed: focused RED unit and E2E failed before implementation, then focused unit/E2E passed after implementation; additional fallback/logging/request-hygiene Gateway E2Es passed; `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` passed with all 51 passing features re-verified.
 
 ## 2026-07-10 P1 Capability Plan 2 - Provider Model Capability Sync
 

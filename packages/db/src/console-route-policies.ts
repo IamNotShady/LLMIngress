@@ -11,6 +11,7 @@ import {
   normalizeRoutePolicyRules,
   type ProviderModelCapabilityMetadata,
   type RouteEndpointProtocol,
+  resolveVirtualModelCapabilityContract,
   routeEndpointProtocols,
 } from "@llmingress/domain";
 import {
@@ -517,6 +518,7 @@ export async function createRoutePolicy(input: {
       await assertVirtualModelHasNoRoutePolicy(client, input.routePolicy.virtualModelId);
       await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
       await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
+      await assertRoutePolicyCandidateCapabilityContract(client, input.routePolicy);
       await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
@@ -581,6 +583,7 @@ export async function updateRoutePolicy(input: {
       }
       await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
       await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
+      await assertRoutePolicyCandidateCapabilityContract(client, input.routePolicy);
       await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
@@ -755,6 +758,30 @@ async function assertEndpointSupportedRoutePolicyCandidates(
     "route_policy_endpoint_unsupported",
     { endpointProtocol: routePolicy.endpointProtocol },
   );
+}
+
+async function assertRoutePolicyCandidateCapabilityContract(
+  client: QueryClient,
+  routePolicy: NormalizedRoutePolicyFormInput,
+): Promise<void> {
+  const candidates = await readProviderModelOptionsById(client, routePolicy.providerModelIds);
+  const result = resolveVirtualModelCapabilityContract(
+    candidates.map((candidate) => ({
+      id: candidate.id,
+      inputModalities: candidate.inputModalities,
+      maxContextTokens: candidate.contextWindow,
+      maxOutputTokens: candidate.maxOutputTokens,
+      outputModalities: candidate.outputModalities,
+      supportsFunctionCalling: candidate.supportsFunctionCalling,
+      supportsReasoning: candidate.supportsReasoning,
+    })),
+  );
+
+  if (result.ok) {
+    return;
+  }
+
+  throw consoleValidationError(result.message, result.code, result.details);
 }
 
 async function readBudgetedVirtualModelUsage(

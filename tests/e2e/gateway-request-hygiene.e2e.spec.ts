@@ -26,6 +26,17 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-request-hygiene",
     });
+    await fixture.query(
+      `
+        update provider_models
+        set input_modalities = array['text', 'image']::text[],
+            output_modalities = array['text', 'embedding']::text[],
+            context_window = 1000000,
+            max_output_tokens = 8192,
+            supports_function_calling = true,
+            supports_reasoning = true
+      `,
+    );
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,

@@ -1,3 +1,4 @@
+import type { ModelInputModality, ModelOutputModality } from "@llmingress/domain";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import type {
   NormalizedOpenAIChatRequest,
@@ -10,10 +11,13 @@ export type GatewayRequestProtocol = "chat_completions" | "embeddings" | "messag
 export type GatewayRequestMetadata = {
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
+  inputModalities: ModelInputModality[];
   messageCount: number;
   model: string;
+  outputModalities: ModelOutputModality[];
   protocol: GatewayRequestProtocol;
   stream: boolean;
+  usesReasoning: boolean;
   usesTools: boolean;
 };
 
@@ -32,10 +36,13 @@ export function buildOpenAIChatCompletionRequestMetadata(input: {
   return {
     estimatedInputTokens: estimateTextTokens([...messageTextParts, ...toolTextParts]),
     estimatedOutputTokens: input.request.maxOutputTokens ?? 1024,
+    inputModalities: detectInputModalities(input.rawBody),
     messageCount: input.request.messages.length,
     model: input.model,
+    outputModalities: ["text"],
     protocol: "chat_completions",
     stream: input.request.stream ?? false,
+    usesReasoning: requestUsesReasoning(input.rawBody),
     usesTools:
       toolTextParts.length > 0 ||
       input.request.messages.some(
@@ -59,10 +66,13 @@ export function buildOpenAIResponsesRequestMetadata(input: {
   return {
     estimatedInputTokens: estimateTextTokens([...inputTextParts, ...toolTextParts]),
     estimatedOutputTokens: input.request.maxOutputTokens ?? 1024,
+    inputModalities: detectInputModalities(input.rawBody),
     messageCount,
     model: input.model,
+    outputModalities: ["text"],
     protocol: "responses",
     stream: input.request.stream ?? false,
+    usesReasoning: requestUsesReasoning(input.rawBody),
     usesTools:
       toolTextParts.length > 0 ||
       (Array.isArray(input.request.input) && input.request.input.some(isResponsesToolInputItem)),
@@ -85,10 +95,13 @@ export function buildAnthropicMessagesRequestMetadata(input: {
   return {
     estimatedInputTokens: estimateTextTokens([...messageTextParts, ...toolTextParts]),
     estimatedOutputTokens: input.request.maxOutputTokens,
+    inputModalities: detectInputModalities(input.rawBody),
     messageCount: input.request.messages.length,
     model: input.model,
+    outputModalities: ["text"],
     protocol: "messages",
     stream: input.request.stream ?? false,
+    usesReasoning: requestUsesReasoning(input.rawBody),
     usesTools: toolTextParts.length > 0,
   };
 }
@@ -235,6 +248,63 @@ function readToolTextParts(rawBody: unknown): string[] {
   }
 
   return parts.filter((part) => part.trim());
+}
+
+function detectInputModalities(rawBody: unknown): ModelInputModality[] {
+  const modalities = new Set<ModelInputModality>(["text"]);
+  collectInputModalities(rawBody, modalities);
+  return modelInputModalityOrder.filter((modality) => modalities.has(modality));
+}
+
+const modelInputModalityOrder = ["text", "image", "audio", "video", "document"] as const;
+
+function collectInputModalities(value: unknown, modalities: Set<ModelInputModality>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectInputModalities(item, modalities);
+    }
+    return;
+  }
+  if (!isRecord(value)) {
+    return;
+  }
+
+  const type = typeof value.type === "string" ? value.type.toLowerCase() : "";
+  const mediaType = typeof value.media_type === "string" ? value.media_type.toLowerCase() : "";
+  if (type.includes("image") || mediaType.startsWith("image/") || value.image_url !== undefined) {
+    modalities.add("image");
+  }
+  if (type.includes("audio") || mediaType.startsWith("audio/") || value.input_audio !== undefined) {
+    modalities.add("audio");
+  }
+  if (type.includes("video") || mediaType.startsWith("video/")) {
+    modalities.add("video");
+  }
+  if (
+    type.includes("file") ||
+    type.includes("document") ||
+    type.includes("pdf") ||
+    mediaType === "application/pdf" ||
+    value.file_id !== undefined ||
+    value.filename !== undefined
+  ) {
+    modalities.add("document");
+  }
+
+  for (const nested of Object.values(value)) {
+    collectInputModalities(nested, modalities);
+  }
+}
+
+function requestUsesReasoning(rawBody: unknown): boolean {
+  if (!isRecord(rawBody)) {
+    return false;
+  }
+  return (
+    rawBody.reasoning !== undefined ||
+    rawBody.reasoning_effort !== undefined ||
+    rawBody.thinking !== undefined
+  );
 }
 
 function safeStringify(value: unknown): string {

@@ -13,6 +13,8 @@ import {
   type HealthSummaryChangedPayload,
 } from "@llmingress/db/provider-health";
 import {
+  type ModelInputModality,
+  type ModelOutputModality,
   normalizeProviderModelCapabilities,
   normalizeRoutePolicyRules,
   type ProviderModelCapabilities,
@@ -43,11 +45,16 @@ export type GatewayRouteCandidateSnapshot = {
   contextWindow?: number | null;
   displayName: string;
   healthStatus: RouteCandidateHealthStatus;
+  inputModalities: ModelInputModality[] | null;
+  maxOutputTokens: number | null;
   modelId: string;
+  outputModalities: ModelOutputModality[] | null;
   price: ModelTokenPrice;
   providerId: string;
   providerKey: string;
   providerModelId: string;
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
   supportsTools?: boolean;
 };
 
@@ -113,13 +120,18 @@ export type RoutePolicyCandidateRow = {
   contextWindow: number | null;
   inputUsdPerMillionTokens: string | null;
   healthStatus: RouteCandidateHealthStatus;
+  inputModalities: ModelInputModality[] | null;
+  maxOutputTokens: number | null;
   modelId: string;
+  outputModalities: ModelOutputModality[] | null;
   outputUsdPerMillionTokens: string | null;
   providerId: string;
   providerKey: string;
   providerModelId: string;
   rules: unknown;
   strategy: GatewayRoutePolicyStrategy;
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
   supportsTools: boolean;
   syncedAt: Date | null;
   syncedCachedInputUsdPerMillionTokens: string | null;
@@ -363,6 +375,11 @@ export async function loadGatewayConfigSnapshot(
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
                provider_models.context_window as "contextWindow",
+               provider_models.input_modalities as "inputModalities",
+               provider_models.output_modalities as "outputModalities",
+               provider_models.max_output_tokens as "maxOutputTokens",
+               provider_models.supports_function_calling as "supportsFunctionCalling",
+               provider_models.supports_reasoning as "supportsReasoning",
                provider_models.supports_function_calling as "supportsTools",
                provider_models.capability_metadata as "capabilityMetadata",
                providers.id::text as "providerId",
@@ -445,7 +462,10 @@ export function rowToRoutePolicySnapshots(
       contextWindow: row.contextWindow,
       displayName: row.displayName,
       healthStatus: row.healthStatus,
+      inputModalities: row.inputModalities,
+      maxOutputTokens: row.maxOutputTokens,
       modelId: row.modelId,
+      outputModalities: row.outputModalities,
       price: resolveEffectiveModelTokenPrice({
         manualOverride: buildManualPriceOverride({
           cachedInputUsdPerMillionTokens: row.cachedInputUsdPerMillionTokens,
@@ -471,6 +491,8 @@ export function rowToRoutePolicySnapshots(
       providerId: row.providerId,
       providerKey: row.providerKey,
       providerModelId: row.providerModelId,
+      supportsFunctionCalling: row.supportsFunctionCalling,
+      supportsReasoning: row.supportsReasoning,
       supportsTools: row.supportsTools,
     });
   }

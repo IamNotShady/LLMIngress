@@ -76,6 +76,59 @@ export type ResolvedProviderModelCapabilities = {
   metadata: ProviderModelCapabilityMetadata;
 };
 
+export type VirtualModelCapabilityContract = {
+  inputModalities: ModelInputModality[];
+  outputModalities: ModelOutputModality[];
+  maxContextTokens: number;
+  maxOutputTokens: number;
+  supportsFunctionCalling: boolean;
+  supportsReasoning: boolean;
+};
+
+export type VirtualModelCapabilityContractCandidate = {
+  id: string;
+  inputModalities: ModelInputModality[] | null;
+  outputModalities: ModelOutputModality[] | null;
+  maxContextTokens: number | null;
+  maxOutputTokens: number | null;
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
+};
+
+export type VirtualModelCapabilityContractErrorCode =
+  | "route_policy_candidate_capability_incomplete"
+  | "route_policy_candidate_capability_mismatch";
+
+export type VirtualModelCapabilityContractResult =
+  | {
+      contract: VirtualModelCapabilityContract;
+      ok: true;
+    }
+  | {
+      code: VirtualModelCapabilityContractErrorCode;
+      details: Record<string, unknown>;
+      message: string;
+      ok: false;
+    };
+
+export type VirtualModelRequestCapabilities = {
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  inputModalities: ModelInputModality[];
+  outputModalities: ModelOutputModality[];
+  usesFunctionCalling: boolean;
+  usesReasoning: boolean;
+};
+
+export type VirtualModelRequestCapabilityValidationResult =
+  | { ok: true }
+  | {
+      code: "virtual_model_capability_mismatch";
+      details: Record<string, unknown>;
+      message: string;
+      ok: false;
+    };
+
 export const emptySyncedModelCapabilities: SyncedModelCapabilities = {
   inputModalities: null,
   maxContextTokens: null,
@@ -158,6 +211,112 @@ export function resolveProviderModelCapabilities(input: {
       syncedCapabilities,
     }),
   };
+}
+
+export function resolveVirtualModelCapabilityContract(
+  candidates: readonly VirtualModelCapabilityContractCandidate[],
+): VirtualModelCapabilityContractResult {
+  const contracts: Array<{
+    contract: VirtualModelCapabilityContract;
+    providerModelId: string;
+  }> = [];
+
+  for (const candidate of candidates) {
+    const contract = readVirtualModelCapabilityCandidateContract(candidate);
+    if (!contract.ok) {
+      return contract;
+    }
+    contracts.push({
+      contract: contract.contract,
+      providerModelId: candidate.id,
+    });
+  }
+
+  const baseline = contracts[0];
+  if (!baseline) {
+    return {
+      code: "route_policy_candidate_capability_incomplete",
+      details: { fields: modelCapabilityFields, providerModelId: null },
+      message: "Route policy requires at least one provider model with complete capabilities.",
+      ok: false,
+    };
+  }
+
+  for (const candidate of contracts.slice(1)) {
+    for (const field of modelCapabilityFields) {
+      if (!virtualModelCapabilityFieldEqual(baseline.contract[field], candidate.contract[field])) {
+        return {
+          code: "route_policy_candidate_capability_mismatch",
+          details: {
+            baselineProviderModelId: baseline.providerModelId,
+            baselineValue: baseline.contract[field],
+            field,
+            providerModelId: candidate.providerModelId,
+            value: candidate.contract[field],
+          },
+          message: `Route policy candidate capabilities must match for ${field}.`,
+          ok: false,
+        };
+      }
+    }
+  }
+
+  return { contract: baseline.contract, ok: true };
+}
+
+export function validateVirtualModelRequestCapabilities(
+  contract: VirtualModelCapabilityContract,
+  request: VirtualModelRequestCapabilities,
+): VirtualModelRequestCapabilityValidationResult {
+  const outputOverflow = request.estimatedOutputTokens > contract.maxOutputTokens;
+  if (outputOverflow) {
+    return virtualModelCapabilityMismatch("maxOutputTokens", {
+      maxOutputTokens: contract.maxOutputTokens,
+      requestedOutputTokens: request.estimatedOutputTokens,
+    });
+  }
+
+  const totalTokens = request.estimatedInputTokens + request.estimatedOutputTokens;
+  if (totalTokens > contract.maxContextTokens) {
+    return virtualModelCapabilityMismatch("maxContextTokens", {
+      maxContextTokens: contract.maxContextTokens,
+      requestedTokens: totalTokens,
+    });
+  }
+
+  const unsupportedInputModalities = request.inputModalities.filter(
+    (modality) => !contract.inputModalities.includes(modality),
+  );
+  if (unsupportedInputModalities.length > 0) {
+    return virtualModelCapabilityMismatch("inputModalities", {
+      supported: contract.inputModalities,
+      unsupported: unsupportedInputModalities,
+    });
+  }
+
+  const unsupportedOutputModalities = request.outputModalities.filter(
+    (modality) => !contract.outputModalities.includes(modality),
+  );
+  if (unsupportedOutputModalities.length > 0) {
+    return virtualModelCapabilityMismatch("outputModalities", {
+      supported: contract.outputModalities,
+      unsupported: unsupportedOutputModalities,
+    });
+  }
+
+  if (request.usesFunctionCalling && !contract.supportsFunctionCalling) {
+    return virtualModelCapabilityMismatch("supportsFunctionCalling", {
+      supported: false,
+    });
+  }
+
+  if (request.usesReasoning && !contract.supportsReasoning) {
+    return virtualModelCapabilityMismatch("supportsReasoning", {
+      supported: false,
+    });
+  }
+
+  return { ok: true };
 }
 
 export type RouteCandidateHealthStatus =
@@ -787,6 +946,83 @@ function setCapabilityField(
       target.supportsReasoning = value as boolean | null;
       return;
   }
+}
+
+function readVirtualModelCapabilityCandidateContract(
+  candidate: VirtualModelCapabilityContractCandidate,
+): VirtualModelCapabilityContractResult {
+  const inputModalities = normalizeModelInputModalities(candidate.inputModalities ?? undefined);
+  const outputModalities = normalizeModelOutputModalities(candidate.outputModalities ?? undefined);
+  const incompleteFields = [
+    ...(inputModalities ? [] : ["inputModalities"]),
+    ...(outputModalities ? [] : ["outputModalities"]),
+    ...(candidate.maxContextTokens === null ? ["maxContextTokens"] : []),
+    ...(candidate.maxOutputTokens === null ? ["maxOutputTokens"] : []),
+    ...(candidate.supportsFunctionCalling === null ? ["supportsFunctionCalling"] : []),
+    ...(candidate.supportsReasoning === null ? ["supportsReasoning"] : []),
+  ];
+
+  if (incompleteFields.length > 0) {
+    return {
+      code: "route_policy_candidate_capability_incomplete",
+      details: {
+        fields: incompleteFields,
+        providerModelId: candidate.id,
+      },
+      message: `Route policy candidate ${candidate.id} has incomplete model capabilities.`,
+      ok: false,
+    };
+  }
+  if (!inputModalities || !outputModalities) {
+    throw new Error("Virtual Model capability modality normalization failed.");
+  }
+
+  return {
+    contract: {
+      inputModalities,
+      maxContextTokens: readRequiredPositiveInteger(candidate.maxContextTokens, "maxContextTokens"),
+      maxOutputTokens: readRequiredPositiveInteger(candidate.maxOutputTokens, "maxOutputTokens"),
+      outputModalities,
+      supportsFunctionCalling: readRequiredBoolean(
+        candidate.supportsFunctionCalling,
+        "supportsFunctionCalling",
+      ),
+      supportsReasoning: readRequiredBoolean(candidate.supportsReasoning, "supportsReasoning"),
+    },
+    ok: true,
+  };
+}
+
+function virtualModelCapabilityFieldEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function virtualModelCapabilityMismatch(
+  field: keyof VirtualModelCapabilityContract,
+  details: Record<string, unknown>,
+): VirtualModelRequestCapabilityValidationResult {
+  return {
+    code: "virtual_model_capability_mismatch",
+    details: { field, ...details },
+    message: `Request exceeds Virtual Model capability contract for ${field}.`,
+    ok: false,
+  };
+}
+
+function readRequiredPositiveInteger(value: unknown, field: string): number {
+  const normalized = readOptionalPositiveInteger(value, field);
+  if (normalized === undefined) {
+    throw new Error(`${field} must be a positive integer.`);
+  }
+  return normalized;
+}
+
+function readRequiredBoolean(value: unknown, field: string): boolean {
+  const normalized = readOptionalBoolean(value, field);
+  if (normalized === undefined) {
+    throw new Error(`${field} must be a boolean.`);
+  }
+  return normalized;
 }
 
 function assertTokenEstimate(value: number, name: string): void {

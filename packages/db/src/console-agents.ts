@@ -790,7 +790,7 @@ function normalizeRequestLoggingEnabled(value: boolean | string | null | undefin
     return false;
   }
   throw consoleValidationError(
-    "Request logging setting must be enabled or disabled.",
+    "Detailed request metadata logging setting must be enabled or disabled.",
     "request_logging_invalid",
     { field: "requestLoggingEnabled" },
   );

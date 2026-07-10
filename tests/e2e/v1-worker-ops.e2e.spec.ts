@@ -725,6 +725,7 @@ async function insertOperationsJobs(
       requestIds,
     },
     priority: 50,
+    runAfter: plan.now,
     trigger: "manual",
   });
   await insertJob(fixture, {
@@ -735,6 +736,7 @@ async function insertOperationsJobs(
       window: "24h",
     },
     priority: 40,
+    runAfter: plan.now,
     trigger: "manual",
   });
   await insertJob(fixture, {
@@ -745,6 +747,7 @@ async function insertOperationsJobs(
       webhookUrl: plan.webhookUrl,
     },
     priority: 30,
+    runAfter: plan.now,
     trigger: "manual",
   });
   await insertJob(fixture, {
@@ -754,6 +757,7 @@ async function insertOperationsJobs(
       outputPath: plan.paths.backup,
     },
     priority: 20,
+    runAfter: plan.now,
     trigger: "manual",
   });
 }
@@ -767,6 +771,7 @@ async function insertRetentionJob(
     jobType: "retention_cleanup",
     payload: plan.retention,
     priority: -10,
+    runAfter: plan.now,
     trigger: "scheduled",
   });
 }
@@ -778,15 +783,23 @@ async function insertJob(
     jobType: string;
     payload: unknown;
     priority: number;
+    runAfter: Date;
     trigger: "manual" | "scheduled" | "system";
   },
 ): Promise<void> {
   await fixture.query(
     `
-      insert into jobs (id, job_type, status, trigger, priority, payload, max_attempts)
-      values ($1, $2, 'pending', $3, $4, $5::jsonb, 1)
+      insert into jobs (id, job_type, status, trigger, priority, payload, max_attempts, run_after)
+      values ($1, $2, 'pending', $3, $4, $5::jsonb, 1, $6::timestamptz)
     `,
-    [input.id, input.jobType, input.trigger, input.priority, JSON.stringify(input.payload)],
+    [
+      input.id,
+      input.jobType,
+      input.trigger,
+      input.priority,
+      JSON.stringify(input.payload),
+      input.runAfter.toISOString(),
+    ],
   );
 }
 

@@ -46,7 +46,7 @@ import {
   readRequestedModelName,
   resolveGatewayVirtualModelRequest,
 } from "@llmingress/gateway-runtime/gateway-virtual-model-access";
-import { createLogger } from "@llmingress/logging";
+import { createLogger, createPinoLoggerOptions } from "@llmingress/logging";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply } from "fastify";
 import { gatewayCorsHeaders } from "./cors.js";
 import {
@@ -88,7 +88,7 @@ type GatewayJsonEndpointDefinition = {
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   const app = Fastify({
     bodyLimit: gatewayBodyLimitBytes(),
-    logger: true,
+    logger: createPinoLoggerOptions(),
   });
 
   app.addHook("onRequest", async (request, reply) => {
@@ -272,7 +272,6 @@ function registerGatewayJsonEndpoint(
       agentKeyPrefix: auth.agentApiKey.keyPrefix,
       method: request.method,
       protocol: endpoint.protocol,
-      requestBody: request.body,
       requestId: auth.requestId,
       requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       url: request.url,
@@ -409,7 +408,6 @@ type GatewayAgentRequestLogInput = {
   agentKeyPrefix: string;
   method: string;
   protocol: GatewayRequestActivityProtocol;
-  requestBody: unknown;
   requestId: string;
   requestLoggingEnabled: boolean;
   url: string;
@@ -426,7 +424,6 @@ export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) 
     agentKeyPrefix: input.agentKeyPrefix,
     method: input.method,
     protocol: input.protocol,
-    requestBody: input.requestBody,
     requestId: input.requestId,
     url: input.url,
     virtualModel: input.virtualModelName,

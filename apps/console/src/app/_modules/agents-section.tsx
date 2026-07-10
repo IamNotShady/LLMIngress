@@ -159,7 +159,7 @@ function AgentCreateDialog({
               </option>
             ))}
           </select>
-          <label htmlFor="agent-request-logging">Request logging</label>
+          <label htmlFor="agent-request-logging">Detailed request metadata logging</label>
           <select
             id="agent-request-logging"
             name="requestLoggingEnabled"
@@ -334,7 +334,9 @@ function AgentEditDialog({
               </option>
             ))}
           </select>
-          <label htmlFor={`agent-request-logging-${agent.id}`}>Request logging</label>
+          <label htmlFor={`agent-request-logging-${agent.id}`}>
+            Detailed request metadata logging
+          </label>
           <select
             id={`agent-request-logging-${agent.id}`}
             name="requestLoggingEnabled"

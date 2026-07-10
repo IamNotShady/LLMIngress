@@ -5,7 +5,17 @@
 - Date: 2026-07-10
 - Branch: `codex/high-priority-hardening`
 - Base: `9a80b4b8`
-- Status: High-priority hardening plan restarted from clean HEAD. Features 1-5 are implemented and verified; feature 6 has not started.
+- Status: High-priority hardening plan restarted from clean HEAD. Features 1-6 are implemented, verified, and ready to commit; feature 7 has not started.
+
+## 2026-07-10 High Priority Hardening 6 - Gateway Metadata-Only Logging
+
+- Removed `requestBody` from Gateway agent request log input and payload construction; `request_logging_enabled` now only emits metadata such as request id, Agent, protocol, method, URL, and Virtual Model.
+- Added shared Pino logger options with redaction for body/requestBody, Authorization, Cookie, x-api-key, and token paths, and configured Fastify to use the same redaction options.
+- Updated Console Agent form copy and validation wording from generic request logging to detailed request metadata logging without changing the existing default.
+- Added unit coverage for metadata-only log payloads and shared redaction paths.
+- Added real Gateway E2E that sends JSON, Streaming, Provider error, and fallback requests containing prompt/tool/test-key markers, then scans Gateway stdout/stderr to ensure those markers never appear.
+- During full feature regression, an existing Worker timing issue surfaced because Node and Postgres clocks diverged while `PostgresJobStore.claimNextJob` mixed an injected runner clock with database `now()`. Fixed the job claim path to use the injected clock for due checks, lease expiry, and attempt start timestamps; updated the daily-ops E2E seed jobs to use the same fixed `run_after` clock.
+- Verification passed: RED unit/E2E failed on current body leakage, then focused feature unit/E2E passed after implementation; focused `v1-worker-ops` unit/E2E passed after the clock repair; `pnpm run verify` passed; final `pnpm run verify:features` passed with all 45 passing features re-verified.
 
 ## 2026-07-10 High Priority Hardening 5 - Gateway Fallback Health
 

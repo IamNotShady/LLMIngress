@@ -125,7 +125,7 @@ export async function seedOpenAIGatewayRoute(
     [agentId, virtualModelId],
   );
   await input.fixture.query(
-    "insert into config_versions (version, source, description) values (1, 'console', 'Gateway E2E config')",
+    "insert into config_versions (version, source, description) values (1, 'console', 'Gateway E2E config') on conflict (version) do nothing",
   );
 
   return { agentId, providerId, providerModelId, routePolicyId, virtualModelId };

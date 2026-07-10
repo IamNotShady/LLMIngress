@@ -335,7 +335,7 @@ class PostgresJobStore implements JobStore {
               select id
               from jobs
               where status = 'pending'
-                and run_after <= now()
+                and run_after <= $4::timestamptz
                 and job_type = any($3::text[])
               order by priority desc, run_after, created_at
               limit 1
@@ -344,9 +344,9 @@ class PostgresJobStore implements JobStore {
             update jobs
             set status = 'running',
                 lease_owner = $1,
-                lease_expires_at = now() + ($2::integer * interval '1 millisecond'),
+                lease_expires_at = $4::timestamptz + ($2::integer * interval '1 millisecond'),
                 attempt_count = attempt_count + 1,
-                updated_at = now()
+                updated_at = $4::timestamptz
             from candidate
             where jobs.id = candidate.id
             returning jobs.id::text,
@@ -357,7 +357,7 @@ class PostgresJobStore implements JobStore {
                       jobs.attempt_count as attempt_number,
                       jobs.max_attempts
           `,
-          [input.workerId, input.leaseMs, input.jobTypes],
+          [input.workerId, input.leaseMs, input.jobTypes, input.now.toISOString()],
         );
         const job = result.rows[0];
 
@@ -369,9 +369,9 @@ class PostgresJobStore implements JobStore {
         await client.query(
           `
             insert into job_attempts (id, job_id, attempt_number, worker_id, status, started_at)
-            values ($1, $2, $3, $4, 'running', now())
+            values ($1, $2, $3, $4, 'running', $5::timestamptz)
           `,
-          [randomUUID(), job.id, job.attempt_number, input.workerId],
+          [randomUUID(), job.id, job.attempt_number, input.workerId, input.now.toISOString()],
         );
         await client.query("commit");
         return rowToClaimedJob(job);

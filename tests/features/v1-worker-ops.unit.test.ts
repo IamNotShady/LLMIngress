@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildV1DailyOperationsSmokePlan } from "../support/v1-daily-operations-smoke";
 
@@ -48,5 +49,16 @@ describe("v1 worker operations milestone", () => {
       jsonlExport: "/tmp/llmingress-daily-ops/daily-operations-requests.jsonl",
       oldExport: "/tmp/llmingress-daily-ops/expired-request-log.jsonl",
     });
+  });
+
+  it("claims due jobs with the runner clock instead of the database wall clock", () => {
+    const source = readFileSync("packages/worker-runtime/src/worker-job-runner.ts", "utf8");
+
+    expect(source).toContain("and run_after <= $4::timestamptz");
+    expect(source).toContain(
+      "lease_expires_at = $4::timestamptz + ($2::integer * interval '1 millisecond')",
+    );
+    expect(source).toContain("values ($1, $2, $3, $4, 'running', $5::timestamptz)");
+    expect(source).not.toContain("and run_after <= now()");
   });
 });

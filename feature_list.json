@@ -552,6 +552,18 @@
       ],
       "status": "passing",
       "evidence": "2026-07-10: TDD red->green. RED unit failed while config transfer routes, db module/export, and docs still existed; RED E2E showed /api/config-export returned 200 after Console sign-in instead of 404. Removed both Console config transfer API routes, deleted packages/db console-import-export and its package export, retargeted security/zod/api-hygiene tests away from the removed endpoints, updated product/architecture docs, and added coverage that Worker backup plus request/cost/webhook exports remain. Focused unit and E2E passed; pnpm run verify passed; pnpm run verify:features passed with all 49 passing features re-verified."
+    },
+    {
+      "id": "provider-model-capability-sync",
+      "name": "Provider Model Capability Sync",
+      "description": "Provider model refresh syncs and stores stable effective capability fields for input/output modalities, max context/output tokens, function calling, and reasoning, records unknown/conflict/manual metadata, and Console can manually override or clear model capabilities.",
+      "verification": "pnpm exec vitest run tests/features/provider-model-capability-sync.unit.test.ts && pnpm test:e2e tests/e2e/provider-model-capability-sync.e2e.spec.ts",
+      "dependencies": [
+        "console-config-transfer-removal",
+        "v1-worker-ops"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Added 0010_provider_model_capabilities to rename supports_tools to nullable supports_function_calling and add modality/max-output/reasoning columns with constraints; extended models.dev, OpenRouter, LiteLLM, and Vercel registry parsers with stable capability extraction, conflict tracking, and manual override resolution. Worker refresh now writes effective independent columns plus capability_metadata, preserves manual overrides, and publishes config changes; Console provider model rows display capability/source status and expose save/clear override actions. Focused unit and E2E passed; pnpm run db:migrate:check passed; pnpm run verify passed; pnpm run verify:features passed with all 50 passing features re-verified."
     }
   ]
 }

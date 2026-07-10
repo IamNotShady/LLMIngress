@@ -84,6 +84,10 @@
       "types": "./src/console-provider-keys.ts",
       "default": "./src/console-provider-keys.ts"
     },
+    "./console-provider-model-capabilities": {
+      "types": "./src/console-provider-model-capabilities.ts",
+      "default": "./src/console-provider-model-capabilities.ts"
+    },
     "./console-provider-oauth": {
       "types": "./src/console-provider-oauth.ts",
       "default": "./src/console-provider-oauth.ts"

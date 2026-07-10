@@ -53,6 +53,9 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@llmingress/logging':
         specifier: workspace:*
         version: link:../../packages/logging
@@ -177,7 +180,11 @@ importers:
         specifier: ^9.13.1
         version: 9.14.0
 
-  packages/provider: {}
+  packages/provider:
+    dependencies:
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/security: {}
 

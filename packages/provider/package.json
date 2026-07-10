@@ -64,5 +64,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@llmingress/domain": "workspace:*"
   }
 }

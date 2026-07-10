@@ -99,6 +99,7 @@ describe("v1 platform milestone", () => {
       { id: "0007", name: "drop_foreign_keys" },
       { id: "0008", name: "provider_dependency_lookup" },
       { id: "0009", name: "worker_delivery_leases" },
+      { id: "0010", name: "provider_model_capabilities" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

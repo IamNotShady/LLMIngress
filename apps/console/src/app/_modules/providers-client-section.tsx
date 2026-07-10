@@ -53,6 +53,7 @@ export function ProvidersClientSection({
   const initialProviderId = initialProvider?.id ?? null;
   const [selectedProviderId, setSelectedProviderId] = useState(initialProviderId);
   const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
+  const [savingCapabilityModelId, setSavingCapabilityModelId] = useState<string | null>(null);
   const [modelQuery, setModelQuery] = useState("");
   useEffect(() => {
     setSelectedProviderId(initialProviderId);
@@ -77,6 +78,26 @@ export function ProvidersClientSection({
       // ponytail: no toast yet; surface enqueue failures when refresh status UI exists.
     } finally {
       setRefreshingProviderId(null);
+    }
+  };
+  const saveModelCapabilities = async (event: FormEvent<HTMLFormElement>, modelId: string) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setSavingCapabilityModelId(modelId);
+    try {
+      const response = await fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+      if (response.ok) {
+        window.location.reload();
+      }
+    } catch {
+      // Keep the table usable; detailed form errors are returned by the API.
+    } finally {
+      setSavingCapabilityModelId(null);
     }
   };
   const selectedProvider = selectedProviderId
@@ -540,11 +561,17 @@ export function ProvidersClientSection({
                   <th>Provider</th>
                   <th>Model ID</th>
                   <th>Context</th>
+                  <th>Output cap</th>
+                  <th>Input</th>
+                  <th>Output</th>
                   <th>Input price</th>
                   <th>Output price</th>
-                  <th>Tools</th>
+                  <th>Function</th>
+                  <th>Reasoning</th>
                   <th>Streaming</th>
                   <th>Status</th>
+                  <th>Capability source</th>
+                  <th>Override</th>
                 </tr>
               </thead>
               <tbody>
@@ -558,12 +585,86 @@ export function ProvidersClientSection({
                       </span>
                     </td>
                     <td>{formatModelContext(model.contextWindow)}</td>
+                    <td>{formatModelContext(model.maxOutputTokens)}</td>
+                    <td>{formatModalities(model.inputModalities)}</td>
+                    <td>{formatModalities(model.outputModalities)}</td>
                     <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
                     <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
-                    <td>{formatBooleanFeature(model.supportsTools)}</td>
+                    <td>{formatNullableBooleanFeature(model.supportsFunctionCalling)}</td>
+                    <td>{formatNullableBooleanFeature(model.supportsReasoning)}</td>
                     <td>{formatBooleanFeature(model.supportsStreaming)}</td>
                     <td>
                       <ModelAvailabilityPill value={model.availability} />
+                    </td>
+                    <td>{formatCapabilityStatus(model)}</td>
+                    <td>
+                      <form
+                        action="/api/provider-model-capabilities"
+                        className="model-capability-form"
+                        onSubmit={(event) => saveModelCapabilities(event, model.id)}
+                      >
+                        <input type="hidden" name="providerModelId" value={model.id} />
+                        <input
+                          aria-label={`${model.modelId} input modalities`}
+                          name="inputModalities"
+                          defaultValue={(model.inputModalities ?? []).join(",")}
+                          placeholder="text,image"
+                        />
+                        <input
+                          aria-label={`${model.modelId} output modalities`}
+                          name="outputModalities"
+                          defaultValue={(model.outputModalities ?? []).join(",")}
+                          placeholder="text"
+                        />
+                        <input
+                          aria-label={`${model.modelId} max context tokens`}
+                          name="maxContextTokens"
+                          defaultValue={model.contextWindow ?? ""}
+                          inputMode="numeric"
+                          placeholder="128000"
+                        />
+                        <input
+                          aria-label={`${model.modelId} max output tokens`}
+                          name="maxOutputTokens"
+                          defaultValue={model.maxOutputTokens ?? ""}
+                          inputMode="numeric"
+                          placeholder="4096"
+                        />
+                        <select
+                          aria-label={`${model.modelId} function calling support`}
+                          name="supportsFunctionCalling"
+                          defaultValue={String(model.supportsFunctionCalling ?? false)}
+                        >
+                          <option value="true">Function yes</option>
+                          <option value="false">Function no</option>
+                        </select>
+                        <select
+                          aria-label={`${model.modelId} reasoning support`}
+                          name="supportsReasoning"
+                          defaultValue={String(model.supportsReasoning ?? false)}
+                        >
+                          <option value="true">Reasoning yes</option>
+                          <option value="false">Reasoning no</option>
+                        </select>
+                        <button
+                          className="provider-row-action"
+                          disabled={savingCapabilityModelId === model.id}
+                          name="action"
+                          type="submit"
+                          value="save"
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="provider-row-action"
+                          disabled={savingCapabilityModelId === model.id}
+                          name="action"
+                          type="submit"
+                          value="clear"
+                        >
+                          Clear
+                        </button>
+                      </form>
                     </td>
                   </tr>
                 ))}
@@ -790,6 +891,37 @@ function formatDecimal(value: number): string {
 
 function formatBooleanFeature(value: boolean): string {
   return value ? "Yes" : "No";
+}
+
+function formatNullableBooleanFeature(value: boolean | null): string {
+  return value === null ? "Unknown" : formatBooleanFeature(value);
+}
+
+function formatModalities(value: readonly string[] | null): string {
+  return value && value.length > 0 ? value.join(", ") : "Unknown";
+}
+
+function formatCapabilityStatus(model: ConsoleProviderModelOption): string {
+  const metadata = model.capabilityMetadata;
+  const hasManual =
+    metadata.manualCapabilities && Object.keys(metadata.manualCapabilities).length > 0;
+  if (hasManual) {
+    return "Manual override";
+  }
+  if (metadata.conflicts && Object.keys(metadata.conflicts).length > 0) {
+    return "Conflict";
+  }
+  if (
+    model.inputModalities === null ||
+    model.outputModalities === null ||
+    model.contextWindow === null ||
+    model.maxOutputTokens === null ||
+    model.supportsFunctionCalling === null ||
+    model.supportsReasoning === null
+  ) {
+    return "Unknown";
+  }
+  return "Synced";
 }
 
 function formatModelAvailability(value: string): string {

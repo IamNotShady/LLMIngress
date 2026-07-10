@@ -89,7 +89,7 @@ export async function seedOpenAIGatewayRoute(
         display_name,
         context_window,
         supports_streaming,
-        supports_tools,
+        supports_function_calling,
         availability
       )
       values ($1, $2, $3, 'Fake Model', 128000, true, true, 'available')

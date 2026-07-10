@@ -10,6 +10,7 @@ const guardedRoutes = [
   "apps/console/src/app/api/playground/result/route.ts",
   "apps/console/src/app/api/prices/override/route.ts",
   "apps/console/src/app/api/provider-keys/route.ts",
+  "apps/console/src/app/api/provider-model-capabilities/route.ts",
   "apps/console/src/app/api/provider-model-refresh/route.ts",
   "apps/console/src/app/api/provider-oauth/route.ts",
   "apps/console/src/app/api/providers/route.ts",

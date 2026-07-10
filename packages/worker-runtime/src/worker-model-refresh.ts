@@ -6,6 +6,13 @@ import {
   readEnabledCompletedProviderOAuthConnections,
   withPooledPostgresClient,
 } from "@llmingress/db/providers";
+import {
+  type ModelInputModality,
+  type ModelOutputModality,
+  type ProviderModelCapabilityMetadata,
+  resolveProviderModelCapabilities,
+  type SyncedModelCapabilities,
+} from "@llmingress/domain";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   fetchListedProviderModels as fetchProviderModelList,
@@ -41,8 +48,13 @@ export type ExistingProviderModel = {
   contextWindow?: number | null;
   displayName: string;
   id: string;
+  inputModalities?: ModelInputModality[] | null;
+  maxOutputTokens?: number | null;
   modelId: string;
+  outputModalities?: ModelOutputModality[] | null;
   referenced: boolean;
+  supportsFunctionCalling?: boolean | null;
+  supportsReasoning?: boolean | null;
   supportsStreaming?: boolean;
   supportsTools?: boolean;
 };
@@ -121,13 +133,19 @@ type ProviderModelRow = {
   context_window: number | null;
   display_name: string;
   id: string;
+  input_modalities: ModelInputModality[] | null;
+  max_output_tokens: number | null;
   model_id: string;
+  output_modalities: ModelOutputModality[] | null;
   referenced: boolean;
+  supports_function_calling: boolean | null;
+  supports_reasoning: boolean | null;
   supports_streaming: boolean;
-  supports_tools: boolean;
 };
 
 const workerManagedCapabilityMetadataKeys = [
+  "syncedCapabilities",
+  "conflicts",
   "tools",
   "reasoning",
   "reasoningLevels",
@@ -162,21 +180,27 @@ export function planProviderModelRefresh(
   for (const existing of input.existingModels) {
     const listed = listedById.get(existing.modelId);
     if (listed) {
-      const metadataChanged = providerModelMetadataChanged(existing, listed);
+      const effectiveListed = applyExistingManualCapabilities(listed, existing);
+      const metadataChanged = providerModelMetadataChanged(existing, effectiveListed);
       if (
         existing.availability !== "available" ||
-        existing.displayName !== listed.displayName ||
+        existing.displayName !== effectiveListed.displayName ||
         metadataChanged
       ) {
         markAvailable.push({
-          capabilityMetadata: listed.capabilityMetadata,
-          contextWindow: listed.contextWindow,
-          displayName: listed.displayName,
+          capabilityMetadata: effectiveListed.capabilityMetadata,
+          contextWindow: effectiveListed.contextWindow,
+          displayName: effectiveListed.displayName,
           id: existing.id,
-          modelId: listed.modelId,
+          inputModalities: effectiveListed.inputModalities,
+          maxOutputTokens: effectiveListed.maxOutputTokens,
+          modelId: effectiveListed.modelId,
+          outputModalities: effectiveListed.outputModalities,
           referenced: existing.referenced,
-          supportsStreaming: listed.supportsStreaming,
-          supportsTools: listed.supportsTools,
+          supportsFunctionCalling: effectiveListed.supportsFunctionCalling,
+          supportsReasoning: effectiveListed.supportsReasoning,
+          supportsStreaming: effectiveListed.supportsStreaming,
+          supportsTools: effectiveListed.supportsTools,
         });
 
         if (existing.referenced && (existing.availability !== "available" || metadataChanged)) {
@@ -248,20 +272,46 @@ export function enrichListedProviderModels(input: {
       return withLocalProviderDefaults(model, input.providerKey);
     }
 
+    const syncedCapabilities = buildListedSyncedCapabilities(model, registryEntry);
+    const capabilityMetadata = buildProviderModelCapabilityMetadata(registryEntry, {
+      syncedCapabilities,
+    });
+
     return withLocalProviderDefaults(
       {
         ...model,
-        capabilityMetadata: buildProviderModelCapabilityMetadata(registryEntry),
-        ...(registryEntry.contextWindow === undefined || registryEntry.contextWindow === null
+        capabilityMetadata,
+        ...(syncedCapabilities.inputModalities === undefined ||
+        syncedCapabilities.inputModalities === null
           ? {}
-          : { contextWindow: registryEntry.contextWindow }),
+          : { inputModalities: syncedCapabilities.inputModalities }),
+        ...(syncedCapabilities.maxContextTokens === undefined ||
+        syncedCapabilities.maxContextTokens === null
+          ? {}
+          : { contextWindow: syncedCapabilities.maxContextTokens }),
+        ...(syncedCapabilities.maxOutputTokens === undefined ||
+        syncedCapabilities.maxOutputTokens === null
+          ? {}
+          : { maxOutputTokens: syncedCapabilities.maxOutputTokens }),
+        ...(syncedCapabilities.outputModalities === undefined ||
+        syncedCapabilities.outputModalities === null
+          ? {}
+          : { outputModalities: syncedCapabilities.outputModalities }),
+        ...(syncedCapabilities.supportsFunctionCalling === undefined ||
+        syncedCapabilities.supportsFunctionCalling === null
+          ? {}
+          : {
+              supportsFunctionCalling: syncedCapabilities.supportsFunctionCalling,
+              supportsTools: syncedCapabilities.supportsFunctionCalling,
+            }),
+        ...(syncedCapabilities.supportsReasoning === undefined ||
+        syncedCapabilities.supportsReasoning === null
+          ? {}
+          : { supportsReasoning: syncedCapabilities.supportsReasoning }),
         ...(registryEntry.supportsStreaming === undefined ||
         registryEntry.supportsStreaming === null
           ? {}
           : { supportsStreaming: registryEntry.supportsStreaming }),
-        ...(registryEntry.supportsTools === undefined || registryEntry.supportsTools === null
-          ? {}
-          : { supportsTools: registryEntry.supportsTools }),
       },
       input.providerKey,
     );
@@ -323,28 +373,111 @@ function withLocalProviderDefaults(
   return { ...model, contextWindow: defaultLocalProviderContextWindow };
 }
 
+function buildListedSyncedCapabilities(
+  listed: ListedProviderModel,
+  registryEntry: ProviderModelRegistryEntry,
+): Partial<SyncedModelCapabilities> {
+  return {
+    inputModalities: listed.inputModalities ?? registryEntry.inputModalities,
+    maxContextTokens: listed.contextWindow ?? registryEntry.maxContextTokens,
+    maxOutputTokens: listed.maxOutputTokens ?? registryEntry.maxOutputTokens,
+    outputModalities: listed.outputModalities ?? registryEntry.outputModalities,
+    supportsFunctionCalling:
+      listed.supportsFunctionCalling ??
+      listed.supportsTools ??
+      registryEntry.supportsFunctionCalling,
+    supportsReasoning: listed.supportsReasoning ?? registryEntry.supportsReasoning,
+  };
+}
+
 function buildProviderModelCapabilityMetadata(
   entry: ProviderModelRegistryEntry,
+  input: {
+    syncedCapabilities: Partial<SyncedModelCapabilities>;
+  },
 ): Record<string, unknown> {
+  const resolved = resolveProviderModelCapabilities({
+    conflicts: entry.capabilityConflicts,
+    registrySources: entry.registrySources,
+    registrySyncedAt: entry.syncedAt.toISOString(),
+    syncedCapabilities: input.syncedCapabilities,
+  });
+
   return {
-    ...(entry.supportsTools === undefined || entry.supportsTools === null
-      ? {}
-      : { tools: entry.supportsTools }),
-    ...(entry.reasoningSupport === undefined || entry.reasoningSupport === null
-      ? {}
-      : { reasoning: entry.reasoningSupport }),
+    ...resolved.metadata,
     ...(entry.reasoningLevels?.length ? { reasoningLevels: entry.reasoningLevels } : {}),
     ...(entry.reasoningDefaultLevel ? { reasoningDefaultLevel: entry.reasoningDefaultLevel } : {}),
-    ...(entry.outputTokenLimit === undefined || entry.outputTokenLimit === null
-      ? {}
-      : { outputTokenLimit: entry.outputTokenLimit }),
-    ...(entry.registrySources && Object.keys(entry.registrySources).length > 0
-      ? { registrySources: entry.registrySources }
-      : {}),
-    registrySyncedAt: entry.syncedAt.toISOString(),
     ...(entry.streamingInferred === undefined
       ? {}
       : { streamingInferred: entry.streamingInferred }),
+  };
+}
+
+function applyExistingManualCapabilities(
+  listed: ListedProviderModel,
+  existing: ExistingProviderModel,
+): ListedProviderModel {
+  const listedMetadata = readCapabilityMetadata(listed.capabilityMetadata);
+  const existingMetadata = readCapabilityMetadata(existing.capabilityMetadata);
+  const syncedCapabilities =
+    listedMetadata.syncedCapabilities ?? buildSyncedCapabilitiesFromListedModel(listed);
+  const resolved = resolveProviderModelCapabilities({
+    conflicts: listedMetadata.conflicts,
+    manualCapabilities: existingMetadata.manualCapabilities,
+    registrySources: listedMetadata.registrySources,
+    registrySyncedAt: listedMetadata.registrySyncedAt,
+    syncedCapabilities,
+  });
+  const effective = resolved.effectiveCapabilities;
+
+  return {
+    ...listed,
+    capabilityMetadata: {
+      ...(listed.capabilityMetadata ?? {}),
+      ...resolved.metadata,
+    },
+    inputModalities: effective.inputModalities,
+    contextWindow: effective.maxContextTokens,
+    maxOutputTokens: effective.maxOutputTokens,
+    outputModalities: effective.outputModalities,
+    supportsFunctionCalling: effective.supportsFunctionCalling,
+    supportsReasoning: effective.supportsReasoning,
+    supportsTools: effective.supportsFunctionCalling,
+  };
+}
+
+function buildSyncedCapabilitiesFromListedModel(
+  listed: ListedProviderModel,
+): Partial<SyncedModelCapabilities> {
+  return {
+    inputModalities: listed.inputModalities,
+    maxContextTokens: listed.contextWindow,
+    maxOutputTokens: listed.maxOutputTokens,
+    outputModalities: listed.outputModalities,
+    supportsFunctionCalling: listed.supportsFunctionCalling ?? listed.supportsTools,
+    supportsReasoning: listed.supportsReasoning,
+  };
+}
+
+function readCapabilityMetadata(
+  value: Record<string, unknown> | undefined,
+): ProviderModelCapabilityMetadata {
+  const record = value ?? {};
+  return {
+    conflicts: isRecord(record.conflicts)
+      ? (record.conflicts as ProviderModelCapabilityMetadata["conflicts"])
+      : undefined,
+    manualCapabilities: isRecord(record.manualCapabilities)
+      ? (record.manualCapabilities as ProviderModelCapabilityMetadata["manualCapabilities"])
+      : undefined,
+    registrySources: isRecord(record.registrySources)
+      ? (record.registrySources as ProviderModelCapabilityMetadata["registrySources"])
+      : undefined,
+    registrySyncedAt:
+      typeof record.registrySyncedAt === "string" ? record.registrySyncedAt : undefined,
+    syncedCapabilities: isRecord(record.syncedCapabilities)
+      ? (record.syncedCapabilities as ProviderModelCapabilityMetadata["syncedCapabilities"])
+      : undefined,
   };
 }
 
@@ -356,6 +489,41 @@ function providerModelMetadataChanged(
     listed.contextWindow !== undefined &&
     listed.contextWindow !== null &&
     listed.contextWindow !== existing.contextWindow
+  ) {
+    return true;
+  }
+  if (
+    listed.inputModalities !== undefined &&
+    listed.inputModalities !== null &&
+    !jsonMetadataValueEqual(listed.inputModalities, existing.inputModalities)
+  ) {
+    return true;
+  }
+  if (
+    listed.maxOutputTokens !== undefined &&
+    listed.maxOutputTokens !== null &&
+    listed.maxOutputTokens !== existing.maxOutputTokens
+  ) {
+    return true;
+  }
+  if (
+    listed.outputModalities !== undefined &&
+    listed.outputModalities !== null &&
+    !jsonMetadataValueEqual(listed.outputModalities, existing.outputModalities)
+  ) {
+    return true;
+  }
+  if (
+    listed.supportsFunctionCalling !== undefined &&
+    listed.supportsFunctionCalling !== null &&
+    listed.supportsFunctionCalling !== existing.supportsFunctionCalling
+  ) {
+    return true;
+  }
+  if (
+    listed.supportsReasoning !== undefined &&
+    listed.supportsReasoning !== null &&
+    listed.supportsReasoning !== existing.supportsReasoning
   ) {
     return true;
   }
@@ -686,9 +854,13 @@ async function readExistingProviderModels(
                provider_models.model_id,
                provider_models.display_name,
                provider_models.availability,
+               provider_models.input_modalities,
+               provider_models.output_modalities,
                provider_models.context_window,
+               provider_models.max_output_tokens,
+               provider_models.supports_function_calling,
+               provider_models.supports_reasoning,
                provider_models.supports_streaming,
-               provider_models.supports_tools,
                provider_models.capability_metadata,
                exists (
                  select 1
@@ -709,10 +881,15 @@ async function readExistingProviderModels(
       contextWindow: row.context_window,
       displayName: row.display_name,
       id: row.id,
+      inputModalities: row.input_modalities,
+      maxOutputTokens: row.max_output_tokens,
       modelId: row.model_id,
+      outputModalities: row.output_modalities,
       referenced: row.referenced,
+      supportsFunctionCalling: row.supports_function_calling,
+      supportsReasoning: row.supports_reasoning,
       supportsStreaming: row.supports_streaming,
-      supportsTools: row.supports_tools,
+      supportsTools: row.supports_function_calling ?? undefined,
     }));
   });
 }
@@ -722,6 +899,9 @@ async function applyProviderModelRefreshPlan(
   providerId: string,
   plan: ProviderModelRefreshPlan,
 ): Promise<void> {
+  // TODO: when refreshed capabilities change, find affected Virtual Models and surface
+  // them proactively in Console. Gateway still validates against the effective
+  // configuration at request time and fails closed for invalid contracts.
   for (const model of plan.insertModels) {
     await client.query(
       `
@@ -730,20 +910,30 @@ async function applyProviderModelRefreshPlan(
           provider_id,
           model_id,
           display_name,
+          input_modalities,
+          output_modalities,
           context_window,
-          supports_tools,
+          max_output_tokens,
+          supports_function_calling,
+          supports_reasoning,
           supports_streaming,
           capability_metadata,
           availability
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'available')
+        values ($1, $2, $3, $4, $5::text[], $6::text[], $7, $8, $9, $10, $11, $12::jsonb, 'available')
         on conflict (provider_id, model_id) do update
         set display_name = excluded.display_name,
+            input_modalities = coalesce(excluded.input_modalities, provider_models.input_modalities),
+            output_modalities = coalesce(excluded.output_modalities, provider_models.output_modalities),
             context_window = coalesce(excluded.context_window, provider_models.context_window),
-            supports_tools = excluded.supports_tools,
+            max_output_tokens = coalesce(excluded.max_output_tokens, provider_models.max_output_tokens),
+            supports_function_calling = coalesce(excluded.supports_function_calling, provider_models.supports_function_calling),
+            supports_reasoning = coalesce(excluded.supports_reasoning, provider_models.supports_reasoning),
             supports_streaming = excluded.supports_streaming,
             capability_metadata = (
               provider_models.capability_metadata
+              - 'syncedCapabilities'
+              - 'conflicts'
               - 'tools'
               - 'reasoning'
               - 'reasoningLevels'
@@ -761,8 +951,12 @@ async function applyProviderModelRefreshPlan(
         providerId,
         model.modelId,
         model.displayName,
+        model.inputModalities ?? null,
+        model.outputModalities ?? null,
         model.contextWindow ?? null,
-        model.supportsTools ?? false,
+        model.maxOutputTokens ?? null,
+        model.supportsFunctionCalling ?? model.supportsTools ?? null,
+        model.supportsReasoning ?? null,
         model.supportsStreaming ?? false,
         JSON.stringify(model.capabilityMetadata ?? {}),
       ],
@@ -775,11 +969,17 @@ async function applyProviderModelRefreshPlan(
         update provider_models
         set display_name = $2,
             availability = 'available',
-            context_window = coalesce($3::integer, context_window),
-            supports_tools = coalesce($4::boolean, supports_tools),
-            supports_streaming = coalesce($5::boolean, supports_streaming),
+            input_modalities = case when $3::boolean then $4::text[] else input_modalities end,
+            output_modalities = case when $5::boolean then $6::text[] else output_modalities end,
+            context_window = case when $7::boolean then $8::integer else context_window end,
+            max_output_tokens = case when $9::boolean then $10::integer else max_output_tokens end,
+            supports_function_calling = case when $11::boolean then $12::boolean else supports_function_calling end,
+            supports_reasoning = case when $13::boolean then $14::boolean else supports_reasoning end,
+            supports_streaming = coalesce($15::boolean, supports_streaming),
             capability_metadata = (
               capability_metadata
+              - 'syncedCapabilities'
+              - 'conflicts'
               - 'tools'
               - 'reasoning'
               - 'reasoningLevels'
@@ -788,7 +988,7 @@ async function applyProviderModelRefreshPlan(
               - 'registrySources'
               - 'registrySyncedAt'
               - 'streamingInferred'
-            ) || $6::jsonb,
+            ) || $16::jsonb,
             updated_at = now()
         where id = $1
           and deleted_at is null
@@ -796,8 +996,18 @@ async function applyProviderModelRefreshPlan(
       [
         model.id,
         model.displayName,
+        hasCapabilityUpdate(model, "inputModalities"),
+        model.inputModalities ?? null,
+        hasCapabilityUpdate(model, "outputModalities"),
+        model.outputModalities ?? null,
+        hasCapabilityUpdate(model, "maxContextTokens"),
         model.contextWindow ?? null,
-        model.supportsTools ?? null,
+        hasCapabilityUpdate(model, "maxOutputTokens"),
+        model.maxOutputTokens ?? null,
+        hasCapabilityUpdate(model, "supportsFunctionCalling"),
+        model.supportsFunctionCalling ?? model.supportsTools ?? null,
+        hasCapabilityUpdate(model, "supportsReasoning"),
+        model.supportsReasoning ?? null,
         model.supportsStreaming ?? null,
         JSON.stringify(model.capabilityMetadata ?? {}),
       ],
@@ -829,6 +1039,17 @@ async function applyProviderModelRefreshPlan(
       [model.id],
     );
   }
+}
+
+function hasCapabilityUpdate(
+  model: ListedProviderModel,
+  field: keyof SyncedModelCapabilities,
+): boolean {
+  const metadata = readCapabilityMetadata(model.capabilityMetadata);
+  return (
+    metadata.syncedCapabilities?.[field] !== undefined ||
+    metadata.manualCapabilities?.[field] !== undefined
+  );
 }
 
 function readProviderId(payload: unknown): string {

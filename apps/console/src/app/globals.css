@@ -1702,6 +1702,25 @@ body:has(.console-dialog-scrim) {
   color: var(--text-subtle);
   font-size: var(--text-xs);
 }
+.model-capability-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(7rem, 1fr));
+  gap: var(--space-2xs);
+  min-width: 18rem;
+}
+.model-capability-form input,
+.model-capability-form select {
+  min-height: 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: var(--text-2xs);
+  padding: 0 var(--space-xs);
+}
+.model-capability-form button {
+  justify-content: center;
+}
 .providers-table {
   min-width: 780px;
   font-size: var(--text-xs);

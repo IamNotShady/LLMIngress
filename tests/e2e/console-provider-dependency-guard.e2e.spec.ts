@@ -77,7 +77,7 @@ async function seedProviderDependency(fixture: {
   );
   await fixture.query(
     `
-      insert into provider_models (id, provider_id, model_id, display_name, supports_streaming, supports_tools)
+      insert into provider_models (id, provider_id, model_id, display_name, supports_streaming, supports_function_calling)
       values ($1, $2, 'dependency-model', 'Dependency Model', true, true)
     `,
     [ids.providerModelId, ids.providerId],

@@ -5,7 +5,16 @@
 - Date: 2026-07-10
 - Branch: `codex/high-priority-hardening`
 - Base: `9a80b4b8`
-- Status: High-priority hardening plan restarted from clean HEAD. Features 1-6 are implemented, verified, and ready to commit; feature 7 has not started.
+- Status: P1 capability plan is in progress on `codex/high-priority-hardening`. Console config transfer removal is committed; Provider model capability sync is implemented and verified; Virtual Model capability contract has not started.
+
+## 2026-07-10 P1 Capability Plan 2 - Provider Model Capability Sync
+
+- Added `0010_provider_model_capabilities.sql` to rename `provider_models.supports_tools` to nullable `supports_function_calling`, add input/output modality arrays, max output tokens, and reasoning support, and enforce enum/positive-token constraints.
+- Added shared domain capability types and one effective-capability resolver where manual overrides win, source conflicts force unknown, and unknown values do not overwrite existing explicit synced values.
+- Extended models.dev, OpenRouter, LiteLLM, and Vercel model registry parsing to map stable input/output modalities, context/output tokens, function calling, and reasoning without model-name inference.
+- Updated Worker provider model refresh to write the six effective capability fields, preserve manual overrides, publish config changes on explicit capability changes, and retain a TODO for proactive Virtual Model invalidation after future refresh-driven capability changes.
+- Added Console provider model capability editing via `/api/provider-model-capabilities`; the Provider model table now shows effective capability values, source status, and save/clear manual override controls.
+- Verification passed: focused provider-model-capability-sync unit and E2E, affected release guard/unit tests, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 50 passing features re-verified.
 
 ## 2026-07-10 High Priority Hardening 6 - Gateway Metadata-Only Logging
 

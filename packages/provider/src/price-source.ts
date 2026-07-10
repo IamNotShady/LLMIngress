@@ -1,3 +1,13 @@
+import {
+  type ModelCapabilityConflicts,
+  type ModelCapabilityField,
+  type ModelCapabilitySyncSource,
+  type ModelInputModality,
+  type ModelOutputModality,
+  normalizeModelInputModalities,
+  normalizeModelOutputModalities,
+  type SyncedModelCapabilities,
+} from "@llmingress/domain";
 import { listPriceSyncSupportedProviderKeys } from "@llmingress/provider/descriptor";
 
 export const MODELS_DEV_PRICE_SOURCE_URL = "https://models.dev/api.json";
@@ -14,8 +24,7 @@ export type ProviderModelRegistrySource =
   | "vercel-ai-gateway";
 
 type ProviderModelRegistryField =
-  | "contextWindow"
-  | "outputTokenLimit"
+  | ModelCapabilityField
   | "reasoning"
   | "supportsStreaming"
   | "supportsTools";
@@ -34,17 +43,21 @@ export type ProviderModelSyncedPrice = {
 };
 
 export type ProviderModelRegistryEntry = {
-  contextWindow?: number | null;
+  capabilityConflicts?: ModelCapabilityConflicts;
+  inputModalities?: ModelInputModality[] | null;
+  maxContextTokens?: number | null;
+  maxOutputTokens?: number | null;
   modelId: string;
-  outputTokenLimit?: number | null;
+  outputModalities?: ModelOutputModality[] | null;
   providerKey: string;
   reasoningDefaultLevel?: string | null;
   reasoningLevels?: string[];
   reasoningSupport?: boolean | null;
   registrySources?: Partial<Record<ProviderModelRegistryField, ProviderModelRegistrySource>>;
   streamingInferred?: boolean;
+  supportsFunctionCalling?: boolean | null;
   supportsStreaming?: boolean | null;
-  supportsTools?: boolean | null;
+  supportsReasoning?: boolean | null;
   syncedAt: Date;
 };
 
@@ -165,10 +178,15 @@ export function normalizeModelsDevProviderModelRegistryEntries(
       }
 
       const limit = readRecord(model.limit);
-      const contextWindow = readPositiveInteger(limit.context);
-      const outputTokenLimit = readPositiveInteger(limit.output);
-      const supportsTools = readOptionalBoolean(model.tool_call);
-      const reasoningSupport = readOptionalBoolean(model.reasoning);
+      const inputModalities = readInputModalities({
+        attachment: model.attachment,
+        modalities: readRecord(model.modalities).input,
+      });
+      const outputModalities = readOutputModalities(readRecord(model.modalities).output);
+      const maxContextTokens = readPositiveInteger(limit.context);
+      const maxOutputTokens = readPositiveInteger(limit.output);
+      const supportsFunctionCalling = readOptionalBoolean(model.tool_call);
+      const supportsReasoning = readOptionalBoolean(model.reasoning);
       const streaming = inferStreamingSupport({
         explicit: null,
         model,
@@ -176,23 +194,28 @@ export function normalizeModelsDevProviderModelRegistryEntries(
       });
 
       entries.push({
-        contextWindow,
+        inputModalities,
+        maxContextTokens,
+        maxOutputTokens,
         modelId,
-        outputTokenLimit,
+        outputModalities,
         providerKey,
         reasoningLevels: readReasoningLevels(model.reasoning_options),
-        reasoningSupport,
+        reasoningSupport: supportsReasoning,
+        supportsFunctionCalling,
+        supportsReasoning,
         registrySources: registrySources({
-          contextWindow,
-          outputTokenLimit,
-          reasoningSupport,
+          inputModalities,
+          maxContextTokens,
+          maxOutputTokens,
+          outputModalities,
           source: "models.dev",
+          supportsFunctionCalling,
+          supportsReasoning,
           supportsStreaming: streaming.value,
-          supportsTools,
         }),
         streamingInferred: streaming.inferred,
         supportsStreaming: streaming.value,
-        supportsTools,
         syncedAt: options.syncedAt,
       });
     }
@@ -225,15 +248,22 @@ export function normalizeOpenRouterProviderModelRegistryEntries(
       sourceProviderKey,
     });
     const topProvider = readRecord(model.top_provider);
-    const contextWindow =
+    const architecture = readRecord(model.architecture);
+    const inputModalities = readInputModalities({
+      modalities: architecture.input_modalities ?? architecture.input,
+    });
+    const outputModalities = readOutputModalities(
+      architecture.output_modalities ?? architecture.output,
+    );
+    const maxContextTokens =
       readPositiveInteger(model.context_length) ?? readPositiveInteger(topProvider.context_length);
-    const outputTokenLimit = readPositiveInteger(topProvider.max_completion_tokens);
+    const maxOutputTokens = readPositiveInteger(topProvider.max_completion_tokens);
     const supportedParameters = readStringArray(model.supported_parameters);
-    const supportsTools =
+    const supportsFunctionCalling =
       supportedParameters.includes("tools") || supportedParameters.includes("tool_choice");
     const reasoning = readRecord(model.reasoning);
     const reasoningLevels = readStringArray(reasoning.supported_efforts);
-    const reasoningSupport =
+    const supportsReasoning =
       Object.keys(reasoning).length > 0 ||
       supportedParameters.includes("reasoning") ||
       supportedParameters.includes("include_reasoning");
@@ -244,24 +274,29 @@ export function normalizeOpenRouterProviderModelRegistryEntries(
     });
 
     entries.push({
-      contextWindow,
+      inputModalities,
+      maxContextTokens,
+      maxOutputTokens,
       modelId,
-      outputTokenLimit,
+      outputModalities,
       providerKey,
       reasoningDefaultLevel: readString(reasoning.default_effort),
       reasoningLevels,
-      reasoningSupport,
+      reasoningSupport: supportsReasoning,
+      supportsFunctionCalling,
+      supportsReasoning,
       registrySources: registrySources({
-        contextWindow,
-        outputTokenLimit,
-        reasoningSupport,
+        inputModalities,
+        maxContextTokens,
+        maxOutputTokens,
+        outputModalities,
         source: "openrouter",
+        supportsFunctionCalling,
+        supportsReasoning,
         supportsStreaming: streaming.value,
-        supportsTools,
       }),
       streamingInferred: streaming.inferred,
       supportsStreaming: streaming.value,
-      supportsTools,
       syncedAt: options.syncedAt,
     });
   }
@@ -295,16 +330,20 @@ export function normalizeLiteLlmProviderModelRegistryEntries(
       continue;
     }
 
-    const contextWindow =
+    const inputModalities = readLiteLlmInputModalities(model);
+    const outputModalities = readOutputModalities(
+      model.output_modalities ?? model.supported_output_modalities,
+    );
+    const maxContextTokens =
       readPositiveInteger(model.max_input_tokens) ?? readPositiveInteger(model.max_tokens);
-    const outputTokenLimit =
+    const maxOutputTokens =
       readPositiveInteger(model.max_output_tokens) ?? readPositiveInteger(model.max_tokens);
-    const supportsTools =
+    const supportsFunctionCalling =
       readOptionalBoolean(model.supports_function_calling) === true ||
       readOptionalBoolean(model.supports_parallel_function_calling) === true ||
       readOptionalBoolean(model.supports_tool_choice) === true;
     const reasoningLevels = readLiteLlmReasoningLevels(model);
-    const reasoningSupport =
+    const supportsReasoning =
       readOptionalBoolean(model.supports_reasoning) === true ||
       readNonNegativeNumber(model.output_cost_per_reasoning_token) !== null ||
       reasoningLevels.length > 0;
@@ -315,23 +354,28 @@ export function normalizeLiteLlmProviderModelRegistryEntries(
     });
 
     entries.push({
-      contextWindow,
+      inputModalities,
+      maxContextTokens,
+      maxOutputTokens,
       modelId,
-      outputTokenLimit,
+      outputModalities,
       providerKey,
       reasoningLevels,
-      reasoningSupport,
+      reasoningSupport: supportsReasoning,
+      supportsFunctionCalling,
+      supportsReasoning,
       registrySources: registrySources({
-        contextWindow,
-        outputTokenLimit,
-        reasoningSupport,
+        inputModalities,
+        maxContextTokens,
+        maxOutputTokens,
+        outputModalities,
         source: "litellm",
+        supportsFunctionCalling,
+        supportsReasoning,
         supportsStreaming: streaming.value,
-        supportsTools,
       }),
       streamingInferred: streaming.inferred,
       supportsStreaming: streaming.value,
-      supportsTools,
       syncedAt: options.syncedAt,
     });
   }
@@ -362,11 +406,14 @@ export function normalizeVercelAiGatewayProviderModelRegistryEntries(
       providerKey,
       sourceProviderKey,
     });
-    const tags = readStringArray(model.tags);
-    const contextWindow = readPositiveInteger(model.context_window);
-    const outputTokenLimit = readPositiveInteger(model.max_tokens);
-    const supportsTools = tags.includes("tool-use");
-    const reasoningSupport = tags.includes("reasoning");
+    const tags = readStringArray(model.tags).map((tag) => tag.toLowerCase());
+    const modelType = readString(model.type)?.toLowerCase() ?? null;
+    const inputModalities = readVercelInputModalities({ modelType, tags });
+    const outputModalities = readVercelOutputModalities({ modelType, tags });
+    const maxContextTokens = readPositiveInteger(model.context_window);
+    const maxOutputTokens = readPositiveInteger(model.max_tokens);
+    const supportsFunctionCalling = tags.includes("tool-use");
+    const supportsReasoning = tags.includes("reasoning");
     const streaming = inferStreamingSupport({
       explicit: null,
       model,
@@ -374,22 +421,27 @@ export function normalizeVercelAiGatewayProviderModelRegistryEntries(
     });
 
     entries.push({
-      contextWindow,
+      inputModalities,
+      maxContextTokens,
+      maxOutputTokens,
       modelId,
-      outputTokenLimit,
+      outputModalities,
       providerKey,
-      reasoningSupport,
+      reasoningSupport: supportsReasoning,
+      supportsFunctionCalling,
+      supportsReasoning,
       registrySources: registrySources({
-        contextWindow,
-        outputTokenLimit,
-        reasoningSupport,
+        inputModalities,
+        maxContextTokens,
+        maxOutputTokens,
+        outputModalities,
         source: "vercel-ai-gateway",
+        supportsFunctionCalling,
+        supportsReasoning,
         supportsStreaming: streaming.value,
-        supportsTools,
       }),
       streamingInferred: streaming.inferred,
       supportsStreaming: streaming.value,
-      supportsTools,
       syncedAt: options.syncedAt,
     });
   }
@@ -573,23 +625,15 @@ function mergeMissingRegistryFields(
   target: ProviderModelRegistryEntry,
   source: ProviderModelRegistryEntry,
 ): void {
-  if (
-    (target.contextWindow === undefined || target.contextWindow === null) &&
-    source.contextWindow !== undefined
-  ) {
-    target.contextWindow = source.contextWindow;
-  }
-  if (
-    (target.outputTokenLimit === undefined || target.outputTokenLimit === null) &&
-    source.outputTokenLimit !== undefined
-  ) {
-    target.outputTokenLimit = source.outputTokenLimit;
-  }
-  if (
-    (target.supportsTools === undefined || target.supportsTools === null) &&
-    source.supportsTools !== undefined
-  ) {
-    target.supportsTools = source.supportsTools;
+  for (const field of [
+    "inputModalities",
+    "outputModalities",
+    "maxContextTokens",
+    "maxOutputTokens",
+    "supportsFunctionCalling",
+    "supportsReasoning",
+  ] as const satisfies readonly ModelCapabilityField[]) {
+    mergeRegistryCapabilityField(target, source, field);
   }
   if (
     (target.supportsStreaming === undefined ||
@@ -631,20 +675,124 @@ function mergeMissingRegistryFields(
   };
 }
 
+function mergeRegistryCapabilityField(
+  target: ProviderModelRegistryEntry,
+  source: ProviderModelRegistryEntry,
+  field: ModelCapabilityField,
+): void {
+  const sourceValue = source[field];
+  if (sourceValue === undefined || sourceValue === null) {
+    return;
+  }
+
+  const sourceName = source.registrySources?.[field] ?? "provider_models_api";
+  const currentConflicts = target.capabilityConflicts?.[field] ?? [];
+  if (currentConflicts.length > 0) {
+    target.capabilityConflicts = {
+      ...(target.capabilityConflicts ?? {}),
+      [field]: addConflictValue(currentConflicts, {
+        source: sourceName as ModelCapabilitySyncSource,
+        value: sourceValue,
+      }),
+    };
+    setRegistryEntryCapabilityField(target, field, null);
+    return;
+  }
+
+  const targetValue = target[field];
+  if (targetValue === undefined || targetValue === null) {
+    setRegistryEntryCapabilityField(target, field, sourceValue);
+    if (source.registrySources?.[field]) {
+      target.registrySources = {
+        ...(target.registrySources ?? {}),
+        [field]: source.registrySources[field],
+      };
+    }
+    return;
+  }
+
+  if (capabilityValueEqual(targetValue, sourceValue)) {
+    return;
+  }
+
+  target.capabilityConflicts = {
+    ...(target.capabilityConflicts ?? {}),
+    [field]: [
+      {
+        source: (target.registrySources?.[field] ??
+          "provider_models_api") as ModelCapabilitySyncSource,
+        value: targetValue,
+      },
+      {
+        source: sourceName as ModelCapabilitySyncSource,
+        value: sourceValue,
+      },
+    ],
+  };
+  setRegistryEntryCapabilityField(target, field, null);
+}
+
+function setRegistryEntryCapabilityField(
+  target: ProviderModelRegistryEntry,
+  field: ModelCapabilityField,
+  value: SyncedModelCapabilities[ModelCapabilityField],
+): void {
+  switch (field) {
+    case "inputModalities":
+      target.inputModalities = value as ModelInputModality[] | null;
+      return;
+    case "outputModalities":
+      target.outputModalities = value as ModelOutputModality[] | null;
+      return;
+    case "maxContextTokens":
+      target.maxContextTokens = value as number | null;
+      return;
+    case "maxOutputTokens":
+      target.maxOutputTokens = value as number | null;
+      return;
+    case "supportsFunctionCalling":
+      target.supportsFunctionCalling = value as boolean | null;
+      return;
+    case "supportsReasoning":
+      target.supportsReasoning = value as boolean | null;
+      return;
+  }
+}
+
+function capabilityValueEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function addConflictValue(
+  values: { source: ModelCapabilitySyncSource; value: unknown }[],
+  next: { source: ModelCapabilitySyncSource; value: unknown },
+): { source: ModelCapabilitySyncSource; value: unknown }[] {
+  return values.some(
+    (value) => value.source === next.source && capabilityValueEqual(value.value, next.value),
+  )
+    ? values
+    : [...values, next];
+}
+
 function registrySources(input: {
-  contextWindow: number | null;
-  outputTokenLimit: number | null;
-  reasoningSupport: boolean | null;
+  inputModalities: ModelInputModality[] | null;
+  maxContextTokens: number | null;
+  maxOutputTokens: number | null;
+  outputModalities: ModelOutputModality[] | null;
   source: ProviderModelRegistrySource;
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
   supportsStreaming: boolean | null;
-  supportsTools: boolean | null;
 }): Partial<Record<ProviderModelRegistryField, ProviderModelRegistrySource>> {
   return {
-    ...(input.contextWindow === null ? {} : { contextWindow: input.source }),
-    ...(input.outputTokenLimit === null ? {} : { outputTokenLimit: input.source }),
-    ...(input.reasoningSupport === null ? {} : { reasoning: input.source }),
+    ...(input.inputModalities === null ? {} : { inputModalities: input.source }),
+    ...(input.maxContextTokens === null ? {} : { maxContextTokens: input.source }),
+    ...(input.maxOutputTokens === null ? {} : { maxOutputTokens: input.source }),
+    ...(input.outputModalities === null ? {} : { outputModalities: input.source }),
+    ...(input.supportsFunctionCalling === null ? {} : { supportsFunctionCalling: input.source }),
+    ...(input.supportsReasoning === null ? {} : { supportsReasoning: input.source }),
+    ...(input.supportsReasoning === null ? {} : { reasoning: input.source }),
     ...(input.supportsStreaming === null ? {} : { supportsStreaming: input.source }),
-    ...(input.supportsTools === null ? {} : { supportsTools: input.source }),
   };
 }
 
@@ -769,6 +917,96 @@ function readStringArray(value: unknown): string[] {
     return [];
   }
   return value.map(readString).filter((entry): entry is string => entry !== null);
+}
+
+function readInputModalities(input: {
+  attachment?: unknown;
+  modalities: unknown;
+}): ModelInputModality[] | null {
+  const values = readStringArray(input.modalities);
+  if (readOptionalBoolean(input.attachment) === true) {
+    values.push("attachment");
+  }
+  return normalizeModelInputModalities(values);
+}
+
+function readOutputModalities(value: unknown): ModelOutputModality[] | null {
+  return normalizeModelOutputModalities(readStringArray(value));
+}
+
+function readLiteLlmInputModalities(model: Record<string, unknown>): ModelInputModality[] | null {
+  const values = [
+    ...readStringArray(model.supported_modalities),
+    ...readStringArray(model.input_modalities),
+  ];
+  if (readOptionalBoolean(model.supports_vision) === true) {
+    values.push("vision");
+  }
+  if (
+    readOptionalBoolean(model.supports_audio_input) === true ||
+    readOptionalBoolean(model.supports_audio) === true
+  ) {
+    values.push("audio");
+  }
+  if (
+    readOptionalBoolean(model.supports_video_input) === true ||
+    readOptionalBoolean(model.supports_video) === true
+  ) {
+    values.push("video");
+  }
+  if (
+    readOptionalBoolean(model.supports_pdf_input) === true ||
+    readOptionalBoolean(model.supports_pdf) === true
+  ) {
+    values.push("pdf");
+  }
+  return normalizeModelInputModalities(values);
+}
+
+function readVercelInputModalities(input: {
+  modelType: string | null;
+  tags: string[];
+}): ModelInputModality[] | null {
+  const values: string[] = [];
+  if (input.modelType === "language" || input.modelType === "embedding") {
+    values.push("text");
+  }
+  if (input.tags.includes("vision")) {
+    values.push("vision");
+  }
+  if (input.tags.includes("file-input") || input.tags.includes("pdf")) {
+    values.push("file");
+  }
+  if (input.tags.includes("audio")) {
+    values.push("audio");
+  }
+  if (input.tags.includes("video")) {
+    values.push("video");
+  }
+  return normalizeModelInputModalities(values);
+}
+
+function readVercelOutputModalities(input: {
+  modelType: string | null;
+  tags: string[];
+}): ModelOutputModality[] | null {
+  const values: string[] = [];
+  if (input.modelType === "language") {
+    values.push("text");
+  }
+  if (input.modelType === "embedding" || input.tags.includes("embeddings")) {
+    values.push("embedding");
+  }
+  if (input.tags.includes("image-generation")) {
+    values.push("image");
+  }
+  if (input.tags.includes("audio-generation")) {
+    values.push("audio");
+  }
+  if (input.tags.includes("video-generation")) {
+    values.push("video");
+  }
+  return normalizeModelOutputModalities(values);
 }
 
 function readNonNegativeNumber(value: unknown): number | null {

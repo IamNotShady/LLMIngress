@@ -1,8 +1,15 @@
+import type { ModelInputModality, ModelOutputModality } from "@llmingress/domain";
+
 export type ListedProviderModel = {
   capabilityMetadata?: Record<string, unknown>;
   contextWindow?: number | null;
   displayName: string;
+  inputModalities?: ModelInputModality[] | null;
+  maxOutputTokens?: number | null;
   modelId: string;
+  outputModalities?: ModelOutputModality[] | null;
+  supportsFunctionCalling?: boolean | null;
+  supportsReasoning?: boolean | null;
   supportsStreaming?: boolean | null;
   supportsTools?: boolean | null;
 };

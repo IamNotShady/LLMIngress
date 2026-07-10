@@ -12,6 +12,7 @@
   "dependencies": {
     "@llmingress/config": "workspace:*",
     "@llmingress/db": "workspace:*",
+    "@llmingress/domain": "workspace:*",
     "@llmingress/logging": "workspace:*",
     "next": "^16.2.9",
     "react": "^19.2.7",

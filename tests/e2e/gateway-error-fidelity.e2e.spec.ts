@@ -326,7 +326,7 @@ async function seedMissingCredentialCandidate(
         display_name,
         context_window,
         supports_streaming,
-        supports_tools,
+        supports_function_calling,
         availability
       )
       values ($1, $2, 'fake-model', 'Fake Model Missing Key', 128000, true, true, 'available')

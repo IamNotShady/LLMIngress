@@ -6,7 +6,10 @@ import {
 import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
+  type ModelInputModality,
+  type ModelOutputModality,
   normalizeRoutePolicyRules,
+  type ProviderModelCapabilityMetadata,
   type RouteEndpointProtocol,
   routeEndpointProtocols,
 } from "@llmingress/domain";
@@ -39,11 +42,15 @@ export type NormalizedRoutePolicyFormInput = {
 
 export type ConsoleProviderModelOption = {
   availability: string;
+  capabilityMetadata: ProviderModelCapabilityMetadata;
   contextWindow: number | null;
   id: string;
+  inputModalities: ModelInputModality[] | null;
+  maxOutputTokens: number | null;
   modelDisplayName: string;
   modelId: string;
   optionLabel: string;
+  outputModalities: ModelOutputModality[] | null;
   pricedOptionLabel: string;
   priceStatus: ModelTokenPrice["status"];
   priceStatusLabel: string;
@@ -56,6 +63,8 @@ export type ConsoleProviderModelOption = {
   providerKey: string;
   providerEnabled: boolean;
   supportedEndpoints: RouteEndpointProtocol[];
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
   supportsStreaming: boolean;
   supportsTools: boolean;
 };
@@ -122,11 +131,15 @@ type RoutePolicyRow = {
 
 type CandidateRow = {
   availability: string;
+  capability_metadata?: unknown;
   candidate_order: number;
   context_window?: number | null;
   id: string;
+  input_modalities?: ModelInputModality[] | null;
+  max_output_tokens?: number | null;
   model_display_name: string;
   model_id: string;
+  output_modalities?: ModelOutputModality[] | null;
   price_override_cached_input_usd_per_million_tokens: string | null;
   price_override_input_usd_per_million_tokens: string | null;
   price_override_output_usd_per_million_tokens: string | null;
@@ -143,16 +156,21 @@ type CandidateRow = {
   provider_key: string;
   provider_template_id: string | null;
   route_policy_id: string;
+  supports_function_calling?: boolean | null;
+  supports_reasoning?: boolean | null;
   supports_streaming?: boolean | null;
-  supports_tools?: boolean | null;
 };
 
 type ProviderModelOptionRow = {
   availability: string;
+  capability_metadata?: unknown;
   context_window?: number | null;
   id: string;
+  input_modalities?: ModelInputModality[] | null;
+  max_output_tokens?: number | null;
   model_display_name: string;
   model_id: string;
+  output_modalities?: ModelOutputModality[] | null;
   price_override_cached_input_usd_per_million_tokens: string | null;
   price_override_input_usd_per_million_tokens: string | null;
   price_override_output_usd_per_million_tokens: string | null;
@@ -168,8 +186,9 @@ type ProviderModelOptionRow = {
   provider_id: string;
   provider_key: string;
   provider_template_id: string | null;
+  supports_function_calling?: boolean | null;
+  supports_reasoning?: boolean | null;
   supports_streaming?: boolean | null;
-  supports_tools?: boolean | null;
 };
 
 type BudgetedVirtualModelUsageRow = {
@@ -442,9 +461,14 @@ export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRo
                        providers.enabled as provider_enabled,
                        provider_models.model_id,
                        provider_models.display_name as model_display_name,
+                       provider_models.input_modalities,
+                       provider_models.output_modalities,
                        provider_models.context_window,
+                       provider_models.max_output_tokens,
+                       provider_models.supports_function_calling,
+                       provider_models.supports_reasoning,
                        provider_models.supports_streaming,
-                       provider_models.supports_tools,
+                       provider_models.capability_metadata,
                        provider_models.availability,
                        provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
                        provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
@@ -847,7 +871,12 @@ async function writeRoutePolicyCandidates(
                provider_models.display_name as model_display_name,
                provider_models.context_window,
                provider_models.supports_streaming,
-               provider_models.supports_tools,
+               provider_models.input_modalities,
+               provider_models.output_modalities,
+               provider_models.max_output_tokens,
+               provider_models.supports_function_calling,
+               provider_models.supports_reasoning,
+               provider_models.capability_metadata,
                provider_models.availability,
                provider_models.manual_input_usd_per_million_tokens::text
                  as price_override_input_usd_per_million_tokens,
@@ -985,7 +1014,12 @@ function providerModelOptionsSelectSql(): string {
            provider_models.display_name as model_display_name,
            provider_models.context_window,
            provider_models.supports_streaming,
-           provider_models.supports_tools,
+           provider_models.input_modalities,
+           provider_models.output_modalities,
+           provider_models.max_output_tokens,
+           provider_models.supports_function_calling,
+           provider_models.supports_reasoning,
+           provider_models.capability_metadata,
            provider_models.availability,
            provider_models.manual_input_usd_per_million_tokens::text as price_override_input_usd_per_million_tokens,
            provider_models.manual_cached_input_usd_per_million_tokens::text as price_override_cached_input_usd_per_million_tokens,
@@ -1076,8 +1110,11 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
 
   return {
     availability: row.availability,
+    capabilityMetadata: readProviderModelCapabilityMetadata(row.capability_metadata),
     contextWindow: row.context_window ?? null,
     id: row.id,
+    inputModalities: row.input_modalities ?? null,
+    maxOutputTokens: row.max_output_tokens ?? null,
     modelDisplayName: row.model_display_name,
     modelId: row.model_id,
     optionLabel: formatProviderModelOptionLabel({
@@ -1101,13 +1138,22 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     providerEnabled: row.provider_enabled,
     providerId: row.provider_id,
     providerKey: row.provider_key,
+    outputModalities: row.output_modalities ?? null,
     supportedEndpoints: listProviderRouteEndpointProtocols({
       providerKey: row.provider_key,
       providerTemplateId: row.provider_template_id,
     }),
+    supportsFunctionCalling: row.supports_function_calling ?? null,
+    supportsReasoning: row.supports_reasoning ?? null,
     supportsStreaming: row.supports_streaming ?? false,
-    supportsTools: row.supports_tools ?? false,
+    supportsTools: row.supports_function_calling ?? false,
   };
+}
+
+function readProviderModelCapabilityMetadata(value: unknown): ProviderModelCapabilityMetadata {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as ProviderModelCapabilityMetadata)
+    : {};
 }
 
 function pluralize(word: string, count: number): string {

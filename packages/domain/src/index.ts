@@ -25,6 +25,75 @@ export type RouteCapability = (typeof routeCapabilities)[number];
 export type RouteEndpointProtocol = (typeof routeEndpointProtocols)[number];
 export type RoutePolicyStrategy = "fixed" | "cost_first" | "quality_first" | "random";
 
+export const modelInputModalities = ["text", "image", "audio", "video", "document"] as const;
+export const modelOutputModalities = ["text", "image", "audio", "video", "embedding"] as const;
+export const modelCapabilitySyncSources = [
+  "provider_models_api",
+  "models.dev",
+  "openrouter",
+  "litellm",
+  "vercel-ai-gateway",
+] as const;
+
+export type ModelInputModality = (typeof modelInputModalities)[number];
+export type ModelOutputModality = (typeof modelOutputModalities)[number];
+export type ModelCapabilitySyncSource = (typeof modelCapabilitySyncSources)[number];
+
+export type SyncedModelCapabilities = {
+  inputModalities: ModelInputModality[] | null;
+  outputModalities: ModelOutputModality[] | null;
+  maxContextTokens: number | null;
+  maxOutputTokens: number | null;
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
+};
+
+export type ModelCapabilityField = keyof SyncedModelCapabilities;
+
+export type ModelCapabilityConflictValue = {
+  source: ModelCapabilitySyncSource;
+  value: unknown;
+};
+
+export type ModelCapabilityConflicts = Partial<
+  Record<ModelCapabilityField, ModelCapabilityConflictValue[]>
+>;
+
+export type ModelCapabilitySources = Partial<
+  Record<ModelCapabilityField, ModelCapabilitySyncSource>
+>;
+
+export type ProviderModelCapabilityMetadata = {
+  conflicts?: ModelCapabilityConflicts;
+  manualCapabilities?: Partial<SyncedModelCapabilities>;
+  registrySources?: ModelCapabilitySources;
+  registrySyncedAt?: string;
+  syncedCapabilities?: Partial<SyncedModelCapabilities>;
+};
+
+export type ResolvedProviderModelCapabilities = {
+  effectiveCapabilities: SyncedModelCapabilities;
+  metadata: ProviderModelCapabilityMetadata;
+};
+
+export const emptySyncedModelCapabilities: SyncedModelCapabilities = {
+  inputModalities: null,
+  maxContextTokens: null,
+  maxOutputTokens: null,
+  outputModalities: null,
+  supportsFunctionCalling: null,
+  supportsReasoning: null,
+};
+
+const modelCapabilityFields = [
+  "inputModalities",
+  "outputModalities",
+  "maxContextTokens",
+  "maxOutputTokens",
+  "supportsFunctionCalling",
+  "supportsReasoning",
+] as const satisfies readonly ModelCapabilityField[];
+
 export type RoutePolicyRules = {
   endpointProtocol?: RouteEndpointProtocol;
   taskTypes?: RouteTaskType[];
@@ -42,6 +111,54 @@ export type ProviderModelCapabilities = {
   maxTimeoutMs?: number;
   retryable?: boolean;
 };
+
+export function normalizeModelInputModalities(value: unknown): ModelInputModality[] | null {
+  return normalizeModelModalities(value, modelInputModalities, normalizeInputModalityAlias);
+}
+
+export function normalizeModelOutputModalities(value: unknown): ModelOutputModality[] | null {
+  return normalizeModelModalities(value, modelOutputModalities, normalizeOutputModalityAlias);
+}
+
+export function resolveProviderModelCapabilities(input: {
+  conflicts?: ModelCapabilityConflicts | null;
+  manualCapabilities?: Partial<SyncedModelCapabilities> | null;
+  syncedCapabilities?: Partial<SyncedModelCapabilities> | null;
+  registrySources?: ModelCapabilitySources | null;
+  registrySyncedAt?: string | null;
+}): ResolvedProviderModelCapabilities {
+  const syncedCapabilities = normalizePartialSyncedModelCapabilities(input.syncedCapabilities);
+  const manualCapabilities = normalizePartialSyncedModelCapabilities(input.manualCapabilities);
+  const conflicts = input.conflicts ?? {};
+  const effectiveCapabilities = { ...emptySyncedModelCapabilities };
+
+  for (const field of modelCapabilityFields) {
+    const manual = manualCapabilities[field];
+    if (manual !== undefined) {
+      setCapabilityField(effectiveCapabilities, field, manual);
+      continue;
+    }
+
+    if ((conflicts[field]?.length ?? 0) > 0) {
+      setCapabilityField(effectiveCapabilities, field, null);
+      continue;
+    }
+
+    const synced = syncedCapabilities[field];
+    setCapabilityField(effectiveCapabilities, field, synced === undefined ? null : synced);
+  }
+
+  return {
+    effectiveCapabilities,
+    metadata: compactProviderModelCapabilityMetadata({
+      conflicts,
+      manualCapabilities,
+      registrySources: input.registrySources ?? undefined,
+      registrySyncedAt: input.registrySyncedAt ?? undefined,
+      syncedCapabilities,
+    }),
+  };
+}
 
 export type RouteCandidateHealthStatus =
   | "healthy"
@@ -513,6 +630,163 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
     virtualModelId: asVirtualModelId(input.routePolicy.virtualModelId),
     virtualModelName: input.routePolicy.virtualModelName,
   };
+}
+
+function normalizeModelModalities<TModality extends string>(
+  value: unknown,
+  allowed: readonly TModality[],
+  alias: (value: string) => TModality | null,
+): TModality[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const seen = new Set<TModality>();
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    const modality = alias(entry);
+    if (modality) {
+      seen.add(modality);
+    }
+  }
+
+  const normalized = allowed.filter((entry) => seen.has(entry));
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeInputModalityAlias(value: string): ModelInputModality | null {
+  const normalized = value.trim().toLowerCase().replaceAll("_", "-");
+  if (normalized === "vision") {
+    return "image";
+  }
+  if (
+    normalized === "file" ||
+    normalized === "files" ||
+    normalized === "pdf" ||
+    normalized === "attachment" ||
+    normalized === "attachments"
+  ) {
+    return "document";
+  }
+  return modelInputModalities.includes(normalized as ModelInputModality)
+    ? (normalized as ModelInputModality)
+    : null;
+}
+
+function normalizeOutputModalityAlias(value: string): ModelOutputModality | null {
+  const normalized = value.trim().toLowerCase().replaceAll("_", "-");
+  if (normalized === "vision") {
+    return "image";
+  }
+  if (normalized === "embeddings") {
+    return "embedding";
+  }
+  return modelOutputModalities.includes(normalized as ModelOutputModality)
+    ? (normalized as ModelOutputModality)
+    : null;
+}
+
+function normalizePartialSyncedModelCapabilities(
+  value: Partial<SyncedModelCapabilities> | null | undefined,
+): Partial<SyncedModelCapabilities> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return omitUndefined({
+    inputModalities:
+      value.inputModalities === null
+        ? null
+        : (normalizeModelInputModalities(value.inputModalities ?? undefined) ?? undefined),
+    maxContextTokens:
+      value.maxContextTokens === null
+        ? null
+        : readOptionalPositiveInteger(value.maxContextTokens, "maxContextTokens"),
+    maxOutputTokens:
+      value.maxOutputTokens === null
+        ? null
+        : readOptionalPositiveInteger(value.maxOutputTokens, "maxOutputTokens"),
+    outputModalities:
+      value.outputModalities === null
+        ? null
+        : (normalizeModelOutputModalities(value.outputModalities ?? undefined) ?? undefined),
+    supportsFunctionCalling:
+      value.supportsFunctionCalling === null
+        ? null
+        : readOptionalBoolean(value.supportsFunctionCalling, "supportsFunctionCalling"),
+    supportsReasoning:
+      value.supportsReasoning === null
+        ? null
+        : readOptionalBoolean(value.supportsReasoning, "supportsReasoning"),
+  });
+}
+
+function compactProviderModelCapabilityMetadata(
+  metadata: ProviderModelCapabilityMetadata,
+): ProviderModelCapabilityMetadata {
+  return omitUndefined({
+    conflicts: compactCapabilityConflicts(metadata.conflicts),
+    manualCapabilities: compactCapabilityObject(metadata.manualCapabilities),
+    registrySources:
+      metadata.registrySources && Object.keys(metadata.registrySources).length > 0
+        ? metadata.registrySources
+        : undefined,
+    registrySyncedAt: metadata.registrySyncedAt,
+    syncedCapabilities: compactCapabilityObject(metadata.syncedCapabilities),
+  });
+}
+
+function compactCapabilityObject(
+  value: Partial<SyncedModelCapabilities> | undefined,
+): Partial<SyncedModelCapabilities> | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const entries = Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as Partial<SyncedModelCapabilities>;
+  return Object.keys(entries).length > 0 ? entries : undefined;
+}
+
+function compactCapabilityConflicts(
+  conflicts: ModelCapabilityConflicts | undefined,
+): ModelCapabilityConflicts | undefined {
+  if (!conflicts) {
+    return undefined;
+  }
+  const compacted = Object.fromEntries(
+    Object.entries(conflicts).filter(([, values]) => Array.isArray(values) && values.length > 0),
+  ) as ModelCapabilityConflicts;
+  return Object.keys(compacted).length > 0 ? compacted : undefined;
+}
+
+function setCapabilityField(
+  target: SyncedModelCapabilities,
+  field: ModelCapabilityField,
+  value: SyncedModelCapabilities[ModelCapabilityField],
+): void {
+  switch (field) {
+    case "inputModalities":
+      target.inputModalities = value as ModelInputModality[] | null;
+      return;
+    case "outputModalities":
+      target.outputModalities = value as ModelOutputModality[] | null;
+      return;
+    case "maxContextTokens":
+      target.maxContextTokens = value as number | null;
+      return;
+    case "maxOutputTokens":
+      target.maxOutputTokens = value as number | null;
+      return;
+    case "supportsFunctionCalling":
+      target.supportsFunctionCalling = value as boolean | null;
+      return;
+    case "supportsReasoning":
+      target.supportsReasoning = value as boolean | null;
+      return;
+  }
 }
 
 function assertTokenEstimate(value: number, name: string): void {

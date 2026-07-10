@@ -159,7 +159,7 @@ async function loadRoutePreviewPolicies(databaseUrl?: string): Promise<RoutePoli
                provider_models.model_id as "modelId",
                provider_models.display_name as "displayName",
                provider_models.context_window as "contextWindow",
-               provider_models.supports_tools as "supportsTools",
+               provider_models.supports_function_calling as "supportsTools",
                provider_models.capability_metadata as "capabilityMetadata",
                providers.id::text as "providerId",
                providers.provider_key as "providerKey",

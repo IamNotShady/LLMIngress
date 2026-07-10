@@ -92,6 +92,11 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     id: "0009",
     name: "worker_delivery_leases",
   },
+  {
+    checksum: "665ec0be6fb72c31078c9cb9051c81b026a29e29bee5b57b31563a75fec35de5",
+    id: "0010",
+    name: "provider_model_capabilities",
+  },
 ];
 
 export async function getMigrationStatusFromDatabase(input: {

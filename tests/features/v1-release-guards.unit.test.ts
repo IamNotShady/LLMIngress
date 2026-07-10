@@ -53,6 +53,7 @@ const allowedFeatureIds = [
   "console-section-data-split",
   "refactor-db-package-split",
   "console-config-transfer-removal",
+  "provider-model-capability-sync",
 ];
 
 const sharedE2EFeatureIds: Record<string, string> = {

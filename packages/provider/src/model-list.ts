@@ -8,6 +8,7 @@ export type ListedProviderModel = {
 };
 
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { fetchCredentialedProviderRequest } from "./authenticated-http.js";
 import {
   buildClaudeCodeModelListUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -23,7 +24,9 @@ export async function fetchListedProviderModels(input: {
 }): Promise<ListedProviderModel[]> {
   const fetchImpl = input.fetch ?? globalThis.fetch;
   const request = buildProviderModelListRequest(input);
-  const response = await fetchImpl(request.url, request.init);
+  const response = input.apiKey
+    ? await fetchCredentialedProviderRequest(fetchImpl, request.url, request.init)
+    : await fetchImpl(request.url, request.init);
   const body = await readResponseBody(response);
 
   if (!response.ok) {

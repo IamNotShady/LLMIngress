@@ -1,3 +1,7 @@
+import {
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "../authenticated-http.js";
 import { mergeHttpHeaders, readHttpHeader, readProviderResponseHeaders } from "../headers.js";
 import {
   isRecord,
@@ -91,12 +95,16 @@ export function createAnthropicProviderAdapter(
   return {
     messages: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildMessagesUrl(target.baseUrl), {
-          body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
-          headers: buildAnthropicProviderHeaders(target.apiKey, headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildAnthropicMessagesUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
+            headers: buildAnthropicProviderHeaders(target.apiKey, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
 
@@ -118,7 +126,7 @@ export function createAnthropicProviderAdapter(
   };
 }
 
-function buildAnthropicProviderHeaders(
+export function buildAnthropicProviderHeaders(
   apiKey: string,
   requestHeaders: Record<string, string> | undefined,
 ): Record<string, string> {
@@ -136,7 +144,7 @@ export function buildAnthropicMessagesPayload(
   return omitUndefined({ ...request.payload, model: target.modelId }) as AnthropicMessagesPayload;
 }
 
-function buildMessagesUrl(baseUrl: string): string {
+export function buildAnthropicMessagesUrl(baseUrl: string): string {
   return joinProviderUrl(baseUrl, "messages");
 }
 
@@ -159,6 +167,18 @@ function mapProviderError(
 }
 
 function mapRequestFailure(error: unknown, timeoutMs: number): AnthropicAdapterError {
+  if (isProviderRedirectRejectedError(error)) {
+    return {
+      body: null,
+      errorCode: error.code,
+      errorMessage: error.message,
+      headers: {},
+      ok: false,
+      retryable: error.retryable,
+      statusCode: error.statusCode,
+    };
+  }
+
   return {
     body: null,
     errorCode: "provider_request_failed",

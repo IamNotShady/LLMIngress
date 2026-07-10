@@ -8,6 +8,10 @@
       "types": "./src/adapters/anthropic.ts",
       "default": "./src/adapters/anthropic.ts"
     },
+    "./authenticated-http": {
+      "types": "./src/authenticated-http.ts",
+      "default": "./src/authenticated-http.ts"
+    },
     "./connectivity": {
       "types": "./src/connectivity.ts",
       "default": "./src/connectivity.ts"

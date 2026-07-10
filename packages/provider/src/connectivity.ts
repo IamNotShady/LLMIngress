@@ -7,6 +7,11 @@ export type ConnectivityCheckProvider = {
 };
 
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { buildAnthropicMessagesUrl, buildAnthropicProviderHeaders } from "./adapters/anthropic.js";
+import {
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "./authenticated-http.js";
 import {
   buildClaudeCodeMessagesUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -122,6 +127,25 @@ export async function checkProviderConnectivity(
     };
   } catch (error) {
     const latencyMs = Math.max(0, nowMs() - startedAt);
+    if (isProviderRedirectRejectedError(error)) {
+      return {
+        checkedAt,
+        errorCode: error.code,
+        errorMessage: error.message,
+        latencyMs,
+        ok: false,
+        probeModelId: options.provider.modelId,
+        providerId: options.provider.id,
+        providerKey: options.provider.providerKey,
+        retryable: error.retryable,
+        status: classifyProviderFailureStatus({
+          errorCode: error.code,
+          errorMessage: error.message,
+          statusCode: error.statusCode,
+        }),
+        statusCode: error.statusCode,
+      };
+    }
     const timedOut = error instanceof ProviderProbeTimeoutError;
 
     return {
@@ -188,6 +212,21 @@ function buildProviderConnectivityRequest(input: {
         method: "POST",
       },
       url: buildClaudeCodeMessagesUrl(input.provider.baseUrl),
+    };
+  }
+
+  if (descriptor.connectivityProbeStyle === "anthropic") {
+    return {
+      init: {
+        body: JSON.stringify({
+          max_tokens: 1,
+          messages: [{ content: "ping", role: "user" }],
+          model: input.provider.modelId,
+        }),
+        headers: buildAnthropicProviderHeaders(input.apiKey ?? "", undefined),
+        method: "POST",
+      },
+      url: buildAnthropicMessagesUrl(input.provider.baseUrl),
     };
   }
 
@@ -394,7 +433,10 @@ async function fetchWithTimeout(
   }, timeoutMs);
 
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
+    return await fetchCredentialedProviderRequest(fetchImpl, url, {
+      ...init,
+      signal: controller.signal,
+    });
   } catch (error) {
     if (controller.signal.aborted) {
       throw new ProviderProbeTimeoutError();

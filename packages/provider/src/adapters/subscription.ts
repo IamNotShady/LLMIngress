@@ -1,3 +1,7 @@
+import {
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "../authenticated-http.js";
 import { readProviderResponseHeaders } from "../headers.js";
 import {
   buildClaudeCodeMessagesUrl,
@@ -42,12 +46,16 @@ export function createCodexSubscriptionAdapter(
     chatCompletion: async () => unsupportedOpenAIAdapterResult("codex_chat_unsupported"),
     response: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildCodexResponsesUrl(target.baseUrl), {
-          body: JSON.stringify(buildCodexResponsesPayload(request, target.modelId)),
-          headers: buildCodexSubscriptionHeaders(target.apiKey ?? "", headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildCodexResponsesUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildCodexResponsesPayload(request, target.modelId)),
+            headers: buildCodexSubscriptionHeaders(target.apiKey ?? "", headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
         if (!response.ok) {
@@ -76,12 +84,16 @@ export function createClaudeCodeProviderAdapter(
   return {
     messages: async ({ headers, request, target }): Promise<AnthropicAdapterResult> => {
       try {
-        const response = await fetchImpl(buildClaudeCodeMessagesUrl(target.baseUrl), {
-          body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
-          headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? "", headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildClaudeCodeMessagesUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
+            headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? "", headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
         if (!response.ok) {
@@ -122,6 +134,18 @@ function unsupportedOpenAIAdapterResult(errorCode: string): OpenAIAdapterResult 
 }
 
 function requestFailed(error: unknown, timeoutMs: number): OpenAIAdapterResult {
+  if (isProviderRedirectRejectedError(error)) {
+    return {
+      body: null,
+      errorCode: error.code,
+      errorMessage: error.message,
+      headers: {},
+      ok: false,
+      retryable: error.retryable,
+      statusCode: error.statusCode,
+    };
+  }
+
   return {
     body: null,
     errorCode: "provider_request_failed",

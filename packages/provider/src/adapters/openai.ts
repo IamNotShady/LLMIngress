@@ -1,3 +1,7 @@
+import {
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "../authenticated-http.js";
 import { mergeHttpHeaders, readProviderResponseHeaders } from "../headers.js";
 import {
   isRecord,
@@ -155,12 +159,16 @@ export function createOpenAIProviderAdapter(
   return {
     chatCompletion: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildChatCompletionsUrl(target.baseUrl), {
-          body: JSON.stringify(buildChatCompletionsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildChatCompletionsUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildChatCompletionsPayload(request, target)),
+            headers: buildProviderHeaders(target.apiKey, options.headers, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
 
@@ -181,12 +189,16 @@ export function createOpenAIProviderAdapter(
     },
     embeddings: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildEmbeddingsUrl(target.baseUrl), {
-          body: JSON.stringify(buildEmbeddingsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildEmbeddingsUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildEmbeddingsPayload(request, target)),
+            headers: buildProviderHeaders(target.apiKey, options.headers, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
 
@@ -207,12 +219,16 @@ export function createOpenAIProviderAdapter(
     },
     response: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildResponsesUrl(target.baseUrl), {
-          body: JSON.stringify(buildResponsesPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildResponsesUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildResponsesPayload(request, target)),
+            headers: buildProviderHeaders(target.apiKey, options.headers, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
 
@@ -306,6 +322,18 @@ function mapProviderError(
 }
 
 function mapRequestFailure(error: unknown, timeoutMs: number): OpenAIAdapterError {
+  if (isProviderRedirectRejectedError(error)) {
+    return {
+      body: null,
+      errorCode: error.code,
+      errorMessage: error.message,
+      headers: {},
+      ok: false,
+      retryable: error.retryable,
+      statusCode: error.statusCode,
+    };
+  }
+
   return {
     body: null,
     errorCode: "provider_request_failed",

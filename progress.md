@@ -5,7 +5,16 @@
 - Date: 2026-07-10
 - Branch: `codex/high-priority-hardening`
 - Base: `9a80b4b8`
-- Status: High-priority hardening plan restarted from clean HEAD. Features 1-3 are implemented and verified; feature 4 has not started.
+- Status: High-priority hardening plan restarted from clean HEAD. Features 1-4 are implemented and verified; feature 5 has not started.
+
+## 2026-07-10 High Priority Hardening 4 - Provider Authenticated HTTP Safety
+
+- Added a shared Provider credential-bearing HTTP helper that forces `redirect: "manual"` and rejects all 3xx responses as `provider_redirect_rejected` without exposing or following `Location`.
+- Routed OpenAI, Anthropic, subscription OAuth, provider model-list, connectivity probe, and Gateway streaming provider requests through the helper when they carry Provider credentials.
+- Added Gateway support for the stable `provider_redirect_rejected` error code, mapped to 502 for client responses.
+- Changed Anthropic connectivity probes to the official Messages shape: `POST /v1/messages`, `x-api-key`, `anthropic-version: 2023-06-01`, `max_tokens: 1`, and `messages: [{ role: "user", content: "ping" }]`, with no Bearer Authorization.
+- Verification passed: `pnpm exec vitest run tests/features/provider-authenticated-http-safety.unit.test.ts`, `pnpm test:e2e tests/e2e/provider-authenticated-http-safety.e2e.spec.ts`, focused provider descriptor/dialect regression, `pnpm run lint:fix`, `pnpm run typecheck`, `pnpm run verify`, pre-mark `pnpm run verify:features` for the existing 42 passing features, and final `pnpm run verify:features` for all 43 passing features.
+- Environment note: first `pnpm run verify` attempt failed because local OrbStack/Postgres stopped accepting new connections; after restarting OrbStack and restoring the local Postgres compose service on `127.0.0.1:55432`, the same command passed.
 
 ## 2026-07-10 High Priority Hardening 3 - Console Provider Dependency Guard
 

@@ -4,7 +4,7 @@ export type ProviderModelListStyle =
   | "codex"
   | "lmstudio"
   | "openrouter";
-export type ProviderConnectivityProbeStyle = "claude_code" | "codex";
+export type ProviderConnectivityProbeStyle = "anthropic" | "claude_code" | "codex";
 export type ProviderSubscriptionAdapter = "claude_code" | "codex";
 
 export type ProviderDescriptor = {
@@ -23,6 +23,7 @@ export type ProviderDescriptor = {
 
 const descriptors: Record<string, ProviderDescriptor> = {
   anthropic: {
+    connectivityProbeStyle: "anthropic",
     fixedApiKeyBaseUrl: "https://api.anthropic.com/v1",
     modelListStyle: "anthropic",
     priceSyncSupported: true,

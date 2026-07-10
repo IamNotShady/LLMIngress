@@ -14,6 +14,7 @@ export type GatewayErrorCode =
   | "provider_credentials_missing"
   | "provider_protocol_unsupported"
   | "provider_rate_limited"
+  | "provider_redirect_rejected"
   | "provider_rejected_request"
   | "provider_request_failed"
   | "provider_unavailable"
@@ -46,6 +47,7 @@ const defaultGatewayErrorMessage: Record<GatewayErrorCode, string> = {
   provider_credentials_missing: "Provider credentials are not configured for the selected route.",
   provider_protocol_unsupported: "Provider protocol is not supported for this endpoint.",
   provider_rate_limited: "Provider rate limit exceeded.",
+  provider_redirect_rejected: "Provider returned a redirect. Configure the final provider URL.",
   provider_rejected_request: "Provider rejected the request.",
   provider_request_failed: "Provider request failed.",
   provider_unavailable: "No eligible provider candidates are available for the selected route.",

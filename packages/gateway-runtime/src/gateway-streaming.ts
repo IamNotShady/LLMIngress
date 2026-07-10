@@ -5,6 +5,10 @@ import { selectRouteAttempts } from "@llmingress/domain";
 import { createLogger } from "@llmingress/logging";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "@llmingress/provider/authenticated-http";
+import {
   type ProviderStreamingDialect,
   resolveProviderStreamingDialect,
 } from "@llmingress/provider/dialect";
@@ -266,6 +270,14 @@ export async function executeGatewayStreamingRequest(input: {
         // --- Fetch with network-error catch ---
         let response: Response | undefined;
         let networkError: Error | undefined;
+        let redirectError:
+          | {
+              code: "provider_redirect_rejected";
+              message: string;
+              retryable: false;
+              statusCode: number;
+            }
+          | undefined;
         const connectController = new AbortController();
         const connectTimeout = setTimeout(() => {
           connectController.abort(
@@ -274,26 +286,77 @@ export async function executeGatewayStreamingRequest(input: {
         }, streamConnectTimeoutMs());
         connectTimeout.unref?.();
         try {
-          response = await (input.fetch ?? globalThis.fetch)(providerUrl, {
-            body: JSON.stringify(
-              buildStreamingRequestBodyForDialect({
-                dialect: providerDialect,
-                modelId: attemptedCandidate.modelId,
-                pathSuffix: normalized.pathSuffix,
-                payload: normalized.payload,
-              }),
-            ),
-            headers: providerDialect.buildHeaders(
-              attemptedCandidate.apiKey,
-              normalized.headersWithApiKey,
-            ),
-            method: "POST",
-            signal: connectController.signal,
-          });
+          response = await fetchCredentialedProviderRequest(
+            input.fetch ?? globalThis.fetch,
+            providerUrl,
+            {
+              body: JSON.stringify(
+                buildStreamingRequestBodyForDialect({
+                  dialect: providerDialect,
+                  modelId: attemptedCandidate.modelId,
+                  pathSuffix: normalized.pathSuffix,
+                  payload: normalized.payload,
+                }),
+              ),
+              headers: providerDialect.buildHeaders(
+                attemptedCandidate.apiKey,
+                normalized.headersWithApiKey,
+              ),
+              method: "POST",
+              signal: connectController.signal,
+            },
+          );
         } catch (err) {
-          networkError = err instanceof Error ? err : new Error("Provider network error.");
+          if (isProviderRedirectRejectedError(err)) {
+            redirectError = {
+              code: err.code,
+              message: err.message,
+              retryable: err.retryable,
+              statusCode: err.statusCode,
+            };
+          } else {
+            networkError = err instanceof Error ? err : new Error("Provider network error.");
+          }
         } finally {
           clearTimeout(connectTimeout);
+        }
+
+        if (redirectError) {
+          recordGatewayProviderTrace({
+            errorCode: redirectError.code,
+            modelId: attemptedCandidate.modelId,
+            providerKey: attemptedCandidate.providerKey,
+            requestId: input.requestId,
+            startedAt: providerStartedAt,
+            status: "failed",
+          });
+          const failedAttempt = buildFallbackFailedAttempt({
+            attemptOrder,
+            providerApiKey,
+            providerModelId: attemptedCandidate.providerModelId,
+            result: {
+              errorCode: redirectError.code,
+              errorMessage: redirectError.message,
+              statusCode: redirectError.statusCode,
+            },
+          });
+          fallbackAttempts.push(failedAttempt);
+          lastFailureCode = redirectError.code;
+          await releaseGatewayConcurrency({
+            databaseUrl: input.databaseUrl,
+            lease: concurrencyLease,
+          });
+          concurrencyLease = undefined;
+          return {
+            body: createGatewayErrorBody(
+              redirectError.code,
+              input.requestId,
+              redirectError.message,
+            ),
+            ok: false,
+            requestMetadata: normalized.requestMetadata,
+            statusCode: mapGatewayErrorStatus(redirectError.code),
+          };
         }
 
         if (networkError || !response) {

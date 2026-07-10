@@ -318,6 +318,17 @@
       "evidence": "2026-07-10: TDD red->green. Added ProviderDependencyImpact, transaction-time dependency rechecks, sorted Provider row locks for Provider mutations and Route Policy candidate writes, running-job delete blocker, pending provider-job cancellation, provider/model soft delete, key/OAuth/health runtime cleanup, Activity/Fallback key ID clearing, 0008 route_policy_candidates(provider_model_id) reverse lookup index, Gateway dangling provider_api_key_id filtering, structured delete/disable 409 JSON, and delete-dialog dependency blockers with no confirm button. Focused unit+E2E, pnpm run db:migrate:check, pnpm run verify, pre-mark pnpm run verify:features for the existing 41 passing features, and final pnpm run verify:features for all 42 passing features passed."
     },
     {
+      "id": "provider-authenticated-http-safety",
+      "name": "Provider Authenticated HTTP Safety",
+      "description": "All Provider requests that carry Authorization, OAuth Bearer, or x-api-key use a shared credential-bearing HTTP helper with redirect: manual; any 3xx response is rejected as provider_redirect_rejected and never followed across JSON, streaming, model-list, and connectivity probe paths. Anthropic connectivity probes use the Anthropic Messages shape: POST /v1/messages with x-api-key, anthropic-version 2023-06-01, max_tokens 1, and a ping user message, without Bearer Authorization.",
+      "verification": "pnpm exec vitest run tests/features/provider-authenticated-http-safety.unit.test.ts && pnpm test:e2e tests/e2e/provider-authenticated-http-safety.e2e.spec.ts",
+      "dependencies": [
+        "console-provider-dependency-guard"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Added shared credential-bearing Provider HTTP helper with redirect: manual and ProviderRedirectRejectedError; OpenAI, Anthropic, subscription OAuth, model-list, connectivity probe, and Gateway streaming requests now reject 3xx as provider_redirect_rejected without following Location. Anthropic connectivity probes now use POST /v1/messages with x-api-key, anthropic-version 2023-06-01, max_tokens 1, and ping user message, without Bearer Authorization. Focused unit+E2E, provider descriptor/dialect regression, pnpm run typecheck, pnpm run verify, pre-mark pnpm run verify:features for the existing 42 passing features, and final pnpm run verify:features for all 43 passing features passed."
+    },
+    {
       "id": "console-sections-split",
       "name": "Console Sections Split",
       "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",

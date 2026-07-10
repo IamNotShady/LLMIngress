@@ -78,6 +78,13 @@ export type FallbackAttemptErrorLike = {
 export function buildFallbackExhaustionError(
   lastError: FallbackAttemptErrorLike | undefined,
 ): GatewayPipelineError {
+  if (lastError?.errorCode === "provider_redirect_rejected") {
+    return new GatewayPipelineError(
+      "provider_redirect_rejected",
+      lastError.errorMessage || "Provider returned a redirect. Configure the final provider URL.",
+      null,
+    );
+  }
   const status = lastError?.statusCode ?? null;
   if (status !== null && status >= 400 && status < 500 && status !== 429) {
     return new GatewayPipelineError(

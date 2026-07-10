@@ -362,6 +362,17 @@
       "evidence": "2026-07-10: TDD red->green. Added GatewayBackgroundTaskRegistry, routed Gateway activity/trace/budget/stream-health/concurrency background writes through it, serialized config reload scheduling with coalesced trailing reloads, made stop clear listeners/timers then await in-flight reloads, and changed Gateway shutdown to close Fastify, drain background tasks, then close Postgres pools. Unit coverage verifies drain timeout/pending reporting, nested task drain, default GATEWAY_SHUTDOWN_DRAIN_MS, stop waiting for in-flight reload, and reload coalescing; real Gateway E2E installs a slow request_activity trigger, sends SIGTERM to the listening Gateway process, and asserts non-zero exit plus pending gateway.activity logging. Focused unit/E2E, related lifecycle/recording/stream checks, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 46 passing features re-verified."
     },
     {
+      "id": "worker-lease-recovery",
+      "name": "Worker Lease Recovery",
+      "description": "Worker jobs and notification delivery use complete at-least-once leases. Job claim recovers expired running jobs before claiming work, renews active leases every leaseMs/3, fences renew/complete/fail by worker id and attempt, exposes RunningJob.signal, aborts stale or shutdown-expired handlers, and defaults WORKER_JOB_LEASE_MS=60000 plus WORKER_SHUTDOWN_GRACE_MS=25000. Notification events carry delivery_owner/delivery_expires_at, recover expired or legacy sending deliveries, fence completion by owner and attempt, process payload eventIds, and enqueue continuation jobs for batches over 50 or events not yet due; WORKER_NOTIFICATION_LEASE_MS defaults to 30000 and Worker IDs default to hostname-pid-randomUUID.",
+      "verification": "pnpm exec vitest run tests/features/worker-lease-recovery.unit.test.ts && pnpm test:e2e tests/e2e/worker-lease-recovery.e2e.spec.ts",
+      "dependencies": [
+        "gateway-lifecycle-drain"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Unit red first showed handlers received no AbortSignal and renewJobLease was absent; E2E red first showed expired running jobs were not reclaimed, oversized notification batches stranded remaining events, and notification lease columns/fencing were missing. Implemented job lease renewal and shutdown aborts, expired running job recovery with job_attempts fencing, notification delivery leases via migration 0009_worker_delivery_leases.sql, payload-scoped notification claims, continuation jobs, legacy sending recovery, and hostname-pid-randomUUID Worker IDs. Focused unit/E2E, related Worker E2Es, db:migrate:check, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 47 passing features re-verified; optimized E2E batch flaked, then built-in per-feature fallback passed."
+    },
+    {
       "id": "console-sections-split",
       "name": "Console Sections Split",
       "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",

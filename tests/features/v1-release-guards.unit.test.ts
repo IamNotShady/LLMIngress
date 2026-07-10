@@ -36,6 +36,7 @@ const allowedFeatureIds = [
   "gateway-fallback-health",
   "gateway-metadata-only-logging",
   "gateway-lifecycle-drain",
+  "worker-lease-recovery",
   "console-sections-split",
   "refactor-route-strategy-registry",
   "refactor-notification-transport-registry",

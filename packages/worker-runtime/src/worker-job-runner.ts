@@ -15,6 +15,7 @@ export type ClaimedJob = {
 };
 
 export type RunningJob = ClaimedJob & {
+  signal: AbortSignal;
   workerId: string;
 };
 
@@ -43,11 +44,20 @@ export type FailJobInput = {
   workerId: string;
 };
 
+export type RenewJobLeaseInput = {
+  attemptNumber: number;
+  jobId: string;
+  leaseMs: number;
+  now: Date;
+  workerId: string;
+};
+
 export type JobStore = {
   claimNextJob: (input: ClaimNextJobInput) => Promise<ClaimedJob | null>;
   close?: () => Promise<void>;
   completeJob: (input: CompleteJobInput) => Promise<boolean>;
   failJob: (input: FailJobInput) => Promise<boolean>;
+  renewJobLease: (input: RenewJobLeaseInput) => Promise<boolean>;
   subscribeJobCreated?: (onJobCreated: () => void) => Promise<{ stop: () => Promise<void> }>;
 };
 
@@ -65,6 +75,7 @@ type CreateJobRunnerOptions = {
   now?: () => Date;
   pollIntervalMs?: number;
   retryBackoffMs?: (job: ClaimedJob, error: JobFailure) => number;
+  shutdownGraceMs?: number;
   store: JobStore;
   workerId: string;
 };
@@ -93,8 +104,9 @@ type JobRow = {
   trigger: string;
 };
 
-const defaultLeaseMs = 30_000;
+const defaultLeaseMs = 60_000;
 const defaultPollIntervalMs = 5_000;
+const defaultShutdownGraceMs = 25_000;
 
 export class JobHandlerError extends Error {
   readonly code: string;
@@ -110,6 +122,7 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
   const leaseMs = options.leaseMs ?? defaultLeaseMs;
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
   const retryBackoffMs = options.retryBackoffMs ?? defaultRetryBackoffMs;
+  const shutdownGraceMs = options.shutdownGraceMs ?? defaultShutdownGraceMs;
   const now = options.now ?? (() => new Date());
   const handledJobTypes = Object.entries(options.handlers)
     .filter(([, handler]) => handler !== undefined)
@@ -120,6 +133,13 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
   let stopped = true;
   let processing = false;
   let wakeRequested = false;
+  let activeJob:
+    | {
+        abortController: AbortController;
+        done: Promise<void>;
+        stopRenewing: () => void;
+      }
+    | undefined;
 
   const schedule = (delayMs: number) => {
     if (stopped) {
@@ -166,51 +186,96 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
     }
 
     const handler = options.handlers[job.jobType];
+    if (!handler) {
+      throw new JobHandlerError("job_handler_missing", `No handler registered for ${job.jobType}.`);
+    }
 
-    try {
-      if (!handler) {
-        throw new JobHandlerError(
-          "job_handler_missing",
-          `No handler registered for ${job.jobType}.`,
-        );
+    const abortController = new AbortController();
+    const renewal = startLeaseRenewal({
+      abortController,
+      job,
+      leaseMs,
+      now,
+      store: options.store,
+      workerId: options.workerId,
+    });
+    let leaseLost = false;
+    const markLeaseLost = () => {
+      leaseLost = true;
+    };
+    renewal.onLeaseLost(markLeaseLost);
+    const execution = (async () => {
+      try {
+        const result = await handler({
+          ...job,
+          signal: abortController.signal,
+          workerId: options.workerId,
+        });
+        if (leaseLost || abortController.signal.aborted) {
+          return { nextDelayMs: 0, processed: true };
+        }
+        const completedAt = now();
+        const completed = await options.store.completeJob({
+          attemptNumber: job.attemptNumber,
+          jobId: job.id,
+          now: completedAt,
+          result,
+          workerId: options.workerId,
+        });
+        if (completed) {
+          await recordWorkerJobTrace({
+            job,
+            startedAt: claimedAt,
+            status: "succeeded",
+          });
+        }
+        return { nextDelayMs: 0, processed: true };
+      } catch (error) {
+        if (leaseLost || abortController.signal.aborted) {
+          return { nextDelayMs: 0, processed: true };
+        }
+        const failedAt = now();
+        const failure = readJobFailure(error);
+        const shouldRetry = job.attemptNumber < job.maxAttempts;
+        const nextDelayMs = shouldRetry ? Math.max(0, retryBackoffMs(job, failure)) : null;
+        const failed = await options.store.failJob({
+          attemptNumber: job.attemptNumber,
+          errorCode: failure.code,
+          errorMessage: failure.message,
+          jobId: job.id,
+          now: failedAt,
+          retryAt: nextDelayMs === null ? null : new Date(failedAt.getTime() + nextDelayMs),
+          workerId: options.workerId,
+        });
+        if (failed) {
+          await recordWorkerJobTrace({
+            errorCode: failure.code,
+            job,
+            startedAt: claimedAt,
+            status: "failed",
+          });
+        }
+        return { nextDelayMs, processed: true };
+      } finally {
+        await renewal.stop();
       }
-
-      const result = await handler({ ...job, workerId: options.workerId });
-      const completedAt = now();
-      await options.store.completeJob({
-        attemptNumber: job.attemptNumber,
-        jobId: job.id,
-        now: completedAt,
-        result,
-        workerId: options.workerId,
-      });
-      await recordWorkerJobTrace({
-        job,
-        startedAt: claimedAt,
-        status: "succeeded",
-      });
-      return { nextDelayMs: 0, processed: true };
-    } catch (error) {
-      const failedAt = now();
-      const failure = readJobFailure(error);
-      const shouldRetry = job.attemptNumber < job.maxAttempts;
-      const nextDelayMs = shouldRetry ? Math.max(0, retryBackoffMs(job, failure)) : null;
-      await options.store.failJob({
-        attemptNumber: job.attemptNumber,
-        errorCode: failure.code,
-        errorMessage: failure.message,
-        jobId: job.id,
-        now: failedAt,
-        retryAt: nextDelayMs === null ? null : new Date(failedAt.getTime() + nextDelayMs),
-        workerId: options.workerId,
-      });
-      await recordWorkerJobTrace({
-        errorCode: failure.code,
-        job,
-        startedAt: claimedAt,
-        status: "failed",
-      });
-      return { nextDelayMs, processed: true };
+    })();
+    activeJob = {
+      abortController,
+      done: execution.then(
+        () => undefined,
+        () => undefined,
+      ),
+      stopRenewing: () => {
+        void renewal.stop();
+      },
+    };
+    try {
+      return await execution;
+    } finally {
+      if (activeJob?.abortController === abortController) {
+        activeJob = undefined;
+      }
     }
   };
 
@@ -269,6 +334,13 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
       }
       await subscription?.stop();
       subscription = undefined;
+      if (activeJob) {
+        const completed = await waitForActiveJob(activeJob.done, shutdownGraceMs);
+        if (!completed) {
+          activeJob.stopRenewing();
+          activeJob.abortController.abort(new Error("worker shutdown grace elapsed"));
+        }
+      }
       await options.store.close?.();
     },
   };
@@ -277,6 +349,93 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
 export function createPostgresJobRunner(options: CreatePostgresJobRunnerOptions): JobRunner {
   const store = new PostgresJobStore(options.databaseUrl);
   return createJobRunner({ ...options, store });
+}
+
+function startLeaseRenewal(input: {
+  abortController: AbortController;
+  job: ClaimedJob;
+  leaseMs: number;
+  now: () => Date;
+  store: JobStore;
+  workerId: string;
+}): {
+  onLeaseLost: (callback: () => void) => void;
+  stop: () => Promise<void>;
+} {
+  const renewEveryMs = Math.max(1, Math.floor(input.leaseMs / 3));
+  let inFlight: Promise<void> | undefined;
+  let leaseLostCallback: (() => void) | undefined;
+  let stopped = false;
+  let renewing = false;
+
+  const markLeaseLost = () => {
+    leaseLostCallback?.();
+    if (!input.abortController.signal.aborted) {
+      input.abortController.abort(new Error("worker job lease lost"));
+    }
+  };
+
+  const renew = async () => {
+    if (stopped || renewing || input.abortController.signal.aborted) {
+      return;
+    }
+
+    renewing = true;
+    try {
+      const renewed = await input.store.renewJobLease({
+        attemptNumber: input.job.attemptNumber,
+        jobId: input.job.id,
+        leaseMs: input.leaseMs,
+        now: input.now(),
+        workerId: input.workerId,
+      });
+      if (!renewed) {
+        markLeaseLost();
+      }
+    } catch {
+      markLeaseLost();
+    } finally {
+      renewing = false;
+    }
+  };
+
+  const timer = setInterval(() => {
+    inFlight = renew();
+  }, renewEveryMs);
+  timer.unref?.();
+
+  return {
+    onLeaseLost: (callback) => {
+      leaseLostCallback = callback;
+    },
+    stop: async () => {
+      stopped = true;
+      clearInterval(timer);
+      await inFlight?.catch(() => undefined);
+    },
+  };
+}
+
+async function waitForActiveJob(done: Promise<void>, timeoutMs: number): Promise<boolean> {
+  if (timeoutMs <= 0) {
+    return false;
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      done.then(() => "completed" as const),
+      new Promise<"timeout">((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+    return result === "completed";
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 function defaultRetryBackoffMs(job: ClaimedJob): number {
@@ -329,6 +488,7 @@ class PostgresJobStore implements JobStore {
       await client.query("begin");
 
       try {
+        await recoverExpiredRunningJobs(client, input.now);
         const result = await client.query<JobRow>(
           `
             with candidate as (
@@ -402,6 +562,7 @@ class PostgresJobStore implements JobStore {
               and status = 'running'
               and lease_owner = $2
               and attempt_count = $3
+              and lease_expires_at > $5::timestamptz
           `,
           [
             input.jobId,
@@ -464,6 +625,7 @@ class PostgresJobStore implements JobStore {
               and status = 'running'
               and lease_owner = $2
               and attempt_count = $3
+              and lease_expires_at > $8::timestamptz
           `,
           [
             input.jobId,
@@ -510,6 +672,25 @@ class PostgresJobStore implements JobStore {
     });
   }
 
+  async renewJobLease(input: RenewJobLeaseInput): Promise<boolean> {
+    return withClient(this.databaseUrl, async (client) => {
+      const result = await client.query(
+        `
+          update jobs
+          set lease_expires_at = $5::timestamptz + ($4::integer * interval '1 millisecond'),
+              updated_at = $5::timestamptz
+          where id = $1
+            and status = 'running'
+            and lease_owner = $2
+            and attempt_count = $3
+            and lease_expires_at > $5::timestamptz
+        `,
+        [input.jobId, input.workerId, input.attemptNumber, input.leaseMs, input.now.toISOString()],
+      );
+      return result.rowCount === 1;
+    });
+  }
+
   async subscribeJobCreated(onJobCreated: () => void): Promise<{ stop: () => Promise<void> }> {
     const client = new PostgresClient({ connectionString: this.databaseUrl });
     await client.connect();
@@ -540,6 +721,91 @@ class PostgresJobStore implements JobStore {
     const client = this.listenerClient;
     this.listenerClient = undefined;
     await client.end();
+  }
+}
+
+async function recoverExpiredRunningJobs(client: PostgresClient, now: Date): Promise<void> {
+  const nowIso = now.toISOString();
+  const expired = await client.query<{ attempt_count: number; id: string; max_attempts: number }>(
+    `
+      select id::text, attempt_count, max_attempts
+      from jobs
+      where status = 'running'
+        and lease_expires_at <= $1::timestamptz
+      order by lease_expires_at, created_at, id
+      limit 100
+      for update skip locked
+    `,
+    [nowIso],
+  );
+
+  if (expired.rows.length === 0) {
+    return;
+  }
+
+  const retriableJobIds = expired.rows
+    .filter((job) => job.attempt_count < job.max_attempts)
+    .map((job) => job.id);
+  const exhaustedJobIds = expired.rows
+    .filter((job) => job.attempt_count >= job.max_attempts)
+    .map((job) => job.id);
+  const expiredAttempts = expired.rows.map((job) => ({
+    attemptNumber: job.attempt_count,
+    jobId: job.id,
+  }));
+
+  await client.query(
+    `
+      update job_attempts
+      set status = 'failed',
+          error_code = 'job_lease_expired',
+          error_message = 'Job lease expired before completion.',
+          finished_at = $2::timestamptz
+      where (job_id, attempt_number) in (
+        select *
+        from unnest($1::uuid[], $3::integer[])
+      )
+        and status = 'running'
+    `,
+    [
+      expiredAttempts.map((attempt) => attempt.jobId),
+      nowIso,
+      expiredAttempts.map((attempt) => attempt.attemptNumber),
+    ],
+  );
+
+  if (retriableJobIds.length > 0) {
+    await client.query(
+      `
+        update jobs
+        set status = 'pending',
+            error_code = 'job_lease_expired',
+            error_message = 'Job lease expired before completion.',
+            run_after = $2::timestamptz,
+            lease_owner = null,
+            lease_expires_at = null,
+            updated_at = $2::timestamptz
+        where id = any($1::uuid[])
+      `,
+      [retriableJobIds, nowIso],
+    );
+  }
+
+  if (exhaustedJobIds.length > 0) {
+    await client.query(
+      `
+        update jobs
+        set status = 'failed',
+            error_code = 'job_lease_expired',
+            error_message = 'Job lease expired before completion.',
+            lease_owner = null,
+            lease_expires_at = null,
+            completed_at = $2::timestamptz,
+            updated_at = $2::timestamptz
+        where id = any($1::uuid[])
+      `,
+      [exhaustedJobIds, nowIso],
+    );
   }
 }
 

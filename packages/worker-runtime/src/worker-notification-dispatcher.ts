@@ -40,6 +40,7 @@ export type NotificationDispatchJobHandlerOptions = {
   databaseUrl?: string;
   deliverWebhook?: NotificationTransport;
   maxBatchSize?: number;
+  notificationLeaseMs?: number;
   now?: () => Date;
   retryBackoffMs?: (input: { attemptNumber: number; eventId: string }) => number;
   transports?: Partial<Record<NotificationChannelType, NotificationTransport>>;
@@ -83,6 +84,11 @@ type ClaimedNotificationEventRow = {
   subject: string;
 };
 
+type ContinuationNotificationEventRow = {
+  id: string;
+  run_after: Date | string;
+};
+
 type ClaimedNotificationEvent = {
   attemptNumber: number;
   body: string;
@@ -97,6 +103,7 @@ type ClaimedNotificationEvent = {
 };
 
 const defaultMaxBatchSize = 50;
+const defaultNotificationLeaseMs = 30_000;
 
 export async function queueNotificationEvent(
   input: QueueNotificationEventInput,
@@ -172,16 +179,28 @@ export function createNotificationDispatchJobHandler(
 ): JobHandler {
   const now = options.now ?? (() => new Date());
   const maxBatchSize = options.maxBatchSize ?? defaultMaxBatchSize;
+  const notificationLeaseMs = options.notificationLeaseMs ?? defaultNotificationLeaseMs;
   const retryBackoffMs = options.retryBackoffMs ?? defaultRetryBackoffMs;
   const transports: Record<NotificationChannelType, NotificationTransport> = {
     webhook: options.transports?.webhook ?? options.deliverWebhook ?? defaultDeliverWebhook,
   };
 
   return async (job) => {
+    const claimedAt = now();
+    const jobEventIds =
+      readNotificationJobEventIds(job.payload) ??
+      (await readLegacyDueNotificationEventIds({
+        databaseUrl: options.databaseUrl,
+        limit: maxBatchSize,
+        now: claimedAt,
+      }));
     const events = await claimDueNotificationEvents({
       databaseUrl: options.databaseUrl,
+      eventIds: jobEventIds,
       limit: maxBatchSize,
-      now: now(),
+      now: claimedAt,
+      owner: job.workerId,
+      leaseMs: notificationLeaseMs,
     });
     const summary = {
       failed: 0,
@@ -190,8 +209,6 @@ export function createNotificationDispatchJobHandler(
       sent: 0,
       trigger: job.trigger,
     };
-    const retryEventIds: string[] = [];
-    let retryRunAfter: Date | null = null;
 
     for (const event of events) {
       summary.processed += 1;
@@ -215,40 +232,56 @@ export function createNotificationDispatchJobHandler(
         retryBackoffMs,
       });
 
-      await recordNotificationDelivery({
+      const recorded = await recordNotificationDelivery({
         completedAt,
         databaseUrl: options.databaseUrl,
         event,
+        owner: job.workerId,
         result,
         retryAt,
       });
+
+      if (!recorded) {
+        continue;
+      }
 
       if (result.status === "sent") {
         summary.sent += 1;
       } else if (retryAt) {
         summary.retrying += 1;
-        retryEventIds.push(event.id);
-        if (!retryRunAfter || retryAt < retryRunAfter) {
-          retryRunAfter = retryAt;
-        }
       } else {
         summary.failed += 1;
       }
     }
 
-    if (retryRunAfter) {
+    const continuation = await readNotificationContinuation({
+      databaseUrl: options.databaseUrl,
+      eventIds: jobEventIds,
+      now: now(),
+    });
+    if (continuation) {
       await withClient(options.databaseUrl, async (client) => {
         await enqueueNotificationDispatchJob(client, {
-          eventIds: retryEventIds,
+          eventIds: continuation.eventIds,
           jobId: randomUUID(),
-          runAfter: retryRunAfter,
-          source: "notification_retry",
+          runAfter: continuation.runAfter,
+          source: "notification_continuation",
         });
       });
     }
 
     return summary;
   };
+}
+
+function readNotificationJobEventIds(payload: unknown): string[] | null {
+  const object = readObject(payload);
+  if (!Array.isArray(object.eventIds)) {
+    return null;
+  }
+
+  const eventIds = object.eventIds.filter((value): value is string => typeof value === "string");
+  return eventIds.length > 0 ? [...new Set(eventIds)] : [];
 }
 
 function normalizeNotificationEventInput(input: QueueNotificationEventInput["event"]) {
@@ -308,7 +341,7 @@ async function enqueueNotificationDispatchJob(
     eventIds: string[];
     jobId: string;
     runAfter: Date;
-    source: "notification_queue" | "notification_retry";
+    source: "notification_continuation" | "notification_queue" | "notification_retry";
   },
 ): Promise<void> {
   await client.query(
@@ -338,59 +371,213 @@ async function enqueueNotificationDispatchJob(
 
 async function claimDueNotificationEvents(input: {
   databaseUrl?: string;
+  eventIds: string[];
+  limit: number;
+  leaseMs: number;
+  now: Date;
+  owner: string;
+}): Promise<ClaimedNotificationEvent[]> {
+  if (input.eventIds.length === 0) {
+    return [];
+  }
+
+  return withClient(input.databaseUrl, async (client) => {
+    await client.query("begin");
+
+    try {
+      await recoverExpiredNotificationDeliveries(client, input.now);
+      const result = await client.query<ClaimedNotificationEventRow>(
+        `
+          with due as (
+            select notification_events.id
+            from notification_events
+            join notification_channels on notification_channels.id = notification_events.channel_id
+            where notification_channels.enabled = true
+              and notification_channels.channel_type = any($3::text[])
+              and notification_events.id = any($4::uuid[])
+              and notification_events.status in ('queued', 'retrying')
+              and notification_events.next_attempt_at <= $1::timestamptz
+            order by notification_events.next_attempt_at,
+                     notification_events.created_at,
+                     notification_events.id
+            limit $2
+            for update of notification_events skip locked
+          ),
+          updated as (
+            update notification_events
+            set status = 'sending',
+                attempt_count = attempt_count + 1,
+                delivery_owner = $5,
+                delivery_expires_at = $1::timestamptz + ($6::integer * interval '1 millisecond'),
+                updated_at = $1::timestamptz
+            from due
+            where notification_events.id = due.id
+            returning notification_events.id::text,
+                      notification_events.channel_id::text,
+                      notification_events.event_type,
+                      notification_events.subject,
+                      notification_events.body,
+                      notification_events.payload,
+                      notification_events.attempt_count as attempt_number,
+                      notification_events.max_attempts
+          )
+          select updated.id,
+                 updated.channel_id,
+                 updated.event_type,
+                 updated.subject,
+                 updated.body,
+                 updated.payload,
+                 updated.attempt_number,
+                 updated.max_attempts,
+                 notification_channels.channel_type,
+                 notification_channels.config as channel_config
+          from updated
+          join notification_channels on notification_channels.id = updated.channel_id::uuid
+          order by notification_channels.channel_type, updated.id
+        `,
+        [
+          input.now.toISOString(),
+          input.limit,
+          [...notificationChannelTypes],
+          input.eventIds,
+          input.owner,
+          input.leaseMs,
+        ],
+      );
+      await client.query("commit");
+      return result.rows.map(rowToClaimedNotificationEvent);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    }
+  });
+}
+
+async function recoverExpiredNotificationDeliveries(
+  client: PostgresClient,
+  now: Date,
+): Promise<void> {
+  const nowIso = now.toISOString();
+  const expired = await client.query<{ attempt_count: number; id: string; max_attempts: number }>(
+    `
+      select id::text, attempt_count, max_attempts
+      from notification_events
+      where status = 'sending'
+        and (delivery_expires_at is null or delivery_expires_at <= $1::timestamptz)
+      order by delivery_expires_at nulls first, updated_at, id
+      limit 100
+      for update skip locked
+    `,
+    [nowIso],
+  );
+
+  if (expired.rows.length === 0) {
+    return;
+  }
+
+  const retryEventIds = expired.rows
+    .filter((event) => event.attempt_count < event.max_attempts)
+    .map((event) => event.id);
+  const failedEventIds = expired.rows
+    .filter((event) => event.attempt_count >= event.max_attempts)
+    .map((event) => event.id);
+
+  if (retryEventIds.length > 0) {
+    await client.query(
+      `
+        update notification_events
+        set status = 'retrying',
+            next_attempt_at = $2::timestamptz,
+            last_error_code = 'notification_lease_expired',
+            last_error_message = 'Notification delivery lease expired before completion.',
+            delivery_owner = null,
+            delivery_expires_at = null,
+            updated_at = $2::timestamptz
+        where id = any($1::uuid[])
+      `,
+      [retryEventIds, nowIso],
+    );
+  }
+
+  if (failedEventIds.length > 0) {
+    await client.query(
+      `
+        update notification_events
+        set status = 'failed',
+            last_error_code = 'notification_lease_expired',
+            last_error_message = 'Notification delivery lease expired before completion.',
+            delivery_owner = null,
+            delivery_expires_at = null,
+            updated_at = $2::timestamptz
+        where id = any($1::uuid[])
+      `,
+      [failedEventIds, nowIso],
+    );
+  }
+}
+
+async function readLegacyDueNotificationEventIds(input: {
+  databaseUrl?: string;
   limit: number;
   now: Date;
-}): Promise<ClaimedNotificationEvent[]> {
+}): Promise<string[]> {
   return withClient(input.databaseUrl, async (client) => {
-    const result = await client.query<ClaimedNotificationEventRow>(
+    const result = await client.query<{ id: string }>(
       `
-        with due as (
-          select notification_events.id
-          from notification_events
-          join notification_channels on notification_channels.id = notification_events.channel_id
-          where notification_channels.enabled = true
-            and notification_channels.channel_type = any($3::text[])
-            and notification_events.status in ('queued', 'retrying')
-            and notification_events.next_attempt_at <= $1::timestamptz
-          order by notification_events.next_attempt_at,
-                   notification_events.created_at,
-                   notification_events.id
-          limit $2
-          for update of notification_events skip locked
-        ),
-        updated as (
-          update notification_events
-          set status = 'sending',
-              attempt_count = attempt_count + 1,
-              updated_at = $1::timestamptz
-          from due
-          where notification_events.id = due.id
-          returning notification_events.id::text,
-                    notification_events.channel_id::text,
-                    notification_events.event_type,
-                    notification_events.subject,
-                    notification_events.body,
-                    notification_events.payload,
-                    notification_events.attempt_count as attempt_number,
-                    notification_events.max_attempts
-        )
-        select updated.id,
-               updated.channel_id,
-               updated.event_type,
-               updated.subject,
-               updated.body,
-               updated.payload,
-               updated.attempt_number,
-               updated.max_attempts,
-               notification_channels.channel_type,
-               notification_channels.config as channel_config
-        from updated
-        join notification_channels on notification_channels.id = updated.channel_id::uuid
-        order by notification_channels.channel_type, updated.id
+        select notification_events.id::text as id
+        from notification_events
+        join notification_channels on notification_channels.id = notification_events.channel_id
+        where notification_channels.enabled = true
+          and notification_channels.channel_type = any($3::text[])
+          and notification_events.status in ('queued', 'retrying')
+          and notification_events.next_attempt_at <= $1::timestamptz
+        order by notification_events.next_attempt_at,
+                 notification_events.created_at,
+                 notification_events.id
+        limit $2
       `,
       [input.now.toISOString(), input.limit, [...notificationChannelTypes]],
     );
-    return result.rows.map(rowToClaimedNotificationEvent);
+    return result.rows.map((row) => row.id);
+  });
+}
+
+async function readNotificationContinuation(input: {
+  databaseUrl?: string;
+  eventIds: string[];
+  now: Date;
+}): Promise<{ eventIds: string[]; runAfter: Date } | null> {
+  if (input.eventIds.length === 0) {
+    return null;
+  }
+
+  return withClient(input.databaseUrl, async (client) => {
+    const result = await client.query<ContinuationNotificationEventRow>(
+      `
+        select id::text,
+               case
+                 when status in ('queued', 'retrying') then next_attempt_at
+                 when status = 'sending' then coalesce(delivery_expires_at, $2::timestamptz)
+                 else $2::timestamptz
+               end as run_after
+        from notification_events
+        where id = any($1::uuid[])
+          and status in ('queued', 'retrying', 'sending')
+        order by array_position($1::uuid[], id)
+      `,
+      [input.eventIds, input.now.toISOString()],
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return {
+      eventIds: result.rows.map((row) => row.id),
+      runAfter: result.rows
+        .map((row) => new Date(row.run_after))
+        .reduce((earliest, value) => (value < earliest ? value : earliest)),
+    };
   });
 }
 
@@ -413,11 +600,12 @@ async function recordNotificationDelivery(input: {
   completedAt: Date;
   databaseUrl?: string;
   event: ClaimedNotificationEvent;
+  owner: string;
   result: NotificationDeliveryResult;
   retryAt: Date | null;
-}): Promise<void> {
-  await withClient(input.databaseUrl, async (client) => {
-    await client.query(
+}): Promise<boolean> {
+  return await withClient(input.databaseUrl, async (client) => {
+    const result = await client.query(
       `
         update notification_events
         set status = $2,
@@ -425,8 +613,13 @@ async function recordNotificationDelivery(input: {
             sent_at = case when $2 = 'sent' then $4::timestamptz else sent_at end,
             last_error_code = $5,
             last_error_message = $6,
+            delivery_owner = null,
+            delivery_expires_at = null,
             updated_at = $4::timestamptz
         where id = $1
+          and status = 'sending'
+          and delivery_owner = $7
+          and attempt_count = $8
       `,
       [
         input.event.id,
@@ -435,8 +628,11 @@ async function recordNotificationDelivery(input: {
         input.completedAt.toISOString(),
         input.result.status === "failed" ? input.result.errorCode : null,
         input.result.status === "failed" ? input.result.errorMessage : null,
+        input.owner,
+        input.event.attemptNumber,
       ],
     );
+    return result.rowCount === 1;
   });
 }
 

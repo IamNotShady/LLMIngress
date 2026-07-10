@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingress/db/client";
@@ -41,13 +43,17 @@ export async function startWorker() {
       cost_report_export: createCostReportExportJobHandler({}),
       fallback_exhaustion_alerts: createFallbackExhaustionAlertsJobHandler({}),
       jsonl_export: createJsonlRequestLogExportJobHandler({}),
-      notification_dispatch: createNotificationDispatchJobHandler({}),
+      notification_dispatch: createNotificationDispatchJobHandler({
+        notificationLeaseMs: readWorkerNotificationLeaseMs(),
+      }),
       rate_limit_alerts: createRateLimitAlertsJobHandler({}),
       webhook_export: createWebhookEventExportJobHandler({}),
       retention_cleanup: createRetentionCleanupJobHandler({}),
       stale_concurrency_reconcile: createStaleConcurrencyReconcileJobHandler({}),
     },
+    leaseMs: readWorkerJobLeaseMs(),
     pollIntervalMs: config.workerHeartbeatMs,
+    shutdownGraceMs: readWorkerShutdownGraceMs(),
     workerId: readWorkerId(),
   });
   const periodicScheduler = createPostgresPeriodicScheduler({
@@ -76,7 +82,31 @@ function logBootstrapSecurityWarnings(warnings: string[]): void {
 }
 
 function readWorkerId(): string {
-  return process.env.WORKER_ID?.trim() || `worker-${process.pid}`;
+  return process.env.WORKER_ID?.trim() || `${hostname()}-${process.pid}-${randomUUID()}`;
+}
+
+function readWorkerJobLeaseMs(): number {
+  return readPositiveIntegerEnv("WORKER_JOB_LEASE_MS", 60_000);
+}
+
+function readWorkerNotificationLeaseMs(): number {
+  return readPositiveIntegerEnv("WORKER_NOTIFICATION_LEASE_MS", 30_000);
+}
+
+function readWorkerShutdownGraceMs(): number {
+  return readPositiveIntegerEnv("WORKER_SHUTDOWN_GRACE_MS", 25_000);
+}
+
+function readPositiveIntegerEnv(name: string, fallback: number): number {
+  const rawValue = process.env[name];
+  if (rawValue === undefined) {
+    return fallback;
+  }
+  const value = Number(rawValue);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return value;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -904,6 +904,11 @@ V1 notification channels:
 
 - Webhook.
 
+Worker notification dispatch is at-least-once. Notification jobs carry explicit
+event IDs, delivery attempts use owner/expiry leases, and oversized or
+not-yet-due batches create continuation jobs so queued events are not stranded
+after a worker crash.
+
 Desktop notifications and local system notifications are not included in V1. If
 needed later, they should be specified separately.
 

@@ -831,12 +831,26 @@ Background Worker
   `-- publish config version and emit config_changed if routing-visible data changed
 ```
 
-Worker jobs use Postgres row locks, advisory locks, or job leases to deduplicate
-work and avoid multiple workers executing the same job. `job_created`
-notification is only a wakeup. The `jobs` table is the source of truth. The
-`backup` job distinguishes scheduled and manual runs through a trigger field.
-V1 can run one Worker. Future multi-instance Workers can use Postgres
-`FOR UPDATE SKIP LOCKED` or advisory locks for concurrent consumption.
+Worker jobs use Postgres row locks and explicit leases to deduplicate work across
+multiple Worker instances. `job_created` notification is only a wakeup. The
+`jobs` table is the source of truth. A claim first recovers up to 100 expired
+running jobs, marking the expired attempt `failed/job_lease_expired`, then
+returns retriable jobs to `pending` or marks exhausted jobs `failed`. Running
+jobs renew their lease every `WORKER_JOB_LEASE_MS / 3`; completion and failure
+updates are fenced by worker id, attempt number, and unexpired lease. If a Worker
+loses its lease, the running handler receives an `AbortSignal` and the stale
+executor cannot overwrite the newer attempt.
+
+Worker shutdown keeps renewing the current job while waiting up to
+`WORKER_SHUTDOWN_GRACE_MS`; after the grace window it aborts the handler and
+stops renewing so normal lease expiry recovery can reclaim the job. Notification
+delivery uses the same at-least-once model: `notification_events` rows carry
+`delivery_owner` / `delivery_expires_at`, delivery completion is fenced by owner
+and attempt count, and legacy `sending` rows without a delivery lease are
+recovered by the next claim. Notification dispatch jobs process the payload
+`eventIds`; batches over 50 or not-yet-due rows enqueue continuation jobs instead
+of leaving events permanently queued. The `backup` job distinguishes scheduled
+and manual runs through a trigger field.
 
 ### 7.5 Playground Public API Test Path
 

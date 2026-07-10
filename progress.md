@@ -912,6 +912,18 @@
 - Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/gateway-lifecycle-drain.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm run test:e2e -- tests/e2e/gateway-lifecycle-drain.e2e.spec.ts --workers=1`, `pnpm run verify`, and `pnpm run verify:features` with all 46 passing features re-verified.
 - Blockers: none open.
 
+## 2026-07-10 High Priority Hardening 8 - Worker Lease Recovery
+
+- `worker-lease-recovery`: Worker job execution now uses full at-least-once leases. Claims recover expired running jobs first, failed expired attempts are recorded in `job_attempts`, retriable jobs return to `pending`, exhausted jobs become terminal `failed`, active jobs renew every `leaseMs / 3`, and stale completion/failure is fenced by worker id, attempt number, and unexpired lease.
+- `RunningJob.signal` is passed to handlers. Renewal fencing or shutdown grace expiry aborts the signal; shutdown waits while renewals continue, then stops renewing and lets lease expiry reclaim the job.
+- Notification delivery leases are added in `0009_worker_delivery_leases.sql` through `delivery_owner` / `delivery_expires_at`, paired nullability constraint, and a sending recovery index. Dispatch claims are scoped to job payload `eventIds`, completion is fenced by owner + attempt count, legacy `sending` rows with null lease recover, and batches over 50 or not-yet-due rows get continuation jobs.
+- Worker defaults added: `WORKER_JOB_LEASE_MS=60000`, `WORKER_NOTIFICATION_LEASE_MS=30000`, `WORKER_SHUTDOWN_GRACE_MS=25000`, and default Worker ID is `hostname-pid-randomUUID`.
+- TDD red evidence: focused unit first failed because handlers received no `AbortSignal`; focused E2E first failed because expired running jobs were not reclaimed, oversized notification batches did not enqueue continuation jobs, and notification delivery lease columns were absent.
+- Focused verification passed: `pnpm exec vitest run tests/features/worker-lease-recovery.unit.test.ts` and `pnpm run test:e2e -- tests/e2e/worker-lease-recovery.e2e.spec.ts --workers=1`.
+- Related Worker regression passed: `pnpm run test:e2e -- tests/e2e/v1-worker-ops.e2e.spec.ts tests/e2e/schema-notification-deliveries-removed.e2e.spec.ts --workers=1`.
+- Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/worker-lease-recovery.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-worker-ops.unit.test.ts`, `pnpm run test:e2e -- tests/e2e/worker-lease-recovery.e2e.spec.ts --workers=1`, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 47 passing features re-verified. The optimized E2E batch flaked, then the built-in per-feature fallback passed and the command exited 0.
+- Blockers: none open.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

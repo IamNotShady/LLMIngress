@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 import { redactSecretsFromJsonlValue } from "./worker-jsonl-export.ts";
+import {
+  sendWorkerWebhookRequest,
+  type WorkerWebhookErrorCode,
+} from "./worker-webhook-transport.ts";
 
 export type WebhookEventExportActivity = {
   agentApiKeyPrefix: string;
@@ -91,7 +95,9 @@ export type WebhookEventExportJobHandlerOptions = {
 };
 
 export type WebhookEventDeliveryInput = {
+  idempotencyKey: string;
   record: WebhookEventExportRecord;
+  signal?: AbortSignal;
   webhookUrl: string;
 };
 
@@ -197,7 +203,14 @@ export function createWebhookEventExportJobHandler(
 
         const startedAt = now();
         const result = await deliverWebhook({
+          idempotencyKey: buildWebhookExportIdempotencyKey({
+            fallbackEventId: entry.fallbackEventId,
+            jobId: job.id,
+            record: entry.record,
+            requestActivityId: entry.requestActivityId,
+          }),
           record: entry.record,
+          signal: job.signal,
           webhookUrl: payload.webhookUrl,
         });
         const completedAt = now();
@@ -575,38 +588,55 @@ async function hasSuccessfulWebhookDelivery(
 async function defaultDeliverWebhookEvent(
   input: WebhookEventDeliveryInput,
 ): Promise<WebhookEventDeliveryResult> {
-  try {
-    const response = await fetch(input.webhookUrl, {
-      body: JSON.stringify(input.record),
-      headers: {
-        "content-type": "application/json",
-      },
-      method: "POST",
-    });
-    const responseBody = truncateResponseBody(await response.text());
+  const result = await sendWorkerWebhookRequest({
+    body: input.record,
+    idempotencyKey: input.idempotencyKey,
+    signal: input.signal,
+    url: input.webhookUrl,
+  });
 
-    if (response.ok) {
-      return {
-        responseBody,
-        responseStatus: response.status,
-        status: "sent",
-      };
-    }
+  if (result.status === "sent") {
+    return {
+      responseBody: truncateResponseBody(result.responseBody),
+      responseStatus: result.responseStatus,
+      status: "sent",
+    };
+  }
 
-    return {
-      errorCode: "webhook_export_http_error",
-      errorMessage: `Webhook export returned HTTP ${response.status}.`,
-      responseBody,
-      responseStatus: response.status,
-      status: "failed",
-    };
-  } catch (error) {
-    return {
-      errorCode: "webhook_export_request_failed",
-      errorMessage: error instanceof Error ? error.message : "Webhook export request failed.",
-      responseStatus: null,
-      status: "failed",
-    };
+  return {
+    errorCode: mapWebhookExportErrorCode(result.errorCode),
+    errorMessage: result.errorMessage,
+    responseBody: truncateResponseBody(result.responseBody),
+    responseStatus: result.responseStatus,
+    status: "failed",
+  };
+}
+
+function buildWebhookExportIdempotencyKey(input: {
+  fallbackEventId: string | null;
+  jobId: string;
+  record: WebhookEventExportRecord;
+  requestActivityId: string;
+}): string {
+  if (input.record.eventType === "fallback" && input.fallbackEventId) {
+    return `webhook-export:${input.jobId}:fallback:${input.fallbackEventId}`;
+  }
+
+  return `webhook-export:${input.jobId}:${input.record.eventType}:${input.requestActivityId}`;
+}
+
+function mapWebhookExportErrorCode(errorCode: WorkerWebhookErrorCode): string {
+  switch (errorCode) {
+    case "webhook_http_error":
+      return "webhook_export_http_error";
+    case "webhook_response_too_large":
+      return "webhook_export_response_too_large";
+    case "webhook_target_blocked":
+      return "webhook_export_target_blocked";
+    case "webhook_timeout":
+      return "webhook_export_timeout";
+    case "webhook_request_failed":
+      return "webhook_export_request_failed";
   }
 }
 

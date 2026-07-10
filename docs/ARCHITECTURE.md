@@ -852,6 +852,17 @@ recovered by the next claim. Notification dispatch jobs process the payload
 of leaving events permanently queued. The `backup` job distinguishes scheduled
 and manual runs through a trigger field.
 
+Worker webhook notification and webhook export jobs share one Node `http`/`https`
+egress transport. The transport resolves the target hostname once, validates the
+resolved address, and pins that address in the actual connection lookup to block
+DNS rebinding. By default it rejects URL credentials, redirects, loopback,
+RFC1918, link-local, CGNAT, unspecified, multicast, IPv6 ULA, and IPv4-mapped
+private targets. `WORKER_WEBHOOK_ALLOWED_HOSTS` is an exact hostname/IP allowlist
+for trusted internal targets; wildcards are not supported. Webhook requests use
+`WORKER_WEBHOOK_TIMEOUT_MS=10000`, cap response reads at
+`WORKER_WEBHOOK_MAX_RESPONSE_BYTES=8192`, and persist response bodies only through
+the existing 2,000-character database truncation.
+
 ### 7.5 Playground Public API Test Path
 
 Console Route Handlers enforce CSRF at the route boundary for every mutating

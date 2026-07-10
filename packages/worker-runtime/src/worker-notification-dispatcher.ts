@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
 import { type NotificationChannelType, notificationChannelTypes } from "@llmingress/domain";
 import { JOB_CREATED_CHANNEL, type JobHandler } from "./worker-job-runner.ts";
+import { sendWorkerWebhookRequest } from "./worker-webhook-transport.ts";
 
 export type { NotificationChannelType };
 export { notificationChannelTypes };
@@ -50,6 +51,7 @@ export type NotificationDeliveryTransportInput = {
   channelConfig: unknown;
   channelType: NotificationChannelType;
   payload: NotificationDeliveryPayload;
+  signal?: AbortSignal;
 };
 
 export type NotificationDeliveryResult =
@@ -222,6 +224,7 @@ export function createNotificationDispatchJobHandler(
       const result = await deliverNotification({
         event,
         payload,
+        signal: job.signal,
         transports,
       });
       const completedAt = now();
@@ -673,6 +676,7 @@ function defaultRetryBackoffMs(input: { attemptNumber: number }): number {
 async function deliverNotification(input: {
   event: ClaimedNotificationEvent;
   payload: NotificationDeliveryPayload;
+  signal?: AbortSignal;
   transports: Record<NotificationChannelType, NotificationTransport>;
 }): Promise<NotificationDeliveryResult> {
   try {
@@ -681,6 +685,7 @@ async function deliverNotification(input: {
       channelConfig: input.event.channelConfig,
       channelType: input.event.channelType,
       payload: input.payload,
+      signal: input.signal,
     });
   } catch (error) {
     return {
@@ -705,39 +710,12 @@ async function defaultDeliverWebhook(
     };
   }
 
-  try {
-    const response = await fetch(url, {
-      body: JSON.stringify(input.payload),
-      headers: {
-        "content-type": "application/json",
-      },
-      method: "POST",
-    });
-    const responseBody = truncateResponseBody(await response.text());
-
-    if (response.ok) {
-      return {
-        responseBody,
-        responseStatus: response.status,
-        status: "sent",
-      };
-    }
-
-    return {
-      errorCode: "webhook_http_error",
-      errorMessage: `Webhook returned HTTP ${response.status}.`,
-      responseBody,
-      responseStatus: response.status,
-      status: "failed",
-    };
-  } catch (error) {
-    return {
-      errorCode: "webhook_request_failed",
-      errorMessage: error instanceof Error ? error.message : "Webhook request failed.",
-      responseStatus: null,
-      status: "failed",
-    };
-  }
+  return sendWorkerWebhookRequest({
+    body: input.payload,
+    idempotencyKey: input.payload.eventId,
+    signal: input.signal,
+    url,
+  });
 }
 
 function readWebhookUrl(config: unknown): string | null {
@@ -757,13 +735,6 @@ function normalizeRequiredText(value: string, label: string): string {
     throw new Error(`${label} is required.`);
   }
   return normalized;
-}
-
-function truncateResponseBody(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return value.slice(0, 2_000);
 }
 
 function stringifyJson(value: unknown): string {

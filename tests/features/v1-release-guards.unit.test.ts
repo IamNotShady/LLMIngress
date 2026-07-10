@@ -37,6 +37,7 @@ const allowedFeatureIds = [
   "gateway-metadata-only-logging",
   "gateway-lifecycle-drain",
   "worker-lease-recovery",
+  "worker-webhook-egress-hardening",
   "console-sections-split",
   "refactor-route-strategy-registry",
   "refactor-notification-transport-registry",

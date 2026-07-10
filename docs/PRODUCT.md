@@ -909,6 +909,13 @@ event IDs, delivery attempts use owner/expiry leases, and oversized or
 not-yet-due batches create continuation jobs so queued events are not stranded
 after a worker crash.
 
+Webhook notification and webhook export delivery use hardened Worker egress.
+Targets with URL credentials, redirects, loopback/private/link-local/CGNAT/
+unspecified/multicast/IPv6 ULA, and IPv4-mapped private addresses are rejected by
+default. Deployments can explicitly allow trusted internal targets with exact
+`WORKER_WEBHOOK_ALLOWED_HOSTS` entries. Worker webhook requests are at-least-once
+and carry stable `Idempotency-Key` headers so receivers can deduplicate retries.
+
 Desktop notifications and local system notifications are not included in V1. If
 needed later, they should be specified separately.
 

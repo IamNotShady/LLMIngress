@@ -924,6 +924,18 @@
 - Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/worker-lease-recovery.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-worker-ops.unit.test.ts`, `pnpm run test:e2e -- tests/e2e/worker-lease-recovery.e2e.spec.ts --workers=1`, `pnpm run db:migrate:check`, `pnpm run verify`, and `pnpm run verify:features` with all 47 passing features re-verified. The optimized E2E batch flaked, then the built-in per-feature fallback passed and the command exited 0.
 - Blockers: none open.
 
+## 2026-07-10 High Priority Hardening 9 - Worker Webhook Egress Hardening
+
+- `worker-webhook-egress-hardening`: Notification webhooks and webhook export now share one dependency-free Node `http`/`https` transport.
+- The transport rejects URL username/password credentials, never follows redirects, resolves the target hostname once, validates the resolved address, and pins that address in the actual request lookup to block DNS rebinding.
+- Default egress policy blocks loopback, RFC1918, link-local, CGNAT, unspecified, multicast, IPv6 ULA, and IPv4-mapped private targets. `WORKER_WEBHOOK_ALLOWED_HOSTS` permits only exact trusted hostname/IP entries; wildcards are ignored.
+- Worker webhook defaults added: `WORKER_WEBHOOK_TIMEOUT_MS=10000`, `WORKER_WEBHOOK_MAX_RESPONSE_BYTES=8192`, and `WORKER_WEBHOOK_ALLOWED_HOSTS=`.
+- Notification delivery passes `RunningJob.signal` through to the webhook transport and uses the notification event ID as `Idempotency-Key`. Webhook export passes `RunningJob.signal` and uses stable job/event-derived idempotency keys. Export response bodies still use the existing 2,000-character database truncation.
+- TDD red evidence: focused unit first failed because `worker-webhook-transport` did not exist; focused E2E first failed because default notification delivery still attempted loopback webhook egress.
+- Focused verification passed: `pnpm exec vitest run tests/features/worker-webhook-egress-hardening.unit.test.ts` and `pnpm run test:e2e -- tests/e2e/worker-webhook-egress-hardening.e2e.spec.ts --workers=1`.
+- Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/worker-webhook-egress-hardening.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm run test:e2e -- tests/e2e/worker-webhook-egress-hardening.e2e.spec.ts --workers=1`, related Worker E2Es, `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, and `pnpm run verify:features` with all 48 passing features re-verified.
+- Blockers: none open.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

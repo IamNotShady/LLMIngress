@@ -43,6 +43,7 @@ export function recordGatewayProviderTrace(input: {
       providerKey: input.providerKey,
       requestId: input.requestId,
     },
+    name: "gateway.provider_trace",
     task: () =>
       recordOpenTelemetrySpan({
         attributes: {

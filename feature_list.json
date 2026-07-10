@@ -351,6 +351,17 @@
       "evidence": "2026-07-10: TDD red->green. Gateway agent request logs no longer accept or emit requestBody, shared Pino/Fastify logger options redact body/requestBody/token/Authorization/Cookie/x-api-key paths, and Console Agent forms now label the switch as detailed request metadata logging. Added unit coverage for metadata-only log payloads and redaction paths; added real Gateway E2E that sends JSON, Streaming, Provider error, and fallback requests with prompt/tool/test-key markers and scans stdout/stderr for leaks. Focused unit+E2E, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 45 passing features re-verified. During regression, repaired an existing Worker clock-skew issue by making job claim use the injected runner clock and aligning daily-ops E2E job run_after seeds to that clock."
     },
     {
+      "id": "gateway-lifecycle-drain",
+      "name": "Gateway Lifecycle Drain",
+      "description": "Gateway config reloads use one serialized coordinator: startup still fails fast, explicit reconcile remains rejectable, notification/timer reloads log failures without unhandled rejections, concurrent wakeups coalesce into one trailing reload, failures keep the last-known-good snapshot, and stop clears listeners/timers before waiting for any in-flight reload. Gateway request side effects run through a shared background task registry and shutdown drains tracked activity, trace, usage/cost, stream health, and concurrency-release tasks before closing database pools; GATEWAY_SHUTDOWN_DRAIN_MS defaults to 10000 and a drain timeout logs pending task names and exits non-zero.",
+      "verification": "pnpm exec vitest run tests/features/gateway-lifecycle-drain.unit.test.ts && pnpm test:e2e tests/e2e/gateway-lifecycle-drain.e2e.spec.ts",
+      "dependencies": [
+        "gateway-metadata-only-logging"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Added GatewayBackgroundTaskRegistry, routed Gateway activity/trace/budget/stream-health/concurrency background writes through it, serialized config reload scheduling with coalesced trailing reloads, made stop clear listeners/timers then await in-flight reloads, and changed Gateway shutdown to close Fastify, drain background tasks, then close Postgres pools. Unit coverage verifies drain timeout/pending reporting, nested task drain, default GATEWAY_SHUTDOWN_DRAIN_MS, stop waiting for in-flight reload, and reload coalescing; real Gateway E2E installs a slow request_activity trigger, sends SIGTERM to the listening Gateway process, and asserts non-zero exit plus pending gateway.activity logging. Focused unit/E2E, related lifecycle/recording/stream checks, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 46 passing features re-verified."
+    },
+    {
       "id": "console-sections-split",
       "name": "Console Sections Split",
       "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",

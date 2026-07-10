@@ -335,6 +335,7 @@ export function recordGatewayProviderApiKeyLastUsed(input: {
   runGatewayBackgroundTask({
     message: "gateway provider api key last-used recording failed",
     metadata: { providerApiKeyId: input.providerApiKeyId },
+    name: "gateway.provider_api_key.last_used",
     task: async () => {
       await getPostgresPool(input.databaseUrl).query(
         `

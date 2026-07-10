@@ -732,6 +732,7 @@ function recordGatewayRuntimeError(input: {
       errorCode: input.error.errorCode,
       requestId: input.metadata.requestId,
     },
+    name: "gateway.stream.runtime_error",
     task: async () => {
       await getPostgresPool(input.databaseUrl).query(
         `

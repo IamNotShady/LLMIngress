@@ -161,6 +161,12 @@ export function createGatewayConfigRuntime(
   let reconcileTimer: NodeJS.Timeout | undefined;
   let heartbeatTimer: NodeJS.Timeout | undefined;
   let reloadInFlight: Promise<void> | undefined;
+  let trailingReloadRequest: ReloadRequest | undefined;
+
+  type ReloadRequest = {
+    force: boolean;
+    targetVersion: number | null;
+  };
 
   // Recording runtime status must never crash gateway boot or abort a config reload.
   async function recordRuntimeStatusSafe(event: GatewayRuntimeStatusEvent): Promise<void> {
@@ -171,39 +177,47 @@ export function createGatewayConfigRuntime(
     }
   }
 
-  async function reloadIfNewer(targetVersion?: number): Promise<void> {
-    if (targetVersion !== undefined && targetVersion <= currentSnapshot.version) {
+  function shouldSkipReload(request: ReloadRequest): boolean {
+    if (request.force || request.targetVersion === null) {
+      return false;
+    }
+    return request.targetVersion <= currentSnapshot.version;
+  }
+
+  function mergeTrailingReload(request: ReloadRequest): void {
+    if (!trailingReloadRequest) {
+      trailingReloadRequest = request;
+      return;
+    }
+
+    trailingReloadRequest = {
+      force: trailingReloadRequest.force || request.force,
+      targetVersion:
+        trailingReloadRequest.targetVersion === null || request.targetVersion === null
+          ? null
+          : Math.max(trailingReloadRequest.targetVersion, request.targetVersion),
+    };
+  }
+
+  async function runReload(request: ReloadRequest): Promise<void> {
+    if (shouldSkipReload(request)) {
       return;
     }
 
     if (reloadInFlight) {
+      mergeTrailingReload(request);
       await reloadInFlight;
-      if (targetVersion === undefined || targetVersion > currentSnapshot.version) {
-        await reloadIfNewer(targetVersion);
-      }
       return;
     }
 
     reloadInFlight = (async () => {
-      let nextSnapshot: GatewayConfigSnapshot;
-      try {
-        nextSnapshot = await loadLatestSnapshot();
-      } catch (error) {
-        await recordRuntimeStatusSafe({
-          type: "reload-failed",
-          targetConfigVersion: targetVersion ?? null,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-
-      if (nextSnapshot.version > currentSnapshot.version) {
-        currentSnapshot = nextSnapshot;
-        await recordRuntimeStatusSafe({
-          type: "reload-succeeded",
-          appliedConfigVersion: nextSnapshot.version,
-          targetConfigVersion: targetVersion ?? nextSnapshot.version,
-        });
+      let nextRequest: ReloadRequest | undefined = request;
+      while (nextRequest) {
+        if (!shouldSkipReload(nextRequest)) {
+          await performReload(nextRequest);
+        }
+        nextRequest = trailingReloadRequest;
+        trailingReloadRequest = undefined;
       }
     })();
 
@@ -214,46 +228,36 @@ export function createGatewayConfigRuntime(
     }
   }
 
-  async function forceReload(): Promise<void> {
-    if (reloadInFlight) {
-      await reloadInFlight;
-      // After the in-flight reload settles, do one more unconditional reload
-      // to ensure health changes that arrived during the in-flight load are applied.
-      await forceReload();
-      return;
-    }
-
-    reloadInFlight = (async () => {
-      let nextSnapshot: GatewayConfigSnapshot;
-      try {
-        nextSnapshot = await loadLatestSnapshot();
-      } catch (error) {
-        await recordRuntimeStatusSafe({
-          type: "reload-failed",
-          targetConfigVersion: null,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-
-      // Unconditional swap — health changes don't bump config version.
-      const previousVersion = currentSnapshot.version;
-      currentSnapshot = nextSnapshot;
-      // Only a config-version bump is a "reload"; same-version health refreshes are silent.
-      if (nextSnapshot.version > previousVersion) {
-        await recordRuntimeStatusSafe({
-          type: "reload-succeeded",
-          appliedConfigVersion: nextSnapshot.version,
-          targetConfigVersion: nextSnapshot.version,
-        });
-      }
-    })();
-
+  async function performReload(request: ReloadRequest): Promise<void> {
+    let nextSnapshot: GatewayConfigSnapshot;
     try {
-      await reloadInFlight;
-    } finally {
-      reloadInFlight = undefined;
+      nextSnapshot = await loadLatestSnapshot();
+    } catch (error) {
+      await recordRuntimeStatusSafe({
+        type: "reload-failed",
+        targetConfigVersion: request.targetVersion,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
+
+    const previousVersion = currentSnapshot.version;
+    if (request.force || nextSnapshot.version > previousVersion) {
+      currentSnapshot = nextSnapshot;
+    }
+    if (nextSnapshot.version > previousVersion) {
+      await recordRuntimeStatusSafe({
+        type: "reload-succeeded",
+        appliedConfigVersion: nextSnapshot.version,
+        targetConfigVersion: request.targetVersion ?? nextSnapshot.version,
+      });
+    }
+  }
+
+  function scheduleReload(request: ReloadRequest): void {
+    runReload(request).catch((error) => {
+      logger.error({ err: error }, "gateway config reload failed");
+    });
   }
 
   return {
@@ -261,7 +265,7 @@ export function createGatewayConfigRuntime(
     // forceReload (not reloadIfNewer) so reconcile also recovers health-only
     // changes whose config version is unchanged, including ones whose
     // health_summary_changed LISTEN/NOTIFY was dropped.
-    reconcile: () => forceReload(),
+    reconcile: () => runReload({ force: true, targetVersion: null }),
     start: async () => {
       currentSnapshot = await loadLatestSnapshot();
       await recordRuntimeStatusSafe({
@@ -274,20 +278,20 @@ export function createGatewayConfigRuntime(
         const createConfigChangedListener =
           options.createConfigChangedListener ?? createPostgresNotificationListener(options);
         listener = await createConfigChangedListener((notification) => {
-          void reloadIfNewer(notification.version);
+          scheduleReload({ force: false, targetVersion: notification.version });
         });
 
         const createHealthChangedListener =
           options.createHealthSummaryChangedListener ??
           createPostgresHealthNotificationListener(options);
         healthListener = await createHealthChangedListener((_payload) => {
-          void forceReload();
+          scheduleReload({ force: true, targetVersion: null });
         });
       }
 
       if (reconcileIntervalMs > 0) {
         reconcileTimer = setInterval(() => {
-          void forceReload();
+          scheduleReload({ force: true, targetVersion: null });
         }, reconcileIntervalMs);
         reconcileTimer.unref?.();
       }
@@ -315,6 +319,13 @@ export function createGatewayConfigRuntime(
       listener = undefined;
       await healthListener?.close();
       healthListener = undefined;
+      if (reloadInFlight) {
+        try {
+          await reloadInFlight;
+        } catch (error) {
+          logger.error({ err: error }, "gateway config reload failed during stop");
+        }
+      }
     },
   };
 }

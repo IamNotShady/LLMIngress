@@ -1049,7 +1049,12 @@ deployments.
 - Streaming first-chunk proxy added latency target: p95 under 200 ms, excluding
   upstream provider first-chunk time.
 - Configuration changes take near-real-time effect for new requests after
-  Gateway hot reload succeeds and do not affect in-flight requests.
+  Gateway hot reload succeeds and do not affect in-flight requests. Failed
+  listener/timer reloads keep the last-known-good snapshot until a later
+  notification or periodic reconcile succeeds.
+- Gateway shutdown drains tracked background writes before closing database
+  pools; `GATEWAY_SHUTDOWN_DRAIN_MS` defaults to 10 seconds, and timeout exits
+  non-zero with pending task names in logs.
 - Server deployments must support Console authentication.
 - Prompt / response content is not recorded by default.
 

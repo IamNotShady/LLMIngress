@@ -6,6 +6,7 @@ import type {
   GatewayRequestActivityRoute,
 } from "@llmingress/gateway-runtime/gateway-activity-recorder";
 import { authenticateGatewayRequest } from "@llmingress/gateway-runtime/gateway-auth";
+import { gatewayBackgroundTasks } from "@llmingress/gateway-runtime/gateway-background-tasks";
 import { executeGatewayOpenAIChatCompletion } from "@llmingress/gateway-runtime/gateway-chat-completions";
 import {
   createGatewayConfigRuntime,
@@ -21,6 +22,7 @@ import {
   gatewayInstanceId,
   gatewayListenHost,
   gatewayMetricsToken,
+  gatewayShutdownDrainMs,
 } from "@llmingress/gateway-runtime/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/gateway-runtime/gateway-error-mapping";
 import { readGatewayProviderRequestHeaders } from "@llmingress/gateway-runtime/gateway-header-passthrough";
@@ -184,7 +186,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
   app.addHook("onClose", async () => {
     await options.configRuntime?.stop();
-    await closePostgresPools();
   });
 
   return app;
@@ -209,15 +210,42 @@ export async function startGateway() {
     port: config.gatewayPort,
   });
 
+  let shuttingDown = false;
   const shutdown = async () => {
-    await app.close();
-    process.exit(0);
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
+    let exitCode = 0;
+    try {
+      await app.close();
+      const drainResult = await gatewayBackgroundTasks.drain({
+        timeoutMs: gatewayShutdownDrainMs(),
+      });
+      if (drainResult.timedOut) {
+        exitCode = 1;
+        logger.error({ pending: drainResult.pending }, "gateway background task drain timed out");
+      }
+      await closePostgresPools();
+    } catch (error) {
+      exitCode = 1;
+      logger.error({ err: error }, "gateway shutdown failed");
+    }
+
+    process.exit(exitCode);
   };
   process.once("SIGTERM", () => {
-    void shutdown();
+    shutdown().catch((error: unknown) => {
+      logger.error({ err: error }, "gateway shutdown failed");
+      process.exit(1);
+    });
   });
   process.once("SIGINT", () => {
-    void shutdown();
+    shutdown().catch((error: unknown) => {
+      logger.error({ err: error }, "gateway shutdown failed");
+      process.exit(1);
+    });
   });
 }
 

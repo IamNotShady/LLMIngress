@@ -50,6 +50,10 @@ export function gatewayHeartbeatIntervalMs(env: GatewayEnvironment = process.env
   return readNonNegativeIntegerEnv(env, "GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000);
 }
 
+export function gatewayShutdownDrainMs(env: GatewayEnvironment = process.env): number {
+  return readNonNegativeIntegerEnv(env, "GATEWAY_SHUTDOWN_DRAIN_MS", 10_000);
+}
+
 function readTrimmedEnv(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;

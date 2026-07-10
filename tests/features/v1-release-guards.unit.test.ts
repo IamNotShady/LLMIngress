@@ -35,6 +35,7 @@ const allowedFeatureIds = [
   "provider-authenticated-http-safety",
   "gateway-fallback-health",
   "gateway-metadata-only-logging",
+  "gateway-lifecycle-drain",
   "console-sections-split",
   "refactor-route-strategy-registry",
   "refactor-notification-transport-registry",

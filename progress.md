@@ -902,6 +902,16 @@
 - Verification passed: `pnpm exec vitest run tests/features/refactor-zod-boundaries.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` with all 39 passing features re-verified.
 - Blockers: none open.
 
+## 2026-07-10 High Priority Hardening 7 - Gateway Lifecycle Drain
+
+- `gateway-lifecycle-drain`: Gateway config reloads now use a single serialized coordinator. Startup load remains fail-fast, explicit `reconcile()` still rejects on failure, and LISTEN/timer entrypoints schedule reloads safely without unhandled rejections. Notifications during an active reload coalesce into one trailing reload, and failures keep the last-known-good snapshot.
+- Added `GatewayBackgroundTaskRegistry` and routed Gateway activity, trace, budget/usage, stream health, runtime error, provider key last-used, and concurrency release writes through tracked background tasks instead of naked fire-and-forget promises.
+- Gateway shutdown order is now Fastify close → config runtime stop → background-task drain → Postgres pool close. `GATEWAY_SHUTDOWN_DRAIN_MS` defaults to `10000`; timeouts log pending task names and exit non-zero.
+- TDD red evidence: `gateway-lifecycle-drain` unit initially failed because `GatewayBackgroundTaskRegistry` was missing, `stop()` returned before in-flight reload settle, and active reload notifications reloaded too many times. The real Gateway E2E initially failed before sending SIGTERM to the actual listening Gateway process.
+- Focused verification passed: `pnpm exec vitest run tests/features/gateway-lifecycle-drain.unit.test.ts`, `pnpm run test:e2e -- tests/e2e/gateway-lifecycle-drain.e2e.spec.ts --workers=1`, related Gateway lifecycle/recording/stream unit checks, related DB/recording E2Es, `pnpm run typecheck`, and `pnpm run lint`.
+- Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/gateway-lifecycle-drain.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm run test:e2e -- tests/e2e/gateway-lifecycle-drain.e2e.spec.ts --workers=1`, `pnpm run verify`, and `pnpm run verify:features` with all 46 passing features re-verified.
+- Blockers: none open.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

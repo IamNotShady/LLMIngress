@@ -2,6 +2,7 @@ import { PassThrough, Readable } from "node:stream";
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-agent-limits.ts";
+import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import { gatewayStreamIdleTimeoutMs } from "./gateway-env.ts";
 import type { FallbackChainCandidate } from "./gateway-fallback-chain.ts";
 
@@ -123,11 +124,14 @@ export function wrapProviderStreamWithActivityCompletion(
       return;
     }
     settled = true;
-    try {
-      void Promise.resolve(input.completeActivity({ statusCode })).catch(() => undefined);
-    } catch {
-      // Activity recording is best-effort after the stream outcome is known.
-    }
+    runGatewayBackgroundTask({
+      message: "gateway stream activity completion failed",
+      metadata: { statusCode },
+      name: "gateway.stream.activity",
+      task: async () => {
+        await Promise.resolve(input.completeActivity({ statusCode }));
+      },
+    });
   }
 
   return output;
@@ -149,11 +153,14 @@ export function wrapProviderStreamWithErrorRecording(
     };
 
     if (!recorded) {
-      try {
-        void Promise.resolve(input.recordRuntimeError(runtimeError)).catch(() => undefined);
-      } catch {
-        // Runtime error recording is diagnostic-only.
-      }
+      runGatewayBackgroundTask({
+        message: "gateway runtime stream error recording failed",
+        metadata: { errorCode: runtimeError.errorCode },
+        name: "gateway.stream.runtime_error",
+        task: async () => {
+          await Promise.resolve(input.recordRuntimeError(runtimeError));
+        },
+      });
     }
     recorded = true;
     output.destroy(error instanceof Error ? error : new Error(runtimeError.errorMessage));
@@ -196,15 +203,25 @@ export function wrapProviderStreamWithMidStreamHealthRecording(
       status: healthStatus,
       trigger: "request_path" as const,
     };
-    void recordProviderHealthEvent({
-      ...shared,
-      providerId: input.candidate.providerId,
-    }).catch(() => undefined);
-    void recordProviderHealthEvent({
-      ...shared,
-      providerId: input.candidate.providerId,
-      providerModelId: input.candidate.providerModelId,
-    }).catch(() => undefined);
+    runGatewayBackgroundTask({
+      message: "gateway stream provider health recording failed",
+      metadata: {
+        providerId: input.candidate.providerId,
+        providerModelId: input.candidate.providerModelId,
+      },
+      name: "gateway.stream.health",
+      task: async () => {
+        await recordProviderHealthEvent({
+          ...shared,
+          providerId: input.candidate.providerId,
+        });
+        await recordProviderHealthEvent({
+          ...shared,
+          providerId: input.candidate.providerId,
+          providerModelId: input.candidate.providerModelId,
+        });
+      },
+    });
   });
 
   return source;
@@ -223,7 +240,17 @@ export function wrapProviderStreamWithConcurrencyRelease(
       return;
     }
     settled = true;
-    void releaseGatewayConcurrency(input);
+    runGatewayBackgroundTask({
+      message: "gateway concurrency release failed",
+      metadata: input.lease
+        ? {
+            agentId: input.lease.agentId,
+            windowStart: input.lease.window.windowStart.toISOString(),
+          }
+        : undefined,
+      name: "gateway.concurrency.release",
+      task: () => releaseGatewayConcurrency(input),
+    });
   };
   source.once("end", release);
   source.once("error", release);

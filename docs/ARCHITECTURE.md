@@ -739,11 +739,25 @@ Hot reload failure handling:
 - Gateway fully validates the new snapshot.
 - If validation fails, Gateway does not switch snapshots.
 - Gateway records a reload failure event.
+- Notification and timer entrypoints use the same serialized reload coordinator.
+  If a reload is already running, additional notifications coalesce into one
+  trailing reload. Startup remains fail-fast, while listener and timer reload
+  failures preserve the last-known-good snapshot and wait for the next wakeup.
 - Console Gateway Runtime page shows target version, applied version, and
   failure reason.
 - If Gateway is online but misses a notification, periodic reconcile reloads.
   If the configuration itself fails validation, the user must fix it and publish
   a new version.
+
+Gateway shutdown order:
+
+- Stop accepting requests and let Fastify close active request handling.
+- Stop config listeners and timers, then wait for any in-flight reload to settle.
+- Drain tracked Gateway background tasks, including activity, trace, usage,
+  cost, stream health, and concurrency-release writes.
+- Close PostgreSQL pools after the drain completes. `GATEWAY_SHUTDOWN_DRAIN_MS`
+  defaults to `10000`; if the drain times out, Gateway logs pending task names
+  and exits non-zero so a supervisor can surface the incomplete shutdown.
 
 ### 7.3 Runtime Data Read Path
 

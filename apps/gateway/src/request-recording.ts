@@ -9,6 +9,7 @@ import {
   type GatewayBudgetSettlement,
   recordGatewayBudgetUsage,
 } from "@llmingress/gateway-runtime/gateway-agent-limits";
+import { runGatewayBackgroundTask } from "@llmingress/gateway-runtime/gateway-background-tasks";
 import type { GatewayRequestMetadata } from "@llmingress/gateway-runtime/gateway-request-metadata";
 import { wrapProviderStreamWithActivityCompletion } from "@llmingress/gateway-runtime/gateway-stream-pipeline";
 import type { GatewayStreamingResult } from "@llmingress/gateway-runtime/gateway-streaming";
@@ -44,18 +45,19 @@ function runRecordingTask(input: {
   activityId?: string;
   logger: FastifyBaseLogger;
   message: string;
+  name: string;
   requestId: string;
   task: () => Promise<void>;
 }): void {
-  void input.task().catch((error) => {
-    input.logger.error(
-      {
-        ...(input.activityId ? { activityId: input.activityId } : {}),
-        err: error,
-        requestId: input.requestId,
-      },
-      input.message,
-    );
+  runGatewayBackgroundTask({
+    logger: input.logger,
+    message: input.message,
+    metadata: {
+      ...(input.activityId ? { activityId: input.activityId } : {}),
+      requestId: input.requestId,
+    },
+    name: input.name,
+    task: input.task,
   });
 }
 
@@ -101,6 +103,7 @@ export async function executeRecordedGatewayJsonRequest(input: {
   runRecordingTask({
     logger: input.logger,
     message: "gateway trace recording failed",
+    name: "gateway.trace",
     requestId: input.requestId,
     task: () =>
       recorder.recordTrace({
@@ -213,6 +216,7 @@ function scheduleRecordActivity(input: {
     activityId: input.activity.id,
     logger: input.input.logger,
     message: "gateway activity recording failed",
+    name: "gateway.activity",
     requestId: input.input.requestId,
     task: () =>
       input.recorder.recordActivity({
@@ -248,6 +252,7 @@ function scheduleBudgetUsage(input: {
   runRecordingTask({
     logger: input.input.logger,
     message: input.message,
+    name: "gateway.budget",
     requestId: input.input.requestId,
     task: () =>
       recordGatewayBudgetUsage({

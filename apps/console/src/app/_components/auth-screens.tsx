@@ -3,7 +3,7 @@
 // the original inline forms so existing auth flows/tests keep working.
 import { FlatIcon } from "./flat-icon";
 
-export function FirstRunSetup() {
+export function FirstRunSetup({ requiresSetupToken = false }: { requiresSetupToken?: boolean }) {
   return (
     <main className="auth-page">
       <section className="auth-panel" aria-labelledby="setup-title">
@@ -20,11 +20,39 @@ export function FirstRunSetup() {
             minLength={8}
             required
           />
+          {requiresSetupToken ? (
+            <>
+              <label htmlFor="setup-token">Setup token</label>
+              <input
+                id="setup-token"
+                name="setupToken"
+                type="password"
+                autoComplete="one-time-code"
+                minLength={32}
+                required
+              />
+            </>
+          ) : null}
           <button type="submit">
             <FlatIcon name="lock" />
             <span>Create admin</span>
           </button>
         </form>
+      </section>
+    </main>
+  );
+}
+
+export function SetupLocked() {
+  return (
+    <main className="auth-page">
+      <section className="auth-panel" aria-labelledby="setup-locked-title">
+        <p className="eyebrow">LLMIngress</p>
+        <h1 id="setup-locked-title">Setup locked</h1>
+        <p className="page-description">
+          This Console is listening beyond loopback. Configure CONSOLE_SETUP_TOKEN with a URL-safe
+          random value of at least 32 characters before creating the first administrator.
+        </p>
       </section>
     </main>
   );

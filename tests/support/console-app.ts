@@ -62,6 +62,7 @@ export async function waitForConsole(baseUrl: string, consoleApp: ConsoleProcess
 
 export function startConsoleProcess(options: {
   databaseUrl: string;
+  env?: Record<string, string | undefined>;
   port: number;
 }): ConsoleProcess {
   const child = spawn(
@@ -84,6 +85,7 @@ export function startConsoleProcess(options: {
         CONSOLE_PORT: String(options.port),
         DATABASE_URL: options.databaseUrl,
         MASTER_KEY: "test-master-key",
+        ...options.env,
       },
       stdio: ["ignore", "pipe", "pipe"],
     },

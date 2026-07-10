@@ -20,11 +20,18 @@ test("v1 release verification runner and docker compose contracts stay runnable"
   );
   expect(dryRun.stdout).toContain("Optimized coverage comparison passed.");
 
+  const composeEnv = {
+    ...process.env,
+    CONSOLE_SETUP_TOKEN: "s".repeat(32),
+    MASTER_KEY: "m".repeat(32),
+    POSTGRES_PASSWORD: "p".repeat(32),
+  };
   const services = await execFileAsync(
     "docker",
     ["compose", "-f", "docker-compose.yml", "config", "--services"],
     {
       cwd: process.cwd(),
+      env: composeEnv,
     },
   );
   expect(services.stdout.trim().split(/\r?\n/)).toEqual(
@@ -33,5 +40,6 @@ test("v1 release verification runner and docker compose contracts stay runnable"
 
   await execFileAsync("docker", ["compose", "-f", "docker-compose.yml", "config", "--quiet"], {
     cwd: process.cwd(),
+    env: composeEnv,
   });
 });

@@ -54,7 +54,15 @@ export type BootstrapRuntimeConfig = {
   consolePort: number;
   workerHeartbeatMs: number;
   masterKeySource: MasterKeySource;
+  securityWarnings: string[];
 };
+
+export type ConsoleSetupMode =
+  | { kind: "locked" }
+  | { kind: "password_only" }
+  | { kind: "token_required"; token: string };
+
+const insecurePublicDefaultMasterKey = "test-master-key-change-me";
 
 export function loadBootstrapRuntimeConfig(
   options: LoadBootstrapRuntimeConfigOptions = {},
@@ -63,6 +71,7 @@ export function loadBootstrapRuntimeConfig(
   const configFilePath = options.configFilePath ?? env.LLMINGRESS_BOOTSTRAP_CONFIG;
   const fileConfig = configFilePath ? readBootstrapConfigFile(configFilePath) : {};
 
+  const masterKeySource = readMasterKeySource(env, fileConfig);
   return {
     gatewayPort: readPort("GATEWAY_PORT", env.GATEWAY_PORT, fileConfig.gatewayPort, 4000),
     consolePort: readPort("CONSOLE_PORT", env.CONSOLE_PORT, fileConfig.consolePort, 3000),
@@ -72,7 +81,8 @@ export function loadBootstrapRuntimeConfig(
       fileConfig.workerHeartbeatMs,
       30_000,
     ),
-    masterKeySource: readMasterKeySource(env, fileConfig),
+    masterKeySource,
+    securityWarnings: readBootstrapSecurityWarnings(env, masterKeySource),
   };
 }
 
@@ -144,6 +154,7 @@ function readMasterKeySource(
 ): MasterKeySource {
   const inlineKey = env.MASTER_KEY ?? fileConfig.masterKey;
   if (inlineKey?.trim()) {
+    assertMasterKeySafeForRuntime(env, inlineKey);
     return { kind: "inline", value: inlineKey };
   }
 
@@ -153,6 +164,35 @@ function readMasterKeySource(
   }
 
   throw new Error("MASTER_KEY or MASTER_KEY_FILE is required.");
+}
+
+function assertMasterKeySafeForRuntime(env: BootstrapEnvironment, inlineKey: string): void {
+  if (env.NODE_ENV !== "production" || inlineKey !== insecurePublicDefaultMasterKey) {
+    return;
+  }
+  if (env.LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY === "true") {
+    return;
+  }
+  throw new Error(
+    "Production startup refused the public default MASTER_KEY. Generate a URL-safe random MASTER_KEY or set LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY=true temporarily to acknowledge the risk.",
+  );
+}
+
+function readBootstrapSecurityWarnings(
+  env: BootstrapEnvironment,
+  masterKeySource: MasterKeySource,
+): string[] {
+  if (
+    env.NODE_ENV === "production" &&
+    masterKeySource.kind === "inline" &&
+    masterKeySource.value === insecurePublicDefaultMasterKey &&
+    env.LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY === "true"
+  ) {
+    return [
+      "HIGH PRIORITY: production is using the public default MASTER_KEY through LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY.",
+    ];
+  }
+  return [];
 }
 
 export function gatewayPublicBaseUrl(
@@ -185,6 +225,46 @@ export function consolePublicBaseUrl(
   }
 
   return url.origin;
+}
+
+export function readConsoleListenHost(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return env.CONSOLE_HOST?.trim() || "127.0.0.1";
+}
+
+export function readConsoleSetupMode(
+  env: Record<string, string | undefined> = process.env,
+): ConsoleSetupMode {
+  const setupToken = readConsoleSetupToken(env);
+  if (setupToken) {
+    return { kind: "token_required", token: setupToken };
+  }
+  if (isLoopbackHost(readConsoleListenHost(env))) {
+    return { kind: "password_only" };
+  }
+  return { kind: "locked" };
+}
+
+export function isLoopbackHost(host: string): boolean {
+  const normalizedHost = host.trim().toLowerCase();
+  return (
+    normalizedHost === "127.0.0.1" ||
+    normalizedHost === "localhost" ||
+    normalizedHost === "::1" ||
+    normalizedHost === "[::1]"
+  );
+}
+
+function readConsoleSetupToken(env: Record<string, string | undefined>): string | null {
+  const value = env.CONSOLE_SETUP_TOKEN?.trim();
+  if (!value) {
+    return null;
+  }
+  if (value.length < 32) {
+    throw new Error("CONSOLE_SETUP_TOKEN must be at least 32 characters.");
+  }
+  return value;
 }
 
 export type ConsoleOriginValidationInput = {

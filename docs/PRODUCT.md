@@ -1012,6 +1012,10 @@ default.
 - Personal computer deployments listen only on `127.0.0.1` by default. Server
   deployments can explicitly configure the listen address.
 - LAN or public access is allowed only after explicit user configuration.
+- Docker Compose requires `MASTER_KEY`, `POSTGRES_PASSWORD`, and
+  `CONSOLE_SETUP_TOKEN`; no public default secret is acceptable for deployment.
+- Compose host-published Gateway, Console, and Postgres ports bind to
+  `127.0.0.1` by default and each has an independent publish-host override.
 - Console mutating requests require an `Origin` header that exactly matches the
   configured public Console origin. Reverse proxy deployments must set
   `CONSOLE_PUBLIC_BASE_URL`; forwarded headers are not trusted to infer it.
@@ -1022,9 +1026,13 @@ default.
 Console must support access control, especially for server or public
 deployments.
 
-- Local localhost mode may allow passwordless first-run setup.
+- Local localhost mode may allow password-only first-run setup without a setup
+  token.
 - Non-localhost listeners must enable Console login.
 - Admin password setup is supported.
+- Fresh non-loopback Console setup requires a configured `CONSOLE_SETUP_TOKEN`
+  of at least 32 characters. Without it, setup is locked and setup POSTs return
+  503. Wrong tokens return 403, and already-initialized setup returns 409.
 - Public access can be disabled.
 - Setup, login, logout, and authenticated Console API mutations use the same
   Origin guard. Safe methods such as GET and HEAD do not perform CSRF checks.

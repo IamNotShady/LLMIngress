@@ -296,6 +296,17 @@
       "evidence": "2026-07-10: TDD red->green. Added shared Console Origin guard for all mutating routes including setup/login/logout, CONSOLE_PUBLIC_BASE_URL exact-origin matching, explicit ConsoleOperationError validation/not_found/conflict mapping, generic internal_error responses with errorId, stable config-import validation code, and static coverage that direct Console JSON errors include code. Focused unit+E2E, pnpm run verify, and pnpm run verify:features passed; the final optimized E2E batch hit a v1-gateway-routing activity-row flake, fallback re-ran all 40 passing features successfully."
     },
     {
+      "id": "console-secure-bootstrap",
+      "name": "Console Secure Bootstrap",
+      "description": "Production Compose requires MASTER_KEY, POSTGRES_PASSWORD, and CONSOLE_SETUP_TOKEN without public defaults; host-published Console, Gateway, and Postgres ports bind 127.0.0.1 by default with explicit publish-host overrides. Fresh non-loopback Console setup requires a 32+ character setup token, loopback direct runs keep password-only setup, missing non-loopback token locks setup with 503, wrong tokens return 403, initialized setup returns 409, admin creation is race-safe, and production startup rejects the old public default master key unless an explicit insecure compatibility flag is set.",
+      "verification": "pnpm exec vitest run tests/features/console-secure-bootstrap.unit.test.ts && pnpm test:e2e tests/e2e/console-secure-bootstrap.e2e.spec.ts",
+      "dependencies": [
+        "console-request-security-contract"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Compose now requires MASTER_KEY, POSTGRES_PASSWORD, and CONSOLE_SETUP_TOKEN with no public defaults, binds published Gateway/Console/Postgres ports to 127.0.0.1 unless explicit publish-host variables are set, and keeps container listeners on 0.0.0.0. Console setup mode keeps loopback password-only setup, locks non-loopback setup without token at 503, requires 32+ character tokens with wrong-token 403, returns 409 after initialization, and admin creation remains race-safe. Production startup rejects the old public default master key unless LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY=true records a high-priority warning. Focused unit+E2E, v1 release guard E2E, pnpm run verify, and pnpm run verify:features passed; final optimized E2E batch hit a v1-gateway-routing activity-row flake, fallback re-ran all 41 passing features successfully."
+    },
+    {
       "id": "console-sections-split",
       "name": "Console Sections Split",
       "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",

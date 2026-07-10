@@ -5,7 +5,18 @@
 - Date: 2026-07-10
 - Branch: `codex/high-priority-hardening`
 - Base: `9a80b4b8`
-- Status: High-priority hardening plan restarted from clean HEAD. Feature 1 `console-request-security-contract` is implemented and verified; feature 2 has not started.
+- Status: High-priority hardening plan restarted from clean HEAD. Features 1-2 are implemented and verified; feature 3 has not started.
+
+## 2026-07-10 High Priority Hardening 2 - Console Secure Bootstrap
+
+- Removed public Compose defaults for `MASTER_KEY`, `POSTGRES_PASSWORD`, and `CONSOLE_SETUP_TOKEN`; Compose now fails config resolution when they are absent.
+- Host-published Compose ports for Gateway, Console, and Postgres bind `127.0.0.1` by default through independent publish-host variables, while container-internal Gateway/Console listeners remain `0.0.0.0`.
+- Added shared Console setup mode handling: loopback direct runs keep password-only setup, configured setup tokens require at least 32 characters, and non-loopback setup without a token renders `Setup locked` and returns 503 on setup POST.
+- Setup POST now checks initialized state before token validation, returns 403 for wrong tokens, and returns 409 for already-initialized setup; concurrent admin creation remains race-safe through the insert conflict path.
+- Production startup now rejects the old public default `MASTER_KEY=test-master-key-change-me` unless `LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY=true` is explicitly set, in which case Gateway/Console/Worker log a high-priority security warning.
+- Updated `.env.example`, README, PRODUCT, and ARCHITECTURE with URL-safe random generation commands, public-origin/setup-token notes, and publish-host behavior.
+- Verification passed: `pnpm exec vitest run tests/features/console-secure-bootstrap.unit.test.ts`, `pnpm test:e2e tests/e2e/console-secure-bootstrap.e2e.spec.ts`, focused release guard unit/E2E, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`, `pnpm run verify`, and `pnpm run verify:features`.
+- Note: final optimized `verify:features` E2E batch hit the known `v1-gateway-routing` activity-row timing flake; fallback re-ran all 41 passing feature verifications successfully.
 
 ## 2026-07-10 High Priority Hardening 1 - Console Request Security Contract
 

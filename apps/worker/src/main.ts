@@ -28,6 +28,7 @@ const logger = createLogger("worker");
 export async function startWorker() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
+  logBootstrapSecurityWarnings(config.securityWarnings);
   const jobRunner = createPostgresJobRunner({
     handlers: {
       model_refresh: createModelRefreshJobHandler({}),
@@ -66,6 +67,12 @@ export async function startWorker() {
       logger.info("[worker] stopped");
     },
   };
+}
+
+function logBootstrapSecurityWarnings(warnings: string[]): void {
+  for (const warning of warnings) {
+    logger.warn({ securityWarning: true }, warning);
+  }
 }
 
 function readWorkerId(): string {

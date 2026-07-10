@@ -1,4 +1,4 @@
-import { gatewayPublicBaseUrl } from "@llmingress/config";
+import { gatewayPublicBaseUrl, readConsoleSetupMode } from "@llmingress/config";
 import { readConsoleAuthState, sessionCookieName } from "@llmingress/db/console-auth";
 import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
 import {
@@ -9,7 +9,7 @@ import {
 } from "@llmingress/db/console-runtime";
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
-import { FirstRunSetup, Login } from "../_components/auth-screens";
+import { FirstRunSetup, Login, SetupLocked } from "../_components/auth-screens";
 import { Sidebar } from "../_components/sidebar";
 import { Topbar } from "../_components/topbar";
 
@@ -21,7 +21,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const authState = await readConsoleAuthState(cookieStore.get(sessionCookieName)?.value);
 
   if (authState === "setup") {
-    return <FirstRunSetup />;
+    const setupMode = readConsoleSetupMode();
+    if (setupMode.kind === "locked") {
+      return <SetupLocked />;
+    }
+    return <FirstRunSetup requiresSetupToken={setupMode.kind === "token_required"} />;
   }
   if (authState === "login") {
     return <Login />;

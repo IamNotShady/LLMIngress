@@ -1372,6 +1372,14 @@ configuration objects.
 
 - Gateway listens on `127.0.0.1` by default.
 - Console allows local access only by default.
+- Docker Compose keeps internal services listening on `0.0.0.0` for container
+  networking, but host-published Gateway, Console, and Postgres ports bind to
+  `127.0.0.1` unless their explicit publish-host variables are set.
+- Compose has no public defaults for `MASTER_KEY`, `POSTGRES_PASSWORD`, or
+  `CONSOLE_SETUP_TOKEN`; generate URL-safe random values before deployment.
+- Fresh non-loopback Console setup is locked unless `CONSOLE_SETUP_TOKEN` is
+  configured, and the submitted setup token must match before the admin password
+  is created.
 - Gateway, Console, and Worker can be started and supervised by one local
   supervisor or process manager.
 - V1 supports only one active Gateway process handling requests. Multiple

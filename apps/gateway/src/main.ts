@@ -193,6 +193,7 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 export async function startGateway() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
+  logBootstrapSecurityWarnings(config.securityWarnings);
   const configRuntime = createGatewayConfigRuntime({
     enableNotifications: gatewayConfigNotifications(),
     gatewayInstanceId: gatewayInstanceId(),
@@ -218,6 +219,12 @@ export async function startGateway() {
   process.once("SIGINT", () => {
     void shutdown();
   });
+}
+
+function logBootstrapSecurityWarnings(warnings: string[]): void {
+  for (const warning of warnings) {
+    logger.warn({ securityWarning: true }, warning);
+  }
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {

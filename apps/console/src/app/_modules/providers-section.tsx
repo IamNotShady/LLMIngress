@@ -5,7 +5,12 @@ import {
 } from "@llmingress/db/console-provider-keys";
 import { listConsoleProviderOAuthConnections } from "@llmingress/db/console-provider-oauth";
 import { listProviderTemplateSelectorGroups } from "@llmingress/db/console-provider-templates";
-import { type ConsoleProvider, listProviders } from "@llmingress/db/console-providers";
+import {
+  type ConsoleProvider,
+  getProviderDependencyImpact,
+  listProviders,
+  type ProviderDependencyImpact,
+} from "@llmingress/db/console-providers";
 import { listProviderModelOptions } from "@llmingress/db/console-route-policies";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref } from "../_lib/pagination";
@@ -350,11 +355,15 @@ function ProviderOAuthCreateDialog({
 
 function ProviderDeleteDialog({
   closeHref,
+  impact,
   provider,
 }: {
   closeHref: string;
+  impact: ProviderDependencyImpact;
   provider: ConsoleProvider;
 }) {
+  const hasBlockers = impact.routePolicies.length > 0 || impact.runningJobCount > 0;
+
   return (
     <>
       <div className="console-dialog-scrim" aria-hidden="true" />
@@ -365,20 +374,84 @@ function ProviderDeleteDialog({
         role="dialog"
       >
         <h2 id="provider-delete-title">Delete provider?</h2>
-        <p>This removes {provider.displayName} from the provider list.</p>
+        {hasBlockers ? (
+          <p>
+            {provider.displayName} cannot be deleted while active Route Policies or running jobs
+            still depend on it.
+          </p>
+        ) : (
+          <p>
+            This removes {provider.displayName} from the provider list and clears its credentials
+            and runtime health data.
+          </p>
+        )}
+        {impact.providerModels.length > 0 ? (
+          <div className="agent-delete-warning">
+            <p>Provider Models referenced by active Route Policies:</p>
+            <ul>
+              {impact.providerModels.map((model) => (
+                <li key={model.id}>
+                  {model.displayName} ({model.modelId})
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {impact.virtualModels.length > 0 ? (
+          <div className="agent-delete-warning">
+            <p>Virtual Models using this provider:</p>
+            <ul>
+              {impact.virtualModels.map((virtualModel) => (
+                <li key={virtualModel.id}>
+                  <a href="/routing">{virtualModel.name}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {impact.routePolicies.length > 0 ? (
+          <div className="agent-delete-warning">
+            <p>Route Policies to update first:</p>
+            <ul>
+              {impact.routePolicies.map((routePolicy) => (
+                <li key={routePolicy.id}>
+                  <a href="/routing">{routePolicy.virtualModelName}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {impact.agents.length > 0 ? (
+          <div className="agent-delete-warning">
+            <p>Agents affected by those Virtual Models:</p>
+            <ul>
+              {impact.agents.map((agent) => (
+                <li key={agent.id}>
+                  <a href={`/agents?selected=${agent.id}`}>{agent.name}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <p>
+          Cleanup impact: {impact.apiKeyCount} API keys, {impact.oauthConnectionCount} OAuth
+          connections, {impact.pendingJobCount} pending jobs, {impact.runningJobCount} running jobs.
+        </p>
         <div className="agent-delete-actions">
           <a className="agent-delete-cancel" href={closeHref}>
             <FlatIcon name="cancel" />
             <span>Cancel</span>
           </a>
-          <form action="/api/providers" method="post">
-            <input type="hidden" name="action" value="delete" />
-            <input type="hidden" name="id" value={provider.id} />
-            <button className="agent-delete-confirm" type="submit">
-              <FlatIcon name="delete" />
-              <span>Delete provider</span>
-            </button>
-          </form>
+          {hasBlockers ? null : (
+            <form action="/api/providers" method="post">
+              <input type="hidden" name="action" value="delete" />
+              <input type="hidden" name="id" value={provider.id} />
+              <button className="agent-delete-confirm" type="submit">
+                <FlatIcon name="delete" />
+                <span>Delete provider</span>
+              </button>
+            </form>
+          )}
         </div>
       </section>
     </>
@@ -498,6 +571,9 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       ? (providers.find((provider) => provider.id === providerDialog) ?? null)
       : null;
   const deleteDialogProvider = providers.find((provider) => provider.id === providerDelete) ?? null;
+  const deleteProviderImpact = deleteDialogProvider
+    ? await getProviderDependencyImpact({ providerId: deleteDialogProvider.id })
+    : null;
   const selectedProviderId = readSingleSearchParam(searchParams.selected);
   const selectedProvider =
     providers.find((provider) => provider.id === selectedProviderId) ??
@@ -557,7 +633,23 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
         />
       ) : null}
       {deleteDialogProvider ? (
-        <ProviderDeleteDialog closeHref={providerDeleteCloseHref} provider={deleteDialogProvider} />
+        <ProviderDeleteDialog
+          closeHref={providerDeleteCloseHref}
+          impact={
+            deleteProviderImpact ?? {
+              agents: [],
+              apiKeyCount: 0,
+              oauthConnectionCount: 0,
+              pendingJobCount: 0,
+              providerId: deleteDialogProvider.id,
+              providerModels: [],
+              routePolicies: [],
+              runningJobCount: 0,
+              virtualModels: [],
+            }
+          }
+          provider={deleteDialogProvider}
+        />
       ) : null}
       {editDialogProvider ? (
         <ProviderEditDialog

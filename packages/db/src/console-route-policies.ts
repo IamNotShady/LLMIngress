@@ -16,6 +16,7 @@ import {
   consoleValidationError,
 } from "./console-operation-error.ts";
 import { listProviderTemplateEndpointProtocols } from "./console-provider-templates.ts";
+import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
 export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
@@ -487,6 +488,7 @@ export async function createRoutePolicy(input: {
     description: `Create route policy ${input.routePolicy.virtualModelId}`,
     changes: [{ table: "route_policies", recordId: routePolicyId }],
     write: async (client) => {
+      await lockProvidersForProviderModels(client, input.routePolicy.providerModelIds);
       await assertVirtualModelExists(client, input.routePolicy.virtualModelId);
       await assertVirtualModelHasNoRoutePolicy(client, input.routePolicy.virtualModelId);
       await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
@@ -544,6 +546,7 @@ export async function updateRoutePolicy(input: {
     description: `Update route policy ${input.id}`,
     changes: [{ table: "route_policies", recordId: input.id }],
     write: async (client) => {
+      await lockProvidersForProviderModels(client, input.routePolicy.providerModelIds);
       const existing = await readRoutePolicyForUpdate(client, input.id);
       if (existing.virtual_model_id !== input.routePolicy.virtualModelId) {
         throw consoleConflictError(

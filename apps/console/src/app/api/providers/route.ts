@@ -71,6 +71,9 @@ export const POST = withConsoleAuth(async (request) => {
     if (verdict.status === 500) {
       return consoleActionErrorResponse(error, "Provider action failed.");
     }
+    if (action === "disable" || action === "delete") {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
     if (action === "create" || action === "createFromTemplate") {
       const redirectUrl = new URL("/providers", request.url);
       redirectUrl.searchParams.set("providerDialog", "new");

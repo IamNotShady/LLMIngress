@@ -307,6 +307,17 @@
       "evidence": "2026-07-10: TDD red->green. Compose now requires MASTER_KEY, POSTGRES_PASSWORD, and CONSOLE_SETUP_TOKEN with no public defaults, binds published Gateway/Console/Postgres ports to 127.0.0.1 unless explicit publish-host variables are set, and keeps container listeners on 0.0.0.0. Console setup mode keeps loopback password-only setup, locks non-loopback setup without token at 503, requires 32+ character tokens with wrong-token 403, returns 409 after initialization, and admin creation remains race-safe. Production startup rejects the old public default master key unless LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY=true records a high-priority warning. Focused unit+E2E, v1 release guard E2E, pnpm run verify, and pnpm run verify:features passed; final optimized E2E batch hit a v1-gateway-routing activity-row flake, fallback re-ran all 41 passing features successfully."
     },
     {
+      "id": "console-provider-dependency-guard",
+      "name": "Console Provider Dependency Guard",
+      "description": "Provider disable and delete are blocked when any active Route Policy references that provider's models. The dependency impact reports affected Provider Models, Route Policies, Virtual Models, Agents, and key/OAuth/job counts; Route Policy candidate writes and Provider mutations lock Providers in a stable sorted order. Provider deletion rechecks dependencies in-transaction, blocks running provider jobs, cancels pending provider jobs, soft-deletes Provider/Models, removes keys/OAuth/health runtime data, clears Activity/Fallback key IDs, preserves historical labels, and Gateway activity recording does not write dangling Provider API key IDs.",
+      "verification": "pnpm exec vitest run tests/features/console-provider-dependency-guard.unit.test.ts && pnpm test:e2e tests/e2e/console-provider-dependency-guard.e2e.spec.ts",
+      "dependencies": [
+        "console-secure-bootstrap"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Added ProviderDependencyImpact, transaction-time dependency rechecks, sorted Provider row locks for Provider mutations and Route Policy candidate writes, running-job delete blocker, pending provider-job cancellation, provider/model soft delete, key/OAuth/health runtime cleanup, Activity/Fallback key ID clearing, 0008 route_policy_candidates(provider_model_id) reverse lookup index, Gateway dangling provider_api_key_id filtering, structured delete/disable 409 JSON, and delete-dialog dependency blockers with no confirm button. Focused unit+E2E, pnpm run db:migrate:check, pnpm run verify, pre-mark pnpm run verify:features for the existing 41 passing features, and final pnpm run verify:features for all 42 passing features passed."
+    },
+    {
       "id": "console-sections-split",
       "name": "Console Sections Split",
       "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",

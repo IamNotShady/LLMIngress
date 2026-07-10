@@ -87,6 +87,12 @@ export async function recordCompletedGatewayRequestActivity(
   });
 
   await withPostgresTransaction(input.databaseUrl, async (client) => {
+    const safeRoute = await sanitizeGatewayRouteProviderApiKeys(client, loggingPolicy.route);
+    const safeLoggingPolicy = {
+      ...loggingPolicy,
+      route: safeRoute,
+    };
+
     await client.query(
       `
         insert into request_activity (
@@ -165,17 +171,17 @@ export async function recordCompletedGatewayRequestActivity(
         input.protocol,
         input.model,
         input.stream,
-        loggingPolicy.route?.routePolicyId ?? null,
-        loggingPolicy.route?.providerId ?? null,
-        loggingPolicy.route?.providerModelId ?? null,
-        JSON.stringify(loggingPolicy.route?.routeReason ?? {}),
-        JSON.stringify(loggingPolicy.requestMetadata),
-        JSON.stringify(loggingPolicy.responseMetadata),
-        loggingPolicy.route?.providerApiKeyId ?? null,
-        loggingPolicy.route?.providerApiKeyPrefix ?? null,
+        safeLoggingPolicy.route?.routePolicyId ?? null,
+        safeLoggingPolicy.route?.providerId ?? null,
+        safeLoggingPolicy.route?.providerModelId ?? null,
+        JSON.stringify(safeLoggingPolicy.route?.routeReason ?? {}),
+        JSON.stringify(safeLoggingPolicy.requestMetadata),
+        JSON.stringify(safeLoggingPolicy.responseMetadata),
+        safeLoggingPolicy.route?.providerApiKeyId ?? null,
+        safeLoggingPolicy.route?.providerApiKeyPrefix ?? null,
         completion.status,
         completion.errorCode,
-        loggingPolicy.errorMessage,
+        safeLoggingPolicy.errorMessage,
         completion.httpStatus,
         completion.latencyMs,
         input.startedAt.toISOString(),
@@ -185,7 +191,7 @@ export async function recordCompletedGatewayRequestActivity(
 
     await insertFallbackEvents(client, {
       activityId: input.activityId,
-      route: input.route,
+      route: safeLoggingPolicy.route,
       succeeded: completion.status === "succeeded",
     });
 
@@ -198,6 +204,67 @@ export async function recordCompletedGatewayRequestActivity(
       });
     }
   });
+}
+
+async function sanitizeGatewayRouteProviderApiKeys(
+  client: PostgresQueryClient,
+  route: GatewayRequestActivityRoute | undefined,
+): Promise<GatewayRequestActivityRoute | undefined> {
+  if (!route) {
+    return undefined;
+  }
+
+  const keyIds = collectProviderApiKeyIds(route);
+  if (keyIds.length === 0) {
+    return route;
+  }
+
+  const existingKeyIds = new Set(
+    (
+      await client.query<{ id: string }>(
+        `
+          select id::text
+          from provider_api_keys
+          where id = any($1::uuid[])
+        `,
+        [keyIds],
+      )
+    ).rows.map((row) => row.id),
+  );
+
+  return {
+    ...route,
+    providerApiKeyId:
+      route.providerApiKeyId && existingKeyIds.has(route.providerApiKeyId)
+        ? route.providerApiKeyId
+        : undefined,
+    fallbackAttempts: readFallbackFailedAttempts(route).map((attempt) => ({
+      ...attempt,
+      providerApiKeyId:
+        attempt.providerApiKeyId && existingKeyIds.has(attempt.providerApiKeyId)
+          ? attempt.providerApiKeyId
+          : undefined,
+    })),
+  };
+}
+
+function collectProviderApiKeyIds(route: GatewayRequestActivityRoute): string[] {
+  const keyIds = new Set<string>();
+  if (route.providerApiKeyId) {
+    keyIds.add(route.providerApiKeyId);
+  }
+  for (const attempt of readFallbackFailedAttempts(route)) {
+    if (attempt.providerApiKeyId) {
+      keyIds.add(attempt.providerApiKeyId);
+    }
+  }
+  return [...keyIds].sort();
+}
+
+function readFallbackFailedAttempts(route: GatewayRequestActivityRoute): FallbackFailedAttempt[] {
+  return Array.isArray(route.fallbackAttempts)
+    ? (route.fallbackAttempts as FallbackFailedAttempt[])
+    : [];
 }
 
 async function insertFallbackEvents(

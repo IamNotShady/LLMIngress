@@ -1,0 +1,2 @@
+create index if not exists idx_route_policy_candidates_provider_model_id
+on route_policy_candidates (provider_model_id);

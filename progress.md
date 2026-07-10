@@ -5,7 +5,17 @@
 - Date: 2026-07-10
 - Branch: `codex/high-priority-hardening`
 - Base: `9a80b4b8`
-- Status: High-priority hardening plan restarted from clean HEAD. Features 1-2 are implemented and verified; feature 3 has not started.
+- Status: High-priority hardening plan restarted from clean HEAD. Features 1-3 are implemented and verified; feature 4 has not started.
+
+## 2026-07-10 High Priority Hardening 3 - Console Provider Dependency Guard
+
+- Added `0008_provider_dependency_lookup.sql` with a reverse lookup index for `route_policy_candidates(provider_model_id)` and updated migration status guards.
+- Added `ProviderDependencyImpact` for affected Provider Models, Route Policies, Virtual Models, Agents, and API key/OAuth/pending/running job counts.
+- Provider disable/delete now lock Providers in stable sorted order and reject active Route Policy dependencies with `provider_dependency_conflict`; delete rechecks in the same transaction, blocks running provider jobs, cancels pending provider jobs, soft-deletes Provider/Models, removes key/OAuth/health runtime data, and clears Activity/Fallback key IDs.
+- Route Policy create/update locks Providers for candidate Provider Models before writing candidates, preventing dependency TOCTOU races with Provider deletion.
+- Gateway activity recording validates `provider_api_key_id` values before writing `request_activity` and `fallback_events`, preserving metadata snapshots while avoiding dangling deleted key UUIDs.
+- Provider delete API now returns structured 409 JSON for delete/disable conflicts, and the delete dialog shows real dependencies with links/counts while suppressing the confirm button when blockers exist.
+- Verification passed: `pnpm exec vitest run tests/features/console-provider-dependency-guard.unit.test.ts`, `pnpm test:e2e tests/e2e/console-provider-dependency-guard.e2e.spec.ts`, `pnpm run db:migrate:check`, `pnpm run lint:fix`, focused migration guard unit, `pnpm run verify`, pre-mark `pnpm run verify:features` for the existing 41 passing features, and final `pnpm run verify:features` for all 42 passing features.
 
 ## 2026-07-10 High Priority Hardening 2 - Console Secure Bootstrap
 

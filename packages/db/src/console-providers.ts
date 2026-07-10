@@ -34,6 +34,18 @@ export type ConsoleProvider = NormalizedProviderFormInput & {
   providerTemplateId: string | null;
 };
 
+export type ProviderDependencyImpact = {
+  agents: Array<{ id: string; name: string }>;
+  apiKeyCount: number;
+  oauthConnectionCount: number;
+  pendingJobCount: number;
+  providerId: string;
+  providerModels: Array<{ displayName: string; id: string; modelId: string }>;
+  routePolicies: Array<{ id: string; virtualModelId: string; virtualModelName: string }>;
+  runningJobCount: number;
+  virtualModels: Array<{ id: string; name: string }>;
+};
+
 type ProviderRow = {
   base_url: string | null;
   display_name: string;
@@ -42,6 +54,24 @@ type ProviderRow = {
   provider_key: string;
   provider_template_id: string | null;
   provider_type: ProviderType;
+};
+
+type ProviderDependencyImpactRow = {
+  agent_id: string | null;
+  agent_name: string | null;
+  provider_model_display_name: string;
+  provider_model_id: string;
+  provider_model_model_id: string;
+  route_policy_id: string;
+  virtual_model_id: string;
+  virtual_model_name: string;
+};
+
+type ProviderDependencyCountsRow = {
+  api_key_count: number;
+  oauth_connection_count: number;
+  pending_job_count: number;
+  running_job_count: number;
 };
 
 export function normalizeProviderFormInput(input: ProviderFormInput): NormalizedProviderFormInput {
@@ -129,6 +159,15 @@ export async function listProviders(databaseUrl?: string): Promise<ConsoleProvid
     );
     return result.rows.map(rowToConsoleProvider);
   });
+}
+
+export async function getProviderDependencyImpact(input: {
+  databaseUrl?: string;
+  providerId: string;
+}): Promise<ProviderDependencyImpact> {
+  return withClient(input.databaseUrl, async (client) =>
+    readProviderDependencyImpact(client, input.providerId),
+  );
 }
 
 export async function createProvider(input: {
@@ -315,6 +354,10 @@ export async function setProviderEnabled(input: {
     description: `${input.enabled ? "Enable" : "Disable"} provider ${input.id}`,
     changes: [{ table: "providers", recordId: input.id }],
     write: async (client) => {
+      await lockProvidersById(client, [input.id]);
+      if (!input.enabled) {
+        await assertProviderHasNoActiveRoutePolicyDependencies(client, input.id);
+      }
       const result = await client.query<ProviderRow>(
         `
           update providers
@@ -346,6 +389,9 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
     description: `Delete provider ${input.id}`,
     changes: [{ table: "providers", recordId: input.id }],
     write: async (client) => {
+      await lockProvidersById(client, [input.id]);
+      await assertProviderHasNoActiveRoutePolicyDependencies(client, input.id);
+      await assertProviderHasNoRunningJobs(client, input.id);
       const result = await client.query<{ id: string }>(
         `
           update providers
@@ -363,6 +409,20 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
           providerId: input.id,
         });
       }
+      await client.query(
+        `
+          update jobs
+          set status = 'canceled',
+              updated_at = now(),
+              completed_at = now(),
+              error_code = 'provider_deleted',
+              error_message = 'Provider was deleted before the job started.'
+          where status = 'pending'
+            and job_type in ('provider_connectivity_check', 'model_refresh')
+            and payload->>'providerId' = $1
+        `,
+        [input.id],
+      );
       await client.query(
         `
           update request_activity
@@ -388,6 +448,9 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
         [input.id],
       );
       await client.query("delete from provider_api_keys where provider_id = $1", [input.id]);
+      await client.query("delete from provider_oauth where provider_id = $1", [input.id]);
+      await client.query("delete from provider_health_summary where provider_id = $1", [input.id]);
+      await client.query("delete from provider_health_events where provider_id = $1", [input.id]);
       await client.query(
         `
           update provider_models
@@ -400,6 +463,30 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
       );
     },
   });
+}
+
+export async function lockProvidersForProviderModels(
+  client: ConfigPublishClient,
+  providerModelIds: readonly string[],
+): Promise<void> {
+  if (providerModelIds.length === 0) {
+    return;
+  }
+  await client.query(
+    `
+      select providers.id::text
+      from providers
+      where providers.id in (
+        select distinct provider_models.provider_id
+        from provider_models
+        where provider_models.id = any($1::uuid[])
+      )
+        and providers.deleted_at is null
+      order by providers.id
+      for update of providers
+    `,
+    [providerModelIds],
+  );
 }
 
 function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
@@ -521,6 +608,178 @@ async function assertProviderKeyAvailable(
       providerKey,
     });
   }
+}
+
+async function lockProvidersById(
+  client: ConfigPublishClient,
+  providerIds: readonly string[],
+): Promise<void> {
+  const ids = [...new Set(providerIds)].sort();
+  if (ids.length === 0) {
+    return;
+  }
+  await client.query(
+    `
+      select id::text
+      from providers
+      where id = any($1::uuid[])
+        and deleted_at is null
+      order by id
+      for update
+    `,
+    [ids],
+  );
+}
+
+async function assertProviderHasNoActiveRoutePolicyDependencies(
+  client: ConfigPublishClient,
+  providerId: string,
+): Promise<void> {
+  const impact = await readProviderDependencyImpact(client, providerId);
+  if (impact.routePolicies.length > 0) {
+    throw consoleConflictError(
+      "Provider is still used by active route policies.",
+      "provider_dependency_conflict",
+      { impact },
+    );
+  }
+}
+
+async function assertProviderHasNoRunningJobs(
+  client: ConfigPublishClient,
+  providerId: string,
+): Promise<void> {
+  const impact = await readProviderDependencyImpact(client, providerId);
+  if (impact.runningJobCount > 0) {
+    throw consoleConflictError("Provider has running jobs.", "provider_job_running", { impact });
+  }
+}
+
+async function readProviderDependencyImpact(
+  client: ConfigPublishClient,
+  providerId: string,
+): Promise<ProviderDependencyImpact> {
+  const dependencyRows = (
+    await client.query<ProviderDependencyImpactRow>(
+      `
+        select provider_models.id::text as provider_model_id,
+               provider_models.model_id as provider_model_model_id,
+               provider_models.display_name as provider_model_display_name,
+               route_policies.id::text as route_policy_id,
+               virtual_models.id::text as virtual_model_id,
+               coalesce(nullif(virtual_models.description, ''), virtual_models.name) as virtual_model_name,
+               agents.id::text as agent_id,
+               agents.name as agent_name
+        from provider_models
+        join route_policy_candidates
+          on route_policy_candidates.provider_model_id = provider_models.id
+        join route_policies
+          on route_policies.id = route_policy_candidates.route_policy_id
+         and route_policies.deleted_at is null
+        join virtual_models
+          on virtual_models.id = route_policies.virtual_model_id
+         and virtual_models.deleted_at is null
+        left join agents
+          on agents.deleted_at is null
+         and agents.enabled = true
+         and (
+              agents.default_virtual_model_id = virtual_models.id
+              or exists (
+                select 1
+                from agent_virtual_models
+                where agent_virtual_models.agent_id = agents.id
+                  and agent_virtual_models.virtual_model_id = virtual_models.id
+              )
+         )
+        where provider_models.provider_id = $1
+          and provider_models.deleted_at is null
+        order by provider_models.display_name,
+                 route_policies.id,
+                 agents.name nulls last,
+                 agents.id nulls last
+      `,
+      [providerId],
+    )
+  ).rows;
+
+  const countRows = (
+    await client.query<ProviderDependencyCountsRow>(
+      `
+        select
+          (select count(*)::integer from provider_api_keys where provider_id = $1::uuid) as api_key_count,
+          (select count(*)::integer from provider_oauth where provider_id = $1::uuid) as oauth_connection_count,
+          (
+            select count(*)::integer
+            from jobs
+            where status = 'pending'
+              and job_type in ('provider_connectivity_check', 'model_refresh')
+              and payload->>'providerId' = $1::text
+          ) as pending_job_count,
+          (
+            select count(*)::integer
+            from jobs
+            where status = 'running'
+              and job_type in ('provider_connectivity_check', 'model_refresh')
+              and payload->>'providerId' = $1::text
+          ) as running_job_count
+      `,
+      [providerId],
+    )
+  ).rows[0] ?? {
+    api_key_count: 0,
+    oauth_connection_count: 0,
+    pending_job_count: 0,
+    running_job_count: 0,
+  };
+
+  return {
+    agents: uniqueBy(
+      dependencyRows
+        .filter((row) => row.agent_id && row.agent_name)
+        .map((row) => ({ id: row.agent_id ?? "", name: row.agent_name ?? "" })),
+      (row) => row.id,
+    ),
+    apiKeyCount: countRows.api_key_count,
+    oauthConnectionCount: countRows.oauth_connection_count,
+    pendingJobCount: countRows.pending_job_count,
+    providerId,
+    providerModels: uniqueBy(
+      dependencyRows.map((row) => ({
+        displayName: row.provider_model_display_name,
+        id: row.provider_model_id,
+        modelId: row.provider_model_model_id,
+      })),
+      (row) => row.id,
+    ),
+    routePolicies: uniqueBy(
+      dependencyRows.map((row) => ({
+        id: row.route_policy_id,
+        virtualModelId: row.virtual_model_id,
+        virtualModelName: row.virtual_model_name,
+      })),
+      (row) => row.id,
+    ),
+    runningJobCount: countRows.running_job_count,
+    virtualModels: uniqueBy(
+      dependencyRows.map((row) => ({
+        id: row.virtual_model_id,
+        name: row.virtual_model_name,
+      })),
+      (row) => row.id,
+    ),
+  };
+}
+
+function uniqueBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const value = key(item);
+    if (seen.has(value)) {
+      return false;
+    }
+    seen.add(value);
+    return true;
+  });
 }
 
 async function withClient<T>(

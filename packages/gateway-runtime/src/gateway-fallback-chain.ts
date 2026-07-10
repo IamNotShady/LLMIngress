@@ -71,8 +71,15 @@ export type FallbackAttemptErrorLike = {
   body?: unknown;
   errorCode: string;
   errorMessage: string;
+  failedBeforeFirstByte?: boolean;
   headers?: Record<string, string>;
+  retryable?: boolean;
   statusCode: number | null;
+};
+
+type FallbackFailureDecision = {
+  stopChain: boolean;
+  tryNextCredential: boolean;
 };
 
 export function buildFallbackExhaustionError(
@@ -111,6 +118,7 @@ export async function executeProviderFallbackAttempts<
   let attemptOrder = 0;
   for (const candidate of input.candidates) {
     const candidateFailedAttempts: FallbackFailedAttempt[] = [];
+    let stopChain = false;
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
       const result = await input.callProvider({ candidate, providerApiKey });
@@ -136,10 +144,21 @@ export async function executeProviderFallbackAttempts<
       input.fallbackAttempts.push(failedAttempt);
       candidateFailedAttempts.push(failedAttempt);
       await input.recordFailedAttempt?.(failedAttempt);
+
+      const decision = classifyFallbackFailure(result);
+      if (decision.stopChain) {
+        stopChain = true;
+        break;
+      }
+      if (!decision.tryNextCredential) {
+        break;
+      }
     }
 
-    if (candidateFailedAttempts.some((attempt) => !attempt.retryable)) {
+    if (candidateFailedAttempts.length > 0) {
       await recordCandidateHealthFailure(input, candidate, candidateFailedAttempts);
+    }
+    if (stopChain) {
       return undefined;
     }
   }
@@ -154,11 +173,12 @@ export function buildFallbackFailedAttempt(input: {
   result: FallbackAttemptErrorLike;
 }): FallbackFailedAttempt {
   const { statusCode } = input.result;
+  const failedBeforeFirstByte = input.result.failedBeforeFirstByte ?? statusCode === null;
   return {
     attemptOrder: input.attemptOrder,
     errorCode: input.result.errorCode,
     errorMessage: input.result.errorMessage,
-    failedBeforeFirstByte: statusCode === null,
+    failedBeforeFirstByte,
     ...(input.providerApiKey.providerApiKeyId
       ? { providerApiKeyId: input.providerApiKey.providerApiKeyId }
       : {}),
@@ -166,9 +186,31 @@ export function buildFallbackFailedAttempt(input: {
       ? { providerApiKeyPrefix: input.providerApiKey.keyPrefix }
       : {}),
     providerModelId: input.providerModelId,
-    retryable: statusCode === null || statusCode === 429 || statusCode >= 500,
+    retryable: isFallbackAttemptRetryable(input.result),
     statusCode,
   };
+}
+
+function classifyFallbackFailure(result: FallbackAttemptErrorLike): FallbackFailureDecision {
+  if (result.errorCode === "provider_redirect_rejected") {
+    return { stopChain: true, tryNextCredential: false };
+  }
+
+  const { statusCode } = result;
+  if (statusCode === null) {
+    return { stopChain: false, tryNextCredential: false };
+  }
+  if (statusCode === 401 || statusCode === 402 || statusCode === 403 || statusCode === 429) {
+    return { stopChain: false, tryNextCredential: true };
+  }
+  if (statusCode >= 400 && statusCode < 600) {
+    return { stopChain: false, tryNextCredential: false };
+  }
+  return { stopChain: true, tryNextCredential: false };
+}
+
+function isFallbackAttemptRetryable(result: FallbackAttemptErrorLike): boolean {
+  return !classifyFallbackFailure(result).stopChain;
 }
 
 export function readFallbackProviderApiKeys(

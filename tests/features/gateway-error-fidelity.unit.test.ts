@@ -151,7 +151,7 @@ describe("gateway error fidelity", () => {
           if (authorization?.includes("bad-retry-key")) {
             return new Response(JSON.stringify({ error: { message: "retry me" } }), {
               headers: { "content-type": "application/json" },
-              status: 500,
+              status: 401,
             });
           }
           return new Response(

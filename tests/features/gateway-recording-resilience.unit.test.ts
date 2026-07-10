@@ -315,6 +315,7 @@ describe("gateway recording resilience", () => {
         fallbackCandidate({ providerModelId: "provider-model-2" }),
       ],
       fallbackAttempts,
+      recordHealthEvent: vi.fn(),
       requestId: "req-1",
     });
 

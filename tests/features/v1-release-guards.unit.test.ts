@@ -33,6 +33,7 @@ const allowedFeatureIds = [
   "console-secure-bootstrap",
   "console-provider-dependency-guard",
   "provider-authenticated-http-safety",
+  "gateway-fallback-health",
   "console-sections-split",
   "refactor-route-strategy-registry",
   "refactor-notification-transport-registry",

@@ -5,7 +5,18 @@
 - Date: 2026-07-10
 - Branch: `codex/high-priority-hardening`
 - Base: `9a80b4b8`
-- Status: High-priority hardening plan restarted from clean HEAD. Features 1-4 are implemented and verified; feature 5 has not started.
+- Status: High-priority hardening plan restarted from clean HEAD. Features 1-5 are implemented and verified; feature 6 has not started.
+
+## 2026-07-10 High Priority Hardening 5 - Gateway Fallback Health
+
+- Unified JSON and Streaming Provider fallback semantics behind `executeProviderFallbackAttempts`.
+- Added shared classification for credential retry versus candidate fallback: 401/402/403/429 try the same candidate's next credential before moving to the next candidate; other 4xx, 5xx, timeout, network, and first-byte failures skip remaining credentials and move to the next candidate.
+- Refactored Streaming provider execution so fetch, HTTP error handling, and first-byte read-ahead run through the shared attempt executor; a Streaming candidate only succeeds after the first provider chunk is read.
+- Failed candidates now record exactly one Provider-level and one Model-level health decision through the shared executor path; recognized client bad-request/unsupported-parameter failures still fall back but do not pollute health.
+- Preserved final Provider error fidelity by keeping last-provider status/body passthrough for exhausted 4xx and safe Gateway errors for network/5xx/redirect cases.
+- Added fake-provider `unsupported-parameter` mode plus feature unit coverage for 401 credential retry, 5xx credential skipping with health, recognized 400 fallback without health, and Streaming executor ownership.
+- Added real Gateway E2E for JSON unsupported-parameter fallback without health records and Streaming first-byte failure fallback with Provider+Model health records.
+- Verification passed: `pnpm exec vitest run tests/features/gateway-fallback-health.unit.test.ts`, `pnpm test:e2e tests/e2e/gateway-fallback-health.e2e.spec.ts`, related Gateway unit/E2E regression, `pnpm run lint`, `pnpm run typecheck`, `pnpm run verify`, pre-mark `pnpm run verify:features` for the existing 43 passing features, and final `pnpm run verify:features` for all 44 passing features.
 
 ## 2026-07-10 High Priority Hardening 4 - Provider Authenticated HTTP Safety
 

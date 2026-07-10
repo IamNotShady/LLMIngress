@@ -329,6 +329,17 @@
       "evidence": "2026-07-10: TDD red->green. Added shared credential-bearing Provider HTTP helper with redirect: manual and ProviderRedirectRejectedError; OpenAI, Anthropic, subscription OAuth, model-list, connectivity probe, and Gateway streaming requests now reject 3xx as provider_redirect_rejected without following Location. Anthropic connectivity probes now use POST /v1/messages with x-api-key, anthropic-version 2023-06-01, max_tokens 1, and ping user message, without Bearer Authorization. Focused unit+E2E, provider descriptor/dialect regression, pnpm run typecheck, pnpm run verify, pre-mark pnpm run verify:features for the existing 42 passing features, and final pnpm run verify:features for all 43 passing features passed."
     },
     {
+      "id": "gateway-fallback-health",
+      "name": "Gateway Fallback Health",
+      "description": "JSON and Streaming Provider fallback share one attempt executor. Streaming only succeeds after first-byte read-ahead. Provider failures before the first client byte can fall back: 401/402/403/429 try the same candidate's next credential before moving to the next candidate; other 4xx, 5xx, timeout, network, and first-byte failures skip remaining credentials and move to the next candidate. Each upstream call records one ordered FallbackFailedAttempt, failed candidates record exactly one Provider and Model health decision, recognized client bad-request or unsupported-parameter failures do not pollute health, and failures after the first client byte are not replayed.",
+      "verification": "pnpm exec vitest run tests/features/gateway-fallback-health.unit.test.ts && pnpm test:e2e tests/e2e/gateway-fallback-health.e2e.spec.ts",
+      "dependencies": [
+        "provider-authenticated-http-safety"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-10: TDD red->green. Unified JSON and Streaming fallback semantics behind executeProviderFallbackAttempts, added credential-vs-candidate retry classification, made failed candidates record health exactly once through the shared path, skipped health pollution for recognized client bad-request/unsupported-parameter failures, and refactored Streaming provider fetch/HTTP/read-ahead handling to use the shared attempt executor before committing first bytes. Added unit coverage for 401 credential retry, 5xx credential skipping plus health, recognized 400 fallback without health, and static Streaming executor ownership; added real Gateway E2E for JSON unsupported-parameter fallback without health and Streaming first-byte failure fallback with Provider+Model health records. Focused unit+E2E, related Gateway unit/E2E regression, lint, typecheck, pnpm run verify, pre-mark pnpm run verify:features for the existing 43 passing features, and final pnpm run verify:features for all 44 passing features passed."
+    },
+    {
       "id": "console-sections-split",
       "name": "Console Sections Split",
       "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",

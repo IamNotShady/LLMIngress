@@ -14,6 +14,12 @@ const bootstrapConfigFileSchema = z.object({
 
 export type BootstrapConfigFile = z.infer<typeof bootstrapConfigFileSchema>;
 
+const bootstrapDatabaseUrlConfigFileSchema = z.object({
+  databaseUrl: optionalStringField("databaseUrl"),
+});
+
+export type BootstrapDatabaseUrlConfigFile = z.infer<typeof bootstrapDatabaseUrlConfigFileSchema>;
+
 function portLikeValue(name: string) {
   return z
     .custom<number | string>((value) => typeof value === "number" || typeof value === "string", {
@@ -75,6 +81,21 @@ export function readBootstrapConfigFile(path: string): BootstrapConfigFile {
     const parsed = bootstrapConfigFileSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
     if (!parsed.success) {
       throw new Error(parsed.error.issues[0]?.message ?? "bootstrap config file is invalid");
+    }
+    return parsed.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`LLMINGRESS_BOOTSTRAP_CONFIG could not be read: ${message}`);
+  }
+}
+
+export function readBootstrapDatabaseUrlConfigFile(path: string): BootstrapDatabaseUrlConfigFile {
+  try {
+    const parsed = bootstrapDatabaseUrlConfigFileSchema.safeParse(
+      JSON.parse(readFileSync(path, "utf8")),
+    );
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? "bootstrap databaseUrl is invalid");
     }
     return parsed.data;
   } catch (error) {

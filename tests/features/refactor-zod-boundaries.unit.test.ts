@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { readBootstrapConfigFile } from "../../packages/config/src/index.ts";
+import { readPostgresDatabaseUrl } from "../../packages/db/src/client.ts";
 import { normalizeRoutePreviewInput } from "../../packages/db/src/console-route-preview.ts";
 
 function writeTempConfig(content: string): string {
@@ -36,6 +37,11 @@ describe("refactor-zod-boundaries", () => {
         usesTools: false,
       }),
     ).toThrow("Route preview requires virtualModelId or virtualModelName.");
+    expect(() =>
+      normalizeRoutePreviewInput({
+        virtualModelId: "",
+      }),
+    ).toThrow("virtualModelId must be a non-empty string.");
     expect(() =>
       normalizeRoutePreviewInput({
         estimatedInputTokens: Number.NaN,
@@ -74,6 +80,22 @@ describe("refactor-zod-boundaries", () => {
 
   it("rejects a bootstrap config file with wrongly typed fields", () => {
     const path = writeTempConfig('{ "masterKey": 123 }');
+    expect(() => readBootstrapConfigFile(path)).toThrow(
+      /LLMINGRESS_BOOTSTRAP_CONFIG could not be read/,
+    );
+  });
+
+  it("lets the database URL reader ignore unrelated malformed bootstrap fields", () => {
+    const databaseUrl = "postgresql://postgres:postgres@127.0.0.1:55432/postgres";
+    const path = writeTempConfig(
+      JSON.stringify({
+        databaseUrl,
+        gatewayPort: null,
+        masterKey: 12345,
+      }),
+    );
+
+    expect(readPostgresDatabaseUrl({ configFilePath: path, env: {} })).toBe(databaseUrl);
     expect(() => readBootstrapConfigFile(path)).toThrow(
       /LLMINGRESS_BOOTSTRAP_CONFIG could not be read/,
     );

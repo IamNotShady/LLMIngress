@@ -821,6 +821,15 @@
 - Implementation complete; waiting for human review before merging back to `dev`.
 - Blockers: none open.
 
+## 2026-07-10 Architecture Hardening Merge-Readiness Repairs
+
+- Fixed DB bootstrap URL resolution: `readPostgresDatabaseUrl` now reads only `databaseUrl` from `LLMINGRESS_BOOTSTRAP_CONFIG`; full runtime bootstrap config parsing remains strict for Gateway/Console/Worker startup.
+- Fixed route-preview validation ordering: blank `virtualModelId` now reports the id error before missing token fields, and the duplicate unreachable schema refine was removed.
+- Fixed `refactor-shared-logger` shared E2E mapping: release guard and `feature_list.json` now point to `tests/e2e/v1-gateway-routing.e2e.spec.ts`.
+- Deferred debt: provider descriptor/template duplicate facts, worker-runtime's unused logging dependency, compatibility re-exports with no direct consumers, repeated `listSourceFiles` test helpers, and small zod helper duplication.
+- Verification passed: `pnpm exec vitest run tests/features/refactor-zod-boundaries.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` with all 39 passing features re-verified.
+- Blockers: none open.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

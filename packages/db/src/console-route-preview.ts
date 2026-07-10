@@ -73,20 +73,16 @@ export async function previewRoutePolicy(input: {
   };
 }
 
-const routePreviewInputSchema = z
-  .object({
-    estimatedInputTokens: nonNegativeFiniteNumber("estimatedInputTokens"),
-    estimatedOutputTokens: nonNegativeFiniteNumber("estimatedOutputTokens"),
-    taskType: optionalRouteTaskType(),
-    usesTools: z.custom<boolean>((value) => typeof value === "boolean", {
-      message: "usesTools must be a boolean.",
-    }),
-    virtualModelId: optionalNonEmptyText("virtualModelId"),
-    virtualModelName: optionalNonEmptyText("virtualModelName"),
-  })
-  .refine((value) => value.virtualModelId !== undefined || value.virtualModelName !== undefined, {
-    message: "Route preview requires virtualModelId or virtualModelName.",
-  });
+const routePreviewInputSchema = z.object({
+  virtualModelId: optionalNonEmptyText("virtualModelId"),
+  virtualModelName: optionalNonEmptyText("virtualModelName"),
+  estimatedInputTokens: nonNegativeFiniteNumber("estimatedInputTokens"),
+  estimatedOutputTokens: nonNegativeFiniteNumber("estimatedOutputTokens"),
+  taskType: optionalRouteTaskType(),
+  usesTools: z.custom<boolean>((value) => typeof value === "boolean", {
+    message: "usesTools must be a boolean.",
+  }),
+});
 
 export function normalizeRoutePreviewInput(input: unknown): RoutePreviewInput {
   if (!isRecord(input)) {

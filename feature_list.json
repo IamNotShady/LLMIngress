@@ -383,7 +383,7 @@
         "refactor-config-ownership"
       ],
       "status": "passing",
-      "evidence": "2026-07-09: TDD red->green. Route preview input and bootstrap config file parsing now use zod schemas while preserving legacy preview validation messages, and Console JSON routes type parsed bodies as unknown. New E2E covers the authenticated invalid-preview boundary response. Focused unit, focused E2E, pnpm run lint, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 33 passing features re-verified."
+      "evidence": "2026-07-09: TDD red->green. Route preview input and bootstrap config file parsing now use zod schemas while preserving legacy preview validation messages, and Console JSON routes type parsed bodies as unknown. New E2E covers the authenticated invalid-preview boundary response. Focused unit, focused E2E, pnpm run lint, pnpm run typecheck, pnpm run verify, and pnpm run verify:features passed with all 33 passing features re-verified. 2026-07-10 merge-readiness repair: DB URL resolution now parses only bootstrap databaseUrl so malformed unrelated runtime fields do not break database clients, full runtime bootstrap parsing remains strict, and route preview validates blank virtualModelId before token fields. Focused zod/release-guard unit, v1-gateway-routing E2E, pnpm run verify, and pnpm run verify:features passed with all 39 passing features re-verified."
     },
     {
       "id": "refactor-branded-ids",
@@ -412,12 +412,12 @@
       "id": "refactor-shared-logger",
       "name": "Shared Pino Logger",
       "description": "A packages/logging pino wrapper owns structured logging, every bare console.log/error/warn call in apps and packages source is replaced with component loggers, and Biome suspicious/noConsole blocks regressions.",
-      "verification": "pnpm exec vitest run tests/features/refactor-shared-logger.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "verification": "pnpm exec vitest run tests/features/refactor-shared-logger.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
       "dependencies": [
-        "v1-worker-ops"
+        "v1-gateway-routing"
       ],
       "status": "passing",
-      "evidence": "2026-07-09: TDD red->green. Added packages/logging as a shared pino wrapper, replaced bare console.log/error/warn calls in apps and packages source with component loggers, and enabled Biome suspicious/noConsole with tests override coverage. Existing db pool logging coverage was updated to the shared logger contract. Focused unit, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 37 passing features re-verified."
+      "evidence": "2026-07-09: TDD red->green. Added packages/logging as a shared pino wrapper, replaced bare console.log/error/warn calls in apps and packages source with component loggers, and enabled Biome suspicious/noConsole with tests override coverage. Existing db pool logging coverage was updated to the shared logger contract. Focused unit, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 37 passing features re-verified. 2026-07-10 merge-readiness repair: shared E2E mapping now protects the gateway routing surface touched by logger call sites. Focused zod/release-guard unit, v1-gateway-routing E2E, pnpm run verify, and pnpm run verify:features passed with all 39 passing features re-verified."
     },
     {
       "id": "console-section-data-split",

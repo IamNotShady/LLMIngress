@@ -1,4 +1,4 @@
-import { readBootstrapConfigFile } from "@llmingress/config";
+import { readBootstrapDatabaseUrlConfigFile } from "@llmingress/config";
 import { createLogger } from "@llmingress/logging";
 import { Client, type ClientConfig, Pool } from "pg";
 
@@ -39,7 +39,7 @@ const postgresPools = new Map<string, Pool>();
 export function readPostgresDatabaseUrl(options: ReadPostgresDatabaseUrlOptions = {}): string {
   const env = options.env ?? process.env;
   const configFilePath = options.configFilePath ?? env.LLMINGRESS_BOOTSTRAP_CONFIG;
-  const fileConfig = configFilePath ? readBootstrapConfigFile(configFilePath) : {};
+  const fileConfig = configFilePath ? readBootstrapDatabaseUrlConfigFile(configFilePath) : {};
   const databaseUrl = env.DATABASE_URL ?? fileConfig.databaseUrl;
 
   if (!databaseUrl?.trim()) {

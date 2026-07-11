@@ -240,7 +240,7 @@ pre { margin: 0; }
   border-block: 1px solid var(--line-soft);
   padding-block: var(--s-16);
 }
-.pain h3 {
+.pain h2 {
   font-size: clamp(1.25rem, 1rem + 1.2vw, 1.625rem);
   max-width: 30ch; margin-bottom: var(--s-12);
 }
@@ -735,7 +735,7 @@ pre { margin: 0; }
 <!-- ================= pain strip ================= -->
 <section class="pain" aria-labelledby="pain-h">
   <div class="wrap">
-    <h3 id="pain-h">Running three agents shouldn’t feel like running three billing departments.</h3>
+    <h2 id="pain-h">Running three agents shouldn’t feel like running three billing departments.</h2>
     <div class="pain-row">
       <div class="pain-item">
         <span class="pain-code">KEY_SPRAWL</span>
@@ -1159,43 +1159,76 @@ docker compose up --build</pre>
 </main>
 
 <script>
-/* tabs */
+/* tabs (click + arrow keys per ARIA tabs pattern) */
 document.querySelectorAll('[role="tablist"]').forEach(function (list) {
-  var tabs = list.querySelectorAll('[role="tab"]');
-  tabs.forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      tabs.forEach(function (t) {
-        t.setAttribute('aria-selected', String(t === tab));
-        var panel = document.getElementById(t.getAttribute('aria-controls'));
-        if (panel) panel.hidden = t !== tab;
-      });
-      var copyBtn = list.parentElement.querySelector('.copy-btn');
-      if (copyBtn) copyBtn.dataset.copyTarget = tab.getAttribute('aria-controls');
+  var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+  function select(tab) {
+    tabs.forEach(function (t) {
+      t.setAttribute('aria-selected', String(t === tab));
+      t.tabIndex = t === tab ? 0 : -1;
+      var panel = document.getElementById(t.getAttribute('aria-controls'));
+      if (panel) panel.hidden = t !== tab;
+    });
+    var copyBtn = list.parentElement.querySelector('.copy-btn');
+    if (copyBtn) copyBtn.dataset.copyTarget = tab.getAttribute('aria-controls');
+  }
+  tabs.forEach(function (tab, i) {
+    tab.tabIndex = tab.getAttribute('aria-selected') === 'true' ? 0 : -1;
+    tab.addEventListener('click', function () { select(tab); });
+    tab.addEventListener('keydown', function (e) {
+      var next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null;
+      if (next === null) return;
+      e.preventDefault();
+      var target = tabs[(next + tabs.length) % tabs.length];
+      target.focus();
+      select(target);
     });
   });
 });
 
-/* copy buttons */
+/* copy buttons (clipboard API with execCommand fallback) */
 document.querySelectorAll('.copy-btn').forEach(function (btn) {
   var live = document.createElement('span');
   live.setAttribute('aria-live', 'polite');
   live.className = 'sr-live';
   btn.after(live);
+  function done() {
+    btn.textContent = 'copied';
+    live.textContent = 'Copied to clipboard';
+    setTimeout(function () { btn.textContent = 'copy'; live.textContent = ''; }, 1600);
+  }
+  function fallback(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* best effort */ }
+    ta.remove();
+    done();
+  }
   btn.addEventListener('click', function () {
     var pre = document.getElementById(btn.dataset.copyTarget);
     if (!pre) return;
-    navigator.clipboard.writeText(pre.textContent.trim()).then(function () {
-      btn.textContent = 'copied';
-      live.textContent = 'Copied to clipboard';
-      setTimeout(function () { btn.textContent = 'copy'; live.textContent = ''; }, 1600);
-    });
+    var text = pre.textContent.trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(text); });
+    } else {
+      fallback(text);
+    }
   });
 });
 
-/* close mobile menu on link click */
+/* close mobile menu on link click or outside click */
 document.querySelectorAll('.nav-menu .sheet a').forEach(function (a) {
   a.addEventListener('click', function () {
     a.closest('details').removeAttribute('open');
+  });
+});
+document.addEventListener('click', function (e) {
+  document.querySelectorAll('.nav-menu[open]').forEach(function (menu) {
+    if (!menu.contains(e.target)) menu.removeAttribute('open');
   });
 });
 </script>

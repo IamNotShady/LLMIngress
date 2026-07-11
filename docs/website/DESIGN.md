@@ -417,8 +417,14 @@ never reads as an empty list. Five items:
 - Topology SVG: `role="img"` + `<title>/<desc>` describing the routing story;
   decorative dots `aria-hidden`.
 - Keyboard: skip-link, visible `:focus-visible` rings (2px `--accent-bright`
-  offset 2px), tabs use `button` + `aria-selected`, FAQ is native disclosure.
-- Copy buttons announce state change (`Copied` text swap, `aria-live=polite`).
+  offset 2px), FAQ is native disclosure. Code tabs follow the ARIA tabs
+  pattern: `button` + `aria-selected`, roving tabindex, Arrow-key switching.
+- Heading order is strict (`h1` → section `h2` → `h3`); the pain-strip
+  headline is an `h2` styled smaller, not an `h3`.
+- Copy buttons announce state change (`Copied` text swap, `aria-live=polite`)
+  and fall back to `execCommand('copy')` when the Clipboard API is
+  unavailable or denied.
+- The mobile `Menu` disclosure closes on link click and on outside click.
 - Contrast per §3.1; status colors always paired with text labels.
 - `prefers-reduced-motion` honored (§3.4).
 

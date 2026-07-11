@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LLMIngress — One gateway for every AI agent</title>
 <meta name="description" content="LLMIngress is a self-hosted AI gateway. Point Codex, Claude Code, Cursor — any OpenAI-compatible agent — at one endpoint: automatic model routing, fallback, budgets, and cost tracking. Your machine, your keys.">
+<meta name="theme-color" content="#0e0c14">
+<meta property="og:title" content="LLMIngress — One gateway for every AI agent">
+<meta property="og:description" content="Self-hosted AI gateway: automatic model routing, fallback, budgets, and cost tracking for all your coding agents.">
+<meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e0c14'/%3E%3Crect x='10' y='10' width='44' height='44' rx='11' fill='%2318161f' stroke='%23755bd6' stroke-width='1.5'/%3E%3Crect x='16' y='27' width='13' height='11' rx='3.5' fill='%238b6cff'/%3E%3Crect x='31' y='16' width='11' height='12' rx='3.5' fill='%23393747'/%3E%3Crect x='31' y='36' width='11' height='12' rx='3.5' fill='%23393747'/%3E%3Crect x='42' y='27' width='12' height='11' rx='3.5' fill='%23393747'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -78,7 +82,9 @@ h1, h2, h3 {
   color: var(--text);
   margin: 0;
 }
-p { margin: 0; max-width: 62ch; }
+h2, h3 { text-wrap: balance; }
+p { margin: 0; max-width: 62ch; text-wrap: pretty; }
+section[id] { scroll-margin-top: 76px; }
 a { color: var(--text); text-decoration: none; }
 code, pre, .mono { font-family: var(--f-mono); font-variant-ligatures: none; }
 pre { margin: 0; }
@@ -171,7 +177,12 @@ pre { margin: 0; }
 .nav-menu .sheet a:hover { background: var(--surface-2); color: var(--text); }
 
 /* ============ hero ============ */
-.hero { padding-block: clamp(72px, 9vw, 128px) var(--section-pad); overflow: hidden; }
+.hero {
+  padding-block: clamp(72px, 9vw, 128px) var(--section-pad);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 46% 42% at 74% 34%, oklch(0.24 0.055 292 / 0.4), transparent 70%);
+}
 .hero-grid {
   display: grid; grid-template-columns: 6fr 5fr;
   gap: clamp(32px, 4vw, 56px); align-items: center;
@@ -215,8 +226,6 @@ pre { margin: 0; }
 .topo .core-socket { fill: oklch(0.32 0.06 292); }
 .topo .core-quiet { fill: var(--surface-2); }
 .topo .core-label { fill: var(--text); font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
-.topo .core-port { fill: var(--text-3); font-family: var(--f-mono); font-size: 11px; }
-.topo .caption { fill: var(--accent-bright); font-family: var(--f-mono); font-size: 11px; }
 .topo .dot-ok { fill: var(--ok); }
 .topo .pulse { fill: var(--accent-bright); }
 .topo-glow { filter: drop-shadow(0 0 22px oklch(0.63 0.19 292 / 0.45)); }
@@ -277,7 +286,11 @@ pre { margin: 0; }
   align-items: start;
 }
 .steps { display: flex; flex-direction: column; gap: var(--s-12); }
-.step { display: grid; grid-template-columns: 44px 1fr; gap: var(--s-4); }
+.step { display: grid; grid-template-columns: 44px 1fr; gap: var(--s-4); position: relative; }
+.step:not(:last-child)::after {
+  content: ""; position: absolute; left: 22px; top: 52px; bottom: -40px;
+  width: 1px; background: var(--line-soft);
+}
 .step-n {
   width: 44px; height: 44px; border-radius: var(--r-md);
   border: 1px solid var(--line);
@@ -639,9 +652,7 @@ pre { margin: 0; }
             <rect class="core-quiet" x="294" y="202" width="20" height="22" rx="7"/>
             <rect class="core-quiet" x="294" y="246" width="20" height="22" rx="7"/>
           </g>
-          <text class="core-label" x="280" y="312" text-anchor="middle">LLMIngress</text>
-          <text class="core-port" x="280" y="330" text-anchor="middle">:4000</text>
-          <text class="caption" x="280" y="356" text-anchor="middle">coding · ctx 12k → claude-sonnet-4-5</text>
+          <text class="core-label" x="280" y="314" text-anchor="middle">LLMIngress</text>
 
           <!-- traveling pulses (hidden when reduced motion) -->
           <g aria-hidden="true">
@@ -917,6 +928,9 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
           <div class="div" role="presentation"></div>
           <div class="kv pick"><span class="k">tier 1</span><span>deepseek-v3 <span class="tick">✓</span></span></div>
           <p class="fb">fallbacks:<br>qwen3-coder,<br>gpt-5-mini</p>
+          <div class="div" role="presentation"></div>
+          <div class="kv"><span class="k">latency</span><span>388 ms</span></div>
+          <div class="kv"><span class="k">cost</span><span>$0.0007</span></div>
         </div>
       </div>
 
@@ -973,7 +987,7 @@ docker compose up --build</pre>
       <p class="eyebrow"><b>05</b> FAQ</p>
       <h2 id="faq-h">Fair questions.</h2>
       <p class="lede">The things developers actually check before running
-        someone else's gateway.</p>
+        someone else’s gateway.</p>
     </div>
     <div class="faq-list">
       <details class="faq-item" open>

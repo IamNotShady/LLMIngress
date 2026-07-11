@@ -101,7 +101,10 @@ Type scale (ratio ~1.33, fluid on display sizes only):
 
 Eyebrow pattern: mono 13px, uppercase, letter-spacing 0.14em, `--text-3`,
 prefixed with a two-character index (`01`, `02`…) in `--accent-bright`.
-The hero is the exception: its eyebrow uses a `//` marker instead of an index.
+Unnumbered sections (hero, compatibility) use a `//` marker instead.
+
+Wrapping: `h2`/`h3` use `text-wrap: balance`, body copy uses
+`text-wrap: pretty` — no orphan words in headings or paragraph tails.
 
 ### 3.3 Spacing, Radius, Elevation
 
@@ -150,6 +153,8 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
 - Left: brand icon (24px, from `docs/brand/llmingress-icon.svg` geometry) +
   wordmark "LLMIngress" (Archivo 600).
 - Center-right: anchor links (Onest 15px, `--text-2`, hover `--text`).
+  Anchor targets carry `scroll-margin-top: 76px` so the sticky bar never
+  covers a section head.
 - Right: `GitHub ↗` ghost button (hairline border). Mobile ≤768px: links
   collapse into a single `Menu` disclosure (native `<details>`); GitHub button
   stays visible.
@@ -177,17 +182,18 @@ Right column — topology diagram (inline SVG, ~560×448):
 - Left rail: 5 agent chips — Codex, Claude Code, Cursor, OpenCode, Copilot
   (rounded rects, `--surface`, mono labels).
 - Center: gateway core — rounded square echoing the brand icon (dark panel,
-  violet inner slot, `--glow`), labeled `LLMIngress` + `:4000` in mono.
+  violet inner slot, `--glow`), labeled `LLMIngress` in mono.
 - Right rail: 5 provider chips — OpenAI, Anthropic, Google, OpenRouter,
   Ollama (`Ollama · local` gets a `--ok` dot).
 - Curved paths agent→core (violet-deep, 1.5px) and core→provider.
 - Story beat drawn into the diagram: the `Claude Code → core → Anthropic`
-  route is highlighted, with one mono caption line under the core:
-  `coding · ctx 12k → claude-sonnet-4-5` (violet). Captions stay off the
-  paths — labels never sit on top of a line. The fallback/429 story is told
-  in the Console showcase (§4.6) instead of the hero, keeping the diagram
-  clean.
+  route is highlighted. The diagram carries no explanatory text beyond chip
+  names and the core label — routing detail and the fallback/429 story are
+  told in the Console showcase (§4.6), keeping the hero clean.
 - Traveling dots per §3.4. Diagram framed in `--r-lg` panel with hairline.
+- A faint brand-hue radial (`oklch(0.24 0.055 292 / 0.4)`, 70% falloff) sits
+  behind the diagram side of the hero — the only background wash on the page,
+  echoing the icon's radial canvas.
 - Mobile: SVG scales to container width (`max-width: 100%; height: auto`),
   min legible width 340px content.
 
@@ -227,7 +233,8 @@ boxes, no icons.
 Eyebrow `02 — SETUP`. H2: **Three steps, one endpoint.** Two-column at
 ≥1024px: steps list left, code panel right (sticky within section).
 
-Steps (numbered 1–3, Archivo H3 + short body):
+Steps (numbered 1–3, Archivo H3 + short body; a 1px hairline connects the
+number badges vertically to express sequence):
 
 1. **Connect your providers.** Paste API keys for OpenAI, Anthropic, Google,
    OpenRouter — or point at local Ollama. Keys are encrypted and never shown
@@ -306,7 +313,8 @@ each a `--surface` panel with a mono title bar:
    (−62%)` with the baseline name in `--text-3`.
 3. **`route — reason`**: mono decision trace:
    `ctx_est: 9.4k · tools: yes · task: coding` → `tier 1: deepseek-v3 ✓`
-   plus `fallbacks: [qwen3-coder, gpt-5-mini]`.
+   plus `fallbacks: [qwen3-coder, gpt-5-mini]`, closed by result rows
+   `latency 388 ms · cost $0.0007` (matches the cursor row in panel 1).
 
 Data is fabricated but internally consistent (prices ≈ real per-1M rates).
 

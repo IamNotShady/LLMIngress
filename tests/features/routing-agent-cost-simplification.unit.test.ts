@@ -51,7 +51,7 @@ describe("routing, Agent, and cost simplification", () => {
   });
 
   it("stores endpoint protocol explicitly and removes retired database columns", () => {
-    const baseline = readFileSync("packages/db/migrations/0001_v1_baseline.sql", "utf8");
+    const baseline = readFileSync("packages/db/migrations/0001_core_baseline.sql", "utf8");
     expect(baseline).toContain("endpoint_protocol text NOT NULL");
     expect(baseline).not.toContain("route_policies_rules_object_check");
     for (const column of [

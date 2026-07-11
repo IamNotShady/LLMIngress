@@ -48,54 +48,9 @@ type AppliedMigrationRow = QueryResultRow & {
 
 export const shippedSqlMigrations: MigrationStatusMigration[] = [
   {
-    checksum: "52a6b63cae35d2ad7f1b3e434630381fb310cdfa75f9a0b14f863cf72efc8bcb",
+    checksum: "ad7a01ad865440fa73822362e27d68e3936620a477b060cf5cfc5fe79bf63ed8",
     id: "0001",
-    name: "v1_baseline",
-  },
-  {
-    checksum: "cec33c998433f2bac833da83f04e2481ef6e62419a46009a094c2dc6a3338fe2",
-    id: "0002",
-    name: "stale_concurrency_job_type",
-  },
-  {
-    checksum: "47e4a65b042b542c299d4adea4e4a800ad1bbb55ba8fb6c9ac1a0cd4ab2040b5",
-    id: "0003",
-    name: "remove_budget_reservations",
-  },
-  {
-    checksum: "fca15196f55bc1f33f83024bd5e0fa187d1874b230bc81081844c45261d79e7e",
-    id: "0004",
-    name: "relax_vocab_checks",
-  },
-  {
-    checksum: "6996ebfcbce4e4715d3019344a91627da8eaf209af693d3c74782d46670786f2",
-    id: "0005",
-    name: "drop_notification_deliveries",
-  },
-  {
-    checksum: "0e8ef3395df6a9c2583b9380542305717b6568d80ea248321d68323803430992",
-    id: "0006",
-    name: "fallback_single_source",
-  },
-  {
-    checksum: "d38214e38750137f340c0a8b4d0bff696d91a973b7e1b9cf3fe1132c587e094e",
-    id: "0007",
-    name: "drop_foreign_keys",
-  },
-  {
-    checksum: "559d7442ae3a9aaa2e14bb33157d0ce10abf17dfdb194bb9c286700948cfd406",
-    id: "0008",
-    name: "provider_dependency_lookup",
-  },
-  {
-    checksum: "3adabce6ff2f6f082f773441d3feab1781768fae218fb523218178b2c18dca93",
-    id: "0009",
-    name: "worker_delivery_leases",
-  },
-  {
-    checksum: "665ec0be6fb72c31078c9cb9051c81b026a29e29bee5b57b31563a75fec35de5",
-    id: "0010",
-    name: "provider_model_capabilities",
+    name: "core_baseline",
   },
 ];
 

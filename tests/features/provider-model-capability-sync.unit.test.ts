@@ -192,16 +192,13 @@ describe("provider model capability sync", () => {
     });
   });
 
-  it("ships migration 0010 for independent effective capability columns", () => {
-    const migration = readFileSync(
-      "packages/db/migrations/0010_provider_model_capabilities.sql",
-      "utf8",
-    );
+  it("ships independent effective capability columns in the core baseline", () => {
+    const migration = readFileSync("packages/db/migrations/0001_core_baseline.sql", "utf8");
 
-    expect(migration).toContain("rename column supports_tools to supports_function_calling");
     expect(migration).toContain("input_modalities text[]");
     expect(migration).toContain("output_modalities text[]");
     expect(migration).toContain("max_output_tokens integer");
+    expect(migration).toContain("supports_function_calling boolean");
     expect(migration).toContain("supports_reasoning boolean");
     expect(migration).toContain("provider_models_input_modalities_values_check");
     expect(migration).toContain("provider_models_output_modalities_values_check");

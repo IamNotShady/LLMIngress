@@ -389,7 +389,7 @@ describe("console dark restyle static contract", () => {
       "utf8",
     );
     const baselineMigration = readFileSync(
-      join(rootDir, "packages/db/migrations/0001_v1_baseline.sql"),
+      join(rootDir, "packages/db/migrations/0001_core_baseline.sql"),
       "utf8",
     );
 

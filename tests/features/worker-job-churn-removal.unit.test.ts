@@ -38,10 +38,7 @@ describe("Worker job churn removal", () => {
   });
 
   it("limits the final migrated jobs constraint to core job types", () => {
-    const migration = readFileSync(
-      "packages/db/migrations/0003_remove_budget_reservations.sql",
-      "utf8",
-    );
+    const migration = readFileSync("packages/db/migrations/0001_core_baseline.sql", "utf8");
     expect(migration).toContain("'model_refresh'");
     expect(migration).toContain("'provider_connectivity_check'");
     expect(migration).toContain("'price_sync'");

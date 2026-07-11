@@ -3,8 +3,8 @@
 --
 
 
--- Dumped from database version 16.14 (Debian 16.14-1.pgdg13+1)
--- Dumped by pg_dump version 16.14 (Debian 16.14-1.pgdg13+1)
+-- Dumped from database version 16.14
+-- Dumped by pg_dump version 16.14
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -34,10 +34,8 @@ CREATE TABLE public.agent_limits (
     enabled boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    alert_threshold numeric(20,6),
     enforcement_policy text DEFAULT 'block'::text NOT NULL,
     manual_bypass boolean DEFAULT false NOT NULL,
-    CONSTRAINT agent_limits_alert_threshold_check CHECK (((alert_threshold IS NULL) OR (alert_threshold > (0)::numeric))),
     CONSTRAINT agent_limits_concurrency_period_unit_check CHECK (((limit_type <> 'concurrency'::text) OR ((period = 'request'::text) AND (unit = 'requests'::text)))),
     CONSTRAINT agent_limits_enforcement_policy_check CHECK ((enforcement_policy = ANY (ARRAY['block'::text, 'warn_only'::text]))),
     CONSTRAINT agent_limits_limit_type_check CHECK ((limit_type = ANY (ARRAY['budget'::text, 'concurrency'::text, 'rpm'::text, 'tpm'::text, 'token'::text]))),
@@ -72,8 +70,7 @@ CREATE TABLE public.agents (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     integration_platform text DEFAULT 'other'::text NOT NULL,
-    deleted_at timestamp with time zone,
-    CONSTRAINT agents_integration_platform_check CHECK ((integration_platform = ANY (ARRAY['codex'::text, 'claude-code'::text, 'cursor'::text, 'opencode'::text, 'hermes'::text, 'openclaw'::text, 'github-copilot'::text, 'other'::text])))
+    deleted_at timestamp with time zone
 );
 
 
@@ -89,44 +86,12 @@ CREATE TABLE public.budget_periods (
     period_end timestamp with time zone NOT NULL,
     tokens_used bigint DEFAULT 0 NOT NULL,
     cost_used_usd numeric(20,8) DEFAULT 0 NOT NULL,
-    reserved_tokens bigint DEFAULT 0 NOT NULL,
-    reserved_cost_usd numeric(20,8) DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT budget_periods_check CHECK ((period_end > period_start)),
     CONSTRAINT budget_periods_cost_used_usd_check CHECK ((cost_used_usd >= (0)::numeric)),
     CONSTRAINT budget_periods_period_type_check CHECK ((period_type = ANY (ARRAY['hour'::text, 'day'::text, 'week'::text, 'month'::text]))),
-    CONSTRAINT budget_periods_reserved_cost_usd_check CHECK ((reserved_cost_usd >= (0)::numeric)),
-    CONSTRAINT budget_periods_reserved_tokens_check CHECK ((reserved_tokens >= 0)),
     CONSTRAINT budget_periods_tokens_used_check CHECK ((tokens_used >= 0))
-);
-
-
---
--- Name: budget_reservations; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.budget_reservations (
-    id uuid NOT NULL,
-    agent_id uuid NOT NULL,
-    budget_period_id uuid,
-    request_activity_id uuid,
-    status text NOT NULL,
-    reserved_input_tokens integer DEFAULT 0 NOT NULL,
-    reserved_output_tokens integer DEFAULT 0 NOT NULL,
-    reserved_cost_usd numeric(20,8) DEFAULT 0 NOT NULL,
-    actual_total_tokens integer,
-    actual_cost_usd numeric(20,8),
-    expires_at timestamp with time zone NOT NULL,
-    finalized_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT budget_reservations_actual_cost_usd_check CHECK (((actual_cost_usd IS NULL) OR (actual_cost_usd >= (0)::numeric))),
-    CONSTRAINT budget_reservations_actual_total_tokens_check CHECK (((actual_total_tokens IS NULL) OR (actual_total_tokens >= 0))),
-    CONSTRAINT budget_reservations_reserved_cost_usd_check CHECK ((reserved_cost_usd >= (0)::numeric)),
-    CONSTRAINT budget_reservations_reserved_input_tokens_check CHECK ((reserved_input_tokens >= 0)),
-    CONSTRAINT budget_reservations_reserved_output_tokens_check CHECK ((reserved_output_tokens >= 0)),
-    CONSTRAINT budget_reservations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'finalized'::text, 'released'::text, 'expired'::text])))
 );
 
 
@@ -207,29 +172,10 @@ CREATE TABLE public.fallback_events (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     provider_api_key_id uuid,
     provider_api_key_prefix text,
+    retryable boolean,
+    status_code integer,
     CONSTRAINT fallback_events_attempt_order_check CHECK ((attempt_order > 0)),
     CONSTRAINT fallback_events_status_check CHECK ((status = ANY (ARRAY['failed'::text, 'succeeded'::text, 'skipped'::text])))
-);
-
-
---
--- Name: gateway_runtime_status; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.gateway_runtime_status (
-    id uuid NOT NULL,
-    gateway_instance_id text NOT NULL,
-    status text NOT NULL,
-    applied_config_version integer,
-    target_config_version integer,
-    last_reload_status text,
-    last_reload_error text,
-    last_reload_at timestamp with time zone,
-    heartbeat_at timestamp with time zone DEFAULT now() NOT NULL,
-    started_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT gateway_runtime_status_last_reload_status_check CHECK (((last_reload_status IS NULL) OR (last_reload_status = ANY (ARRAY['pending'::text, 'succeeded'::text, 'failed'::text])))),
-    CONSTRAINT gateway_runtime_status_status_check CHECK ((status = ANY (ARRAY['starting'::text, 'ready'::text, 'degraded'::text, 'stopped'::text])))
 );
 
 
@@ -277,78 +223,10 @@ CREATE TABLE public.jobs (
     completed_at timestamp with time zone,
     CONSTRAINT jobs_attempt_count_check CHECK ((attempt_count >= 0)),
     CONSTRAINT jobs_check CHECK (((lease_owner IS NULL) = (lease_expires_at IS NULL))),
-    CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connectivity_check'::text, 'price_sync'::text, 'billing_reconciliation'::text, 'retention_cleanup'::text, 'stale_reservation_cleanup'::text, 'jsonl_export'::text, 'cost_report_export'::text, 'notification_dispatch'::text, 'webhook_export'::text, 'backup'::text, 'budget_threshold_alerts'::text, 'rate_limit_alerts'::text, 'provider_failure_alerts'::text, 'fallback_exhaustion_alerts'::text]))),
+    CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connectivity_check'::text, 'price_sync'::text]))),
     CONSTRAINT jobs_max_attempts_check CHECK ((max_attempts > 0)),
     CONSTRAINT jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'canceled'::text]))),
     CONSTRAINT jobs_trigger_check CHECK ((trigger = ANY (ARRAY['manual'::text, 'scheduled'::text, 'system'::text])))
-);
-
-
---
--- Name: notification_channels; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.notification_channels (
-    id uuid NOT NULL,
-    channel_type text NOT NULL,
-    display_name text NOT NULL,
-    enabled boolean DEFAULT true NOT NULL,
-    config jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT notification_channels_channel_type_check CHECK ((channel_type = ANY (ARRAY['email'::text, 'webhook'::text])))
-);
-
-
---
--- Name: notification_deliveries; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.notification_deliveries (
-    id uuid NOT NULL,
-    notification_event_id uuid NOT NULL,
-    channel_id uuid NOT NULL,
-    channel_type text NOT NULL,
-    attempt_number integer NOT NULL,
-    status text NOT NULL,
-    request_payload jsonb DEFAULT '{}'::jsonb NOT NULL,
-    response_status integer,
-    response_body text,
-    error_code text,
-    error_message text,
-    started_at timestamp with time zone NOT NULL,
-    completed_at timestamp with time zone NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT notification_deliveries_attempt_number_check CHECK ((attempt_number > 0)),
-    CONSTRAINT notification_deliveries_channel_type_check CHECK ((channel_type = ANY (ARRAY['email'::text, 'webhook'::text]))),
-    CONSTRAINT notification_deliveries_response_status_check CHECK (((response_status IS NULL) OR ((response_status >= 100) AND (response_status <= 599)))),
-    CONSTRAINT notification_deliveries_status_check CHECK ((status = ANY (ARRAY['sent'::text, 'failed'::text])))
-);
-
-
---
--- Name: notification_events; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.notification_events (
-    id uuid NOT NULL,
-    channel_id uuid NOT NULL,
-    event_type text NOT NULL,
-    subject text NOT NULL,
-    body text NOT NULL,
-    payload jsonb DEFAULT '{}'::jsonb NOT NULL,
-    status text NOT NULL,
-    attempt_count integer DEFAULT 0 NOT NULL,
-    max_attempts integer DEFAULT 3 NOT NULL,
-    next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
-    sent_at timestamp with time zone,
-    last_error_code text,
-    last_error_message text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT notification_events_attempt_count_check CHECK ((attempt_count >= 0)),
-    CONSTRAINT notification_events_max_attempts_check CHECK ((max_attempts > 0)),
-    CONSTRAINT notification_events_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'sending'::text, 'retrying'::text, 'sent'::text, 'failed'::text, 'canceled'::text])))
 );
 
 
@@ -434,7 +312,7 @@ CREATE TABLE public.provider_models (
     display_name text NOT NULL,
     context_window integer,
     supports_streaming boolean DEFAULT false NOT NULL,
-    supports_tools boolean DEFAULT false NOT NULL,
+    supports_function_calling boolean,
     availability text DEFAULT 'available'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -453,12 +331,21 @@ CREATE TABLE public.provider_models (
     synced_price_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     synced_price_updated_at timestamp with time zone,
     deleted_at timestamp with time zone,
+    input_modalities text[],
+    output_modalities text[],
+    max_output_tokens integer,
+    supports_reasoning boolean,
     CONSTRAINT provider_models_availability_check CHECK ((availability = ANY (ARRAY['available'::text, 'unavailable'::text, 'not_listed'::text, 'deprecated'::text]))),
     CONSTRAINT provider_models_capability_metadata_object_check CHECK ((jsonb_typeof(capability_metadata) = 'object'::text)),
     CONSTRAINT provider_models_context_window_check CHECK (((context_window IS NULL) OR (context_window > 0))),
+    CONSTRAINT provider_models_input_modalities_nonempty_check CHECK (((input_modalities IS NULL) OR (cardinality(input_modalities) > 0))),
+    CONSTRAINT provider_models_input_modalities_values_check CHECK (((input_modalities IS NULL) OR (input_modalities <@ ARRAY['text'::text, 'image'::text, 'audio'::text, 'video'::text, 'document'::text]))),
     CONSTRAINT provider_models_manual_cached_input_usd_per_million_token_check CHECK (((manual_cached_input_usd_per_million_tokens IS NULL) OR (manual_cached_input_usd_per_million_tokens >= (0)::numeric))),
     CONSTRAINT provider_models_manual_input_usd_per_million_tokens_check CHECK (((manual_input_usd_per_million_tokens IS NULL) OR (manual_input_usd_per_million_tokens >= (0)::numeric))),
     CONSTRAINT provider_models_manual_output_usd_per_million_tokens_check CHECK (((manual_output_usd_per_million_tokens IS NULL) OR (manual_output_usd_per_million_tokens >= (0)::numeric))),
+    CONSTRAINT provider_models_max_output_tokens_check CHECK (((max_output_tokens IS NULL) OR (max_output_tokens > 0))),
+    CONSTRAINT provider_models_output_modalities_nonempty_check CHECK (((output_modalities IS NULL) OR (cardinality(output_modalities) > 0))),
+    CONSTRAINT provider_models_output_modalities_values_check CHECK (((output_modalities IS NULL) OR (output_modalities <@ ARRAY['text'::text, 'image'::text, 'audio'::text, 'video'::text, 'embedding'::text]))),
     CONSTRAINT provider_models_synced_cached_input_usd_per_million_token_check CHECK (((synced_cached_input_usd_per_million_tokens IS NULL) OR (synced_cached_input_usd_per_million_tokens >= (0)::numeric))),
     CONSTRAINT provider_models_synced_input_usd_per_million_tokens_check CHECK (((synced_input_usd_per_million_tokens IS NULL) OR (synced_input_usd_per_million_tokens >= (0)::numeric))),
     CONSTRAINT provider_models_synced_output_usd_per_million_tokens_check CHECK (((synced_output_usd_per_million_tokens IS NULL) OR (synced_output_usd_per_million_tokens >= (0)::numeric))),
@@ -557,7 +444,6 @@ CREATE TABLE public.request_activity (
     model text,
     stream boolean DEFAULT false NOT NULL,
     route_reason jsonb DEFAULT '{}'::jsonb NOT NULL,
-    fallback_attempts jsonb DEFAULT '[]'::jsonb NOT NULL,
     status text NOT NULL,
     error_code text,
     error_message text,
@@ -666,25 +552,6 @@ CREATE TABLE public.route_policy_candidates (
 
 
 --
--- Name: runtime_errors; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.runtime_errors (
-    id uuid NOT NULL,
-    process_type text NOT NULL,
-    process_id text,
-    request_activity_id uuid,
-    severity text NOT NULL,
-    error_code text NOT NULL,
-    error_message text NOT NULL,
-    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT runtime_errors_process_type_check CHECK ((process_type = ANY (ARRAY['gateway'::text, 'console'::text, 'worker'::text]))),
-    CONSTRAINT runtime_errors_severity_check CHECK ((severity = ANY (ARRAY['info'::text, 'warning'::text, 'error'::text, 'fatal'::text])))
-);
-
-
---
 -- Name: virtual_models; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -696,33 +563,6 @@ CREATE TABLE public.virtual_models (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     deleted_at timestamp with time zone
-);
-
-
---
--- Name: webhook_deliveries; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.webhook_deliveries (
-    id uuid NOT NULL,
-    job_id uuid,
-    event_type text NOT NULL,
-    request_activity_id uuid,
-    fallback_event_id uuid,
-    webhook_url text NOT NULL,
-    status text NOT NULL,
-    request_payload jsonb DEFAULT '{}'::jsonb NOT NULL,
-    response_status integer,
-    response_body text,
-    error_code text,
-    error_message text,
-    started_at timestamp with time zone NOT NULL,
-    completed_at timestamp with time zone NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT webhook_deliveries_event_reference CHECK ((((event_type = 'request'::text) AND (request_activity_id IS NOT NULL) AND (fallback_event_id IS NULL)) OR ((event_type = 'fallback'::text) AND (request_activity_id IS NOT NULL) AND (fallback_event_id IS NOT NULL)) OR ((event_type = 'error'::text) AND (request_activity_id IS NOT NULL) AND (fallback_event_id IS NULL)))),
-    CONSTRAINT webhook_deliveries_event_type_check CHECK ((event_type = ANY (ARRAY['request'::text, 'fallback'::text, 'error'::text]))),
-    CONSTRAINT webhook_deliveries_response_status_check CHECK (((response_status IS NULL) OR ((response_status >= 100) AND (response_status <= 599)))),
-    CONSTRAINT webhook_deliveries_status_check CHECK ((status = ANY (ARRAY['sent'::text, 'failed'::text])))
 );
 
 
@@ -798,14 +638,6 @@ ALTER TABLE ONLY public.budget_periods
 
 
 --
--- Name: budget_reservations budget_reservations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.budget_reservations
-    ADD CONSTRAINT budget_reservations_pkey PRIMARY KEY (id);
-
-
---
 -- Name: config_versions config_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -862,22 +694,6 @@ ALTER TABLE ONLY public.fallback_events
 
 
 --
--- Name: gateway_runtime_status gateway_runtime_status_gateway_instance_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.gateway_runtime_status
-    ADD CONSTRAINT gateway_runtime_status_gateway_instance_id_key UNIQUE (gateway_instance_id);
-
-
---
--- Name: gateway_runtime_status gateway_runtime_status_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.gateway_runtime_status
-    ADD CONSTRAINT gateway_runtime_status_pkey PRIMARY KEY (id);
-
-
---
 -- Name: job_attempts job_attempts_job_id_attempt_number_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -899,38 +715,6 @@ ALTER TABLE ONLY public.job_attempts
 
 ALTER TABLE ONLY public.jobs
     ADD CONSTRAINT jobs_pkey PRIMARY KEY (id);
-
-
---
--- Name: notification_channels notification_channels_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.notification_channels
-    ADD CONSTRAINT notification_channels_pkey PRIMARY KEY (id);
-
-
---
--- Name: notification_deliveries notification_deliveries_notification_event_id_attempt_numbe_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.notification_deliveries
-    ADD CONSTRAINT notification_deliveries_notification_event_id_attempt_numbe_key UNIQUE (notification_event_id, attempt_number);
-
-
---
--- Name: notification_deliveries notification_deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.notification_deliveries
-    ADD CONSTRAINT notification_deliveries_pkey PRIMARY KEY (id);
-
-
---
--- Name: notification_events notification_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.notification_events
-    ADD CONSTRAINT notification_events_pkey PRIMARY KEY (id);
 
 
 --
@@ -987,14 +771,6 @@ ALTER TABLE ONLY public.provider_oauth
 
 ALTER TABLE ONLY public.providers
     ADD CONSTRAINT providers_pkey PRIMARY KEY (id);
-
-
---
--- Name: providers providers_template_id_whitelisted; Type: CHECK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE public.providers
-    ADD CONSTRAINT providers_template_id_whitelisted CHECK (((provider_template_id IS NULL) OR (provider_template_id = ANY (ARRAY['deepseek'::text, 'xai'::text, 'qwen'::text, 'moonshot'::text, 'minimax'::text, 'zai'::text, 'ollama'::text, 'lmstudio'::text, 'llama_cpp'::text, 'openrouter'::text, 'google'::text, 'openai_codex'::text, 'claude_code'::text])))) NOT VALID;
 
 
 --
@@ -1094,14 +870,6 @@ ALTER TABLE ONLY public.route_policy_candidates
 
 
 --
--- Name: runtime_errors runtime_errors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.runtime_errors
-    ADD CONSTRAINT runtime_errors_pkey PRIMARY KEY (id);
-
-
---
 -- Name: virtual_models virtual_models_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1110,32 +878,10 @@ ALTER TABLE ONLY public.virtual_models
 
 
 --
--- Name: webhook_deliveries webhook_deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.webhook_deliveries
-    ADD CONSTRAINT webhook_deliveries_pkey PRIMARY KEY (id);
-
-
---
 -- Name: idx_budget_periods_agent_period; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_budget_periods_agent_period ON public.budget_periods USING btree (agent_id, period_type, period_start DESC);
-
-
---
--- Name: idx_budget_reservations_agent_status; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_budget_reservations_agent_status ON public.budget_reservations USING btree (agent_id, status, created_at DESC);
-
-
---
--- Name: idx_budget_reservations_pending_expires_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_budget_reservations_pending_expires_at ON public.budget_reservations USING btree (expires_at) WHERE (status = 'pending'::text);
 
 
 --
@@ -1150,13 +896,6 @@ CREATE INDEX idx_console_sessions_expires_at ON public.console_sessions USING bt
 --
 
 CREATE INDEX idx_fallback_events_request_attempt ON public.fallback_events USING btree (request_activity_id, attempt_order);
-
-
---
--- Name: idx_gateway_runtime_status_heartbeat_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_gateway_runtime_status_heartbeat_at ON public.gateway_runtime_status USING btree (heartbeat_at DESC);
 
 
 --
@@ -1178,27 +917,6 @@ CREATE INDEX idx_jobs_running_lease_expires_at ON public.jobs USING btree (lease
 --
 
 CREATE INDEX idx_jobs_type_status ON public.jobs USING btree (job_type, status, created_at DESC);
-
-
---
--- Name: idx_notification_channels_enabled_type; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_notification_channels_enabled_type ON public.notification_channels USING btree (enabled, channel_type, display_name);
-
-
---
--- Name: idx_notification_deliveries_event_created_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_notification_deliveries_event_created_at ON public.notification_deliveries USING btree (notification_event_id, created_at);
-
-
---
--- Name: idx_notification_events_dispatch_due; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_notification_events_dispatch_due ON public.notification_events USING btree (status, next_attempt_at, created_at);
 
 
 --
@@ -1363,17 +1081,10 @@ CREATE UNIQUE INDEX idx_route_policies_virtual_model_active ON public.route_poli
 
 
 --
--- Name: idx_runtime_errors_process_created_at; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_route_policy_candidates_provider_model_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_runtime_errors_process_created_at ON public.runtime_errors USING btree (process_type, process_id, created_at DESC);
-
-
---
--- Name: idx_runtime_errors_severity_created_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_runtime_errors_severity_created_at ON public.runtime_errors USING btree (severity, created_at DESC);
+CREATE INDEX idx_route_policy_candidates_provider_model_id ON public.route_policy_candidates USING btree (provider_model_id);
 
 
 --
@@ -1381,20 +1092,6 @@ CREATE INDEX idx_runtime_errors_severity_created_at ON public.runtime_errors USI
 --
 
 CREATE UNIQUE INDEX idx_virtual_models_name_active ON public.virtual_models USING btree (name) WHERE (deleted_at IS NULL);
-
-
---
--- Name: idx_webhook_deliveries_activity_created_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_webhook_deliveries_activity_created_at ON public.webhook_deliveries USING btree (request_activity_id, created_at);
-
-
---
--- Name: idx_webhook_deliveries_job_created_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_webhook_deliveries_job_created_at ON public.webhook_deliveries USING btree (job_id, created_at);
 
 
 --
@@ -1430,406 +1127,6 @@ CREATE UNIQUE INDEX uq_provider_health_summary_provider_model ON public.provider
 --
 
 CREATE UNIQUE INDEX uq_provider_models_provider_id_id ON public.provider_models USING btree (provider_id, id);
-
-
---
--- Name: agent_limits agent_limits_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_limits
-    ADD CONSTRAINT agent_limits_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE CASCADE;
-
-
---
--- Name: agent_virtual_models agent_virtual_models_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_virtual_models
-    ADD CONSTRAINT agent_virtual_models_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE CASCADE;
-
-
---
--- Name: agent_virtual_models agent_virtual_models_virtual_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_virtual_models
-    ADD CONSTRAINT agent_virtual_models_virtual_model_id_fkey FOREIGN KEY (virtual_model_id) REFERENCES public.virtual_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: agents agents_default_virtual_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agents
-    ADD CONSTRAINT agents_default_virtual_model_id_fkey FOREIGN KEY (default_virtual_model_id) REFERENCES public.virtual_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: budget_periods budget_periods_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.budget_periods
-    ADD CONSTRAINT budget_periods_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE RESTRICT;
-
-
---
--- Name: budget_reservations budget_reservations_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.budget_reservations
-    ADD CONSTRAINT budget_reservations_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE RESTRICT;
-
-
---
--- Name: budget_reservations budget_reservations_budget_period_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.budget_reservations
-    ADD CONSTRAINT budget_reservations_budget_period_id_fkey FOREIGN KEY (budget_period_id) REFERENCES public.budget_periods(id) ON DELETE CASCADE;
-
-
---
--- Name: budget_reservations budget_reservations_request_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.budget_reservations
-    ADD CONSTRAINT budget_reservations_request_activity_id_fkey FOREIGN KEY (request_activity_id) REFERENCES public.request_activity(id) ON DELETE SET NULL;
-
-
---
--- Name: fallback_events fallback_events_provider_api_key_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.fallback_events
-    ADD CONSTRAINT fallback_events_provider_api_key_id_fkey FOREIGN KEY (provider_api_key_id) REFERENCES public.provider_api_keys(id) ON DELETE SET NULL;
-
-
---
--- Name: fallback_events fallback_events_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.fallback_events
-    ADD CONSTRAINT fallback_events_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: fallback_events fallback_events_request_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.fallback_events
-    ADD CONSTRAINT fallback_events_request_activity_id_fkey FOREIGN KEY (request_activity_id) REFERENCES public.request_activity(id) ON DELETE CASCADE;
-
-
---
--- Name: gateway_runtime_status gateway_runtime_status_applied_config_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.gateway_runtime_status
-    ADD CONSTRAINT gateway_runtime_status_applied_config_version_fkey FOREIGN KEY (applied_config_version) REFERENCES public.config_versions(version) ON DELETE RESTRICT;
-
-
---
--- Name: gateway_runtime_status gateway_runtime_status_target_config_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.gateway_runtime_status
-    ADD CONSTRAINT gateway_runtime_status_target_config_version_fkey FOREIGN KEY (target_config_version) REFERENCES public.config_versions(version) ON DELETE RESTRICT;
-
-
---
--- Name: job_attempts job_attempts_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.job_attempts
-    ADD CONSTRAINT job_attempts_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE CASCADE;
-
-
---
--- Name: notification_deliveries notification_deliveries_channel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.notification_deliveries
-    ADD CONSTRAINT notification_deliveries_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.notification_channels(id) ON DELETE RESTRICT;
-
-
---
--- Name: notification_deliveries notification_deliveries_notification_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.notification_deliveries
-    ADD CONSTRAINT notification_deliveries_notification_event_id_fkey FOREIGN KEY (notification_event_id) REFERENCES public.notification_events(id) ON DELETE CASCADE;
-
-
---
--- Name: notification_events notification_events_channel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.notification_events
-    ADD CONSTRAINT notification_events_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.notification_channels(id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_api_keys provider_api_keys_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_api_keys
-    ADD CONSTRAINT provider_api_keys_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.providers(id) ON DELETE CASCADE;
-
-
---
--- Name: provider_health_events provider_health_events_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_events
-    ADD CONSTRAINT provider_health_events_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE SET NULL;
-
-
---
--- Name: provider_health_events provider_health_events_model_provider_match; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_events
-    ADD CONSTRAINT provider_health_events_model_provider_match FOREIGN KEY (provider_id, provider_model_id) REFERENCES public.provider_models(provider_id, id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_health_events provider_health_events_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_events
-    ADD CONSTRAINT provider_health_events_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.providers(id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_health_events provider_health_events_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_events
-    ADD CONSTRAINT provider_health_events_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_health_summary provider_health_summary_last_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_summary
-    ADD CONSTRAINT provider_health_summary_last_event_id_fkey FOREIGN KEY (last_event_id) REFERENCES public.provider_health_events(id) ON DELETE SET NULL;
-
-
---
--- Name: provider_health_summary provider_health_summary_model_provider_match; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_summary
-    ADD CONSTRAINT provider_health_summary_model_provider_match FOREIGN KEY (provider_id, provider_model_id) REFERENCES public.provider_models(provider_id, id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_health_summary provider_health_summary_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_summary
-    ADD CONSTRAINT provider_health_summary_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.providers(id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_health_summary provider_health_summary_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_health_summary
-    ADD CONSTRAINT provider_health_summary_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_models provider_models_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_models
-    ADD CONSTRAINT provider_models_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.providers(id) ON DELETE RESTRICT;
-
-
---
--- Name: provider_oauth provider_oauth_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.provider_oauth
-    ADD CONSTRAINT provider_oauth_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.providers(id) ON DELETE CASCADE;
-
-
---
--- Name: rate_limit_windows rate_limit_windows_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.rate_limit_windows
-    ADD CONSTRAINT rate_limit_windows_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_activity request_activity_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_activity
-    ADD CONSTRAINT request_activity_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_activity request_activity_provider_api_key_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_activity
-    ADD CONSTRAINT request_activity_provider_api_key_id_fkey FOREIGN KEY (provider_api_key_id) REFERENCES public.provider_api_keys(id) ON DELETE SET NULL;
-
-
---
--- Name: request_activity request_activity_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_activity
-    ADD CONSTRAINT request_activity_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.providers(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_activity request_activity_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_activity
-    ADD CONSTRAINT request_activity_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_activity request_activity_provider_model_provider_match; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_activity
-    ADD CONSTRAINT request_activity_provider_model_provider_match FOREIGN KEY (provider_id, provider_model_id) REFERENCES public.provider_models(provider_id, id) ON DELETE RESTRICT;
-
-
---
--- Name: request_activity request_activity_route_policy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_activity
-    ADD CONSTRAINT request_activity_route_policy_id_fkey FOREIGN KEY (route_policy_id) REFERENCES public.route_policies(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_activity request_activity_virtual_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_activity
-    ADD CONSTRAINT request_activity_virtual_model_id_fkey FOREIGN KEY (virtual_model_id) REFERENCES public.virtual_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_costs request_costs_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_costs
-    ADD CONSTRAINT request_costs_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_costs request_costs_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_costs
-    ADD CONSTRAINT request_costs_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_costs request_costs_request_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_costs
-    ADD CONSTRAINT request_costs_request_activity_id_fkey FOREIGN KEY (request_activity_id) REFERENCES public.request_activity(id) ON DELETE CASCADE;
-
-
---
--- Name: request_usage request_usage_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_usage
-    ADD CONSTRAINT request_usage_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_usage request_usage_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_usage
-    ADD CONSTRAINT request_usage_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: request_usage request_usage_request_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_usage
-    ADD CONSTRAINT request_usage_request_activity_id_fkey FOREIGN KEY (request_activity_id) REFERENCES public.request_activity(id) ON DELETE CASCADE;
-
-
---
--- Name: request_usage request_usage_virtual_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_usage
-    ADD CONSTRAINT request_usage_virtual_model_id_fkey FOREIGN KEY (virtual_model_id) REFERENCES public.virtual_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: route_policies route_policies_virtual_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.route_policies
-    ADD CONSTRAINT route_policies_virtual_model_id_fkey FOREIGN KEY (virtual_model_id) REFERENCES public.virtual_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: route_policy_candidates route_policy_candidates_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.route_policy_candidates
-    ADD CONSTRAINT route_policy_candidates_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
--- Name: route_policy_candidates route_policy_candidates_route_policy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.route_policy_candidates
-    ADD CONSTRAINT route_policy_candidates_route_policy_id_fkey FOREIGN KEY (route_policy_id) REFERENCES public.route_policies(id) ON DELETE CASCADE;
-
-
---
--- Name: runtime_errors runtime_errors_request_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.runtime_errors
-    ADD CONSTRAINT runtime_errors_request_activity_id_fkey FOREIGN KEY (request_activity_id) REFERENCES public.request_activity(id) ON DELETE SET NULL;
-
-
---
--- Name: webhook_deliveries webhook_deliveries_fallback_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.webhook_deliveries
-    ADD CONSTRAINT webhook_deliveries_fallback_event_id_fkey FOREIGN KEY (fallback_event_id) REFERENCES public.fallback_events(id) ON DELETE CASCADE;
-
-
---
--- Name: webhook_deliveries webhook_deliveries_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.webhook_deliveries
-    ADD CONSTRAINT webhook_deliveries_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE SET NULL;
-
-
---
--- Name: webhook_deliveries webhook_deliveries_request_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.webhook_deliveries
-    ADD CONSTRAINT webhook_deliveries_request_activity_id_fkey FOREIGN KEY (request_activity_id) REFERENCES public.request_activity(id) ON DELETE CASCADE;
 
 
 --

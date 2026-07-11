@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 
 describe("console provider dependency guard", () => {
   it("ships the provider-model reverse dependency lookup index", () => {
-    const migrationPath = "packages/db/migrations/0008_provider_dependency_lookup.sql";
+    const migrationPath = "packages/db/migrations/0001_core_baseline.sql";
     expect(existsSync(migrationPath)).toBe(true);
     const migration = readFileSync(migrationPath, "utf8");
     expect(migration).toContain("route_policy_candidates");

@@ -11,6 +11,7 @@ import {
   listAgents,
   listAgentVirtualModelAccess,
 } from "@llmingress/db/console-agents";
+import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
@@ -44,159 +45,155 @@ function LimitsConfigDialog({
   const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-label="Rule configuration"
-        aria-labelledby={`limits-config-title-${agent.id}`}
-        aria-modal="true"
-        className="console-dialog limits-config-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head limits-config-head">
-          <div>
-            <h2 className="limits-config-title" id={`limits-config-title-${agent.id}`}>
-              Rule configuration
-            </h2>
-            <p>{agent.name}</p>
-          </div>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
+    <ConsoleDialog
+      ariaLabelledby={`limits-config-title-${agent.id}`}
+      className="console-dialog limits-config-dialog"
+      closeHref={closeHref}
+      triggerId={`limits-edit-${agent.id}-trigger`}
+    >
+      <div className="console-dialog-head limits-config-head">
+        <div>
+          <h2 className="limits-config-title" id={`limits-config-title-${agent.id}`}>
+            Rule configuration
+          </h2>
+          <p>{agent.name}</p>
         </div>
-        <form className="limits-config-form" action="/api/agent-limits" method="post">
-          <input type="hidden" name="action" value="saveLimitRules" />
-          <input type="hidden" name="agentId" value={agent.id} />
-          <div className="limits-form-grid">
-            <div className="console-field">
-              <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
-              <input
-                id={`limits-budget-${agent.id}`}
-                name="budgetUsd"
-                type="number"
-                min="0.000001"
-                step="0.000001"
-                defaultValue={formatInputNumber(
-                  budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
-                )}
-                required
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <form className="limits-config-form" action="/api/agent-limits" method="post">
+        <input type="hidden" name="action" value="saveLimitRules" />
+        <input type="hidden" name="agentId" value={agent.id} />
+        <div className="limits-form-grid">
+          <div className="console-field">
+            <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
+            <input
+              id={`limits-budget-${agent.id}`}
+              name="budgetUsd"
+              type="number"
+              min="0.000001"
+              step="0.000001"
+              defaultValue={formatInputNumber(
+                budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
+              )}
+              required
+            />
+          </div>
+          <div className="console-field">
+            <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
+            <input
+              id={`limits-token-${agent.id}`}
+              name="tokenLimit"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={formatInputNumber(
+                tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
+              )}
+              required
+            />
+          </div>
+          <div className="console-field">
+            <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
+            <select
+              id={`limits-budget-period-${agent.id}`}
+              name="budgetPeriod"
+              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+              required
+            >
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div>
+        </div>
+        <div className="limits-usage-block">
+          <div className="usage-bar">
+            <div className="usage-bar-head">
+              <span>Current usage</span>
+              <span>{formatUsagePercent(usagePercent)}</span>
+            </div>
+            <div className="usage-bar-track">
+              <div
+                className={`usage-bar-fill ${usageTone}`.trim()}
+                style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
               />
             </div>
+          </div>
+        </div>
+        <div>
+          <h3 className="limits-config-subtitle">Rate limit caps</h3>
+          <div className="limits-rate-grid">
             <div className="console-field">
-              <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
+              <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
               <input
-                id={`limits-token-${agent.id}`}
-                name="tokenLimit"
+                id={`limits-rpm-${agent.id}`}
+                name="rpm"
                 type="number"
                 min="1"
                 step="1"
                 defaultValue={formatInputNumber(
-                  tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
+                  rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
                 )}
                 required
               />
             </div>
             <div className="console-field">
-              <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
-              <select
-                id={`limits-budget-period-${agent.id}`}
-                name="budgetPeriod"
-                defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+              <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
+              <input
+                id={`limits-tpm-${agent.id}`}
+                name="tpm"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
+                )}
                 required
-              >
-                <option value="day">Day</option>
-                <option value="week">Week</option>
-                <option value="month">Month</option>
-              </select>
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
+              <input
+                id={`limits-concurrency-${agent.id}`}
+                name="concurrency"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
+                )}
+                required
+              />
             </div>
           </div>
-          <div className="limits-usage-block">
-            <div className="usage-bar">
-              <div className="usage-bar-head">
-                <span>Current usage</span>
-                <span>{formatUsagePercent(usagePercent)}</span>
-              </div>
-              <div className="usage-bar-track">
-                <div
-                  className={`usage-bar-fill ${usageTone}`.trim()}
-                  style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
-                />
-              </div>
-            </div>
+        </div>
+        <div>
+          <h3 className="limits-config-subtitle">Allowed Virtual Models</h3>
+          <div className="tag-row">
+            {allowedVirtualModels.length === 0 ? (
+              <span className="tag-chip">All virtual models</span>
+            ) : (
+              allowedVirtualModels.map((virtualModel) => (
+                <span className="tag-chip" key={virtualModel.id}>
+                  {virtualModel.name}
+                </span>
+              ))
+            )}
           </div>
-          <div>
-            <h3 className="limits-config-subtitle">Rate limit caps</h3>
-            <div className="limits-rate-grid">
-              <div className="console-field">
-                <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
-                <input
-                  id={`limits-rpm-${agent.id}`}
-                  name="rpm"
-                  type="number"
-                  min="1"
-                  step="1"
-                  defaultValue={formatInputNumber(
-                    rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
-                  )}
-                  required
-                />
-              </div>
-              <div className="console-field">
-                <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
-                <input
-                  id={`limits-tpm-${agent.id}`}
-                  name="tpm"
-                  type="number"
-                  min="1"
-                  step="1"
-                  defaultValue={formatInputNumber(
-                    tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
-                  )}
-                  required
-                />
-              </div>
-              <div className="console-field">
-                <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
-                <input
-                  id={`limits-concurrency-${agent.id}`}
-                  name="concurrency"
-                  type="number"
-                  min="1"
-                  step="1"
-                  defaultValue={formatInputNumber(
-                    concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
-                  )}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h3 className="limits-config-subtitle">Allowed Virtual Models</h3>
-            <div className="tag-row">
-              {allowedVirtualModels.length === 0 ? (
-                <span className="tag-chip">All virtual models</span>
-              ) : (
-                allowedVirtualModels.map((virtualModel) => (
-                  <span className="tag-chip" key={virtualModel.id}>
-                    {virtualModel.name}
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
-          <div className="limits-config-actions">
-            <a className="secondary-button" href={closeHref}>
-              Cancel
-            </a>
-            <button type="submit">
-              <span>Save</span>
-            </button>
-          </div>
-        </form>
-      </section>
-    </>
+        </div>
+        <div className="limits-config-actions">
+          <a className="secondary-button" href={closeHref}>
+            Cancel
+          </a>
+          <button type="submit">
+            <span>Save</span>
+          </button>
+        </div>
+      </form>
+    </ConsoleDialog>
   );
 }
 
@@ -208,36 +205,32 @@ function LimitsDeleteDialog({
   closeHref: string;
 }) {
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby={`limits-delete-dialog-title-${agent.id}`}
-        aria-modal="true"
-        className="console-dialog agent-delete-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <h2 id={`limits-delete-dialog-title-${agent.id}`}>
-            Delete limit rules for {agent.name}?
-          </h2>
-        </div>
-        <p>This removes every limit rule configured for this Agent API key.</p>
-        <div className="agent-delete-actions">
-          <a className="agent-delete-cancel" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Cancel</span>
-          </a>
-          <form action="/api/agent-limits" method="post">
-            <input type="hidden" name="action" value="deleteLimitRules" />
-            <input type="hidden" name="agentId" value={agent.id} />
-            <button className="agent-delete-confirm" type="submit">
-              <FlatIcon name="delete" />
-              <span>Delete</span>
-            </button>
-          </form>
-        </div>
-      </section>
-    </>
+    <ConsoleDialog
+      ariaLabelledby={`limits-delete-dialog-title-${agent.id}`}
+      className="console-dialog agent-delete-dialog"
+      closeHref={closeHref}
+      initialFocus="cancel"
+      triggerId={`limits-delete-${agent.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <h2 id={`limits-delete-dialog-title-${agent.id}`}>Delete limit rules for {agent.name}?</h2>
+      </div>
+      <p>This removes every limit rule configured for this Agent API key.</p>
+      <div className="agent-delete-actions">
+        <a className="agent-delete-cancel" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Cancel</span>
+        </a>
+        <form action="/api/agent-limits" method="post">
+          <input type="hidden" name="action" value="deleteLimitRules" />
+          <input type="hidden" name="agentId" value={agent.id} />
+          <button className="agent-delete-confirm" type="submit">
+            <FlatIcon name="delete" />
+            <span>Delete</span>
+          </button>
+        </form>
+      </div>
+    </ConsoleDialog>
   );
 }
 
@@ -523,6 +516,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                                   aria-label={`Edit ${row.agent.name}`}
                                   className="link-button agent-action-edit row-action-button"
                                   href={editHref}
+                                  id={`limits-edit-${row.agent.id}-trigger`}
                                   title="Edit"
                                 >
                                   <FlatIcon name="edit" />
@@ -535,6 +529,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                                   limitDelete: row.agent.id,
                                   limitDialog: undefined,
                                 })}
+                                id={`limits-delete-${row.agent.id}-trigger`}
                                 title="Delete"
                               >
                                 <FlatIcon name="delete" />

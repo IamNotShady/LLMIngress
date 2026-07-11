@@ -14,7 +14,7 @@ export default async function ProvidersPage({
         title="Providers & Models"
         description="Configure provider keys, refresh model lists, and manage model pricing."
         actions={
-          <a className="btn" href="?providerDialog=new">
+          <a className="btn" href="?providerDialog=new" id="provider-create-dialog-trigger">
             <span>Add Provider</span>
           </a>
         }

@@ -76,10 +76,10 @@
       "id": "release-guards",
       "name": "Release Guards",
       "description": "One 24-table core database baseline, deleted-surface guards, verification scripts, build contracts, and repository hygiene keep the pre-release product reproducible.",
-      "verification": "pnpm exec vitest run tests/features/core-baseline-compression.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/core-baseline-compression.e2e.spec.ts tests/e2e/v1-platform.e2e.spec.ts tests/e2e/v1-release-guards.e2e.spec.ts",
+      "verification": "pnpm exec vitest run tests/features/core-baseline-compression.unit.test.ts tests/features/core-delivery-hardening.unit.test.ts tests/features/core-delivery-core-behavior.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/core-baseline-compression.e2e.spec.ts tests/e2e/core-delivery-hardening.e2e.spec.ts tests/e2e/v1-platform.e2e.spec.ts tests/e2e/v1-release-guards.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-11: One reproducible 24-table baseline, nine current passing milestones, and deleted-surface guards remain enforced after Console performance work."
+      "evidence": "2026-07-11: One reproducible 24-table baseline, native accessible dialogs, strict parseArgs CLIs, four non-root compiled runtime images, deleted-surface guards, and enforced 45/45/38/50 coverage thresholds pass."
     }
   ]
 }

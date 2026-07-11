@@ -39,11 +39,15 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - `1427fa01` — removed external observability and added real readiness.
 - `633f270b` — simplified routing, Agents, and cost reporting.
 - `e844f2a6` — removed maintenance Job churn and added direct locked retention.
-- Core baseline and project-history compression completed: one migration, 24 final tables, and nine current milestones.
-- Console performance completed: shared pooling, parallel page reads, compact Overview KPIs, correct Usage dates, and server-paginated Provider models.
-- Current feature: dialog/container/CLI/coverage hardening.
+- `36b57799` — compressed the pre-release schema and project history to one baseline and nine milestones.
+- `c16fed90` — added shared pooling, parallel Console reads, compact KPIs, correct Usage dates, and server-paginated models.
+- Core delivery hardening is implemented: native accessible dialogs, strict migration CLIs, four compiled non-root runtime images, and enforced JSON coverage thresholds.
 
 ## Verification
+
+Final 2026-07-11 result: migration check passed, `pnpm run verify` passed with 60 test files
+and 304 tests, and `pnpm run verify:features` re-verified all 9 milestones. Coverage is
+48.14% statements, 48.28% lines, 40.81% branches, and 50.83% functions.
 
 Database-backed checks use:
 
@@ -58,7 +62,4 @@ pre-release baseline reset and does not support in-place upgrade from the former
 
 ## Open Work
 
-- `core-console-performance`
-- `core-delivery-hardening`
-
-Blockers: none.
+No accepted core-slimming feature remains. Blockers: none.

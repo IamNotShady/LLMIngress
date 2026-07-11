@@ -1073,16 +1073,13 @@ details.disclosure[open] > .disclosure-summary {
   box-shadow: var(--shadow-pop);
   animation: dialog-in 0.16s var(--ease-out) both;
 }
-.console-dialog-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 49;
+.console-dialog::backdrop {
   background: color-mix(in srgb, var(--canvas) 78%, transparent);
   backdrop-filter: blur(3px) saturate(1.05);
   animation: scrim-in 0.16s var(--ease-out) both;
 }
-html:has(.console-dialog-scrim),
-body:has(.console-dialog-scrim) {
+html:has(.console-dialog[open]),
+body:has(.console-dialog[open]) {
   overflow-x: clip;
 }
 .console-dialog-head {

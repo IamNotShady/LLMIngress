@@ -113,6 +113,6 @@ describe("console semantic status static contract", () => {
     // The dialog posts the same API action with an explicit confirm.
     const deleteDialog = source.slice(source.indexOf("function LimitsDeleteDialog"));
     expect(deleteDialog).toContain('name="action" value="deleteLimitRules"');
-    expect(deleteDialog).toContain('aria-modal="true"');
+    expect(deleteDialog).toContain("<ConsoleDialog");
   });
 });

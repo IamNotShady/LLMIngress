@@ -250,6 +250,7 @@ export function ProvidersClientSection({
                                         selected: provider.id,
                                       })}
                                       aria-label={`Edit ${provider.displayName}`}
+                                      id={`provider-edit-${provider.id}-trigger`}
                                       title="Edit"
                                     >
                                       <FlatIcon name="edit" />
@@ -273,6 +274,7 @@ export function ProvidersClientSection({
                                         selected: provider.id,
                                       })}
                                       aria-label={`Delete ${provider.displayName}`}
+                                      id={`provider-delete-${provider.id}-trigger`}
                                       title="Delete"
                                     >
                                       <FlatIcon name="delete" />
@@ -299,6 +301,7 @@ export function ProvidersClientSection({
                                         selected: provider.id,
                                       })}
                                       aria-label={`Delete ${provider.displayName}`}
+                                      id={`provider-delete-${provider.id}-trigger`}
                                       title="Delete"
                                     >
                                       <FlatIcon name="delete" />
@@ -340,6 +343,7 @@ export function ProvidersClientSection({
                                           <button
                                             aria-label="Add OAuth connection"
                                             className="provider-key-add-button"
+                                            id={`provider-key-${provider.id}-trigger`}
                                             title="Add OAuth connection"
                                             type="submit"
                                           >
@@ -354,6 +358,7 @@ export function ProvidersClientSection({
                                             selected: provider.id,
                                           })}
                                           aria-label="Add API key"
+                                          id={`provider-key-${provider.id}-trigger`}
                                           title="Add API key"
                                         >
                                           <FlatIcon name="key" />
@@ -495,6 +500,7 @@ export function ProvidersClientSection({
                                                         selected: provider.id,
                                                       })}
                                                       aria-label="Delete API key"
+                                                      id={`provider-key-delete-${providerKey.id}-trigger`}
                                                       title="Delete API key"
                                                     >
                                                       <FlatIcon name="delete" />

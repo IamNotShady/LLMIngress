@@ -27,6 +27,7 @@
     "@types/node": "^25.9.3",
     "@types/pg": "^8.20.0",
     "@vitest/coverage-v8": "4.1.8",
+    "esbuild": "^0.28.0",
     "tsx": "^4.22.4",
     "turbo": "^2.9.18",
     "typescript": "^6.0.3",

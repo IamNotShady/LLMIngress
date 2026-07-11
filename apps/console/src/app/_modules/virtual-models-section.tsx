@@ -19,6 +19,7 @@ import {
   listVirtualModels,
 } from "@llmingress/db/console-virtual-models";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
+import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
@@ -47,114 +48,112 @@ function VirtualModelViewDialog({
   virtualModel: ConsoleVirtualModel;
 }) {
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby={`virtual-model-view-dialog-title-${virtualModel.id}`}
-        aria-modal="true"
-        className="console-dialog agent-view-dialog vm-view-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <div className="agent-view-dialog-title">
-            <h2 id={`virtual-model-view-dialog-title-${virtualModel.id}`}>{virtualModel.name}</h2>
-            {virtualModel.enabled ? (
-              <span className="pill--ok pill">Enabled</span>
-            ) : (
-              <span className="pill">Disabled</span>
-            )}
-          </div>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
+    <ConsoleDialog
+      ariaLabelledby={`virtual-model-view-dialog-title-${virtualModel.id}`}
+      className="console-dialog agent-view-dialog vm-view-dialog"
+      closeHref={closeHref}
+      initialFocus="close"
+      triggerId={`virtual-model-view-${virtualModel.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <div className="agent-view-dialog-title">
+          <h2 id={`virtual-model-view-dialog-title-${virtualModel.id}`}>{virtualModel.name}</h2>
+          {virtualModel.enabled ? (
+            <span className="pill--ok pill">Enabled</span>
+          ) : (
+            <span className="pill">Disabled</span>
+          )}
         </div>
-        <dl className="agent-detail-fields">
-          <div>
-            <dt>Strategy</dt>
-            <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : MISSING_VALUE}</dd>
-          </div>
-          <div>
-            <dt>Endpoint</dt>
-            <dd>{formatRouteEndpointProtocolLabel(routePolicy?.endpointProtocol ?? "")}</dd>
-          </div>
-          <div>
-            <dt>Candidates</dt>
-            <dd>{routePolicy ? `${routePolicy.candidates.length} models` : MISSING_VALUE}</dd>
-          </div>
-          <div>
-            <dt>Default hit</dt>
-            <dd>{formatDefaultCandidate(routePolicy)}</dd>
-          </div>
-          <div>
-            <dt>Requests 24h</dt>
-            <dd>{formatConsoleCompactCount(virtualModel.requestCount24h)}</dd>
-          </div>
-          <div>
-            <dt>Cost 24h</dt>
-            <dd>{formatVirtualModelCost(virtualModel.cost24hUsd)}</dd>
-          </div>
-          <div>
-            <dt>Failure rate total</dt>
-            <dd>
-              {formatVirtualModelFailureRate(
-                virtualModel.requestCountTotal,
-                virtualModel.failureCountTotal,
-              )}
-            </dd>
-          </div>
-        </dl>
-        <section className="agent-detail-section">
-          <h3>Candidates</h3>
-          {routePolicy?.candidates.length ? (
-            <div className="vm-candidate-list">
-              {routePolicy.candidates.map((candidate) => (
-                <div className="vm-candidate-card" key={candidate.id}>
-                  <div>
-                    <strong>
-                      {candidate.providerDisplayName} / {candidate.modelDisplayName}
-                    </strong>
-                    <span>
-                      {formatModelPrice(candidate.inputUsdPerMillionTokens)} /{" "}
-                      {formatModelPrice(candidate.outputUsdPerMillionTokens)}
-                    </span>
-                  </div>
-                  {candidate.availability === "available" ? (
-                    <span className="pill--ok pill">Available</span>
-                  ) : (
-                    <span className="pill">Disabled</span>
-                  )}
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <dl className="agent-detail-fields">
+        <div>
+          <dt>Strategy</dt>
+          <dd>{routePolicy ? formatRouteStrategyLabel(routePolicy.strategy) : MISSING_VALUE}</dd>
+        </div>
+        <div>
+          <dt>Endpoint</dt>
+          <dd>{formatRouteEndpointProtocolLabel(routePolicy?.endpointProtocol ?? "")}</dd>
+        </div>
+        <div>
+          <dt>Candidates</dt>
+          <dd>{routePolicy ? `${routePolicy.candidates.length} models` : MISSING_VALUE}</dd>
+        </div>
+        <div>
+          <dt>Default hit</dt>
+          <dd>{formatDefaultCandidate(routePolicy)}</dd>
+        </div>
+        <div>
+          <dt>Requests 24h</dt>
+          <dd>{formatConsoleCompactCount(virtualModel.requestCount24h)}</dd>
+        </div>
+        <div>
+          <dt>Cost 24h</dt>
+          <dd>{formatVirtualModelCost(virtualModel.cost24hUsd)}</dd>
+        </div>
+        <div>
+          <dt>Failure rate total</dt>
+          <dd>
+            {formatVirtualModelFailureRate(
+              virtualModel.requestCountTotal,
+              virtualModel.failureCountTotal,
+            )}
+          </dd>
+        </div>
+      </dl>
+      <section className="agent-detail-section">
+        <h3>Candidates</h3>
+        {routePolicy?.candidates.length ? (
+          <div className="vm-candidate-list">
+            {routePolicy.candidates.map((candidate) => (
+              <div className="vm-candidate-card" key={candidate.id}>
+                <div>
+                  <strong>
+                    {candidate.providerDisplayName} / {candidate.modelDisplayName}
+                  </strong>
+                  <span>
+                    {formatModelPrice(candidate.inputUsdPerMillionTokens)} /{" "}
+                    {formatModelPrice(candidate.outputUsdPerMillionTokens)}
+                  </span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p>No candidates configured.</p>
-          )}
-        </section>
-        {routePolicyWarnings.length > 0 ? (
-          <section className="agent-detail-section" aria-label="Route warnings">
-            <h3>Route warnings</h3>
-            {routePolicyWarnings.map((warning) => (
-              <p className="route-warning" key={warning}>
-                {warning}
-              </p>
+                {candidate.availability === "available" ? (
+                  <span className="pill--ok pill">Available</span>
+                ) : (
+                  <span className="pill">Disabled</span>
+                )}
+              </div>
             ))}
-          </section>
-        ) : null}
-        <section className="agent-detail-section">
-          <h3>Fallback overview</h3>
-          {fallbackOverview.length > 0 ? (
-            <DonutBreakdown
-              ariaLabel="Fallback overview"
-              data={fallbackOverview}
-              valueFormat="percent"
-            />
-          ) : (
-            <p>No fallback data recorded in the last 24h.</p>
-          )}
-        </section>
+          </div>
+        ) : (
+          <p>No candidates configured.</p>
+        )}
       </section>
-    </>
+      {routePolicyWarnings.length > 0 ? (
+        <section className="agent-detail-section" aria-label="Route warnings">
+          <h3>Route warnings</h3>
+          {routePolicyWarnings.map((warning) => (
+            <p className="route-warning" key={warning}>
+              {warning}
+            </p>
+          ))}
+        </section>
+      ) : null}
+      <section className="agent-detail-section">
+        <h3>Fallback overview</h3>
+        {fallbackOverview.length > 0 ? (
+          <DonutBreakdown
+            ariaLabel="Fallback overview"
+            data={fallbackOverview}
+            valueFormat="percent"
+          />
+        ) : (
+          <p>No fallback data recorded in the last 24h.</p>
+        )}
+      </section>
+    </ConsoleDialog>
   );
 }
 
@@ -409,7 +408,11 @@ export async function VirtualModelsSection({
                           key={virtualModel.id}
                         >
                           <td>
-                            <a className="table-row-link" href={viewHref}>
+                            <a
+                              className="table-row-link"
+                              href={viewHref}
+                              id={`virtual-model-view-${virtualModel.id}-trigger`}
+                            >
                               {virtualModel.name}
                             </a>
                           </td>
@@ -479,6 +482,7 @@ export async function VirtualModelsSection({
                                   virtualModelView: undefined,
                                   virtualModelDialog: virtualModel.id,
                                 })}
+                                id={`virtual-model-edit-${virtualModel.id}-trigger`}
                                 title="Edit"
                               >
                                 <FlatIcon name="edit" />

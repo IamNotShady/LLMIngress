@@ -12,6 +12,7 @@ import {
   type ProviderDependencyImpact,
 } from "@llmingress/db/console-providers";
 import { listProviderModelPage } from "@llmingress/db/console-route-policies";
+import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref } from "../_lib/pagination";
 import { ProviderCreateForm } from "./provider-create-form";
@@ -89,33 +90,30 @@ function ProviderCreateDialog({
     defaultProviderCreateChoice;
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="new-provider-dialog-title"
-        aria-modal="true"
-        className="console-dialog provider-create-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <h2 id="new-provider-dialog-title">Add Provider</h2>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
-        </div>
-        <ProviderCreateForm
-          baseUrlError={baseUrlError}
-          choices={providerCreateChoices}
-          displayNameError={displayNameError}
-          formError={formError}
-          initialBaseUrl={formValues.baseUrl}
-          initialDisplayName={formValues.displayName}
-          initialProviderKey={selectedChoice.providerKey}
-          providerKeyError={providerKeyError}
-        />
-      </section>
-    </>
+    <ConsoleDialog
+      ariaLabelledby="new-provider-dialog-title"
+      className="console-dialog provider-create-dialog"
+      closeHref={closeHref}
+      triggerId="provider-create-dialog-trigger"
+    >
+      <div className="console-dialog-head">
+        <h2 id="new-provider-dialog-title">Add Provider</h2>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <ProviderCreateForm
+        baseUrlError={baseUrlError}
+        choices={providerCreateChoices}
+        displayNameError={displayNameError}
+        formError={formError}
+        initialBaseUrl={formValues.baseUrl}
+        initialDisplayName={formValues.displayName}
+        initialProviderKey={selectedChoice.providerKey}
+        providerKeyError={providerKeyError}
+      />
+    </ConsoleDialog>
   );
 }
 
@@ -137,68 +135,65 @@ function ProviderEditDialog({
   const baseUrlError = errorField === "baseUrl" ? error : undefined;
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="edit-provider-dialog-title"
-        aria-modal="true"
-        className="console-dialog provider-edit-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <h2 id="edit-provider-dialog-title">Edit {provider.displayName}</h2>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
-        </div>
-        <form className="provider-create-form" action="/api/providers" method="post">
-          <input type="hidden" name="action" value="update" />
-          <input type="hidden" name="id" value={provider.id} />
-          {formError ? (
-            <p className="form-error" role="alert">
-              {formError}
-            </p>
-          ) : null}
-          <label htmlFor="provider-edit-display-name">Provider display name</label>
-          <input
-            aria-describedby="provider-edit-display-name-error"
-            aria-invalid={displayNameError ? true : undefined}
-            className={displayNameError ? "is-invalid" : undefined}
-            defaultValue={formValues.displayName}
-            id="provider-edit-display-name"
-            name="displayName"
-            required
-          />
-          <p
-            className={displayNameError ? "field-error is-visible" : "field-error"}
-            id="provider-edit-display-name-error"
-          >
-            {displayNameError}
+    <ConsoleDialog
+      ariaLabelledby="edit-provider-dialog-title"
+      className="console-dialog provider-edit-dialog"
+      closeHref={closeHref}
+      triggerId={`provider-edit-${provider.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <h2 id="edit-provider-dialog-title">Edit {provider.displayName}</h2>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <form className="provider-create-form" action="/api/providers" method="post">
+        <input type="hidden" name="action" value="update" />
+        <input type="hidden" name="id" value={provider.id} />
+        {formError ? (
+          <p className="form-error" role="alert">
+            {formError}
           </p>
-          <label htmlFor="provider-edit-base-url">Provider base URL</label>
-          <input
-            aria-describedby="provider-edit-base-url-error"
-            aria-invalid={baseUrlError ? true : undefined}
-            className={baseUrlError ? "is-invalid" : undefined}
-            defaultValue={formValues.baseUrl}
-            id="provider-edit-base-url"
-            name="baseUrl"
-            readOnly={Boolean(provider.providerTemplateId)}
-            type="url"
-          />
-          <p
-            className={baseUrlError ? "field-error is-visible" : "field-error"}
-            id="provider-edit-base-url-error"
-          >
-            {baseUrlError}
-          </p>
-          <button type="submit">
-            <span>Save</span>
-          </button>
-        </form>
-      </section>
-    </>
+        ) : null}
+        <label htmlFor="provider-edit-display-name">Provider display name</label>
+        <input
+          aria-describedby="provider-edit-display-name-error"
+          aria-invalid={displayNameError ? true : undefined}
+          className={displayNameError ? "is-invalid" : undefined}
+          defaultValue={formValues.displayName}
+          id="provider-edit-display-name"
+          name="displayName"
+          required
+        />
+        <p
+          className={displayNameError ? "field-error is-visible" : "field-error"}
+          id="provider-edit-display-name-error"
+        >
+          {displayNameError}
+        </p>
+        <label htmlFor="provider-edit-base-url">Provider base URL</label>
+        <input
+          aria-describedby="provider-edit-base-url-error"
+          aria-invalid={baseUrlError ? true : undefined}
+          className={baseUrlError ? "is-invalid" : undefined}
+          defaultValue={formValues.baseUrl}
+          id="provider-edit-base-url"
+          name="baseUrl"
+          readOnly={Boolean(provider.providerTemplateId)}
+          type="url"
+        />
+        <p
+          className={baseUrlError ? "field-error is-visible" : "field-error"}
+          id="provider-edit-base-url-error"
+        >
+          {baseUrlError}
+        </p>
+        <button type="submit">
+          <span>Save</span>
+        </button>
+      </form>
+    </ConsoleDialog>
   );
 }
 
@@ -210,49 +205,46 @@ function ProviderKeyCreateDialog({
   provider: ConsoleProvider;
 }) {
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="provider-key-create-title"
-        aria-modal="true"
-        className="console-dialog provider-key-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <h2 id="provider-key-create-title">New {provider.displayName} API key</h2>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
-        </div>
-        <form className="provider-create-form" action="/api/provider-keys" method="post">
-          <input type="hidden" name="providerId" value={provider.id} />
-          <label htmlFor="provider-key-create-value">Provider API key</label>
-          <input
-            autoComplete="off"
-            id="provider-key-create-value"
-            name="providerApiKey"
-            required
-            type="password"
-          />
-          <label htmlFor="provider-key-create-label">Label</label>
-          <input id="provider-key-create-label" maxLength={100} name="label" type="text" />
-          <label htmlFor="provider-key-create-priority">Priority</label>
-          <input
-            defaultValue={100}
-            id="provider-key-create-priority"
-            max={100}
-            min={0}
-            name="priority"
-            step={1}
-            type="number"
-          />
-          <button type="submit">
-            <span>Save</span>
-          </button>
-        </form>
-      </section>
-    </>
+    <ConsoleDialog
+      ariaLabelledby="provider-key-create-title"
+      className="console-dialog provider-key-dialog"
+      closeHref={closeHref}
+      triggerId={`provider-key-${provider.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <h2 id="provider-key-create-title">New {provider.displayName} API key</h2>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <form className="provider-create-form" action="/api/provider-keys" method="post">
+        <input type="hidden" name="providerId" value={provider.id} />
+        <label htmlFor="provider-key-create-value">Provider API key</label>
+        <input
+          autoComplete="off"
+          id="provider-key-create-value"
+          name="providerApiKey"
+          required
+          type="password"
+        />
+        <label htmlFor="provider-key-create-label">Label</label>
+        <input id="provider-key-create-label" maxLength={100} name="label" type="text" />
+        <label htmlFor="provider-key-create-priority">Priority</label>
+        <input
+          defaultValue={100}
+          id="provider-key-create-priority"
+          max={100}
+          min={0}
+          name="priority"
+          step={1}
+          type="number"
+        />
+        <button type="submit">
+          <span>Save</span>
+        </button>
+      </form>
+    </ConsoleDialog>
   );
 }
 
@@ -277,78 +269,75 @@ function ProviderOAuthCreateDialog({
   const priorityDefaultValue = priorityValue ?? "100";
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="provider-oauth-create-title"
-        aria-modal="true"
-        className="console-dialog provider-key-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <h2 id="provider-oauth-create-title">New {provider.displayName} OAuth connection</h2>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
-        </div>
-        {error ? <p className="form-error">{error}</p> : null}
-        {hasPendingAuthorization ? (
-          <>
-            <div className="provider-create-form">
-              <label htmlFor="provider-oauth-authorize-url">Authorization URL</label>
-              <textarea
-                id="provider-oauth-authorize-url"
-                readOnly
-                rows={4}
-                defaultValue={authorizeUrl}
-              />
-              <a
-                className="oauth-open-link secondary-button"
-                href={authorizeUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <FlatIcon name="view" />
-                <span>Open authorization URL</span>
-              </a>
-            </div>
-            <form className="provider-create-form" action="/api/provider-oauth" method="post">
-              <input type="hidden" name="action" value="complete" />
-              <input type="hidden" name="providerId" value={provider.id} />
-              <input type="hidden" name="providerOAuthId" value={providerOAuthId} />
-              <input type="hidden" name="providerAuthorizeUrl" value={authorizeUrl} />
-              <label htmlFor="provider-oauth-complete-label">Label</label>
-              <input
-                id="provider-oauth-complete-label"
-                maxLength={100}
-                name="label"
-                type="text"
-                defaultValue={labelValue ?? ""}
-              />
-              <label htmlFor="provider-oauth-complete-priority">Priority</label>
-              <input
-                defaultValue={priorityDefaultValue}
-                id="provider-oauth-complete-priority"
-                max={100}
-                min={0}
-                name="priority"
-                step={1}
-                type="number"
-              />
-              <label htmlFor="provider-oauth-callback-input">
-                Callback URL or authorization code
-              </label>
-              <textarea id="provider-oauth-callback-input" name="callbackInput" required rows={4} />
-              <button className="oauth-action-button" type="submit">
-                <FlatIcon name="confirm" />
-                <span>Connect OAuth</span>
-              </button>
-            </form>
-          </>
-        ) : null}
-      </section>
-    </>
+    <ConsoleDialog
+      ariaLabelledby="provider-oauth-create-title"
+      className="console-dialog provider-key-dialog"
+      closeHref={closeHref}
+      triggerId={`provider-key-${provider.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <h2 id="provider-oauth-create-title">New {provider.displayName} OAuth connection</h2>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      {error ? <p className="form-error">{error}</p> : null}
+      {hasPendingAuthorization ? (
+        <>
+          <div className="provider-create-form">
+            <label htmlFor="provider-oauth-authorize-url">Authorization URL</label>
+            <textarea
+              id="provider-oauth-authorize-url"
+              readOnly
+              rows={4}
+              defaultValue={authorizeUrl}
+            />
+            <a
+              className="oauth-open-link secondary-button"
+              href={authorizeUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <FlatIcon name="view" />
+              <span>Open authorization URL</span>
+            </a>
+          </div>
+          <form className="provider-create-form" action="/api/provider-oauth" method="post">
+            <input type="hidden" name="action" value="complete" />
+            <input type="hidden" name="providerId" value={provider.id} />
+            <input type="hidden" name="providerOAuthId" value={providerOAuthId} />
+            <input type="hidden" name="providerAuthorizeUrl" value={authorizeUrl} />
+            <label htmlFor="provider-oauth-complete-label">Label</label>
+            <input
+              id="provider-oauth-complete-label"
+              maxLength={100}
+              name="label"
+              type="text"
+              defaultValue={labelValue ?? ""}
+            />
+            <label htmlFor="provider-oauth-complete-priority">Priority</label>
+            <input
+              defaultValue={priorityDefaultValue}
+              id="provider-oauth-complete-priority"
+              max={100}
+              min={0}
+              name="priority"
+              step={1}
+              type="number"
+            />
+            <label htmlFor="provider-oauth-callback-input">
+              Callback URL or authorization code
+            </label>
+            <textarea id="provider-oauth-callback-input" name="callbackInput" required rows={4} />
+            <button className="oauth-action-button" type="submit">
+              <FlatIcon name="confirm" />
+              <span>Connect OAuth</span>
+            </button>
+          </form>
+        </>
+      ) : null}
+    </ConsoleDialog>
   );
 }
 
@@ -364,96 +353,94 @@ function ProviderDeleteDialog({
   const hasBlockers = impact.routePolicies.length > 0 || impact.runningJobCount > 0;
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="provider-delete-title"
-        aria-modal="true"
-        className="console-dialog agent-delete-dialog"
-        role="dialog"
-      >
-        <h2 id="provider-delete-title">Delete provider?</h2>
-        {hasBlockers ? (
-          <p>
-            {provider.displayName} cannot be deleted while active Route Policies or running jobs
-            still depend on it.
-          </p>
-        ) : (
-          <p>
-            This removes {provider.displayName} from the provider list and clears its credentials
-            and runtime health data.
-          </p>
-        )}
-        {impact.providerModels.length > 0 ? (
-          <div className="agent-delete-warning">
-            <p>Provider Models referenced by active Route Policies:</p>
-            <ul>
-              {impact.providerModels.map((model) => (
-                <li key={model.id}>
-                  {model.displayName} ({model.modelId})
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {impact.virtualModels.length > 0 ? (
-          <div className="agent-delete-warning">
-            <p>Virtual Models using this provider:</p>
-            <ul>
-              {impact.virtualModels.map((virtualModel) => (
-                <li key={virtualModel.id}>
-                  <a href="/models">{virtualModel.name}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {impact.routePolicies.length > 0 ? (
-          <div className="agent-delete-warning">
-            <p>Route Policies to update first:</p>
-            <ul>
-              {impact.routePolicies.map((routePolicy) => (
-                <li key={routePolicy.id}>
-                  <a href="/models">{routePolicy.virtualModelName}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {impact.agents.length > 0 ? (
-          <div className="agent-delete-warning">
-            <p>Agents affected by those Virtual Models:</p>
-            <ul>
-              {impact.agents.map((agent) => (
-                <li key={agent.id}>
-                  <a href={`/agents?selected=${agent.id}`}>{agent.name}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+    <ConsoleDialog
+      ariaLabelledby="provider-delete-title"
+      className="console-dialog agent-delete-dialog"
+      closeHref={closeHref}
+      initialFocus="cancel"
+      triggerId={`provider-delete-${provider.id}-trigger`}
+    >
+      <h2 id="provider-delete-title">Delete provider?</h2>
+      {hasBlockers ? (
         <p>
-          Cleanup impact: {impact.apiKeyCount} API keys, {impact.oauthConnectionCount} OAuth
-          connections, {impact.pendingJobCount} pending jobs, {impact.runningJobCount} running jobs.
+          {provider.displayName} cannot be deleted while active Route Policies or running jobs still
+          depend on it.
         </p>
-        <div className="agent-delete-actions">
-          <a className="agent-delete-cancel" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Cancel</span>
-          </a>
-          {hasBlockers ? null : (
-            <form action="/api/providers" method="post">
-              <input type="hidden" name="action" value="delete" />
-              <input type="hidden" name="id" value={provider.id} />
-              <button className="agent-delete-confirm" type="submit">
-                <FlatIcon name="delete" />
-                <span>Delete provider</span>
-              </button>
-            </form>
-          )}
+      ) : (
+        <p>
+          This removes {provider.displayName} from the provider list and clears its credentials and
+          runtime health data.
+        </p>
+      )}
+      {impact.providerModels.length > 0 ? (
+        <div className="agent-delete-warning">
+          <p>Provider Models referenced by active Route Policies:</p>
+          <ul>
+            {impact.providerModels.map((model) => (
+              <li key={model.id}>
+                {model.displayName} ({model.modelId})
+              </li>
+            ))}
+          </ul>
         </div>
-      </section>
-    </>
+      ) : null}
+      {impact.virtualModels.length > 0 ? (
+        <div className="agent-delete-warning">
+          <p>Virtual Models using this provider:</p>
+          <ul>
+            {impact.virtualModels.map((virtualModel) => (
+              <li key={virtualModel.id}>
+                <a href="/models">{virtualModel.name}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {impact.routePolicies.length > 0 ? (
+        <div className="agent-delete-warning">
+          <p>Route Policies to update first:</p>
+          <ul>
+            {impact.routePolicies.map((routePolicy) => (
+              <li key={routePolicy.id}>
+                <a href="/models">{routePolicy.virtualModelName}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {impact.agents.length > 0 ? (
+        <div className="agent-delete-warning">
+          <p>Agents affected by those Virtual Models:</p>
+          <ul>
+            {impact.agents.map((agent) => (
+              <li key={agent.id}>
+                <a href={`/agents?selected=${agent.id}`}>{agent.name}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <p>
+        Cleanup impact: {impact.apiKeyCount} API keys, {impact.oauthConnectionCount} OAuth
+        connections, {impact.pendingJobCount} pending jobs, {impact.runningJobCount} running jobs.
+      </p>
+      <div className="agent-delete-actions">
+        <a className="agent-delete-cancel" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Cancel</span>
+        </a>
+        {hasBlockers ? null : (
+          <form action="/api/providers" method="post">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="id" value={provider.id} />
+            <button className="agent-delete-confirm" type="submit">
+              <FlatIcon name="delete" />
+              <span>Delete provider</span>
+            </button>
+          </form>
+        )}
+      </div>
+    </ConsoleDialog>
   );
 }
 
@@ -469,34 +456,32 @@ function ProviderKeyDeleteDialog({
   provider: ConsoleProvider;
 }) {
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="provider-key-delete-title"
-        aria-modal="true"
-        className="console-dialog agent-delete-dialog"
-        role="dialog"
-      >
-        <h2 id="provider-key-delete-title">Delete API key?</h2>
-        <p>
-          This removes key {keyPrefix} from {provider.displayName}.
-        </p>
-        <div className="agent-delete-actions">
-          <a className="agent-delete-cancel" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Cancel</span>
-          </a>
-          <form action="/api/provider-keys" method="post">
-            <input type="hidden" name="action" value="delete" />
-            <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />
-            <button className="agent-delete-confirm" type="submit">
-              <FlatIcon name="delete" />
-              <span>Delete key</span>
-            </button>
-          </form>
-        </div>
-      </section>
-    </>
+    <ConsoleDialog
+      ariaLabelledby="provider-key-delete-title"
+      className="console-dialog agent-delete-dialog"
+      closeHref={closeHref}
+      initialFocus="cancel"
+      triggerId={`provider-key-delete-${providerApiKeyId}-trigger`}
+    >
+      <h2 id="provider-key-delete-title">Delete API key?</h2>
+      <p>
+        This removes key {keyPrefix} from {provider.displayName}.
+      </p>
+      <div className="agent-delete-actions">
+        <a className="agent-delete-cancel" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Cancel</span>
+        </a>
+        <form action="/api/provider-keys" method="post">
+          <input type="hidden" name="action" value="delete" />
+          <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />
+          <button className="agent-delete-confirm" type="submit">
+            <FlatIcon name="delete" />
+            <span>Delete key</span>
+          </button>
+        </form>
+      </div>
+    </ConsoleDialog>
   );
 }
 

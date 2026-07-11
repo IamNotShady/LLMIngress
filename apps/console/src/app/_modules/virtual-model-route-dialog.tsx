@@ -1,6 +1,7 @@
 "use client";
 
 import { type DragEvent, useMemo, useState } from "react";
+import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
 
 type Strategy = "fixed" | "cost_first" | "random";
@@ -146,12 +147,15 @@ export function VirtualModelRouteDialogClient({
 
   return (
     <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="virtual-model-dialog-title"
-        aria-modal="true"
+      <ConsoleDialog
+        ariaLabelledby="virtual-model-dialog-title"
         className="console-dialog vm-route-dialog"
-        role="dialog"
+        closeHref={closeHref}
+        triggerId={
+          virtualModel
+            ? `virtual-model-edit-${virtualModel.id}-trigger`
+            : "virtual-model-create-dialog-trigger"
+        }
       >
         <div className="console-dialog-head">
           <h2 id="virtual-model-dialog-title">
@@ -199,6 +203,7 @@ export function VirtualModelRouteDialogClient({
                 <div>
                   <label htmlFor="virtual-model-dialog-name">Virtual Model name</label>
                   <input
+                    data-dialog-initial-focus
                     id="virtual-model-dialog-name"
                     name="name"
                     defaultValue={virtualModel?.name ?? ""}
@@ -312,6 +317,7 @@ export function VirtualModelRouteDialogClient({
               </p>
               <button
                 className="secondary-button vm-add-model-button"
+                id="vm-model-picker-trigger"
                 type="button"
                 onClick={() => setPickerOpen(true)}
               >
@@ -328,101 +334,95 @@ export function VirtualModelRouteDialogClient({
             </div>
           </form>
         </div>
-      </section>
+      </ConsoleDialog>
 
       {pickerOpen ? (
-        <>
-          <div className="vm-model-picker-scrim" aria-hidden="true" />
-          <section
-            aria-labelledby="vm-model-picker-title"
-            aria-modal="true"
-            className="console-dialog vm-model-picker"
-            role="dialog"
-          >
-            <div className="console-dialog-head">
-              <h2 id="vm-model-picker-title">Add Model</h2>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => setPickerOpen(false)}
+        <ConsoleDialog
+          ariaLabelledby="vm-model-picker-title"
+          className="console-dialog vm-model-picker"
+          closeHref={closeHref}
+          onRequestClose={() => setPickerOpen(false)}
+          triggerId="vm-model-picker-trigger"
+        >
+          <div className="console-dialog-head">
+            <h2 id="vm-model-picker-title">Add Model</h2>
+            <button className="secondary-button" type="button" onClick={() => setPickerOpen(false)}>
+              <FlatIcon name="cancel" />
+              <span>Close</span>
+            </button>
+          </div>
+          <div className="vm-model-filter-bar">
+            <div>
+              <label htmlFor="vm-model-provider-filter">Provider</label>
+              <select
+                id="vm-model-provider-filter"
+                value={providerFilter}
+                onChange={(event) => setProviderFilter(event.target.value)}
               >
-                <FlatIcon name="cancel" />
-                <span>Close</span>
-              </button>
+                <option value="all">All</option>
+                {providerFilters.map(([providerKey, providerDisplayName]) => (
+                  <option key={providerKey} value={providerKey}>
+                    {providerDisplayName}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="vm-model-filter-bar">
-              <div>
-                <label htmlFor="vm-model-provider-filter">Provider</label>
-                <select
-                  id="vm-model-provider-filter"
-                  value={providerFilter}
-                  onChange={(event) => setProviderFilter(event.target.value)}
-                >
-                  <option value="all">All</option>
-                  {providerFilters.map(([providerKey, providerDisplayName]) => (
-                    <option key={providerKey} value={providerKey}>
-                      {providerDisplayName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="vm-model-name-filter">Model name</label>
-                <input
-                  id="vm-model-name-filter"
-                  placeholder="Search model name"
-                  value={modelQuery}
-                  onChange={(event) => setModelQuery(event.target.value)}
-                />
-              </div>
+            <div>
+              <label htmlFor="vm-model-name-filter">Model name</label>
+              <input
+                id="vm-model-name-filter"
+                placeholder="Search model name"
+                value={modelQuery}
+                onChange={(event) => setModelQuery(event.target.value)}
+              />
             </div>
-            <div className="data-table-wrap">
-              <table className="data-table vm-model-picker-table">
-                <thead>
+          </div>
+          <div className="data-table-wrap">
+            <table className="data-table vm-model-picker-table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Model ID</th>
+                  <th>Context</th>
+                  <th>Input price</th>
+                  <th>Output price</th>
+                  <th>Function calling</th>
+                  <th>Streaming</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleOptions.length === 0 ? (
                   <tr>
-                    <th>Provider</th>
-                    <th>Model ID</th>
-                    <th>Context</th>
-                    <th>Input price</th>
-                    <th>Output price</th>
-                    <th>Function calling</th>
-                    <th>Streaming</th>
+                    <td colSpan={7}>No models found.</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {visibleOptions.length === 0 ? (
-                    <tr>
-                      <td colSpan={7}>No models found.</td>
+                ) : (
+                  visibleOptions.map((option) => (
+                    <tr key={option.id}>
+                      <td>{option.providerDisplayName}</td>
+                      <td>
+                        <button
+                          className="vm-model-select-button"
+                          type="button"
+                          onClick={() => addModel(option)}
+                        >
+                          <strong>{option.modelDisplayName}</strong>
+                          {option.modelId !== option.modelDisplayName ? (
+                            <span>{option.modelId}</span>
+                          ) : null}
+                        </button>
+                      </td>
+                      <td>{formatModelContext(option.contextWindow)}</td>
+                      <td>{formatModelPrice(option.inputUsdPerMillionTokens)}</td>
+                      <td>{formatModelPrice(option.outputUsdPerMillionTokens)}</td>
+                      <td>{formatBooleanFeature(option.supportsFunctionCalling)}</td>
+                      <td>{formatBooleanFeature(option.supportsStreaming)}</td>
                     </tr>
-                  ) : (
-                    visibleOptions.map((option) => (
-                      <tr key={option.id}>
-                        <td>{option.providerDisplayName}</td>
-                        <td>
-                          <button
-                            className="vm-model-select-button"
-                            type="button"
-                            onClick={() => addModel(option)}
-                          >
-                            <strong>{option.modelDisplayName}</strong>
-                            {option.modelId !== option.modelDisplayName ? (
-                              <span>{option.modelId}</span>
-                            ) : null}
-                          </button>
-                        </td>
-                        <td>{formatModelContext(option.contextWindow)}</td>
-                        <td>{formatModelPrice(option.inputUsdPerMillionTokens)}</td>
-                        <td>{formatModelPrice(option.outputUsdPerMillionTokens)}</td>
-                        <td>{formatBooleanFeature(option.supportsFunctionCalling)}</td>
-                        <td>{formatBooleanFeature(option.supportsStreaming)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </ConsoleDialog>
       ) : null}
     </>
   );

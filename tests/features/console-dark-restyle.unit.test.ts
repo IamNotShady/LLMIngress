@@ -297,7 +297,7 @@ describe("console dark restyle static contract", () => {
     expect(limitsSection).not.toContain('className="table-row-link"');
     expect(limitsSection).not.toContain("is-clickable");
     expect(limitsDialog).toContain('className="console-dialog limits-config-dialog"');
-    expect(limitsDialog).toContain('aria-modal="true"');
+    expect(limitsDialog).toContain("<ConsoleDialog");
     expect(limitsDialog).toContain("<span>Save</span>");
     expect(limitsDialog).not.toContain("Save rules");
     expect(limitsDialog).not.toContain("formatLimitsKeyPrefix(agent.keyPrefix)");
@@ -354,7 +354,7 @@ describe("console dark restyle static contract", () => {
     expect(sections).not.toContain("?? activities[0] ?? null");
     expect(sections).toContain("activityDetailCloseHref");
     expect(sections).toContain('className="console-dialog activity-detail-dialog"');
-    expect(sections).toContain('aria-modal="true"');
+    expect(sections).toContain("<ConsoleDialog");
     expect(sections).toContain("<span>Close</span>");
     expect(stylesheet).toMatch(/\.activity-shell\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).toMatch(/\.activity-detail-dialog\s*\{[^}]*width:\s*min\(48rem/s);

@@ -14,7 +14,11 @@ export default async function VirtualModelsPage({
         title="Virtual Models / Routes"
         description="Expose simple routing policies under a Virtual Model name: strategy + candidates."
         actions={
-          <a className="btn" href="/models?virtualModelDialog=new">
+          <a
+            className="btn"
+            href="/models?virtualModelDialog=new"
+            id="virtual-model-create-dialog-trigger"
+          >
             <span>Create Virtual Model</span>
           </a>
         }

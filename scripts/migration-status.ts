@@ -1,3 +1,4 @@
+import { parseArgs } from "node:util";
 import { formatMigrationStatusReport, getMigrationStatus } from "@llmingress/db";
 
 type CliOptions = {
@@ -5,22 +6,19 @@ type CliOptions = {
 };
 
 function readCliOptions(args: string[], env: NodeJS.ProcessEnv): CliOptions {
-  const databaseUrl = readFlagValue(args, "--database-url") ?? env.DATABASE_URL;
+  const { values } = parseArgs({
+    allowPositionals: false,
+    args,
+    options: { "database-url": { type: "string" } },
+    strict: true,
+  });
+  const databaseUrl = values["database-url"] ?? env.DATABASE_URL;
 
   if (!databaseUrl?.trim()) {
     throw new Error("DATABASE_URL or --database-url is required.");
   }
 
   return { databaseUrl };
-}
-
-function readFlagValue(args: string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  if (index === -1) {
-    return undefined;
-  }
-
-  return args[index + 1];
 }
 
 async function main(): Promise<void> {

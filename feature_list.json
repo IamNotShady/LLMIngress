@@ -67,10 +67,10 @@
       "id": "console-core",
       "name": "Console Core",
       "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation and forms.",
-      "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
+      "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-11: Shared pooling, parallel page reads, compact Overview KPIs, inclusive UTC Usage dates, and PostgreSQL model pagination pass 22 unit assertions and four serial real-process/database E2E."
+      "evidence": "2026-07-11: All eight retained pages were rendered against a fresh database. Core onboarding, accurate Gateway target labeling, actionable empty states, Virtual Model recovery guidance, responsive navigation, shared pooling, compact KPIs, UTC Usage dates, and server-side model pagination pass focused unit and real-process E2E."
     },
     {
       "id": "release-guards",

@@ -675,7 +675,12 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
           <div className="chart-card agents-list-card">
             <h2 className="chart-card-title">Agent list</h2>
             {agents.length === 0 ? (
-              <p>No agents yet — create one below.</p>
+              <p>
+                <a className="empty-state-action" href="?agentDialog=new">
+                  Create an Agent
+                </a>{" "}
+                to issue an API key and grant Virtual Model access.
+              </p>
             ) : visibleAgents.length === 0 ? (
               <p>No agents match the selected filters.</p>
             ) : (

@@ -328,7 +328,7 @@ export function VirtualModelRouteDialogClient({
               <a className="secondary-button" href={closeHref}>
                 <span>Cancel</span>
               </a>
-              <button type="submit">
+              <button disabled={selectedCandidates.length === 0} type="submit">
                 <span>{virtualModel ? "Save" : "Create"}</span>
               </button>
             </div>
@@ -393,7 +393,13 @@ export function VirtualModelRouteDialogClient({
               <tbody>
                 {visibleOptions.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>No models found.</td>
+                    <td colSpan={7}>
+                      <p>No compatible models available for this endpoint.</p>
+                      <a className="empty-state-action" href="/providers">
+                        Open Providers
+                      </a>{" "}
+                      to add or refresh Provider Models.
+                    </td>
                   </tr>
                 ) : (
                   visibleOptions.map((option) => (

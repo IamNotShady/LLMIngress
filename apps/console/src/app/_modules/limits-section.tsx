@@ -481,7 +481,26 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                 <tbody>
                   {filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={10}>No limit rules configured.</td>
+                      <td colSpan={10}>
+                        {agents.length === 0 ? (
+                          <>
+                            <a className="empty-state-action" href="/agents?agentDialog=new">
+                              Create an Agent and enable limits
+                            </a>{" "}
+                            to add budget, token, RPM, TPM, and concurrency rules.
+                          </>
+                        ) : query ? (
+                          "No limit rules match the search."
+                        ) : (
+                          <>
+                            No limit rules configured. Edit an Agent from the{" "}
+                            <a className="empty-state-action" href="/agents">
+                              Agents page
+                            </a>{" "}
+                            to enable them.
+                          </>
+                        )}
+                      </td>
                     </tr>
                   ) : (
                     filteredRows.map((row) => {

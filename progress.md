@@ -42,6 +42,7 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - `36b57799` — compressed the pre-release schema and project history to one baseline and nine milestones.
 - `c16fed90` — added shared pooling, parallel Console reads, compact KPIs, correct Usage dates, and server-paginated models.
 - Core delivery hardening is implemented: native accessible dialogs, strict migration CLIs, four compiled non-root runtime images, and enforced JSON coverage thresholds.
+- Post-slimming Console audit completed across all eight retained pages: fresh installs now show the core Provider → Virtual Model → Agent → Playground path, empty states link to their prerequisites, and the sidebar no longer implies Gateway readiness without a health signal.
 
 ## Verification
 

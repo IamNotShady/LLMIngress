@@ -77,8 +77,7 @@ export function Sidebar({
         <div className="sidebar-runtime-card">
           <span className="sidebar-runtime-summary">
             <span className="sidebar-runtime-status">
-              <span className="sidebar-account-dot" aria-hidden="true" />
-              <span className="sidebar-runtime-title">Gateway</span>
+              <span className="sidebar-runtime-title">Gateway target</span>
             </span>
             <em>Gateway URL {gatewayUrlLabel}</em>
             <span className="sidebar-runtime-providers">

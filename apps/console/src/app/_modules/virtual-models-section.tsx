@@ -376,7 +376,12 @@ export async function VirtualModelsSection({
           <div className="chart-card">
             <h2 className="chart-card-title">Virtual Model list</h2>
             {visibleVirtualModels.length === 0 ? (
-              <p>No virtual models configured.</p>
+              <p>
+                <a className="empty-state-action" href="/providers?providerDialog=new">
+                  Add a Provider and refresh its models
+                </a>
+                , then create a Virtual Model from compatible candidates.
+              </p>
             ) : (
               <div className="data-table-wrap">
                 <table className="data-table vm-table">

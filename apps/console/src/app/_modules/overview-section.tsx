@@ -86,6 +86,41 @@ export async function OverviewSection() {
 
   return (
     <section className="overview-dashboard" aria-label="Overview">
+      {usageSummary.requestCount === 0 ? (
+        <section className="chart-card core-onboarding" aria-labelledby="core-onboarding-title">
+          <div className="core-onboarding-copy">
+            <p className="eyebrow">Core setup</p>
+            <h2 id="core-onboarding-title">Route your first request</h2>
+            <p>Configure only the four building blocks required to send and monitor traffic.</p>
+          </div>
+          <ol className="core-onboarding-steps">
+            <li>
+              <a href="/providers?providerDialog=new">
+                <span>1</span>
+                Add a Provider
+              </a>
+            </li>
+            <li>
+              <a href="/models?virtualModelDialog=new">
+                <span>2</span>
+                Create a Virtual Model
+              </a>
+            </li>
+            <li>
+              <a href="/agents?agentDialog=new">
+                <span>3</span>
+                Create an Agent
+              </a>
+            </li>
+            <li>
+              <a href="/playground">
+                <span>4</span>
+                Send a test request
+              </a>
+            </li>
+          </ol>
+        </section>
+      ) : null}
       <div className="stat-grid overview-stat-grid">
         <StatCard
           icon="RQ"

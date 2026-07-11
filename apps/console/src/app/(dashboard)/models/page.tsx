@@ -11,8 +11,8 @@ export default async function VirtualModelsPage({
   return (
     <div className="page models-page">
       <PageHeader
-        title="Virtual Models / Routes"
-        description="Expose simple routing policies under a Virtual Model name: strategy + candidates."
+        title="Virtual Models"
+        description="Combine compatible Provider Models under one routed model name with health filtering and fallback."
         actions={
           <a
             className="btn"

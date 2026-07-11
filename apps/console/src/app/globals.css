@@ -371,17 +371,6 @@ pre,
   border-top: 1px solid var(--border);
 }
 
-.sidebar-account-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--radius-pill);
-  background: var(--ok);
-  flex: none;
-}
-.sidebar-account-dot.is-warn {
-  background: var(--warn);
-}
-
 .sidebar-footer-row {
   display: flex;
   flex-direction: column;
@@ -456,6 +445,62 @@ pre,
   flex-direction: column;
   gap: var(--space-lg);
 }
+.core-onboarding {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.75fr) minmax(0, 1.6fr);
+  gap: var(--space-lg);
+  align-items: center;
+  border-color: var(--accent-soft-border);
+  background: linear-gradient(135deg, var(--accent-soft), var(--surface) 52%);
+}
+.core-onboarding-copy h2 {
+  margin: var(--space-2xs) 0;
+  font-size: var(--text-xl);
+}
+.core-onboarding-copy p:last-child {
+  margin: 0;
+  color: var(--text-muted);
+}
+.core-onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.core-onboarding-steps a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 3.25rem;
+  padding: var(--space-sm);
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+.core-onboarding-steps a:hover {
+  border-color: var(--accent-soft-border);
+  color: var(--accent-strong);
+}
+.core-onboarding-steps span {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  color: var(--accent-text);
+  font-family: var(--font-mono);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+}
+.empty-state-action {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
 
 .agents-dashboard {
   display: flex;
@@ -471,16 +516,12 @@ pre,
 
 /* Vertical rhythm for stacked content blocks (paragraph readouts, sub-cards). */
 .provider-item,
-.runtime-item,
-.settings-panel,
 .activity-detail {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
 }
 .provider-item p,
-.runtime-item p,
-.settings-panel p,
 .activity-detail p {
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -497,8 +538,6 @@ pre,
 }
 .card,
 .provider-item,
-.runtime-item,
-.settings-panel,
 .activity-detail {
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -514,8 +553,7 @@ pre,
    Grids / layouts
    ========================================================================== */
 
-.provider-list,
-.settings-grid {
+.provider-list {
   display: grid;
   gap: var(--space-md);
 }
@@ -2354,14 +2392,6 @@ button.table-row-link {
   background: var(--accent-soft);
 }
 
-/* Health dots glow in the dark shell. */
-.sidebar-account-dot {
-  box-shadow: var(--glow-ok);
-}
-.sidebar-account-dot.is-warn {
-  box-shadow: var(--glow-warn);
-}
-
 /* ---- Progress / usage bars ---- */
 .usage-bar {
   display: flex;
@@ -3285,7 +3315,7 @@ button.table-row-link {
   margin-top: var(--space-xs);
 }
 
-/* ---- Virtual Models / Routes ---- */
+/* ---- Virtual Models ---- */
 .vm-dashboard {
   display: flex;
   flex-direction: column;
@@ -3454,14 +3484,37 @@ button.table-row-link {
 }
 .vm-model-picker-table {
   table-layout: fixed;
+  min-width: 56rem;
 }
 .vm-model-picker-table td,
 .vm-model-picker-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.vm-model-picker-table th:nth-child(1),
+.vm-model-picker-table td:nth-child(1) {
+  width: 14%;
 }
 .vm-model-picker-table th:nth-child(2),
 .vm-model-picker-table td:nth-child(2) {
-  width: 42%;
+  width: 26%;
+}
+.vm-model-picker-table th:nth-child(3),
+.vm-model-picker-table td:nth-child(3),
+.vm-model-picker-table th:nth-child(7),
+.vm-model-picker-table td:nth-child(7) {
+  width: 10%;
+}
+.vm-model-picker-table th:nth-child(4),
+.vm-model-picker-table td:nth-child(4),
+.vm-model-picker-table th:nth-child(5),
+.vm-model-picker-table td:nth-child(5) {
+  width: 12%;
+}
+.vm-model-picker-table th:nth-child(6),
+.vm-model-picker-table td:nth-child(6) {
+  width: 16%;
 }
 .vm-model-select-button {
   appearance: none;
@@ -3513,6 +3566,9 @@ button.table-row-link {
   .overview-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .core-onboarding {
+    grid-template-columns: 1fr;
+  }
   .agents-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3555,6 +3611,9 @@ button.table-row-link {
     height: auto;
   }
   .overview-stat-grid {
+    grid-template-columns: 1fr;
+  }
+  .core-onboarding-steps {
     grid-template-columns: 1fr;
   }
   .activity-page {

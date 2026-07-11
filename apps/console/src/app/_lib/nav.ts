@@ -29,7 +29,7 @@ export const consoleNavItems: ConsoleNavItem[] = [
   },
   {
     label: "Virtual Models",
-    pageTitle: "Virtual Models / Routes",
+    pageTitle: "Virtual Models",
     href: "/models",
     hint: "Names, routes & fallback",
     icon: "VM",

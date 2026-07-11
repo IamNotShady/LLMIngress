@@ -191,7 +191,8 @@ side so paths curve loosely:
 - Center: gateway core — rounded square echoing the brand icon (dark panel,
   violet inner slot, `--glow`), labeled `LLMIngress` in mono.
 - Right rail: 5 provider chips — OpenAI, Anthropic, Google, OpenRouter,
-  Ollama (`Ollama · local` gets a `--ok` dot).
+  Ollama. All chips share one style; no per-chip badges or sub-labels
+  (the local/$0 story belongs to the compatibility section, §4.5).
 - Curved paths agent→core (violet-deep, 1.5px) and core→provider.
 - Story beat drawn into the diagram: the `Claude Code → core → Anthropic`
   route is highlighted. The diagram carries no explanatory text beyond chip

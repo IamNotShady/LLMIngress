@@ -48,10 +48,6 @@
       "types": "./src/console-agents.ts",
       "default": "./src/console-agents.ts"
     },
-    "./console-analytics": {
-      "types": "./src/console-analytics.ts",
-      "default": "./src/console-analytics.ts"
-    },
     "./console-auth": {
       "types": "./src/console-auth.ts",
       "default": "./src/console-auth.ts"

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -21,7 +21,7 @@ const MODEL_COUNT = 60;
 async function seedIaData(databaseUrl: string) {
   const providerId = randomUUID();
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `insert into providers (id, provider_type, provider_key, display_name, enabled)
        values ($1, 'api_key', 'ia-probe-provider', 'IA Probe Provider', true)`,
@@ -47,6 +47,7 @@ async function seedIaData(databaseUrl: string) {
       );
     }
   });
+  return providerId;
 }
 
 test("providers page shows one provider representation with a searchable capped model library; agents KPIs and settings forms behave on mobile", async ({
@@ -59,7 +60,7 @@ test("providers page shows one provider representation with a searchable capped 
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await seedIaData(fixture.databaseUrl);
+    const providerId = await seedIaData(fixture.databaseUrl);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const consoleApp = startConsoleProcess({
@@ -87,11 +88,14 @@ test("providers page shows one provider representation with a searchable capped 
 
           const libraryRows = page.locator(".model-library-table tbody tr");
           await expect(libraryRows).toHaveCount(50);
-          await expect(page.getByText(`Showing first 50 of ${MODEL_COUNT} models`)).toBeVisible();
+          await expect(page.getByText(`Page 1 of 2 · ${MODEL_COUNT} models`)).toBeVisible();
 
-          await page.fill(".model-library-search input", "ia-needle");
+          await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-needle`, {
+            waitUntil: "networkidle",
+          });
           await expect(libraryRows).toHaveCount(1);
           await expect(libraryRows.first()).toContainText("ia-needle-model");
+          expect(new URL(page.url()).searchParams.get("modelQuery")).toBe("ia-needle");
 
           // The page no longer balloons to thousands of pixels.
           const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);

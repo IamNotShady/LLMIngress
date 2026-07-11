@@ -4,10 +4,10 @@
       "id": "core-platform-security",
       "name": "Core Platform Security",
       "description": "Console setup, authentication, CSRF, secret encryption, safe error boundaries, Gateway readiness, configuration reload, and graceful shutdown protect the core platform.",
-      "verification": "pnpm exec vitest run tests/features/console-request-security-contract.unit.test.ts tests/features/console-secure-bootstrap.unit.test.ts tests/features/gateway-lifecycle-drain.unit.test.ts && pnpm test:e2e tests/e2e/console-request-security-contract.e2e.spec.ts tests/e2e/console-secure-bootstrap.e2e.spec.ts tests/e2e/runtime-observability-removal.e2e.spec.ts",
+      "verification": "pnpm exec vitest run tests/features/console-request-security-contract.unit.test.ts tests/features/console-secure-bootstrap.unit.test.ts tests/features/gateway-lifecycle-drain.unit.test.ts && pnpm test:e2e tests/e2e/console-request-security-contract.e2e.spec.ts tests/e2e/console-secure-bootstrap.e2e.spec.ts tests/e2e/runtime-observability-removal.e2e.spec.ts --workers=1",
       "dependencies": [],
       "status": "passing",
-      "evidence": "2026-07-11: Current security and lifecycle contracts are covered by focused unit and real-process E2E verification."
+      "evidence": "2026-07-11: Security/lifecycle unit tests and all five real-process E2E pass. Process-heavy Console E2E run serially to avoid competing Next dev instances."
     },
     {
       "id": "provider-model-management",
@@ -34,7 +34,7 @@
       "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts tests/features/gateway-metadata-only-logging.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts tests/e2e/gateway-metadata-only-logging.e2e.spec.ts",
       "dependencies": ["virtual-model-routing"],
       "status": "passing",
-      "evidence": "2026-07-11: All four public protocols, streaming/error fidelity, and secret-free operational logging pass."
+      "evidence": "2026-07-11: All four public protocols, streaming/error fidelity, secret-free logs, and provider smoke E2E pass. Activity assertions now wait up to five seconds for the intentionally asynchronous metadata write."
     },
     {
       "id": "agent-access-and-limits",
@@ -67,10 +67,10 @@
       "id": "console-core",
       "name": "Console Core",
       "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation and forms.",
-      "verification": "pnpm exec vitest run tests/features/v1-console.unit.test.ts tests/features/console-sections-split.unit.test.ts tests/features/console-shared-formatters.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-sections-split.e2e.spec.ts tests/e2e/console-shared-formatters.e2e.spec.ts",
+      "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-11: Reduced Console navigation, core pages, forms, and shared display behavior pass."
+      "evidence": "2026-07-11: Shared pooling, parallel page reads, compact Overview KPIs, inclusive UTC Usage dates, and PostgreSQL model pagination pass 22 unit assertions and four serial real-process/database E2E."
     },
     {
       "id": "release-guards",
@@ -79,7 +79,7 @@
       "verification": "pnpm exec vitest run tests/features/core-baseline-compression.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/core-baseline-compression.e2e.spec.ts tests/e2e/v1-platform.e2e.spec.ts tests/e2e/v1-release-guards.e2e.spec.ts",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-11: Ten historical migrations were replaced by one reproducible 24-table core baseline. The tracker now contains nine current capability milestones, progress is current-state only, and release guards prevent removed schema, routes, modules, configuration, and Job types from returning. Fresh migration and migration replay checks pass."
+      "evidence": "2026-07-11: One reproducible 24-table baseline, nine current passing milestones, and deleted-surface guards remain enforced after Console performance work."
     }
   ]
 }

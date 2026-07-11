@@ -119,14 +119,14 @@ export async function withPostgresTransaction<T>(
   });
 }
 
-export async function withPostgresClient<T>(
+export async function withDedicatedPostgresClient<T>(
   operation: (client: PostgresQueryClient) => Promise<T>,
 ): Promise<T>;
-export async function withPostgresClient<T>(
+export async function withDedicatedPostgresClient<T>(
   databaseUrl: string | undefined,
   operation: (client: PostgresQueryClient) => Promise<T>,
 ): Promise<T>;
-export async function withPostgresClient<T>(
+export async function withDedicatedPostgresClient<T>(
   databaseUrlOrOperation: string | undefined | ((client: PostgresQueryClient) => Promise<T>),
   maybeOperation?: (client: PostgresQueryClient) => Promise<T>,
 ): Promise<T> {
@@ -135,7 +135,7 @@ export async function withPostgresClient<T>(
   const operation =
     typeof databaseUrlOrOperation === "function" ? databaseUrlOrOperation : maybeOperation;
   if (!operation) {
-    throw new Error("withPostgresClient requires an operation.");
+    throw new Error("withDedicatedPostgresClient requires an operation.");
   }
 
   const client = new PostgresClient(databaseUrl ? { connectionString: databaseUrl } : {});

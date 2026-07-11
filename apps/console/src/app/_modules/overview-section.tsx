@@ -1,5 +1,4 @@
 import { type ConsoleActivity, listConsoleActivities } from "@llmingress/db/console-activity";
-import { getConsoleAnalyticsSnapshot } from "@llmingress/db/console-analytics";
 import {
   formatConsoleCompactCount,
   formatConsoleCount,
@@ -9,6 +8,7 @@ import {
 import {
   type ConsoleUsageDimensionBreakdown,
   type ConsoleUsageTrendPoint,
+  getConsolePrevious24HourKpis,
   getConsoleUsageSummary,
 } from "@llmingress/db/console-usage";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
@@ -66,17 +66,14 @@ function formatActivityModelSummary(activity: ConsoleActivity): string {
 export async function OverviewSection() {
   const now = new Date();
   const overviewStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const usageSummary = await getConsoleUsageSummary({ window: "24h" });
-  const overviewAnalytics = await getConsoleAnalyticsSnapshot({
-    bucket: "hour",
-    end: now,
-    start: overviewStart,
-    topLimit: 20,
-  });
-  const recentActivities = await listConsoleActivities({
-    filters: { from: overviewStart },
-    limit: 8,
-  });
+  const [usageSummary, previousKpis, recentActivities] = await Promise.all([
+    getConsoleUsageSummary({ window: "24h" }),
+    getConsolePrevious24HourKpis({ now }),
+    listConsoleActivities({
+      filters: { from: overviewStart },
+      limit: 8,
+    }),
+  ]);
   const activeAgentCount = usageSummary.agentBreakdowns.filter(
     (agent) => agent.requestCount > 0,
   ).length;
@@ -96,11 +93,11 @@ export async function OverviewSection() {
           value={formatConsoleCompactCount(usageSummary.requestCount)}
           delta={formatPreviousWindowPercentDelta(
             usageSummary.requestCount,
-            overviewAnalytics.previous.requestCount,
+            previousKpis.requestCount,
           )}
           deltaTone={formatDeltaTone(
             usageSummary.requestCount,
-            overviewAnalytics.previous.requestCount,
+            previousKpis.requestCount,
             "up-good",
           )}
         />
@@ -110,11 +107,11 @@ export async function OverviewSection() {
           value={formatConsoleUsd(usageSummary.totalCostUsd)}
           delta={formatPreviousWindowPercentDelta(
             Number(usageSummary.totalCostUsd ?? 0),
-            Number(overviewAnalytics.previous.totalCostUsd ?? 0),
+            Number(previousKpis.totalCostUsd ?? 0),
           )}
           deltaTone={formatDeltaTone(
             Number(usageSummary.totalCostUsd ?? 0),
-            Number(overviewAnalytics.previous.totalCostUsd ?? 0),
+            Number(previousKpis.totalCostUsd ?? 0),
             "down-good",
           )}
         />
@@ -124,13 +121,9 @@ export async function OverviewSection() {
           value={formatConsoleCompactCount(usageSummary.totalTokens)}
           delta={formatPreviousWindowPercentDelta(
             usageSummary.totalTokens,
-            overviewAnalytics.previous.totalTokens,
+            previousKpis.totalTokens,
           )}
-          deltaTone={formatDeltaTone(
-            usageSummary.totalTokens,
-            overviewAnalytics.previous.totalTokens,
-            "up-good",
-          )}
+          deltaTone={formatDeltaTone(usageSummary.totalTokens, previousKpis.totalTokens, "up-good")}
         />
         <StatCard
           icon="FR"
@@ -141,13 +134,13 @@ export async function OverviewSection() {
             usageSummary.requestCount > 0
               ? usageSummary.failureCount / usageSummary.requestCount
               : 0,
-            overviewAnalytics.previous.failureRate,
+            previousKpis.failureRate,
           )}
           deltaTone={formatDeltaTone(
             usageSummary.requestCount > 0
               ? usageSummary.failureCount / usageSummary.requestCount
               : 0,
-            overviewAnalytics.previous.failureRate,
+            previousKpis.failureRate,
             "down-good",
           )}
         />

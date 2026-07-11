@@ -20,13 +20,19 @@ describe("console providers IA and form polish static contract", () => {
     expect(css()).not.toContain(".provider-summary-card");
   });
 
-  test("model library is searchable and capped with a truncation note", () => {
-    const source = providersSection();
-    expect(source).toContain("MODEL_LIBRARY_PAGE_SIZE = 50");
-    expect(source).toContain("model-library-search");
-    expect(source).toContain("Search models");
-    expect(source).toContain("Showing first");
-    expect(source).toContain(".slice(0, MODEL_LIBRARY_PAGE_SIZE)");
+  test("model library search and pagination execute on the server", () => {
+    const clientSource = providersSection();
+    const serverSource = sectionSource("providers-section.tsx");
+    const querySource = readFileSync(
+      join(rootDir, "packages/db/src/console-route-policies.ts"),
+      "utf8",
+    );
+    expect(clientSource).toContain("model-library-search");
+    expect(clientSource).toContain("providerModelPage.pageCount");
+    expect(clientSource).not.toContain("MODEL_LIBRARY_PAGE_SIZE");
+    expect(clientSource).not.toContain("selectedProviderModels.filter");
+    expect(serverSource).toContain("listProviderModelPage");
+    expect(querySource).toContain("limit 50");
   });
 
   test("agents KPI grid collapses to two columns on mobile", () => {

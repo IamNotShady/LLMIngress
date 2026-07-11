@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -27,7 +27,7 @@ async function seedConsoleData(databaseUrl: string) {
   const agentId = randomUUID();
   const virtualModelId = randomUUID();
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `insert into agents (id, name, key_prefix, key_hash, enabled)
        values ($1, 'layout-probe-agent', 'llmi_layout_probe', 'test-hash', true)`,

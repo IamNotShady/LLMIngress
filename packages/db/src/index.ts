@@ -17,8 +17,8 @@ export {
   closePostgresPools,
   getPostgresPool,
   PostgresClient,
+  withDedicatedPostgresClient,
   withPooledPostgresClient,
-  withPostgresClient,
   withPostgresTransaction,
 } from "./client.js";
 export type {

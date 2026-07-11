@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   consoleConflictError,
@@ -117,7 +117,7 @@ export function getVirtualModelDeleteDependencyError(
 }
 
 export async function listVirtualModels(databaseUrl?: string): Promise<ConsoleVirtualModel[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<VirtualModelRow>(buildVirtualModelListSql());
     return result.rows.map(rowToConsoleVirtualModel);
   });
@@ -127,7 +127,7 @@ export async function listVirtualModelFallbackBreakdown(input: {
   databaseUrl?: string;
   virtualModelId: string;
 }): Promise<ConsoleVirtualModelFallbackBreakdown[]> {
-  return withClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<VirtualModelFallbackBreakdownRow>(
       `
         with vm_requests as (
@@ -489,18 +489,4 @@ function requireSavedVirtualModel(
     throw new Error("Virtual Model was not saved.");
   }
   return virtualModel;
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

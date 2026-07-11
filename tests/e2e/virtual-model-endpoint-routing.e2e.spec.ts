@@ -7,7 +7,7 @@ import {
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -97,7 +97,7 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
   const codexModelId = randomUUID();
   const virtualModelId = randomUUID();
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `
         insert into providers (id, provider_type, provider_key, display_name, enabled)

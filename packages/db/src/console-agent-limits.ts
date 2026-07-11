@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolveEffectiveModelTokenPrice } from "@llmingress/billing/price-registry";
-import { PostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
@@ -198,13 +198,13 @@ export function formatAgentLimitSummaries(
 }
 
 export async function listAgentLimits(databaseUrl?: string): Promise<ConsoleAgentLimit[]> {
-  return withClient(databaseUrl, (client) => readAgentLimits(client));
+  return withPooledPostgresClient(databaseUrl, (client) => readAgentLimits(client));
 }
 
 export async function listAgentLimitRuntimeSnapshots(
   databaseUrl?: string,
 ): Promise<ConsoleAgentLimitRuntimeSnapshot[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const budgetUsage = await readAgentLimitBudgetUsage(client);
     const rateWindows = await readAgentLimitRateWindows(client);
     const errorCounts = await readAgentLimitErrorCounts(client);
@@ -613,18 +613,4 @@ function clampPercent(value: number): number {
     return 0;
   }
   return Math.min(999, value);
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

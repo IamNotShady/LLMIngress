@@ -1,4 +1,4 @@
-import { PostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { formatConsoleUsd } from "@llmingress/db/console-format";
 import { consoleValidationError } from "./console-operation-error.ts";
 
@@ -175,10 +175,7 @@ export async function listConsoleActivities(
     typeof input === "string"
       ? normalizeActivityListInput({ databaseUrl: input, limit })
       : normalizeActivityListInput(input);
-  const client = new PostgresClient({ connectionString: listInput.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(listInput.databaseUrl, async (client) => {
     const where = buildActivityWhereClause(listInput.filters);
     const result = await client.query<ActivityRow>(
       `
@@ -247,9 +244,7 @@ export async function listConsoleActivities(
     );
 
     return result.rows.map(rowToConsoleActivity);
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function countConsoleActivities(input: {
@@ -261,10 +256,7 @@ export async function countConsoleActivities(input: {
     page: _filterPage,
     ...filters
   } = normalizeConsoleActivityFilters(input.filters ?? {});
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const where = buildActivityWhereClause(filters);
     const result = await client.query<{ count: string }>(
       `
@@ -275,9 +267,7 @@ export async function countConsoleActivities(input: {
       where.values,
     );
     return Number.parseInt(result.rows[0]?.count ?? "0", 10);
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function getConsoleActivityDetail(input: {
@@ -292,10 +282,7 @@ export async function getConsoleActivityDetail(input: {
     );
   }
 
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ActivityRow>(
       `
         select request_activity.id::text,
@@ -395,9 +382,7 @@ export async function getConsoleActivityDetail(input: {
       requestMetadata: row.request_metadata ?? {},
       responseMetadata: row.response_metadata ?? {},
     };
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export function normalizeConsoleActivityFilters(

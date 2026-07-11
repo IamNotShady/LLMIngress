@@ -1,4 +1,4 @@
-import { PostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { formatConsoleUsd } from "@llmingress/db/console-format";
 
 export type ConsoleUsageWindow = "24h" | "7d" | "30d";
@@ -49,6 +49,13 @@ export type ConsoleUsageSummary = {
   trend: ConsoleUsageTrendPoint[];
   virtualModelBreakdowns: ConsoleUsageDimensionBreakdown[];
   window: ConsoleUsageWindow;
+};
+
+export type ConsoleUsageKpis = {
+  failureRate: number;
+  requestCount: number;
+  totalCostUsd: string | null;
+  totalTokens: number;
 };
 
 type UsageSummaryRow = {
@@ -113,10 +120,7 @@ export async function getConsoleUsageSummary(input: {
   const scope = buildUsageScope(input, range);
   const bucketUnit =
     range.end.getTime() - range.start.getTime() <= 48 * 60 * 60 * 1000 ? "hour" : "day";
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const summaryResult = await client.query<UsageSummaryRow>(
       `
           select count(request_activity.id)::integer as request_count,
@@ -388,9 +392,46 @@ export async function getConsoleUsageSummary(input: {
       ),
       window: input.window,
     };
-  } finally {
-    await client.end();
-  }
+  });
+}
+
+export async function getConsolePrevious24HourKpis(
+  input: { databaseUrl?: string; now?: Date } = {},
+): Promise<ConsoleUsageKpis> {
+  const now = input.now ?? new Date();
+  const end = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<UsageSummaryRow>(
+      `
+        select count(request_activity.id)::integer as request_count,
+               count(request_activity.id) filter (where request_activity.status = 'failed')::integer
+                 as failure_count,
+               null::double precision as avg_latency_ms,
+               '0'::text as input_tokens,
+               '0'::text as output_tokens,
+               coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
+               coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
+                 as total_cost_usd
+        from request_activity
+        left join request_usage on request_usage.request_activity_id = request_activity.id
+        left join request_costs on request_costs.request_activity_id = request_activity.id
+        where request_activity.started_at >= $1
+          and request_activity.started_at < $2
+      `,
+      [start.toISOString(), end.toISOString()],
+    );
+    const row = result.rows[0];
+    const requestCount = row?.request_count ?? 0;
+    const failureCount = row?.failure_count ?? 0;
+    return {
+      failureRate: requestCount > 0 ? failureCount / requestCount : 0,
+      requestCount,
+      totalCostUsd: row?.total_cost_usd ?? null,
+      totalTokens: readInteger(row?.total_tokens),
+    };
+  });
 }
 
 export function formatConsoleUsageCost(totalCostUsd: string | null): string {

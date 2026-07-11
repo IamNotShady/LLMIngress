@@ -40,8 +40,8 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - `633f270b` — simplified routing, Agents, and cost reporting.
 - `e844f2a6` — removed maintenance Job churn and added direct locked retention.
 - Core baseline and project-history compression completed: one migration, 24 final tables, and nine current milestones.
-- Current feature: Console performance.
-- Next: dialog/container/CLI/coverage hardening.
+- Console performance completed: shared pooling, parallel page reads, compact Overview KPIs, correct Usage dates, and server-paginated Provider models.
+- Current feature: dialog/container/CLI/coverage hardening.
 
 ## Verification
 

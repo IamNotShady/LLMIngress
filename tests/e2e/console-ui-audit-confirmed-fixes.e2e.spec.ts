@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -21,7 +21,7 @@ async function seedAuditData(databaseUrl: string) {
   const activityId = randomUUID();
   const otherActivityId = randomUUID();
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `insert into agents (id, name, key_prefix, key_hash, enabled)
        values
@@ -146,7 +146,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
             const to = (document.querySelector("#usage-date-to") as HTMLInputElement).value;
             return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
           });
-          expect(daySpan).toBe(7);
+          expect(daySpan).toBe(6);
           await expect(page.locator(".stat-card", { hasText: "Total cost" })).toContainText(
             "$0.42",
           );

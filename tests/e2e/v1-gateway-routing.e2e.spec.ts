@@ -294,43 +294,49 @@ async function expectRequestActivityRows(
   fixture: Fixture,
   scenarios: readonly V1ProviderCoverageScenario[],
 ): Promise<void> {
-  const result = await fixture.query<{
-    http_status: number;
-    model: string;
-    model_id: string;
-    protocol: string;
-    provider_key: string;
-    request_id: string;
-    status: string;
-  }>(
-    `
-      select request_activity.request_id,
-             request_activity.protocol,
-             request_activity.model,
-             request_activity.status,
-             request_activity.http_status,
-             providers.provider_key,
-             provider_models.model_id
-      from request_activity
-      join providers on providers.id = request_activity.provider_id
-      join provider_models on provider_models.id = request_activity.provider_model_id
-      where request_activity.request_id = any($1::text[])
-      order by array_position($1::text[], request_activity.request_id)
-    `,
-    [scenarios.map((scenario) => scenario.requestId)],
-  );
+  const expected = scenarios.map((scenario) => ({
+    http_status: 200,
+    model: scenario.virtualModelName,
+    model_id: scenario.modelId,
+    protocol: scenario.endpoint,
+    provider_key: scenario.providerKey,
+    request_id: scenario.requestId,
+    status: "succeeded",
+  }));
 
-  expect(result.rows).toEqual(
-    scenarios.map((scenario) => ({
-      http_status: 200,
-      model: scenario.virtualModelName,
-      model_id: scenario.modelId,
-      protocol: scenario.endpoint,
-      provider_key: scenario.providerKey,
-      request_id: scenario.requestId,
-      status: "succeeded",
-    })),
-  );
+  await expect
+    .poll(
+      async () => {
+        const result = await fixture.query<{
+          http_status: number;
+          model: string;
+          model_id: string;
+          protocol: string;
+          provider_key: string;
+          request_id: string;
+          status: string;
+        }>(
+          `
+            select request_activity.request_id,
+                   request_activity.protocol,
+                   request_activity.model,
+                   request_activity.status,
+                   request_activity.http_status,
+                   providers.provider_key,
+                   provider_models.model_id
+            from request_activity
+            join providers on providers.id = request_activity.provider_id
+            join provider_models on provider_models.id = request_activity.provider_model_id
+            where request_activity.request_id = any($1::text[])
+            order by array_position($1::text[], request_activity.request_id)
+          `,
+          [scenarios.map((scenario) => scenario.requestId)],
+        );
+        return result.rows;
+      },
+      { timeout: 5_000 },
+    )
+    .toEqual(expected);
 }
 
 function readHeader(

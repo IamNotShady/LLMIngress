@@ -11,7 +11,7 @@ import {
   listProviders,
   type ProviderDependencyImpact,
 } from "@llmingress/db/console-providers";
-import { listProviderModelOptions } from "@llmingress/db/console-route-policies";
+import { listProviderModelPage } from "@llmingress/db/console-route-policies";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref } from "../_lib/pagination";
 import { ProviderCreateForm } from "./provider-create-form";
@@ -19,7 +19,6 @@ import { ProvidersClientSection } from "./providers-client-section";
 import {
   type ConsoleSearchParams,
   getConsoleProviderOrder,
-  orderProviderModelsForConsole,
   readSingleSearchParam,
 } from "./sections";
 
@@ -524,11 +523,14 @@ function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider
   });
 }
 export async function ProvidersSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const providers = orderProvidersForConsole(await listProviders());
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
-  const providerKeys = await listProviderApiKeyMetadata();
-  const providerOAuthConnections = await listConsoleProviderOAuthConnections();
-  const providerModelOptions = orderProviderModelsForConsole(await listProviderModelOptions());
+  const [providerRows, providerHealthSummaries, providerKeys, providerOAuthConnections] =
+    await Promise.all([
+      listProviders(),
+      listConsoleProviderHealthSummaries(),
+      listProviderApiKeyMetadata(),
+      listConsoleProviderOAuthConnections(),
+    ]);
+  const providers = orderProvidersForConsole(providerRows);
   const providerKeysByProviderId = groupProviderKeysByProviderId(providerKeys);
   const providerDialog = readSingleSearchParam(searchParams.providerDialog);
   const providerDelete = readSingleSearchParam(searchParams.providerDelete);
@@ -571,15 +573,27 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
       ? (providers.find((provider) => provider.id === providerDialog) ?? null)
       : null;
   const deleteDialogProvider = providers.find((provider) => provider.id === providerDelete) ?? null;
-  const deleteProviderImpact = deleteDialogProvider
-    ? await getProviderDependencyImpact({ providerId: deleteDialogProvider.id })
-    : null;
   const selectedProviderId = readSingleSearchParam(searchParams.selected);
   const selectedProvider =
     providers.find((provider) => provider.id === selectedProviderId) ??
     providers.find((provider) => provider.providerKey === "openai") ??
     providers[0] ??
     null;
+  const modelQuery = readSingleSearchParam(searchParams.modelQuery)?.trim() ?? "";
+  const parsedModelPage = Number.parseInt(readSingleSearchParam(searchParams.modelPage) ?? "1", 10);
+  const modelPage = Number.isInteger(parsedModelPage) && parsedModelPage > 0 ? parsedModelPage : 1;
+  const [providerModelPage, deleteProviderImpact] = await Promise.all([
+    selectedProvider
+      ? listProviderModelPage({
+          page: modelPage,
+          providerId: selectedProvider.id,
+          query: modelQuery,
+        })
+      : Promise.resolve({ items: [], page: 1, pageCount: 1, total: 0 }),
+    deleteDialogProvider
+      ? getProviderDependencyImpact({ providerId: deleteDialogProvider.id })
+      : Promise.resolve(null),
+  ]);
   const selectedProviderKeys = selectedProvider
     ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
     : [];
@@ -593,9 +607,10 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
         initialSelectedProviderId={selectedProviderId ?? undefined}
         providerHealthSummaries={providerHealthSummaries}
         providerKeys={providerKeys}
-        providerModelOptions={providerModelOptions}
+        providerModelPage={providerModelPage}
         providerOAuthConnections={providerOAuthConnections}
         providers={providers}
+        modelQuery={modelQuery}
         searchParams={searchParams}
       />
       {providerDialog === "new" ? (

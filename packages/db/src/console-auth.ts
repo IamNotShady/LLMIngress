@@ -6,7 +6,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { promisify } from "node:util";
-import { PostgresClient, readPostgresDatabaseUrl } from "@llmingress/db/client";
+import { readPostgresDatabaseUrl, withPooledPostgresClient } from "@llmingress/db/client";
 import { consoleConflictError, consoleValidationError } from "./console-operation-error.ts";
 
 export const sessionCookieName = "llmingress_console_session";
@@ -87,7 +87,7 @@ export async function readConsoleAuthState(
 }
 
 export async function isConsoleInitialized(databaseUrl?: string): Promise<boolean> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<{ exists: boolean }>(
       "select exists(select 1 from console_admins where id = 1) as exists",
     );
@@ -98,7 +98,7 @@ export async function isConsoleInitialized(databaseUrl?: string): Promise<boolea
 export async function getConsoleSecuritySummary(
   databaseUrl = readPostgresDatabaseUrl(),
 ): Promise<ConsoleSecuritySummary> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<{
       active_session_count: number;
       admin_password_set: boolean;
@@ -138,7 +138,7 @@ export async function createAdminPassword(
   const passwordHash = await hashAdminPassword(password);
 
   try {
-    await withClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
+    await withPooledPostgresClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
       await client.query("insert into console_admins (id, password_hash) values (1, $1)", [
         passwordHash,
       ]);
@@ -167,7 +167,7 @@ export async function loginConsoleAdmin(
       field: "password",
     });
   }
-  const admin = await withClient(databaseUrl, async (client) => {
+  const admin = await withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<AdminRow>(
       "select password_hash from console_admins where id = 1",
     );
@@ -199,7 +199,7 @@ export async function verifyConsoleSession(
   }
 
   const tokenHash = hashSessionToken(sessionToken);
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<SessionRow>(
       `
         select id
@@ -231,7 +231,7 @@ export async function deleteConsoleSession(
     return;
   }
 
-  await withClient(databaseUrl, async (client) => {
+  await withPooledPostgresClient(databaseUrl, async (client) => {
     await client.query("delete from console_sessions where token_hash = $1", [
       hashSessionToken(sessionToken),
     ]);
@@ -270,7 +270,7 @@ async function createConsoleSession(databaseUrl: string | undefined): Promise<Co
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionDurationMs);
 
-  await withClient(databaseUrl, async (client) => {
+  await withPooledPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `
         insert into console_sessions (id, token_hash, expires_at)
@@ -285,20 +285,6 @@ async function createConsoleSession(databaseUrl: string | undefined): Promise<Co
 
 function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("base64url");
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient(databaseUrl ? { connectionString: databaseUrl } : {});
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }
 
 function resolveDatabaseUrlAndSessionToken(

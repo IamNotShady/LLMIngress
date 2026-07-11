@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
-import { PostgresClient } from "@llmingress/db/providers";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   consoleConflictError,
@@ -31,6 +31,7 @@ export type NormalizedProviderFormInput = {
 export type ConsoleProvider = NormalizedProviderFormInput & {
   enabled: boolean;
   id: string;
+  providerModelCount: number;
   providerTemplateId: string | null;
 };
 
@@ -52,6 +53,7 @@ type ProviderRow = {
   enabled: boolean;
   id: string;
   provider_key: string;
+  provider_model_count?: number;
   provider_template_id: string | null;
   provider_type: ProviderType;
 };
@@ -142,7 +144,7 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
 }
 
 export async function listProviders(databaseUrl?: string): Promise<ConsoleProvider[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
         select id::text,
@@ -151,7 +153,13 @@ export async function listProviders(databaseUrl?: string): Promise<ConsoleProvid
                provider_template_id,
                display_name,
                base_url,
-               enabled
+               enabled,
+               (
+                 select count(*)::integer
+                 from provider_models
+                 where provider_models.provider_id = providers.id
+                   and provider_models.deleted_at is null
+               ) as provider_model_count
         from providers
         where deleted_at is null
         order by provider_key
@@ -165,7 +173,7 @@ export async function getProviderDependencyImpact(input: {
   databaseUrl?: string;
   providerId: string;
 }): Promise<ProviderDependencyImpact> {
-  return withClient(input.databaseUrl, async (client) =>
+  return withPooledPostgresClient(input.databaseUrl, async (client) =>
     readProviderDependencyImpact(client, input.providerId),
   );
 }
@@ -496,6 +504,7 @@ function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
     enabled: row.enabled,
     id: row.id,
     providerKey: row.provider_key,
+    providerModelCount: row.provider_model_count ?? 0,
     providerTemplateId: row.provider_template_id,
     providerType: row.provider_type,
   };
@@ -780,18 +789,4 @@ function uniqueBy<T>(items: T[], key: (item: T) => string): T[] {
     seen.add(value);
     return true;
   });
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

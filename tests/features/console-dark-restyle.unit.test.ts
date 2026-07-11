@@ -401,7 +401,7 @@ describe("console dark restyle static contract", () => {
     expect(baselineMigration).not.toContain("default_priority");
   });
 
-  test("providers list changes selection locally without route navigation", () => {
+  test("providers list keeps selection and model pagination in page query parameters", () => {
     const sections = moduleSource("providers-section.tsx");
     const providersClientSection = readFileSync(
       join(appDir, "_modules/providers-client-section.tsx"),
@@ -409,19 +409,14 @@ describe("console dark restyle static contract", () => {
     );
 
     expect(sections).toContain("ProvidersClientSection");
-    expect(sections).not.toContain("const providerHref = buildQueryHref(searchParams");
     expect(providersClientSection).toContain('"use client"');
     expect(providersClientSection).toContain("useState");
-    expect(providersClientSection).toContain("toggleProvider(provider.id)");
-    expect(providersClientSection).toContain(
-      "currentProviderId === providerId ? null : providerId",
-    );
-    expect(providersClientSection).toContain("const selectedProvider = selectedProviderId");
-    expect(providersClientSection).toContain(
-      "providers.find((provider) => provider.id === selectedProviderId)",
-    );
-    expect(providersClientSection).toContain('type="button"');
-    expect(providersClientSection).not.toContain("href={providerHref}");
+    expect(providersClientSection).not.toContain("toggleProvider(provider.id)");
+    expect(providersClientSection).toContain("selected: provider.id");
+    expect(providersClientSection).toContain("modelPage: undefined");
+    expect(providersClientSection).toContain("modelQuery: undefined");
+    expect(providersClientSection).toContain('name="modelQuery"');
+    expect(providersClientSection).toContain("providerModelPage.pageCount");
   });
 
   test("provider details expand inline inside the provider list", () => {

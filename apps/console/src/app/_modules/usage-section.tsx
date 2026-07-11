@@ -8,7 +8,6 @@ import { listProviders } from "@llmingress/db/console-providers";
 import {
   type ConsoleUsageDimensionBreakdown,
   type ConsoleUsageTrendPoint,
-  type ConsoleUsageWindow,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
 } from "@llmingress/db/console-usage";
@@ -16,6 +15,7 @@ import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
 import { StatCard } from "../_components/stat-card";
+import { resolveConsoleUsageDateRange } from "../_lib/usage-date-range";
 import {
   type ConsoleSearchParams,
   failureRateTone,
@@ -53,52 +53,6 @@ function UsageCostDonut({
 function readOptionalFilterParam(value: string | string[] | undefined): string | null {
   const param = readSingleSearchParam(value)?.trim();
   return param ? param : null;
-}
-
-function parseUsageDateStart(value: string | undefined): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return null;
-  }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function parseUsageDateEndExclusive(value: string | undefined): Date | null {
-  const start = parseUsageDateStart(value);
-  if (!start) {
-    return null;
-  }
-  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
-}
-
-function getUsageDateInputValues(input: {
-  dateFromParam: string | undefined;
-  dateToParam: string | undefined;
-  now: Date;
-  window: ConsoleUsageWindow;
-}): { dateFromValue: string; dateToValue: string } {
-  const fallbackFrom = getUsageDateFallbackStart(input.now, input.window);
-  return {
-    dateFromValue: parseUsageDateStart(input.dateFromParam)
-      ? (input.dateFromParam ?? formatUsageDateInput(fallbackFrom))
-      : formatUsageDateInput(fallbackFrom),
-    dateToValue: parseUsageDateStart(input.dateToParam)
-      ? (input.dateToParam ?? formatUsageDateInput(input.now))
-      : formatUsageDateInput(input.now),
-  };
-}
-
-function getUsageDateFallbackStart(now: Date, window: ConsoleUsageWindow): Date {
-  const durationMs = {
-    "24h": 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-  }[window];
-  return new Date(now.getTime() - durationMs);
-}
-
-function formatUsageDateInput(value: Date): string {
-  return value.toISOString().slice(0, 10);
 }
 
 function formatCostTrendPoint(point: ConsoleUsageTrendPoint) {
@@ -147,17 +101,18 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
   const selectedVirtualModelId = readOptionalFilterParam(searchParams.virtualModelId);
   const selectedProviderId = readOptionalFilterParam(searchParams.providerId);
   const now = new Date();
-  const { dateFromValue, dateToValue } = getUsageDateInputValues({
-    dateFromParam,
-    dateToParam,
+  const usageDateRange = resolveConsoleUsageDateRange({
+    dateFrom: dateFromParam,
+    dateTo: dateToParam,
     now,
     window: usageWindow,
   });
+  const { dateFromValue, dateToValue } = usageDateRange;
   const [usageSummary, agents, virtualModels, providers] = await Promise.all([
     getConsoleUsageSummary({
       agentId: selectedAgentId,
-      dateFrom: parseUsageDateStart(dateFromValue),
-      dateTo: parseUsageDateEndExclusive(dateToValue),
+      dateFrom: usageDateRange.start,
+      dateTo: usageDateRange.endExclusive,
       now,
       providerId: selectedProviderId,
       virtualModelId: selectedVirtualModelId,

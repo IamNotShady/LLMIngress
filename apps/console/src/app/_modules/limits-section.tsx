@@ -353,10 +353,12 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
   const dialogAgentId = readSingleSearchParam(searchParams.limitDialog);
   const deleteDialogAgentId = readSingleSearchParam(searchParams.limitDelete);
   const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
-  const agents = await listAgents();
-  const agentLimits = await listAgentLimits();
-  const runtimeSnapshots = await listAgentLimitRuntimeSnapshots();
-  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
+  const [agents, agentLimits, runtimeSnapshots, agentVirtualModelAccess] = await Promise.all([
+    listAgents(),
+    listAgentLimits(),
+    listAgentLimitRuntimeSnapshots(),
+    listAgentVirtualModelAccess(),
+  ]);
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
   const runtimeByAgentId = new Map(
     runtimeSnapshots.map((snapshot) => [snapshot.agentId, snapshot]),

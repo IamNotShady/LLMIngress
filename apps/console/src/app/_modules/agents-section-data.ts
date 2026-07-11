@@ -4,11 +4,14 @@ import { getConsoleUsageSummary } from "@llmingress/db/console-usage";
 import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 
 export async function loadAgentsSectionData() {
-  const usageToday = await getConsoleUsageSummary({ window: "24h" });
-  const agents = await listAgents();
-  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
-  const agentLimits = await listAgentLimits();
-  const virtualModels = await listVirtualModels();
+  const [usageToday, agents, agentVirtualModelAccess, agentLimits, virtualModels] =
+    await Promise.all([
+      getConsoleUsageSummary({ window: "24h" }),
+      listAgents(),
+      listAgentVirtualModelAccess(),
+      listAgentLimits(),
+      listVirtualModels(),
+    ]);
 
   return { agentLimits, agentVirtualModelAccess, agents, usageToday, virtualModels };
 }

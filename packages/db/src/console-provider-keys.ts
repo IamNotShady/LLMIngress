@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
@@ -131,7 +131,7 @@ export function readConsoleMasterKeySource(
 export async function listProviderApiKeyMetadata(
   databaseUrl?: string,
 ): Promise<ProviderApiKeyMetadata[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderApiKeyStorageRow>(
       `
         select id::text,
@@ -327,18 +327,4 @@ function requireProviderApiKeyRow(
     throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found");
   }
   return row;
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

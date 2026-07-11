@@ -1,4 +1,4 @@
-import { PostgresClient } from "@llmingress/db/client";
+import { type PostgresQueryClient, withPooledPostgresClient } from "@llmingress/db/client";
 
 export type ConsoleStoredProviderHealthStatus =
   | "auth_failed"
@@ -70,10 +70,7 @@ const defaultHealthStaleAfterMs = 5 * 60 * 1000;
 export async function listConsoleProviderHealthSummaries(
   input: ListConsoleProviderHealthSummariesInput = {},
 ): Promise<ConsoleProviderHealthSummary[]> {
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const hasSoftDeleteColumns = await providerHealthSoftDeleteColumnsAvailable(client);
     const providerDeletedFilter = hasSoftDeleteColumns ? "where providers.deleted_at is null" : "";
     const providerModelDeletedFilter = hasSoftDeleteColumns
@@ -153,12 +150,12 @@ export async function listConsoleProviderHealthSummaries(
         staleAfterMs,
       }),
     );
-  } finally {
-    await client.end();
-  }
+  });
 }
 
-async function providerHealthSoftDeleteColumnsAvailable(client: PostgresClient): Promise<boolean> {
+async function providerHealthSoftDeleteColumnsAvailable(
+  client: PostgresQueryClient,
+): Promise<boolean> {
   const result = await client.query<{ available: boolean }>(
     `
       select count(*) = 2 as available

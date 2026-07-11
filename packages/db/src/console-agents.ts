@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { PostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
@@ -203,7 +203,7 @@ export function getAgentDeleteDependencyError(_input: AgentDependencyCounts): st
 }
 
 export async function listAgents(databaseUrl?: string): Promise<ConsoleAgent[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<AgentRow>(
       `
         select agents.id::text,
@@ -390,7 +390,9 @@ export function formatAgentVirtualModelAccess(input: {
 export async function listAgentVirtualModelAccess(
   databaseUrl?: string,
 ): Promise<AgentVirtualModelAccess[]> {
-  return withClient(databaseUrl, async (client) => readAgentVirtualModelAccess(client));
+  return withPooledPostgresClient(databaseUrl, async (client) =>
+    readAgentVirtualModelAccess(client),
+  );
 }
 
 export async function updateAgentVirtualModelAccess(input: {
@@ -816,18 +818,4 @@ function requireAgentVirtualModelAccess(
     throw new Error("Agent virtual model access was not saved.");
   }
   return access;
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

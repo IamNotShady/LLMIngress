@@ -39,7 +39,7 @@ export const consoleNavItems: ConsoleNavItem[] = [
   { label: "Limits", href: "/limits", hint: "Budgets & rate limits", icon: "LI" },
   { label: "Playground", href: "/playground", hint: "Send a live request", icon: "PG" },
   { label: "Gateway Runtime", href: "/runtime", hint: "Status & migrations", icon: "GW" },
-  { label: "Settings", href: "/settings", hint: "Preferences & alerts", icon: "ST" },
+  { label: "Settings", href: "/settings", hint: "Preferences & security", icon: "ST" },
 ];
 
 /** Resolve the active nav item for a given pathname (longest matching href wins). */

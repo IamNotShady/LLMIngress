@@ -1,8 +1,5 @@
 import type { ConsoleActivity } from "@llmingress/db/console-activity";
-import {
-  type ConsoleAgentLimit,
-  defaultAgentLimitFormValues,
-} from "@llmingress/db/console-agent-limits";
+import type { ConsoleAgentLimit } from "@llmingress/db/console-agent-limits";
 import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provider-health";
 import type {
   ConsoleProviderModelOption,
@@ -62,11 +59,6 @@ export function ActivityStatusPill({ status }: { status: string }) {
     return <span className="pill--danger pill">Failed</span>;
   }
   return <span className="pill">{status}</span>;
-}
-
-export function readAgentAlertThresholdPercent(limits: readonly ConsoleAgentLimit[]): number {
-  const configuredThreshold = limits.find((limit) => limit.alertThreshold !== null)?.alertThreshold;
-  return (configuredThreshold ?? defaultAgentLimitFormValues.alertThresholdPercent / 100) * 100;
 }
 
 export function formatDateTime(value: Date): string {

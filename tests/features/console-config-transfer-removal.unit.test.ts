@@ -22,21 +22,18 @@ describe("console config transfer removal", () => {
     expect(dbPackage.exports["./console-import-export"]).toBeUndefined();
   });
 
-  it("keeps worker backup and operational export modules", () => {
+  it("does not replace removed Console config transfer with Worker backup or export", () => {
     for (const path of [
       "packages/worker-runtime/src/worker-backup.ts",
       "packages/worker-runtime/src/worker-jsonl-export.ts",
       "packages/worker-runtime/src/worker-cost-report-export.ts",
       "packages/worker-runtime/src/worker-webhook-export.ts",
     ]) {
-      expect(existsSync(join(repoRoot, path)), path).toBe(true);
+      expect(existsSync(join(repoRoot, path)), path).toBe(false);
     }
 
     const workerMain = readFileSync(join(repoRoot, "apps/worker/src/main.ts"), "utf8");
-    expect(workerMain).toContain("createBackupJobHandler");
-    expect(workerMain).toContain("createJsonlRequestLogExportJobHandler");
-    expect(workerMain).toContain("createCostReportExportJobHandler");
-    expect(workerMain).toContain("createWebhookEventExportJobHandler");
+    expect(workerMain).not.toMatch(/Backup|Jsonl|CostReportExport|WebhookEventExport/);
   });
 
   it("documents only operational exports and database backup, not Console config transfer", () => {
@@ -46,13 +43,13 @@ describe("console config transfer removal", () => {
     expect(product).not.toMatch(/config import\/export/i);
     expect(product).not.toMatch(/Export Provider \/ Model \/ Route Policy configuration/i);
     expect(product).not.toMatch(/Import configuration backups/i);
-    expect(product).toMatch(/Export request records/i);
-    expect(product).toMatch(/Export cost reports/i);
-    expect(product).toMatch(/Automatically back up the configuration database/i);
+    expect(product).not.toMatch(/Export request records/i);
+    expect(product).not.toMatch(/Export cost reports/i);
+    expect(product).not.toMatch(/Automatically back up the configuration database/i);
 
     expect(architecture).not.toMatch(/data import\/export/i);
     expect(architecture).not.toMatch(/import\/export entry points/i);
-    expect(architecture).toMatch(/JSONL \/ webhook export/i);
-    expect(architecture).toMatch(/scheduled backup/i);
+    expect(architecture).not.toMatch(/JSONL \/ webhook export/i);
+    expect(architecture).not.toMatch(/scheduled backup/i);
   });
 });

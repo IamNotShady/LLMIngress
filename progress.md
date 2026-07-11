@@ -614,8 +614,6 @@
   - `pnpm run db:migrate:check`
   - `pnpm run verify`
   - `pnpm run verify:features` passed with all 21 passing features re-verified.
-- Remaining risks/non-goals: JSONL keeps the legacy `fallbackAttempts` output contract, but it is now reconstructed from `fallback_events`. `0007_drop_concurrency_windows` remains unimplemented pending the multi-instance Gateway product decision documented in `docs/SCHEMA_REFACTOR.md`.
-
 ## 2026-07-05 Provider Connectivity Probe Model Fix
 
 - Fixed false unhealthy OpenAI provider probes:
@@ -963,6 +961,17 @@
 - Focused verification passed: `pnpm exec vitest run tests/features/console-config-transfer-removal.unit.test.ts tests/features/console-api-hygiene.unit.test.ts tests/features/refactor-zod-boundaries.unit.test.ts tests/features/console-request-security-contract.unit.test.ts` and `pnpm test:e2e tests/e2e/console-config-transfer-removal.e2e.spec.ts tests/e2e/console-request-security-contract.e2e.spec.ts`.
 - Final verification passed: `jq empty feature_list.json`, `pnpm exec vitest run tests/features/console-config-transfer-removal.unit.test.ts tests/features/v1-release-guards.unit.test.ts`, `pnpm test:e2e tests/e2e/console-config-transfer-removal.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` with all 49 passing features re-verified.
 - Blockers: none open.
+
+## 2026-07-11 Core Slimming 1 - Worker Non-Core Removal
+
+- Removed alert evaluation and delivery, notification channels, JSONL/cost/webhook exports, database backup, billing reconciliation, and all associated Worker handlers, Console APIs/UI, environment variables, package exports, commands, docs, and obsolete tests.
+- Removed Agent limit alert thresholds while retaining budget, RPM, TPM, concurrency, and per-request token enforcement.
+- Worker now registers model refresh, Provider connectivity check, price sync, retention cleanup, and stale-concurrency repair. The final two remain temporary persistent jobs until `worker-job-churn-removal` converts them to direct maintenance.
+- RED unit failed on the existing modules, command, package export, domain vocabulary, and 15 registered handlers. RED Console E2E returned 400 from the old notification API instead of framework 404.
+- Focused unit and E2E passed, including real core Worker job completion and active/expired lease behavior.
+- `pnpm run verify` passed with 53 test files and 281 tests. The first `pnpm run verify:features` found one obsolete Webhook form assertion while 53 other E2Es passed; after removing it, the focused Console E2E passed. Final `pnpm run verify` and `pnpm run verify:features` passed with all 49 passing features re-verified.
+- This feature deleted 11,169 lines and added 319 lines before commit review.
+- Blockers: none.
 
 ## Required Verification
 

@@ -9,7 +9,6 @@ const formerMapperFiles = [
   "packages/gateway-runtime/src/gateway-config-reload.ts",
   "packages/db/src/console-route-policies.ts",
   "packages/db/src/console-agent-limits.ts",
-  "packages/worker-runtime/src/worker-billing-reconciliation.ts",
   "packages/db/src/console-price-overrides.ts",
   "packages/db/src/console-route-preview.ts",
 ];

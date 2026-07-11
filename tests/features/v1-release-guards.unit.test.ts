@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = process.cwd();
 const allowedFeatureIds = [
+  "worker-noncore-removal",
   "v1-platform",
   "v1-gateway-routing",
   "v1-console",
@@ -23,7 +24,6 @@ const allowedFeatureIds = [
   "gateway-request-hygiene",
   "gateway-cohesion-refactor",
   "schema-vocab-checks-relaxed",
-  "schema-notification-deliveries-removed",
   "schema-fallback-single-source",
   "virtual-model-endpoint-routing",
   "gateway-listen-host",
@@ -37,10 +37,8 @@ const allowedFeatureIds = [
   "gateway-metadata-only-logging",
   "gateway-lifecycle-drain",
   "worker-lease-recovery",
-  "worker-webhook-egress-hardening",
   "console-sections-split",
   "refactor-route-strategy-registry",
-  "refactor-notification-transport-registry",
   "refactor-price-row-mappers",
   "refactor-agent-limit-domain-types",
   "refactor-config-ownership",
@@ -64,7 +62,6 @@ const sharedE2EFeatureIds: Record<string, string> = {
   "refactor-provider-descriptor": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
   "refactor-db-package-split": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
   "refactor-shared-logger": "tests/e2e/v1-gateway-routing.e2e.spec.ts",
-  "refactor-notification-transport-registry": "tests/e2e/v1-worker-ops.e2e.spec.ts",
   "refactor-agent-limit-domain-types": "tests/e2e/v1-console.e2e.spec.ts",
   "refactor-config-ownership": "tests/e2e/v1-console.e2e.spec.ts",
   "refactor-db-row-strict-types": "tests/e2e/v1-worker-ops.e2e.spec.ts",
@@ -74,6 +71,7 @@ const sharedE2EFeatureIds: Record<string, string> = {
 };
 
 const inProgressFeatureIds = new Set([
+  "worker-noncore-removal",
   "gateway-db-pool",
   "gateway-recording-resilience",
   "gateway-stream-robustness",
@@ -82,7 +80,6 @@ const inProgressFeatureIds = new Set([
   "gateway-request-hygiene",
   "gateway-cohesion-refactor",
   "schema-vocab-checks-relaxed",
-  "schema-notification-deliveries-removed",
   "schema-fallback-single-source",
   "virtual-model-endpoint-routing",
   "gateway-listen-host",
@@ -94,7 +91,6 @@ const inProgressFeatureIds = new Set([
   "provider-authenticated-http-safety",
   "console-sections-split",
   "refactor-route-strategy-registry",
-  "refactor-notification-transport-registry",
   "refactor-price-row-mappers",
   "refactor-agent-limit-domain-types",
   "refactor-config-ownership",
@@ -133,8 +129,6 @@ describe("v1 release guards milestone", () => {
 
   it("keeps stale generated artifacts and one-off docs out of the repo", () => {
     const stalePaths = [
-      "apps/worker/.llmingress/backups/llmingress-backup-scheduled-2026-06-17T00-00-00-000Z.json",
-      "apps/worker/.llmingress/backups/llmingress-backup-scheduled-2026-06-18T00-00-00-000Z.json",
       "docs/PLAN.md",
       "docs/console-ui-operator-grade-polish-implementation.md",
       "session-handoff.md",

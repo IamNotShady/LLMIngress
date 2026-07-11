@@ -1420,7 +1420,7 @@ body:has(.console-dialog-scrim) {
   color: var(--text-subtle);
 }
 
-/* Numeric table cells that crossed an alert threshold. */
+/* Numeric table cells that crossed a configured limit. */
 .num-danger {
   color: var(--danger);
   font-weight: 700;
@@ -2534,11 +2534,6 @@ button.table-row-link {
   gap: var(--space-lg);
   min-width: 0;
 }
-.notification-channel-save-button {
-  justify-self: center;
-  min-width: 6rem;
-}
-
 /* ---- Playground reference layout ---- */
 .playground-page {
   max-width: none;

@@ -30,7 +30,7 @@ test("schema vocab checks are relaxed while machine states remain constrained", 
 
     await expect(
       fixture.query(
-        "insert into jobs (id, job_type, status, trigger) values ($1, 'backup', 'bogus_status', 'manual')",
+        "insert into jobs (id, job_type, status, trigger) values ($1, 'future_job_type', 'bogus_status', 'manual')",
         [randomUUID()],
       ),
     ).rejects.toThrow(/jobs_status_check/);

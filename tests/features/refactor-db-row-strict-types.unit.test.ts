@@ -33,9 +33,6 @@ describe("refactor-db-row-strict-types", () => {
   });
 
   it("drops the index-signature-driven casts", () => {
-    const jsonl = readFileSync("packages/worker-runtime/src/worker-jsonl-export.ts", "utf8");
-    expect(jsonl).not.toContain("row.cost_source as string");
-    expect(jsonl).not.toContain("row.token_source as string");
     const modelRefresh = readFileSync(
       "packages/worker-runtime/src/worker-model-refresh.ts",
       "utf8",

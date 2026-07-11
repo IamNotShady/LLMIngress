@@ -1,26 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
-import { readBackupSettings } from "./worker-backup.ts";
-import { readBudgetThresholdAlertSettings } from "./worker-budget-threshold-alerts.ts";
-import { readFallbackExhaustionAlertSettings } from "./worker-fallback-exhaustion-alerts.ts";
 import { JOB_CREATED_CHANNEL } from "./worker-job-runner.ts";
-import { readProviderFailureAlertSettings } from "./worker-provider-failure-alerts.ts";
-import { readRateLimitAlertSettings } from "./worker-rate-limit-alerts.ts";
 import { readRetentionCleanupSettings } from "./worker-retention-cleanup.ts";
 
-export type PeriodicTaskJobType =
-  | "model_refresh"
-  | "provider_connectivity_check"
-  | "price_sync"
-  | "billing_reconciliation"
-  | "retention_cleanup"
-  | "stale_concurrency_reconcile"
-  | "webhook_export"
-  | "backup"
-  | "budget_threshold_alerts"
-  | "rate_limit_alerts"
-  | "provider_failure_alerts"
-  | "fallback_exhaustion_alerts";
+export type PeriodicTaskJobType = "retention_cleanup" | "stale_concurrency_reconcile";
 
 export type PeriodicTaskDefinition = {
   id: string;
@@ -78,11 +61,6 @@ type CreatePostgresPeriodicSchedulerOptions = Omit<CreatePeriodicSchedulerOption
 const defaultTickIntervalMs = 30_000;
 
 export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
-  const backupSettings = readBackupSettings();
-  const budgetThresholdAlertSettings = readBudgetThresholdAlertSettings();
-  const fallbackExhaustionAlertSettings = readFallbackExhaustionAlertSettings();
-  const providerFailureAlertSettings = readProviderFailureAlertSettings();
-  const rateLimitAlertSettings = readRateLimitAlertSettings();
   const retentionCleanupSettings = readRetentionCleanupSettings();
 
   return [
@@ -102,54 +80,6 @@ export function createDefaultPeriodicTasks(): PeriodicTaskDefinition[] {
       maxAttempts: 1,
       payload: { retentionDays: retentionCleanupSettings.retentionDays },
       priority: 0,
-      startAt: new Date(0),
-    },
-    {
-      id: "backup",
-      intervalMs: backupSettings.intervalMs,
-      jobType: "backup",
-      maxAttempts: 1,
-      payload: { outputDir: backupSettings.outputDir },
-      priority: -10,
-      startAt: new Date(0),
-    },
-    {
-      id: "budget-threshold-alerts",
-      intervalMs: budgetThresholdAlertSettings.intervalMs,
-      jobType: "budget_threshold_alerts",
-      maxAttempts: 1,
-      payload: { thresholdRatios: budgetThresholdAlertSettings.thresholdRatios },
-      priority: -5,
-      startAt: new Date(0),
-    },
-    {
-      id: "rate-limit-alerts",
-      intervalMs: rateLimitAlertSettings.intervalMs,
-      jobType: "rate_limit_alerts",
-      maxAttempts: 1,
-      payload: {
-        thresholdCount: rateLimitAlertSettings.thresholdCount,
-        windowMs: rateLimitAlertSettings.windowMs,
-      },
-      priority: -5,
-      startAt: new Date(0),
-    },
-    {
-      id: "provider-failure-alerts",
-      intervalMs: providerFailureAlertSettings.intervalMs,
-      jobType: "provider_failure_alerts",
-      maxAttempts: 1,
-      payload: { thresholdCount: providerFailureAlertSettings.thresholdCount },
-      priority: -5,
-      startAt: new Date(0),
-    },
-    {
-      id: "fallback-exhaustion-alerts",
-      intervalMs: fallbackExhaustionAlertSettings.intervalMs,
-      jobType: "fallback_exhaustion_alerts",
-      maxAttempts: 1,
-      payload: { windowMs: fallbackExhaustionAlertSettings.windowMs },
-      priority: -5,
       startAt: new Date(0),
     },
   ];

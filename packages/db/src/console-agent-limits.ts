@@ -20,7 +20,6 @@ import type {
 } from "@llmingress/domain";
 
 export type AgentLimitRuleInput = {
-  alertThreshold?: number | null;
   enforcementPolicy?: AgentLimitEnforcementPolicy;
   limitType: AgentLimitType;
   limitValue: number;
@@ -31,7 +30,6 @@ export type AgentLimitRuleInput = {
 
 export type AgentLimitFormInput = {
   agentId?: string | null;
-  alertThresholdPercent?: string | number | null;
   budgetPeriod?: string | null;
   budgetUsd?: string | number | null;
   concurrency?: string | number | null;
@@ -63,7 +61,6 @@ export type ConsoleAgentLimitRuntimeSnapshot = {
 };
 
 type AgentLimitRow = {
-  alert_threshold: string | null;
   agent_id: string;
   enabled: boolean;
   enforcement_policy: AgentLimitEnforcementPolicy;
@@ -124,7 +121,6 @@ type QueryClient = {
 const budgetPeriods = ["day", "week", "month"] as const;
 
 export const defaultAgentLimitFormValues = {
-  alertThresholdPercent: 80,
   budgetPeriod: "month",
   budgetUsd: 10,
   concurrency: 10,
@@ -138,13 +134,11 @@ export function normalizeAgentLimitFormInput(
 ): NormalizedAgentLimitFormInput {
   const agentId = normalizeRequiredText(input.agentId, "Agent id");
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
-  const alertThreshold = normalizeAlertThresholdPercent(input.alertThresholdPercent);
 
   return {
     agentId,
     rules: [
       {
-        alertThreshold,
         enforcementPolicy: "block",
         limitType: "budget",
         limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
@@ -153,7 +147,6 @@ export function normalizeAgentLimitFormInput(
         unit: "usd",
       },
       {
-        alertThreshold,
         enforcementPolicy: "block",
         limitType: "rpm",
         limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
@@ -162,7 +155,6 @@ export function normalizeAgentLimitFormInput(
         unit: "requests",
       },
       {
-        alertThreshold,
         enforcementPolicy: "block",
         limitType: "tpm",
         limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
@@ -171,7 +163,6 @@ export function normalizeAgentLimitFormInput(
         unit: "tokens",
       },
       {
-        alertThreshold,
         enforcementPolicy: "block",
         limitType: "concurrency",
         limitValue: normalizePositiveNumber(
@@ -183,7 +174,6 @@ export function normalizeAgentLimitFormInput(
         unit: "requests",
       },
       {
-        alertThreshold,
         enforcementPolicy: "block",
         limitType: "token",
         limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
@@ -297,11 +287,10 @@ export async function saveAgentLimitRules(input: {
               limit_value,
               unit,
               enabled,
-              alert_threshold,
               enforcement_policy,
               manual_bypass
             )
-            values ($1, $2, $3, $4, $5, $6, true, $7, $8, $9)
+            values ($1, $2, $3, $4, $5, $6, true, $7, $8)
           `,
           [
             randomUUID(),
@@ -310,7 +299,6 @@ export async function saveAgentLimitRules(input: {
             rule.period,
             rule.limitValue,
             rule.unit,
-            rule.alertThreshold ?? null,
             rule.enforcementPolicy ?? "block",
             rule.manualBypass ?? false,
           ],
@@ -473,7 +461,6 @@ async function readAgentLimits(
              limit_value::text,
              unit,
              enabled,
-             alert_threshold::text,
              enforcement_policy,
              manual_bypass
       from agent_limits
@@ -483,7 +470,6 @@ async function readAgentLimits(
     [agentId ?? null],
   );
   return result.rows.map((row) => ({
-    alertThreshold: row.alert_threshold === null ? null : Number(row.alert_threshold),
     agentId: row.agent_id,
     enabled: row.enabled,
     enforcementPolicy: row.enforcement_policy,
@@ -608,18 +594,6 @@ function normalizePositiveNumber(value: string | number | null | undefined, labe
     );
   }
   return numberValue;
-}
-
-function normalizeAlertThresholdPercent(value: string | number | null | undefined): number {
-  const rawValue = value ?? defaultAgentLimitFormValues.alertThresholdPercent;
-  const numberValue = typeof rawValue === "number" ? rawValue : Number(rawValue);
-  if (!Number.isFinite(numberValue) || numberValue <= 0 || numberValue > 100) {
-    throw consoleValidationError(
-      "Alert threshold must be greater than zero and no more than 100.",
-      "agent_limit_alert_threshold_invalid",
-    );
-  }
-  return numberValue / 100;
 }
 
 function normalizeRequiredText(value: string | null | undefined, label: string): string {

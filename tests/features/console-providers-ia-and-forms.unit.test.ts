@@ -35,16 +35,9 @@ describe("console providers IA and form polish static contract", () => {
     );
   });
 
-  test("settings display-only selects look disabled and the webhook form guides input", () => {
+  test("settings display-only selects look disabled", () => {
     expect(css()).toMatch(/select:disabled,\s*textarea:disabled\s*\{[^}]*cursor:\s*not-allowed/s);
     expect(css()).toMatch(/select:disabled,\s*textarea:disabled\s*\{[^}]*opacity/s);
-    const source = sectionSource("settings-section.tsx");
-    const webhookForm = source.slice(
-      source.indexOf('action="/api/notification-channels"'),
-      source.indexOf("</form>", source.indexOf('action="/api/notification-channels"')),
-    );
-    expect(webhookForm).toMatch(/id="notification-webhook-name"[^/]*placeholder=/s);
-    expect(webhookForm).toMatch(/id="notification-webhook-url"[^/]*placeholder=/s);
   });
 
   test("virtual model dialog submit says Create when creating, Save when editing", () => {

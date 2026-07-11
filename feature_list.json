@@ -1,6 +1,17 @@
 {
   "features": [
     {
+      "id": "worker-noncore-removal",
+      "name": "Worker Non-Core Removal",
+      "description": "Alerting, notifications, operational exports, database backup, and billing reconciliation are removed from Worker and Console while provider model refresh, connectivity checks, price sync, retention, and stale concurrency maintenance remain reachable.",
+      "verification": "pnpm exec vitest run tests/features/worker-noncore-removal.unit.test.ts && pnpm test:e2e tests/e2e/worker-noncore-removal.e2e.spec.ts tests/e2e/v1-worker-ops.e2e.spec.ts",
+      "dependencies": [
+        "virtual-model-capability-contract"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-11: TDD red->green. Removed Worker alert evaluation, notification delivery, JSONL/cost/webhook export, database backup, billing reconciliation, their Console notification API/UI, environment variables, package exports, commands, docs, and obsolete tests. Agent limit alert thresholds were removed while budget/RPM/TPM/concurrency/token enforcement remains. Worker currently registers the three core Provider jobs plus retention and stale-concurrency jobs pending their direct-maintenance feature. Focused unit/E2E, workspace typecheck, pnpm run verify, and pre-mark pnpm run verify:features passed; the optimized batch initially found one obsolete webhook-form assertion, which was removed and its focused E2E passed. Final pnpm run verify and pnpm run verify:features passed with all 49 passing features re-verified."
+    },
+    {
       "id": "v1-platform",
       "name": "V1 Platform Foundation",
       "description": "Workspace scripts, env loading, bootstrap config, PostgreSQL migration runner, and migration status checks keep a fresh local install runnable from the standard startup path.",
@@ -216,20 +227,9 @@
       "evidence": "2026-07-05: TDD red->green. Added migration 0004_relax_vocab_checks to drop product vocabulary CHECK constraints for jobs.job_type, agents.integration_platform, and providers.provider_template_id while keeping machine-state CHECK constraints enforced and existing application-layer validation intact. RED focused test failed on jobs_job_type_check, agents_integration_platform_check, and providers_template_id_whitelisted. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 19 passing features re-verified."
     },
     {
-      "id": "schema-notification-deliveries-removed",
-      "name": "Schema Notification Deliveries Removed",
-      "description": "The write-only notification_deliveries audit table is removed; notification retry state lives solely on notification_events (attempt_count, last_error_*, status), the dispatcher no longer records per-attempt audit rows, and backups no longer include the table. webhook_deliveries stays as the webhook export dedup ledger.",
-      "verification": "pnpm exec vitest run tests/features/schema-notification-deliveries-removed.unit.test.ts && pnpm test:e2e tests/e2e/schema-notification-deliveries-removed.e2e.spec.ts",
-      "dependencies": [
-        "v1-worker-ops"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-05: TDD red->green. Added migration 0005_drop_notification_deliveries to remove the write-only notification_deliveries table, simplified notification dispatch recording to update notification_events only, and removed the table from backup artifacts while keeping webhook_deliveries unchanged. RED unit failed on missing notification_deliveries when simulating the dropped table plus schema/backup assertions; RED E2E failed because the table still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 20 passing features re-verified."
-    },
-    {
       "id": "schema-fallback-single-source",
       "name": "Schema Fallback Single Source",
-      "description": "fallback_events is the single source of truth for retry chains: fallback_events gains retryable/status_code, the request_activity.fallback_attempts jsonb column is dropped, Console activity list/detail, jsonl export (legacy fallbackAttempts shape preserved), and fallback exhaustion alerts all derive attempts from fallback_events rows.",
+      "description": "fallback_events is the single source of truth for retry chains: fallback_events carries retryable/status_code, request_activity has no fallback_attempts JSON copy, and Console Activity derives attempts from fallback_events rows.",
       "verification": "pnpm exec vitest run tests/features/schema-fallback-single-source.unit.test.ts && pnpm test:e2e tests/e2e/schema-fallback-single-source.e2e.spec.ts",
       "dependencies": [
         "v1-gateway-routing",
@@ -364,24 +364,13 @@
     {
       "id": "worker-lease-recovery",
       "name": "Worker Lease Recovery",
-      "description": "Worker jobs and notification delivery use complete at-least-once leases. Job claim recovers expired running jobs before claiming work, renews active leases every leaseMs/3, fences renew/complete/fail by worker id and attempt, exposes RunningJob.signal, aborts stale or shutdown-expired handlers, and defaults WORKER_JOB_LEASE_MS=60000 plus WORKER_SHUTDOWN_GRACE_MS=25000. Notification events carry delivery_owner/delivery_expires_at, recover expired or legacy sending deliveries, fence completion by owner and attempt, process payload eventIds, and enqueue continuation jobs for batches over 50 or events not yet due; WORKER_NOTIFICATION_LEASE_MS defaults to 30000 and Worker IDs default to hostname-pid-randomUUID.",
+      "description": "Worker jobs use complete at-least-once leases. Job claim recovers expired running jobs before claiming work, renews active leases every leaseMs/3, fences renew/complete/fail by worker id and attempt, exposes RunningJob.signal, aborts stale or shutdown-expired handlers, and defaults WORKER_JOB_LEASE_MS=60000 plus WORKER_SHUTDOWN_GRACE_MS=25000. Worker IDs default to hostname-pid-randomUUID.",
       "verification": "pnpm exec vitest run tests/features/worker-lease-recovery.unit.test.ts && pnpm test:e2e tests/e2e/worker-lease-recovery.e2e.spec.ts",
       "dependencies": [
         "gateway-lifecycle-drain"
       ],
       "status": "passing",
       "evidence": "2026-07-10: TDD red->green. Unit red first showed handlers received no AbortSignal and renewJobLease was absent; E2E red first showed expired running jobs were not reclaimed, oversized notification batches stranded remaining events, and notification lease columns/fencing were missing. Implemented job lease renewal and shutdown aborts, expired running job recovery with job_attempts fencing, notification delivery leases via migration 0009_worker_delivery_leases.sql, payload-scoped notification claims, continuation jobs, legacy sending recovery, and hostname-pid-randomUUID Worker IDs. Focused unit/E2E, related Worker E2Es, db:migrate:check, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 47 passing features re-verified; optimized E2E batch flaked, then built-in per-feature fallback passed."
-    },
-    {
-      "id": "worker-webhook-egress-hardening",
-      "name": "Worker Webhook Egress Hardening",
-      "description": "Notification webhooks and webhook export use one dependency-free Node http/https transport that rejects URL credentials and redirects, resolves and pins DNS results for the actual connection, blocks loopback, RFC1918, link-local, CGNAT, unspecified, multicast, IPv6 ULA, and IPv4-mapped private targets by default, allows trusted internal targets only through exact WORKER_WEBHOOK_ALLOWED_HOSTS entries, defaults WORKER_WEBHOOK_TIMEOUT_MS=10000 and WORKER_WEBHOOK_MAX_RESPONSE_BYTES=8192 while retaining 2,000-character database response truncation, merges job abort signals with timeout handling, and sends stable Idempotency-Key headers for notification event IDs and webhook export job/event IDs.",
-      "verification": "pnpm exec vitest run tests/features/worker-webhook-egress-hardening.unit.test.ts && pnpm test:e2e tests/e2e/worker-webhook-egress-hardening.e2e.spec.ts",
-      "dependencies": [
-        "worker-lease-recovery"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-10: TDD red->green. Unit red first failed because the shared Worker webhook transport module did not exist; focused E2E red first showed default notification delivery still reached a loopback webhook/retry path before the fixture was tightened to a terminal one-attempt event. Implemented shared Worker webhook egress transport, notification/export integration, DNS pinning, private/local/reserved target blocking, exact allowlist, no redirects, timeout/response-size caps, abort signal propagation, and stable Idempotency-Key headers. Focused unit/E2E, related Worker E2Es, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 48 passing features re-verified."
     },
     {
       "id": "console-sections-split",
@@ -405,17 +394,6 @@
       ],
       "status": "passing",
       "evidence": "2026-07-09: TDD red->green. Route policy strategy ordering and decision messaging now dispatch through routeStrategyHandlers Record<RoutePolicyStrategy, RouteStrategyHandler>; focused unit, pnpm run verify, and pnpm run verify:features passed with all 26 prior passing features re-verified."
-    },
-    {
-      "id": "refactor-notification-transport-registry",
-      "name": "Notification Transport Registry",
-      "description": "Notification channel types come from one packages/domain list, dispatcher delivery resolves through a channel-type transport registry, and no SQL hardcodes channel_type = 'webhook'.",
-      "verification": "pnpm exec vitest run tests/features/refactor-notification-transport-registry.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
-      "dependencies": [
-        "v1-worker-ops"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-09: TDD red->green. Notification channel types now come from packages/domain, dispatcher delivery resolves through a NotificationChannelType transport registry, and notification SQL uses parameterized channel type arrays instead of channel_type = 'webhook'. Focused unit, pnpm run verify, and pnpm run verify:features passed with all 27 passing features re-verified."
     },
     {
       "id": "refactor-price-row-mappers",

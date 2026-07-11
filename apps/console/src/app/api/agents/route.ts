@@ -116,7 +116,6 @@ async function saveAgentRelatedSettings(input: {
   await saveAgentLimitRules({
     limits: normalizeAgentLimitFormInput({
       agentId: input.id,
-      alertThresholdPercent: readText(input.form, "alertThresholdPercent") ?? null,
       budgetPeriod: readRequiredText(input.form, "budgetPeriod"),
       budgetUsd: readRequiredText(input.form, "budgetUsd"),
       concurrency: readText(input.form, "concurrency") ?? null,

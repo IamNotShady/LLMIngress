@@ -1,5 +1,3 @@
-import { unlink } from "node:fs/promises";
-import { isAbsolute } from "node:path";
 import { PostgresClient } from "@llmingress/db/client";
 import { type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
 
@@ -15,8 +13,6 @@ export type RetentionCleanupSettings = {
 
 export type RetentionCleanupResult = {
   cutoff: string;
-  deletedExportFileCount: number;
-  deletedExportTaskCount: number;
   deletedRequestActivityCount: number;
   preservedBudgetPeriodCount: number;
   preservedRateLimitWindowCount: number;
@@ -33,15 +29,9 @@ type CleanupExpiredDataOptions = CreateRetentionCleanupJobHandlerOptions & {
 };
 
 type RetentionCleanupRow = {
-  deleted_export_task_count: number;
   deleted_request_activity_count: number;
   preserved_budget_period_count: number;
   preserved_rate_limit_window_count: number;
-};
-
-type ExpiredExportTaskRow = {
-  id: string;
-  output_path: string;
 };
 
 const dayMs = 24 * 60 * 60 * 1000;
@@ -63,51 +53,12 @@ export async function cleanupExpiredOperationalData(
 
   try {
     await client.query("begin");
-    const expiredExportTasks = await client.query<ExpiredExportTaskRow>(
-      `
-        select id::text,
-               result->>'outputPath' as output_path
-        from jobs
-        where job_type in ('jsonl_export', 'cost_report_export')
-          and status = 'succeeded'
-          and completed_at < $1::timestamptz
-          and result ? 'outputPath'
-          and not result ? 'exportFileDeletedAt'
-        for update
-      `,
-      [parsedPayload.cutoff.toISOString()],
-    );
-    const deletedExportFileCount = await deleteLocalExportFiles(
-      expiredExportTasks.rows.map((row) => row.output_path),
-    );
     const result = await client.query<RetentionCleanupRow>(
       `
-        with marked_export_jobs as (
-          update jobs
-          set result = jsonb_set(
-                result,
-                '{exportFileDeletedAt}',
-                to_jsonb($3::text),
-                true
-              ),
-              updated_at = now()
-          where id = any($2::uuid[])
-          returning id
-        ),
-        expired_request_activity as (
+        with expired_request_activity as (
           select id
           from request_activity
           where created_at < $1::timestamptz
-        ),
-        deleted_webhook_deliveries as (
-          delete from webhook_deliveries
-          where request_activity_id in (select id from expired_request_activity)
-             or fallback_event_id in (
-               select id
-               from fallback_events
-               where request_activity_id in (select id from expired_request_activity)
-             )
-          returning id
         ),
         deleted_fallback_events as (
           delete from fallback_events
@@ -136,25 +87,18 @@ export async function cleanupExpiredOperationalData(
           returning id
         )
         select
-          (select count(*)::integer from marked_export_jobs) as deleted_export_task_count,
           (select count(*)::integer from deleted_request_activity)
             as deleted_request_activity_count,
           (select count(*)::integer from budget_periods) as preserved_budget_period_count,
           (select count(*)::integer from rate_limit_windows) as preserved_rate_limit_window_count
       `,
-      [
-        parsedPayload.cutoff.toISOString(),
-        expiredExportTasks.rows.map((row) => row.id),
-        (options.now?.() ?? new Date()).toISOString(),
-      ],
+      [parsedPayload.cutoff.toISOString()],
     );
     await client.query("commit");
 
     const row = result.rows[0];
     return {
       cutoff: parsedPayload.cutoff.toISOString(),
-      deletedExportFileCount,
-      deletedExportTaskCount: row?.deleted_export_task_count ?? 0,
       deletedRequestActivityCount: row?.deleted_request_activity_count ?? 0,
       preservedBudgetPeriodCount: row?.preserved_budget_period_count ?? 0,
       preservedRateLimitWindowCount: row?.preserved_rate_limit_window_count ?? 0,
@@ -207,32 +151,6 @@ function readObject(value: unknown): Record<string, unknown> {
     return {};
   }
   return value as Record<string, unknown>;
-}
-
-async function deleteLocalExportFiles(outputPaths: string[]): Promise<number> {
-  let deletedCount = 0;
-
-  for (const outputPath of outputPaths) {
-    if (!isAbsolute(outputPath)) {
-      continue;
-    }
-
-    try {
-      await unlink(outputPath);
-      deletedCount += 1;
-    } catch (error) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  return deletedCount;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
 }
 
 function readPositiveIntegerEnv(

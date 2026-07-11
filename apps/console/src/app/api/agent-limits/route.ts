@@ -30,7 +30,6 @@ export const POST = withConsoleAuth(async (request) => {
     await saveAgentLimitRules({
       limits: normalizeAgentLimitFormInput({
         agentId,
-        alertThresholdPercent: readText(form, "alertThresholdPercent"),
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
         concurrency: readText(form, "concurrency"),

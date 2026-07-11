@@ -20,7 +20,6 @@ import {
   type ConsoleSearchParams,
   findAgentLimit,
   groupByAgentId,
-  readAgentAlertThresholdPercent,
   readSingleSearchParam,
 } from "./sections";
 
@@ -210,16 +209,6 @@ function AgentCreateDialog({
               <option value="week">Week</option>
               <option value="month">Month</option>
             </select>
-            <label htmlFor="agent-alert-threshold">Alert threshold (%)</label>
-            <input
-              id="agent-alert-threshold"
-              name="alertThresholdPercent"
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              defaultValue={defaultAgentLimitFormValues.alertThresholdPercent}
-            />
             <label htmlFor="agent-rpm">RPM limit</label>
             <input
               id="agent-rpm"
@@ -284,7 +273,6 @@ function AgentEditDialog({
   const rpmLimit = findAgentLimit(limits, "rpm");
   const tokenLimit = findAgentLimit(limits, "token");
   const tpmLimit = findAgentLimit(limits, "tpm");
-  const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
   const limitsEnabled = limits.length > 0;
 
   return (
@@ -404,17 +392,6 @@ function AgentEditDialog({
               <option value="week">Week</option>
               <option value="month">Month</option>
             </select>
-            <label htmlFor={`agent-alert-threshold-${agent.id}`}>Alert threshold (%)</label>
-            <input
-              id={`agent-alert-threshold-${agent.id}`}
-              name="alertThresholdPercent"
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              defaultValue={alertThresholdPercent}
-              required
-            />
             <label htmlFor={`agent-rpm-${agent.id}`}>RPM limit</label>
             <input
               id={`agent-rpm-${agent.id}`}

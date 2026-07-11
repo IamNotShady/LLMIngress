@@ -19,7 +19,6 @@ import {
   findAgentLimit,
   formatDeltaTone,
   groupByAgentId,
-  readAgentAlertThresholdPercent,
   readSingleSearchParam,
 } from "./sections";
 
@@ -41,7 +40,6 @@ function LimitsConfigDialog({
   const tpmLimit = findAgentLimit(limits, "tpm");
   const concurrencyLimit = findAgentLimit(limits, "concurrency");
   const tokenLimit = findAgentLimit(limits, "token");
-  const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
   const usagePercent = runtime.budgetUsagePercent;
   const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
 
@@ -111,19 +109,6 @@ function LimitsConfigDialog({
                 <option value="week">Week</option>
                 <option value="month">Month</option>
               </select>
-            </div>
-            <div className="console-field">
-              <label htmlFor={`limits-alert-threshold-${agent.id}`}>Alert threshold</label>
-              <input
-                id={`limits-alert-threshold-${agent.id}`}
-                name="alertThresholdPercent"
-                type="number"
-                min="1"
-                max="100"
-                step="1"
-                defaultValue={formatInputNumber(alertThresholdPercent)}
-                required
-              />
             </div>
           </div>
           <div className="limits-usage-block">
@@ -298,11 +283,9 @@ function getEmptyAgentLimitRuntimeSnapshot(agentId: string): ConsoleAgentLimitRu
 }
 
 function getLimitRuleStatus({
-  alertThresholdPercent,
   enabled,
   usagePercent,
 }: {
-  alertThresholdPercent: number;
   enabled: boolean;
   usagePercent: number;
 }): { className: string; label: string } {
@@ -311,9 +294,6 @@ function getLimitRuleStatus({
   }
   if (usagePercent >= 100) {
     return { className: "pill--danger", label: "Blocked" };
-  }
-  if (usagePercent >= alertThresholdPercent) {
-    return { className: "pill--warn", label: "Warning" };
   }
   return { className: "pill--ok", label: "Normal" };
 }
@@ -397,14 +377,12 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
     const limits = agentLimitsByAgentId.get(agent.id) ?? [];
     const summaries = formatAgentLimitSummaries(limits);
     const runtime = getAgentLimitRuntimeSnapshot(agent.id, runtimeByAgentId);
-    const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
     const budgetUsagePercent = runtime.budgetUsagePercent;
     const status = getLimitRuleStatus({
-      alertThresholdPercent,
       enabled: agent.enabled,
       usagePercent: budgetUsagePercent,
     });
-    return { agent, alertThresholdPercent, budgetUsagePercent, limits, runtime, status, summaries };
+    return { agent, budgetUsagePercent, limits, runtime, status, summaries };
   });
   const filteredRows = query
     ? rows.filter((row) => {
@@ -428,9 +406,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
     (sum, snapshot) => sum + snapshot.rateLimitHits24h,
     0,
   );
-  const nearBudgetCount = rows.filter(
-    (row) => row.budgetUsagePercent >= row.alertThresholdPercent,
-  ).length;
+  const nearBudgetCount = rows.filter((row) => row.budgetUsagePercent >= 100).length;
   const dialogLimits = dialogAgent ? (agentLimitsByAgentId.get(dialogAgent.id) ?? []) : [];
   const dialogRuntime = dialogAgent
     ? getAgentLimitRuntimeSnapshot(dialogAgent.id, runtimeByAgentId)
@@ -463,7 +439,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
               icon="B"
               label="Keys near budget"
               value={String(nearBudgetCount)}
-              delta="At alert threshold"
+              delta="At configured limit"
             />
             <StatCard
               icon="L"

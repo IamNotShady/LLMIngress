@@ -248,24 +248,6 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(/\.playground-actions button\s*\{[^}]*justify-content:\s*center/s);
   });
 
-  test("settings notification channel submit is a compact centered Save button", () => {
-    const sections = moduleSource("settings-section.tsx");
-    const stylesheet = css();
-    const notificationForm = sections.slice(
-      sections.indexOf('action="/api/notification-channels"'),
-      sections.indexOf("</form>", sections.indexOf('action="/api/notification-channels"')),
-    );
-
-    expect(notificationForm).toContain('className="notification-channel-save-button"');
-    expect(notificationForm).toContain("<span>Save</span>");
-    expect(notificationForm).not.toContain("Create webhook notification channel");
-    expect(notificationForm).not.toContain("FlatIcon");
-    expect(stylesheet).toMatch(
-      /\.notification-channel-save-button\s*\{[^}]*justify-self:\s*center/s,
-    );
-    expect(stylesheet).toMatch(/\.notification-channel-save-button\s*\{[^}]*min-width:\s*6rem/s);
-  });
-
   test("dialog form submit buttons stay compact and text-only", () => {
     const agentSection = moduleSource("agents-section.tsx");
     const sections = consoleSectionSource();

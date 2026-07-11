@@ -4,10 +4,7 @@ import { SettingsSection } from "../../_modules/settings-section";
 export default function SettingsPage() {
   return (
     <div className="page settings-page">
-      <PageHeader
-        title="Settings"
-        description="Console preferences, security reminders, and notification channels."
-      />
+      <PageHeader title="Settings" description="Console preferences and security reminders." />
       <SettingsSection />
     </div>
   );

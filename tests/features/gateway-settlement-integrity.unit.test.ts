@@ -6,7 +6,7 @@ import {
   enforceGatewayAgentLimits,
   recordGatewayBudgetUsage,
 } from "../../packages/gateway-runtime/src/gateway-agent-limits";
-import { createDefaultPeriodicTasks } from "../../packages/worker-runtime/src/worker-periodic-scheduler";
+import { createCoreMaintenanceTasks } from "../../packages/worker-runtime/src/worker-maintenance-scheduler";
 import { reconcileGatewayConcurrencyWindows } from "../../packages/worker-runtime/src/worker-stale-concurrency";
 
 describe("gateway settlement integrity", () => {
@@ -152,17 +152,11 @@ describe("gateway settlement integrity", () => {
     });
   });
 
-  it("registers stale concurrency reconciliation in periodic tasks", () => {
-    expect(createDefaultPeriodicTasks()).toContainEqual(
+  it("registers stale concurrency reconciliation as direct maintenance", () => {
+    expect(createCoreMaintenanceTasks()).toContainEqual(
       expect.objectContaining({
         id: "stale-concurrency-reconcile",
         intervalMs: 300_000,
-        jobType: "stale_concurrency_reconcile",
-      }),
-    );
-    expect(createDefaultPeriodicTasks()).not.toContainEqual(
-      expect.objectContaining({
-        jobType: "stale_reservation_cleanup",
       }),
     );
   });

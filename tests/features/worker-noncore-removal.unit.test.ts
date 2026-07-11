@@ -37,20 +37,14 @@ describe("worker non-core removal", () => {
     );
   });
 
-  it("registers only core provider jobs plus temporary maintenance jobs", () => {
+  it("registers only core provider jobs", () => {
     const workerMain = readFileSync(join(repoRoot, "apps/worker/src/main.ts"), "utf8");
     const registeredHandlers = [
       ...workerMain.matchAll(/^\s{6}([a-z_]+): create\w+JobHandler/gm),
     ].map(([, jobType]) => jobType);
 
     expect(registeredHandlers.sort()).toEqual(
-      [
-        "model_refresh",
-        "price_sync",
-        "provider_connectivity_check",
-        "retention_cleanup",
-        "stale_concurrency_reconcile",
-      ].sort(),
+      ["model_refresh", "price_sync", "provider_connectivity_check"].sort(),
     );
   });
 

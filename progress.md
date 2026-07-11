@@ -992,6 +992,16 @@
 - The first feature regression found four historical tests that assumed removed Agent/Preview fields or one Virtual Model spanning multiple endpoint protocols. Those tests now assert the reduced UI/API and seed protocol-specific Virtual Models; their focused E2Es pass.
 - Blockers: none.
 
+## 2026-07-11 Core Slimming 4 - Worker Job Churn Removal
+
+- Replaced the scheduled-job producer with an in-process maintenance scheduler. Worker handlers now contain only `model_refresh`, `provider_connectivity_check`, and `price_sync`.
+- Stale concurrency runs every five minutes and retention every 24 hours. Each task holds a dedicated PostgreSQL advisory lock for its execution, so concurrent Worker instances do not duplicate maintenance.
+- Retention deletes Activity/Usage/Cost/Fallback after 30 days, terminal Jobs/Attempts after 7 days, and Provider health events after 30 days while preserving the event referenced by current health summary. Deletes are limited to 1,000 rows per batch and check shutdown abort between batches.
+- RED tests failed on both maintenance Job handlers, scheduled Job insertion, unbounded retention, and the old job-type constraint.
+- Focused unit/E2E, migration replay, lint, typecheck, and `pnpm run verify` passed (56 test files, 286 tests). Real DB E2E verified advisory-lock fencing and zero maintenance Job/Attempt creation.
+- The first feature regression found a millisecond host/PostgreSQL clock race in the old Worker smoke seed; setting `run_after` one second in the past passed five consecutive runs. A later batch-only Console startup 500 passed immediately in isolated verification.
+- Blockers: none.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

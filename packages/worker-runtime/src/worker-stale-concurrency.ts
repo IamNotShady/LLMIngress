@@ -1,5 +1,4 @@
 import { getPostgresPool } from "@llmingress/db/client";
-import type { JobHandler } from "./worker-job-runner.ts";
 
 export type StaleConcurrencyReconcileResult = {
   reconciledWindowCount: number;
@@ -34,10 +33,4 @@ export async function reconcileGatewayConcurrencyWindows(
     [inFlightMaxAgeMinutes, quietMinutes],
   );
   return { reconciledWindowCount: result.rowCount ?? 0 };
-}
-
-export function createStaleConcurrencyReconcileJobHandler(
-  options: { databaseUrl?: string } = {},
-): JobHandler {
-  return async () => reconcileGatewayConcurrencyWindows(options);
 }

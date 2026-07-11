@@ -5,15 +5,13 @@ import { loadBootstrapRuntimeConfig } from "@llmingress/config";
 import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingress/db/client";
 import { createLogger } from "@llmingress/logging";
 import { createPostgresJobRunner } from "@llmingress/worker-runtime/worker-job-runner";
-import { createModelRefreshJobHandler } from "@llmingress/worker-runtime/worker-model-refresh";
 import {
-  createDefaultPeriodicTasks,
-  createPostgresPeriodicScheduler,
-} from "@llmingress/worker-runtime/worker-periodic-scheduler";
+  createCoreMaintenanceTasks,
+  createPostgresMaintenanceScheduler,
+} from "@llmingress/worker-runtime/worker-maintenance-scheduler";
+import { createModelRefreshJobHandler } from "@llmingress/worker-runtime/worker-model-refresh";
 import { createPriceSyncJobHandler } from "@llmingress/worker-runtime/worker-price-sync";
 import { createProviderConnectivityCheckJobHandler } from "@llmingress/worker-runtime/worker-provider-connectivity-check";
-import { createRetentionCleanupJobHandler } from "@llmingress/worker-runtime/worker-retention-cleanup";
-import { createStaleConcurrencyReconcileJobHandler } from "@llmingress/worker-runtime/worker-stale-concurrency";
 
 const logger = createLogger("worker");
 
@@ -26,26 +24,24 @@ export async function startWorker() {
       model_refresh: createModelRefreshJobHandler({}),
       provider_connectivity_check: createProviderConnectivityCheckJobHandler({}),
       price_sync: createPriceSyncJobHandler({}),
-      retention_cleanup: createRetentionCleanupJobHandler({}),
-      stale_concurrency_reconcile: createStaleConcurrencyReconcileJobHandler({}),
     },
     leaseMs: readWorkerJobLeaseMs(),
     pollIntervalMs: config.workerHeartbeatMs,
     shutdownGraceMs: readWorkerShutdownGraceMs(),
     workerId: readWorkerId(),
   });
-  const periodicScheduler = createPostgresPeriodicScheduler({
-    tasks: createDefaultPeriodicTasks(),
+  const maintenanceScheduler = createPostgresMaintenanceScheduler({
+    tasks: createCoreMaintenanceTasks(),
     tickIntervalMs: config.workerHeartbeatMs,
   });
   await jobRunner.start();
-  await periodicScheduler.start();
+  await maintenanceScheduler.start();
 
   logger.info("[worker] started");
 
   return {
     async stop() {
-      await periodicScheduler.stop();
+      await maintenanceScheduler.stop();
       await jobRunner.stop();
       await closePostgresPools();
       logger.info("[worker] stopped");

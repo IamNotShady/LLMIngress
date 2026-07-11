@@ -14,7 +14,7 @@ test("Worker claims and completes a core provider maintenance job", async () => 
     await fixture.query(
       `
         insert into jobs (id, job_type, status, trigger, payload, max_attempts, run_after)
-        values ($1, 'model_refresh', 'pending', 'manual', '{}'::jsonb, 1, now())
+        values ($1, 'model_refresh', 'pending', 'manual', '{}'::jsonb, 1, now() - interval '1 second')
       `,
       [jobId],
     );

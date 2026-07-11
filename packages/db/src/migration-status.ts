@@ -58,12 +58,12 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "stale_concurrency_job_type",
   },
   {
-    checksum: "3861906dac167fc9b71d8be0359564000d560f17240b7e4f4ac6f3a56103a3d1",
+    checksum: "47e4a65b042b542c299d4adea4e4a800ad1bbb55ba8fb6c9ac1a0cd4ab2040b5",
     id: "0003",
     name: "remove_budget_reservations",
   },
   {
-    checksum: "b49690f559aa4cc3faf2ca13d4925394751fbd351635c5ac5b6c0b65c9b16a89",
+    checksum: "fca15196f55bc1f33f83024bd5e0fa187d1874b230bc81081844c45261d79e7e",
     id: "0004",
     name: "relax_vocab_checks",
   },

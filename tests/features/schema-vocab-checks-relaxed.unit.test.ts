@@ -6,14 +6,14 @@ import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
 describe("schema vocab checks relaxed", () => {
-  it("accepts a job_type outside the current product vocabulary", async () => {
+  it("rejects a persistent job_type outside the core Worker registry", async () => {
     await withMigratedFixture(async (fixture) => {
       await expect(
         fixture.query(
           "insert into jobs (id, job_type, status, trigger) values ($1, 'future_job_type', 'pending', 'manual')",
           [randomUUID()],
         ),
-      ).resolves.toBeDefined();
+      ).rejects.toThrow(/jobs_job_type_check/);
     });
   });
 
@@ -43,7 +43,7 @@ describe("schema vocab checks relaxed", () => {
     await withMigratedFixture(async (fixture) => {
       await expect(
         fixture.query(
-          "insert into jobs (id, job_type, status, trigger) values ($1, 'future_job_type', 'bogus_status', 'manual')",
+          "insert into jobs (id, job_type, status, trigger) values ($1, 'model_refresh', 'bogus_status', 'manual')",
           [randomUUID()],
         ),
       ).rejects.toThrow(/jobs_status_check/);
@@ -53,7 +53,6 @@ describe("schema vocab checks relaxed", () => {
   it("keeps application-layer vocabulary validation as the write-path defense", () => {
     expect(() =>
       normalizeAgentFormInput({
-        agentType: "coding",
         integrationPlatform: "future-platform",
         name: "Vocab Agent",
       }),

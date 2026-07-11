@@ -34,6 +34,17 @@
       "evidence": "2026-07-11: TDD red->green. Removed quality_first, legacy route rules and preview/UI, Agent type and request-logging switches, and savings/baseline cost fields. Route Policy now owns an explicit endpoint_protocol, Gateway uses the six-field Virtual Model capability contract, and actual/estimated request cost remains. Focused unit/E2E, migration replay, lint, typecheck, and pnpm run verify passed. Full feature regression exposed four stale historical assertions; protocol-specific VM seeds and surviving API boundary assertions now pass."
     },
     {
+      "id": "worker-job-churn-removal",
+      "name": "Worker Job Churn Removal",
+      "description": "Worker persistent jobs are limited to model_refresh, provider_connectivity_check, and price_sync. Stale concurrency repair and batched retention run directly on in-process timers under PostgreSQL advisory locks and never create jobs or attempts.",
+      "verification": "pnpm exec vitest run tests/features/worker-job-churn-removal.unit.test.ts && pnpm test:e2e tests/e2e/worker-job-churn-removal.e2e.spec.ts",
+      "dependencies": [
+        "routing-agent-cost-simplification"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-11: TDD red->green. Worker now registers only model_refresh, provider_connectivity_check, and price_sync. Stale concurrency and retention run directly on in-process intervals under session advisory locks, support shutdown abort, batch deletes at 1,000 rows, preserve the health event referenced by summary, and create no jobs or attempts. Focused unit/E2E, migration replay, lint, typecheck, and pnpm run verify passed."
+    },
+    {
       "id": "v1-platform",
       "name": "V1 Platform Foundation",
       "description": "Workspace scripts, env loading, bootstrap config, PostgreSQL migration runner, and migration status checks keep a fresh local install runnable from the standard startup path.",
@@ -67,7 +78,7 @@
     {
       "id": "v1-worker-ops",
       "name": "V1 Worker Operations",
-      "description": "Worker jobs are limited to leased provider model refresh, provider connectivity checks, price sync, and temporary maintenance jobs pending direct in-process scheduling.",
+      "description": "Worker jobs are limited to leased provider model refresh, provider connectivity checks, and price sync; retention and stale concurrency repair run directly without persistent jobs.",
       "verification": "pnpm exec vitest run tests/features/v1-worker-ops.unit.test.ts tests/features/provider-dialect.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
       "dependencies": [
         "v1-platform"
@@ -240,13 +251,13 @@
     {
       "id": "schema-vocab-checks-relaxed",
       "name": "Schema Vocab Checks Relaxed",
-      "description": "Product vocabulary values (job_type, agent integration_platform, provider_template_id) are validated only at the application layer; the database accepts values outside today's vocabulary while machine-state CHECK constraints (status, trigger, agent_type, numeric ranges) remain enforced.",
+      "description": "Extensible Agent integration-platform and Provider template labels remain application-validated, while persistent Worker job types and machine states are constrained by the database to the current core contract.",
       "verification": "pnpm exec vitest run tests/features/schema-vocab-checks-relaxed.unit.test.ts && pnpm test:e2e tests/e2e/schema-vocab-checks-relaxed.e2e.spec.ts",
       "dependencies": [
         "v1-platform"
       ],
       "status": "passing",
-      "evidence": "2026-07-05: TDD red->green. Added migration 0004_relax_vocab_checks to drop product vocabulary CHECK constraints for jobs.job_type, agents.integration_platform, and providers.provider_template_id while keeping machine-state CHECK constraints enforced and existing application-layer validation intact. RED focused test failed on jobs_job_type_check, agents_integration_platform_check, and providers_template_id_whitelisted. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 19 passing features re-verified."
+      "evidence": "2026-07-11 core slimming follow-up: Agent integration-platform and Provider template vocabularies remain extensible, while jobs.job_type is constrained to the three persistent core operations. Focused unit/E2E and migration replay passed."
     },
     {
       "id": "schema-fallback-single-source",

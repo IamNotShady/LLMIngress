@@ -179,7 +179,12 @@ Left column:
 - Trust line (mono 13px, `--text-3`, must fit one line in the text column):
   `Apache-2.0 · Single-user · Keys never leave your box`
 
-Right column — topology diagram (inline SVG, ~560×448):
+Right column — topology diagram (inline SVG, ~660×448). On viewports wider
+than the 1120px content column the frame bleeds right toward the viewport
+edge (keeps a 24px inset, extension capped at 220px) so the diagram gets
+extra room without squeezing the text column; the bleed resets when the
+hero stacks. Inside the canvas the rails sit 128px from the core on each
+side so paths curve loosely:
 
 - Left rail: 5 agent chips — Codex, Claude Code, Cursor, OpenCode, Copilot
   (rounded rects, `--surface`, mono labels).

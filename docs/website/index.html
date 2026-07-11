@@ -208,6 +208,10 @@ pre { margin: 0; }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 /* topology diagram */
+/* bleed the frame toward the right viewport edge on wide screens */
+.hero .topo {
+  margin-right: max(calc((min(1120px, 100vw) - 100vw) / 2 - var(--gutter) + 24px), -220px);
+}
 .topo-frame {
   border: 1px solid var(--line-soft); border-radius: var(--r-lg);
   background: var(--bg-raised);
@@ -549,6 +553,7 @@ pre { margin: 0; }
 /* ============ responsive ============ */
 @media (max-width: 1024px) {
   .hero-grid { grid-template-columns: 1fr; }
+  .hero .topo { margin-right: 0; }
   .topo-frame { max-width: 720px; }
   .how-grid { grid-template-columns: 1fr; }
   .code-panel { position: static; }
@@ -636,7 +641,7 @@ pre { margin: 0; }
 
     <div class="topo rise rise-6">
       <div class="topo-frame">
-        <svg viewBox="0 0 560 448" role="img" aria-labelledby="topo-t topo-d">
+        <svg viewBox="0 0 660 448" role="img" aria-labelledby="topo-t topo-d">
           <title id="topo-t">LLMIngress routing topology</title>
           <desc id="topo-d">Five AI agents connect to one LLMIngress gateway,
             which routes each request to the right provider — here a Claude
@@ -644,21 +649,21 @@ pre { margin: 0; }
 
           <!-- rail labels -->
           <text class="rail-label" x="12" y="18">AGENTS</text>
-          <text class="rail-label" x="412" y="18">PROVIDERS</text>
+          <text class="rail-label" x="512" y="18">PROVIDERS</text>
 
           <!-- connection paths: agents -> core -->
-          <path class="path"     d="M148 52  C 196 52, 190 205, 226 211"/>
-          <path class="path-hot" d="M148 140 C 196 140, 190 222, 226 224" id="p-in-hot"/>
-          <path class="path"     d="M148 228 C 190 228, 196 235, 226 236"/>
-          <path class="path"     d="M148 316 C 196 316, 190 250, 226 248"/>
-          <path class="path"     d="M148 404 C 200 404, 188 265, 226 260"/>
+          <path class="path"     d="M148 52  C 214 52, 238 205, 276 211"/>
+          <path class="path-hot" d="M148 140 C 214 140, 238 222, 276 224" id="p-in-hot"/>
+          <path class="path"     d="M148 228 C 230 228, 242 235, 276 236"/>
+          <path class="path"     d="M148 316 C 214 316, 238 250, 276 248"/>
+          <path class="path"     d="M148 404 C 222 404, 234 265, 276 260"/>
 
           <!-- core -> providers -->
-          <path class="path"      d="M334 211 C 372 205, 366 52, 412 52"/>
-          <path class="path-hot"  d="M334 224 C 372 222, 366 140, 412 140" id="p-out-hot"/>
-          <path class="path"      d="M334 236 C 366 235, 372 228, 412 228"/>
-          <path class="path"      d="M334 248 C 372 250, 366 316, 412 316"/>
-          <path class="path"      d="M334 260 C 372 265, 360 404, 412 404"/>
+          <path class="path"      d="M384 211 C 422 205, 446 52, 512 52"/>
+          <path class="path-hot"  d="M384 224 C 422 222, 446 140, 512 140" id="p-out-hot"/>
+          <path class="path"      d="M384 236 C 418 235, 430 228, 512 228"/>
+          <path class="path"      d="M384 248 C 422 250, 446 316, 512 316"/>
+          <path class="path"      d="M384 260 C 426 265, 438 404, 512 404"/>
 
           <!-- agent chips -->
           <g>
@@ -676,49 +681,49 @@ pre { margin: 0; }
 
           <!-- provider chips -->
           <g>
-            <rect class="chip" x="412" y="30"  width="140" height="44" rx="10"/>
-            <text class="chip-label" x="428" y="57">openai</text>
-            <rect class="chip" x="412" y="118" width="140" height="44" rx="10" stroke="oklch(0.5 0.16 292 / 0.8)"/>
-            <text class="chip-label" x="428" y="145" fill="oklch(0.93 0.008 292)">anthropic</text>
-            <rect class="chip" x="412" y="206" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="428" y="233">google</text>
-            <rect class="chip" x="412" y="294" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="428" y="321">openrouter</text>
-            <rect class="chip" x="412" y="382" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="428" y="409">ollama</text>
-            <circle class="dot-ok" cx="524" cy="399" r="3"/>
-            <text class="chip-sub" x="428" y="421">local · $0</text>
+            <rect class="chip" x="512" y="30"  width="140" height="44" rx="10"/>
+            <text class="chip-label" x="528" y="57">openai</text>
+            <rect class="chip" x="512" y="118" width="140" height="44" rx="10" stroke="oklch(0.5 0.16 292 / 0.8)"/>
+            <text class="chip-label" x="528" y="145" fill="oklch(0.93 0.008 292)">anthropic</text>
+            <rect class="chip" x="512" y="206" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="528" y="233">google</text>
+            <rect class="chip" x="512" y="294" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="528" y="321">openrouter</text>
+            <rect class="chip" x="512" y="382" width="140" height="44" rx="10"/>
+            <text class="chip-label" x="528" y="409">ollama</text>
+            <circle class="dot-ok" cx="624" cy="399" r="3"/>
+            <text class="chip-sub" x="528" y="421">local · $0</text>
           </g>
 
           <!-- gateway core (echoes brand icon) -->
           <g class="topo-glow">
-            <rect class="core-panel" x="226" y="181" width="108" height="108" rx="24"/>
-            <rect class="core-inner" x="234" y="189" width="92" height="92" rx="18"/>
+            <rect class="core-panel" x="276" y="181" width="108" height="108" rx="24"/>
+            <rect class="core-inner" x="284" y="189" width="92" height="92" rx="18"/>
             <!-- active slot + sockets, from the brand icon -->
-            <rect class="core-slot" x="246" y="226" width="28" height="22" rx="7"/>
-            <rect class="core-socket" x="278" y="232" width="11" height="10" rx="5"/>
-            <rect class="core-quiet" x="294" y="202" width="20" height="22" rx="7"/>
-            <rect class="core-quiet" x="294" y="246" width="20" height="22" rx="7"/>
+            <rect class="core-slot" x="296" y="226" width="28" height="22" rx="7"/>
+            <rect class="core-socket" x="328" y="232" width="11" height="10" rx="5"/>
+            <rect class="core-quiet" x="344" y="202" width="20" height="22" rx="7"/>
+            <rect class="core-quiet" x="344" y="246" width="20" height="22" rx="7"/>
           </g>
-          <text class="core-label" x="280" y="314" text-anchor="middle">LLMIngress</text>
+          <text class="core-label" x="330" y="314" text-anchor="middle">LLMIngress</text>
 
           <!-- traveling pulses (hidden when reduced motion) -->
           <g aria-hidden="true">
             <circle class="pulse" r="2.5">
               <animateMotion dur="3.2s" repeatCount="indefinite"
-                path="M148 140 C 196 140, 190 222, 226 224"/>
+                path="M148 140 C 214 140, 238 222, 276 224"/>
             </circle>
             <circle class="pulse" r="2.5">
               <animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite"
-                path="M334 224 C 372 222, 366 140, 412 140"/>
+                path="M384 224 C 422 222, 446 140, 512 140"/>
             </circle>
             <circle class="pulse" r="2" opacity="0.7">
               <animateMotion dur="4.8s" begin="0.8s" repeatCount="indefinite"
-                path="M148 52 C 196 52, 190 205, 226 211"/>
+                path="M148 52 C 214 52, 238 205, 276 211"/>
             </circle>
             <circle class="pulse" r="2" opacity="0.7">
               <animateMotion dur="5.4s" begin="2.4s" repeatCount="indefinite"
-                path="M148 316 C 196 316, 190 250, 226 248"/>
+                path="M148 316 C 214 316, 238 250, 276 248"/>
             </circle>
           </g>
         </svg>

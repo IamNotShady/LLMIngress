@@ -92,7 +92,7 @@ Type scale (ratio ~1.33, fluid on display sizes only):
 
 | Token | Size | Use |
 | --- | --- | --- |
-| `--t-hero` | `clamp(2.5rem, 1.2rem + 4.5vw, 4.25rem)` | H1 |
+| `--t-hero` | `clamp(2.5rem, 1rem + 4vw, 3.75rem)` | H1 |
 | `--t-h2` | `clamp(1.8rem, 1.1rem + 2.4vw, 2.75rem)` | Section titles |
 | `--t-h3` | `1.25rem` | Feature titles, card titles |
 | `--t-body` | `1.0625rem` (17px) | Body copy |
@@ -161,7 +161,9 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
 
 ### 4.1 Hero
 
-Two-column grid (6/5) at ≥1024px; stacks text-then-diagram below.
+Two-column grid at ≥1024px, weighted toward the diagram
+(text : diagram = 1 : 1.08); stacks text-then-diagram below, where the
+diagram frame may grow to 720px wide.
 
 Left column:
 
@@ -174,8 +176,8 @@ Left column:
   keys."
 - CTA row: primary `Deploy locally` (violet fill, `--ink` label, → `#deploy`);
   secondary `View on GitHub ↗` (hairline ghost).
-- Trust line (mono 13px, `--text-3`):
-  `Apache-2.0 · Single-user by design · Keys never leave your box`
+- Trust line (mono 13px, `--text-3`, must fit one line in the text column):
+  `Apache-2.0 · Single-user · Keys never leave your box`
 
 Right column — topology diagram (inline SVG, ~560×448):
 

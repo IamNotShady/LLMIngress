@@ -43,7 +43,7 @@
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Onest", "Segoe UI", system-ui, sans-serif;
   --f-mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --t-hero: clamp(2.5rem, 1.2rem + 4.5vw, 4.25rem);
+  --t-hero: clamp(2.5rem, 1rem + 4vw, 3.75rem);
   --t-h2: clamp(1.8rem, 1.1rem + 2.4vw, 2.75rem);
   --t-h3: 1.25rem;
   --t-body: 1.0625rem;
@@ -184,8 +184,8 @@ pre { margin: 0; }
     radial-gradient(ellipse 46% 42% at 74% 34%, oklch(0.24 0.055 292 / 0.4), transparent 70%);
 }
 .hero-grid {
-  display: grid; grid-template-columns: 6fr 5fr;
-  gap: clamp(32px, 4vw, 56px); align-items: center;
+  display: grid; grid-template-columns: 1fr 1.08fr;
+  gap: clamp(32px, 3.5vw, 48px); align-items: center;
 }
 .hero .eyebrow { margin-bottom: var(--s-6); }
 .hero h1 { font-size: var(--t-hero); max-width: 13ch; }
@@ -549,7 +549,7 @@ pre { margin: 0; }
 /* ============ responsive ============ */
 @media (max-width: 1024px) {
   .hero-grid { grid-template-columns: 1fr; }
-  .topo-frame { max-width: 640px; }
+  .topo-frame { max-width: 720px; }
   .how-grid { grid-template-columns: 1fr; }
   .code-panel { position: static; }
   .console-grid { grid-template-columns: 1fr; }
@@ -631,7 +631,7 @@ pre { margin: 0; }
         <a class="btn btn-primary" href="#deploy">Deploy locally</a>
         <a class="btn btn-ghost" href="#" rel="noopener">View on GitHub <span class="ext">↗</span></a>
       </div>
-      <p class="trust rise rise-5">Apache-2.0 · Single-user by design · Keys never leave your box</p>
+      <p class="trust rise rise-5">Apache-2.0 · Single-user · Keys never leave your box</p>
     </div>
 
     <div class="topo rise rise-6">

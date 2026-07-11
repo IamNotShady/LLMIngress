@@ -4,15 +4,6 @@ import {
   type PricedModelTokenPrice,
 } from "@llmingress/billing/price-registry";
 
-export const routeTaskTypes = [
-  "general",
-  "coding",
-  "repo",
-  "terminal",
-  "long_context",
-  "reasoning",
-] as const;
-export const routeCapabilities = ["coding", "reasoning", "tools"] as const;
 export const routeEndpointProtocols = [
   "chat_completions",
   "responses",
@@ -20,10 +11,8 @@ export const routeEndpointProtocols = [
   "embeddings",
 ] as const;
 
-export type RouteTaskType = (typeof routeTaskTypes)[number];
-export type RouteCapability = (typeof routeCapabilities)[number];
 export type RouteEndpointProtocol = (typeof routeEndpointProtocols)[number];
-export type RoutePolicyStrategy = "fixed" | "cost_first" | "quality_first" | "random";
+export type RoutePolicyStrategy = "fixed" | "cost_first" | "random";
 
 export const modelInputModalities = ["text", "image", "audio", "video", "document"] as const;
 export const modelOutputModalities = ["text", "image", "audio", "video", "embedding"] as const;
@@ -147,24 +136,6 @@ const modelCapabilityFields = [
   "supportsReasoning",
 ] as const satisfies readonly ModelCapabilityField[];
 
-export type RoutePolicyRules = {
-  endpointProtocol?: RouteEndpointProtocol;
-  taskTypes?: RouteTaskType[];
-  requiredCapabilities?: RouteCapability[];
-  maxContextTokens?: number;
-  requireTools?: boolean;
-  timeoutMs?: number;
-  retryAttempts?: number;
-};
-
-export type ProviderModelCapabilities = {
-  coding?: boolean;
-  reasoning?: boolean;
-  tools?: boolean;
-  maxTimeoutMs?: number;
-  retryable?: boolean;
-};
-
 export function normalizeModelInputModalities(value: unknown): ModelInputModality[] | null {
   return normalizeModelModalities(value, modelInputModalities, normalizeInputModalityAlias);
 }
@@ -248,8 +219,8 @@ export function resolveVirtualModelCapabilityContract(
         return {
           code: "route_policy_candidate_capability_mismatch",
           details: {
-            baselineProviderModelId: baseline.providerModelId,
-            baselineValue: baseline.contract[field],
+            referenceProviderModelId: baseline.providerModelId,
+            referenceValue: baseline.contract[field],
             field,
             providerModelId: candidate.providerModelId,
             value: candidate.contract[field],
@@ -329,8 +300,6 @@ export type RouteCandidateHealthStatus =
 
 export type RouteCandidate = {
   candidateOrder: number;
-  capabilities?: ProviderModelCapabilities;
-  contextWindow?: number | null;
   displayName: string;
   healthStatus?: RouteCandidateHealthStatus;
   modelId: string;
@@ -338,13 +307,12 @@ export type RouteCandidate = {
   providerId: string;
   providerKey: string;
   providerModelId: string;
-  supportsTools?: boolean;
 };
 
 export type RoutePolicy<TCandidate extends RouteCandidate = RouteCandidate> = {
   candidates: TCandidate[];
+  endpointProtocol?: RouteEndpointProtocol;
   id: string;
-  rules?: RoutePolicyRules;
   strategy: RoutePolicyStrategy;
   virtualModelId: string;
   virtualModelName: string;
@@ -358,8 +326,6 @@ export type RouteSelectionRequest<TCandidate extends RouteCandidate = RouteCandi
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
   snapshot: RouteSelectionSnapshot<TCandidate>;
-  taskType?: RouteTaskType;
-  usesTools?: boolean;
   virtualModelId?: string;
   virtualModelName?: string;
 };
@@ -372,8 +338,8 @@ export type RouteCandidateExplanation = {
 };
 
 export type RouteReason = {
-  appliedRules: RoutePolicyRules;
   candidateExplanations: RouteCandidateExplanation[];
+  endpointProtocol?: RouteEndpointProtocol;
   estimatedCostUsd?: number;
   message: string;
   priceSource?: PricedModelTokenPrice["source"];
@@ -448,20 +414,6 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
     orderCandidates: (candidates) => candidates,
     usesEstimatedCost: false,
   },
-  quality_first: {
-    decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
-      `quality_first route for ${virtualModelName} selected highest-priced eligible candidate ${selectedCandidateOrder}.`,
-    orderCandidates: (candidates, context) =>
-      buildCostCandidates(candidates, context)
-        .sort((a, b) => {
-          if (a.estimatedCostUsd !== b.estimatedCostUsd) {
-            return b.estimatedCostUsd - a.estimatedCostUsd;
-          }
-          return a.candidate.candidateOrder - b.candidate.candidateOrder;
-        })
-        .map((entry) => entry.candidate),
-    usesEstimatedCost: true,
-  },
   random: {
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
       `random route for ${virtualModelName} selected eligible candidate ${selectedCandidateOrder}.`,
@@ -482,18 +434,9 @@ export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(i
   routePolicy: RoutePolicy<TCandidate>;
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
-  taskType?: RouteTaskType;
-  usesTools?: boolean;
   random?: () => number;
 }): TCandidate[] {
   const { routePolicy, random } = input;
-  const selectionRequest: RouteSelectionRequest<TCandidate> = {
-    estimatedInputTokens: input.estimatedInputTokens,
-    estimatedOutputTokens: input.estimatedOutputTokens,
-    snapshot: { routePolicies: [routePolicy] },
-    taskType: input.taskType,
-    usesTools: input.usesTools,
-  };
 
   const sortedCandidates = [...routePolicy.candidates].sort(
     (a, b) => a.candidateOrder - b.candidateOrder,
@@ -504,54 +447,14 @@ export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(i
     (c) => !INELIGIBLE_HEALTH.has(c.healthStatus ?? "unknown"),
   );
 
-  // Filter by rule eligibility via evaluateCandidate
-  const ruleEligible = healthEligible.filter((candidate) => {
-    const result = evaluateCandidate({ candidate, input: selectionRequest, routePolicy });
-    return result.eligible;
-  });
-
-  if (ruleEligible.length === 0) {
+  if (healthEligible.length === 0) {
     return [];
   }
 
-  return routeStrategyHandlers[routePolicy.strategy].orderCandidates(ruleEligible, {
+  return routeStrategyHandlers[routePolicy.strategy].orderCandidates(healthEligible, {
     estimatedInputTokens: input.estimatedInputTokens,
     estimatedOutputTokens: input.estimatedOutputTokens,
     random: random ?? Math.random,
-  });
-}
-
-export function normalizeRoutePolicyRules(value: unknown): RoutePolicyRules {
-  const record = readOptionalRecord(value, "Route policy rules");
-  return omitUndefined({
-    endpointProtocol: readOptionalEnum(
-      record.endpointProtocol,
-      routeEndpointProtocols,
-      "endpointProtocol",
-      "endpoint protocol",
-    ),
-    maxContextTokens: readOptionalPositiveInteger(record.maxContextTokens, "maxContextTokens"),
-    requiredCapabilities: readOptionalEnumArray(
-      record.requiredCapabilities,
-      routeCapabilities,
-      "requiredCapabilities",
-      "capability",
-    ),
-    requireTools: readOptionalBoolean(record.requireTools, "requireTools"),
-    retryAttempts: readOptionalNonNegativeInteger(record.retryAttempts, "retryAttempts"),
-    taskTypes: readOptionalEnumArray(record.taskTypes, routeTaskTypes, "taskTypes", "task type"),
-    timeoutMs: readOptionalPositiveInteger(record.timeoutMs, "timeoutMs"),
-  });
-}
-
-export function normalizeProviderModelCapabilities(value: unknown): ProviderModelCapabilities {
-  const record = readOptionalRecord(value, "Provider model capability metadata");
-  return omitUndefined({
-    coding: readOptionalBoolean(record.coding, "coding"),
-    maxTimeoutMs: readOptionalPositiveInteger(record.maxTimeoutMs, "maxTimeoutMs"),
-    reasoning: readOptionalBoolean(record.reasoning, "reasoning"),
-    retryable: readOptionalBoolean(record.retryable, "retryable"),
-    tools: readOptionalBoolean(record.tools, "tools"),
   });
 }
 
@@ -570,17 +473,20 @@ export function selectRouteAttempts<TCandidate extends RouteCandidate>(
   const allCandidatesSorted = [...routePolicy.candidates].sort(
     (a, b) => a.candidateOrder - b.candidateOrder,
   );
-  const evaluated = allCandidatesSorted.map((candidate) =>
-    evaluateCandidate({ candidate, input, routePolicy }),
-  );
+  const evaluated = allCandidatesSorted.map((candidate) => {
+    const eligible = !INELIGIBLE_HEALTH.has(candidate.healthStatus ?? "unknown");
+    return {
+      candidate,
+      eligible,
+      reasons: eligible ? [] : [`health status ${candidate.healthStatus} is not eligible`],
+    };
+  });
 
   // Build the ordered attempt chain ONCE (single shuffle for random strategy)
   const chain = buildRouteAttemptCandidates({
     routePolicy,
     estimatedInputTokens: input.estimatedInputTokens,
     estimatedOutputTokens: input.estimatedOutputTokens,
-    taskType: input.taskType,
-    usesTools: input.usesTools,
     random: input.random,
   });
 
@@ -653,80 +559,6 @@ function findRoutePolicy<TCandidate extends RouteCandidate>(
   return routePolicy;
 }
 
-function evaluateCandidate<TCandidate extends RouteCandidate>(input: {
-  candidate: TCandidate;
-  input: RouteSelectionRequest<TCandidate>;
-  routePolicy: RoutePolicy<TCandidate>;
-}): CandidateEligibility<TCandidate> {
-  const totalEstimatedTokens = input.input.estimatedInputTokens + input.input.estimatedOutputTokens;
-  const rules = input.routePolicy.rules ?? {};
-  const reasons: string[] = [];
-
-  if (
-    input.input.taskType &&
-    rules.taskTypes &&
-    rules.taskTypes.length > 0 &&
-    !rules.taskTypes.includes(input.input.taskType)
-  ) {
-    reasons.push(`task type ${input.input.taskType} is not allowed by route policy`);
-  }
-  if (rules.maxContextTokens !== undefined) {
-    if (totalEstimatedTokens > rules.maxContextTokens) {
-      reasons.push(
-        `estimated tokens ${totalEstimatedTokens} exceed policy max context ${rules.maxContextTokens}`,
-      );
-    }
-    if (
-      input.candidate.contextWindow !== undefined &&
-      input.candidate.contextWindow !== null &&
-      totalEstimatedTokens > input.candidate.contextWindow
-    ) {
-      reasons.push(
-        `estimated tokens ${totalEstimatedTokens} exceed model context window ${input.candidate.contextWindow}`,
-      );
-    }
-  }
-  if (rules.requireTools && input.candidate.supportsTools !== true) {
-    reasons.push("request uses tools but model does not support tools");
-  }
-
-  const missingCapabilities = (rules.requiredCapabilities ?? []).filter(
-    (capability) => !candidateHasCapability(input.candidate, capability),
-  );
-  if (missingCapabilities.length > 0) {
-    reasons.push(`missing required capabilities: ${missingCapabilities.join(", ")}`);
-  }
-  if (
-    rules.timeoutMs !== undefined &&
-    input.candidate.capabilities?.maxTimeoutMs !== undefined &&
-    rules.timeoutMs > input.candidate.capabilities.maxTimeoutMs
-  ) {
-    reasons.push(
-      `policy timeout ${rules.timeoutMs}ms exceeds model max timeout ${input.candidate.capabilities.maxTimeoutMs}ms`,
-    );
-  }
-  if (
-    rules.retryAttempts !== undefined &&
-    rules.retryAttempts > 0 &&
-    input.candidate.capabilities?.retryable !== true
-  ) {
-    reasons.push("policy retry attempts require retryable model");
-  }
-
-  return {
-    candidate: input.candidate,
-    eligible: reasons.length === 0,
-    reasons,
-  };
-}
-
-function candidateHasCapability(candidate: RouteCandidate, capability: RouteCapability): boolean {
-  if (capability === "tools") {
-    return candidate.supportsTools === true || candidate.capabilities?.tools === true;
-  }
-  return candidate.capabilities?.[capability] === true;
-}
-
 function buildCostCandidates<TCandidate extends RouteCandidate>(
   candidates: TCandidate[],
   input: { estimatedInputTokens: number; estimatedOutputTokens: number },
@@ -767,7 +599,6 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
     providerModelId: asProviderModelId(input.candidate.providerModelId),
     routePolicyId: asRoutePolicyId(input.routePolicy.id),
     routeReason: {
-      appliedRules: input.routePolicy.rules ?? {},
       candidateExplanations: input.evaluated.map((evaluated) => ({
         candidateOrder: evaluated.candidate.candidateOrder,
         eligible: evaluated.eligible,
@@ -780,6 +611,7 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
               : evaluated.reasons,
       })),
       estimatedCostUsd: input.estimatedCostUsd,
+      endpointProtocol: input.routePolicy.endpointProtocol,
       message: input.message,
       priceSource: input.priceSource,
       selectedCandidateOrder: input.candidate.candidateOrder,
@@ -1031,16 +863,6 @@ function assertTokenEstimate(value: number, name: string): void {
   }
 }
 
-function readOptionalRecord(value: unknown, name: string): Record<string, unknown> {
-  if (value === undefined || value === null) {
-    return {};
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object.`);
-  }
-  return value as Record<string, unknown>;
-}
-
 function readOptionalBoolean(value: unknown, name: string): boolean | undefined {
   if (value === undefined) {
     return undefined;
@@ -1059,56 +881,6 @@ function readOptionalPositiveInteger(value: unknown, name: string): number | und
     throw new Error(`${name} must be a positive integer.`);
   }
   return value;
-}
-
-function readOptionalNonNegativeInteger(value: unknown, name: string): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new Error(`${name} must be a non-negative integer.`);
-  }
-  return value;
-}
-
-function readOptionalEnum<T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-  name: string,
-  label: string,
-): T | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!allowed.includes(value as T)) {
-    throw new Error(`${name} contains invalid ${label}.`);
-  }
-  return value as T;
-}
-
-function readOptionalEnumArray<T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-  name: string,
-  label: string,
-): T[] | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!Array.isArray(value)) {
-    throw new Error(`${name} must be an array.`);
-  }
-
-  const result: T[] = [];
-  for (const entry of value) {
-    if (!allowed.includes(entry as T)) {
-      throw new Error(`${name} contains invalid ${label}.`);
-    }
-    if (!result.includes(entry as T)) {
-      result.push(entry as T);
-    }
-  }
-  return result;
 }
 
 function omitUndefined<T extends Record<string, unknown>>(input: T): T {

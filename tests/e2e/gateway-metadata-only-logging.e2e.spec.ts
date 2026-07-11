@@ -33,19 +33,19 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
     const fallbackFailingProvider = await createProvider(providers);
     const fallbackSucceedingProvider = await createProvider(providers);
 
-    const jsonRoute = await seedOpenAIGatewayRoute({
+    await seedOpenAIGatewayRoute({
       agentApiKey: jsonAgentApiKey,
       fixture,
       providerBaseUrl: jsonProvider.url,
       virtualModelName: "vm-metadata-json",
     });
-    const streamRoute = await seedOpenAIGatewayRoute({
+    await seedOpenAIGatewayRoute({
       agentApiKey: streamAgentApiKey,
       fixture,
       providerBaseUrl: `${streamProvider.url}?mode=stream&stream_end_ms=20`,
       virtualModelName: "vm-metadata-stream",
     });
-    const errorRoute = await seedOpenAIGatewayRoute({
+    await seedOpenAIGatewayRoute({
       agentApiKey: errorAgentApiKey,
       fixture,
       providerBaseUrl: `${errorProvider.url}?mode=bad-request`,
@@ -62,11 +62,6 @@ test("Gateway stdout logs omit prompt, tool arguments, and test keys across JSON
       providerBaseUrl: fallbackSucceedingProvider.url,
       routePolicyId: fallbackRoute.routePolicyId,
     });
-    await fixture.query(
-      "update agents set request_logging_enabled = true where id in ($1, $2, $3, $4)",
-      [jsonRoute.agentId, streamRoute.agentId, errorRoute.agentId, fallbackRoute.agentId],
-    );
-
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
       env: { LOG_LEVEL: "info" },

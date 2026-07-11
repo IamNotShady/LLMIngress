@@ -282,7 +282,6 @@ function registerGatewayJsonEndpoint(
       method: request.method,
       protocol: endpoint.protocol,
       requestId: auth.requestId,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       url: request.url,
       virtualModelName: virtualModelAccess.virtualModel.name,
     });
@@ -307,7 +306,6 @@ function registerGatewayJsonEndpoint(
           logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: endpoint.protocol,
-          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
@@ -330,7 +328,6 @@ function registerGatewayJsonEndpoint(
       logger: request.log,
       model: virtualModelAccess.virtualModel.name,
       protocol: endpoint.protocol,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
@@ -418,16 +415,11 @@ type GatewayAgentRequestLogInput = {
   method: string;
   protocol: GatewayRequestActivityProtocol;
   requestId: string;
-  requestLoggingEnabled: boolean;
   url: string;
   virtualModelName: string;
 };
 
 export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) {
-  if (!input.requestLoggingEnabled) {
-    return null;
-  }
-
   return {
     agentId: input.agentId,
     agentKeyPrefix: input.agentKeyPrefix,
@@ -441,9 +433,6 @@ export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) 
 
 function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRequestLogInput) {
   const payload = buildGatewayAgentRequestLog(input);
-  if (!payload) {
-    return;
-  }
   logger.info(payload, "gateway agent request");
 }
 

@@ -32,7 +32,6 @@ describe("schema fallback single source", () => {
         model: "schema-vm",
         protocol: "chat_completions",
         requestId: "req-schema-fallback-record",
-        requestLoggingEnabled: true,
         responseBody: {
           error: { code: "provider_request_failed", message: "Provider failed." },
         },
@@ -80,7 +79,6 @@ describe("schema fallback single source", () => {
           model: "schema-vm",
           protocol: "chat_completions",
           requestId: "req-schema-no-jsonb",
-          requestLoggingEnabled: true,
           responseBody: { id: "ok" },
           route: {
             fallbackAttempts: [],
@@ -162,7 +160,7 @@ async function seedRuntimeEntities(fixture: TestPostgresFixture) {
     virtualModelId: randomUUID(),
   };
   await fixture.query(
-    "insert into agents (id, name, agent_type, key_prefix) values ($1, 'Schema Agent', 'coding', 'llmi_schema')",
+    "insert into agents (id, name, key_prefix) values ($1, 'Schema Agent', 'llmi_schema')",
     [ids.agentId],
   );
   await fixture.query(

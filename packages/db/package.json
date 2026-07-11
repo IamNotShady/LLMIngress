@@ -96,10 +96,6 @@
       "types": "./src/console-route-policies.ts",
       "default": "./src/console-route-policies.ts"
     },
-    "./console-route-preview": {
-      "types": "./src/console-route-preview.ts",
-      "default": "./src/console-route-preview.ts"
-    },
     "./console-usage": {
       "types": "./src/console-usage.ts",
       "default": "./src/console-usage.ts"

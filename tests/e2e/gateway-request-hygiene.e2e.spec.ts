@@ -20,11 +20,38 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const responsesAgentApiKey = "llmi_resp_request_hygiene_key_094";
+    const messagesAgentApiKey = "llmi_msg_request_hygiene_key_094";
+    const embeddingsAgentApiKey = "llmi_embed_request_hygiene_key_094";
     await seedOpenAIGatewayRoute({
       agentApiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-request-hygiene",
+    });
+    await seedOpenAIGatewayRoute({
+      agentApiKey: responsesAgentApiKey,
+      endpointProtocol: "responses",
+      fixture,
+      providerBaseUrl: fakeProvider.url,
+      virtualModelName: "vm-request-hygiene-responses",
+    });
+    const messagesSeed = await seedOpenAIGatewayRoute({
+      agentApiKey: messagesAgentApiKey,
+      endpointProtocol: "messages",
+      fixture,
+      providerBaseUrl: fakeProvider.url,
+      virtualModelName: "vm-request-hygiene-messages",
+    });
+    await fixture.query("update providers set provider_key = 'anthropic' where id = $1", [
+      messagesSeed.providerId,
+    ]);
+    await seedOpenAIGatewayRoute({
+      agentApiKey: embeddingsAgentApiKey,
+      endpointProtocol: "embeddings",
+      fixture,
+      providerBaseUrl: fakeProvider.url,
+      virtualModelName: "vm-request-hygiene-embeddings",
     });
     await fixture.query(
       `
@@ -162,7 +189,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           input: [{ content: "run pwd", role: "user" }, toolOutput],
           max_tool_calls: 3,
           metadata: { trace: "responses" },
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-responses",
           parallel_tool_calls: false,
           previous_response_id: "resp_123",
           reasoning: { effort: "medium" },
@@ -175,7 +202,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           user: "end-user-123",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
           ...openAIHeaderProbe,
           "x-client-request-id": "client-responses-1",
@@ -223,11 +250,11 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
               role: "user",
             },
           ],
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-responses",
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -261,12 +288,12 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       const reasoningReplayResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
           input: [reasoningItem, assistantPlaceholder],
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-responses",
           store: false,
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -286,13 +313,13 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       const providerOwnedResponsesResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
           input: { provider: "owned" },
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-responses",
           parallel_tool_calls: "provider-owned",
           tool_choice: "provider-owned",
           tools: ["provider-owned"],
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -317,12 +344,12 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           max_tokens: 128,
           mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
           messages: [{ content: "hello", role: "user" }],
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-messages",
         }),
         headers: {
           "anthropic-beta": "context-1m-2025-08-07",
           "anthropic-version": "2024-01-01",
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${messagesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -353,12 +380,12 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
         body: JSON.stringify({
           max_tokens: "provider-owned",
           messages: "provider-owned",
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-messages",
           stream: "provider-owned",
           system: { provider: "owned" },
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${messagesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -380,10 +407,10 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           dimensions: "provider-owned",
           encoding_format: "provider-owned",
           input: { provider: "owned" },
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-embeddings",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${embeddingsAgentApiKey}`,
           "content-type": "application/json",
           ...openAIHeaderProbe,
           "x-client-request-id": "client-embeddings-1",

@@ -32,7 +32,6 @@ function pricedCandidate(input: {
     providerId: "provider-1",
     providerKey: "openai",
     providerModelId: `pm-${input.candidateOrder}`,
-    supportsTools: true,
   };
 }
 
@@ -85,14 +84,6 @@ describe("refactor-route-strategy-registry", () => {
     expect(result.decision?.routeReason.priceSource).toBe("manual_override");
   });
 
-  it("keeps quality_first behavior: highest-priced first", () => {
-    const result = select("quality_first");
-    expect(result.chain.map((c) => c.candidateOrder)).toEqual([2, 1]);
-    expect(result.decision?.routeReason.message).toBe(
-      "quality_first route for vm selected highest-priced eligible candidate 2.",
-    );
-  });
-
   it("keeps random behavior deterministic under injected random", () => {
     // random: () => 0 时 Fisher-Yates 在两候选上必定交换 → [2, 1]
     const result = select("random");
@@ -106,8 +97,8 @@ describe("refactor-route-strategy-registry", () => {
     const chain = buildRouteAttemptCandidates({
       estimatedInputTokens: 1_000,
       estimatedOutputTokens: 1_000,
-      routePolicy: policyWith("quality_first"),
+      routePolicy: policyWith("cost_first"),
     });
-    expect(chain.map((c) => c.candidateOrder)).toEqual([2, 1]);
+    expect(chain.map((c) => c.candidateOrder)).toEqual([1, 2]);
   });
 });

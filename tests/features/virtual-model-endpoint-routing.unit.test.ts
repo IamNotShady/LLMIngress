@@ -121,7 +121,7 @@ describe("virtual model endpoint routing", () => {
           {
             candidates: [candidateSnapshot()],
             id: "route-1",
-            rules: { endpointProtocol: "messages" },
+            endpointProtocol: "messages",
             strategy: "fixed",
             virtualModelId: "vm-1",
             virtualModelName: "vm",

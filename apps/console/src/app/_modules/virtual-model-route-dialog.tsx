@@ -3,7 +3,7 @@
 import { type DragEvent, useMemo, useState } from "react";
 import { FlatIcon } from "../_components/flat-icon";
 
-type Strategy = "fixed" | "cost_first" | "quality_first" | "random";
+type Strategy = "fixed" | "cost_first" | "random";
 type EndpointProtocol = "chat_completions" | "responses" | "messages" | "embeddings";
 
 type ProviderModelOption = {
@@ -19,7 +19,7 @@ type ProviderModelOption = {
   providerKey: string;
   supportedEndpoints: EndpointProtocol[];
   supportsStreaming: boolean;
-  supportsTools: boolean;
+  supportsFunctionCalling: boolean | null;
 };
 
 type Candidate = ProviderModelOption & {
@@ -39,7 +39,7 @@ type VirtualModel = {
   name: string;
 };
 
-const strategies: Strategy[] = ["fixed", "cost_first", "quality_first", "random"];
+const strategies: Strategy[] = ["fixed", "cost_first", "random"];
 const endpointProtocols: EndpointProtocol[] = [
   "chat_completions",
   "responses",
@@ -253,7 +253,7 @@ export function VirtualModelRouteDialogClient({
                         <th>Context</th>
                         <th>Input price</th>
                         <th>Output price</th>
-                        <th>Tools</th>
+                        <th>Function calling</th>
                         <th>Status</th>
                         <th>Actions</th>
                       </tr>
@@ -283,7 +283,7 @@ export function VirtualModelRouteDialogClient({
                           <td>{formatModelContext(candidate.contextWindow)}</td>
                           <td>{formatModelPrice(candidate.inputUsdPerMillionTokens)}</td>
                           <td>{formatModelPrice(candidate.outputUsdPerMillionTokens)}</td>
-                          <td>{formatBooleanFeature(candidate.supportsTools)}</td>
+                          <td>{formatBooleanFeature(candidate.supportsFunctionCalling)}</td>
                           <td>
                             {candidate.availability === "available" ? (
                               <span className="pill--ok pill">Available</span>
@@ -385,7 +385,7 @@ export function VirtualModelRouteDialogClient({
                     <th>Context</th>
                     <th>Input price</th>
                     <th>Output price</th>
-                    <th>Tools</th>
+                    <th>Function calling</th>
                     <th>Streaming</th>
                   </tr>
                 </thead>
@@ -413,7 +413,7 @@ export function VirtualModelRouteDialogClient({
                         <td>{formatModelContext(option.contextWindow)}</td>
                         <td>{formatModelPrice(option.inputUsdPerMillionTokens)}</td>
                         <td>{formatModelPrice(option.outputUsdPerMillionTokens)}</td>
-                        <td>{formatBooleanFeature(option.supportsTools)}</td>
+                        <td>{formatBooleanFeature(option.supportsFunctionCalling)}</td>
                         <td>{formatBooleanFeature(option.supportsStreaming)}</td>
                       </tr>
                     ))
@@ -431,9 +431,6 @@ export function VirtualModelRouteDialogClient({
 function formatRouteStrategyLabel(strategy: Strategy): string {
   if (strategy === "cost_first") {
     return "Cost First";
-  }
-  if (strategy === "quality_first") {
-    return "Quality First";
   }
   if (strategy === "random") {
     return "Random";
@@ -469,9 +466,6 @@ function formatRouteStrategyDescription(strategy: Strategy): string {
   if (strategy === "cost_first") {
     return "Prefer the lowest-cost candidate";
   }
-  if (strategy === "quality_first") {
-    return "Prefer the highest-priced candidate";
-  }
   return "Pick a random eligible candidate each request";
 }
 
@@ -499,6 +493,6 @@ function formatDecimal(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function formatBooleanFeature(value: boolean): string {
-  return value ? "Yes" : "No";
+function formatBooleanFeature(value: boolean | null): string {
+  return value === null ? "Unknown" : value ? "Yes" : "No";
 }

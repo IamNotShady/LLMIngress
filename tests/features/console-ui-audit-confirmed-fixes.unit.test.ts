@@ -16,7 +16,6 @@ const consoleSectionSource = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "route-policies-section.tsx",
     "agents-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
@@ -83,9 +82,8 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(agentFormsSource).not.toContain('<option value="day">day</option>');
     expect(agentFormsSource).not.toContain('<option value="week">week</option>');
     expect(agentFormsSource).not.toContain('<option value="month">month</option>');
-    expect(sourceText).toContain('<option value="coding">Coding</option>');
-    expect(sourceText).toContain('<option value="terminal">Terminal</option>');
-    expect(sourceText).toContain('<option value="true">Enabled</option>');
+    expect(sourceText).not.toContain('name="agentType"');
+    expect(sourceText).not.toContain('name="requestLoggingEnabled"');
     expect(agentFormsSource).toContain('<option value="day">Day</option>');
     expect(agentFormsSource).toContain('<option value="week">Week</option>');
     expect(agentFormsSource).toContain('<option value="month">Month</option>');

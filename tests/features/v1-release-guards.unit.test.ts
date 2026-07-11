@@ -6,6 +6,7 @@ const repoRoot = process.cwd();
 const allowedFeatureIds = [
   "worker-noncore-removal",
   "runtime-observability-removal",
+  "routing-agent-cost-simplification",
   "v1-platform",
   "v1-gateway-routing",
   "v1-console",
@@ -74,6 +75,7 @@ const sharedE2EFeatureIds: Record<string, string> = {
 const inProgressFeatureIds = new Set([
   "worker-noncore-removal",
   "runtime-observability-removal",
+  "routing-agent-cost-simplification",
   "gateway-db-pool",
   "gateway-recording-resilience",
   "gateway-stream-robustness",

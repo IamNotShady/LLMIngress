@@ -48,5 +48,5 @@ export const POST = withConsoleAuth(async (request) => {
     return consoleActionErrorResponse(error, "Route Policy action failed.");
   }
 
-  return redirectToConsolePath("/routing");
+  return redirectToConsolePath("/models");
 });

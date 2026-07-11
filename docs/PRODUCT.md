@@ -94,8 +94,7 @@ Prompt content, response content, tool arguments, credentials, cookies, and auth
 headers are never written to operational logs.
 
 Console reporting includes request count, tokens, latency, failure rate, actual/estimated
-cost, fallback history, and Provider health history. Savings and hypothetical baseline cost
-are not part of the product.
+cost, fallback history, and Provider health history.
 
 ## Console
 

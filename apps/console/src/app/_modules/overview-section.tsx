@@ -151,20 +151,6 @@ export async function OverviewSection() {
             "down-good",
           )}
         />
-        <StatCard
-          icon="SV"
-          label="Savings"
-          value={formatConsoleUsd(usageSummary.totalSavingsUsd)}
-          delta={formatPreviousWindowPercentDelta(
-            Number(usageSummary.totalSavingsUsd ?? 0),
-            Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
-          )}
-          deltaTone={formatDeltaTone(
-            Number(usageSummary.totalSavingsUsd ?? 0),
-            Number(overviewAnalytics.previous.totalSavingsUsd ?? 0),
-            "up-good",
-          )}
-        />
         <StatCard icon="AG" label="Active agents 24h" value={String(activeAgentCount)} />
       </div>
 

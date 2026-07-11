@@ -26,10 +26,8 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "create") {
       const result = await createAgent({
         agent: normalizeAgentFormInput({
-          agentType: readText(form, "agentType"),
           integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
-          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
       });
       await saveAgentRelatedSettings({
@@ -42,10 +40,8 @@ export const POST = withConsoleAuth(async (request) => {
     } else if (action === "update") {
       await updateAgent({
         agent: normalizeAgentFormInput({
-          agentType: readText(form, "agentType"),
           integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
-          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         id: readRequiredText(form, "id"),
       });
@@ -53,10 +49,8 @@ export const POST = withConsoleAuth(async (request) => {
       const id = readRequiredText(form, "id");
       await updateAgent({
         agent: normalizeAgentFormInput({
-          agentType: readText(form, "agentType"),
           integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
-          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         id,
       });

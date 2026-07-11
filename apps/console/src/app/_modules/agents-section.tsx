@@ -5,7 +5,6 @@ import {
 import {
   type AgentDerivedStatus,
   type AgentIntegrationPlatform,
-  type AgentType,
   type AgentVirtualModelAccess,
   agentIntegrationPlatforms,
   type ConsoleAgent,
@@ -59,10 +58,6 @@ function AgentViewDialog({
           </a>
         </div>
         <dl className="agent-detail-fields">
-          <div>
-            <dt>Type</dt>
-            <dd>{formatAgentTypeLabel(agent.agentType)}</dd>
-          </div>
           <div>
             <dt>Platform</dt>
             <dd>{formatAgentIntegrationPlatformLabel(agent.integrationPlatform)}</dd>
@@ -137,14 +132,6 @@ function AgentCreateDialog({
           <input type="hidden" name="action" value="create" />
           <label htmlFor="agent-name">Agent name</label>
           <input id="agent-name" name="name" required />
-          <label htmlFor="agent-type">Agent type</label>
-          <select id="agent-type" name="agentType" required defaultValue="coding">
-            <option value="coding">Coding</option>
-            <option value="desktop">Desktop</option>
-            <option value="terminal">Terminal</option>
-            <option value="ide">IDE</option>
-            <option value="other">Other</option>
-          </select>
           <label htmlFor="agent-integration-platform">Integration platform</label>
           <select
             id="agent-integration-platform"
@@ -157,16 +144,6 @@ function AgentCreateDialog({
                 {formatAgentIntegrationPlatformLabel(platform)}
               </option>
             ))}
-          </select>
-          <label htmlFor="agent-request-logging">Detailed request metadata logging</label>
-          <select
-            id="agent-request-logging"
-            name="requestLoggingEnabled"
-            required
-            defaultValue="true"
-          >
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
           </select>
           <span className="form-label" id="agent-allowed-virtual-models-label">
             Allowed virtual models
@@ -296,19 +273,6 @@ function AgentEditDialog({
           <input type="hidden" name="id" value={agent.id} />
           <label htmlFor={`agent-name-${agent.id}`}>Agent name</label>
           <input id={`agent-name-${agent.id}`} name="name" defaultValue={agent.name} required />
-          <label htmlFor={`agent-type-${agent.id}`}>Agent type</label>
-          <select
-            id={`agent-type-${agent.id}`}
-            name="agentType"
-            defaultValue={agent.agentType}
-            required
-          >
-            <option value="coding">Coding</option>
-            <option value="desktop">Desktop</option>
-            <option value="terminal">Terminal</option>
-            <option value="ide">IDE</option>
-            <option value="other">Other</option>
-          </select>
           <label htmlFor={`agent-integration-platform-${agent.id}`}>Integration platform</label>
           <select
             id={`agent-integration-platform-${agent.id}`}
@@ -321,18 +285,6 @@ function AgentEditDialog({
                 {formatAgentIntegrationPlatformLabel(platform)}
               </option>
             ))}
-          </select>
-          <label htmlFor={`agent-request-logging-${agent.id}`}>
-            Detailed request metadata logging
-          </label>
-          <select
-            id={`agent-request-logging-${agent.id}`}
-            name="requestLoggingEnabled"
-            defaultValue={String(agent.requestLoggingEnabled)}
-            required
-          >
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
           </select>
           <span className="form-label" id={`agent-allowed-virtual-models-label-${agent.id}`}>
             Allowed virtual models
@@ -509,30 +461,11 @@ function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHre
   );
 }
 
-function formatAgentTypeLabel(agentType: string): string {
-  const labels: Record<string, string> = {
-    coding: "CLI",
-    desktop: "Agent",
-    ide: "IDE",
-    other: "Agent",
-    terminal: "Terminal",
-  };
-  return labels[agentType] ?? agentType;
-}
-
-type AgentTypeFilter = "all" | AgentType;
-
 type AgentStatusFilter = "all" | AgentDerivedStatus;
 
 type AgentPlatformFilter = "all" | AgentIntegrationPlatform;
 
-const agentTypeFilters: readonly AgentType[] = ["coding", "desktop", "terminal", "ide", "other"];
-
 const agentStatusFilters: readonly AgentDerivedStatus[] = ["online", "offline", "high-risk"];
-
-function readAgentTypeFilter(value: string | undefined): AgentTypeFilter {
-  return agentTypeFilters.includes(value as AgentType) ? (value as AgentType) : "all";
-}
 
 function readAgentStatusFilter(value: string | undefined): AgentStatusFilter {
   return agentStatusFilters.includes(value as AgentDerivedStatus)
@@ -552,14 +485,10 @@ function filterAgents(
     agentPlatformFilter: AgentPlatformFilter;
     agentSearch: string;
     agentStatusFilter: AgentStatusFilter;
-    agentTypeFilter: AgentTypeFilter;
   },
 ): ConsoleAgent[] {
   const normalizedSearch = filters.agentSearch.toLowerCase();
   return agents.filter((agent) => {
-    if (filters.agentTypeFilter !== "all" && agent.agentType !== filters.agentTypeFilter) {
-      return false;
-    }
     if (filters.agentStatusFilter !== "all" && agent.status !== filters.agentStatusFilter) {
       return false;
     }
@@ -575,8 +504,6 @@ function filterAgents(
     return [
       agent.name,
       agent.keyPrefix ?? "",
-      agent.agentType,
-      formatAgentTypeLabel(agent.agentType),
       formatAgentIntegrationPlatformLabel(agent.integrationPlatform),
     ].some((value) => value.toLowerCase().includes(normalizedSearch));
   });
@@ -658,7 +585,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
   const onlineAgentCount = agents.filter((agent) => agent.status === "online").length;
   const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
-  const agentTypeFilter = readAgentTypeFilter(readSingleSearchParam(searchParams.agentType));
   const agentStatusFilter = readAgentStatusFilter(readSingleSearchParam(searchParams.agentStatus));
   const agentPlatformFilter = readAgentPlatformFilter(
     readSingleSearchParam(searchParams.agentPlatform),
@@ -667,7 +593,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
   const visibleAgents = filterAgents(agents, {
     agentSearch,
     agentStatusFilter,
-    agentTypeFilter,
     agentPlatformFilter,
   });
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
@@ -710,17 +635,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
           <form action="/agents" method="get">
             <fieldset className="agents-filter-bar">
               <legend className="sr-only">Agent filters</legend>
-              <div className="console-field">
-                <label htmlFor="agent-filter-type">Type</label>
-                <select id="agent-filter-type" name="agentType" defaultValue={agentTypeFilter}>
-                  <option value="all">All</option>
-                  <option value="coding">Coding</option>
-                  <option value="terminal">Terminal</option>
-                  <option value="ide">IDE</option>
-                  <option value="desktop">Desktop</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
               <div className="console-field">
                 <label htmlFor="agent-filter-status">Status</label>
                 <select
@@ -779,7 +693,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                   <thead>
                     <tr>
                       <th>Agent</th>
-                      <th>Type</th>
                       <th>API Key Prefix</th>
                       <th>Default VM</th>
                       <th className="num">Available VM</th>
@@ -809,11 +722,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                           <td>
                             <a className="table-row-link" href={agentViewHref}>
                               {agent.name}
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={agentViewHref}>
-                              {formatAgentTypeLabel(agent.agentType)}
                             </a>
                           </td>
                           <td className="mono">

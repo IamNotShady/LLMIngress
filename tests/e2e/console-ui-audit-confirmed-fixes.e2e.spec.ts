@@ -23,10 +23,10 @@ async function seedAuditData(databaseUrl: string) {
 
   await withPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
+      `insert into agents (id, name, key_prefix, key_hash, enabled)
        values
-         ($1, 'audit-old-agent', 'terminal', 'llmi_audit_old', 'test-hash', true),
-         ($2, 'audit-other-agent', 'terminal', 'llmi_audit_other', 'test-hash-other', true)`,
+         ($1, 'audit-old-agent', 'llmi_audit_old', 'test-hash', true),
+         ($2, 'audit-other-agent', 'llmi_audit_other', 'test-hash-other', true)`,
       [agentId, otherAgentId],
     );
     await client.query(
@@ -163,7 +163,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
           await expect(
             page.locator('input[name="allowedVirtualModelIds"][type="checkbox"]'),
           ).toHaveCount(1);
-          await expect(page.locator("#agent-type")).toContainText("Coding");
+          await expect(page.locator("#agent-type")).toHaveCount(0);
 
           for (const viewport of [
             { width: 1280, height: 800 },

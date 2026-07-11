@@ -43,7 +43,6 @@ export type ConsoleAnalyticsKpis = {
   p95LatencyMs: number | null;
   requestCount: number;
   totalCostUsd: string | null;
-  totalSavingsUsd: string | null;
   totalTokens: number;
 };
 
@@ -92,7 +91,6 @@ type AnalyticsKpiRow = {
   p95_latency_ms: number | string | null;
   request_count: number;
   total_cost_usd: string | null;
-  total_savings_usd: string | null;
   total_tokens: string | null;
 };
 
@@ -442,7 +440,6 @@ const analyticsMetricSelectSql = `
   coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
   coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
   coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text as total_cost_usd,
-  coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text as total_savings_usd,
   (
     percentile_cont(0.95) within group (order by scoped_activity.latency_ms)
       filter (where scoped_activity.latency_ms is not null)
@@ -481,7 +478,6 @@ function rowToAnalyticsKpis(row: AnalyticsKpiRow | undefined): ConsoleAnalyticsK
     p95LatencyMs: readNullableNumber(row?.p95_latency_ms),
     requestCount: row?.request_count ?? 0,
     totalCostUsd: row?.total_cost_usd ?? null,
-    totalSavingsUsd: row?.total_savings_usd ?? null,
     totalTokens: readInteger(row?.total_tokens),
   };
 }

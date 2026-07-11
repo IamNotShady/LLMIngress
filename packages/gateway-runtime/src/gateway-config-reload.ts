@@ -12,15 +12,12 @@ import {
   createHealthSummaryChangedListener as createPostgresHealthSummaryChangedListener,
   type HealthSummaryChangedPayload,
 } from "@llmingress/db/provider-health";
-import {
-  type ModelInputModality,
-  type ModelOutputModality,
-  normalizeProviderModelCapabilities,
-  normalizeRoutePolicyRules,
-  type ProviderModelCapabilities,
-  type RouteCandidateHealthStatus,
-  type RoutePolicyRules,
-  type RoutePolicyStrategy,
+import type {
+  ModelInputModality,
+  ModelOutputModality,
+  RouteCandidateHealthStatus,
+  RouteEndpointProtocol,
+  RoutePolicyStrategy,
 } from "@llmingress/domain";
 import { createLogger } from "@llmingress/logging";
 
@@ -36,7 +33,6 @@ export type GatewayRoutePolicyStrategy = RoutePolicyStrategy;
 
 export type GatewayRouteCandidateSnapshot = {
   candidateOrder: number;
-  capabilities?: ProviderModelCapabilities;
   contextWindow?: number | null;
   displayName: string;
   healthStatus: RouteCandidateHealthStatus;
@@ -50,13 +46,12 @@ export type GatewayRouteCandidateSnapshot = {
   providerModelId: string;
   supportsFunctionCalling: boolean | null;
   supportsReasoning: boolean | null;
-  supportsTools?: boolean;
 };
 
 export type GatewayRoutePolicySnapshot = {
   candidates: GatewayRouteCandidateSnapshot[];
+  endpointProtocol: RouteEndpointProtocol;
   id: string;
-  rules?: RoutePolicyRules;
   strategy: GatewayRoutePolicyStrategy;
   virtualModelId: string;
   virtualModelName: string;
@@ -111,7 +106,6 @@ type ProviderRow = {
 
 export type RoutePolicyCandidateRow = {
   candidateOrder: number;
-  capabilityMetadata: unknown;
   displayName: string;
   id: string;
   cachedInputUsdPerMillionTokens: string | null;
@@ -126,11 +120,10 @@ export type RoutePolicyCandidateRow = {
   providerId: string;
   providerKey: string;
   providerModelId: string;
-  rules: unknown;
+  endpointProtocol: RouteEndpointProtocol;
   strategy: GatewayRoutePolicyStrategy;
   supportsFunctionCalling: boolean | null;
   supportsReasoning: boolean | null;
-  supportsTools: boolean;
   syncedAt: Date | null;
   syncedCachedInputUsdPerMillionTokens: string | null;
   syncedInputUsdPerMillionTokens: string | null;
@@ -326,7 +319,7 @@ export async function loadGatewayConfigSnapshot(
       `
         select route_policies.id::text as id,
                route_policies.strategy,
-               route_policies.rules,
+               route_policies.endpoint_protocol as "endpointProtocol",
                virtual_models.id::text as "virtualModelId",
                virtual_models.name as "virtualModelName",
                route_policy_candidates.provider_model_id::text as "providerModelId",
@@ -339,8 +332,6 @@ export async function loadGatewayConfigSnapshot(
                provider_models.max_output_tokens as "maxOutputTokens",
                provider_models.supports_function_calling as "supportsFunctionCalling",
                provider_models.supports_reasoning as "supportsReasoning",
-               provider_models.supports_function_calling as "supportsTools",
-               provider_models.capability_metadata as "capabilityMetadata",
                providers.id::text as "providerId",
                providers.provider_key as "providerKey",
                provider_models.manual_input_usd_per_million_tokens::text
@@ -406,8 +397,8 @@ export function rowToRoutePolicySnapshots(
     if (!routePolicy) {
       routePolicy = {
         candidates: [],
+        endpointProtocol: row.endpointProtocol,
         id: row.id,
-        rules: normalizeRoutePolicyRules(row.rules),
         strategy: row.strategy,
         virtualModelId: row.virtualModelId,
         virtualModelName: row.virtualModelName,
@@ -417,7 +408,6 @@ export function rowToRoutePolicySnapshots(
 
     routePolicy.candidates.push({
       candidateOrder: row.candidateOrder,
-      capabilities: normalizeProviderModelCapabilities(row.capabilityMetadata),
       contextWindow: row.contextWindow,
       displayName: row.displayName,
       healthStatus: row.healthStatus,
@@ -452,7 +442,6 @@ export function rowToRoutePolicySnapshots(
       providerModelId: row.providerModelId,
       supportsFunctionCalling: row.supportsFunctionCalling,
       supportsReasoning: row.supportsReasoning,
-      supportsTools: row.supportsTools,
     });
   }
 

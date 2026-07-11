@@ -25,7 +25,6 @@ describe("gateway-metadata-only-logging", () => {
         ],
       },
       requestId: "req-unit",
-      requestLoggingEnabled: true,
       url: "/v1/chat/completions",
       virtualModelName: "vm-unit",
     });

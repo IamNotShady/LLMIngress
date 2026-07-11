@@ -5,8 +5,6 @@ import type { GatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 
 export type GatewayUsageCostDetails = {
   actualPrice: ModelTokenPrice;
-  baselinePrice: ModelTokenPrice;
-  baselineProviderModelId: string;
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
   providerUsage?: GatewayProviderTokenUsage;
@@ -21,15 +19,6 @@ export type GatewayUsageCostRecords = {
     priceSource: string;
     priceVersion: string;
     totalCostUsd: number | null;
-  };
-  requestSavings: {
-    actualCostUsd: number | null;
-    baselineCostUsd: number | null;
-    baselineProviderModelId: string;
-    priceSource: string;
-    priceVersion: string;
-    savingsPercent: number | null;
-    savingsUsd: number | null;
   };
   requestUsage: {
     cachedInputTokens: number;
@@ -49,15 +38,13 @@ type RecordGatewayUsageCostInput = {
   virtualModelId: string;
 };
 
-export async function recordGatewayUsageCostAndSavings(
-  input: RecordGatewayUsageCostInput,
-): Promise<void> {
+export async function recordGatewayUsageAndCost(input: RecordGatewayUsageCostInput): Promise<void> {
   await withPostgresTransaction(input.databaseUrl, async (client) => {
-    await insertGatewayUsageCostAndSavings(client, input);
+    await insertGatewayUsageAndCost(client, input);
   });
 }
 
-export async function insertGatewayUsageCostAndSavings(
+export async function insertGatewayUsageAndCost(
   client: PostgresQueryClient,
   input: Omit<RecordGatewayUsageCostInput, "databaseUrl">,
 ): Promise<void> {
@@ -106,16 +93,9 @@ export async function insertGatewayUsageCostAndSavings(
           total_cost_usd,
           cost_source,
           price_source,
-          price_version,
-          baseline_provider_model_id,
-          actual_cost_usd,
-          baseline_cost_usd,
-          savings_usd,
-          savings_percent,
-          savings_price_source,
-          savings_price_version
+          price_version
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `,
     [
       randomUUID(),
@@ -128,13 +108,6 @@ export async function insertGatewayUsageCostAndSavings(
       records.requestCost.costSource,
       records.requestCost.priceSource,
       records.requestCost.priceVersion,
-      records.requestSavings.baselineProviderModelId,
-      records.requestSavings.actualCostUsd,
-      records.requestSavings.baselineCostUsd,
-      records.requestSavings.savingsUsd,
-      records.requestSavings.savingsPercent,
-      records.requestSavings.priceSource,
-      records.requestSavings.priceVersion,
     ],
   );
 }
@@ -148,12 +121,6 @@ export function buildGatewayUsageCostRecords(
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
   });
-  const baselineCost = calculateTokenCostUsd(input.baselinePrice, {
-    cachedInputTokens: usage.cachedInputTokens,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-  });
-
   if (actualCost.status !== "estimated") {
     return {
       requestCost: {
@@ -163,15 +130,6 @@ export function buildGatewayUsageCostRecords(
         priceSource: "unavailable",
         priceVersion: input.actualPrice.priceVersion,
         totalCostUsd: null,
-      },
-      requestSavings: {
-        actualCostUsd: null,
-        baselineCostUsd: null,
-        baselineProviderModelId: input.baselineProviderModelId,
-        priceSource: "unavailable",
-        priceVersion: input.actualPrice.priceVersion,
-        savingsPercent: null,
-        savingsUsd: null,
       },
       requestUsage: usage,
     };
@@ -188,38 +146,8 @@ export function buildGatewayUsageCostRecords(
     totalCostUsd: actualCost.totalCostUsd,
   };
 
-  if (baselineCost.status !== "estimated") {
-    return {
-      requestCost,
-      requestSavings: {
-        actualCostUsd: actualCost.totalCostUsd,
-        baselineCostUsd: null,
-        baselineProviderModelId: input.baselineProviderModelId,
-        priceSource: "unavailable",
-        priceVersion: input.baselinePrice.priceVersion,
-        savingsPercent: null,
-        savingsUsd: null,
-      },
-      requestUsage: usage,
-    };
-  }
-
-  const savingsUsd = roundUsd(baselineCost.totalCostUsd - actualCost.totalCostUsd);
-
   return {
     requestCost,
-    requestSavings: {
-      actualCostUsd: actualCost.totalCostUsd,
-      baselineCostUsd: baselineCost.totalCostUsd,
-      baselineProviderModelId: input.baselineProviderModelId,
-      priceSource,
-      priceVersion: input.actualPrice.priceVersion,
-      savingsPercent:
-        baselineCost.totalCostUsd === 0
-          ? null
-          : roundPercent((savingsUsd / baselineCost.totalCostUsd) * 100),
-      savingsUsd,
-    },
     requestUsage: usage,
   };
 }
@@ -246,12 +174,4 @@ function buildGatewayRequestUsage(
     tokenSource: "estimated",
     totalTokens: input.estimatedInputTokens + input.estimatedOutputTokens,
   };
-}
-
-function roundUsd(value: number): number {
-  return Math.round(value * 100_000_000) / 100_000_000;
-}
-
-function roundPercent(value: number): number {
-  return Math.round(value * 1_000_000) / 1_000_000;
 }

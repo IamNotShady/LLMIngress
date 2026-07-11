@@ -23,8 +23,8 @@ async function seedSemanticData(databaseUrl: string) {
 
   await withPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
-       values ($1, 'semantic-probe-agent', 'terminal', 'llmi_semantic_probe', 'test-hash', true)`,
+      `insert into agents (id, name, key_prefix, key_hash, enabled)
+       values ($1, 'semantic-probe-agent', 'llmi_semantic_probe', 'test-hash', true)`,
       [agentId],
     );
     await client.query(

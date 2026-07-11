@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { RouteEndpointProtocol } from "@llmingress/domain";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 
@@ -8,6 +9,7 @@ export type QueryableFixture = {
 
 export type SeedOpenAIGatewayRouteInput = {
   agentApiKey: string;
+  endpointProtocol?: RouteEndpointProtocol;
   fixture: QueryableFixture;
   masterKey?: string;
   modelId?: string;
@@ -43,12 +45,11 @@ export async function seedOpenAIGatewayRoute(
       insert into agents (
         id,
         name,
-        agent_type,
         key_prefix,
         key_hash,
         enabled
       )
-      values ($1, 'Gateway E2E Agent', 'coding', $2, $3, true)
+      values ($1, 'Gateway E2E Agent', $2, $3, true)
     `,
     [agentId, input.agentApiKey.slice(0, 12), buildGatewayAgentApiKeyHash(input.agentApiKey)],
   );
@@ -109,8 +110,8 @@ export async function seedOpenAIGatewayRoute(
     virtualModelId,
   ]);
   await input.fixture.query(
-    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
-    [routePolicyId, virtualModelId],
+    "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', $3)",
+    [routePolicyId, virtualModelId, input.endpointProtocol ?? "chat_completions"],
   );
   await input.fixture.query(
     `

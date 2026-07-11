@@ -41,8 +41,8 @@ async function seedIaData(databaseUrl: string) {
     }
     for (let i = 0; i < 3; i++) {
       await client.query(
-        `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
-         values ($1, $2, 'terminal', $3, $4, true)`,
+        `insert into agents (id, name, key_prefix, key_hash, enabled)
+         values ($1, $2, $3, $4, true)`,
         [randomUUID(), `ia-probe-agent-${i}`, `llmi_ia_probe_${i}`, `test-hash-${i}`],
       );
     }

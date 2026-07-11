@@ -13,7 +13,6 @@ const guardedRoutes = [
   "apps/console/src/app/api/provider-model-refresh/route.ts",
   "apps/console/src/app/api/provider-oauth/route.ts",
   "apps/console/src/app/api/providers/route.ts",
-  "apps/console/src/app/api/route-policies/preview/route.ts",
   "apps/console/src/app/api/route-policies/route.ts",
   "apps/console/src/app/api/virtual-models/route.ts",
 ];

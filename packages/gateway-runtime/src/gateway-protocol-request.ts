@@ -38,9 +38,7 @@ import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
-  requireGatewayRoutePolicy,
   requireGatewayRoutePolicyForVirtualModel,
-  selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 import {
@@ -143,7 +141,6 @@ export async function executeGatewayProtocolRequest<
       estimatedInputTokens: requestMetadata.estimatedInputTokens,
       estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
       snapshot: input.snapshot,
-      usesTools: requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
     if (!routeResult.decision || routeResult.chain.length === 0) {
@@ -156,8 +153,6 @@ export async function executeGatewayProtocolRequest<
     }
 
     const routeDecision = routeResult.decision;
-    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const selectedCandidate = routeResult.chain[0];
     if (!selectedCandidate) {
       throw new Error("Selected route candidate was not found in route policy.");
@@ -251,8 +246,6 @@ export async function executeGatewayProtocolRequest<
       statusCode: success.result.statusCode,
       usageCost: {
         actualPrice: success.candidate.price,
-        baselinePrice: baselineCandidate.price,
-        baselineProviderModelId: baselineCandidate.providerModelId,
         estimatedInputTokens: requestMetadata.estimatedInputTokens,
         estimatedOutputTokens: requestMetadata.estimatedOutputTokens,
         providerUsage: readGatewayProviderTokenUsage(success.result.body),

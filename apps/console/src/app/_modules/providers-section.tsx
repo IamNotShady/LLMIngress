@@ -403,7 +403,7 @@ function ProviderDeleteDialog({
             <ul>
               {impact.virtualModels.map((virtualModel) => (
                 <li key={virtualModel.id}>
-                  <a href="/routing">{virtualModel.name}</a>
+                  <a href="/models">{virtualModel.name}</a>
                 </li>
               ))}
             </ul>
@@ -415,7 +415,7 @@ function ProviderDeleteDialog({
             <ul>
               {impact.routePolicies.map((routePolicy) => (
                 <li key={routePolicy.id}>
-                  <a href="/routing">{routePolicy.virtualModelName}</a>
+                  <a href="/models">{routePolicy.virtualModelName}</a>
                 </li>
               ))}
             </ul>

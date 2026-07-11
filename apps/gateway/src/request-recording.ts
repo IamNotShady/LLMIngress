@@ -65,7 +65,6 @@ export async function executeRecordedGatewayJsonRequest(input: {
   model: string;
   protocol: GatewayRequestActivityProtocol;
   recorder?: GatewayRequestRecorder;
-  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }): Promise<GatewayJsonEndpointResponse> {
@@ -107,7 +106,6 @@ export async function executeRecordedGatewayStreamingRequest(input: {
   model: string;
   protocol: GatewayRequestActivityProtocol;
   recorder?: GatewayRequestRecorder;
-  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }): Promise<GatewayStreamingResult> {
@@ -179,7 +177,6 @@ function scheduleRecordActivity(input: {
     model: string;
     protocol: GatewayRequestActivityProtocol;
     requestId: string;
-    requestLoggingEnabled: boolean;
     virtualModelId: string;
   };
   requestMetadata?: GatewayRequestMetadata;
@@ -204,7 +201,6 @@ function scheduleRecordActivity(input: {
         model: input.input.model,
         protocol: input.input.protocol,
         requestId: input.input.requestId,
-        requestLoggingEnabled: input.input.requestLoggingEnabled,
         requestMetadata: input.requestMetadata,
         responseBody: input.responseBody,
         route: input.route,

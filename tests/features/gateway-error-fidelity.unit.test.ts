@@ -181,6 +181,7 @@ describe("gateway error fidelity", () => {
                   providerModelId,
                 }),
               ],
+              endpointProtocol: "chat_completions",
               id: "route-1",
               strategy: "fixed",
               virtualModelId: "vm-1",

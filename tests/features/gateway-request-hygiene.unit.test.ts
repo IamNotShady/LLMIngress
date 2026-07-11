@@ -15,7 +15,6 @@ import {
 } from "../../packages/gateway-runtime/src/gateway-provider-credentials";
 import { estimateTextTokens } from "../../packages/gateway-runtime/src/gateway-request-metadata";
 import { normalizeOpenAIResponsesRequest } from "../../packages/gateway-runtime/src/gateway-responses";
-import { selectGatewayBaselineCandidate } from "../../packages/gateway-runtime/src/gateway-runtime-helpers";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 describe("gateway request hygiene", () => {
@@ -75,21 +74,6 @@ describe("gateway request hygiene", () => {
     expect(estimateTextTokens(["你好世界"])).toBe(4);
     expect(estimateTextTokens(["abcdefgh"])).toBe(2);
     expect(estimateTextTokens(["你好ab"])).toBe(3);
-  });
-
-  it("selects the baseline candidate without mutating the route snapshot", () => {
-    const second = candidateSnapshot({ candidateOrder: 2 });
-    const first = candidateSnapshot({ candidateOrder: 1 });
-    const routePolicy = {
-      candidates: [second, first],
-      id: "route-1",
-      strategy: "fixed",
-      virtualModelId: "vm-1",
-      virtualModelName: "vm",
-    };
-
-    expect(selectGatewayBaselineCandidate(routePolicy)).toBe(first);
-    expect(routePolicy.candidates).toEqual([second, first]);
   });
 
   it("normalizes whitelisted OpenAI passthrough parameters and max_completion_tokens", () => {

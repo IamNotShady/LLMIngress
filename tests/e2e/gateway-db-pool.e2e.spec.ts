@@ -81,12 +81,11 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
       insert into agents (
         id,
         name,
-        agent_type,
         key_prefix,
         key_hash,
         enabled
       )
-      values ($1, 'Pool Test Agent', 'coding', $2, $3, true)
+      values ($1, 'Pool Test Agent', $2, $3, true)
     `,
     [agentId, agentApiKey.slice(0, 12), buildGatewayAgentApiKeyHash(agentApiKey)],
   );
@@ -141,7 +140,7 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
     virtualModelId,
   ]);
   await fixture.query(
-    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
+    "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', 'chat_completions')",
     [routePolicyId, virtualModelId],
   );
   await fixture.query(

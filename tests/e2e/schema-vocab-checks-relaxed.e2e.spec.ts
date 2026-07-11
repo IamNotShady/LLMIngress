@@ -17,7 +17,7 @@ test("schema vocab checks are relaxed while machine states remain constrained", 
     ).resolves.toBeDefined();
     await expect(
       fixture.query(
-        "insert into agents (id, name, agent_type, integration_platform) values ($1, 'Vocab E2E Agent', 'coding', 'future-platform')",
+        "insert into agents (id, name, integration_platform) values ($1, 'Vocab E2E Agent', 'future-platform')",
         [randomUUID()],
       ),
     ).resolves.toBeDefined();

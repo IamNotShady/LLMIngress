@@ -26,7 +26,6 @@ test("fallback_events is the persisted retry-chain source", async () => {
       model: "schema-vm",
       protocol: "chat_completions",
       requestId: "req-schema-fallback-e2e",
-      requestLoggingEnabled: true,
       responseBody: {
         error: { code: "provider_request_failed", message: "Provider failed." },
       },
@@ -74,7 +73,7 @@ async function seedRuntimeEntities(fixture: Awaited<ReturnType<typeof createTest
     virtualModelId: randomUUID(),
   };
   await fixture.query(
-    "insert into agents (id, name, agent_type, key_prefix) values ($1, 'Schema Agent', 'coding', 'llmi_schema')",
+    "insert into agents (id, name, key_prefix) values ($1, 'Schema Agent', 'llmi_schema')",
     [ids.agentId],
   );
   await fixture.query(

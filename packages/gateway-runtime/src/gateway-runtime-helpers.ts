@@ -53,24 +53,12 @@ export function requireGatewayRoutePolicyForVirtualModel(
   return routePolicy;
 }
 
-export function selectGatewayBaselineCandidate(
-  routePolicy: GatewayRoutePolicySnapshot,
-): GatewayRouteCandidateSnapshot {
-  const candidate = [...routePolicy.candidates].sort(
-    (left, right) => left.candidateOrder - right.candidateOrder,
-  )[0];
-  if (!candidate) {
-    throw new Error(`Route policy ${routePolicy.id} has no baseline candidate.`);
-  }
-  return candidate;
-}
-
 export function assertGatewayRoutePolicyEndpointProtocol(input: {
   protocol: RouteEndpointProtocol;
   routePolicy: GatewayRoutePolicySnapshot;
 }): void {
-  const expectedProtocol = input.routePolicy.rules?.endpointProtocol;
-  if (!expectedProtocol || expectedProtocol === input.protocol) {
+  const expectedProtocol = input.routePolicy.endpointProtocol;
+  if (expectedProtocol === input.protocol) {
     return;
   }
 

@@ -10,7 +10,6 @@ const formerMapperFiles = [
   "packages/db/src/console-route-policies.ts",
   "packages/db/src/console-agent-limits.ts",
   "packages/db/src/console-price-overrides.ts",
-  "packages/db/src/console-route-preview.ts",
 ];
 
 describe("refactor-price-row-mappers", () => {

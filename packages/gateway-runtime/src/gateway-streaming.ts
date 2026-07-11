@@ -62,9 +62,7 @@ import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
   isRecord,
-  requireGatewayRoutePolicy,
   requireGatewayRoutePolicyForVirtualModel,
-  selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
 import {
   composeGatewayProviderStreamPipeline,
@@ -157,7 +155,6 @@ export async function executeGatewayStreamingRequest(input: {
       estimatedInputTokens: normalized.estimatedInputTokens,
       estimatedOutputTokens: normalized.estimatedOutputTokens,
       snapshot: input.snapshot,
-      usesTools: normalized.requestMetadata.usesTools,
       virtualModelId: input.virtualModel.id,
     });
 
@@ -177,8 +174,6 @@ export async function executeGatewayStreamingRequest(input: {
     }
 
     const routeDecision = routeResult.decision;
-    const routePolicy = requireGatewayRoutePolicy(input.snapshot, routeDecision.routePolicyId);
-    const baselineCandidate = selectGatewayBaselineCandidate(routePolicy);
     const gatewayChain = routeResult.chain;
 
     const fallbackAttempts: FallbackFailedAttempt[] = [];
@@ -297,8 +292,6 @@ export async function executeGatewayStreamingRequest(input: {
       statusCode: success.result.statusCode,
       usageCost: {
         actualPrice: success.candidate.price,
-        baselinePrice: baselineCandidate.price,
-        baselineProviderModelId: baselineCandidate.providerModelId,
         estimatedInputTokens: normalized.estimatedInputTokens,
         estimatedOutputTokens: normalized.estimatedOutputTokens,
         providerModelId: success.candidate.providerModelId,

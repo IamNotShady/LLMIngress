@@ -5,7 +5,7 @@ import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 import {
   type GatewayUsageCostDetails,
-  insertGatewayUsageCostAndSavings,
+  insertGatewayUsageAndCost,
 } from "./gateway-usage-recorder.ts";
 
 export type GatewayRequestActivityProtocol =
@@ -55,7 +55,6 @@ type RecordCompletedGatewayRequestActivityInput = {
   protocol: GatewayRequestActivityProtocol;
   completedAt?: Date;
   requestId: string;
-  requestLoggingEnabled: boolean;
   requestMetadata?: GatewayRequestMetadata;
   responseBody: unknown;
   route?: GatewayRequestActivityRoute;
@@ -75,16 +74,15 @@ export async function recordCompletedGatewayRequestActivity(
     startedAt: input.startedAt,
     statusCode: input.statusCode,
   });
-  const loggingPolicy = applyGatewayRequestLoggingPolicy({
-    completion,
-    requestLoggingEnabled: input.requestLoggingEnabled,
-    requestMetadata: input.requestMetadata,
+  const loggingPolicy = {
+    errorMessage: completion.errorMessage,
+    requestMetadata: input.requestMetadata ?? {},
     responseMetadata: buildGatewayResponseMetadata({
       completion,
       responseBody: input.responseBody,
     }),
     route: input.route,
-  });
+  };
 
   await withPostgresTransaction(input.databaseUrl, async (client) => {
     const safeRoute = await sanitizeGatewayRouteProviderApiKeys(client, loggingPolicy.route);
@@ -196,7 +194,7 @@ export async function recordCompletedGatewayRequestActivity(
     });
 
     if (completion.status === "succeeded" && input.usageCost) {
-      await insertGatewayUsageCostAndSavings(client, {
+      await insertGatewayUsageAndCost(client, {
         activityId: input.activityId,
         agentId: input.agentId,
         usageCost: input.usageCost,
@@ -343,47 +341,6 @@ async function insertFallbackEvents(
       attemptOrder,
     ],
   );
-}
-
-export function applyGatewayRequestLoggingPolicy(input: {
-  completion: GatewayActivityCompletion;
-  requestLoggingEnabled: boolean;
-  requestMetadata?: GatewayRequestMetadata;
-  responseMetadata: GatewayResponseMetadata;
-  route?: GatewayRequestActivityRoute;
-}): {
-  errorMessage: string | null;
-  requestMetadata: GatewayRequestMetadata | Record<string, never>;
-  responseMetadata: GatewayResponseMetadata | Record<string, never>;
-  route?: GatewayRequestActivityRoute;
-} {
-  if (input.requestLoggingEnabled) {
-    return {
-      errorMessage: input.completion.errorMessage,
-      requestMetadata: input.requestMetadata ?? {},
-      responseMetadata: input.responseMetadata,
-      route: input.route,
-    };
-  }
-
-  return {
-    errorMessage: null,
-    requestMetadata: {},
-    route: input.route
-      ? {
-          modelId: input.route.modelId,
-          providerApiKeyId: input.route.providerApiKeyId,
-          providerApiKeyPrefix: input.route.providerApiKeyPrefix,
-          providerId: input.route.providerId,
-          providerKey: input.route.providerKey,
-          providerModelId: input.route.providerModelId,
-          routePolicyId: input.route.routePolicyId,
-          fallbackAttempts: [],
-          routeReason: {},
-        }
-      : undefined,
-    responseMetadata: {},
-  };
 }
 
 export function buildGatewayResponseMetadata(input: {

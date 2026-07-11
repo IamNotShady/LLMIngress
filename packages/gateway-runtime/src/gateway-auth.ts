@@ -11,7 +11,6 @@ export type GatewayAuthenticatedAgent = {
   defaultVirtualModelId: string | null;
   id: string;
   keyPrefix: string;
-  requestLoggingEnabled: boolean;
 };
 
 export type GatewayAuthSuccess = {
@@ -44,7 +43,6 @@ type AgentApiKeyAuthRow = {
   enabled: boolean;
   id: string;
   key_prefix: string;
-  request_logging_enabled: boolean;
 };
 
 const gatewayRequestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -106,7 +104,6 @@ export async function authenticateGatewayRequest(input: {
       defaultVirtualModelId: row.default_virtual_model_id,
       id: row.id,
       keyPrefix: row.key_prefix,
-      requestLoggingEnabled: row.request_logging_enabled,
     },
     ok: true,
     requestId,
@@ -136,8 +133,7 @@ async function readAgentApiKeyByHash(
              agents.id::text as agent_id,
              agents.key_prefix,
              agents.default_virtual_model_id::text,
-             agents.enabled,
-             agents.request_logging_enabled
+             agents.enabled
       from agents
       where agents.key_hash = $1
         and agents.deleted_at is null

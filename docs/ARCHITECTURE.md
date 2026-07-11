@@ -151,4 +151,4 @@ from older migration histories are recreated. Runtime and configuration services
 different schema generations are not mixed.
 
 The schema excludes notifications, webhook delivery, external exports, backup state, runtime
-heartbeat/error tables, tracing, metrics, billing reconciliation, and savings calculations.
+heartbeat/error tables, tracing, metrics, and billing reconciliation.

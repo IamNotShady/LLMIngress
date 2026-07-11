@@ -29,8 +29,8 @@ async function seedConsoleData(databaseUrl: string) {
 
   await withPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
-       values ($1, 'layout-probe-agent', 'terminal', 'llmi_layout_probe', 'test-hash', true)`,
+      `insert into agents (id, name, key_prefix, key_hash, enabled)
+       values ($1, 'layout-probe-agent', 'llmi_layout_probe', 'test-hash', true)`,
       [agentId],
     );
     await client.query(

@@ -2798,7 +2798,7 @@ button.table-row-link {
   gap: var(--space-sm);
 }
 .usage-kpi-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .usage-kpi-grid .stat-card {
   background: var(--surface-raised);
@@ -2807,39 +2807,9 @@ button.table-row-link {
 }
 .usage-analysis-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(18rem, 0.45fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
   align-items: stretch;
-}
-.usage-savings-card {
-  gap: var(--space-md);
-}
-.usage-savings-list {
-  display: grid;
-  gap: var(--space-sm);
-  margin: 0;
-}
-.usage-savings-list div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  min-width: 0;
-  padding: var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
-}
-.usage-savings-list dt {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-.usage-savings-list dd {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-feature-settings: "tnum" 1;
-  color: var(--text);
 }
 .usage-distribution-grid {
   display: grid;

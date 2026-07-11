@@ -13,7 +13,6 @@ const sections = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "route-policies-section.tsx",
     "agents-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
@@ -56,7 +55,6 @@ describe("console semantic status static contract", () => {
     expect(statCardBlock(source, "Cost 24h")).toContain('"down-good"');
     expect(statCardBlock(source, "Tokens 24h")).toContain('"up-good"');
     expect(statCardBlock(source, "Failure rate")).toContain('"down-good"');
-    expect(statCardBlock(source, "Savings")).toContain('"up-good"');
     expect(statCardBlock(source, "Over-limit today")).toContain('"down-good"');
   });
 

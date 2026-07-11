@@ -30,7 +30,6 @@ alter table request_activity drop constraint if exists request_activity_provider
 alter table request_activity drop constraint if exists request_activity_route_policy_id_fkey;
 alter table request_activity drop constraint if exists request_activity_virtual_model_id_fkey;
 alter table request_costs drop constraint if exists request_costs_agent_id_fkey;
-alter table request_costs drop constraint if exists request_costs_baseline_provider_model_id_fkey;
 alter table request_costs drop constraint if exists request_costs_provider_model_id_fkey;
 alter table request_costs drop constraint if exists request_costs_request_activity_id_fkey;
 alter table request_usage drop constraint if exists request_usage_agent_id_fkey;

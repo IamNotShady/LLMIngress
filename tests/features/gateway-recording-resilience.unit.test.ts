@@ -43,7 +43,6 @@ const baseInput = {
   agentApiKeyPrefix: "llmi_",
   model: "vm-a",
   protocol: "chat_completions" as const,
-  requestLoggingEnabled: true,
   requestId: "req-1",
   virtualModelId: "vm-id-1",
 };
@@ -165,8 +164,6 @@ describe("gateway recording resilience", () => {
         statusCode: 200,
         usageCost: {
           actualPrice: { status: "unknown_price", priceVersion: "v0" } as never,
-          baselinePrice: { status: "unknown_price", priceVersion: "v0" } as never,
-          baselineProviderModelId: "pm-1",
           estimatedInputTokens: 1,
           estimatedOutputTokens: 1,
           providerModelId: "pm-1",
@@ -243,8 +240,6 @@ describe("gateway recording resilience", () => {
         statusCode: 200,
         usageCost: {
           actualPrice: { status: "unknown_price", priceVersion: "v0" } as never,
-          baselinePrice: { status: "unknown_price", priceVersion: "v0" } as never,
-          baselineProviderModelId: "pm-1",
           estimatedInputTokens: 1,
           estimatedOutputTokens: 1,
           providerModelId: "pm-1",

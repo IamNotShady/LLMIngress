@@ -982,6 +982,16 @@
 - This feature deleted 11,169 lines and added 319 lines before commit review.
 - Blockers: none.
 
+## 2026-07-11 Core Slimming 3 - Routing, Agent, And Cost Simplification
+
+- Removed `quality_first`, legacy Route Policy rule filters, Route Preview, the standalone Routing page, Agent type/request-logging switches, and savings/baseline cost calculations.
+- Route Policies now store an explicit endpoint protocol; a Virtual Model retains one complete six-field capability contract and one fallback chain for that protocol.
+- Gateway request logging is fixed metadata-only behavior with no per-Agent switch. Request cost persistence and Console Usage/Overview now report actual or estimated cost without a speculative savings baseline.
+- RED unit/E2E failed on the legacy modules, routes, fields, strategy, UI, and schema before implementation.
+- Focused route/capability/logging tests, migration replay, lint, typecheck, and `pnpm run verify` passed (55 unit files, 282 tests, production build successful).
+- The first feature regression found four historical tests that assumed removed Agent/Preview fields or one Virtual Model spanning multiple endpoint protocols. Those tests now assert the reduced UI/API and seed protocol-specific Virtual Models; their focused E2Es pass.
+- Blockers: none.
+
 ## Required Verification
 
 Use the local PostgreSQL test database:

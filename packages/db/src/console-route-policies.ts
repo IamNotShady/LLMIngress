@@ -8,7 +8,6 @@ import { createConfigPublisher } from "@llmingress/db/config-versions";
 import {
   type ModelInputModality,
   type ModelOutputModality,
-  normalizeRoutePolicyRules,
   type ProviderModelCapabilityMetadata,
   type RouteEndpointProtocol,
   resolveVirtualModelCapabilityContract,
@@ -23,7 +22,7 @@ import { listProviderTemplateEndpointProtocols } from "./console-provider-templa
 import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
 
-export const routePolicyStrategies = ["fixed", "cost_first", "quality_first", "random"] as const;
+export const routePolicyStrategies = ["fixed", "cost_first", "random"] as const;
 
 export type RoutePolicyStrategy = (typeof routePolicyStrategies)[number];
 
@@ -67,7 +66,6 @@ export type ConsoleProviderModelOption = {
   supportsFunctionCalling: boolean | null;
   supportsReasoning: boolean | null;
   supportsStreaming: boolean;
-  supportsTools: boolean;
 };
 
 export type ConsoleRoutePolicyCandidate = ConsoleProviderModelOption & {
@@ -122,8 +120,8 @@ export type RouteReasonMetadataInput = {
 };
 
 type RoutePolicyRow = {
+  endpoint_protocol: RouteEndpointProtocol;
   id: string;
-  rules: unknown;
   strategy: RoutePolicyStrategy;
   virtual_model_display_name: string;
   virtual_model_id: string;
@@ -222,7 +220,7 @@ export function normalizeRoutePolicyFormInput(
   }
   if (!isRoutePolicyStrategy(strategy)) {
     throw consoleValidationError(
-      "Route policy strategy must be fixed, cost_first, quality_first, or random.",
+      "Route policy strategy must be fixed, cost_first, or random.",
       "route_policy_strategy_invalid",
       { field: "strategy" },
     );
@@ -435,7 +433,7 @@ export async function listRoutePolicies(databaseUrl?: string): Promise<ConsoleRo
       `
         select route_policies.id::text,
                route_policies.strategy,
-               route_policies.rules,
+               route_policies.endpoint_protocol,
                virtual_models.id::text as virtual_model_id,
                virtual_models.name as virtual_model_name,
                virtual_models.description as virtual_model_display_name
@@ -523,11 +521,11 @@ export async function createRoutePolicy(input: {
 
       const result = await client.query<RoutePolicyRow>(
         `
-          insert into route_policies (id, virtual_model_id, strategy, rules)
-          values ($1, $2, $3, $4::jsonb)
+          insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
+          values ($1, $2, $3, $4)
           returning id::text,
                     strategy,
-                    rules,
+                    endpoint_protocol,
                     virtual_model_id::text,
                     (
                       select name
@@ -544,7 +542,7 @@ export async function createRoutePolicy(input: {
           routePolicyId,
           input.routePolicy.virtualModelId,
           input.routePolicy.strategy,
-          JSON.stringify(routePolicyRulesJson(input.routePolicy)),
+          input.routePolicy.endpointProtocol,
         ],
       );
       const candidateRows = await writeRoutePolicyCandidates(
@@ -590,12 +588,12 @@ export async function updateRoutePolicy(input: {
         `
           update route_policies
           set strategy = $2,
-              rules = coalesce(rules, '{}'::jsonb) || $3::jsonb,
+              endpoint_protocol = $3,
               updated_at = now()
           where id = $1
           returning id::text,
                     strategy,
-                    rules,
+                    endpoint_protocol,
                     virtual_model_id::text,
                     (
                       select name
@@ -608,11 +606,7 @@ export async function updateRoutePolicy(input: {
                       where virtual_models.id = route_policies.virtual_model_id
                     ) as virtual_model_display_name
         `,
-        [
-          input.id,
-          input.routePolicy.strategy,
-          JSON.stringify(routePolicyRulesJson(input.routePolicy)),
-        ],
+        [input.id, input.routePolicy.strategy, input.routePolicy.endpointProtocol],
       );
       await client.query("delete from route_policy_candidates where route_policy_id = $1", [
         input.id,
@@ -849,7 +843,7 @@ async function readRoutePolicyForUpdate(
     `
       select route_policies.id::text,
              route_policies.strategy,
-             route_policies.rules,
+             route_policies.endpoint_protocol,
              route_policies.virtual_model_id::text,
              virtual_models.name as virtual_model_name,
              virtual_models.description as virtual_model_display_name
@@ -1075,20 +1069,13 @@ function groupCandidatesByPolicyId(
   return candidatesByPolicyId;
 }
 
-function routePolicyRulesJson(routePolicy: NormalizedRoutePolicyFormInput): {
-  endpointProtocol: RouteEndpointProtocol;
-} {
-  return { endpointProtocol: routePolicy.endpointProtocol };
-}
-
 function rowToConsoleRoutePolicy(
   row: RoutePolicyRow,
   candidates: ConsoleRoutePolicyCandidate[],
 ): ConsoleRoutePolicy {
-  const rules = normalizeRoutePolicyRules(row.rules);
   return {
     candidates,
-    endpointProtocol: rules.endpointProtocol ?? null,
+    endpointProtocol: row.endpoint_protocol,
     id: row.id,
     routeReason: buildRouteReasonMetadata({
       candidateCount: candidates.length,
@@ -1173,7 +1160,6 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     supportsFunctionCalling: row.supports_function_calling ?? null,
     supportsReasoning: row.supports_reasoning ?? null,
     supportsStreaming: row.supports_streaming ?? false,
-    supportsTools: row.supports_function_calling ?? false,
   };
 }
 

@@ -91,15 +91,15 @@ async function seedProviderDependency(fixture: {
   );
   await fixture.query(
     `
-      insert into agents (id, name, agent_type, key_prefix, key_hash, default_virtual_model_id)
-      values ($1, 'Dependency Agent', 'coding', 'llmi_test', 'hash', $2)
+      insert into agents (id, name, key_prefix, key_hash, default_virtual_model_id)
+      values ($1, 'Dependency Agent', 'llmi_test', 'hash', $2)
     `,
     [ids.agentId, ids.virtualModelId],
   );
   await fixture.query(
     `
-      insert into route_policies (id, virtual_model_id, strategy, rules)
-      values ($1, $2, 'fixed', '{"endpointProtocol":"chat_completions"}'::jsonb)
+      insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
+      values ($1, $2, 'fixed', 'chat_completions')
     `,
     [ids.routePolicyId, ids.virtualModelId],
   );

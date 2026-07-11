@@ -48,7 +48,7 @@ describe("virtual model capability contract", () => {
     expect(result).toMatchObject({
       code: "route_policy_candidate_capability_mismatch",
       details: {
-        baselineProviderModelId: "candidate-a",
+        referenceProviderModelId: "candidate-a",
         field: "maxOutputTokens",
         providerModelId: "candidate-b",
       },

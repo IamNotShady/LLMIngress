@@ -76,7 +76,7 @@ async function seedV1ProviderCoverageRoutes(
   const seededVirtualModelIds: string[] = [];
 
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'V1 Provider Smoke Agent', 'coding', true)",
+    "insert into agents (id, name, enabled) values ($1, 'V1 Provider Smoke Agent', true)",
     [seedAgentId],
   );
 
@@ -151,8 +151,8 @@ async function seedV1ProviderCoverageRoutes(
       [virtualModelId, scenario.virtualModelName, scenario.virtualModelDisplayName],
     );
     await fixture.query(
-      "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
-      [routePolicyId, virtualModelId],
+      "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', $3)",
+      [routePolicyId, virtualModelId, scenario.endpoint],
     );
     await fixture.query(
       `

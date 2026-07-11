@@ -65,7 +65,6 @@ CREATE TABLE public.agent_virtual_models (
 CREATE TABLE public.agents (
     id uuid NOT NULL,
     name text NOT NULL,
-    agent_type text NOT NULL,
     key_prefix text,
     key_hash text,
     default_virtual_model_id uuid,
@@ -73,9 +72,7 @@ CREATE TABLE public.agents (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     integration_platform text DEFAULT 'other'::text NOT NULL,
-    request_logging_enabled boolean DEFAULT true NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT agents_agent_type_check CHECK ((agent_type = ANY (ARRAY['coding'::text, 'desktop'::text, 'terminal'::text, 'ide'::text, 'other'::text]))),
     CONSTRAINT agents_integration_platform_check CHECK ((integration_platform = ANY (ARRAY['codex'::text, 'claude-code'::text, 'cursor'::text, 'opencode'::text, 'hermes'::text, 'openclaw'::text, 'github-copilot'::text, 'other'::text])))
 );
 
@@ -603,17 +600,7 @@ CREATE TABLE public.request_costs (
     cost_source text NOT NULL,
     price_source text,
     price_version text,
-    reconciled_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    baseline_provider_model_id uuid,
-    actual_cost_usd numeric(20,8),
-    baseline_cost_usd numeric(20,8),
-    savings_usd numeric(20,8),
-    savings_percent numeric(12,6),
-    savings_price_source text,
-    savings_price_version text,
-    CONSTRAINT request_costs_actual_cost_usd_check CHECK (((actual_cost_usd IS NULL) OR (actual_cost_usd >= (0)::numeric))),
-    CONSTRAINT request_costs_baseline_cost_usd_check CHECK (((baseline_cost_usd IS NULL) OR (baseline_cost_usd >= (0)::numeric))),
     CONSTRAINT request_costs_cost_source_check CHECK ((cost_source = ANY (ARRAY['provider'::text, 'estimated'::text, 'reconciled'::text, 'unavailable'::text]))),
     CONSTRAINT request_costs_input_cost_usd_check CHECK (((input_cost_usd IS NULL) OR (input_cost_usd >= (0)::numeric))),
     CONSTRAINT request_costs_output_cost_usd_check CHECK (((output_cost_usd IS NULL) OR (output_cost_usd >= (0)::numeric))),
@@ -657,10 +644,10 @@ CREATE TABLE public.route_policies (
     strategy text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    rules jsonb DEFAULT '{}'::jsonb NOT NULL,
+    endpoint_protocol text NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT route_policies_rules_object_check CHECK ((jsonb_typeof(rules) = 'object'::text)),
-    CONSTRAINT route_policies_strategy_check CHECK ((strategy = ANY (ARRAY['fixed'::text, 'cost_first'::text, 'quality_first'::text, 'random'::text])))
+    CONSTRAINT route_policies_endpoint_protocol_check CHECK ((endpoint_protocol = ANY (ARRAY['chat_completions'::text, 'responses'::text, 'messages'::text, 'embeddings'::text]))),
+    CONSTRAINT route_policies_strategy_check CHECK ((strategy = ANY (ARRAY['fixed'::text, 'cost_first'::text, 'random'::text])))
 );
 
 
@@ -1742,14 +1729,6 @@ ALTER TABLE ONLY public.request_costs
 
 
 --
--- Name: request_costs request_costs_baseline_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.request_costs
-    ADD CONSTRAINT request_costs_baseline_provider_model_id_fkey FOREIGN KEY (baseline_provider_model_id) REFERENCES public.provider_models(id) ON DELETE RESTRICT;
-
-
---
 -- Name: request_costs request_costs_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1856,4 +1835,3 @@ ALTER TABLE ONLY public.webhook_deliveries
 --
 -- PostgreSQL database dump complete
 --
-

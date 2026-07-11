@@ -210,9 +210,6 @@ function formatRouteStrategyLabel(strategy: string): string {
   if (strategy === "cost_first") {
     return "Cost First";
   }
-  if (strategy === "quality_first") {
-    return "Quality First";
-  }
   if (strategy === "random") {
     return "Random";
   }

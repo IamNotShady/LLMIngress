@@ -35,7 +35,7 @@ export const consoleNavItems: ConsoleNavItem[] = [
     icon: "VM",
   },
   { label: "Activity", href: "/activity", hint: "Recent requests", icon: "AC" },
-  { label: "Usage & Cost", href: "/usage", hint: "Spend, tokens, savings", icon: "UC" },
+  { label: "Usage & Cost", href: "/usage", hint: "Spend, tokens, latency", icon: "UC" },
   { label: "Limits", href: "/limits", hint: "Budgets & rate limits", icon: "LI" },
   { label: "Playground", href: "/playground", hint: "Send a live request", icon: "PG" },
 ];

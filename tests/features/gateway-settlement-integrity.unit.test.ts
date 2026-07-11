@@ -66,8 +66,6 @@ describe("gateway settlement integrity", () => {
         requestId: "req-budget-success",
         usageCost: {
           actualPrice: pricedModel(),
-          baselinePrice: pricedModel(),
-          baselineProviderModelId: randomUUID(),
           estimatedInputTokens: 100,
           estimatedOutputTokens: 100,
           providerModelId: randomUUID(),
@@ -118,8 +116,6 @@ describe("gateway settlement integrity", () => {
         requestId: "req-budget-disabled",
         usageCost: {
           actualPrice: pricedModel(),
-          baselinePrice: pricedModel(),
-          baselineProviderModelId: randomUUID(),
           estimatedInputTokens: 100,
           estimatedOutputTokens: 100,
           providerModelId: randomUUID(),
@@ -189,7 +185,7 @@ async function withMigratedFixture<T>(
 async function seedAgent(fixture: TestPostgresFixture): Promise<string> {
   const agentId = randomUUID();
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'Settlement Agent', 'coding', true)",
+    "insert into agents (id, name, enabled) values ($1, 'Settlement Agent', true)",
     [agentId],
   );
   return agentId;

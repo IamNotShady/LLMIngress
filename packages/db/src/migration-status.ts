@@ -48,7 +48,7 @@ type AppliedMigrationRow = QueryResultRow & {
 
 export const shippedSqlMigrations: MigrationStatusMigration[] = [
   {
-    checksum: "1b894e463ec7a3297f78f313ec476104390121725c5c700c837f75ba6517e5de",
+    checksum: "52a6b63cae35d2ad7f1b3e434630381fb310cdfa75f9a0b14f863cf72efc8bcb",
     id: "0001",
     name: "v1_baseline",
   },
@@ -78,7 +78,7 @@ export const shippedSqlMigrations: MigrationStatusMigration[] = [
     name: "fallback_single_source",
   },
   {
-    checksum: "9cf3cd316246b7813211d04a35a764724b19c8bca3ad8aeaecc4112d0378ea78",
+    checksum: "d38214e38750137f340c0a8b4d0bff696d91a973b7e1b9cf3fe1132c587e094e",
     id: "0007",
     name: "drop_foreign_keys",
   },

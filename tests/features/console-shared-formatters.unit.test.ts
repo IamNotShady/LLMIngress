@@ -19,7 +19,6 @@ const consoleSectionSource = () =>
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "route-policies-section.tsx",
     "agents-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",

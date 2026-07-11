@@ -21,7 +21,7 @@ describe("schema vocab checks relaxed", () => {
     await withMigratedFixture(async (fixture) => {
       await expect(
         fixture.query(
-          "insert into agents (id, name, agent_type, integration_platform) values ($1, 'Vocab Agent', 'coding', 'future-platform')",
+          "insert into agents (id, name, integration_platform) values ($1, 'Vocab Agent', 'future-platform')",
           [randomUUID()],
         ),
       ).resolves.toBeDefined();

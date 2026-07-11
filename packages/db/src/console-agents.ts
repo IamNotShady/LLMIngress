@@ -3,7 +3,6 @@ import { PostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
-export type AgentType = "coding" | "desktop" | "terminal" | "ide" | "other";
 export type AgentIntegrationPlatform =
   | "claude-code"
   | "codex"
@@ -27,17 +26,13 @@ export const agentIntegrationPlatforms: readonly AgentIntegrationPlatform[] = [
 ];
 
 export type AgentFormInput = {
-  agentType?: string | null;
   integrationPlatform?: string | null;
   name?: string | null;
-  requestLoggingEnabled?: boolean | string | null;
 };
 
 export type NormalizedAgentFormInput = {
-  agentType: AgentType;
   integrationPlatform: AgentIntegrationPlatform;
   name: string;
-  requestLoggingEnabled: boolean;
 };
 
 export type ConsoleAgent = NormalizedAgentFormInput & {
@@ -80,7 +75,6 @@ export type NormalizedAgentVirtualModelAccessInput = {
 };
 
 type AgentRow = {
-  agent_type: AgentType;
   created_at: Date;
   enabled: boolean;
   has_api_key: boolean;
@@ -93,7 +87,6 @@ type AgentRow = {
   recent_failure_count: number;
   recent_request_count: number;
   request_attribution_count: number;
-  request_logging_enabled: boolean;
   updated_at: Date;
   unhealthy_reachable_provider_count: number;
 };
@@ -151,20 +144,12 @@ export function prepareAgentApiKeyForStorage(plaintext: string): StoredAgentApiK
 
 export function normalizeAgentFormInput(input: AgentFormInput): NormalizedAgentFormInput {
   const name = input.name?.trim();
-  const agentType = input.agentType?.trim().toLowerCase();
   const integrationPlatform = (input.integrationPlatform ?? "other").trim().toLowerCase();
 
   if (!name) {
     throw consoleValidationError("Agent name is required.", "agent_name_required", {
       field: "name",
     });
-  }
-  if (!isAgentType(agentType)) {
-    throw consoleValidationError(
-      "Agent type must be coding, desktop, terminal, ide, or other.",
-      "agent_type_invalid",
-      { field: "agentType" },
-    );
   }
   if (!isAgentIntegrationPlatform(integrationPlatform)) {
     throw consoleValidationError(
@@ -175,10 +160,8 @@ export function normalizeAgentFormInput(input: AgentFormInput): NormalizedAgentF
   }
 
   return {
-    agentType,
     integrationPlatform,
     name,
-    requestLoggingEnabled: normalizeRequestLoggingEnabled(input.requestLoggingEnabled),
   };
 }
 
@@ -225,9 +208,7 @@ export async function listAgents(databaseUrl?: string): Promise<ConsoleAgent[]> 
       `
         select agents.id::text,
                agents.name,
-               agents.agent_type,
                agents.integration_platform,
-               agents.request_logging_enabled,
                agents.key_prefix,
                agents.enabled,
                agents.created_at,
@@ -482,19 +463,15 @@ export async function createAgent(input: {
           insert into agents (
             id,
             name,
-            agent_type,
             integration_platform,
-            request_logging_enabled,
             key_prefix,
             key_hash,
             enabled
           )
-          values ($1, $2, $3, $4, $5, $6, $7, true)
+          values ($1, $2, $3, $4, $5, true)
           returning id::text,
                     name,
-                    agent_type,
                     integration_platform,
-                    request_logging_enabled,
                     key_prefix,
                     enabled,
                     created_at,
@@ -510,9 +487,7 @@ export async function createAgent(input: {
         [
           agentId,
           input.agent.name,
-          input.agent.agentType,
           input.agent.integrationPlatform,
-          input.agent.requestLoggingEnabled,
           stored.keyPrefix,
           stored.keyHash,
         ],
@@ -541,17 +516,13 @@ export async function updateAgent(input: {
         `
           update agents
           set name = $2,
-              agent_type = $3,
-              integration_platform = $4,
-              request_logging_enabled = $5,
+              integration_platform = $3,
               updated_at = now()
           where id = $1
             and deleted_at is null
           returning id::text,
                     name,
-                    agent_type,
                     integration_platform,
-                    request_logging_enabled,
                     key_prefix,
                     enabled,
                     created_at,
@@ -583,13 +554,7 @@ export async function updateAgent(input: {
                     0::integer as unhealthy_reachable_provider_count,
                     0::double precision as limit_usage_ratio
         `,
-        [
-          input.id,
-          input.agent.name,
-          input.agent.agentType,
-          input.agent.integrationPlatform,
-          input.agent.requestLoggingEnabled,
-        ],
+        [input.id, input.agent.name, input.agent.integrationPlatform],
       );
       agent = rowToConsoleAgent(requireRow(result.rows[0]));
     },
@@ -739,7 +704,6 @@ function rowToConsoleAgent(row: AgentRow): ConsoleAgent {
   const limitUsageRatio = readNumber(row.limit_usage_ratio);
 
   return {
-    agentType: row.agent_type,
     createdAt: new Date(row.created_at),
     enabled: row.enabled,
     hasApiKey: row.has_api_key,
@@ -748,7 +712,6 @@ function rowToConsoleAgent(row: AgentRow): ConsoleAgent {
     keyPrefix: row.key_prefix,
     name: row.name,
     requestAttributionCount: row.request_attribution_count,
-    requestLoggingEnabled: row.request_logging_enabled,
     status: deriveAgentStatus({
       latestRequestAt: row.latest_request_at,
       limitUsageRatio,
@@ -760,40 +723,8 @@ function rowToConsoleAgent(row: AgentRow): ConsoleAgent {
   };
 }
 
-function isAgentType(value: string | undefined): value is AgentType {
-  return (
-    value === "coding" ||
-    value === "desktop" ||
-    value === "terminal" ||
-    value === "ide" ||
-    value === "other"
-  );
-}
-
 function isAgentIntegrationPlatform(value: string): value is AgentIntegrationPlatform {
   return agentIntegrationPlatforms.includes(value as AgentIntegrationPlatform);
-}
-
-function normalizeRequestLoggingEnabled(value: boolean | string | null | undefined): boolean {
-  if (value === undefined || value === null || value === "") {
-    return true;
-  }
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["1", "enabled", "on", "true", "yes"].includes(normalized)) {
-    return true;
-  }
-  if (["0", "disabled", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-  throw consoleValidationError(
-    "Detailed request metadata logging setting must be enabled or disabled.",
-    "request_logging_invalid",
-    { field: "requestLoggingEnabled" },
-  );
 }
 
 function normalizeAgentApiKeyPlaintext(value: string): string {

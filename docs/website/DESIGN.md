@@ -237,8 +237,8 @@ Steps (numbered 1–3, Archivo H3 + short body; a 1px hairline connects the
 number badges vertically to express sequence):
 
 1. **Connect your providers.** Paste API keys for OpenAI, Anthropic, Google,
-   OpenRouter — or point at local Ollama. Keys are encrypted and never shown
-   again.
+   OpenRouter — connect a personal subscription, or point at local Ollama.
+   Keys are encrypted and never shown again.
 2. **Define virtual models.** Name a policy like `code-fast` or
    `deep-reasoning`; set model scope, cost preference, and a fallback chain.
 3. **Point your agents at the gateway.** Each agent gets the base URL, its own
@@ -288,8 +288,14 @@ concrete compatibility claim, not decoration:
   GitHub Copilot · any OpenAI-compatible agent
 - **Providers it routes to `out →`** — "API keys, personal subscriptions,
   and local runtimes — configured once, shared by every agent."
-  Chips: OpenAI · Anthropic · Google Gemini · OpenRouter · DeepSeek · xAI ·
-  Qwen · Moonshot · MiniMax · Z.ai · Ollama · LM Studio · llama.cpp
+  Chips grouped under mono sub-labels matching the product's provider
+  taxonomy (PRODUCT.md §8):
+  - `API KEYS` — OpenAI · Anthropic · Google Gemini · OpenRouter · DeepSeek ·
+    xAI · Qwen · Moonshot · MiniMax · Z.ai
+  - `SUBSCRIPTIONS` — ChatGPT Plus / Pro · Claude Pro / Max · GitHub Copilot ·
+    Kimi Coding Plan · GLM Coding Plan (reflects built-in allowlisted
+    templates; individual templates may be disabled per ToS constraints)
+  - `LOCAL` — Ollama · LM Studio · llama.cpp
 
 Chips are mono 13px with hairline border on `--surface`; the final chip in
 each group is a dashed `--text-3` "+ more" entry.
@@ -298,8 +304,19 @@ each group is a dashed `--text-3` "+ more" entry.
 
 Eyebrow `03 — OBSERVABILITY`. H2: **The Console shows its work.** Lede:
 "Every request explains itself: which model, why, what it cost. No black-box
-routing." Three evidence panels (12-col grid: 5 / 4 / 3; stacks ≤1024px),
-each a `--surface` panel with a mono title bar:
+routing."
+
+The whole exhibit is one framed Console window (`--bg` on the `--bg-raised`
+section, `--r-lg`, hairline border) so it reads as a single product
+screenshot, not floating cards:
+
+- Title bar: mono `llmingress console — localhost:3000` with a green live
+  dot.
+- Overview stat row, 4 cells divided by hairlines (2×2 grid ≤768px):
+  `requests · today 1,284` / `cost · today $3.42` / `failure rate 0.4%` /
+  `saved vs baseline −62%` (`--ok`). Numbers agree with the panels below.
+- Inside the window, three evidence panels (grid 5 / 4 / 3; stacks ≤1024px),
+  each a `--surface` panel with a mono title bar:
 
 1. **`activity — live`**: 5 request rows (mono): agent, virtual model → real
    model, latency, cost, status dot. One row shows fallback:
@@ -368,9 +385,10 @@ never reads as an empty list. Five items:
 
 ### 4.9 Final CTA + Footer
 
-- CTA band on `--bg-raised`: H2 **Give your agents one door.** + primary
-  `Deploy locally` + ghost `Read the docs`. Under it, the compose one-liner
-  repeated in mono.
+- CTA band: a centered, hairline-framed `--r-lg` panel on `--bg-raised` with
+  a faint violet radial falling from its top edge. H2 **Give your agents one
+  door.** + primary `Deploy locally` + ghost `Read the docs`, buttons
+  centered. Under them, the compose one-liner repeated in mono, centered.
 - Footer: 3 columns — brand (icon + one-liner "A self-hosted AI gateway for
   AI agents."), Product links (Features, How it works, Deploy, FAQ), Project
   links (GitHub ↗, Docs ↗, License Apache-2.0, Changelog ↗). Bottom line:
@@ -382,7 +400,7 @@ never reads as an empty list. Five items:
 | --- | --- |
 | ≥1280 | Reference design. Content column 1120px |
 | ≤1024 | Hero stacks (text → diagram); console panels stack 1-col; how-it-works stacks (steps → code, sticky disabled); FAQ stacks (head → list, sticky disabled) |
-| ≤768 | Nav links → `Menu` disclosure; pain strip, features, compatibility, deploy cards single column; section padding tightens |
+| ≤768 | Nav links → `Menu` disclosure; pain strip, features, compatibility, deploy cards single column; console stat row 2×2; section padding tightens |
 | ≤390 | H1 ≈ 40px; code blocks `overflow-x: auto`; chips wrap; **no horizontal page scroll** (hard requirement) |
 
 ## 6. Accessibility

@@ -345,6 +345,12 @@ pre { margin: 0; }
 .eco-col h3 .dir { color: var(--text-3); font-weight: 400; font-stretch: 100%; }
 .eco-col > p { margin-top: var(--s-2); font-size: var(--t-small); color: var(--text-2); max-width: 46ch; }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-6); }
+.chip-group { margin-top: var(--s-6); }
+.chip-group-label {
+  font-family: var(--f-mono); font-size: 0.7rem; font-weight: 500;
+  letter-spacing: 0.14em; color: var(--text-3);
+}
+.chip-group .chips { margin-top: var(--s-3); }
 .chip-t {
   font-family: var(--f-mono); font-size: var(--t-mono); color: var(--text-2);
   border: 1px solid var(--line); border-radius: 999px;
@@ -355,9 +361,38 @@ pre { margin: 0; }
 
 /* ============ console showcase ============ */
 .console { padding-block: var(--section-pad); background: var(--bg-raised); border-block: 1px solid var(--line-soft); }
+.console-frame {
+  margin-top: var(--s-16);
+  background: var(--bg);
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.console-titlebar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px; border-bottom: 1px solid var(--line-soft);
+  font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.console-titlebar .live { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.console-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--line-soft);
+}
+.cstat { padding: var(--s-6); }
+.cstat + .cstat { border-left: 1px solid var(--line-soft); }
+.cstat-k {
+  display: block; font-family: var(--f-mono); font-size: 0.7rem;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+.cstat-v {
+  display: block; margin-top: 6px;
+  font-family: var(--f-mono); font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.cstat-v.ok { color: var(--ok); }
 .console-grid {
   display: grid; grid-template-columns: 5fr 4fr 3fr;
-  gap: var(--s-4); margin-top: var(--s-16); align-items: stretch;
+  gap: var(--s-4); padding: var(--s-4); align-items: stretch;
 }
 .panel {
   background: var(--surface); border: 1px solid var(--line-soft);
@@ -478,14 +513,23 @@ pre { margin: 0; }
 .faq-item .a code { font-size: 0.85em; color: var(--accent-bright); }
 
 /* ============ final cta + footer ============ */
-.cta-final { padding-block: var(--section-pad); text-align: left; }
-.cta-final h2 { font-size: var(--t-h2); max-width: 16ch; }
-.cta-final .cta-row { margin-top: var(--s-8); }
-.cta-final .one-liner {
+.cta-final { padding-block: var(--section-pad); }
+.cta-band {
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  padding: clamp(48px, 7vw, 88px) var(--gutter);
+  text-align: center;
+  background:
+    radial-gradient(ellipse 70% 90% at 50% 0%, oklch(0.22 0.05 292 / 0.55), transparent 72%),
+    var(--bg-raised);
+}
+.cta-band h2 { font-size: var(--t-h2); max-width: 16ch; margin-inline: auto; }
+.cta-band .cta-row { margin-top: var(--s-8); justify-content: center; }
+.cta-band .one-liner {
   margin-top: var(--s-8); font-family: var(--f-mono); font-size: var(--t-mono);
   color: var(--text-3); overflow-x: auto; white-space: nowrap; padding-bottom: 4px;
+  max-width: none; text-align: center;
 }
-.cta-final .one-liner b { color: var(--text-2); font-weight: 400; }
+.cta-band .one-liner b { color: var(--text-2); font-weight: 400; }
 
 .footer { border-top: 1px solid var(--line-soft); padding-block: var(--s-16) var(--s-12); }
 .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--s-12); }
@@ -520,6 +564,10 @@ pre { margin: 0; }
   .shapes { grid-template-columns: 1fr; }
   .eco-grid { grid-template-columns: 1fr; gap: var(--s-8); }
   .footer-grid { grid-template-columns: 1fr; gap: var(--s-8); }
+  .console-stats { grid-template-columns: 1fr 1fr; }
+  .cstat + .cstat { border-left: 0; }
+  .cstat:nth-child(even) { border-left: 1px solid var(--line-soft); }
+  .cstat:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
 }
 
 /* ============ motion safety ============ */
@@ -775,9 +823,9 @@ pre { margin: 0; }
           <div class="step-n">1</div>
           <div>
             <h3>Connect your providers</h3>
-            <p>Paste API keys for OpenAI, Anthropic, Google, OpenRouter — or
-              point at local Ollama. Keys are encrypted at rest and never
-              shown again.</p>
+            <p>Paste API keys for OpenAI, Anthropic, Google, OpenRouter —
+              connect a personal subscription, or point at local Ollama.
+              Keys are encrypted at rest and never shown again.</p>
           </div>
         </div>
         <div class="step">
@@ -852,8 +900,23 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
         <h3>Providers it routes to <span class="dir">out →</span></h3>
         <p>API keys, personal subscriptions, and local runtimes — configured
           once, shared by every agent.</p>
-        <div class="chips">
-          <span class="chip-t">OpenAI</span><span class="chip-t">Anthropic</span><span class="chip-t">Google Gemini</span><span class="chip-t">OpenRouter</span><span class="chip-t">DeepSeek</span><span class="chip-t">xAI</span><span class="chip-t">Qwen</span><span class="chip-t">Moonshot</span><span class="chip-t">MiniMax</span><span class="chip-t">Z.ai</span><span class="chip-t">Ollama</span><span class="chip-t">LM Studio</span><span class="chip-t more">llama.cpp + more</span>
+        <div class="chip-group">
+          <span class="chip-group-label">API KEYS</span>
+          <div class="chips">
+            <span class="chip-t">OpenAI</span><span class="chip-t">Anthropic</span><span class="chip-t">Google Gemini</span><span class="chip-t">OpenRouter</span><span class="chip-t">DeepSeek</span><span class="chip-t">xAI</span><span class="chip-t">Qwen</span><span class="chip-t">Moonshot</span><span class="chip-t">MiniMax</span><span class="chip-t">Z.ai</span>
+          </div>
+        </div>
+        <div class="chip-group">
+          <span class="chip-group-label">SUBSCRIPTIONS</span>
+          <div class="chips">
+            <span class="chip-t">ChatGPT Plus / Pro</span><span class="chip-t">Claude Pro / Max</span><span class="chip-t">GitHub Copilot</span><span class="chip-t">Kimi Coding Plan</span><span class="chip-t">GLM Coding Plan</span>
+          </div>
+        </div>
+        <div class="chip-group">
+          <span class="chip-group-label">LOCAL</span>
+          <div class="chips">
+            <span class="chip-t">Ollama</span><span class="chip-t">LM Studio</span><span class="chip-t more">llama.cpp + more</span>
+          </div>
         </div>
       </div>
     </div>
@@ -869,7 +932,15 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
       <p class="lede">Every request explains itself: which model, why, and
         what it cost. No black-box routing.</p>
     </div>
-    <div class="console-grid">
+    <div class="console-frame">
+      <div class="console-titlebar"><span class="live"></span> llmingress console — localhost:3000</div>
+      <div class="console-stats">
+        <div class="cstat"><span class="cstat-k">requests · today</span><span class="cstat-v">1,284</span></div>
+        <div class="cstat"><span class="cstat-k">cost · today</span><span class="cstat-v">$3.42</span></div>
+        <div class="cstat"><span class="cstat-k">failure rate</span><span class="cstat-v">0.4%</span></div>
+        <div class="cstat"><span class="cstat-k">saved vs baseline</span><span class="cstat-v ok">−62%</span></div>
+      </div>
+      <div class="console-grid">
 
       <div class="panel">
         <div class="panel-bar"><span class="live"></span> activity — live</div>
@@ -934,6 +1005,7 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
         </div>
       </div>
 
+      </div>
     </div>
   </div>
 </section>
@@ -1027,12 +1099,14 @@ docker compose up --build</pre>
 <!-- ================= final cta ================= -->
 <section class="cta-final" aria-labelledby="cta-h">
   <div class="wrap">
-    <h2 id="cta-h">Give your agents one door.</h2>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="#deploy">Deploy locally</a>
-      <a class="btn btn-ghost" href="#" rel="noopener">Read the docs <span class="ext">↗</span></a>
+    <div class="cta-band">
+      <h2 id="cta-h">Give your agents one door.</h2>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#deploy">Deploy locally</a>
+        <a class="btn btn-ghost" href="#" rel="noopener">Read the docs <span class="ext">↗</span></a>
+      </div>
+      <p class="one-liner">$ <b>docker compose up --build</b>&nbsp;&nbsp;# Gateway :4000 · Console :3000</p>
     </div>
-    <p class="one-liner">$ <b>docker compose up --build</b>&nbsp;&nbsp;# Gateway :4000 · Console :3000</p>
   </div>
 </section>
 

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { gatewayPublicBaseUrl } from "../../packages/config/src/index.ts";
 
 const formerInlineDefaultFiles = [
-  "apps/console/src/app/_modules/runtime-section.tsx",
   "apps/console/src/app/api/agents/_created-page.ts",
   "apps/console/src/app/(dashboard)/playground/page.tsx",
   "apps/console/src/app/(dashboard)/layout.tsx",

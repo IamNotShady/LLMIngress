@@ -12,7 +12,7 @@ import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
 const agentApiKey = "llmi_gateway_request_hygiene_key_094";
 
-test("gateway accepts large bodies, protects metrics, and passes chat parameters through", async () => {
+test("gateway accepts large bodies and passes chat parameters through", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_request_hygiene_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -40,7 +40,6 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
-      env: { GATEWAY_METRICS_TOKEN: "metrics-token" },
       port: await getFreePort(),
     });
 
@@ -52,14 +51,6 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         "openai-organization": "org_agent_123",
         "openai-project": "proj_agent_123",
       };
-
-      const unauthorizedMetrics = await fetch(`${baseUrl}/metrics`);
-      expect(unauthorizedMetrics.status).toBe(401);
-
-      const authorizedMetrics = await fetch(`${baseUrl}/metrics`, {
-        headers: { authorization: "Bearer metrics-token" },
-      });
-      expect(authorizedMetrics.status).toBe(200);
 
       const largeMessage = "x".repeat(2 * 1024 * 1024);
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {

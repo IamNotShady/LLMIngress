@@ -36,11 +36,11 @@ describe("db connection hygiene", () => {
     expect(workerSource).toContain("closePostgresPools");
   });
 
-  it("renames the stuttering runtime-status module and drops the dead observability package", () => {
+  it("keeps runtime-status and the dead observability package removed", () => {
     expect(existsSync("packages/gateway-runtime/src/gateway-gateway-runtime-status.ts")).toBe(
       false,
     );
-    expect(existsSync("packages/gateway-runtime/src/gateway-runtime-status.ts")).toBe(true);
+    expect(existsSync("packages/gateway-runtime/src/gateway-runtime-status.ts")).toBe(false);
     expect(existsSync(["packages", "observability"].join("/"))).toBe(false);
   });
 });

@@ -42,7 +42,6 @@ import {
   requireGatewayRoutePolicyForVirtualModel,
   selectGatewayBaselineCandidate,
 } from "./gateway-runtime-helpers.ts";
-import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
 import {
   assertGatewayRequestWithinVirtualModelContract,
@@ -203,20 +202,11 @@ export async function executeGatewayProtocolRequest<
 
     const success = await executeProviderFallbackAttempts<TSuccess>({
       callProvider: async ({ candidate, providerApiKey }) => {
-        const providerStartedAt = new Date();
         const result = await input.spec.callProvider({
           candidate,
           providerApiKey,
           providerRequestHeaders: input.providerRequestHeaders ?? {},
           request: normalized.request,
-        });
-        recordGatewayProviderTrace({
-          errorCode: result.ok ? null : result.errorCode,
-          modelId: candidate.modelId,
-          providerKey: candidate.providerKey,
-          requestId: input.requestId,
-          startedAt: providerStartedAt,
-          status: result.ok ? "succeeded" : "failed",
         });
         if (!result.ok) {
           lastError = result;

@@ -211,9 +211,7 @@ pre,
 }
 
 .providers-page,
-.models-page,
-.runtime-page,
-.settings-page {
+.models-page {
   max-width: 100rem;
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
@@ -2525,15 +2523,6 @@ button.table-row-link {
   border-color: var(--accent-soft-border);
 }
 
-.settings-layout {
-  display: block;
-}
-.settings-sections {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-  min-width: 0;
-}
 /* ---- Playground reference layout ---- */
 .playground-page {
   max-width: none;

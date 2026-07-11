@@ -18,16 +18,14 @@ import {
   gatewayBodyLimitBytes,
   gatewayConfigNotifications,
   gatewayConfigReconcileIntervalMs,
-  gatewayHeartbeatIntervalMs,
-  gatewayInstanceId,
   gatewayListenHost,
-  gatewayMetricsToken,
+  gatewayReadinessTimeoutMs,
   gatewayShutdownDrainMs,
 } from "@llmingress/gateway-runtime/gateway-env";
 import { gatewayRequestIdHeader } from "@llmingress/gateway-runtime/gateway-error-mapping";
 import { readGatewayProviderRequestHeaders } from "@llmingress/gateway-runtime/gateway-header-passthrough";
+import { readGatewayHealthStatus } from "@llmingress/gateway-runtime/gateway-health";
 import { executeGatewayAnthropicMessages } from "@llmingress/gateway-runtime/gateway-messages";
-import { getPrometheusMetricsDocument } from "@llmingress/gateway-runtime/gateway-metrics";
 import {
   type GatewayRequestMetadata,
   gatewayRequestMetadataHeader,
@@ -104,34 +102,19 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
   });
 
-  app.get("/health", async () => {
-    const snapshot = options.configRuntime?.getSnapshot();
-
-    return {
-      configVersion: snapshot?.version ?? null,
-      providerCount: snapshot?.providers.length ?? 0,
-      service: "gateway",
-      status: "ok",
-    };
+  app.get("/health/live", async () => {
+    return { service: "gateway", status: "ok" };
   });
 
-  app.get("/metrics", async (request, reply) => {
-    const requiredToken = gatewayMetricsToken();
-    if (requiredToken) {
-      const authorization = firstRequestHeaderValue(request.headers.authorization);
-      if (authorization !== `Bearer ${requiredToken}`) {
-        return reply.code(401).send({
-          error: {
-            code: "unauthorized_metrics_access",
-            message: "Metrics access requires a valid bearer token.",
-          },
-        });
-      }
-    }
-
-    const document = await getPrometheusMetricsDocument({});
-    return reply.header("content-type", document.contentType).send(document.body);
-  });
+  const readinessHandler = async (_request: unknown, reply: FastifyReply) => {
+    const health = await readGatewayHealthStatus({
+      configRuntime: options.configRuntime,
+      timeoutMs: gatewayReadinessTimeoutMs(),
+    });
+    return reply.code(health.statusCode).send(health.body);
+  };
+  app.get("/health", readinessHandler);
+  app.get("/health/ready", readinessHandler);
 
   registerGatewayJsonEndpoint(app, options, {
     execute: (input) => executeGatewayOpenAIChatCompletion(input),
@@ -197,8 +180,6 @@ export async function startGateway() {
   logBootstrapSecurityWarnings(config.securityWarnings);
   const configRuntime = createGatewayConfigRuntime({
     enableNotifications: gatewayConfigNotifications(),
-    gatewayInstanceId: gatewayInstanceId(),
-    heartbeatIntervalMs: gatewayHeartbeatIntervalMs(),
     reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
   });
   await configRuntime.start();

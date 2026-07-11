@@ -12,7 +12,6 @@ const consoleSectionSource = () =>
   [
     "sections.tsx",
     "overview-section.tsx",
-    "runtime-section.tsx",
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
@@ -21,7 +20,6 @@ const consoleSectionSource = () =>
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
-    "settings-section.tsx",
   ]
     .map(moduleSource)
     .join("\n");
@@ -91,12 +89,11 @@ describe("console dark restyle static contract", () => {
     expect(sections).not.toMatch(/"#[0-9a-fA-F]{6}"/);
   });
 
-  test("overview gateway details live in the sidebar runtime card", () => {
+  test("overview gateway details live in the sidebar gateway card", () => {
     const sections = consoleSectionSource();
     const sidebar = readFileSync(join(appDir, "_components/sidebar.tsx"), "utf8");
     expect(sections).not.toContain('<h2 className="detail-panel-title">Gateway status</h2>');
     expect(sidebar).toContain("Gateway URL");
-    expect(sidebar).toContain("Uptime");
     expect(sidebar).toContain("Providers");
     expect(sidebar).toContain("sidebar-runtime-status");
     expect(sidebar).toContain("sidebar-provider-health-count");
@@ -170,24 +167,10 @@ describe("console dark restyle static contract", () => {
     expect(vmTable).toContain('className="link-button agent-action-edit row-action-button"');
     expect(vmTable).toContain('<FlatIcon name="edit" />');
     expect(vmTable).not.toContain('className="table-action-link"');
-    expect(stylesheet).toMatch(
-      /\.providers-page,\s*\.models-page,\s*\.runtime-page,\s*\.settings-page\s*\{[^}]*margin:\s*0/s,
-    );
+    expect(stylesheet).toMatch(/\.providers-page,\s*\.models-page\s*\{[^}]*margin:\s*0/s);
     expect(stylesheet).toMatch(/\.vm-filter-bar button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
       /\.vm-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
-    );
-  });
-
-  test("utility console pages use the left-aligned console shell", () => {
-    const runtimePage = readFileSync(join(appDir, "(dashboard)/runtime/page.tsx"), "utf8");
-    const settingsPage = readFileSync(join(appDir, "(dashboard)/settings/page.tsx"), "utf8");
-    const stylesheet = css();
-
-    expect(runtimePage).toContain('className="page runtime-page"');
-    expect(settingsPage).toContain('className="page settings-page"');
-    expect(stylesheet).toMatch(
-      /\.providers-page,\s*\.models-page,\s*\.runtime-page,\s*\.settings-page\s*\{[^}]*margin:\s*0/s,
     );
   });
 

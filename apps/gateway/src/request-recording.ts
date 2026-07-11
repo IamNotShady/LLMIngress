@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import {
   type GatewayRequestActivityProtocol,
   type GatewayRequestActivityRoute,
-  readGatewayActivityError,
   recordCompletedGatewayRequestActivity,
 } from "@llmingress/gateway-runtime/gateway-activity-recorder";
 import {
@@ -13,7 +12,6 @@ import { runGatewayBackgroundTask } from "@llmingress/gateway-runtime/gateway-ba
 import type { GatewayRequestMetadata } from "@llmingress/gateway-runtime/gateway-request-metadata";
 import { wrapProviderStreamWithActivityCompletion } from "@llmingress/gateway-runtime/gateway-stream-pipeline";
 import type { GatewayStreamingResult } from "@llmingress/gateway-runtime/gateway-streaming";
-import { recordGatewayRequestTrace } from "@llmingress/gateway-runtime/gateway-tracing";
 import {
   buildGatewayProviderUsageResponseBody,
   createGatewayStreamingUsageCollector,
@@ -33,12 +31,10 @@ export type GatewayJsonEndpointResponse = {
 
 export type GatewayRequestRecorder = {
   recordActivity: typeof recordCompletedGatewayRequestActivity;
-  recordTrace: typeof recordGatewayRequestTrace;
 };
 
 export const defaultGatewayRequestRecorder: GatewayRequestRecorder = {
   recordActivity: recordCompletedGatewayRequestActivity,
-  recordTrace: recordGatewayRequestTrace,
 };
 
 function runRecordingTask(input: {
@@ -98,24 +94,6 @@ export async function executeRecordedGatewayJsonRequest(input: {
     statusCode: response.statusCode,
     stream: false,
     usageCost: response.statusCode < 400 ? usageCost : undefined,
-  });
-
-  runRecordingTask({
-    logger: input.logger,
-    message: "gateway trace recording failed",
-    name: "gateway.trace",
-    requestId: input.requestId,
-    task: () =>
-      recorder.recordTrace({
-        errorCode: readGatewayActivityError(response.body)?.errorCode ?? null,
-        httpStatus: response.statusCode,
-        modelId: response.activity?.modelId ?? null,
-        protocol: input.protocol,
-        providerKey: response.activity?.providerKey ?? null,
-        requestId: input.requestId,
-        startedAt: activity.startedAt,
-        status: response.statusCode < 400 ? "succeeded" : "failed",
-      }),
   });
 
   return response;

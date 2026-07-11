@@ -23,11 +23,6 @@ import {
   type RoutePolicyStrategy,
 } from "@llmingress/domain";
 import { createLogger } from "@llmingress/logging";
-import {
-  createGatewayRuntimeStatusRecorder,
-  type GatewayRuntimeStatusEvent,
-  type RecordGatewayRuntimeStatus,
-} from "./gateway-runtime-status.ts";
 
 const logger = createLogger("gateway");
 
@@ -75,10 +70,16 @@ export type GatewayConfigSnapshot = {
 };
 
 export type GatewayConfigRuntime = {
+  getReadinessStatus: () => GatewayConfigReadinessStatus;
   getSnapshot: () => GatewayConfigSnapshot;
   reconcile: () => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
+};
+
+export type GatewayConfigReadinessStatus = {
+  hasLoadedSnapshot: boolean;
+  lastReloadFailed: boolean;
 };
 
 type ConfigChangedListener = {
@@ -98,10 +99,7 @@ type GatewayConfigRuntimeOptions = {
   createHealthSummaryChangedListener?: CreateHealthSummaryChangedListener;
   databaseUrl?: string;
   enableNotifications?: boolean;
-  gatewayInstanceId?: string;
-  heartbeatIntervalMs?: number;
   loadLatestSnapshot?: () => Promise<GatewayConfigSnapshot>;
-  recordRuntimeStatus?: RecordGatewayRuntimeStatus;
   reconcileIntervalMs?: number;
 };
 
@@ -161,17 +159,12 @@ export function createGatewayConfigRuntime(
   const loadLatestSnapshot = options.loadLatestSnapshot ?? createPostgresSnapshotLoader(options);
   const enableNotifications = options.enableNotifications !== false;
   const reconcileIntervalMs = options.reconcileIntervalMs ?? 30_000;
-  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 0;
-  const gatewayInstanceId = options.gatewayInstanceId ?? "gateway";
-  const recordRuntimeStatus =
-    options.recordRuntimeStatus ??
-    createGatewayRuntimeStatusRecorder({ databaseUrl: options.databaseUrl, gatewayInstanceId });
-
   let currentSnapshot = emptySnapshot;
+  let hasLoadedSnapshot = false;
+  let lastReloadFailed = false;
   let listener: ConfigChangedListener | undefined;
   let healthListener: ConfigChangedListener | undefined;
   let reconcileTimer: NodeJS.Timeout | undefined;
-  let heartbeatTimer: NodeJS.Timeout | undefined;
   let reloadInFlight: Promise<void> | undefined;
   let trailingReloadRequest: ReloadRequest | undefined;
 
@@ -179,15 +172,6 @@ export function createGatewayConfigRuntime(
     force: boolean;
     targetVersion: number | null;
   };
-
-  // Recording runtime status must never crash gateway boot or abort a config reload.
-  async function recordRuntimeStatusSafe(event: GatewayRuntimeStatusEvent): Promise<void> {
-    try {
-      await recordRuntimeStatus(event);
-    } catch (error) {
-      logger.error({ err: error }, "failed to record runtime status");
-    }
-  }
 
   function shouldSkipReload(request: ReloadRequest): boolean {
     if (request.force || request.targetVersion === null) {
@@ -245,24 +229,15 @@ export function createGatewayConfigRuntime(
     try {
       nextSnapshot = await loadLatestSnapshot();
     } catch (error) {
-      await recordRuntimeStatusSafe({
-        type: "reload-failed",
-        targetConfigVersion: request.targetVersion,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      lastReloadFailed = true;
       throw error;
     }
+
+    lastReloadFailed = false;
 
     const previousVersion = currentSnapshot.version;
     if (request.force || nextSnapshot.version > previousVersion) {
       currentSnapshot = nextSnapshot;
-    }
-    if (nextSnapshot.version > previousVersion) {
-      await recordRuntimeStatusSafe({
-        type: "reload-succeeded",
-        appliedConfigVersion: nextSnapshot.version,
-        targetConfigVersion: request.targetVersion ?? nextSnapshot.version,
-      });
     }
   }
 
@@ -273,6 +248,7 @@ export function createGatewayConfigRuntime(
   }
 
   return {
+    getReadinessStatus: () => ({ hasLoadedSnapshot, lastReloadFailed }),
     getSnapshot: () => currentSnapshot,
     // forceReload (not reloadIfNewer) so reconcile also recovers health-only
     // changes whose config version is unchanged, including ones whose
@@ -280,11 +256,8 @@ export function createGatewayConfigRuntime(
     reconcile: () => runReload({ force: true, targetVersion: null }),
     start: async () => {
       currentSnapshot = await loadLatestSnapshot();
-      await recordRuntimeStatusSafe({
-        type: "startup",
-        appliedConfigVersion: currentSnapshot.version,
-        startedAt: new Date(),
-      });
+      hasLoadedSnapshot = true;
+      lastReloadFailed = false;
 
       if (enableNotifications) {
         const createConfigChangedListener =
@@ -307,25 +280,11 @@ export function createGatewayConfigRuntime(
         }, reconcileIntervalMs);
         reconcileTimer.unref?.();
       }
-
-      if (heartbeatIntervalMs > 0) {
-        heartbeatTimer = setInterval(() => {
-          void recordRuntimeStatusSafe({
-            type: "heartbeat",
-            appliedConfigVersion: currentSnapshot.version,
-          });
-        }, heartbeatIntervalMs);
-        heartbeatTimer.unref?.();
-      }
     },
     stop: async () => {
       if (reconcileTimer) {
         clearInterval(reconcileTimer);
         reconcileTimer = undefined;
-      }
-      if (heartbeatTimer) {
-        clearInterval(heartbeatTimer);
-        heartbeatTimer = undefined;
       }
       await listener?.close();
       listener = undefined;

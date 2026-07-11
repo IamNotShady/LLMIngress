@@ -111,7 +111,6 @@ test("console serves the dark violet Geist skin with compact controls and no ove
           );
           const runtimeCard = page.locator(".sidebar-runtime-card");
           await expect(runtimeCard).toContainText("Gateway URL");
-          await expect(runtimeCard).toContainText("Uptime");
           await expect(runtimeCard).toContainText("Providers");
           await expect(runtimeCard).not.toContainText(/healthy|unhealthy/i);
           expect(await runtimeCard.locator(".sidebar-provider-health-count").count()).toBe(2);

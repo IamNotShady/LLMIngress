@@ -10,7 +10,6 @@ const sections = () =>
   [
     "sections.tsx",
     "overview-section.tsx",
-    "runtime-section.tsx",
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
@@ -19,7 +18,6 @@ const sections = () =>
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
-    "settings-section.tsx",
   ]
     .map(sectionSource)
     .join("\n");
@@ -74,13 +72,6 @@ describe("console semantic status static contract", () => {
     const stylesheet = css();
     expect(stylesheet).toMatch(/\.num-danger\s*\{[^}]*var\(--danger\)/s);
     expect(stylesheet).toMatch(/\.num-warn\s*\{[^}]*var\(--warn\)/s);
-  });
-
-  test("runtime heartbeat and migration check are status-colored", () => {
-    const source = sections();
-    expect(statCardBlock(source, "Heartbeat")).toContain("valueTone");
-    expect(source).toContain('<span className="pill--ok pill">Ready</span>');
-    expect(source).toContain('<span className="pill--danger pill">Blocked</span>');
   });
 
   test("disabled providers and models wear neutral chips, not error red", () => {

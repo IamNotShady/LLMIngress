@@ -2,10 +2,19 @@
 
 ## Current State
 
-- Date: 2026-07-10
+- Date: 2026-07-11
 - Branch: `codex/high-priority-hardening`
-- Base: `9a80b4b8`
-- Status: P1 capability plan is implemented, verified, and committed on `codex/high-priority-hardening`.
+- Base: `6c5343e2`
+- Status: Core slimming is in progress. Worker non-core operations are committed; Runtime and external observability removal is verified and ready to commit.
+
+## 2026-07-11 Core Slimming 2 - Runtime And External Observability Removal
+
+- Deleted Gateway Prometheus metrics, OpenTelemetry trace export, runtime heartbeat/error persistence, and the associated DB modules and package exports.
+- Deleted Console Runtime and Settings pages, navigation items, runtime status queries, sidebar version/uptime fields, and obsolete styling/tests.
+- Added `GET /health/live`, database-and-config-aware `GET /health/ready`, and readiness-compatible `GET /health`; readiness returns `degraded` for a failed reload with a last-known-good snapshot and `503 unavailable` when PostgreSQL or the initial config snapshot is unavailable.
+- Added `GATEWAY_READINESS_TIMEOUT_MS=1000`; health responses expose only safe status, config version, and config load time.
+- Preserved useful metadata-write resilience coverage while deleting OTEL test infrastructure and runtime-error recording wrappers.
+- Verification passed: focused unit/typecheck, 7 affected real-process E2Es, 8 health/recording E2Es, `pnpm run verify` (54 files, 281 tests, Lines 38.63%), and pre-mark `pnpm run verify:features` with all 49 existing passing features re-verified.
 
 ## 2026-07-10 P1 Capability Plan 3 - Virtual Model Capability Contract
 

@@ -10,9 +10,7 @@ import {
 } from "../support/console-app";
 import { withProcessLock } from "../support/process-lock";
 
-test("removed notification API returns 404 and Settings no longer exposes alert delivery", async ({
-  browser,
-}) => {
+test("removed notification API and Settings page return 404", async ({ browser }) => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_worker_slimming_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -39,9 +37,8 @@ test("removed notification API returns 404 and Settings no longer exposes alert 
           });
           expect(response.status()).toBe(404);
 
-          await page.goto(`${baseUrl}/settings`);
-          await expect(page.getByText("Notification channels")).toHaveCount(0);
-          await expect(page.getByLabel("Webhook URL")).toHaveCount(0);
+          const settings = await page.request.get(`${baseUrl}/settings`);
+          expect(settings.status()).toBe(404);
         } finally {
           await context.close();
         }

@@ -219,7 +219,6 @@ describe("streaming backpressure", () => {
 
   it("cancels the readahead reader through the composed stream pipeline when the client side closes", async () => {
     let cancelCalls = 0;
-    let runtimeErrorRecords = 0;
     const stalled = new ReadableStream<Uint8Array>({
       cancel() {
         cancelCalls += 1;
@@ -253,9 +252,6 @@ describe("streaming backpressure", () => {
       idleTimeoutMs: 10_000,
       lease: undefined,
       reader,
-      recordRuntimeError: async () => {
-        runtimeErrorRecords += 1;
-      },
     });
     const wrapped = wrapProviderStreamWithActivityCompletion(source, {
       completeActivity: async () => undefined,
@@ -266,8 +262,6 @@ describe("streaming backpressure", () => {
     await delay(10);
     wrapped.destroy();
     await waitFor(() => cancelCalls === 1);
-
-    expect(runtimeErrorRecords).toBe(0);
   });
 });
 

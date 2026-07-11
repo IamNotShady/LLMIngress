@@ -11,7 +11,6 @@ import {
   executeProviderFallbackAttempts,
   type FallbackChainCandidate,
 } from "../../packages/gateway-runtime/src/gateway-fallback-chain";
-import { wrapProviderStreamWithErrorRecording } from "../../packages/gateway-runtime/src/gateway-stream-pipeline";
 
 const postgresQueryMock = vi.hoisted(() => vi.fn(async () => ({ rows: [] })));
 const recordGatewayBudgetUsageMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -69,7 +68,6 @@ function fallbackCandidate(
 function recorder(overrides: Partial<GatewayRequestRecorder> = {}): GatewayRequestRecorder {
   return {
     recordActivity: vi.fn(async () => undefined),
-    recordTrace: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -153,13 +151,10 @@ describe("gateway recording resilience", () => {
     recordBlocked.resolve();
   });
 
-  it("logs background JSON activity and trace write failures after returning the LLM response", async () => {
+  it("logs background JSON activity failures after returning the LLM response", async () => {
     const logger = fakeLogger();
     const failing = recorder({
       recordActivity: vi.fn(async () => {
-        throw new Error("write failed");
-      }),
-      recordTrace: vi.fn(async () => {
         throw new Error("write failed");
       }),
     });
@@ -181,14 +176,10 @@ describe("gateway recording resilience", () => {
       recorder: failing,
     });
     expect(response.statusCode).toBe(200);
-    await waitForErrorLogs(logger, 2);
+    await waitForErrorLogs(logger, 1);
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ activityId: expect.any(String), requestId: baseInput.requestId }),
       "gateway activity recording failed",
-    );
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ requestId: baseInput.requestId }),
-      "gateway trace recording failed",
     );
   });
 
@@ -325,31 +316,6 @@ describe("gateway recording resilience", () => {
     expect(postgresQueryMock).not.toHaveBeenCalled();
   });
 
-  it("propagates stream runtime errors before runtime error recording finishes", async () => {
-    const recordStarted = deferred();
-    const recordBlocked = deferred();
-    const source = new Readable({
-      read() {},
-    });
-    const output = wrapProviderStreamWithErrorRecording(source, {
-      recordRuntimeError: async () => {
-        recordStarted.resolve();
-        await recordBlocked.promise;
-      },
-    });
-    const errorPromise = new Promise<Error>((resolve) => {
-      output.once("error", (error) => resolve(error));
-    });
-
-    source.destroy(new Error("midstream boom"));
-
-    await recordStarted.promise;
-    const error = await expectResolvedBeforeRecording(errorPromise);
-    expect(error.message).toBe("midstream boom");
-
-    recordBlocked.resolve();
-  });
-
   it("keeps gateway observability writes off the awaited request path", () => {
     const runtimeFiles = [
       "packages/gateway-runtime/src/gateway-protocol-request.ts",
@@ -360,7 +326,6 @@ describe("gateway recording resilience", () => {
       .map((file) => readFileSync(join(process.cwd(), file), "utf8"))
       .join("\n");
 
-    expect(source).not.toMatch(/\bawait\s+recordGatewayProviderTrace\(/);
     expect(source).not.toMatch(/\bawait\s+recordSucceededAttemptInDatabase\(/);
     expect(source).not.toMatch(/\bawait\s+recordFailedAttemptInDatabase\(/);
     expect(source).not.toMatch(/\bawait\s+recordGatewayProviderApiKeyLastUsed\(/);

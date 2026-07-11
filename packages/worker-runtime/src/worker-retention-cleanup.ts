@@ -75,12 +75,6 @@ export async function cleanupExpiredOperationalData(
           where request_activity_id in (select id from expired_request_activity)
           returning id
         ),
-        cleared_runtime_errors as (
-          update runtime_errors
-          set request_activity_id = null
-          where request_activity_id in (select id from expired_request_activity)
-          returning id
-        ),
         deleted_request_activity as (
           delete from request_activity
           where id in (select id from expired_request_activity)

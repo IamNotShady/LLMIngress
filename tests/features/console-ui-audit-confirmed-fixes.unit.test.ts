@@ -13,7 +13,6 @@ const consoleSectionSource = () =>
   [
     "sections.tsx",
     "overview-section.tsx",
-    "runtime-section.tsx",
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
@@ -22,7 +21,6 @@ const consoleSectionSource = () =>
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
-    "settings-section.tsx",
   ]
     .map(sectionSource)
     .join("\n");
@@ -108,8 +106,6 @@ describe("console UI audit confirmed fixes static contract", () => {
 
   test("page headers and dialog close actions are consistent", () => {
     expect(source("apps/console/src/app/(dashboard)/usage/page.tsx")).not.toContain("eyebrow=");
-    expect(source("apps/console/src/app/(dashboard)/runtime/page.tsx")).not.toContain("eyebrow=");
-    expect(source("apps/console/src/app/(dashboard)/settings/page.tsx")).not.toContain("eyebrow=");
     const limitsSource = sectionSource("limits-section.tsx");
     const limitsDialogHead = limitsSource.slice(
       limitsSource.indexOf('className="console-dialog-head limits-config-head"'),

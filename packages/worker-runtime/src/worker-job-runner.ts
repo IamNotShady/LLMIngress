@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { PostgresClient } from "@llmingress/db/client";
-import { recordOpenTelemetrySpan } from "@llmingress/db/traces";
 
 export const JOB_CREATED_CHANNEL = "job_created";
 
@@ -215,20 +214,13 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
           return { nextDelayMs: 0, processed: true };
         }
         const completedAt = now();
-        const completed = await options.store.completeJob({
+        await options.store.completeJob({
           attemptNumber: job.attemptNumber,
           jobId: job.id,
           now: completedAt,
           result,
           workerId: options.workerId,
         });
-        if (completed) {
-          await recordWorkerJobTrace({
-            job,
-            startedAt: claimedAt,
-            status: "succeeded",
-          });
-        }
         return { nextDelayMs: 0, processed: true };
       } catch (error) {
         if (leaseLost || abortController.signal.aborted) {
@@ -238,7 +230,7 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
         const failure = readJobFailure(error);
         const shouldRetry = job.attemptNumber < job.maxAttempts;
         const nextDelayMs = shouldRetry ? Math.max(0, retryBackoffMs(job, failure)) : null;
-        const failed = await options.store.failJob({
+        await options.store.failJob({
           attemptNumber: job.attemptNumber,
           errorCode: failure.code,
           errorMessage: failure.message,
@@ -247,14 +239,6 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
           retryAt: nextDelayMs === null ? null : new Date(failedAt.getTime() + nextDelayMs),
           workerId: options.workerId,
         });
-        if (failed) {
-          await recordWorkerJobTrace({
-            errorCode: failure.code,
-            job,
-            startedAt: claimedAt,
-            status: "failed",
-          });
-        }
         return { nextDelayMs, processed: true };
       } finally {
         await renewal.stop();
@@ -451,31 +435,6 @@ function readJobFailure(error: unknown): JobFailure {
     code: "job_handler_failed",
     message: error instanceof Error ? error.message : "Job handler failed.",
   };
-}
-
-async function recordWorkerJobTrace(input: {
-  errorCode?: string;
-  job: ClaimedJob;
-  startedAt: Date;
-  status: "failed" | "succeeded";
-}): Promise<void> {
-  await recordOpenTelemetrySpan({
-    attributes: {
-      "error.code": input.errorCode,
-      "job.id": input.job.id,
-      "job.type": input.job.jobType,
-      "llmingress.status": input.status,
-    },
-    endTimeUnixNano: dateToUnixNano(new Date()),
-    kind: "internal",
-    name: "llmingress.worker.job",
-    serviceName: "llmingress-worker",
-    startTimeUnixNano: dateToUnixNano(input.startedAt),
-  });
-}
-
-function dateToUnixNano(value: Date): string {
-  return String(BigInt(value.getTime()) * 1_000_000n);
 }
 
 class PostgresJobStore implements JobStore {

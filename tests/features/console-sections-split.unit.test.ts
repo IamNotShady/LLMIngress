@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 const modulesDir = "apps/console/src/app/_modules";
 const sectionFiles = [
   "overview-section.tsx",
-  "runtime-section.tsx",
   "usage-section.tsx",
   "activity-section.tsx",
   "virtual-models-section.tsx",
@@ -13,7 +12,6 @@ const sectionFiles = [
   "limits-section.tsx",
   "models-section.tsx",
   "providers-section.tsx",
-  "settings-section.tsx",
 ];
 
 function lineCount(path: string): number {

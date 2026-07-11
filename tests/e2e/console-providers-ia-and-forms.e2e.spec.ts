@@ -109,15 +109,8 @@ test("providers page shows one provider representation with a searchable capped 
             .evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
           expect(truncated).toBe(0);
 
-          // --- Settings: display-only selects read as disabled.
-          await page.setViewportSize({ width: 1280, height: 900 });
-          await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
-          const languageSelect = page.locator("#settings-language");
-          await expect(languageSelect).toBeDisabled();
-          expect(await languageSelect.evaluate((el) => getComputedStyle(el).cursor)).toBe(
-            "not-allowed",
-          );
           // --- Virtual model dialog: create mode says Create.
+          await page.setViewportSize({ width: 1280, height: 900 });
           await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
             waitUntil: "networkidle",
           });

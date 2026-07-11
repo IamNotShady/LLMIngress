@@ -15,8 +15,6 @@ const expectedRoutes = [
   "/usage",
   "/limits",
   "/playground",
-  "/runtime",
-  "/settings",
 ];
 
 describe("console module navigation config", () => {

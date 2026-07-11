@@ -12,6 +12,17 @@
       "evidence": "2026-07-11: TDD red->green. Removed Worker alert evaluation, notification delivery, JSONL/cost/webhook export, database backup, billing reconciliation, their Console notification API/UI, environment variables, package exports, commands, docs, and obsolete tests. Agent limit alert thresholds were removed while budget/RPM/TPM/concurrency/token enforcement remains. Worker currently registers the three core Provider jobs plus retention and stale-concurrency jobs pending their direct-maintenance feature. Focused unit/E2E, workspace typecheck, pnpm run verify, and pre-mark pnpm run verify:features passed; the optimized batch initially found one obsolete webhook-form assertion, which was removed and its focused E2E passed. Final pnpm run verify and pnpm run verify:features passed with all 49 passing features re-verified."
     },
     {
+      "id": "runtime-observability-removal",
+      "name": "Runtime And External Observability Removal",
+      "description": "Console Runtime and Settings, Gateway metrics, OpenTelemetry tracing, gateway runtime-status/error persistence, and related configuration are removed. Gateway exposes /health/live plus database-and-config-aware /health/ready and /health, returning ok, degraded, or unavailable without leaking database errors.",
+      "verification": "pnpm exec vitest run tests/features/runtime-observability-removal.unit.test.ts && pnpm test:e2e tests/e2e/runtime-observability-removal.e2e.spec.ts",
+      "dependencies": [
+        "worker-noncore-removal"
+      ],
+      "status": "passing",
+      "evidence": "2026-07-11: TDD red->green. Removed Gateway Prometheus metrics, OpenTelemetry tracing, runtime heartbeat/error persistence, Console Runtime and Settings pages, related package exports, environment variables, UI, and obsolete tests. Added /health/live and database-plus-config-aware /health/ready and /health with ok/degraded/unavailable states and a configurable readiness timeout. Focused unit/typecheck passed; real Gateway/Console E2E verified database-down readiness, process liveness, deleted /metrics, and 404 Console pages. pnpm run verify passed with 54 files/281 tests and Lines 38.63%; pre-mark pnpm run verify:features passed all 49 existing features after removing one stale Uptime assertion."
+    },
+    {
       "id": "v1-platform",
       "name": "V1 Platform Foundation",
       "description": "Workspace scripts, env loading, bootstrap config, PostgreSQL migration runner, and migration status checks keep a fresh local install runnable from the standard startup path.",
@@ -45,7 +56,7 @@
     {
       "id": "v1-worker-ops",
       "name": "V1 Worker Operations",
-      "description": "Worker jobs cover usage breakdowns, JSONL and cost exports, webhook and notification dispatch, alerts, metrics, traces, backup, migration status, and retention cleanup.",
+      "description": "Worker jobs are limited to leased provider model refresh, provider connectivity checks, price sync, and temporary maintenance jobs pending direct in-process scheduling.",
       "verification": "pnpm exec vitest run tests/features/v1-worker-ops.unit.test.ts tests/features/provider-dialect.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
       "dependencies": [
         "v1-platform"
@@ -148,7 +159,7 @@
     {
       "id": "gateway-recording-resilience",
       "name": "Gateway Recording Resilience",
-      "description": "A running gateway still returns the LLM response with HTTP 200 when activity/usage/trace recording writes fail (up to the request_activity table being dropped), logging failures at error level instead of failing the agent request.",
+      "description": "A running gateway still returns the LLM response with HTTP 200 when activity and usage recording writes fail (up to the request_activity table being dropped), logging failures at error level instead of failing the agent request.",
       "verification": "pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts && pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts",
       "dependencies": [
         "gateway-db-pool"
@@ -193,7 +204,7 @@
     {
       "id": "gateway-request-hygiene",
       "name": "Gateway Request Hygiene",
-      "description": "A running gateway accepts 2MB chat bodies under a configurable body limit, rejects malformed client x-request-id values, estimates CJK tokens realistically, protects /metrics behind an optional bearer token, forwards OpenAI-compatible Responses, Chat Completions, Embeddings, and Anthropic Messages provider payloads from the Agent body with only virtual model replacement, and refreshes provider OAuth tokens under a row lock so concurrent requests refresh exactly once.",
+      "description": "A running gateway accepts 2MB chat bodies under a configurable body limit, rejects malformed client x-request-id values, estimates CJK tokens realistically, forwards OpenAI-compatible Responses, Chat Completions, Embeddings, and Anthropic Messages provider payloads from the Agent body with only virtual model replacement, and refreshes provider OAuth tokens under a row lock so concurrent requests refresh exactly once.",
       "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts",
       "dependencies": [
         "gateway-db-pool",

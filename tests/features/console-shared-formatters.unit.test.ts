@@ -16,7 +16,6 @@ const consoleSectionSource = () =>
   [
     "sections.tsx",
     "overview-section.tsx",
-    "runtime-section.tsx",
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
@@ -25,7 +24,6 @@ const consoleSectionSource = () =>
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
-    "settings-section.tsx",
   ]
     .map(moduleSource)
     .join("\n");

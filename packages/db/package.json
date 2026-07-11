@@ -32,10 +32,6 @@
       "types": "./src/provider-jobs.ts",
       "default": "./src/provider-jobs.ts"
     },
-    "./traces": {
-      "types": "./src/traces.ts",
-      "default": "./src/traces.ts"
-    },
     "./migration-status": {
       "types": "./src/migration-status.ts",
       "default": "./src/migration-status.ts"
@@ -103,10 +99,6 @@
     "./console-route-preview": {
       "types": "./src/console-route-preview.ts",
       "default": "./src/console-route-preview.ts"
-    },
-    "./console-runtime": {
-      "types": "./src/console-runtime.ts",
-      "default": "./src/console-runtime.ts"
     },
     "./console-usage": {
       "types": "./src/console-usage.ts",

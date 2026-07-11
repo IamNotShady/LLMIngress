@@ -6,11 +6,6 @@ import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import { gatewayStreamIdleTimeoutMs } from "./gateway-env.ts";
 import type { FallbackChainCandidate } from "./gateway-fallback-chain.ts";
 
-export type GatewayRuntimeStreamError = {
-  errorCode: "provider_stream_error";
-  errorMessage: string;
-};
-
 export function streamIdleTimeoutMs(env: Record<string, string | undefined> = process.env): number {
   return gatewayStreamIdleTimeoutMs(env);
 }
@@ -137,44 +132,6 @@ export function wrapProviderStreamWithActivityCompletion(
   return output;
 }
 
-export function wrapProviderStreamWithErrorRecording(
-  source: Readable,
-  input: {
-    recordRuntimeError: (error: GatewayRuntimeStreamError) => Promise<void> | void;
-  },
-): Readable {
-  const output = new PassThrough();
-  let recorded = false;
-
-  source.on("error", (error) => {
-    const runtimeError: GatewayRuntimeStreamError = {
-      errorCode: "provider_stream_error",
-      errorMessage: error instanceof Error ? error.message : "Provider stream failed.",
-    };
-
-    if (!recorded) {
-      runGatewayBackgroundTask({
-        message: "gateway runtime stream error recording failed",
-        metadata: { errorCode: runtimeError.errorCode },
-        name: "gateway.stream.runtime_error",
-        task: async () => {
-          await Promise.resolve(input.recordRuntimeError(runtimeError));
-        },
-      });
-    }
-    recorded = true;
-    output.destroy(error instanceof Error ? error : new Error(runtimeError.errorMessage));
-  });
-  source.pipe(output);
-  output.once("close", () => {
-    if (!source.destroyed && !source.readableEnded) {
-      source.destroy();
-    }
-  });
-
-  return output;
-}
-
 export function wrapProviderStreamWithMidStreamHealthRecording(
   source: Readable,
   input: {
@@ -265,16 +222,12 @@ export function composeGatewayProviderStreamPipeline(input: {
   idleTimeoutMs?: number;
   lease: GatewayConcurrencyLease | undefined;
   reader: ReadableStreamDefaultReader<Uint8Array>;
-  recordRuntimeError: (error: GatewayRuntimeStreamError) => Promise<void> | void;
 }): Readable {
   return wrapProviderStreamWithConcurrencyRelease(
     wrapProviderStreamWithMidStreamHealthRecording(
-      wrapProviderStreamWithErrorRecording(
-        createReadaheadStream(input.reader, input.firstValue, {
-          idleTimeoutMs: input.idleTimeoutMs,
-        }),
-        { recordRuntimeError: input.recordRuntimeError },
-      ),
+      createReadaheadStream(input.reader, input.firstValue, {
+        idleTimeoutMs: input.idleTimeoutMs,
+      }),
       {
         candidate: input.candidate,
         databaseUrl: input.databaseUrl,

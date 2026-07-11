@@ -16,7 +16,7 @@ import { withProcessLock } from "../support/process-lock";
 
 // Seeds the states whose meaning the console previously miscolored: a 37.5%
 // failure rate (3 of 8 requests failed), an intentionally disabled provider,
-// a stale gateway heartbeat, and an agent with deletable limit rules.
+// and an agent with deletable limit rules.
 async function seedSemanticData(databaseUrl: string) {
   const agentId = randomUUID();
   const virtualModelId = randomUUID();
@@ -64,12 +64,6 @@ async function seedSemanticData(databaseUrl: string) {
     await client.query(
       `insert into providers (id, provider_type, provider_key, display_name, enabled)
        values ($1, 'api_key', 'semantic-disabled-probe', 'Semantic Disabled Probe', false)`,
-      [randomUUID()],
-    );
-
-    await client.query(
-      `insert into gateway_runtime_status (id, gateway_instance_id, status, heartbeat_at, started_at)
-       values ($1, 'semantic-probe-gateway', 'ready', now() - interval '10 minutes', now() - interval '2 hours')`,
       [randomUUID()],
     );
 
@@ -134,14 +128,6 @@ test("console colors status by meaning and keeps destructive actions quiet but c
               .locator(".stat-card-value.is-danger"),
           ).toBeVisible();
           await expect(page.locator(".vm-table .num-danger").first()).toBeVisible();
-
-          // --- Runtime: stale heartbeat warns; migration check is an ok pill.
-          await page.goto(`${baseUrl}/runtime`);
-          const heartbeatCard = page.locator(".stat-card", { hasText: "Heartbeat" });
-          await expect(heartbeatCard).toContainText("Stale");
-          await expect(heartbeatCard.locator(".stat-card-value.is-warn")).toBeVisible();
-          const migrateField = page.locator(".detail-field", { hasText: "db:migrate:check" });
-          await expect(migrateField.locator(".pill--ok")).toContainText("Ready");
 
           // --- Providers: an intentionally disabled provider is neutral gray,
           // not error red.

@@ -4,10 +4,6 @@ export function gatewayBodyLimitBytes(env: GatewayEnvironment = process.env): nu
   return readNonNegativeIntegerEnv(env, "GATEWAY_BODY_LIMIT_BYTES", 10_485_760);
 }
 
-export function gatewayMetricsToken(env: GatewayEnvironment = process.env): string | undefined {
-  return readTrimmedEnv(env.GATEWAY_METRICS_TOKEN);
-}
-
 export function gatewayStreamConnectTimeoutMs(env: GatewayEnvironment = process.env): number {
   return readPositiveIntegerValue(env.GATEWAY_STREAM_CONNECT_TIMEOUT_MS, 30_000);
 }
@@ -18,10 +14,6 @@ export function gatewayStreamIdleTimeoutMs(env: GatewayEnvironment = process.env
 
 export function gatewayBudgetReservationTtlSeconds(env: GatewayEnvironment = process.env): number {
   return readPositiveIntegerValue(env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS, 1_800);
-}
-
-export function gatewayInstanceId(env: GatewayEnvironment = process.env): string {
-  return readTrimmedEnv(env.GATEWAY_INSTANCE_ID) ?? "gateway";
 }
 
 export function gatewayListenHost(env: GatewayEnvironment = process.env): string {
@@ -46,12 +38,12 @@ export function gatewayConfigReconcileIntervalMs(env: GatewayEnvironment = proce
   return readNonNegativeIntegerEnv(env, "GATEWAY_CONFIG_RECONCILE_INTERVAL_MS", 30_000);
 }
 
-export function gatewayHeartbeatIntervalMs(env: GatewayEnvironment = process.env): number {
-  return readNonNegativeIntegerEnv(env, "GATEWAY_HEARTBEAT_INTERVAL_MS", 15_000);
-}
-
 export function gatewayShutdownDrainMs(env: GatewayEnvironment = process.env): number {
   return readNonNegativeIntegerEnv(env, "GATEWAY_SHUTDOWN_DRAIN_MS", 10_000);
+}
+
+export function gatewayReadinessTimeoutMs(env: GatewayEnvironment = process.env): number {
+  return readPositiveIntegerValue(env.GATEWAY_READINESS_TIMEOUT_MS, 1_000);
 }
 
 function readTrimmedEnv(value: string | undefined): string | undefined {

@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
-import { getPostgresPool } from "@llmingress/db/client";
 import { selectRouteAttempts } from "@llmingress/domain";
 import { createLogger } from "@llmingress/logging";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
@@ -24,13 +22,12 @@ import {
   type GatewayConcurrencyLease,
   releaseGatewayConcurrency,
 } from "./gateway-agent-limits.ts";
-import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import { normalizeOpenAIChatCompletionRequest } from "./gateway-chat-completions.ts";
 import type {
   GatewayConfigSnapshot,
   GatewayRouteCandidateSnapshot,
 } from "./gateway-config-reload.ts";
-import { gatewayInstanceId, gatewayStreamConnectTimeoutMs } from "./gateway-env.ts";
+import { gatewayStreamConnectTimeoutMs } from "./gateway-env.ts";
 import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 import {
   createGatewayErrorBody,
@@ -71,10 +68,8 @@ import {
 } from "./gateway-runtime-helpers.ts";
 import {
   composeGatewayProviderStreamPipeline,
-  type GatewayRuntimeStreamError,
   readChunkWithTimeout,
 } from "./gateway-stream-pipeline.ts";
-import { recordGatewayProviderTrace } from "./gateway-tracing.ts";
 import type { GatewayUsageCostDetails } from "./gateway-usage-recorder.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 import {
@@ -288,17 +283,6 @@ export async function executeGatewayStreamingRequest(input: {
       firstValue: success.result.firstValue,
       lease: concurrencyLease,
       reader: success.result.reader,
-      recordRuntimeError: (error) =>
-        recordGatewayRuntimeError({
-          databaseUrl: input.databaseUrl,
-          error,
-          metadata: {
-            protocol: input.protocol,
-            providerModelId: success.candidate.providerModelId,
-            requestId: input.requestId,
-            virtualModelId: input.virtualModel.id,
-          },
-        }),
     });
     concurrencyLease = undefined;
 
@@ -389,7 +373,6 @@ async function callStreamingProvider(input: {
     providerApiKey: input.providerApiKey,
   });
   const providerDialect = resolveProviderStreamingDialect(attemptedCandidate.providerKey);
-  const providerStartedAt = new Date();
   const providerUrl = providerDialect.buildUrl(
     attemptedCandidate.baseUrl,
     input.normalized.pathSuffix,
@@ -403,14 +386,6 @@ async function callStreamingProvider(input: {
     providerUrl,
   });
   if (!responseResult.ok) {
-    recordGatewayProviderTrace({
-      errorCode: responseResult.errorCode,
-      modelId: attemptedCandidate.modelId,
-      providerKey: attemptedCandidate.providerKey,
-      requestId: input.requestId,
-      startedAt: providerStartedAt,
-      status: "failed",
-    });
     return responseResult;
   }
 
@@ -433,14 +408,6 @@ async function callStreamingProvider(input: {
         : response.status >= 400 && response.status < 500
           ? "provider_rejected_request"
           : "provider_request_failed";
-    recordGatewayProviderTrace({
-      errorCode,
-      modelId: attemptedCandidate.modelId,
-      providerKey: attemptedCandidate.providerKey,
-      requestId: input.requestId,
-      startedAt: providerStartedAt,
-      status: "failed",
-    });
     return {
       body: providerError.body,
       errorCode,
@@ -470,14 +437,6 @@ async function callStreamingProvider(input: {
 
   if (readaheadError !== undefined || !firstChunk || firstChunk.done) {
     await reader.cancel().catch(() => undefined);
-    recordGatewayProviderTrace({
-      errorCode: "provider_request_failed",
-      modelId: attemptedCandidate.modelId,
-      providerKey: attemptedCandidate.providerKey,
-      requestId: input.requestId,
-      startedAt: providerStartedAt,
-      status: "failed",
-    });
     return {
       errorCode: "provider_request_failed",
       errorMessage: readaheadError ?? "Provider returned an empty stream.",
@@ -486,15 +445,6 @@ async function callStreamingProvider(input: {
       statusCode: null,
     };
   }
-
-  recordGatewayProviderTrace({
-    errorCode: null,
-    modelId: attemptedCandidate.modelId,
-    providerKey: attemptedCandidate.providerKey,
-    requestId: input.requestId,
-    startedAt: providerStartedAt,
-    status: "succeeded",
-  });
 
   return {
     body: null,
@@ -731,44 +681,6 @@ function buildAnthropicMessagesStreamingPayload(
   request: NormalizedAnthropicMessagesRequest,
 ): Record<string, unknown> {
   return request.payload;
-}
-
-function recordGatewayRuntimeError(input: {
-  databaseUrl?: string;
-  error: GatewayRuntimeStreamError;
-  metadata: Record<string, unknown>;
-}): void {
-  runGatewayBackgroundTask({
-    message: "gateway runtime stream error recording failed",
-    metadata: {
-      errorCode: input.error.errorCode,
-      requestId: input.metadata.requestId,
-    },
-    name: "gateway.stream.runtime_error",
-    task: async () => {
-      await getPostgresPool(input.databaseUrl).query(
-        `
-          insert into runtime_errors (
-            id,
-            process_type,
-            process_id,
-            severity,
-            error_code,
-            error_message,
-            metadata
-          )
-          values ($1, 'gateway', $2, 'error', $3, $4, $5)
-        `,
-        [
-          randomUUID(),
-          gatewayInstanceId(),
-          input.error.errorCode,
-          input.error.errorMessage,
-          JSON.stringify(input.metadata),
-        ],
-      );
-    },
-  });
 }
 
 function buildStreamingRequestBodyForDialect(input: {

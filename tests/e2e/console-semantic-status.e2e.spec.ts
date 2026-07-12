@@ -73,8 +73,8 @@ async function seedSemanticData(databaseUrl: string) {
     ] as const;
     for (const [limitType, period, limitValue, unit] of limitRules) {
       await client.query(
-        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, alert_threshold)
-         values ($1, $2, $3, $4, $5, $6, 80)`,
+        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
+         values ($1, $2, $3, $4, $5, $6)`,
         [randomUUID(), agentId, limitType, period, limitValue, unit],
       );
     }

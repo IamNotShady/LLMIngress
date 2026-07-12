@@ -128,27 +128,7 @@ async function publishConfigChange(
 
   try {
     await connection.query("begin");
-    await connection.query("select pg_advisory_xact_lock($1)", [11_000_011]);
-    await input.write(connection);
-
-    const preparedChanges = prepareConfigChanges(input);
-    const version = await insertConfigVersion(
-      connection,
-      input,
-      preparedChanges.map((change) => change.stored),
-    );
-    const changes = preparedChanges.map((change) => change.published);
-    const result: ConfigPublishResult = {
-      version: version.version,
-      configVersionId: version.configVersionId,
-      source: input.source,
-      changes,
-    };
-
-    await connection.query("select pg_notify($1, $2)", [
-      CONFIG_CHANGED_CHANNEL,
-      JSON.stringify(buildConfigChangedPayload(result)),
-    ]);
+    const result = await publishConfigChangeWithClient(connection, input);
     await connection.query("commit");
 
     return result;
@@ -158,6 +138,35 @@ async function publishConfigChange(
   } finally {
     await connection.end?.();
   }
+}
+
+export async function publishConfigChangeWithClient(
+  client: ConfigPublishClient,
+  input: PublishConfigChangeInput,
+): Promise<ConfigPublishResult> {
+  if (input.changes.length === 0) {
+    throw new Error("Config publisher requires at least one config change.");
+  }
+  await client.query("select pg_advisory_xact_lock($1)", [11_000_011]);
+  await input.write(client);
+
+  const preparedChanges = prepareConfigChanges(input);
+  const version = await insertConfigVersion(
+    client,
+    input,
+    preparedChanges.map((change) => change.stored),
+  );
+  const result: ConfigPublishResult = {
+    version: version.version,
+    configVersionId: version.configVersionId,
+    source: input.source,
+    changes: preparedChanges.map((change) => change.published),
+  };
+  await client.query("select pg_notify($1, $2)", [
+    CONFIG_CHANGED_CHANNEL,
+    JSON.stringify(buildConfigChangedPayload(result)),
+  ]);
+  return result;
 }
 
 function buildConfigChangedPayload(result: ConfigPublishResult): ConfigChangedPayload {

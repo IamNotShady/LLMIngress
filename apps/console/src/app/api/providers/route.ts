@@ -7,7 +7,7 @@ import {
   setProviderEnabled,
   updateProvider,
 } from "@llmingress/db/console-providers";
-import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
+import { enqueueProviderProbeLifecycleJob } from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { classifyConsoleActionError } from "../_error-classify";
@@ -29,7 +29,10 @@ export const POST = withConsoleAuth(async (request) => {
           providerType: readText(form, "providerType"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      await enqueueProviderProbeLifecycleJob({
+        providerId: provider.id,
+        source: "provider_created",
+      });
     } else if (action === "createFromTemplate") {
       const provider = await createProviderFromTemplate({
         template: normalizeProviderTemplateFormInput({
@@ -37,14 +40,22 @@ export const POST = withConsoleAuth(async (request) => {
           templateId: readText(form, "templateId"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      await enqueueProviderProbeLifecycleJob({
+        providerId: provider.id,
+        source: "provider_created",
+      });
     } else if (action === "update") {
-      const provider = await updateProvider({
+      const result = await updateProvider({
         baseUrl: readText(form, "baseUrl"),
         displayName: readRequiredText(form, "displayName"),
         id: readRequiredText(form, "id"),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      if (result.baseUrlChanged) {
+        await enqueueProviderProbeLifecycleJob({
+          providerId: result.provider.id,
+          source: "base_url_changed",
+        });
+      }
     } else if (action === "enable" || action === "disable") {
       const providerId = readRequiredText(form, "id");
       await setProviderEnabled({
@@ -52,8 +63,9 @@ export const POST = withConsoleAuth(async (request) => {
         id: providerId,
       });
       if (action === "enable") {
-        await enqueueProviderConnectivityCheckJob({
+        await enqueueProviderProbeLifecycleJob({
           providerId,
+          source: "provider_enabled",
         });
       }
     } else if (action === "delete") {
@@ -82,7 +94,10 @@ export const POST = withConsoleAuth(async (request) => {
       redirectUrl.searchParams.set("providerDialog", "new");
       redirectUrl.searchParams.set("providerError", verdict.message);
       redirectUrl.searchParams.set("providerErrorCode", verdict.code);
-      redirectUrl.searchParams.set("providerErrorField", "providerKey");
+      redirectUrl.searchParams.set(
+        "providerErrorField",
+        typeof verdict.details?.field === "string" ? verdict.details.field : "providerKey",
+      );
       setSearchParam(redirectUrl, "providerKeyValue", readText(form, "providerKey"));
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
@@ -93,7 +108,10 @@ export const POST = withConsoleAuth(async (request) => {
       setSearchParam(redirectUrl, "providerDialog", readText(form, "id"));
       redirectUrl.searchParams.set("providerError", verdict.message);
       redirectUrl.searchParams.set("providerErrorCode", verdict.code);
-      redirectUrl.searchParams.set("providerErrorField", "form");
+      redirectUrl.searchParams.set(
+        "providerErrorField",
+        typeof verdict.details?.field === "string" ? verdict.details.field : "form",
+      );
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
       return redirectToConsolePath(redirectUrl);

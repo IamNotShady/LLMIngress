@@ -33,11 +33,11 @@ describe("console provider template registry", () => {
     expect(isKnownProviderTemplateKey("future-provider")).toBe(false);
   });
 
-  it("describes remote API key providers with fixed URLs and endpoints", () => {
+  it("describes remote API key providers with editable default URLs and endpoints", () => {
     const remote = readTemplate("remote_api_key", "google");
 
     expect(remote).toMatchObject({
-      baseUrlMode: "fixed_remote",
+      baseUrlMode: "user_remote",
       displayName: "Google Gemini",
       endpoints: {
         chat_completions: chatEndpoint,
@@ -83,12 +83,12 @@ describe("console provider template registry", () => {
     });
   });
 
-  it("keeps subscription provider endpoints fixed", () => {
+  it("keeps subscription protocol paths fixed while allowing custom API roots", () => {
     const subscription = readTemplate("subscription", "openai_codex");
     const claudeCode = readTemplate("subscription", "claude_code");
 
     expect(subscription).toMatchObject({
-      baseUrlMode: "fixed_remote",
+      baseUrlMode: "user_remote",
       endpoints: {
         models: { method: "GET", path: "codex/models" },
         responses: { method: "POST", path: "codex/responses" },
@@ -105,12 +105,12 @@ describe("console provider template registry", () => {
       },
       providerKey: "claude_code",
     });
-    expect(() =>
+    expect(
       normalizeProviderTemplateFormInput({
-        baseUrl: "https://example.com",
+        baseUrl: "https://example.com/codex",
         templateId: "openai_codex",
-      }),
-    ).toThrow(/Custom subscription endpoints are not allowed/);
+      }).baseUrl,
+    ).toBe("https://example.com/codex");
   });
 
   it("keeps long-tail OpenAI-compatible list scoped to long-tail providers", () => {

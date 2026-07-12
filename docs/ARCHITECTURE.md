@@ -98,6 +98,12 @@ The durable Job Runner supports exactly three product operations:
 - Provider connectivity check
 - price sync
 
+New Provider probe requests are represented by one `model_refresh` job. Its handler fetches and
+enriches the current Provider model list, probes a model selected from that fresh result, then
+atomically commits model changes plus Provider/model health. The legacy connectivity job type is
+accepted as a compatibility entry point, but invokes the same composite handler and never skips
+model refresh. Provider HTTP calls run before the short PostgreSQL transaction.
+
 Jobs use PostgreSQL `FOR UPDATE SKIP LOCKED`, leases, heartbeat renewal, attempt fencing,
 bounded retries, and `AbortSignal`. Completion or failure from a Worker that lost its lease
 cannot overwrite a newer attempt.
@@ -120,6 +126,8 @@ Worker model refresh merges the Provider API with models.dev, OpenRouter, LiteLL
 The first available value wins in that order, so lower-priority sources only fill missing fields.
 Missing values remain unknown; model names are not used to infer core capabilities. Manual values
 take precedence over synchronized values.
+Every model explicitly returned by the Provider API is retained even when context or price data is
+unavailable; Console renders those nullable values as Unknown.
 
 Provider credentials remain encrypted with the deployment master key. Authenticated Provider
 HTTP calls do not follow redirects. Connectivity probes and model-list requests share the same

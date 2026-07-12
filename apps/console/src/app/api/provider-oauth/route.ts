@@ -5,10 +5,7 @@ import {
   setProviderOAuthConnectionEnabled,
   startProviderOAuthConnection,
 } from "@llmingress/db/console-provider-oauth";
-import {
-  enqueueProviderConnectivityCheckJob,
-  enqueueProviderModelRefreshJob,
-} from "@llmingress/db/provider-jobs";
+import { enqueueProviderProbeLifecycleJob } from "@llmingress/db/provider-jobs";
 import type { NextRequest, NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { classifyConsoleActionError } from "../_error-classify";
@@ -29,8 +26,10 @@ export const POST = withConsoleAuth(async (request) => {
         priority: readNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      await enqueueProviderModelRefreshJob({ providerId: result.providerId });
-      await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
+      await enqueueProviderProbeLifecycleJob({
+        providerId: result.providerId,
+        source: "oauth_ready",
+      });
       return redirectToProvider(result.providerId);
     }
 
@@ -47,7 +46,12 @@ export const POST = withConsoleAuth(async (request) => {
         enabled: action === "enable",
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
+      if (result.enabled) {
+        await enqueueProviderProbeLifecycleJob({
+          providerId: result.providerId,
+          source: "oauth_ready",
+        });
+      }
       return redirectToProvider(result.providerId);
     }
 

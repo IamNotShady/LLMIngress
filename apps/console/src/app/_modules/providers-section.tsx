@@ -30,7 +30,7 @@ const providerTemplateGroups = listProviderTemplateSelectorGroups();
 const directProviderCreateChoices = [
   {
     action: "create",
-    baseUrlMode: "fixed_create",
+    baseUrlMode: "user_remote",
     displayName: "OpenAI",
     fixedBaseUrl: "https://api.openai.com/v1",
     groupId: "remote_api_key",
@@ -41,7 +41,7 @@ const directProviderCreateChoices = [
   },
   {
     action: "create",
-    baseUrlMode: "fixed_create",
+    baseUrlMode: "user_remote",
     displayName: "Anthropic",
     fixedBaseUrl: "https://api.anthropic.com/v1",
     groupId: "remote_api_key",
@@ -186,7 +186,7 @@ function ProviderEditDialog({
           defaultValue={formValues.baseUrl}
           id="provider-edit-base-url"
           name="baseUrl"
-          readOnly={Boolean(provider.providerTemplateId)}
+          required
           type="url"
         />
         <p

@@ -121,7 +121,7 @@ export async function listConsoleProviderHealthSummaries(
       `
           select distinct payload ->> 'providerId' as provider_id
           from jobs
-          where job_type = 'provider_connectivity_check'
+          where job_type in ('model_refresh', 'provider_connectivity_check')
             and status in ('pending', 'running')
             and payload ->> 'providerId' is not null
         `,

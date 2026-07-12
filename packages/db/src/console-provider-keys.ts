@@ -182,6 +182,29 @@ export async function saveProviderApiKey(input: {
     description: `Save provider API key ${input.providerId}`,
     changes: [{ table: "provider_api_keys", recordId: rowId }],
     write: async (client) => {
+      const provider = await client.query<{ provider_type: string }>(
+        `
+          select provider_type
+          from providers
+          where id = $1
+            and deleted_at is null
+          for update
+        `,
+        [input.providerId],
+      );
+      const providerType = provider.rows[0]?.provider_type;
+      if (!providerType) {
+        throw consoleNotFoundError("Provider was not found.", "provider_not_found", {
+          providerId: input.providerId,
+        });
+      }
+      if (providerType !== "api_key") {
+        throw consoleValidationError(
+          "Provider API keys can only be saved for API Key Providers.",
+          "provider_api_key_unsupported",
+          { providerId: input.providerId, providerType },
+        );
+      }
       const result = await client.query<ProviderApiKeyStorageRow>(
         `
           insert into provider_api_keys (

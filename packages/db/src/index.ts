@@ -34,6 +34,7 @@ export {
   CONFIG_CHANGED_CHANNEL,
   createConfigChangedListener,
   createConfigPublisher,
+  publishConfigChangeWithClient,
 } from "./config-versions.js";
 export type {
   AppliedMigrationStatus,

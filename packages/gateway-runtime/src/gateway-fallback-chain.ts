@@ -1,4 +1,4 @@
-import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
+import { recordProviderAndModelHealth } from "@llmingress/db/provider-health";
 import { createLogger } from "@llmingress/logging";
 import {
   classifyProviderFailureStatus,
@@ -66,7 +66,7 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     databaseUrl?: string;
     fallbackAttempts: FallbackFailedAttempt[];
     recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void> | void;
-    recordHealthEvent?: typeof recordProviderHealthEvent;
+    recordHealthEvent?: typeof recordProviderAndModelHealth;
     requestId?: string;
   };
 
@@ -278,7 +278,7 @@ export function readFallbackProviderApiKeys(
 export async function recordCandidateHealthFailure(
   input: {
     databaseUrl?: string;
-    recordHealthEvent?: typeof recordProviderHealthEvent;
+    recordHealthEvent?: typeof recordProviderAndModelHealth;
   },
   candidate: FallbackChainCandidate,
   failedAttempts: FallbackFailedAttempt[],
@@ -301,7 +301,7 @@ export async function recordCandidateHealthFailure(
     return;
   }
 
-  const healthRecorder = input.recordHealthEvent ?? recordProviderHealthEvent;
+  const healthRecorder = input.recordHealthEvent ?? recordProviderAndModelHealth;
 
   const shared = {
     ...(input.databaseUrl ? { databaseUrl: input.databaseUrl } : {}),
@@ -321,12 +321,7 @@ export async function recordCandidateHealthFailure(
   };
 
   await healthRecorder({
-    ...shared,
-    providerId: candidate.providerId,
-  });
-  await healthRecorder({
-    ...shared,
-    providerId: candidate.providerId,
+    event: { ...shared, providerId: candidate.providerId },
     providerModelId: candidate.providerModelId,
   });
 }

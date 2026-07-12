@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { type ConfigChange, createConfigPublisher } from "@llmingress/db/config-versions";
+import { withPostgresTransaction } from "@llmingress/db/client";
+import { type ConfigChange, publishConfigChangeWithClient } from "@llmingress/db/config-versions";
+import {
+  recordProviderAndModelHealthWithClient,
+  recordProviderHealthEventWithClient,
+} from "@llmingress/db/provider-health";
 import {
   completeProviderOAuthConnection,
   type PostgresQueryClient,
@@ -13,6 +18,7 @@ import {
   resolveProviderModelCapabilities,
   type SyncedModelCapabilities,
 } from "@llmingress/domain";
+import { selectProviderProbeModel } from "@llmingress/provider/connectivity";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   fetchListedProviderModels as fetchProviderModelList,
@@ -37,6 +43,10 @@ import {
   readWorkerMasterKeySource,
 } from "./worker-credential-utils.ts";
 import { JOB_CREATED_CHANNEL, type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
+import {
+  type AggregatedProviderConnectivityResult,
+  probeProvider,
+} from "./worker-provider-probe.ts";
 
 export type ProviderModelAvailability = "available" | "unavailable" | "not_listed" | "deprecated";
 export type { ListedProviderModel } from "@llmingress/provider/model-list";
@@ -87,11 +97,6 @@ export type ChainedPriceSyncJobPayload = {
   source: "model_refresh";
 };
 
-export type ChainedConnectivityCheckJobPayload = {
-  providerId: string;
-  source: "model_refresh";
-};
-
 type CreateModelRefreshJobHandlerOptions = {
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
@@ -100,8 +105,13 @@ type CreateModelRefreshJobHandlerOptions = {
   modelRegistrySource?: () => Promise<ProviderModelRegistryEntry[]>;
 };
 
-type RefreshProviderModelsOptions = CreateModelRefreshJobHandlerOptions & {
+export type RefreshProviderModelsOptions = CreateModelRefreshJobHandlerOptions & {
+  followUpProbe?: boolean;
+  jobId?: string;
+  jobTrigger?: string;
   providerId: string;
+  requestedProviderApiKeyId?: string;
+  timeoutMs?: number;
 };
 
 type PlanProviderModelRefreshInput = {
@@ -115,6 +125,13 @@ type ProviderRow = {
   id: string;
   provider_key: string;
   provider_type: "api_key" | "local" | "subscription";
+  updated_at: string;
+};
+
+type ProviderCredentialSnapshot = {
+  encryptedSecret: Record<string, unknown>;
+  id: string;
+  kind: "api_key" | "oauth";
 };
 
 function requireProviderBaseUrl(provider: ProviderRow): string {
@@ -159,8 +176,14 @@ export function createModelRefreshJobHandler(
   options: CreateModelRefreshJobHandlerOptions,
 ): JobHandler {
   return async (job) => {
-    const providerId = readProviderId(job.payload);
-    return refreshProviderModels({ ...options, providerId });
+    const payload = readModelRefreshPayload(job.payload);
+    return refreshProviderModels({
+      ...options,
+      followUpProbe: payload.followUpProbe,
+      jobId: job.id,
+      jobTrigger: job.trigger,
+      providerId: payload.providerId,
+    });
   };
 }
 
@@ -315,22 +338,6 @@ export function enrichListedProviderModels(input: {
       input.providerKey,
     );
   });
-}
-
-export function filterRefreshableListedProviderModels(input: {
-  listedModels: ListedProviderModel[];
-  providerKey: string;
-  syncedPrices: ProviderModelSyncedPrice[];
-}): ListedProviderModel[] {
-  return input.listedModels.filter(
-    (model) =>
-      (model.contextWindow !== undefined && model.contextWindow !== null) ||
-      findSyncedProviderModelPrice(input.syncedPrices, {
-        displayName: model.displayName,
-        modelId: model.modelId,
-        providerKey: input.providerKey,
-      }) !== null,
-  );
 }
 
 function findSyncedProviderModelPrice(
@@ -584,7 +591,7 @@ export async function refreshProviderModels(
 ): Promise<ProviderModelRefreshResult> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const provider = await readProvider(options.databaseUrl, options.providerId);
-  const apiKey =
+  const credential =
     provider.provider_type === "api_key"
       ? await readProviderApiKey({
           databaseUrl: options.databaseUrl,
@@ -605,7 +612,7 @@ export async function refreshProviderModels(
           })
         : null;
   const rawListedModels = await fetchProviderModelList({
-    apiKey,
+    apiKey: credential?.plaintext ?? null,
     baseUrl: requireProviderBaseUrl(provider),
     fetch: fetchImpl,
     providerKey: provider.provider_key,
@@ -625,64 +632,266 @@ export async function refreshProviderModels(
     providerKey: provider.provider_key,
     registryEntries,
   });
-  const listedModels = filterRefreshableListedProviderModels({
-    listedModels: enrichedListedModels,
-    providerKey: provider.provider_key,
-    syncedPrices,
-  });
-  const existingModels = await readExistingProviderModels(options.databaseUrl, provider.id);
-  const plan = planProviderModelRefresh({ existingModels, listedModels });
-  let chainedConnectivityCheckJobId: string | null = null;
-  let chainedPriceSyncJobId: string | null = null;
-  const writePlan = async (client: QueryClient) => {
-    await applyProviderModelRefreshPlan(client, provider.id, plan);
-    if (listedModels.length > 0) {
-      chainedConnectivityCheckJobId = await enqueueChainedConnectivityCheckJob(client, {
-        providerId: provider.id,
-      });
-    }
-    chainedPriceSyncJobId = await enqueueChainedPriceSyncJob(client, {
-      listedModels,
-      providerId: provider.id,
-      providerKey: provider.provider_key,
-    });
-  };
+  const listedModels = enrichedListedModels;
+  const probeModelId = options.followUpProbe
+    ? selectProviderProbeModel(
+        listedModels.map((model) => {
+          const price = findSyncedProviderModelPrice(syncedPrices, {
+            displayName: model.displayName,
+            modelId: model.modelId,
+            providerKey: provider.provider_key,
+          });
+          return {
+            contextWindow: model.contextWindow ?? null,
+            inputUsdPerMillionTokens: price?.inputUsdPerMillionTokens ?? null,
+            modelId: model.modelId,
+            outputUsdPerMillionTokens: price?.outputUsdPerMillionTokens ?? null,
+          };
+        }),
+      )
+    : null;
+  const probeResult =
+    options.followUpProbe && probeModelId
+      ? await probeProvider({
+          databaseUrl: options.databaseUrl,
+          fetch: fetchImpl,
+          masterKeySource:
+            options.masterKeySource ??
+            readWorkerMasterKeySource(process.env, "provider connectivity checks"),
+          provider: {
+            baseUrl: requireProviderBaseUrl(provider),
+            displayName: provider.display_name,
+            id: provider.id,
+            modelId: probeModelId,
+            providerKey: provider.provider_key,
+            providerType: provider.provider_type,
+          },
+          requestedProviderApiKeyId: options.requestedProviderApiKeyId,
+          timeoutMs: options.timeoutMs,
+        })
+      : options.followUpProbe
+        ? buildNoProbeModelResult(provider)
+        : null;
+  let plan: ProviderModelRefreshPlan | undefined;
   let publishedConfigVersion: number | null = null;
-
-  if (plan.routingVisibleChanges.length > 0) {
-    const publisher = createConfigPublisher({ databaseUrl: options.databaseUrl });
-    const result = await publisher.publish({
-      source: "worker",
-      description: `Refresh provider models for ${provider.provider_key}`,
-      changes: plan.routingVisibleChanges,
-      write: writePlan,
-    });
-    publishedConfigVersion = result.version;
-  } else {
-    await withPooledPostgresClient(options.databaseUrl, async (client) => {
-      await client.query("begin");
-      try {
-        await writePlan(client);
-        await client.query("commit");
-      } catch (error) {
-        await client.query("rollback");
-        throw error;
+  let chainedPriceSyncJobId: string | null = null;
+  await withPostgresTransaction(options.databaseUrl, async (client) => {
+    if (options.jobId) {
+      await client.query("select pg_advisory_xact_lock(hashtext($1))", [
+        `provider_probe_job:${options.jobId}`,
+      ]);
+      const prior = await client.query<{ exists: boolean }>(
+        `
+          select exists(
+            select 1
+            from provider_health_events
+            where job_id = $1
+              and provider_id = $2
+          ) as exists
+        `,
+        [options.jobId, provider.id],
+      );
+      if (prior.rows[0]?.exists) {
+        plan = emptyProviderModelRefreshPlan();
+        return;
       }
-    });
-  }
+    }
+    await assertProviderSnapshotCurrent(client, provider, credential?.snapshot ?? null);
+    const existingModels = await readExistingProviderModels(client, provider.id);
+    plan = planProviderModelRefresh({ existingModels, listedModels });
+    const writePlan = async (writeClient: QueryClient) => {
+      const currentPlan = requireRefreshPlan(plan);
+      await applyProviderModelRefreshPlan(writeClient, provider.id, currentPlan);
+      chainedPriceSyncJobId = await enqueueChainedPriceSyncJob(writeClient, {
+        listedModels,
+        providerId: provider.id,
+        providerKey: provider.provider_key,
+      });
+      if (probeResult) {
+        await persistProbeHealth(writeClient, {
+          jobId: options.jobId,
+          jobTrigger: options.jobTrigger,
+          probeModelId,
+          provider,
+          result: probeResult,
+        });
+      }
+    };
+    if (plan.routingVisibleChanges.length > 0) {
+      const result = await publishConfigChangeWithClient(client, {
+        source: "worker",
+        description: `Refresh provider models for ${provider.provider_key}`,
+        changes: plan.routingVisibleChanges,
+        write: writePlan,
+      });
+      publishedConfigVersion = result.version;
+    } else {
+      await writePlan(client);
+    }
+  });
+
+  const committedPlan = requireRefreshPlan(plan);
 
   return {
-    chainedConnectivityCheckJobId,
+    chainedConnectivityCheckJobId: null,
     chainedPriceSyncJobId,
     fetchedModelCount: rawListedModels.length,
-    insertedModelCount: plan.insertModels.length,
-    markedAvailableCount: plan.markAvailable.length,
-    markedNotListedCount: plan.markNotListed.length,
-    markedUnavailableCount: plan.markUnavailable.length,
+    insertedModelCount: committedPlan.insertModels.length,
+    markedAvailableCount: committedPlan.markAvailable.length,
+    markedNotListedCount: committedPlan.markNotListed.length,
+    markedUnavailableCount: committedPlan.markUnavailable.length,
     providerId: provider.id,
     publishedConfigVersion,
-    routingVisibleChangeCount: plan.routingVisibleChanges.length,
+    routingVisibleChangeCount: committedPlan.routingVisibleChanges.length,
   };
+}
+
+function emptyProviderModelRefreshPlan(): ProviderModelRefreshPlan {
+  return {
+    insertModels: [],
+    markAvailable: [],
+    markNotListed: [],
+    markUnavailable: [],
+    routingVisibleChanges: [],
+  };
+}
+
+function requireRefreshPlan(plan: ProviderModelRefreshPlan | undefined): ProviderModelRefreshPlan {
+  if (!plan) {
+    throw new Error("Provider model refresh plan was not created.");
+  }
+  return plan;
+}
+
+function buildNoProbeModelResult(provider: ProviderRow): AggregatedProviderConnectivityResult {
+  return {
+    apiKeyResults: [],
+    checkedAt: new Date().toISOString(),
+    errorCode: "provider_probe_model_unavailable",
+    errorMessage: "Provider has no ordinary chat-compatible models for connectivity check.",
+    latencyMs: 0,
+    oauthResults: [],
+    ok: false,
+    probeModelId: null,
+    providerId: provider.id,
+    providerKey: provider.provider_key,
+    retryable: false,
+    status: "unhealthy",
+    statusCode: null,
+  };
+}
+
+async function assertProviderSnapshotCurrent(
+  client: QueryClient,
+  provider: ProviderRow,
+  credential: ProviderCredentialSnapshot | null,
+): Promise<void> {
+  const result = await client.query<{ current: boolean }>(
+    `
+      select enabled
+             and deleted_at is null
+             and updated_at::text = $2
+             and base_url is not distinct from $3
+             and provider_type = $4
+             as current
+      from providers
+      where id = $1
+      for update
+    `,
+    [provider.id, provider.updated_at, provider.base_url, provider.provider_type],
+  );
+  if (result.rows[0]?.current !== true) {
+    throw new JobHandlerError(
+      "provider_probe_snapshot_stale",
+      "Provider configuration changed while the probe was running.",
+    );
+  }
+  if (!credential) {
+    return;
+  }
+  const table = credential.kind === "api_key" ? "provider_api_keys" : "provider_oauth";
+  const secretColumn = credential.kind === "api_key" ? "encrypted_key" : "encrypted_token";
+  const credentialResult = await client.query<{ current: boolean }>(
+    `
+      select enabled
+             and ${secretColumn} = $2::jsonb
+             as current
+      from ${table}
+      where id = $1
+        and provider_id = $3
+      for update
+    `,
+    [credential.id, JSON.stringify(credential.encryptedSecret), provider.id],
+  );
+  if (credentialResult.rows[0]?.current !== true) {
+    throw new JobHandlerError(
+      "provider_probe_snapshot_stale",
+      "Provider credentials changed while the probe was running.",
+    );
+  }
+}
+
+async function persistProbeHealth(
+  client: QueryClient,
+  input: {
+    jobId?: string;
+    jobTrigger?: string;
+    probeModelId: string | null;
+    provider: ProviderRow;
+    result: AggregatedProviderConnectivityResult;
+  },
+): Promise<void> {
+  const event = {
+    errorCode: input.result.errorCode,
+    errorMessage: input.result.errorMessage,
+    jobId: input.jobId,
+    latencyMs: input.result.latencyMs,
+    metadata: {
+      apiKeyResults: input.result.apiKeyResults.map((result) => ({
+        errorCode: result.errorCode,
+        ok: result.ok,
+        providerApiKeyPrefix: result.providerApiKeyPrefix,
+        status: result.status,
+        statusCode: result.statusCode,
+      })),
+      oauthResults: input.result.oauthResults.map((result) => ({
+        errorCode: result.errorCode,
+        ok: result.ok,
+        providerOAuthId: result.providerOAuthId,
+        providerOAuthLabel: result.providerOAuthLabel,
+        status: result.status,
+        statusCode: result.statusCode,
+      })),
+      probeModelId: input.result.probeModelId,
+      providerKey: input.result.providerKey,
+      retryable: input.result.retryable,
+      statusCode: input.result.statusCode,
+    },
+    observedAt: new Date(input.result.checkedAt),
+    providerId: input.provider.id,
+    status: input.result.status,
+    trigger: input.jobTrigger === "manual" ? ("manual" as const) : ("worker_probe" as const),
+  };
+  if (!input.probeModelId) {
+    await recordProviderHealthEventWithClient(client, event);
+    return;
+  }
+  const model = await client.query<{ id: string }>(
+    `
+      select id::text
+      from provider_models
+      where provider_id = $1
+        and model_id = $2
+        and deleted_at is null
+      for update
+    `,
+    [input.provider.id, input.probeModelId],
+  );
+  const providerModelId = model.rows[0]?.id;
+  if (!providerModelId) {
+    throw new Error("Provider probe model was not persisted.");
+  }
+  await recordProviderAndModelHealthWithClient(client, { event, providerModelId });
 }
 
 export function buildChainedPriceSyncJobPayload(input: {
@@ -700,64 +909,6 @@ export function buildChainedPriceSyncJobPayload(input: {
 
 export function isUnfinishedChainedPriceSyncStatus(status: string): boolean {
   return status === "pending" || status === "running";
-}
-
-export function buildChainedConnectivityCheckJobPayload(input: {
-  providerId: string;
-}): ChainedConnectivityCheckJobPayload {
-  return {
-    providerId: input.providerId,
-    source: "model_refresh",
-  };
-}
-
-export function isUnfinishedChainedConnectivityCheckStatus(status: string): boolean {
-  return status === "pending" || status === "running";
-}
-
-async function enqueueChainedConnectivityCheckJob(
-  client: QueryClient,
-  input: {
-    providerId: string;
-  },
-): Promise<string> {
-  await client.query("select pg_advisory_xact_lock(hashtext($1))", [
-    `model_refresh_connectivity_check:${input.providerId}`,
-  ]);
-
-  const existing = await client.query<{ id: string; status: string }>(
-    `
-      select id::text, status
-      from jobs
-      where job_type = 'provider_connectivity_check'
-        and trigger = 'system'
-        and payload->>'source' = 'model_refresh'
-        and payload->>'providerId' = $1
-        and status in ('pending', 'running')
-      order by created_at
-      limit 1
-      for update
-    `,
-    [input.providerId],
-  );
-  const existingJob = existing.rows.find((row) =>
-    isUnfinishedChainedConnectivityCheckStatus(row.status),
-  );
-  if (existingJob) {
-    await notifyJobCreated(client, existingJob.id);
-    return existingJob.id;
-  }
-
-  const jobId = randomUUID();
-  await client.query(
-    `
-      insert into jobs (id, job_type, status, trigger, payload, max_attempts)
-      values ($1, 'provider_connectivity_check', 'pending', 'system', $2::jsonb, 1)
-    `,
-    [jobId, JSON.stringify(buildChainedConnectivityCheckJobPayload(input))],
-  );
-  await notifyJobCreated(client, jobId);
-  return jobId;
 }
 
 async function enqueueChainedPriceSyncJob(
@@ -818,7 +969,7 @@ async function readProvider(
   return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
-        select id::text, provider_type, provider_key, display_name, base_url
+        select id::text, provider_type, provider_key, display_name, base_url, updated_at::text
         from providers
         where id = $1
           and enabled = true
@@ -838,12 +989,11 @@ async function readProvider(
 }
 
 async function readExistingProviderModels(
-  databaseUrl: string | undefined,
+  client: QueryClient,
   providerId: string,
 ): Promise<ExistingProviderModel[]> {
-  return withPooledPostgresClient(databaseUrl, async (client) => {
-    const result = await client.query<ProviderModelRow>(
-      `
+  const result = await client.query<ProviderModelRow>(
+    `
         select provider_models.id::text,
                provider_models.model_id,
                provider_models.display_name,
@@ -866,26 +1016,25 @@ async function readExistingProviderModels(
           and provider_models.deleted_at is null
         order by provider_models.model_id
       `,
-      [providerId],
-    );
+    [providerId],
+  );
 
-    return result.rows.map((row) => ({
-      availability: row.availability,
-      capabilityMetadata: readJsonRecord(row.capability_metadata),
-      contextWindow: row.context_window,
-      displayName: row.display_name,
-      id: row.id,
-      inputModalities: row.input_modalities,
-      maxOutputTokens: row.max_output_tokens,
-      modelId: row.model_id,
-      outputModalities: row.output_modalities,
-      referenced: row.referenced,
-      supportsFunctionCalling: row.supports_function_calling,
-      supportsReasoning: row.supports_reasoning,
-      supportsStreaming: row.supports_streaming,
-      supportsTools: row.supports_function_calling ?? undefined,
-    }));
-  });
+  return result.rows.map((row) => ({
+    availability: row.availability,
+    capabilityMetadata: readJsonRecord(row.capability_metadata),
+    contextWindow: row.context_window,
+    displayName: row.display_name,
+    id: row.id,
+    inputModalities: row.input_modalities,
+    maxOutputTokens: row.max_output_tokens,
+    modelId: row.model_id,
+    outputModalities: row.output_modalities,
+    referenced: row.referenced,
+    supportsFunctionCalling: row.supports_function_calling,
+    supportsReasoning: row.supports_reasoning,
+    supportsStreaming: row.supports_streaming,
+    supportsTools: row.supports_function_calling ?? undefined,
+  }));
 }
 
 async function applyProviderModelRefreshPlan(
@@ -1046,9 +1195,15 @@ function hasCapabilityUpdate(
   );
 }
 
-function readProviderId(payload: unknown): string {
+function readModelRefreshPayload(payload: unknown): {
+  followUpProbe: boolean;
+  providerId: string;
+} {
   if (isRecord(payload) && typeof payload.providerId === "string" && payload.providerId.trim()) {
-    return payload.providerId;
+    return {
+      followUpProbe: payload.followUpProbe !== false,
+      providerId: payload.providerId,
+    };
   }
   throw new Error("model_refresh job payload requires providerId.");
 }
@@ -1057,13 +1212,16 @@ async function readProviderApiKey(input: {
   databaseUrl?: string;
   masterKeySource: MasterKeySource;
   providerId: string;
-}): Promise<string> {
-  const encrypted = await withPooledPostgresClient(input.databaseUrl, async (client) => {
-    const result = await client.query<{ encrypted_key: unknown }>(
+}): Promise<{ plaintext: string; snapshot: ProviderCredentialSnapshot }> {
+  const stored = await withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<{ encrypted_key: unknown; id: string }>(
       `
-        select encrypted_key
+        select id::text, encrypted_key
         from provider_api_keys
         where provider_id = $1
+          and enabled = true
+        order by priority, created_at, id
+        limit 1
       `,
       [input.providerId],
     );
@@ -1071,10 +1229,12 @@ async function readProviderApiKey(input: {
     if (!row) {
       throw new Error("Provider API key was not found.");
     }
-    return readEncryptedSecret(row.encrypted_key);
+    return { encryptedKey: readEncryptedSecret(row.encrypted_key), id: row.id };
   });
-
-  return createSecretEncryption(input.masterKeySource).decrypt(encrypted);
+  return {
+    plaintext: createSecretEncryption(input.masterKeySource).decrypt(stored.encryptedKey),
+    snapshot: { encryptedSecret: stored.encryptedKey, id: stored.id, kind: "api_key" },
+  };
 }
 
 async function readProviderOAuthAccessToken(input: {
@@ -1083,7 +1243,7 @@ async function readProviderOAuthAccessToken(input: {
   masterKeySource: MasterKeySource;
   providerId: string;
   providerKey: string;
-}): Promise<string> {
+}): Promise<{ plaintext: string; snapshot: ProviderCredentialSnapshot }> {
   if (!isSubscriptionProviderKey(input.providerKey)) {
     throw new Error("Provider does not support OAuth model refresh.");
   }
@@ -1101,7 +1261,14 @@ async function readProviderOAuthAccessToken(input: {
     encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
   );
   if (!isProviderOAuthTokenExpired(token)) {
-    return token.accessToken;
+    return {
+      plaintext: token.accessToken,
+      snapshot: {
+        encryptedSecret: connection.encryptedToken,
+        id: connection.id,
+        kind: "oauth",
+      },
+    };
   }
   if (!token.refreshToken) {
     throw new Error("Provider OAuth token expired and has no refresh token.");
@@ -1112,13 +1279,17 @@ async function readProviderOAuthAccessToken(input: {
     providerKey: input.providerKey,
     refreshToken: token.refreshToken,
   });
+  const encryptedToken = encryption.encrypt(JSON.stringify(refreshed));
   await completeProviderOAuthConnection({
     databaseUrl: input.databaseUrl,
-    encryptedToken: encryption.encrypt(JSON.stringify(refreshed)),
+    encryptedToken,
     providerOAuthId: connection.id,
     tokenExpiresAt: refreshed.expiresAt === null ? null : new Date(refreshed.expiresAt),
   });
-  return refreshed.accessToken;
+  return {
+    plaintext: refreshed.accessToken,
+    snapshot: { encryptedSecret: encryptedToken, id: connection.id, kind: "oauth" },
+  };
 }
 
 function readJsonRecord(value: unknown): Record<string, unknown> {

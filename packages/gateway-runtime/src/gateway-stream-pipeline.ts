@@ -1,5 +1,5 @@
 import { PassThrough, Readable } from "node:stream";
-import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
+import { recordProviderAndModelHealth } from "@llmingress/db/provider-health";
 import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-agent-limits.ts";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
@@ -168,13 +168,8 @@ export function wrapProviderStreamWithMidStreamHealthRecording(
       },
       name: "gateway.stream.health",
       task: async () => {
-        await recordProviderHealthEvent({
-          ...shared,
-          providerId: input.candidate.providerId,
-        });
-        await recordProviderHealthEvent({
-          ...shared,
-          providerId: input.candidate.providerId,
+        await recordProviderAndModelHealth({
+          event: { ...shared, providerId: input.candidate.providerId },
           providerModelId: input.candidate.providerModelId,
         });
       },

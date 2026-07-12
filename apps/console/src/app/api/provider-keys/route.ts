@@ -3,7 +3,7 @@ import {
   readConsoleMasterKeySource,
   saveProviderApiKey,
 } from "@llmingress/db/console-provider-keys";
-import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
+import { enqueueProviderProbeLifecycleJob } from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
@@ -32,9 +32,9 @@ export const POST = withConsoleAuth(async (request) => {
       priority: readNumber(form, "priority"),
       providerId,
     });
-    await enqueueProviderConnectivityCheckJob({
-      providerApiKeyId: result.metadata.id,
+    await enqueueProviderProbeLifecycleJob({
       providerId,
+      source: "api_key_saved",
     });
 
     if (request.headers.get("accept")?.includes("application/json")) {

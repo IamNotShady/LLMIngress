@@ -6,7 +6,7 @@ import { FlatIcon, type FlatIconName } from "../_components/flat-icon";
 
 export type ProviderCreateChoice = {
   action: string;
-  baseUrlMode: string;
+  baseUrlMode: "user_local_private" | "user_remote";
   baseUrlPlaceholder?: string;
   displayName: string;
   fixedBaseUrl?: string;
@@ -49,19 +49,16 @@ export function ProviderCreateForm({
     readChoiceDisplayName(initialChoice, { initialDisplayName, initialProviderKey }),
   );
   const [baseUrlValue, setBaseUrlValue] = useState(() =>
-    readChoiceBaseUrl(initialChoice, initialBaseUrl),
+    readChoiceBaseUrl(initialChoice, { initialBaseUrl, initialProviderKey }),
   );
   const choice = choices.find((item) => item.id === choiceId) ?? initialChoice;
   const visibleChoices = choices.filter((item) => item.groupId === activeGroupId);
-  const isLocal = choice.baseUrlMode === "user_local_private";
-  const isSubscription = choice.providerType === "subscription";
-  const isDirectCreate = choice.baseUrlMode === "fixed_create";
   const selectChoice = (nextChoice: ProviderCreateChoice) => {
     setChoiceId(nextChoice.id);
     setDisplayNameValue(
       readChoiceDisplayName(nextChoice, { initialDisplayName, initialProviderKey }),
     );
-    setBaseUrlValue(readChoiceBaseUrl(nextChoice, initialBaseUrl));
+    setBaseUrlValue(readChoiceBaseUrl(nextChoice, { initialBaseUrl, initialProviderKey }));
   };
 
   return (
@@ -141,31 +138,25 @@ export function ProviderCreateForm({
       >
         {displayNameError}
       </p>
-      {isSubscription ? (
-        <input type="hidden" name="baseUrl" value={choice.fixedBaseUrl ?? ""} />
-      ) : (
-        <>
-          <label htmlFor="provider-base-url">Provider base URL</label>
-          <input
-            aria-describedby="provider-base-url-error"
-            aria-invalid={baseUrlError ? true : undefined}
-            className={baseUrlError ? "is-invalid" : undefined}
-            id="provider-base-url"
-            name={isDirectCreate || isLocal ? "baseUrl" : undefined}
-            onChange={(event) => setBaseUrlValue(event.target.value)}
-            placeholder={choice.baseUrlPlaceholder ?? choice.fixedBaseUrl ?? ""}
-            required={isDirectCreate || isLocal}
-            type="url"
-            value={baseUrlValue}
-          />
-          <p
-            className={baseUrlError ? "field-error is-visible" : "field-error"}
-            id="provider-base-url-error"
-          >
-            {baseUrlError}
-          </p>
-        </>
-      )}
+      <label htmlFor="provider-base-url">Provider base URL</label>
+      <input
+        aria-describedby="provider-base-url-error"
+        aria-invalid={baseUrlError ? true : undefined}
+        className={baseUrlError ? "is-invalid" : undefined}
+        id="provider-base-url"
+        name="baseUrl"
+        onChange={(event) => setBaseUrlValue(event.target.value)}
+        placeholder={choice.baseUrlPlaceholder ?? choice.fixedBaseUrl ?? ""}
+        required
+        type="url"
+        value={baseUrlValue}
+      />
+      <p
+        className={baseUrlError ? "field-error is-visible" : "field-error"}
+        id="provider-base-url-error"
+      >
+        {baseUrlError}
+      </p>
       <button type="submit">
         <span>Create</span>
       </button>
@@ -182,8 +173,13 @@ function readChoiceDisplayName(
     : choice.displayName;
 }
 
-function readChoiceBaseUrl(choice: ProviderCreateChoice, initialBaseUrl: string): string {
-  return choice.baseUrlMode === "user_local_private" ? initialBaseUrl : (choice.fixedBaseUrl ?? "");
+function readChoiceBaseUrl(
+  choice: ProviderCreateChoice,
+  input: { initialBaseUrl: string; initialProviderKey: string },
+): string {
+  return choice.providerKey === input.initialProviderKey && input.initialBaseUrl
+    ? input.initialBaseUrl
+    : choice.fixedBaseUrl || choice.baseUrlPlaceholder || "";
 }
 
 function buildChoiceGroups(choices: ProviderCreateChoice[]): Array<{ id: string; label: string }> {

@@ -146,24 +146,15 @@ describe("gateway fallback health", () => {
         statusCode: 503,
       },
     ]);
-    expect(recordHealthEvent).toHaveBeenCalledTimes(2);
-    expect(recordHealthEvent).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
+    expect(recordHealthEvent).toHaveBeenCalledOnce();
+    expect(recordHealthEvent).toHaveBeenCalledWith({
+      event: expect.objectContaining({
         providerId: "provider-1",
         status: "unhealthy",
         trigger: "request_path",
       }),
-    );
-    expect(recordHealthEvent).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        providerId: "provider-1",
-        providerModelId: "pm-1",
-        status: "unhealthy",
-        trigger: "request_path",
-      }),
-    );
+      providerModelId: "pm-1",
+    });
   });
 
   it("falls back for any Provider HTTP 400 without polluting provider health", async () => {

@@ -1,6 +1,6 @@
 # LLMIngress Current State
 
-Updated: 2026-07-11
+Updated: 2026-07-12
 Branch: `codex/high-priority-hardening`
 
 ## Product Scope
@@ -51,12 +51,15 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Gateway Provider dispatch now strips browser `Origin`, `Referer`, browser `User-Agent`, and all `Sec-*` headers while preserving protocol headers. The Claude Code Subscription adapter retains `anthropic-dangerous-direct-browser-access: true` because the official Claude Code CLI sends it; removing the forwarded browser Origin fixes the Organization CORS rejection without changing Subscription identity.
 - Console mutation forms now submit with same-origin fetch and keep API failures in the current screen or dialog. Structured errors with a field render as red text beside that input; Provider delete races and other operation-level conflicts render inline instead of navigating to raw JSON.
 - Provider relative timestamps use one server-generated reference timestamp, removing the `49 min ago` / `50 min ago` hydration mismatch. Virtual Model deletion now checks only Agent default/grant usage and transactionally retires its owned Route Policy.
+- Provider API-key and Subscription templates now expose editable base URLs with HTTPS/loopback validation, while OAuth issuer/token endpoints remain fixed. API-key persistence rejects non-API-key Providers before creating key/config/job rows.
+- Every Provider probe now runs as one composite model-refresh handler: Provider HTTP completes first, then one short transaction revalidates the Provider/credential snapshot and atomically commits model changes plus Provider/model health. Legacy connectivity jobs call the same handler, Job-ID retries are idempotent, and Gateway paired health writes use the same atomic DB API.
+- Provider API models are no longer filtered when both context and price are unknown. They remain available for chat-compatible probes and render as `Unknown` in the Console.
 
 ## Verification
 
-Final 2026-07-12 result: migration check passed, `pnpm run verify` passed with 61 test files
-and 313 tests, and `pnpm run verify:features` re-verified all 9 milestones. Coverage is 48.01%
-statements, 48.17% lines, 40.50% branches, and 50.87% functions.
+Final 2026-07-12 result: `pnpm run verify` passed with 62 test files and 317 tests,
+and `pnpm run verify:features` re-verified all 9 milestones. Coverage is 47.98%
+statements, 48.13% lines, 40.33% branches, and 50.54% functions.
 
 Database-backed checks use:
 

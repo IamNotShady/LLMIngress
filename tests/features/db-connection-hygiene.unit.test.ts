@@ -5,7 +5,6 @@ const pooledModules = [
   "packages/db/src/providers.ts",
   "packages/db/src/provider-jobs.ts",
   "packages/worker-runtime/src/worker-model-refresh.ts",
-  "packages/worker-runtime/src/worker-provider-connectivity-check.ts",
 ];
 
 describe("db connection hygiene", () => {
@@ -19,7 +18,7 @@ describe("db connection hygiene", () => {
     for (const file of pooledModules) {
       const source = readFileSync(file, "utf8");
       expect(source, file).not.toMatch(/\bwithPostgresClient\(/);
-      expect(source, file).toContain("withPooledPostgresClient");
+      expect(source, file).toMatch(/with(?:PooledPostgresClient|PostgresTransaction)/);
     }
   });
 

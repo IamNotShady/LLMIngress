@@ -205,11 +205,15 @@ test("successful connectivity probe restores the selected provider model health"
 
     const handler = createProviderConnectivityCheckJobHandler({
       databaseUrl: fixture.databaseUrl,
-      fetch: async () =>
-        new Response(JSON.stringify({ choices: [{ message: { content: "pong" } }] }), {
-          headers: { "content-type": "application/json" },
-          status: 200,
-        }),
+      fetch: async (url) =>
+        String(url).endsWith("/models")
+          ? Response.json({ data: [{ id: "gpt-health" }] })
+          : new Response(JSON.stringify({ choices: [{ message: { content: "pong" } }] }), {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            }),
+      modelPriceSource: async () => [],
+      modelRegistrySource: async () => [],
       masterKeySource: { kind: "inline", value: "test-master-key" },
     });
     await handler({

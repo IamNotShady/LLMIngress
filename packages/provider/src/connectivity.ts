@@ -307,12 +307,7 @@ type ProbeModelRank = {
 };
 
 function isEligibleProbeModel(candidate: ProviderProbeModelCandidate): boolean {
-  return (
-    typeof candidate.contextWindow === "number" &&
-    Number.isFinite(candidate.contextWindow) &&
-    candidate.contextWindow > 0 &&
-    !isObviouslyNonChatModel(candidate.modelId)
-  );
+  return !isObviouslyNonChatModel(candidate.modelId);
 }
 
 function rankProbeModel(candidate: ProviderProbeModelCandidate): ProbeModelRank {

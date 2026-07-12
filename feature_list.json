@@ -12,11 +12,11 @@
     {
       "id": "provider-model-management",
       "name": "Provider Model Management",
-      "description": "Provider credentials, OAuth, connectivity, model discovery, capability synchronization, manual overrides, dependency guards, and price synchronization remain supported.",
-      "verification": "pnpm exec vitest run tests/features/provider-model-capability-sync.unit.test.ts tests/features/console-provider-dependency-guard.unit.test.ts tests/features/provider-authenticated-http-safety.unit.test.ts && pnpm test:e2e tests/e2e/provider-model-capability-sync.e2e.spec.ts tests/e2e/console-provider-dependency-guard.e2e.spec.ts tests/e2e/provider-authenticated-http-safety.e2e.spec.ts",
+      "description": "Provider credentials, editable API roots, OAuth, composite model-refresh probes, atomic Provider/model health, complete Provider-listed model discovery, manual overrides, dependency guards, and price synchronization remain supported.",
+      "verification": "pnpm exec vitest run tests/features/provider-probe-lifecycle.unit.test.ts tests/features/provider-model-capability-sync.unit.test.ts tests/features/console-provider-templates.unit.test.ts tests/features/console-provider-dependency-guard.unit.test.ts tests/features/provider-authenticated-http-safety.unit.test.ts && pnpm test:e2e tests/e2e/provider-probe-lifecycle.e2e.spec.ts tests/e2e/provider-model-capability-sync.e2e.spec.ts tests/e2e/console-provider-dependency-guard.e2e.spec.ts tests/e2e/provider-authenticated-http-safety.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-11: Provider/model sync preserves Provider API > models.dev > OpenRouter > LiteLLM > Vercel priority, removes conflict-to-unknown calculation, and a successful connectivity probe restores both Provider and selected-model health. Focused unit and database E2E coverage pass."
+      "evidence": "2026-07-12: Remote API-key and Subscription base URLs are editable with server-side URL/type validation. Every probe refreshes the Provider model list and performs remote I/O before one short transaction atomically commits models plus Provider/model health. Unknown-context/unpriced Provider-listed models remain visible, stale snapshots do not commit, and Job-ID retries are idempotent. Focused unit/database E2E, pnpm run verify (62 files/317 tests), and all 9 feature regressions pass."
     },
     {
       "id": "virtual-model-routing",

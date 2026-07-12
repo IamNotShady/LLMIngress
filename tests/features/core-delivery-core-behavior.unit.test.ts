@@ -7,16 +7,10 @@ import {
   normalizeVirtualModelFormInput,
 } from "@llmingress/db/console-virtual-models";
 import type { ListedProviderModel } from "@llmingress/provider/model-list";
-import type {
-  ProviderModelRegistryEntry,
-  ProviderModelSyncedPrice,
-} from "@llmingress/provider/price-source";
+import type { ProviderModelRegistryEntry } from "@llmingress/provider/price-source";
 import {
-  buildChainedConnectivityCheckJobPayload,
   buildChainedPriceSyncJobPayload,
   enrichListedProviderModels,
-  filterRefreshableListedProviderModels,
-  isUnfinishedChainedConnectivityCheckStatus,
   isUnfinishedChainedPriceSyncStatus,
   planProviderModelRefresh,
 } from "@llmingress/worker-runtime/worker-model-refresh";
@@ -188,7 +182,7 @@ describe("core delivery behavior coverage", () => {
     expect(plan.routingVisibleChanges).toHaveLength(2);
   });
 
-  it("enriches and filters synced models while building deterministic chained jobs", () => {
+  it("enriches synced models while building deterministic chained jobs", () => {
     const syncedAt = new Date("2026-01-02T03:04:05.000Z");
     const registry: ProviderModelRegistryEntry[] = [
       {
@@ -220,30 +214,6 @@ describe("core delivery behavior coverage", () => {
     });
     expect(enriched[1]).toEqual(listed("unknown"));
 
-    const prices: ProviderModelSyncedPrice[] = [
-      {
-        cachedInputUsdPerMillionTokens: null,
-        inputUsdPerMillionTokens: 1,
-        modelId: "priced",
-        outputUsdPerMillionTokens: 2,
-        priceVersion: "v1",
-        providerKey: "openai",
-        source: "models.dev",
-        sourceUrl: "https://models.dev",
-        syncedAt,
-      },
-    ];
-    expect(
-      filterRefreshableListedProviderModels({
-        listedModels: [
-          listed("context", { contextWindow: 4096 }),
-          listed("priced"),
-          listed("missing"),
-        ],
-        providerKey: "openai",
-        syncedPrices: prices,
-      }).map((model) => model.modelId),
-    ).toEqual(["context", "priced"]);
     expect(
       buildChainedPriceSyncJobPayload({
         listedModels: [listed("b"), listed("a"), listed("b")],
@@ -256,17 +226,10 @@ describe("core delivery behavior coverage", () => {
       providerKey: "openai",
       source: "model_refresh",
     });
-    expect(buildChainedConnectivityCheckJobPayload({ providerId: "provider-1" })).toEqual({
-      providerId: "provider-1",
-      source: "model_refresh",
-    });
     expect(["pending", "running", "complete"].map(isUnfinishedChainedPriceSyncStatus)).toEqual([
       true,
       true,
       false,
     ]);
-    expect(
-      ["pending", "running", "failed"].map(isUnfinishedChainedConnectivityCheckStatus),
-    ).toEqual([true, true, false]);
   });
 });

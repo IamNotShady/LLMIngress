@@ -1,4 +1,5 @@
 import { consoleValidationError } from "./console-operation-error.ts";
+import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
 import type { ProviderType } from "./console-providers.ts";
 
 export type OpenAICompatibleProviderTemplateId =
@@ -97,7 +98,7 @@ export type ProviderTemplateFormInput = {
 
 export type ProviderTemplateSelectorItem = {
   auth?: ProviderTemplateAuthBehavior;
-  baseUrlMode: "fixed_remote" | "user_local_private";
+  baseUrlMode: "user_local_private" | "user_remote";
   baseUrlPlaceholder?: string;
   displayName: string;
   endpoints: ProviderEndpoints;
@@ -404,27 +405,14 @@ export function normalizeProviderTemplateFormInput(
   }
 
   const template = readProviderTemplate(input.templateId);
-  if (template.providerType === "local") {
-    return normalizeLocalTemplateFormInput(template as LocalProviderTemplate, input.baseUrl);
-  }
-
-  if (!template.baseUrl) {
-    throw providerTemplateValidation("Provider must use a fixed provider template URL.");
-  }
-
-  const baseUrl = input.baseUrl?.trim();
-  if (baseUrl && normalizeUrl(baseUrl) !== normalizeUrl(template.baseUrl)) {
-    if (template.providerType === "subscription") {
-      throw providerTemplateValidation("Custom subscription endpoints are not allowed.");
-    }
-    throw providerTemplateValidation(
-      template.id === "google"
-        ? "Custom Gemini endpoints are not allowed."
-        : "Custom OpenAI-compatible endpoints are not allowed.",
-    );
-  }
-
-  return toCreateInput(template, template.baseUrl);
+  const baseUrl = normalizeProviderBaseUrl({
+    providerType: template.providerType,
+    value: input.baseUrl ?? template.baseUrl,
+  });
+  return {
+    ...toCreateInput(template, baseUrl),
+    providerTemplateId: template.id,
+  };
 }
 
 export function isKnownProviderTemplateKey(providerKey: string): boolean {
@@ -440,24 +428,6 @@ export function listProviderTemplateEndpointProtocols(
   return Object.keys(readProviderTemplate(templateId).endpoints) as ProviderEndpointProtocol[];
 }
 
-function normalizeLocalTemplateFormInput(
-  template: LocalProviderTemplate,
-  rawBaseUrl: string | null | undefined,
-): ProviderTemplateCreateInput {
-  const baseUrl = rawBaseUrl?.trim();
-
-  if (!baseUrl) {
-    throw providerTemplateValidation(`${template.displayName} base URL is required.`);
-  }
-
-  readHttpUrl(baseUrl);
-
-  return {
-    ...toCreateInput(template, normalizeUrl(baseUrl)),
-    providerTemplateId: template.id,
-  };
-}
-
 function readProviderTemplate(id: ProviderTemplateId): ProviderTemplate {
   const template = providerTemplates[id];
   return {
@@ -471,7 +441,7 @@ function readProviderTemplate(id: ProviderTemplateId): ProviderTemplate {
 function toSelectorItem(template: ProviderTemplate): ProviderTemplateSelectorItem {
   return omitUndefined({
     auth: template.auth ? { ...template.auth } : undefined,
-    baseUrlMode: template.providerType === "local" ? "user_local_private" : "fixed_remote",
+    baseUrlMode: template.providerType === "local" ? "user_local_private" : "user_remote",
     baseUrlPlaceholder: template.baseUrlPlaceholder,
     displayName: template.displayName,
     endpoints: copyEndpoints(template.endpoints),
@@ -525,32 +495,6 @@ function copyEndpoints(endpoints: ProviderEndpoints): ProviderEndpoints {
       endpoint ? { ...endpoint } : endpoint,
     ]),
   ) as ProviderEndpoints;
-}
-
-function readHttpUrl(value: string): URL {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw providerTemplateValidation("Provider base URL must be a valid URL.");
-  }
-
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw providerTemplateValidation("Provider base URL must use http or https.");
-  }
-
-  return url;
-}
-
-function normalizeUrl(value: string): string {
-  const url = readHttpUrl(value);
-  const pathname =
-    url.pathname === "/"
-      ? ""
-      : url.pathname.length > 1 && url.pathname.endsWith("/")
-        ? url.pathname.slice(0, -1)
-        : url.pathname;
-  return `${url.origin}${pathname}${url.search}`;
 }
 
 function providerTemplateValidation(message: string) {

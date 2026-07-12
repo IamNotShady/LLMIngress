@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
-import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   consoleConflictError,
   consoleNotFoundError,
   consoleValidationError,
 } from "./console-operation-error.ts";
+import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
 import {
   isKnownProviderTemplateKey,
   type ProviderTemplateCreateInput,
@@ -80,7 +80,6 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
   const providerKey = input.providerKey?.trim().toLowerCase();
   const displayName = input.displayName?.trim();
   const providerType = input.providerType?.trim();
-  const baseUrl = input.baseUrl?.trim() || null;
 
   if (!providerKey) {
     throw consoleValidationError("Provider key is required.", "provider_key_required", {
@@ -130,10 +129,7 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
     );
   }
 
-  if (baseUrl) {
-    assertUrl(baseUrl);
-    assertProviderBaseUrlAllowed(providerKey, providerType, baseUrl);
-  }
+  const baseUrl = normalizeProviderBaseUrl({ providerType, value: input.baseUrl });
 
   return {
     baseUrl,
@@ -281,9 +277,8 @@ export async function updateProvider(input: {
   databaseUrl?: string;
   displayName: string;
   id: string;
-}): Promise<ConsoleProvider> {
+}): Promise<{ baseUrlChanged: boolean; provider: ConsoleProvider }> {
   const displayName = input.displayName.trim();
-  const baseUrl = input.baseUrl?.trim() || null;
   if (!displayName) {
     throw consoleValidationError(
       "Provider display name is required.",
@@ -293,11 +288,9 @@ export async function updateProvider(input: {
       },
     );
   }
-  if (baseUrl) {
-    assertUrl(baseUrl);
-  }
 
   let provider: ConsoleProvider | undefined;
+  let baseUrlChanged = false;
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
@@ -324,7 +317,11 @@ export async function updateProvider(input: {
           )
         ).rows[0],
       );
-      const nextBaseUrl = resolveUpdatedBaseUrl(existing, baseUrl);
+      const nextBaseUrl = normalizeProviderBaseUrl({
+        providerType: existing.provider_type,
+        value: input.baseUrl,
+      });
+      baseUrlChanged = nextBaseUrl !== existing.base_url;
       const result = await client.query<ProviderRow>(
         `
           update providers
@@ -347,7 +344,7 @@ export async function updateProvider(input: {
     },
   });
 
-  return requireSavedProvider(provider);
+  return { baseUrlChanged, provider: requireSavedProvider(provider) };
 }
 
 export async function setProviderEnabled(input: {
@@ -510,59 +507,6 @@ function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
   };
 }
 
-function resolveUpdatedBaseUrl(
-  existing: ProviderRow,
-  requestedBaseUrl: string | null,
-): string | null {
-  if (existing.provider_template_id) {
-    if (requestedBaseUrl && requestedBaseUrl !== existing.base_url) {
-      throw consoleValidationError(
-        "Template provider base URL cannot be changed.",
-        "provider_template_base_url_immutable",
-        { providerId: existing.id },
-      );
-    }
-
-    return existing.base_url;
-  }
-
-  if (requestedBaseUrl) {
-    assertProviderBaseUrlAllowed(existing.provider_key, existing.provider_type, requestedBaseUrl);
-  }
-
-  return requestedBaseUrl;
-}
-
-function assertProviderBaseUrlAllowed(
-  providerKey: string,
-  providerType: ProviderType,
-  baseUrl: string,
-): void {
-  if (providerType === "local") {
-    return;
-  }
-
-  const fixedBaseUrl = resolveProviderDescriptor(providerKey).fixedApiKeyBaseUrl;
-  if (fixedBaseUrl && normalizeUrlForComparison(baseUrl) === fixedBaseUrl) {
-    return;
-  }
-
-  throw consoleValidationError(
-    "Custom OpenAI-compatible endpoints are not allowed.",
-    "provider_base_url_not_allowed",
-    { providerKey },
-  );
-}
-
-function normalizeUrlForComparison(value: string): string {
-  const url = new URL(value);
-  const pathname =
-    url.pathname.length > 1 && url.pathname.endsWith("/")
-      ? url.pathname.slice(0, -1)
-      : url.pathname;
-  return `${url.origin}${pathname}`;
-}
-
 function requireRow(row: ProviderRow | undefined): ProviderRow {
   if (!row) {
     throw consoleNotFoundError("Provider was not found.", "provider_not_found");
@@ -579,20 +523,6 @@ function requireSavedProvider(provider: ConsoleProvider | undefined): ConsolePro
 
 function isProviderType(value: string | undefined): value is ProviderType {
   return value === "api_key" || value === "local" || value === "subscription";
-}
-
-function assertUrl(value: string): void {
-  try {
-    new URL(value);
-  } catch {
-    throw consoleValidationError(
-      "Provider base URL must be a valid URL.",
-      "provider_base_url_invalid",
-      {
-        field: "baseUrl",
-      },
-    );
-  }
 }
 
 async function assertProviderKeyAvailable(

@@ -58,7 +58,7 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Agent creation now renders the selected/default Virtual Model name in the one-time connection dialog instead of `<Virtual Model Name>`. The Virtual Models search input now tolerates pre-hydration browser caret-color mutations without a hydration error.
 - Agent creation now requires an Allowed Virtual Model and atomically commits the Agent, API key, model grants, optional default, explicit Limits switch, and rules. Default choices follow the selected grants, while the one-time result shows the API key, Gateway URL, and platform-specific connection guidance.
 - Gateway now treats `agents.limits_enabled` as the sole Limits switch and performs no Limits database work while it is false. Disabling Limits preserves its rules. Agent Enable/Disable preserves the same API key and configuration, and the Agents list now shows Virtual Model names and Enabled state without the dynamic Status or Available VM columns.
-- Limits page rules and runtime KPIs now join through `agents` and include only rows where the Agent is enabled, Limits are enabled, and the Agent is not deleted. Agents management uses a separate saved-rules read so disabling Limits still preserves and restores its configuration.
+- Limits lists/KPIs include only active Agents with Limits enabled, while saved rules remain restorable; rows now expose Edit only, with delete UI removed.
 
 ## Verification
 

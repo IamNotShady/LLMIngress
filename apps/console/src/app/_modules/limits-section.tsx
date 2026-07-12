@@ -202,46 +202,6 @@ function LimitsConfigDialog({
   );
 }
 
-function LimitsDeleteDialog({
-  agent,
-  closeHref,
-}: {
-  agent: { id: string; name: string };
-  closeHref: string;
-}) {
-  return (
-    <ConsoleDialog
-      ariaLabelledby={`limits-delete-dialog-title-${agent.id}`}
-      className="console-dialog agent-delete-dialog"
-      closeHref={closeHref}
-      initialFocus="cancel"
-      triggerId={`limits-delete-${agent.id}-trigger`}
-    >
-      <div className="console-dialog-head">
-        <h2 id={`limits-delete-dialog-title-${agent.id}`}>Delete limit rules for {agent.name}?</h2>
-      </div>
-      <p>This removes every limit rule configured for this Agent API key.</p>
-      <div className="agent-delete-actions">
-        <a className="agent-delete-cancel" href={closeHref}>
-          <FlatIcon name="cancel" />
-          <span>Cancel</span>
-        </a>
-        <ConsoleMutationForm
-          action="/api/agent-limits"
-          fallbackError="Agent limit deletion failed."
-        >
-          <input type="hidden" name="action" value="deleteLimitRules" />
-          <input type="hidden" name="agentId" value={agent.id} />
-          <button className="agent-delete-confirm" type="submit">
-            <FlatIcon name="delete" />
-            <span>Delete</span>
-          </button>
-        </ConsoleMutationForm>
-      </div>
-    </ConsoleDialog>
-  );
-}
-
 function getAgentLimitRuntimeSnapshot(
   agentId: string,
   snapshotsByAgentId: Map<string, ConsoleAgentLimitRuntimeSnapshot>,
@@ -352,7 +312,6 @@ function formatInteger(value: number): string {
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
   const dialogAgentId = readSingleSearchParam(searchParams.limitDialog);
-  const deleteDialogAgentId = readSingleSearchParam(searchParams.limitDelete);
   const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
   const [agents, agentLimits, runtimeSnapshots, agentVirtualModelAccess] = await Promise.all([
     listAgents(),
@@ -415,10 +374,6 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
     ? getAgentLimitRuntimeSnapshot(dialogAgent.id, runtimeByAgentId)
     : null;
   const dialogCloseHref = buildQueryHref(searchParams, { limitDialog: undefined });
-  const deleteDialogAgent = deleteDialogAgentId
-    ? (agents.find((agent) => agent.id === deleteDialogAgentId) ?? null)
-    : null;
-  const deleteDialogCloseHref = buildQueryHref(searchParams, { limitDelete: undefined });
 
   return (
     <section className="limits-dashboard" aria-label="Limits">
@@ -537,29 +492,15 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                             </span>
                           </td>
                           <td className="limits-rule-action-cell">
-                            <span className="limits-rule-actions">
-                              <span className="agent-table-actions">
-                                <a
-                                  aria-label={`Edit ${row.agent.name}`}
-                                  className="link-button agent-action-edit row-action-button"
-                                  href={editHref}
-                                  id={`limits-edit-${row.agent.id}-trigger`}
-                                  title="Edit"
-                                >
-                                  <FlatIcon name="edit" />
-                                </a>
-                              </span>
+                            <span className="agent-table-actions">
                               <a
-                                aria-label={`Delete ${row.agent.name}`}
-                                className="limits-rule-delete-button row-action-button row-action-danger"
-                                href={buildQueryHref(searchParams, {
-                                  limitDelete: row.agent.id,
-                                  limitDialog: undefined,
-                                })}
-                                id={`limits-delete-${row.agent.id}-trigger`}
-                                title="Delete"
+                                aria-label={`Edit ${row.agent.name}`}
+                                className="link-button agent-action-edit row-action-button"
+                                href={editHref}
+                                id={`limits-edit-${row.agent.id}-trigger`}
+                                title="Edit"
                               >
-                                <FlatIcon name="delete" />
+                                <FlatIcon name="edit" />
                               </a>
                             </span>
                           </td>
@@ -581,9 +522,6 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
           allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(dialogAgent.id))}
           runtime={dialogRuntime ?? getEmptyAgentLimitRuntimeSnapshot(dialogAgent.id)}
         />
-      ) : null}
-      {deleteDialogAgent ? (
-        <LimitsDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
       ) : null}
     </section>
   );

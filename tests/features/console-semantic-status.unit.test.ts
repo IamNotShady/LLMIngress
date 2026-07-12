@@ -87,7 +87,7 @@ describe("console semantic status static contract", () => {
     expect(sections()).not.toContain('pill--danger pill">Disabled');
   });
 
-  test("row-level delete actions are quiet, destructive emphasis lives in dialogs", () => {
+  test("row-level destructive emphasis is limited to supported delete actions", () => {
     const stylesheet = css();
     expect(stylesheet).toMatch(
       /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*transparent/s,
@@ -95,24 +95,20 @@ describe("console semantic status static contract", () => {
     expect(stylesheet).not.toMatch(
       /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*var\(--danger\)/s,
     );
-    expect(stylesheet).toMatch(/\.limits-rule-delete-button\s*\{[^}]*background:\s*transparent/s);
+    expect(stylesheet).not.toContain(".limits-rule-delete-button");
     // The confirm dialog keeps the loud filled danger button.
     expect(stylesheet).toMatch(/\.agent-delete-confirm\s*\{[^}]*var\(--danger\)/s);
   });
 
-  test("limits row delete opens a confirm dialog instead of posting directly", () => {
+  test("limits rows expose edit without a delete action", () => {
     const source = sectionSource("limits-section.tsx");
-    expect(source).toContain("function LimitsDeleteDialog");
-    expect(source).toContain("limitDelete: row.agent.id");
-    // The rules table row itself no longer submits the delete form.
     const limitsSection = source.slice(
       source.indexOf("export async function LimitsSection"),
       source.length,
     );
-    expect(limitsSection).not.toContain('name="action" value="deleteLimitRules"');
-    // The dialog posts the same API action with an explicit confirm.
-    const deleteDialog = source.slice(source.indexOf("function LimitsDeleteDialog"));
-    expect(deleteDialog).toContain('name="action" value="deleteLimitRules"');
-    expect(deleteDialog).toContain("<ConsoleDialog");
+    expect(limitsSection).toContain("aria-label={`Edit ");
+    expect(source).not.toContain("function LimitsDeleteDialog");
+    expect(source).not.toContain("limitDelete");
+    expect(source).not.toContain("aria-label={`Delete ");
   });
 });

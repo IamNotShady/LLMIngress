@@ -2965,42 +2965,6 @@ button.table-row-link {
 .limits-rule-action-cell {
   text-align: right;
 }
-.limits-rule-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-xs);
-}
-.limits-rule-delete-button {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2rem;
-  padding: 0 var(--space-sm);
-  color: var(--danger-strong);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-weight: 800;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out),
-    box-shadow 0.15s var(--ease-out), transform 0.05s var(--ease-out);
-}
-.limits-rule-delete-button:hover {
-  background: var(--danger-soft);
-  border-color: var(--danger);
-}
-.limits-rule-delete-button:active {
-  transform: translateY(1px);
-}
-.limits-rule-delete-button:focus-visible {
-  outline: 2px solid var(--danger);
-  outline-offset: 2px;
-}
 .limits-status-pill {
   min-width: 4.3rem;
   justify-content: center;

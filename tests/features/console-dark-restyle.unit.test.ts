@@ -279,7 +279,7 @@ describe("console dark restyle static contract", () => {
     );
     const limitsDialog = sections.slice(
       sections.indexOf("function LimitsConfigDialog"),
-      sections.indexOf("function LimitsDeleteDialog"),
+      sections.indexOf("function getAgentLimitRuntimeSnapshot"),
     );
     const limitsActions = limitsDialog.slice(
       limitsDialog.indexOf('<div className="limits-config-actions">'),
@@ -291,6 +291,7 @@ describe("console dark restyle static contract", () => {
 
     expect(limitsSection).toContain("limitDialog: row.agent.id");
     expect(limitsSection).toContain('<FlatIcon name="edit" />');
+    expect(limitsSection).not.toContain('<FlatIcon name="delete" />');
     expect(limitsSection).toContain('className="agent-table-actions"');
     expect(limitsSection).toContain('className="link-button agent-action-edit row-action-button"');
     expect(limitsSection).not.toContain('className="table-action-link"');

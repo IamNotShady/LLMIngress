@@ -16,15 +16,15 @@ import { withProcessLock } from "../support/process-lock";
 
 // Seeds the states whose meaning the console previously miscolored: a 37.5%
 // failure rate (3 of 8 requests failed), an intentionally disabled provider,
-// and an agent with deletable limit rules.
+// and an enabled agent with visible limit rules.
 async function seedSemanticData(databaseUrl: string) {
   const agentId = randomUUID();
   const virtualModelId = randomUUID();
 
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, key_prefix, key_hash, enabled)
-       values ($1, 'semantic-probe-agent', 'llmi_semantic_probe', 'test-hash', true)`,
+      `insert into agents (id, name, key_prefix, key_hash, enabled, limits_enabled)
+       values ($1, 'semantic-probe-agent', 'llmi_semantic_probe', 'test-hash', true, true)`,
       [agentId],
     );
     await client.query(
@@ -147,21 +147,17 @@ test("console colors status by meaning and keeps destructive actions quiet but c
             "rgba(0, 0, 0, 0)",
           );
 
-          // --- Limits: row delete opens a confirm dialog; confirming removes
-          // the rules.
+          // --- Limits: rows retain edit as their only action.
           await page.goto(`${baseUrl}/limits`);
           const limitsRow = page.locator(".limits-rule-table tbody tr", {
             hasText: "semantic-probe-agent",
           });
           await expect(limitsRow).toHaveCount(1);
-          await page.getByRole("link", { name: "Delete semantic-probe-agent" }).click();
-          const confirmDialog = page.getByRole("dialog", {
-            name: /Delete .*semantic-probe-agent.*\?/,
-          });
-          await expect(confirmDialog).toBeVisible();
-          await confirmDialog.getByRole("button", { name: "Delete" }).click();
           await expect(
-            page.locator(".limits-rule-table tbody tr", { hasText: "semantic-probe-agent" }),
+            limitsRow.getByRole("link", { name: "Edit semantic-probe-agent" }),
+          ).toBeVisible();
+          await expect(
+            limitsRow.getByRole("link", { name: "Delete semantic-probe-agent" }),
           ).toHaveCount(0);
         } finally {
           await context.close();

@@ -3,6 +3,10 @@ import {
   createRoutePolicy,
   normalizeRoutePolicyFormInput,
 } from "@llmingress/db/console-route-policies";
+import {
+  createVirtualModelWithRoute,
+  normalizeVirtualModelFormInput,
+} from "@llmingress/db/console-virtual-models";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { createFakeProviderServer } from "../support/fake-provider";
@@ -16,7 +20,7 @@ import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
 const agentApiKey = "llmi_virtual_model_capability_contract_key";
 
-test("route policy save rejects incomplete and mismatched provider model capabilities", async () => {
+test("route policy save allows unknown and rejects mismatched provider model capabilities", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_vm_contract_console_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -49,9 +53,87 @@ test("route policy save rejects incomplete and mismatched provider model capabil
           virtualModelId: seeded.virtualModelId,
         }),
       }),
-    ).rejects.toMatchObject({
-      code: "route_policy_candidate_capability_incomplete",
+    ).resolves.toMatchObject({
+      virtualModelId: seeded.virtualModelId,
     });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("virtual model creation atomically requires and writes its route", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_vm_atomic_create_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const seeded = await seedRoutePolicyCapabilityData(fixture);
+    const versionBefore = await countRows(fixture, "config_versions");
+
+    await expect(
+      createVirtualModelWithRoute({
+        databaseUrl: fixture.databaseUrl,
+        routePolicy: {
+          endpointProtocol: "chat_completions",
+          providerModelIds: [],
+          strategy: "fixed",
+        },
+        virtualModel: normalizeVirtualModelFormInput({
+          description: "Atomic empty route",
+          name: "vm-atomic-empty",
+        }),
+      }),
+    ).rejects.toMatchObject({ code: "route_policy_candidates_required" });
+
+    await expect(
+      createVirtualModelWithRoute({
+        databaseUrl: fixture.databaseUrl,
+        routePolicy: {
+          endpointProtocol: "chat_completions",
+          providerModelIds: [seeded.completeModelId, seeded.mismatchedModelId],
+          strategy: "fixed",
+        },
+        virtualModel: normalizeVirtualModelFormInput({
+          description: "Atomic rollback route",
+          name: "vm-atomic-rollback",
+        }),
+      }),
+    ).rejects.toMatchObject({ code: "route_policy_candidate_capability_mismatch" });
+
+    expect(await countVirtualModelsByName(fixture, ["vm-atomic-empty", "vm-atomic-rollback"])).toBe(
+      0,
+    );
+    expect(await countRows(fixture, "config_versions")).toBe(versionBefore);
+
+    const created = await createVirtualModelWithRoute({
+      databaseUrl: fixture.databaseUrl,
+      routePolicy: {
+        endpointProtocol: "chat_completions",
+        providerModelIds: [seeded.completeModelId],
+        strategy: "cost_first",
+      },
+      virtualModel: normalizeVirtualModelFormInput({
+        description: "Atomic success route",
+        name: "vm-atomic-success",
+      }),
+    });
+
+    expect(created.routePolicy).toMatchObject({
+      endpointProtocol: "chat_completions",
+      strategy: "cost_first",
+      virtualModelId: created.virtualModel.id,
+    });
+    expect(created.routePolicy.candidates).toHaveLength(1);
+    expect(await countRows(fixture, "config_versions")).toBe(versionBefore + 1);
+    const latestVersion = await fixture.query<{ changes: Array<{ table: string }> }>(
+      "select changes from config_versions order by version desc limit 1",
+    );
+    expect(latestVersion.rows[0]?.changes.map((change) => change.table)).toEqual([
+      "virtual_models",
+      "route_policies",
+      "route_policy_candidates",
+    ]);
   } finally {
     await fixture.dispose();
   }
@@ -120,7 +202,81 @@ test("gateway rejects requests that exceed the Virtual Model capability contract
   }
 });
 
+test("gateway skips request checks for unknown Virtual Model capability fields", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_vm_contract_unknown_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const provider = await createFakeProviderServer();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await seedOpenAIGatewayRoute({
+      agentApiKey,
+      fixture,
+      providerBaseUrl: provider.url,
+      virtualModelName: "vm-contract-unknown",
+    });
+    await fixture.query(
+      `
+        update provider_models
+        set input_modalities = array['text']::text[],
+            output_modalities = array['text']::text[],
+            context_window = 8192,
+            max_output_tokens = 2048,
+            supports_function_calling = null,
+            supports_reasoning = false
+      `,
+    );
+
+    const gateway = startGatewayProcess({
+      databaseUrl: fixture.databaseUrl,
+      port: await getFreePort(),
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${gateway.port}`;
+      await waitForGateway(baseUrl, gateway);
+
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-contract-unknown",
+          tools: [{ function: { name: "lookup" }, type: "function" }],
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(provider.requests).toHaveLength(1);
+    } finally {
+      await stopGatewayProcess(gateway);
+    }
+  } finally {
+    await provider.close();
+    await fixture.dispose();
+  }
+});
+
 type Fixture = Awaited<ReturnType<typeof createTestPostgresFixture>>;
+
+async function countRows(fixture: Fixture, table: "config_versions"): Promise<number> {
+  const result = await fixture.query<{ count: number }>(
+    `select count(*)::integer as count from ${table}`,
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+async function countVirtualModelsByName(fixture: Fixture, names: string[]): Promise<number> {
+  const result = await fixture.query<{ count: number }>(
+    "select count(*)::integer as count from virtual_models where name = any($1::text[])",
+    [names],
+  );
+  return result.rows[0]?.count ?? 0;
+}
 
 async function seedRoutePolicyCapabilityData(fixture: Fixture): Promise<{
   completeModelId: string;

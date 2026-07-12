@@ -21,11 +21,11 @@
     {
       "id": "virtual-model-routing",
       "name": "Virtual Model Routing",
-      "description": "Virtual Models enforce one complete six-field capability contract and route with fixed, cost_first, or random ordering, health filtering, and fallback.",
-      "verification": "pnpm exec vitest run tests/features/virtual-model-capability-contract.unit.test.ts tests/features/virtual-model-endpoint-routing.unit.test.ts tests/features/gateway-fallback-health.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-capability-contract.e2e.spec.ts tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts tests/e2e/gateway-fallback-health.e2e.spec.ts",
+      "description": "Virtual Models are atomically created with one Route Policy and at least one candidate, reject conflicting known capability values while allowing unknowns, and route with fixed, input-plus-output cost_first, or random ordering, health filtering, unknown-price fallback, and fallback execution.",
+      "verification": "pnpm exec vitest run tests/features/virtual-model-capability-contract.unit.test.ts tests/features/virtual-model-endpoint-routing.unit.test.ts tests/features/gateway-fallback-health.unit.test.ts tests/features/refactor-route-strategy-registry.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-capability-contract.e2e.spec.ts tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts tests/e2e/gateway-fallback-health.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-12: Capability consistency, endpoint protocol selection, health filtering, and fallback behavior pass. Virtual Model deletion now blocks only Agent defaults/grants and transactionally retires the Virtual Model's owned Route Policy. Real Console E2E verifies route-owned deletion and inline duplicate-name errors."
+      "evidence": "2026-07-12: Virtual Model creation atomically requires a Route Policy and candidate. Known capability conflicts are rejected while unknown fields pass and skip only their Gateway pre-check. cost_first uses input-plus-output price, keeps unknown prices last, and records successful unknown-price JSON/Streaming requests as unavailable $0 cost. Focused 26 unit and 12 E2E checks, pnpm run verify (61 files/322 tests), and all 9 feature regressions pass."
     },
     {
       "id": "gateway-protocol-execution",

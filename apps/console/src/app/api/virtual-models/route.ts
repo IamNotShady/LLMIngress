@@ -4,7 +4,7 @@ import {
   updateRoutePolicy,
 } from "@llmingress/db/console-route-policies";
 import {
-  createVirtualModel,
+  createVirtualModelWithRoute,
   deleteVirtualModel,
   normalizeVirtualModelFormInput,
   updateVirtualModel,
@@ -20,31 +20,18 @@ export const POST = withConsoleAuth(async (request) => {
   const action = readText(form, "action");
 
   try {
-    if (action === "create") {
-      await createVirtualModel({
+    if (action === "createWithRoute") {
+      await createVirtualModelWithRoute({
+        routePolicy: {
+          endpointProtocol: readText(form, "endpointProtocol"),
+          providerModelIds: readTextValues(form, "providerModelIds"),
+          strategy: readText(form, "strategy"),
+        },
         virtualModel: normalizeVirtualModelFormInput({
           description: readText(form, "description"),
           name: readText(form, "name"),
         }),
       });
-    } else if (action === "createWithRoute") {
-      const virtualModel = await createVirtualModel({
-        virtualModel: normalizeVirtualModelFormInput({
-          description: readText(form, "description"),
-          name: readText(form, "name"),
-        }),
-      });
-      const providerModelIds = readTextValues(form, "providerModelIds");
-      if (providerModelIds.length > 0) {
-        await createRoutePolicy({
-          routePolicy: normalizeRoutePolicyFormInput({
-            endpointProtocol: readText(form, "endpointProtocol"),
-            providerModelIds,
-            strategy: readText(form, "strategy"),
-            virtualModelId: virtualModel.id,
-          }),
-        });
-      }
     } else if (action === "update") {
       await updateVirtualModel({
         id: readRequiredText(form, "id"),

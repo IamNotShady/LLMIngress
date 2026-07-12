@@ -85,6 +85,60 @@ describe("gateway settlement integrity", () => {
     });
   });
 
+  it("allows unknown-priced budget requests and records tokens with zero cost", async () => {
+    await withMigratedFixture(async (fixture) => {
+      const agentId = await seedAgent(fixture);
+      await seedAgentLimit(fixture, agentId, {
+        limitType: "budget",
+        limitValue: 10,
+        period: "day",
+        unit: "usd",
+      });
+
+      const unknownPrice = {
+        modelId: "unknown-price-model",
+        priceVersion: "test-unknown",
+        providerKey: "openai",
+        reason: "no_current_price" as const,
+        status: "unknown_price" as const,
+      };
+      const decision = await enforceGatewayAgentLimits({
+        agentId,
+        budgetPrice: unknownPrice,
+        databaseUrl: fixture.databaseUrl,
+        requestId: "req-budget-unknown-price",
+        requestMetadata: requestMetadata({ estimatedInputTokens: 100, estimatedOutputTokens: 100 }),
+      });
+
+      expect(decision.ok).toBe(true);
+      if (!decision.ok) {
+        return;
+      }
+      await recordGatewayBudgetUsage({
+        agentId,
+        budgetSettlement: decision.budgetSettlement,
+        databaseUrl: fixture.databaseUrl,
+        requestId: "req-budget-unknown-price",
+        usageCost: {
+          actualPrice: unknownPrice,
+          estimatedInputTokens: 100,
+          estimatedOutputTokens: 100,
+          providerModelId: randomUUID(),
+          providerUsage: {
+            cachedInputTokens: 0,
+            inputTokens: 120,
+            outputTokens: 80,
+            reasoningTokens: 0,
+          },
+        },
+      });
+
+      const row = await readLatestBudgetPeriod(fixture, agentId);
+      expect(Number(row?.cost_used_usd)).toBe(0);
+      expect(Number(row?.tokens_used)).toBe(200);
+    });
+  });
+
   it("ignores disabled budget limits for start checks and end accounting", async () => {
     await withMigratedFixture(async (fixture) => {
       const agentId = await seedAgent(fixture);

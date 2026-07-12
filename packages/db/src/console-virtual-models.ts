@@ -6,6 +6,12 @@ import {
   consoleNotFoundError,
   consoleValidationError,
 } from "./console-operation-error.ts";
+import {
+  type ConsoleRoutePolicy,
+  createRoutePolicyWithClient,
+  normalizeRoutePolicyFormInput,
+  type RoutePolicyFormInput,
+} from "./console-route-policies.ts";
 
 export type VirtualModelFormInput = {
   description?: string | null;
@@ -15,6 +21,13 @@ export type VirtualModelFormInput = {
 export type NormalizedVirtualModelFormInput = {
   description: string;
   name: string;
+};
+
+export type VirtualModelRouteFormInput = Omit<RoutePolicyFormInput, "virtualModelId">;
+
+export type CreatedVirtualModelWithRoute = {
+  routePolicy: ConsoleRoutePolicy;
+  virtualModel: ConsoleVirtualModel;
 };
 
 export type ConsoleVirtualModel = NormalizedVirtualModelFormInput & {
@@ -171,18 +184,29 @@ export async function listVirtualModelFallbackBreakdown(input: {
   });
 }
 
-export async function createVirtualModel(input: {
+export async function createVirtualModelWithRoute(input: {
   databaseUrl?: string;
+  routePolicy: VirtualModelRouteFormInput;
   virtualModel: NormalizedVirtualModelFormInput;
-}): Promise<ConsoleVirtualModel> {
+}): Promise<CreatedVirtualModelWithRoute> {
   const virtualModelId = randomUUID();
+  const routePolicyId = randomUUID();
+  const normalizedRoutePolicy = normalizeRoutePolicyFormInput({
+    ...input.routePolicy,
+    virtualModelId,
+  });
   let virtualModel: ConsoleVirtualModel | undefined;
+  let routePolicy: ConsoleRoutePolicy | undefined;
 
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
-    description: `Create virtual model ${input.virtualModel.name}`,
-    changes: [{ table: "virtual_models", recordId: virtualModelId }],
+    description: `Create virtual model ${input.virtualModel.name} with route`,
+    changes: [
+      { table: "virtual_models", recordId: virtualModelId },
+      { table: "route_policies", recordId: routePolicyId },
+      { table: "route_policy_candidates" },
+    ],
     write: async (client) => {
       await assertVirtualModelNameAvailable(client, input.virtualModel.name);
       const result = await client.query<VirtualModelRow>(
@@ -204,10 +228,18 @@ export async function createVirtualModel(input: {
         [virtualModelId, input.virtualModel.name, input.virtualModel.description],
       );
       virtualModel = rowToConsoleVirtualModel(requireRow(result.rows[0]));
+      routePolicy = await createRoutePolicyWithClient({
+        client,
+        routePolicy: normalizedRoutePolicy,
+        routePolicyId,
+      });
     },
   });
 
-  return requireSavedVirtualModel(virtualModel);
+  return {
+    routePolicy: requireSavedRoutePolicy(routePolicy),
+    virtualModel: requireSavedVirtualModel(virtualModel),
+  };
 }
 
 export async function updateVirtualModel(input: {
@@ -497,4 +529,11 @@ function requireSavedVirtualModel(
     throw new Error("Virtual Model was not saved.");
   }
   return virtualModel;
+}
+
+function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): ConsoleRoutePolicy {
+  if (!routePolicy) {
+    throw new Error("Virtual Model route policy was not saved.");
+  }
+  return routePolicy;
 }

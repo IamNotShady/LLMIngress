@@ -2,7 +2,6 @@ import { mapGatewayErrorStatus } from "./gateway-error-mapping.ts";
 
 export type GatewayErrorCode =
   | "cost_budget_exceeded"
-  | "cost_budget_price_unavailable"
   | "disabled_agent_api_key"
   | "invalid_agent_api_key"
   | "invalid_chat_request"
@@ -35,7 +34,6 @@ export type GatewayErrorBody = {
 
 const defaultGatewayErrorMessage: Record<GatewayErrorCode, string> = {
   cost_budget_exceeded: "Agent API key cost budget was exceeded.",
-  cost_budget_price_unavailable: "Cost budget enforcement requires a known model price.",
   disabled_agent_api_key: "Agent API key is disabled.",
   invalid_agent_api_key: "Agent API key is invalid.",
   invalid_chat_request: "Chat completion request must include at least one string-content message.",

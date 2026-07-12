@@ -77,6 +77,92 @@ test("gateway records streaming budget usage after EOF without reservations", as
   );
 });
 
+test("gateway records unknown-price JSON usage with zero cost", async () => {
+  await withSettlementGateway(
+    {
+      budgetLimitUsd: 1,
+      mode: "cached-usage",
+      priceKnown: false,
+      virtualModelName: "vm-settlement-unknown-json",
+    },
+    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-settlement-unknown-json",
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(fakeProvider.requests).toHaveLength(1);
+      await expect
+        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .toEqual({
+          costUsedUsd: 0,
+          tokensUsed: expectedActualTokens,
+        });
+      await expect
+        .poll(() => readLatestRequestCost(fixture))
+        .toEqual({
+          costSource: "unavailable",
+          inputCostUsd: 0,
+          outputCostUsd: 0,
+          priceSource: "unavailable",
+          totalCostUsd: 0,
+        });
+    },
+  );
+});
+
+test("gateway records unknown-price streaming usage with zero cost", async () => {
+  await withSettlementGateway(
+    {
+      budgetLimitUsd: 1,
+      mode: "stream&usage=chat&stream_end_ms=100",
+      priceKnown: false,
+      virtualModelName: "vm-settlement-unknown-stream",
+    },
+    async ({ agentApiKey, baseUrl, fakeProvider, fixture, seeded }) => {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        body: JSON.stringify({
+          messages: [{ content: "ping", role: "user" }],
+          model: "vm-settlement-unknown-stream",
+          stream: true,
+        }),
+        headers: {
+          authorization: `Bearer ${agentApiKey}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("[DONE]");
+      expect(fakeProvider.requests).toHaveLength(1);
+      await expect
+        .poll(() => readBudgetUsage(fixture, seeded.agentId))
+        .toEqual({
+          costUsedUsd: 0,
+          tokensUsed: expectedActualTokens,
+        });
+      await expect
+        .poll(() => readLatestRequestCost(fixture))
+        .toEqual({
+          costSource: "unavailable",
+          inputCostUsd: 0,
+          outputCostUsd: 0,
+          priceSource: "unavailable",
+          totalCostUsd: 0,
+        });
+    },
+  );
+});
+
 test("gateway rejects exceeded budgets before provider calls", async () => {
   await withSettlementGateway(
     { budgetLimitUsd: 0.000001, mode: "cached-usage", virtualModelName: "vm-budget-exceeded" },
@@ -116,6 +202,7 @@ async function withSettlementGateway(
   input: {
     budgetLimitUsd: number;
     mode: string;
+    priceKnown?: boolean;
     virtualModelName: string;
   },
   run: (context: SettlementGatewayContext) => Promise<void>,
@@ -134,16 +221,18 @@ async function withSettlementGateway(
       providerBaseUrl: `${fakeProvider.url}?mode=${input.mode}`,
       virtualModelName: input.virtualModelName,
     });
-    await fixture.query(
-      `
-        update provider_models
-        set manual_input_usd_per_million_tokens = 100,
-            manual_output_usd_per_million_tokens = 50,
-            manual_price_updated_at = now()
-        where id = $1
-      `,
-      [seeded.providerModelId],
-    );
+    if (input.priceKnown !== false) {
+      await fixture.query(
+        `
+          update provider_models
+          set manual_input_usd_per_million_tokens = 100,
+              manual_output_usd_per_million_tokens = 50,
+              manual_price_updated_at = now()
+          where id = $1
+        `,
+        [seeded.providerModelId],
+      );
+    }
     await fixture.query(
       `
         insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, enabled)
@@ -217,4 +306,42 @@ async function budgetReservationsTableExists(fixture: QueryableFixture): Promise
     `,
   );
   return result.rows[0]?.exists ?? false;
+}
+
+async function readLatestRequestCost(fixture: QueryableFixture): Promise<{
+  costSource: string;
+  inputCostUsd: number;
+  outputCostUsd: number;
+  priceSource: string;
+  totalCostUsd: number;
+} | null> {
+  const result = await fixture.query<{
+    cost_source: string;
+    input_cost_usd: string;
+    output_cost_usd: string;
+    price_source: string;
+    total_cost_usd: string;
+  }>(
+    `
+      select cost_source,
+             input_cost_usd::text,
+             output_cost_usd::text,
+             price_source,
+             total_cost_usd::text
+      from request_costs
+      order by created_at desc
+      limit 1
+    `,
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+  return {
+    costSource: row.cost_source,
+    inputCostUsd: Number(row.input_cost_usd),
+    outputCostUsd: Number(row.output_cost_usd),
+    priceSource: row.price_source,
+    totalCostUsd: Number(row.total_cost_usd),
+  };
 }

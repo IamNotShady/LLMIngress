@@ -9,7 +9,8 @@ import {
 
 function pricedCandidate(input: {
   candidateOrder: number;
-  usdPerMillionTokens: number;
+  inputUsdPerMillionTokens: number;
+  outputUsdPerMillionTokens: number;
 }): RouteCandidate {
   const modelId = `model-${input.candidateOrder}`;
   return {
@@ -18,9 +19,9 @@ function pricedCandidate(input: {
     modelId,
     price: {
       currency: "USD",
-      inputUsdPerMillionTokens: input.usdPerMillionTokens,
+      inputUsdPerMillionTokens: input.inputUsdPerMillionTokens,
       modelId,
-      outputUsdPerMillionTokens: input.usdPerMillionTokens,
+      outputUsdPerMillionTokens: input.outputUsdPerMillionTokens,
       priceVersion: "test",
       providerKey: "openai",
       snapshotDate: "2026-01-01",
@@ -35,11 +36,38 @@ function pricedCandidate(input: {
   };
 }
 
+function unknownPriceCandidate(candidateOrder: number): RouteCandidate {
+  const modelId = `model-${candidateOrder}`;
+  return {
+    candidateOrder,
+    displayName: modelId,
+    modelId,
+    price: {
+      modelId,
+      priceVersion: "test",
+      providerKey: "openai",
+      reason: "no_current_price",
+      status: "unknown_price",
+    },
+    providerId: "provider-1",
+    providerKey: "openai",
+    providerModelId: `pm-${candidateOrder}`,
+  };
+}
+
 function policyWith(strategy: RoutePolicy["strategy"]): RoutePolicy {
   return {
     candidates: [
-      pricedCandidate({ candidateOrder: 1, usdPerMillionTokens: 1 }),
-      pricedCandidate({ candidateOrder: 2, usdPerMillionTokens: 10 }),
+      pricedCandidate({
+        candidateOrder: 1,
+        inputUsdPerMillionTokens: 1,
+        outputUsdPerMillionTokens: 10,
+      }),
+      pricedCandidate({
+        candidateOrder: 2,
+        inputUsdPerMillionTokens: 6,
+        outputUsdPerMillionTokens: 6,
+      }),
     ],
     id: "rp-1",
     strategy,
@@ -74,14 +102,49 @@ describe("refactor-route-strategy-registry", () => {
     );
   });
 
-  it("keeps cost_first behavior: cheapest first with estimated cost", () => {
+  it("orders cost_first by input plus output price without token weighting", () => {
     const result = select("cost_first");
     expect(result.chain.map((c) => c.candidateOrder)).toEqual([1, 2]);
     expect(result.decision?.routeReason.message).toBe(
       "cost_first route for vm selected cheapest eligible candidate 1.",
     );
-    expect(result.decision?.routeReason.estimatedCostUsd).toBeGreaterThan(0);
+    expect(result.decision?.routeReason.estimatedCostUsd).toBeUndefined();
     expect(result.decision?.routeReason.priceSource).toBe("manual_override");
+
+    const outputHeavy = selectRouteAttempts({
+      estimatedInputTokens: 1,
+      estimatedOutputTokens: 1_000_000,
+      snapshot: { routePolicies: [policyWith("cost_first")] },
+      virtualModelName: "vm",
+    });
+    expect(outputHeavy.chain.map((candidate) => candidate.candidateOrder)).toEqual([1, 2]);
+  });
+
+  it("appends unknown prices in configured order after priced candidates", () => {
+    const routePolicy = policyWith("cost_first");
+    routePolicy.candidates = [
+      unknownPriceCandidate(1),
+      pricedCandidate({
+        candidateOrder: 2,
+        inputUsdPerMillionTokens: 2,
+        outputUsdPerMillionTokens: 2,
+      }),
+      unknownPriceCandidate(3),
+      pricedCandidate({
+        candidateOrder: 4,
+        inputUsdPerMillionTokens: 1,
+        outputUsdPerMillionTokens: 1,
+      }),
+    ];
+
+    const result = selectRouteAttempts({
+      estimatedInputTokens: 1_000,
+      estimatedOutputTokens: 1_000,
+      snapshot: { routePolicies: [routePolicy] },
+      virtualModelName: "vm",
+    });
+
+    expect(result.chain.map((candidate) => candidate.candidateOrder)).toEqual([4, 2, 1, 3]);
   });
 
   it("keeps random behavior deterministic under injected random", () => {

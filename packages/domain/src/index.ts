@@ -1,8 +1,4 @@
-import {
-  calculateTokenCostUsd,
-  type ModelTokenPrice,
-  type PricedModelTokenPrice,
-} from "@llmingress/billing/price-registry";
+import type { ModelTokenPrice, PricedModelTokenPrice } from "@llmingress/billing/price-registry";
 import { omitUndefined } from "@llmingress/util";
 
 export const routeEndpointProtocols = [
@@ -57,12 +53,12 @@ export type ResolvedProviderModelCapabilities = {
 };
 
 export type VirtualModelCapabilityContract = {
-  inputModalities: ModelInputModality[];
-  outputModalities: ModelOutputModality[];
-  maxContextTokens: number;
-  maxOutputTokens: number;
-  supportsFunctionCalling: boolean;
-  supportsReasoning: boolean;
+  inputModalities: ModelInputModality[] | null;
+  outputModalities: ModelOutputModality[] | null;
+  maxContextTokens: number | null;
+  maxOutputTokens: number | null;
+  supportsFunctionCalling: boolean | null;
+  supportsReasoning: boolean | null;
 };
 
 export type VirtualModelCapabilityContractCandidate = {
@@ -75,9 +71,7 @@ export type VirtualModelCapabilityContractCandidate = {
   supportsReasoning: boolean | null;
 };
 
-export type VirtualModelCapabilityContractErrorCode =
-  | "route_policy_candidate_capability_incomplete"
-  | "route_policy_candidate_capability_mismatch";
+export type VirtualModelCapabilityContractErrorCode = "route_policy_candidate_capability_mismatch";
 
 export type VirtualModelCapabilityContractResult =
   | {
@@ -170,59 +164,62 @@ export function resolveProviderModelCapabilities(input: {
 export function resolveVirtualModelCapabilityContract(
   candidates: readonly VirtualModelCapabilityContractCandidate[],
 ): VirtualModelCapabilityContractResult {
-  const contracts: Array<{
-    contract: VirtualModelCapabilityContract;
-    providerModelId: string;
-  }> = [];
-
-  for (const candidate of candidates) {
-    const contract = readVirtualModelCapabilityCandidateContract(candidate);
-    if (!contract.ok) {
-      return contract;
-    }
-    contracts.push({
-      contract: contract.contract,
-      providerModelId: candidate.id,
-    });
+  if (candidates.length === 0) {
+    throw new Error("Route policy requires at least one provider model.");
   }
 
-  const baseline = contracts[0];
-  if (!baseline) {
-    return {
-      code: "route_policy_candidate_capability_incomplete",
-      details: { fields: modelCapabilityFields, providerModelId: null },
-      message: "Route policy requires at least one provider model with complete capabilities.",
-      ok: false,
-    };
-  }
+  const contracts = candidates.map((candidate) => ({
+    contract: readVirtualModelCapabilityCandidateContract(candidate),
+    providerModelId: candidate.id,
+  }));
+  const resolved: VirtualModelCapabilityContract = { ...emptySyncedModelCapabilities };
 
-  for (const candidate of contracts.slice(1)) {
-    for (const field of modelCapabilityFields) {
-      if (!virtualModelCapabilityFieldEqual(baseline.contract[field], candidate.contract[field])) {
+  for (const field of modelCapabilityFields) {
+    let reference: (typeof contracts)[number] | undefined;
+    let hasUnknown = false;
+
+    for (const candidate of contracts) {
+      const value = candidate.contract[field];
+      if (value === null) {
+        hasUnknown = true;
+        continue;
+      }
+      if (!reference) {
+        reference = candidate;
+        continue;
+      }
+      if (!virtualModelCapabilityFieldEqual(reference.contract[field], value)) {
         return {
           code: "route_policy_candidate_capability_mismatch",
           details: {
-            referenceProviderModelId: baseline.providerModelId,
-            referenceValue: baseline.contract[field],
+            referenceProviderModelId: reference.providerModelId,
+            referenceValue: reference.contract[field],
             field,
             providerModelId: candidate.providerModelId,
-            value: candidate.contract[field],
+            value,
           },
           message: `Route policy candidate capabilities must match for ${field}.`,
           ok: false,
         };
       }
     }
+
+    setCapabilityField(
+      resolved,
+      field,
+      hasUnknown || !reference ? null : reference.contract[field],
+    );
   }
 
-  return { contract: baseline.contract, ok: true };
+  return { contract: resolved, ok: true };
 }
 
 export function validateVirtualModelRequestCapabilities(
   contract: VirtualModelCapabilityContract,
   request: VirtualModelRequestCapabilities,
 ): VirtualModelRequestCapabilityValidationResult {
-  const outputOverflow = request.estimatedOutputTokens > contract.maxOutputTokens;
+  const outputOverflow =
+    contract.maxOutputTokens !== null && request.estimatedOutputTokens > contract.maxOutputTokens;
   if (outputOverflow) {
     return virtualModelCapabilityMismatch("maxOutputTokens", {
       maxOutputTokens: contract.maxOutputTokens,
@@ -231,16 +228,16 @@ export function validateVirtualModelRequestCapabilities(
   }
 
   const totalTokens = request.estimatedInputTokens + request.estimatedOutputTokens;
-  if (totalTokens > contract.maxContextTokens) {
+  if (contract.maxContextTokens !== null && totalTokens > contract.maxContextTokens) {
     return virtualModelCapabilityMismatch("maxContextTokens", {
       maxContextTokens: contract.maxContextTokens,
       requestedTokens: totalTokens,
     });
   }
 
-  const unsupportedInputModalities = request.inputModalities.filter(
-    (modality) => !contract.inputModalities.includes(modality),
-  );
+  const unsupportedInputModalities = contract.inputModalities
+    ? request.inputModalities.filter((modality) => !contract.inputModalities?.includes(modality))
+    : [];
   if (unsupportedInputModalities.length > 0) {
     return virtualModelCapabilityMismatch("inputModalities", {
       supported: contract.inputModalities,
@@ -248,9 +245,9 @@ export function validateVirtualModelRequestCapabilities(
     });
   }
 
-  const unsupportedOutputModalities = request.outputModalities.filter(
-    (modality) => !contract.outputModalities.includes(modality),
-  );
+  const unsupportedOutputModalities = contract.outputModalities
+    ? request.outputModalities.filter((modality) => !contract.outputModalities?.includes(modality))
+    : [];
   if (unsupportedOutputModalities.length > 0) {
     return virtualModelCapabilityMismatch("outputModalities", {
       supported: contract.outputModalities,
@@ -258,13 +255,13 @@ export function validateVirtualModelRequestCapabilities(
     });
   }
 
-  if (request.usesFunctionCalling && !contract.supportsFunctionCalling) {
+  if (request.usesFunctionCalling && contract.supportsFunctionCalling === false) {
     return virtualModelCapabilityMismatch("supportsFunctionCalling", {
       supported: false,
     });
   }
 
-  if (request.usesReasoning && !contract.supportsReasoning) {
+  if (request.usesReasoning && contract.supportsReasoning === false) {
     return virtualModelCapabilityMismatch("supportsReasoning", {
       supported: false,
     });
@@ -344,8 +341,7 @@ export type RouteDecision = {
 
 type CostCandidate<TCandidate extends RouteCandidate = RouteCandidate> = {
   candidate: TCandidate;
-  estimatedCostUsd: number;
-  priceSource: PricedModelTokenPrice["source"];
+  combinedPriceUsdPerMillionTokens: number | null;
 };
 
 type CandidateEligibility<TCandidate extends RouteCandidate = RouteCandidate> = {
@@ -373,29 +369,37 @@ type RouteStrategyHandler = {
     candidates: TCandidate[],
     context: RouteStrategyContext,
   ) => TCandidate[];
-  usesEstimatedCost: boolean;
+  reportsSelectedPrice: boolean;
 };
 
 const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> = {
   cost_first: {
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
       `cost_first route for ${virtualModelName} selected cheapest eligible candidate ${selectedCandidateOrder}.`,
-    orderCandidates: (candidates, context) =>
-      buildCostCandidates(candidates, context)
+    orderCandidates: (candidates) =>
+      buildCostCandidates(candidates)
         .sort((a, b) => {
-          if (a.estimatedCostUsd !== b.estimatedCostUsd) {
-            return a.estimatedCostUsd - b.estimatedCostUsd;
+          if (a.combinedPriceUsdPerMillionTokens === null) {
+            return b.combinedPriceUsdPerMillionTokens === null
+              ? a.candidate.candidateOrder - b.candidate.candidateOrder
+              : 1;
+          }
+          if (b.combinedPriceUsdPerMillionTokens === null) {
+            return -1;
+          }
+          if (a.combinedPriceUsdPerMillionTokens !== b.combinedPriceUsdPerMillionTokens) {
+            return a.combinedPriceUsdPerMillionTokens - b.combinedPriceUsdPerMillionTokens;
           }
           return a.candidate.candidateOrder - b.candidate.candidateOrder;
         })
         .map((entry) => entry.candidate),
-    usesEstimatedCost: true,
+    reportsSelectedPrice: true,
   },
   fixed: {
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
       `fixed route for ${virtualModelName} selected configured candidate ${selectedCandidateOrder}.`,
     orderCandidates: (candidates) => candidates,
-    usesEstimatedCost: false,
+    reportsSelectedPrice: false,
   },
   random: {
     decisionMessage: ({ selectedCandidateOrder, virtualModelName }) =>
@@ -409,7 +413,7 @@ const routeStrategyHandlers: Record<RoutePolicyStrategy, RouteStrategyHandler> =
       }
       return shuffled;
     },
-    usesEstimatedCost: false,
+    reportsSelectedPrice: false,
   },
 };
 
@@ -484,12 +488,7 @@ export function selectRouteAttempts<TCandidate extends RouteCandidate>(
   const handler = routeStrategyHandlers[routePolicy.strategy];
   let estimatedCostUsd: number | undefined;
   let priceSource: PricedModelTokenPrice["source"] | undefined;
-  if (handler.usesEstimatedCost) {
-    const costResult = calculateTokenCostUsd(selectedCandidate.price, {
-      inputTokens: input.estimatedInputTokens,
-      outputTokens: input.estimatedOutputTokens,
-    });
-    estimatedCostUsd = costResult.status === "estimated" ? costResult.totalCostUsd : undefined;
+  if (handler.reportsSelectedPrice) {
     priceSource =
       selectedCandidate.price.status !== "unknown_price"
         ? selectedCandidate.price.source
@@ -544,27 +543,16 @@ function findRoutePolicy<TCandidate extends RouteCandidate>(
 
 function buildCostCandidates<TCandidate extends RouteCandidate>(
   candidates: TCandidate[],
-  input: { estimatedInputTokens: number; estimatedOutputTokens: number },
 ): CostCandidate<TCandidate>[] {
-  const result: CostCandidate<TCandidate>[] = [];
-  for (const candidate of candidates) {
-    if (candidate.price.status === "unknown_price") {
-      continue;
-    }
-    const cost = calculateTokenCostUsd(candidate.price, {
-      inputTokens: input.estimatedInputTokens,
-      outputTokens: input.estimatedOutputTokens,
-    });
-    if (cost.status !== "estimated") {
-      continue;
-    }
-    result.push({
+  return candidates.map((candidate) => {
+    return {
       candidate,
-      estimatedCostUsd: cost.totalCostUsd,
-      priceSource: candidate.price.source,
-    });
-  }
-  return result;
+      combinedPriceUsdPerMillionTokens:
+        candidate.price.status === "unknown_price"
+          ? null
+          : candidate.price.inputUsdPerMillionTokens + candidate.price.outputUsdPerMillionTokens,
+    };
+  });
 }
 
 function createDecision<TCandidate extends RouteCandidate>(input: {
@@ -752,46 +740,17 @@ function setCapabilityField(
 
 function readVirtualModelCapabilityCandidateContract(
   candidate: VirtualModelCapabilityContractCandidate,
-): VirtualModelCapabilityContractResult {
+): VirtualModelCapabilityContract {
   const inputModalities = normalizeModelInputModalities(candidate.inputModalities ?? undefined);
   const outputModalities = normalizeModelOutputModalities(candidate.outputModalities ?? undefined);
-  const incompleteFields = [
-    ...(inputModalities ? [] : ["inputModalities"]),
-    ...(outputModalities ? [] : ["outputModalities"]),
-    ...(candidate.maxContextTokens === null ? ["maxContextTokens"] : []),
-    ...(candidate.maxOutputTokens === null ? ["maxOutputTokens"] : []),
-    ...(candidate.supportsFunctionCalling === null ? ["supportsFunctionCalling"] : []),
-    ...(candidate.supportsReasoning === null ? ["supportsReasoning"] : []),
-  ];
-
-  if (incompleteFields.length > 0) {
-    return {
-      code: "route_policy_candidate_capability_incomplete",
-      details: {
-        fields: incompleteFields,
-        providerModelId: candidate.id,
-      },
-      message: `Route policy candidate ${candidate.id} has incomplete model capabilities.`,
-      ok: false,
-    };
-  }
-  if (!inputModalities || !outputModalities) {
-    throw new Error("Virtual Model capability modality normalization failed.");
-  }
 
   return {
-    contract: {
-      inputModalities,
-      maxContextTokens: readRequiredPositiveInteger(candidate.maxContextTokens, "maxContextTokens"),
-      maxOutputTokens: readRequiredPositiveInteger(candidate.maxOutputTokens, "maxOutputTokens"),
-      outputModalities,
-      supportsFunctionCalling: readRequiredBoolean(
-        candidate.supportsFunctionCalling,
-        "supportsFunctionCalling",
-      ),
-      supportsReasoning: readRequiredBoolean(candidate.supportsReasoning, "supportsReasoning"),
-    },
-    ok: true,
+    inputModalities,
+    maxContextTokens: candidate.maxContextTokens,
+    maxOutputTokens: candidate.maxOutputTokens,
+    outputModalities,
+    supportsFunctionCalling: candidate.supportsFunctionCalling,
+    supportsReasoning: candidate.supportsReasoning,
   };
 }
 
@@ -809,22 +768,6 @@ function virtualModelCapabilityMismatch(
     message: `Request exceeds Virtual Model capability contract for ${field}.`,
     ok: false,
   };
-}
-
-function readRequiredPositiveInteger(value: unknown, field: string): number {
-  const normalized = readOptionalPositiveInteger(value, field);
-  if (normalized === undefined) {
-    throw new Error(`${field} must be a positive integer.`);
-  }
-  return normalized;
-}
-
-function readRequiredBoolean(value: unknown, field: string): boolean {
-  const normalized = readOptionalBoolean(value, field);
-  if (normalized === undefined) {
-    throw new Error(`${field} must be a boolean.`);
-  }
-  return normalized;
 }
 
 function assertTokenEstimate(value: number, name: string): void {

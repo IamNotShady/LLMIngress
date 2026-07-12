@@ -16,7 +16,7 @@ const completeCandidate = {
 } as const;
 
 describe("virtual model capability contract", () => {
-  it("rejects candidates with unknown capability fields", () => {
+  it("allows unknown capability fields and keeps them unknown in the contract", () => {
     const result = resolveVirtualModelCapabilityContract([
       {
         ...completeCandidate,
@@ -25,10 +25,32 @@ describe("virtual model capability contract", () => {
     ]);
 
     expect(result).toMatchObject({
-      code: "route_policy_candidate_capability_incomplete",
+      contract: { supportsReasoning: null },
+      ok: true,
+    });
+  });
+
+  it("does not let unknown values hide conflicts between known candidates", () => {
+    const result = resolveVirtualModelCapabilityContract([
+      completeCandidate,
+      {
+        ...completeCandidate,
+        id: "candidate-unknown",
+        maxContextTokens: null,
+      },
+      {
+        ...completeCandidate,
+        id: "candidate-conflict",
+        maxContextTokens: 64_000,
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      code: "route_policy_candidate_capability_mismatch",
       details: {
-        fields: ["supportsReasoning"],
-        providerModelId: "candidate-a",
+        field: "maxContextTokens",
+        providerModelId: "candidate-conflict",
+        referenceProviderModelId: "candidate-a",
       },
       ok: false,
     });
@@ -93,6 +115,43 @@ describe("virtual model capability contract", () => {
     ).toMatchObject({
       code: "virtual_model_capability_mismatch",
       details: { field: "supportsFunctionCalling" },
+      ok: false,
+    });
+  });
+
+  it("skips request checks only for unknown contract fields", () => {
+    const contract: VirtualModelCapabilityContract = {
+      inputModalities: ["text"],
+      maxContextTokens: null,
+      maxOutputTokens: 1_024,
+      outputModalities: ["text"],
+      supportsFunctionCalling: null,
+      supportsReasoning: false,
+    };
+
+    expect(
+      validateVirtualModelRequestCapabilities(contract, {
+        estimatedInputTokens: 100_000,
+        estimatedOutputTokens: 512,
+        inputModalities: ["text"],
+        outputModalities: ["text"],
+        usesFunctionCalling: true,
+        usesReasoning: false,
+      }),
+    ).toEqual({ ok: true });
+
+    expect(
+      validateVirtualModelRequestCapabilities(contract, {
+        estimatedInputTokens: 1,
+        estimatedOutputTokens: 2_048,
+        inputModalities: ["text"],
+        outputModalities: ["text"],
+        usesFunctionCalling: true,
+        usesReasoning: false,
+      }),
+    ).toMatchObject({
+      code: "virtual_model_capability_mismatch",
+      details: { field: "maxOutputTokens" },
       ok: false,
     });
   });

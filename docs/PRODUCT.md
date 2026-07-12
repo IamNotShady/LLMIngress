@@ -63,8 +63,13 @@ The stable model capability contract contains:
 - function calling support
 - reasoning support
 
-All candidates in one Virtual Model must have complete and identical values for these
-fields. The Gateway rejects requests outside the contract before calling a Provider.
+Known values for these fields must be identical across candidates. Unknown values are allowed
+and cause Gateway to skip only that field's request pre-check. Virtual Model creation atomically
+requires one Route Policy and at least one candidate model.
+
+`cost_first` compares input price plus output price without request token weighting. Models with
+unknown prices remain at the end of the fallback chain. A successful unknown-price request records
+zero monetary cost with an unavailable price source while retaining its token usage.
 
 ## Agents and Limits
 

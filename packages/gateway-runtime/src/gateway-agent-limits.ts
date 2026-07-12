@@ -23,7 +23,6 @@ export type GatewayBudgetPeriod = Extract<AgentLimitPeriod, "day" | "hour" | "mo
 
 export type GatewayAgentLimitErrorCode =
   | "cost_budget_exceeded"
-  | "cost_budget_price_unavailable"
   | "rate_limit_exceeded"
   | "token_budget_exceeded";
 
@@ -361,8 +360,16 @@ async function evaluateBudgetLimits(
     return { ok: true };
   }
 
+  const period = getBudgetPeriodWindow(input.now, costLimit.period);
   if (!input.budgetPrice || input.budgetPrice.status === "unknown_price") {
-    return budgetFailure("cost_budget_price_unavailable", input.requestId);
+    return {
+      budgetSettlement: {
+        periodEnd: period.windowEnd,
+        periodStart: period.windowStart,
+        periodType: costLimit.period,
+      },
+      ok: true,
+    };
   }
 
   const estimate = calculateTokenCostUsd(input.budgetPrice, {
@@ -370,10 +377,9 @@ async function evaluateBudgetLimits(
     outputTokens: input.requestMetadata.estimatedOutputTokens,
   });
   if (estimate.status !== "estimated") {
-    return budgetFailure("cost_budget_price_unavailable", input.requestId);
+    throw new Error("Priced budget candidate cost could not be calculated.");
   }
 
-  const period = getBudgetPeriodWindow(input.now, costLimit.period);
   const currentCostUsd = await readCurrentBudgetPeriodCost(client, {
     agentId: input.agentId,
     period,
@@ -682,9 +688,6 @@ function isBudgetPeriod(period: string): period is GatewayBudgetPeriod {
 function budgetErrorMessage(code: Exclude<GatewayAgentLimitErrorCode, "rate_limit_exceeded">) {
   if (code === "token_budget_exceeded") {
     return "Agent API key token budget was exceeded.";
-  }
-  if (code === "cost_budget_price_unavailable") {
-    return "Agent API key cost budget requires a priced provider model.";
   }
   return "Agent API key cost budget was exceeded.";
 }

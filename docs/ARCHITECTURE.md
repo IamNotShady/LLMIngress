@@ -69,16 +69,22 @@ capabilities and prices, Virtual Models, Route Policies, candidates, and enabled
 One Virtual Model maps to one Route Policy. A policy contains an endpoint protocol, strategy,
 and ordered candidate models. Supported strategies are `fixed`, `cost_first`, and `random`.
 Candidate health is applied before ordering. The full ordered result is the fallback chain.
+Console creates a Virtual Model, its Route Policy, and at least one candidate in one transaction;
+the configuration API cannot create a new unroutable Virtual Model.
 
-Candidate models must share one complete six-field capability contract:
+Candidate models use an optimistic six-field capability contract:
 
 - input and output modalities
 - maximum context and output tokens
 - function calling
 - reasoning
 
-Console validates the contract transactionally on create/update. Gateway also validates
-historical configuration and request requirements before Provider execution.
+Console rejects only conflicting known values; unknown values are allowed. Gateway validates
+request requirements only for fields that are known across every candidate.
+
+`cost_first` orders healthy priced candidates by input price plus output price without request
+token weighting. Unknown-price candidates remain eligible at the end of the fallback chain.
+Successful unknown-price requests record zero monetary cost with an unavailable price source.
 
 ## Console Control Plane
 

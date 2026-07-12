@@ -118,11 +118,11 @@ export function buildGatewayUsageCostRecords(
     return {
       requestCost: {
         costSource: "unavailable",
-        inputCostUsd: null,
-        outputCostUsd: null,
+        inputCostUsd: 0,
+        outputCostUsd: 0,
         priceSource: "unavailable",
         priceVersion: input.actualPrice.priceVersion,
-        totalCostUsd: null,
+        totalCostUsd: 0,
       },
       requestUsage: usage,
     };

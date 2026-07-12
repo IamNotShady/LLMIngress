@@ -4,7 +4,6 @@ import type { GatewayErrorCode } from "./gateway-errors.ts";
 
 const gatewayErrorStatusByCode: Record<GatewayErrorCode, number> = {
   cost_budget_exceeded: 402,
-  cost_budget_price_unavailable: 402,
   disabled_agent_api_key: 401,
   invalid_agent_api_key: 401,
   invalid_chat_request: 400,

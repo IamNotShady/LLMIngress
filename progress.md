@@ -20,7 +20,8 @@ tool arguments.
 
 - Console pages: Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, Playground.
 - Route strategies: `fixed`, `cost_first`, `random`.
-- Virtual Model candidates must share the complete six-field capability contract.
+- Virtual Models atomically require a Route Policy and candidate; capabilities reject only known
+  conflicts, and `cost_first` uses input-plus-output price with unknown prices last.
 - Gateway exposes `/health/live`, `/health/ready`, and readiness-compatible `/health`.
 - Worker persistent jobs: `model_refresh`, `provider_connectivity_check`, `price_sync`.
 - Stale concurrency and retention run directly under PostgreSQL advisory locks and create no jobs.
@@ -61,11 +62,9 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 
 ## Verification
 
-Final 2026-07-12 result (after dead-code cleanup): `pnpm run verify` passed with 61
-test files and 318 tests, and `pnpm run verify:features` re-verified all 9 milestones.
-Coverage is 48.78% statements, 48.95% lines, 41.24% branches, and 51.87% functions.
-`verify:features` fails while a leftover `next dev` holds the Console dev lock; stop
-it and rerun.
+Final 2026-07-12 result: `pnpm run verify` passed with 61 files/322 tests and
+`pnpm run verify:features` passed all 9 milestones. Coverage is 49.03% statements,
+49.18% lines, 41.49% branches, and 52.15% functions.
 
 Database-backed checks use:
 

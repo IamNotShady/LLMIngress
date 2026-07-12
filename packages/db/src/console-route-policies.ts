@@ -197,12 +197,6 @@ type ProviderModelOptionRow = {
   supports_streaming?: boolean | null;
 };
 
-type BudgetedVirtualModelUsageRow = {
-  budgeted_agent_count: number;
-  display_name: string;
-  name: string;
-};
-
 type QueryClient = {
   query: <T = Record<string, unknown>>(
     text: string,
@@ -269,7 +263,7 @@ export function buildRoutePolicyWarnings(
   for (const candidate of candidates) {
     if (candidate.priceStatus === "unknown_price") {
       warnings.push(
-        `Price warning: ${candidate.optionLabel} has unknown price; save a manual price override before using budgeted routes.`,
+        `Price warning: ${candidate.optionLabel} has unknown price and is tried after priced candidates.`,
       );
     }
     if (candidate.availability !== "available") {
@@ -552,50 +546,61 @@ export async function createRoutePolicy(input: {
     description: `Create route policy ${input.routePolicy.virtualModelId}`,
     changes: [{ table: "route_policies", recordId: routePolicyId }],
     write: async (client) => {
-      await lockProvidersForProviderModels(client, input.routePolicy.providerModelIds);
-      await assertVirtualModelExists(client, input.routePolicy.virtualModelId);
-      await assertVirtualModelHasNoRoutePolicy(client, input.routePolicy.virtualModelId);
-      await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
-      await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
-      await assertRoutePolicyCandidateCapabilityContract(client, input.routePolicy);
-      await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
-
-      const result = await client.query<RoutePolicyRow>(
-        `
-          insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
-          values ($1, $2, $3, $4)
-          returning id::text,
-                    strategy,
-                    endpoint_protocol,
-                    virtual_model_id::text,
-                    (
-                      select name
-                      from virtual_models
-                      where virtual_models.id = route_policies.virtual_model_id
-                    ) as virtual_model_name,
-                    (
-                      select description
-                      from virtual_models
-                      where virtual_models.id = route_policies.virtual_model_id
-                    ) as virtual_model_display_name
-        `,
-        [
-          routePolicyId,
-          input.routePolicy.virtualModelId,
-          input.routePolicy.strategy,
-          input.routePolicy.endpointProtocol,
-        ],
-      );
-      const candidateRows = await writeRoutePolicyCandidates(
+      routePolicy = await createRoutePolicyWithClient({
         client,
+        routePolicy: input.routePolicy,
         routePolicyId,
-        input.routePolicy,
-      );
-      routePolicy = rowToConsoleRoutePolicy(requireRow(result.rows[0]), candidateRows);
+      });
     },
   });
 
   return requireSavedRoutePolicy(routePolicy);
+}
+
+export async function createRoutePolicyWithClient(input: {
+  client: QueryClient;
+  routePolicy: NormalizedRoutePolicyFormInput;
+  routePolicyId: string;
+}): Promise<ConsoleRoutePolicy> {
+  await lockProvidersForProviderModels(input.client, input.routePolicy.providerModelIds);
+  await assertVirtualModelExists(input.client, input.routePolicy.virtualModelId);
+  await assertVirtualModelHasNoRoutePolicy(input.client, input.routePolicy.virtualModelId);
+  await assertProviderModelsExist(input.client, input.routePolicy.providerModelIds);
+  await assertEndpointSupportedRoutePolicyCandidates(input.client, input.routePolicy);
+  await assertRoutePolicyCandidateCapabilityContract(input.client, input.routePolicy);
+
+  const result = await input.client.query<RoutePolicyRow>(
+    `
+      insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
+      values ($1, $2, $3, $4)
+      returning id::text,
+                strategy,
+                endpoint_protocol,
+                virtual_model_id::text,
+                (
+                  select name
+                  from virtual_models
+                  where virtual_models.id = route_policies.virtual_model_id
+                ) as virtual_model_name,
+                (
+                  select description
+                  from virtual_models
+                  where virtual_models.id = route_policies.virtual_model_id
+                ) as virtual_model_display_name
+    `,
+    [
+      input.routePolicyId,
+      input.routePolicy.virtualModelId,
+      input.routePolicy.strategy,
+      input.routePolicy.endpointProtocol,
+    ],
+  );
+  const candidateRows = await writeRoutePolicyCandidates(
+    input.client,
+    input.routePolicyId,
+    input.routePolicy,
+  );
+  return rowToConsoleRoutePolicy(requireRow(result.rows[0]), candidateRows);
 }
 
 export async function updateRoutePolicy(input: {
@@ -623,7 +628,6 @@ export async function updateRoutePolicy(input: {
       await assertProviderModelsExist(client, input.routePolicy.providerModelIds);
       await assertEndpointSupportedRoutePolicyCandidates(client, input.routePolicy);
       await assertRoutePolicyCandidateCapabilityContract(client, input.routePolicy);
-      await assertBudgetSafeRoutePolicyCandidates(client, input.routePolicy);
 
       const result = await client.query<RoutePolicyRow>(
         `
@@ -747,33 +751,6 @@ async function assertProviderModelsExist(
   }
 }
 
-async function assertBudgetSafeRoutePolicyCandidates(
-  client: QueryClient,
-  routePolicy: NormalizedRoutePolicyFormInput,
-): Promise<void> {
-  const budgetedUsage = await readBudgetedVirtualModelUsage(client, routePolicy.virtualModelId);
-  if (budgetedUsage.budgeted_agent_count === 0) {
-    return;
-  }
-
-  const candidates = await readProviderModelOptionsById(client, routePolicy.providerModelIds);
-  const unknownPriceCandidates = candidates.filter(
-    (candidate) => candidate.priceStatus === "unknown_price",
-  );
-  if (unknownPriceCandidates.length === 0) {
-    return;
-  }
-
-  const candidateLabels = unknownPriceCandidates
-    .map((candidate) => `${candidate.modelDisplayName} (${candidate.modelId})`)
-    .join(", ");
-  const modelLabel = `${budgetedUsage.display_name} (${budgetedUsage.name})`;
-  throw consoleValidationError(
-    `Cannot save Route Policy for ${modelLabel} because ${candidateLabels} has unknown price. Save a manual price override or choose a priced replacement.`,
-    "route_policy_candidate_unknown_price",
-  );
-}
-
 async function assertEndpointSupportedRoutePolicyCandidates(
   client: QueryClient,
   routePolicy: NormalizedRoutePolicyFormInput,
@@ -817,42 +794,6 @@ async function assertRoutePolicyCandidateCapabilityContract(
   }
 
   throw consoleValidationError(result.message, result.code, result.details);
-}
-
-async function readBudgetedVirtualModelUsage(
-  client: QueryClient,
-  virtualModelId: string,
-): Promise<BudgetedVirtualModelUsageRow> {
-  const result = await client.query<BudgetedVirtualModelUsageRow>(
-    `
-      select virtual_models.name,
-             virtual_models.description as display_name,
-             count(distinct agents.id) filter (where agent_limits.id is not null)::integer as budgeted_agent_count
-      from virtual_models
-      left join agents
-        on agents.enabled = true
-       and agents.deleted_at is null
-       and (
-            agents.default_virtual_model_id = virtual_models.id
-            or exists (
-              select 1
-              from agent_virtual_models
-              where agent_virtual_models.agent_id = agents.id
-                and agent_virtual_models.virtual_model_id = virtual_models.id
-            )
-       )
-      left join agent_limits
-        on agent_limits.agent_id = agents.id
-       and agent_limits.enabled = true
-       and agent_limits.limit_type = 'budget'
-       and agent_limits.unit = 'usd'
-      where virtual_models.id = $1
-        and virtual_models.deleted_at is null
-      group by virtual_models.id, virtual_models.name, virtual_models.description
-    `,
-    [virtualModelId],
-  );
-  return requireRow(result.rows[0]);
 }
 
 async function readProviderModelOptionsById(

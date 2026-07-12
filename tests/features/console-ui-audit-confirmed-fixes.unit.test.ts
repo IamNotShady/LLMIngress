@@ -72,7 +72,7 @@ describe("console UI audit confirmed fixes static contract", () => {
 
   test("stat labels describe the data they actually show", () => {
     const sourceText = consoleSectionSource();
-    expect(sourceText).toContain('label="Online"');
+    expect(sourceText).toContain('label="Enabled"');
     expect(sourceText).toContain('label="Cost 24h"');
     expect(sourceText).toContain('label="Failure rate total"');
     expect(sourceText).toContain('<th className="num">Failure rate total</th>');
@@ -83,6 +83,7 @@ describe("console UI audit confirmed fixes static contract", () => {
 
   test("agent forms use display labels and checkbox grants", () => {
     const sourceText = sectionSource("agents-section.tsx");
+    const virtualModelFields = sectionSource("agent-virtual-model-fields.tsx");
     const agentFormsSource = sourceText.slice(
       sourceText.indexOf("function AgentCreateDialog"),
       sourceText.indexOf("function AgentDeleteDialog"),
@@ -102,8 +103,9 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(agentFormsSource).toContain('<option value="day">Day</option>');
     expect(agentFormsSource).toContain('<option value="week">Week</option>');
     expect(agentFormsSource).toContain('<option value="month">Month</option>');
-    expect(agentFormsSource).toContain('type="checkbox"');
-    expect(agentFormsSource).toContain('name="allowedVirtualModelIds"');
+    expect(virtualModelFields).toContain('type="checkbox"');
+    expect(virtualModelFields).toContain('name="allowedVirtualModelIds"');
+    expect(virtualModelFields).toContain("selectedVirtualModelIds.has(virtualModel.id)");
     expect(agentFormsSource).not.toContain("multiple\n");
   });
 

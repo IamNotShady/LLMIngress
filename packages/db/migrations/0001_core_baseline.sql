@@ -67,6 +67,7 @@ CREATE TABLE public.agents (
     key_hash text,
     default_virtual_model_id uuid,
     enabled boolean DEFAULT true NOT NULL,
+    limits_enabled boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     integration_platform text DEFAULT 'other'::text NOT NULL,

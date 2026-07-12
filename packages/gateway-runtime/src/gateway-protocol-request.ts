@@ -3,7 +3,7 @@ import { createLogger } from "@llmingress/logging";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
-  enforceGatewayAgentLimits,
+  enforceGatewayAgentLimitsIfEnabled,
   type GatewayBudgetSettlement,
   type GatewayConcurrencyLease,
   releaseGatewayConcurrency,
@@ -98,6 +98,7 @@ export async function executeGatewayProtocolRequest<
   agentId: string;
   databaseUrl?: string;
   masterKeySource?: MasterKeySource;
+  limitsEnabled?: boolean;
   requestBody: unknown;
   requestId: string;
   protocol: RouteEndpointProtocol;
@@ -174,10 +175,11 @@ export async function executeGatewayProtocolRequest<
       masterKeySource: input.masterKeySource ?? readGatewayMasterKeySource(),
     });
 
-    const limits = await enforceGatewayAgentLimits({
+    const limits = await enforceGatewayAgentLimitsIfEnabled({
       agentId: input.agentId,
       budgetPrice: candidates[0]?.price,
       databaseUrl: input.databaseUrl,
+      limitsEnabled: input.limitsEnabled !== false,
       requestId: input.requestId,
       requestMetadata,
     });

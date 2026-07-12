@@ -1,7 +1,7 @@
 # LLMIngress Current State
 
 Updated: 2026-07-12
-Branch: `codex/high-priority-hardening`
+Branch: `dev`
 
 ## Product Scope
 
@@ -52,19 +52,19 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Gateway Provider dispatch now strips browser `Origin`, `Referer`, browser `User-Agent`, and all `Sec-*` headers while preserving protocol headers. The Claude Code Subscription adapter retains `anthropic-dangerous-direct-browser-access: true` because the official Claude Code CLI sends it; removing the forwarded browser Origin fixes the Organization CORS rejection without changing Subscription identity.
 - Console mutation forms now submit with same-origin fetch and keep API failures in the current screen or dialog. Structured errors with a field render as red text beside that input; Provider delete races and other operation-level conflicts render inline instead of navigating to raw JSON.
 - Provider relative timestamps use one server-generated reference timestamp, removing the `49 min ago` / `50 min ago` hydration mismatch. Virtual Model deletion now checks only Agent default/grant usage and transactionally retires its owned Route Policy.
-- Provider API-key and Subscription templates now expose editable base URLs with HTTPS/loopback validation, while OAuth issuer/token endpoints remain fixed. API-key persistence rejects non-API-key Providers before creating key/config/job rows.
 - Every Provider probe now runs as one composite model-refresh handler: Provider HTTP completes first, then one short transaction revalidates the Provider/credential snapshot and atomically commits model changes plus Provider/model health. Legacy connectivity jobs call the same handler, Job-ID retries are idempotent, and Gateway paired health writes use the same atomic DB API.
-- Provider API models are no longer filtered when both context and price are unknown. They remain available for chat-compatible probes and render as `Unknown` in the Console.
 - Console desktop navigation now uses a 280px sidebar with 15px labels. Activity and Limits share the same 1600px content boundary as Providers and Virtual Models, and Activity pagination now returns 20 requests per page.
 - Playground treats Temperature, Top P, and Max Tokens as optional request values. Clearing any of these inputs now omits the corresponding `temperature`, `top_p`, or `max_tokens` property instead of substituting a default and sending it to Gateway.
 - Agent creation now renders the selected/default Virtual Model name in the one-time connection dialog instead of `<Virtual Model Name>`. The Virtual Models search input now tolerates pre-hydration browser caret-color mutations without a hydration error.
-- Dead-code cleanup removed the Ollama adapter, `/api/route-policies`, 28 dead exports, the static price registry, branded IDs, and the legacy fallback timeline; shared helpers moved to `packages/util`. Kept for manual overrides pending re-wiring: `models-section.tsx` and the prices/capabilities override APIs.
+- Agent creation now requires an Allowed Virtual Model and atomically commits the Agent, API key, model grants, optional default, explicit Limits switch, and rules. Default choices follow the selected grants, while the one-time result shows the API key, Gateway URL, and platform-specific connection guidance.
+- Gateway now treats `agents.limits_enabled` as the sole Limits switch and performs no Limits database work while it is false. Disabling Limits preserves its rules. Agent Enable/Disable preserves the same API key and configuration, and the Agents list now shows Virtual Model names and Enabled state without the dynamic Status or Available VM columns.
 
 ## Verification
 
-Final 2026-07-12 result: `pnpm run verify` passed with 61 files/322 tests and
-`pnpm run verify:features` passed all 9 milestones. Coverage is 49.03% statements,
-49.18% lines, 41.49% branches, and 52.15% functions.
+Final 2026-07-12 result: focused Agent unit/database/Console E2E, isolated live-browser QA,
+`pnpm run db:migrate:check`, and `pnpm run verify` passed with 62 files/327 tests.
+All 9 milestones passed `pnpm run verify:features`. Coverage is 49.22% statements,
+49.37% lines, 41.84% branches, and 52.22% functions.
 
 Database-backed checks use:
 

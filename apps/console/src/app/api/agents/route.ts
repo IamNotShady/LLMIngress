@@ -1,16 +1,14 @@
+import { normalizeAgentLimitRulesInput } from "@llmingress/db/console-agent-limits";
 import {
-  deleteAgentLimitRules,
-  normalizeAgentLimitFormInput,
-  saveAgentLimitRules,
-} from "@llmingress/db/console-agent-limits";
-import {
-  type AgentVirtualModelAccess,
-  createAgent,
+  createAgentWithSettings,
   deleteAgent,
   normalizeAgentFormInput,
   normalizeAgentVirtualModelAccessFormInput,
+  normalizeAgentVirtualModelSelectionInput,
+  setAgentEnabled,
   updateAgent,
   updateAgentVirtualModelAccess,
+  updateAgentWithSettings,
 } from "@llmingress/db/console-agents";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
@@ -25,22 +23,25 @@ export const POST = withConsoleAuth(async (request) => {
 
   try {
     if (action === "create") {
-      const result = await createAgent({
-        agent: normalizeAgentFormInput({
-          integrationPlatform: readText(form, "integrationPlatform"),
-          name: readText(form, "name"),
-        }),
+      const limitsEnabled = readText(form, "enableLimits") === "true";
+      const agent = normalizeAgentFormInput({
+        integrationPlatform: readText(form, "integrationPlatform"),
+        name: readText(form, "name"),
       });
-      const access = await saveAgentRelatedSettings({
-        clearLimitsWhenDisabled: false,
-        form,
-        id: result.id,
-        saveLimits: readText(form, "enableLimits") === "true",
+      const result = await createAgentWithSettings({
+        agent,
+        limitRules: limitsEnabled ? readAgentLimitRules(form) : [],
+        limitsEnabled,
+        virtualModels: normalizeAgentVirtualModelSelectionInput({
+          allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
+          defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
+        }),
       });
       return renderOneTimeAgentResponse(
         {
           ...result,
-          virtualModelName: readAgentConnectionVirtualModelName(access),
+          integrationPlatform: agent.integrationPlatform,
+          virtualModelName: readAgentConnectionVirtualModelName(result.virtualModelAccess),
         },
         request.headers.get("accept")?.includes("application/json") ? "json" : "html",
       );
@@ -54,20 +55,26 @@ export const POST = withConsoleAuth(async (request) => {
       });
     } else if (action === "saveAll") {
       const id = readRequiredText(form, "id");
-      await updateAgent({
+      const limitsEnabled = readText(form, "enableLimits") === "true";
+      await updateAgentWithSettings({
         agent: normalizeAgentFormInput({
           integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
         }),
         id,
-      });
-      await saveAgentRelatedSettings({
-        clearLimitsWhenDisabled: true,
-        form,
-        id,
-        saveLimits: readText(form, "enableLimits") === "true",
+        limitRules: limitsEnabled ? readAgentLimitRules(form) : [],
+        limitsEnabled,
+        virtualModels: normalizeAgentVirtualModelSelectionInput({
+          allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
+          defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
+        }),
       });
       return redirectToConsolePath(`/agents?selected=${encodeURIComponent(id)}`);
+    } else if (action === "enable" || action === "disable") {
+      await setAgentEnabled({
+        enabled: action === "enable",
+        id: readRequiredText(form, "id"),
+      });
     } else if (action === "delete") {
       await deleteAgent({
         id: readRequiredText(form, "id"),
@@ -93,41 +100,20 @@ export const POST = withConsoleAuth(async (request) => {
   return redirectToConsolePath("/agents");
 });
 
-async function saveAgentRelatedSettings(input: {
-  clearLimitsWhenDisabled: boolean;
-  form: FormData;
-  id: string;
-  saveLimits: boolean;
-}): Promise<AgentVirtualModelAccess> {
-  const access = await updateAgentVirtualModelAccess({
-    access: normalizeAgentVirtualModelAccessFormInput({
-      allowedVirtualModelIds: readTextValues(input.form, "allowedVirtualModelIds"),
-      defaultVirtualModelId: readText(input.form, "defaultVirtualModelId") ?? null,
-      id: input.id,
-    }),
+function readAgentLimitRules(form: FormData) {
+  return normalizeAgentLimitRulesInput({
+    budgetPeriod: readRequiredText(form, "budgetPeriod"),
+    budgetUsd: readRequiredText(form, "budgetUsd"),
+    concurrency: readText(form, "concurrency") ?? null,
+    rpm: readRequiredText(form, "rpm"),
+    tokenLimit: readRequiredText(form, "tokenLimit"),
+    tpm: readRequiredText(form, "tpm"),
   });
-  if (!input.saveLimits) {
-    if (input.clearLimitsWhenDisabled) {
-      await deleteAgentLimitRules({
-        agentId: input.id,
-      });
-    }
-    return access;
-  }
-  await saveAgentLimitRules({
-    limits: normalizeAgentLimitFormInput({
-      agentId: input.id,
-      budgetPeriod: readRequiredText(input.form, "budgetPeriod"),
-      budgetUsd: readRequiredText(input.form, "budgetUsd"),
-      concurrency: readText(input.form, "concurrency") ?? null,
-      rpm: readRequiredText(input.form, "rpm"),
-      tokenLimit: readRequiredText(input.form, "tokenLimit"),
-      tpm: readRequiredText(input.form, "tpm"),
-    }),
-  });
-  return access;
 }
 
-function readAgentConnectionVirtualModelName(access: AgentVirtualModelAccess): string | null {
+function readAgentConnectionVirtualModelName(access: {
+  allowedVirtualModels: Array<{ name: string }>;
+  defaultVirtualModel: { name: string } | null;
+}): string | null {
   return access.defaultVirtualModel?.name ?? access.allowedVirtualModels[0]?.name ?? null;
 }

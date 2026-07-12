@@ -3,7 +3,6 @@ import {
   defaultAgentLimitFormValues,
 } from "@llmingress/db/console-agent-limits";
 import {
-  type AgentDerivedStatus,
   type AgentIntegrationPlatform,
   type AgentVirtualModelAccess,
   agentIntegrationPlatforms,
@@ -17,6 +16,7 @@ import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import { AgentCreateDialogClient } from "./agent-create-dialog-client";
+import { AgentVirtualModelFields } from "./agent-virtual-model-fields";
 import { loadAgentsSectionData } from "./agents-section-data";
 import {
   type ConsoleSearchParams,
@@ -50,10 +50,7 @@ function AgentViewDialog({
       triggerId={`agent-view-${agent.id}-trigger`}
     >
       <div className="console-dialog-head">
-        <div className="agent-view-dialog-title">
-          <h2 id={`agent-view-dialog-title-${agent.id}`}>{agent.name}</h2>
-          <AgentStatusPill status={agent.status} />
-        </div>
+        <h2 id={`agent-view-dialog-title-${agent.id}`}>{agent.name}</h2>
         <a className="secondary-button" href={closeHref}>
           <FlatIcon name="cancel" />
           <span>Close</span>
@@ -67,6 +64,10 @@ function AgentViewDialog({
         <div>
           <dt>Created</dt>
           <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
+        </div>
+        <div>
+          <dt>Enabled</dt>
+          <dd>{agent.enabled ? "True" : "False"}</dd>
         </div>
         <div>
           <dt>Default model</dt>
@@ -131,23 +132,11 @@ function AgentCreateDialog({
           </option>
         ))}
       </select>
-      <span className="form-label" id="agent-allowed-virtual-models-label">
-        Allowed virtual models
-      </span>
-      <AgentAllowedVirtualModelsCheckboxes
-        labelId="agent-allowed-virtual-models-label"
-        selectedVirtualModelIds={[]}
-        virtualModels={virtualModels}
+      <AgentVirtualModelFields
+        idPrefix="agent"
+        initialSelectedVirtualModelIds={[]}
+        virtualModels={virtualModels.map(({ id, name }) => ({ id, name }))}
       />
-      <label htmlFor="agent-default-virtual-model">Default virtual model</label>
-      <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
-        <option value="">No default virtual model</option>
-        {virtualModels.map((virtualModel) => (
-          <option key={virtualModel.id} value={virtualModel.id}>
-            {formatVirtualModelOptionLabel(virtualModel)}
-          </option>
-        ))}
-      </select>
       <label className="checkbox-label agent-limit-toggle" htmlFor="agent-enable-limits">
         <input id="agent-enable-limits" name="enableLimits" type="checkbox" value="true" />
         <span>Enable limits</span>
@@ -231,7 +220,7 @@ function AgentEditDialog({
   const rpmLimit = findAgentLimit(limits, "rpm");
   const tokenLimit = findAgentLimit(limits, "token");
   const tpmLimit = findAgentLimit(limits, "tpm");
-  const limitsEnabled = limits.length > 0;
+  const limitsEnabled = agent.limitsEnabled;
 
   return (
     <ConsoleDialog
@@ -269,29 +258,14 @@ function AgentEditDialog({
             </option>
           ))}
         </select>
-        <span className="form-label" id={`agent-allowed-virtual-models-label-${agent.id}`}>
-          Allowed virtual models
-        </span>
-        <AgentAllowedVirtualModelsCheckboxes
-          labelId={`agent-allowed-virtual-models-label-${agent.id}`}
-          selectedVirtualModelIds={access.allowedVirtualModels.map(
+        <AgentVirtualModelFields
+          idPrefix={`agent-${agent.id}`}
+          initialDefaultVirtualModelId={access.defaultVirtualModel?.id ?? ""}
+          initialSelectedVirtualModelIds={access.allowedVirtualModels.map(
             (virtualModel) => virtualModel.id,
           )}
-          virtualModels={virtualModels}
+          virtualModels={virtualModels.map(({ id, name }) => ({ id, name }))}
         />
-        <label htmlFor={`agent-default-virtual-model-${agent.id}`}>Default virtual model</label>
-        <select
-          id={`agent-default-virtual-model-${agent.id}`}
-          name="defaultVirtualModelId"
-          defaultValue={access.defaultVirtualModel?.id ?? ""}
-        >
-          <option value="">No default virtual model</option>
-          {virtualModels.map((virtualModel) => (
-            <option key={virtualModel.id} value={virtualModel.id}>
-              {formatVirtualModelOptionLabel(virtualModel)}
-            </option>
-          ))}
-        </select>
         <label
           className="checkbox-label agent-limit-toggle"
           htmlFor={`agent-enable-limits-${agent.id}`}
@@ -376,40 +350,6 @@ function AgentEditDialog({
   );
 }
 
-function AgentAllowedVirtualModelsCheckboxes({
-  labelId,
-  selectedVirtualModelIds,
-  virtualModels,
-}: {
-  labelId: string;
-  selectedVirtualModelIds: readonly string[];
-  virtualModels: readonly ConsoleVirtualModel[];
-}) {
-  const selectedIds = new Set(selectedVirtualModelIds);
-  if (virtualModels.length === 0) {
-    return <p className="form-hint">No virtual models configured.</p>;
-  }
-  return (
-    <fieldset aria-labelledby={labelId} className="agent-vm-checkbox-list">
-      {virtualModels.map((virtualModel) => {
-        const inputId = `${labelId}-${virtualModel.id}`;
-        return (
-          <label className="checkbox-label" htmlFor={inputId} key={virtualModel.id}>
-            <input
-              defaultChecked={selectedIds.has(virtualModel.id)}
-              id={inputId}
-              name="allowedVirtualModelIds"
-              type="checkbox"
-              value={virtualModel.id}
-            />
-            <span>{formatVirtualModelOptionLabel(virtualModel)}</span>
-          </label>
-        );
-      })}
-    </fieldset>
-  );
-}
-
 function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHref: string }) {
   return (
     <ConsoleDialog
@@ -441,17 +381,41 @@ function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHre
   );
 }
 
-type AgentStatusFilter = "all" | AgentDerivedStatus;
+function AgentEnabledToggleForm({ agent }: { agent: ConsoleAgent }) {
+  if (agent.enabled) {
+    return (
+      <ConsoleMutationForm action="/api/agents" fallbackError="Agent disable failed.">
+        <input type="hidden" name="action" value="disable" />
+        <input type="hidden" name="id" value={agent.id} />
+        <button
+          aria-label={`Disable ${agent.name}`}
+          className="agent-action-toggle row-action-button"
+          title="Disable"
+          type="submit"
+        >
+          <FlatIcon name="disable" />
+        </button>
+      </ConsoleMutationForm>
+    );
+  }
+
+  return (
+    <ConsoleMutationForm action="/api/agents" fallbackError="Agent enable failed.">
+      <input type="hidden" name="action" value="enable" />
+      <input type="hidden" name="id" value={agent.id} />
+      <button
+        aria-label={`Enable ${agent.name}`}
+        className="agent-action-toggle row-action-button"
+        title="Enable"
+        type="submit"
+      >
+        <FlatIcon name="enable" />
+      </button>
+    </ConsoleMutationForm>
+  );
+}
 
 type AgentPlatformFilter = "all" | AgentIntegrationPlatform;
-
-const agentStatusFilters: readonly AgentDerivedStatus[] = ["online", "offline", "high-risk"];
-
-function readAgentStatusFilter(value: string | undefined): AgentStatusFilter {
-  return agentStatusFilters.includes(value as AgentDerivedStatus)
-    ? (value as AgentDerivedStatus)
-    : "all";
-}
 
 function readAgentPlatformFilter(value: string | undefined): AgentPlatformFilter {
   return agentIntegrationPlatforms.includes(value as AgentIntegrationPlatform)
@@ -464,14 +428,10 @@ function filterAgents(
   filters: {
     agentPlatformFilter: AgentPlatformFilter;
     agentSearch: string;
-    agentStatusFilter: AgentStatusFilter;
   },
 ): ConsoleAgent[] {
   const normalizedSearch = filters.agentSearch.toLowerCase();
   return agents.filter((agent) => {
-    if (filters.agentStatusFilter !== "all" && agent.status !== filters.agentStatusFilter) {
-      return false;
-    }
     if (
       filters.agentPlatformFilter !== "all" &&
       agent.integrationPlatform !== filters.agentPlatformFilter
@@ -501,16 +461,6 @@ function formatAgentIntegrationPlatformLabel(platform: AgentIntegrationPlatform)
     other: "Other",
   };
   return labels[platform];
-}
-
-function AgentStatusPill({ status }: { status: AgentDerivedStatus }) {
-  if (status === "online") {
-    return <span className="pill--ok pill">Online</span>;
-  }
-  if (status === "high-risk") {
-    return <span className="pill--danger pill">High risk</span>;
-  }
-  return <span className="pill--warn pill">Offline</span>;
 }
 
 function formatAgentKeyPrefixDisplay(keyPrefix: string): string {
@@ -549,13 +499,6 @@ function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
   return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
 }
 
-function formatVirtualModelOptionLabel(virtualModel: {
-  description?: string;
-  displayName?: string;
-  name: string;
-}): string {
-  return virtualModel.name;
-}
 export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const { agentLimits, agentVirtualModelAccess, agents, usageToday, virtualModels } =
     await loadAgentsSectionData();
@@ -563,16 +506,14 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
     agentVirtualModelAccess.map((access) => [access.agentId, access]),
   );
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
-  const onlineAgentCount = agents.filter((agent) => agent.status === "online").length;
+  const enabledAgentCount = agents.filter((agent) => agent.enabled).length;
   const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
-  const agentStatusFilter = readAgentStatusFilter(readSingleSearchParam(searchParams.agentStatus));
   const agentPlatformFilter = readAgentPlatformFilter(
     readSingleSearchParam(searchParams.agentPlatform),
   );
   const agentSearch = readSingleSearchParam(searchParams.agentSearch)?.trim() ?? "";
   const visibleAgents = filterAgents(agents, {
     agentSearch,
-    agentStatusFilter,
     agentPlatformFilter,
   });
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
@@ -604,7 +545,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
         <div className="agents-main-column">
           <div className="stat-grid agents-stat-grid">
             <StatCard icon="AG" label="Agents" value={String(agents.length)} />
-            <StatCard icon="ON" label="Online" value={String(onlineAgentCount)} />
+            <StatCard icon="ON" label="Enabled" value={String(enabledAgentCount)} />
             <StatCard
               icon="RQ"
               label="Requests 24h"
@@ -615,19 +556,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
           <form action="/agents" method="get">
             <fieldset className="agents-filter-bar">
               <legend className="sr-only">Agent filters</legend>
-              <div className="console-field">
-                <label htmlFor="agent-filter-status">Status</label>
-                <select
-                  id="agent-filter-status"
-                  name="agentStatus"
-                  defaultValue={agentStatusFilter}
-                >
-                  <option value="all">All</option>
-                  <option value="online">Online</option>
-                  <option value="offline">Offline</option>
-                  <option value="high-risk">High risk</option>
-                </select>
-              </div>
               <div className="console-field">
                 <label htmlFor="agent-filter-platform">Platform</label>
                 <select
@@ -680,10 +608,10 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                       <th>Agent</th>
                       <th>API Key Prefix</th>
                       <th>Default VM</th>
-                      <th className="num">Available VM</th>
+                      <th>Virtual Models</th>
                       <th className="num">Requests 24h</th>
                       <th className="num">24h Cost</th>
-                      <th>Status</th>
+                      <th>Enabled</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -725,9 +653,18 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                               {access?.defaultVirtualModel?.name ?? "None"}
                             </a>
                           </td>
-                          <td className="num">
-                            <a className="table-row-link" href={agentViewHref}>
-                              {access?.allowedVirtualModels.length ?? 0}
+                          <td>
+                            <a
+                              className="agent-virtual-model-names table-row-link"
+                              href={agentViewHref}
+                              title={
+                                access?.allowedVirtualModels
+                                  .map((model) => model.name)
+                                  .join(", ") || "None"
+                              }
+                            >
+                              {access?.allowedVirtualModels.map((model) => model.name).join(", ") ||
+                                "None"}
                             </a>
                           </td>
                           <td className="num">
@@ -742,11 +679,12 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                           </td>
                           <td>
                             <a className="table-row-link" href={agentViewHref}>
-                              <AgentStatusPill status={agent.status} />
+                              {agent.enabled ? "True" : "False"}
                             </a>
                           </td>
                           <td>
                             <span className="agent-table-actions">
+                              <AgentEnabledToggleForm agent={agent} />
                               <a
                                 aria-label={`Edit ${agent.name}`}
                                 className="link-button agent-action-edit row-action-button"

@@ -11,6 +11,7 @@ export type SeedOpenAIGatewayRouteInput = {
   agentApiKey: string;
   endpointProtocol?: RouteEndpointProtocol;
   fixture: QueryableFixture;
+  limitsEnabled?: boolean;
   masterKey?: string;
   modelId?: string;
   providerApiKey?: string;
@@ -47,11 +48,17 @@ export async function seedOpenAIGatewayRoute(
         name,
         key_prefix,
         key_hash,
-        enabled
+        enabled,
+        limits_enabled
       )
-      values ($1, 'Gateway E2E Agent', $2, $3, true)
+      values ($1, 'Gateway E2E Agent', $2, $3, true, $4)
     `,
-    [agentId, input.agentApiKey.slice(0, 12), buildGatewayAgentApiKeyHash(input.agentApiKey)],
+    [
+      agentId,
+      input.agentApiKey.slice(0, 12),
+      buildGatewayAgentApiKeyHash(input.agentApiKey),
+      input.limitsEnabled ?? false,
+    ],
   );
   await input.fixture.query(
     `

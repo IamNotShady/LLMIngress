@@ -218,6 +218,7 @@ async function withSettlementGateway(
     const seeded = await seedOpenAIGatewayRoute({
       agentApiKey,
       fixture,
+      limitsEnabled: true,
       providerBaseUrl: `${fakeProvider.url}?mode=${input.mode}`,
       virtualModelName: input.virtualModelName,
     });

@@ -199,7 +199,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
           );
 
           await page.goto(`${baseUrl}/agents`, { waitUntil: "networkidle" });
-          await expect(page.locator(".stat-card", { hasText: "Online" })).toContainText("0");
+          await expect(page.locator(".stat-card", { hasText: "Enabled" })).toContainText("2");
           await expect(page.locator(".stat-card", { hasText: "Cost 24h" })).toContainText("$0.00");
 
           await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
@@ -213,6 +213,14 @@ test("console audit fixes keep time windows honest and prevent activity timestam
           ).toHaveCount(1);
           await expect(page.locator("#agent-type")).toHaveCount(0);
           await page.getByLabel("Agent name").fill("audit-created-agent");
+          await expect(page.getByLabel("Default virtual model").locator("option")).toHaveCount(1);
+          await page.getByRole("button", { name: "Create" }).click();
+          await expect(page.getByText("Select at least one allowed Virtual Model.")).toBeVisible();
+          await page.getByLabel("audit-probe-vm").check();
+          await expect(page.getByLabel("Default virtual model").locator("option")).toHaveCount(2);
+          await page.getByLabel("Default virtual model").selectOption({ label: "audit-probe-vm" });
+          await page.getByLabel("audit-probe-vm").uncheck();
+          await expect(page.getByLabel("Default virtual model")).toHaveValue("");
           await page.getByLabel("audit-probe-vm").check();
           await page.getByLabel("Default virtual model").selectOption({ label: "audit-probe-vm" });
           await page.getByRole("button", { name: "Create" }).click();
@@ -220,6 +228,19 @@ test("console audit fixes keep time windows honest and prevent activity timestam
           await expect(createdAgentDialog).toBeVisible();
           await expect(createdAgentDialog).toContainText("audit-probe-vm");
           await expect(createdAgentDialog).not.toContainText("<Virtual Model Name>");
+          await expect(createdAgentDialog).not.toContainText("Agent API key prefix");
+          await createdAgentDialog.getByRole("link", { name: "Close" }).click();
+          const createdAgentRow = page.locator(".agents-table tbody tr", {
+            hasText: "audit-created-agent",
+          });
+          await expect(createdAgentRow).toContainText("audit-probe-vm");
+          await expect(createdAgentRow).toContainText("True");
+          await createdAgentRow
+            .getByRole("button", { name: "Disable audit-created-agent" })
+            .click();
+          await expect(createdAgentRow).toContainText("False");
+          await createdAgentRow.getByRole("button", { name: "Enable audit-created-agent" }).click();
+          await expect(createdAgentRow).toContainText("True");
 
           for (const viewport of [
             { width: 1280, height: 800 },

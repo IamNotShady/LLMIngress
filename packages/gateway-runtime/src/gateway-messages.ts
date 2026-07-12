@@ -105,6 +105,7 @@ export async function executeGatewayAnthropicMessages(input: {
   agentId: string;
   adapter?: AnthropicProviderAdapter;
   databaseUrl?: string;
+  limitsEnabled?: boolean;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;

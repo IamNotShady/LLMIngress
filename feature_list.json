@@ -25,7 +25,7 @@
       "verification": "pnpm exec vitest run tests/features/virtual-model-capability-contract.unit.test.ts tests/features/virtual-model-endpoint-routing.unit.test.ts tests/features/gateway-fallback-health.unit.test.ts tests/features/refactor-route-strategy-registry.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-capability-contract.e2e.spec.ts tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts tests/e2e/gateway-fallback-health.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-12: Virtual Model creation atomically requires a Route Policy and candidate. Known capability conflicts are rejected while unknown fields pass and skip only their Gateway pre-check. cost_first uses input-plus-output price, keeps unknown prices last, and records successful unknown-price JSON/Streaming requests as unavailable $0 cost. Focused 26 unit and 12 E2E checks, pnpm run verify (61 files/322 tests), and all 9 feature regressions pass."
+      "evidence": "2026-07-12: Virtual Model routing remains unchanged. Settlement fixtures now explicitly enable Agent Limits before asserting accounting; focused verification passes 26 unit and 12 database/real-Gateway E2E checks."
     },
     {
       "id": "gateway-protocol-execution",
@@ -39,11 +39,11 @@
     {
       "id": "agent-access-and-limits",
       "name": "Agent Access And Limits",
-      "description": "Agent API keys, Virtual Model grants, RPM, TPM, token, budget, and concurrency limits are enforced without non-core Agent modes or logging switches.",
-      "verification": "pnpm exec vitest run tests/features/gateway-settlement-integrity.unit.test.ts tests/features/refactor-agent-limit-domain-types.unit.test.ts && pnpm test:e2e tests/e2e/gateway-settlement-integrity.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts",
+      "description": "Agent API keys, required Virtual Model grants, atomic creation, explicit Limits enablement, reversible Agent enable/disable, RPM, TPM, token, budget, and concurrency limits are enforced without non-core Agent modes or logging switches.",
+      "verification": "pnpm exec vitest run tests/features/agent-management-contract.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts tests/features/refactor-agent-limit-domain-types.unit.test.ts && pnpm test:e2e tests/e2e/agent-management-contract.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts",
       "dependencies": ["gateway-protocol-execution"],
       "status": "passing",
-      "evidence": "2026-07-11: Agent authentication, grants, limit enforcement, settlement, and stale concurrency repair pass."
+      "evidence": "2026-07-12: Agent creation atomically commits the API key, required Virtual Model grants, default model, Limits switch, and rules. Gateway skips Limits access while the switch is off, preserved rules resume when re-enabled, and disabling/re-enabling restores the same key without deleting configuration or history. Focused verification passes 13 unit and 7 database/real-process E2E checks; pnpm run verify passes 62 files/327 tests and all 9 feature regressions pass."
     },
     {
       "id": "usage-and-activity",
@@ -66,11 +66,11 @@
     {
       "id": "console-core",
       "name": "Console Core",
-      "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation, consistent desktop content widths, and readable paginated lists.",
+      "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation, consistent desktop content widths, readable paginated lists, and complete Agent setup and enable/disable controls.",
       "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-12: The desktop sidebar is 280px with 15px navigation labels. Activity and Limits share the 1600px content boundary used by Providers and Virtual Models, and Activity pages contain 20 rows. Playground now omits blank Temperature, Top P, and Max Tokens values from Chat Completions and Messages requests. Agent creation now renders the selected/default Virtual Model name instead of the placeholder, and the Virtual Models search input tolerates pre-hydration browser caret mutations without hydration errors. Focused unit tests, focused Console E2E, pnpm run verify (62 files/321 tests), and all 9 feature regressions pass."
+      "evidence": "2026-07-12: Agents require an Allowed Virtual Model, restrict Default Model choices to selected grants, and show one-time API Key, Gateway URL, and platform-specific setup guidance. The list shows Virtual Model names and Enabled state with reversible Enable/Disable actions; dynamic Status and Available VM columns are removed. Focused unit/Console E2E, isolated live-browser QA with no console errors, pnpm run verify (62 files/327 tests), and all 9 feature regressions pass."
     },
     {
       "id": "release-guards",
@@ -79,7 +79,7 @@
       "verification": "pnpm exec vitest run tests/features/core-baseline-compression.unit.test.ts tests/features/core-delivery-hardening.unit.test.ts tests/features/core-delivery-core-behavior.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/core-baseline-compression.e2e.spec.ts tests/e2e/core-delivery-hardening.e2e.spec.ts tests/e2e/v1-platform.e2e.spec.ts tests/e2e/v1-release-guards.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-11: One reproducible 24-table baseline, native accessible dialogs, strict parseArgs CLIs, four non-root compiled runtime images, deleted-surface guards, and enforced 45/45/38/50 coverage thresholds pass. Release guards were revalidated after the transient routing E2E startup failure passed in isolation."
+      "evidence": "2026-07-12: The single reproducible 24-table baseline includes agents.limits_enabled and its updated manifest checksum. db:migrate:check, pnpm run verify, and all 9 feature regressions pass; progress remains within its compression budget and all release contracts remain enabled."
     }
   ]
 }

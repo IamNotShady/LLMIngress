@@ -17,7 +17,7 @@ import type {
 import { isRecord } from "@llmingress/util";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
-  enforceGatewayAgentLimits,
+  enforceGatewayAgentLimitsIfEnabled,
   type GatewayBudgetSettlement,
   type GatewayConcurrencyLease,
   releaseGatewayConcurrency,
@@ -114,6 +114,7 @@ export async function executeGatewayStreamingRequest(input: {
   agentId: string;
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
+  limitsEnabled?: boolean;
   protocol: GatewayStreamingProtocol;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
@@ -191,10 +192,11 @@ export async function executeGatewayStreamingRequest(input: {
     }
 
     if (!limitsEnforced) {
-      const limits = await enforceGatewayAgentLimits({
+      const limits = await enforceGatewayAgentLimitsIfEnabled({
         agentId: input.agentId,
         budgetPrice: candidates[0]?.price,
         databaseUrl: input.databaseUrl,
+        limitsEnabled: input.limitsEnabled !== false,
         requestId: input.requestId,
         requestMetadata: normalized.requestMetadata,
       });

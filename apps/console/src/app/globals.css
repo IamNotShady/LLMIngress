@@ -1487,7 +1487,7 @@ body:has(.console-dialog[open]) {
 }
 .agents-filter-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(7rem, 1fr)) minmax(13rem, 1.4fr) max-content;
+  grid-template-columns: minmax(7rem, 1fr) minmax(13rem, 1.4fr) max-content;
   gap: var(--space-sm);
   align-items: end;
   margin: 0;
@@ -1533,9 +1533,9 @@ body:has(.console-dialog[open]) {
 }
 .agents-table th:nth-child(4),
 .agents-table td:nth-child(4) {
-  width: 7.25rem;
-  min-width: 7.25rem;
-  max-width: 7.25rem;
+  width: 13rem;
+  min-width: 13rem;
+  max-width: 13rem;
 }
 .agents-table th:nth-child(5),
 .agents-table td:nth-child(5) {
@@ -2037,7 +2037,38 @@ button.table-row-link {
   gap: var(--space-sm);
 }
 .agent-table-actions form {
-  display: none;
+  display: contents;
+}
+.agent-table-actions .agent-action-toggle {
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+.agent-table-actions .agent-action-toggle:hover {
+  color: var(--text) !important;
+  background: var(--surface-inset) !important;
+  border-color: var(--border-strong) !important;
+}
+.agent-virtual-model-names {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-configuration-guide {
+  display: grid;
+  gap: var(--space-sm);
+}
+.agent-configuration-guide pre {
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-sm);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
 }
 .agent-table-actions .link-button {
   appearance: none !important;

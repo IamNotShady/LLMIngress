@@ -62,6 +62,7 @@ type CreateGatewayAppOptions = {
 
 type GatewayJsonEndpointExecutionInput = {
   agentId: string;
+  limitsEnabled: boolean;
   providerRequestHeaders: Record<string, string>;
   requestBody: unknown;
   requestId: string;
@@ -296,6 +297,7 @@ function registerGatewayJsonEndpoint(
           execute: () =>
             executeGatewayStreamingRequest({
               agentId: auth.agentApiKey.id,
+              limitsEnabled: auth.agentApiKey.limitsEnabled,
               protocol: streamingProtocol,
               providerRequestHeaders,
               requestBody: request.body,
@@ -319,6 +321,7 @@ function registerGatewayJsonEndpoint(
       execute: () =>
         endpoint.execute({
           agentId: auth.agentApiKey.id,
+          limitsEnabled: auth.agentApiKey.limitsEnabled,
           providerRequestHeaders,
           requestBody: request.body,
           requestId: auth.requestId,

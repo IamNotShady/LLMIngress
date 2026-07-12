@@ -44,7 +44,7 @@ The request path is:
 authenticate Agent
   -> resolve allowed Virtual Model
   -> validate request capability contract
-  -> enforce Agent limits
+  -> enforce Agent limits when the Agent limits switch is enabled
   -> order healthy route candidates
   -> execute credentials and fallback candidates
   -> stream or return Provider response
@@ -141,9 +141,12 @@ credential safety policy.
 
 ## Runtime State and Accounting
 
-Agent limits use `agent_limits`, current `rate_limit_windows`, and `budget_periods`. Gateway
-keeps low-latency process state where appropriate but writes restart-recoverable counters to
-PostgreSQL.
+`agents.limits_enabled` is the sole Agent-level switch for limit enforcement. When it is false,
+Gateway does not read `agent_limits` or perform budget, rate, token, or concurrency checks. When
+it is true, Gateway enforces enabled rules from `agent_limits` using current
+`rate_limit_windows` and `budget_periods`. Disabling the switch preserves the rules so they can
+be restored without recreation. Gateway keeps low-latency process state where appropriate but
+writes restart-recoverable counters to PostgreSQL.
 
 Completed request metadata is stored in `request_activity`, `request_usage`, `request_costs`,
 and `fallback_events`. Provider health history and current state use

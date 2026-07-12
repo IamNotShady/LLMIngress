@@ -89,7 +89,7 @@ type AgentLimitErrorCountRow = {
   rate_limit_hits_24h: number;
 };
 
-type QueryClient = {
+export type AgentLimitQueryClient = {
   query: <T = Record<string, unknown>>(
     text: string,
     values?: readonly unknown[],
@@ -111,56 +111,59 @@ export function normalizeAgentLimitFormInput(
   input: AgentLimitFormInput,
 ): NormalizedAgentLimitFormInput {
   const agentId = normalizeRequiredText(input.agentId, "Agent id");
+  return { agentId, rules: normalizeAgentLimitRulesInput(input) };
+}
+
+export function normalizeAgentLimitRulesInput(
+  input: Omit<AgentLimitFormInput, "agentId">,
+): AgentLimitRuleInput[] {
   const budgetPeriod = normalizeBudgetPeriod(input.budgetPeriod);
 
-  return {
-    agentId,
-    rules: [
-      {
-        enforcementPolicy: "block",
-        limitType: "budget",
-        limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
-        manualBypass: false,
-        period: budgetPeriod,
-        unit: "usd",
-      },
-      {
-        enforcementPolicy: "block",
-        limitType: "rpm",
-        limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
-        manualBypass: false,
-        period: "minute",
-        unit: "requests",
-      },
-      {
-        enforcementPolicy: "block",
-        limitType: "tpm",
-        limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
-        manualBypass: false,
-        period: "minute",
-        unit: "tokens",
-      },
-      {
-        enforcementPolicy: "block",
-        limitType: "concurrency",
-        limitValue: normalizePositiveNumber(
-          input.concurrency ?? defaultAgentLimitFormValues.concurrency,
-          "Concurrency limit",
-        ),
-        manualBypass: false,
-        period: "request",
-        unit: "requests",
-      },
-      {
-        enforcementPolicy: "block",
-        limitType: "token",
-        limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
-        manualBypass: false,
-        period: "request",
-        unit: "tokens",
-      },
-    ],
-  };
+  return [
+    {
+      enforcementPolicy: "block",
+      limitType: "budget",
+      limitValue: normalizePositiveNumber(input.budgetUsd, "Budget USD limit"),
+      manualBypass: false,
+      period: budgetPeriod,
+      unit: "usd",
+    },
+    {
+      enforcementPolicy: "block",
+      limitType: "rpm",
+      limitValue: normalizePositiveNumber(input.rpm, "RPM limit"),
+      manualBypass: false,
+      period: "minute",
+      unit: "requests",
+    },
+    {
+      enforcementPolicy: "block",
+      limitType: "tpm",
+      limitValue: normalizePositiveNumber(input.tpm, "TPM limit"),
+      manualBypass: false,
+      period: "minute",
+      unit: "tokens",
+    },
+    {
+      enforcementPolicy: "block",
+      limitType: "concurrency",
+      limitValue: normalizePositiveNumber(
+        input.concurrency ?? defaultAgentLimitFormValues.concurrency,
+        "Concurrency limit",
+      ),
+      manualBypass: false,
+      period: "request",
+      unit: "requests",
+    },
+    {
+      enforcementPolicy: "block",
+      limitType: "token",
+      limitValue: normalizePositiveNumber(input.tokenLimit, "Token limit"),
+      manualBypass: false,
+      period: "request",
+      unit: "tokens",
+    },
+  ];
 }
 
 export function formatAgentLimitSummaries(
@@ -241,43 +244,7 @@ export async function saveAgentLimitRules(input: {
     changes: [{ table: "agent_limits", recordId: input.limits.agentId }],
     write: async (client) => {
       await assertAgentExists(client, input.limits.agentId);
-      await client.query(
-        `
-          delete from agent_limits
-          where agent_id = $1
-            and limit_type = any($2::text[])
-        `,
-        [input.limits.agentId, input.limits.rules.map((rule) => rule.limitType)],
-      );
-
-      for (const rule of input.limits.rules) {
-        await client.query(
-          `
-            insert into agent_limits (
-              id,
-              agent_id,
-              limit_type,
-              period,
-              limit_value,
-              unit,
-              enabled,
-              enforcement_policy,
-              manual_bypass
-            )
-            values ($1, $2, $3, $4, $5, $6, true, $7, $8)
-          `,
-          [
-            randomUUID(),
-            input.limits.agentId,
-            rule.limitType,
-            rule.period,
-            rule.limitValue,
-            rule.unit,
-            rule.enforcementPolicy ?? "block",
-            rule.manualBypass ?? false,
-          ],
-        );
-      }
+      await replaceAgentLimitRulesWithClient(client, input.limits.agentId, input.limits.rules);
 
       savedLimits = await readAgentLimits(client, input.limits.agentId);
     },
@@ -287,6 +254,50 @@ export async function saveAgentLimitRules(input: {
     throw new Error("Agent limits were not saved.");
   }
   return savedLimits;
+}
+
+export async function replaceAgentLimitRulesWithClient(
+  client: AgentLimitQueryClient,
+  agentId: string,
+  rules: readonly AgentLimitRuleInput[],
+): Promise<void> {
+  await client.query(
+    `
+      delete from agent_limits
+      where agent_id = $1
+        and limit_type = any($2::text[])
+    `,
+    [agentId, rules.map((rule) => rule.limitType)],
+  );
+
+  for (const rule of rules) {
+    await client.query(
+      `
+        insert into agent_limits (
+          id,
+          agent_id,
+          limit_type,
+          period,
+          limit_value,
+          unit,
+          enabled,
+          enforcement_policy,
+          manual_bypass
+        )
+        values ($1, $2, $3, $4, $5, $6, true, $7, $8)
+      `,
+      [
+        randomUUID(),
+        agentId,
+        rule.limitType,
+        rule.period,
+        rule.limitValue,
+        rule.unit,
+        rule.enforcementPolicy ?? "block",
+        rule.manualBypass ?? false,
+      ],
+    );
+  }
 }
 
 export async function deleteAgentLimitRules(input: {
@@ -305,7 +316,7 @@ export async function deleteAgentLimitRules(input: {
   });
 }
 
-async function assertAgentExists(client: QueryClient, id: string): Promise<void> {
+async function assertAgentExists(client: AgentLimitQueryClient, id: string): Promise<void> {
   const result = await client.query("select 1 from agents where id = $1 for update", [id]);
   if (!result.rows[0]) {
     throw consoleNotFoundError("Agent was not found.", "agent_not_found", { agentId: id });
@@ -313,7 +324,7 @@ async function assertAgentExists(client: QueryClient, id: string): Promise<void>
 }
 
 async function readAgentLimits(
-  client: QueryClient,
+  client: AgentLimitQueryClient,
   agentId?: string,
 ): Promise<ConsoleAgentLimit[]> {
   const result = await client.query<AgentLimitRow>(
@@ -346,7 +357,9 @@ async function readAgentLimits(
   }));
 }
 
-async function readAgentLimitBudgetUsage(client: QueryClient): Promise<AgentLimitBudgetUsageRow[]> {
+async function readAgentLimitBudgetUsage(
+  client: AgentLimitQueryClient,
+): Promise<AgentLimitBudgetUsageRow[]> {
   const result = await client.query<AgentLimitBudgetUsageRow>(
     `
       select agent_limits.agent_id::text as agent_id,
@@ -369,7 +382,9 @@ async function readAgentLimitBudgetUsage(client: QueryClient): Promise<AgentLimi
   return result.rows;
 }
 
-async function readAgentLimitRateWindows(client: QueryClient): Promise<AgentLimitRateWindowRow[]> {
+async function readAgentLimitRateWindows(
+  client: AgentLimitQueryClient,
+): Promise<AgentLimitRateWindowRow[]> {
   const result = await client.query<AgentLimitRateWindowRow>(
     `
       select rate_limit_windows.agent_id::text as agent_id,
@@ -388,7 +403,9 @@ async function readAgentLimitRateWindows(client: QueryClient): Promise<AgentLimi
   return result.rows;
 }
 
-async function readAgentLimitErrorCounts(client: QueryClient): Promise<AgentLimitErrorCountRow[]> {
+async function readAgentLimitErrorCounts(
+  client: AgentLimitQueryClient,
+): Promise<AgentLimitErrorCountRow[]> {
   const result = await client.query<AgentLimitErrorCountRow>(
     `
       select request_activity.agent_id::text as agent_id,

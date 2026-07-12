@@ -82,6 +82,7 @@ describe("console api hygiene", () => {
   it("returns the actual virtual model name in one-time agent connection details", async () => {
     const response = renderOneTimeAgentResponse(
       {
+        integrationPlatform: "other",
         keyPrefix: "llmi_test_key",
         plaintext: "llmi_test_key_value",
         virtualModelName: "audit-probe-vm",
@@ -90,6 +91,10 @@ describe("console api hygiene", () => {
     );
 
     await expect(response.json()).resolves.toMatchObject({
+      configurationGuide: {
+        title: "Configure your integration",
+      },
+      integrationPlatform: "other",
       virtualModelName: "audit-probe-vm",
     });
   });

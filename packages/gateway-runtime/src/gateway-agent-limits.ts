@@ -172,6 +172,15 @@ export async function enforceGatewayAgentLimits(input: {
   });
 }
 
+export async function enforceGatewayAgentLimitsIfEnabled(
+  input: Parameters<typeof enforceGatewayAgentLimits>[0] & { limitsEnabled: boolean },
+): Promise<GatewayAgentLimitDecision> {
+  if (!input.limitsEnabled) {
+    return { ok: true };
+  }
+  return enforceGatewayAgentLimits(input);
+}
+
 export async function releaseGatewayConcurrency(input: {
   databaseUrl?: string;
   lease: GatewayConcurrencyLease | undefined;

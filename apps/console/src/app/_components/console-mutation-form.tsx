@@ -24,6 +24,7 @@ type ConsoleErrorPayload = {
 };
 
 const errorFieldByCode: Record<string, string> = {
+  agent_allowed_virtual_model_required: "allowedVirtualModelIds",
   agent_integration_platform_invalid: "integrationPlatform",
   agent_name_required: "name",
   console_setup_token_invalid: "setupToken",

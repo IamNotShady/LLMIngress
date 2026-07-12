@@ -81,6 +81,7 @@ export async function executeGatewayOpenAIChatCompletion(input: {
   agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
+  limitsEnabled?: boolean;
   masterKeySource?: MasterKeySource;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;

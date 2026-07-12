@@ -83,6 +83,7 @@ export async function executeGatewayOpenAIResponse(input: {
   agentId: string;
   adapter?: OpenAIProviderAdapter;
   databaseUrl?: string;
+  limitsEnabled?: boolean;
   providerRequestHeaders?: Record<string, string>;
   requestBody: unknown;
   requestId: string;

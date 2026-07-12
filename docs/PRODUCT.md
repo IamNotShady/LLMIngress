@@ -25,10 +25,10 @@ Agents authenticate with a dedicated `llmi_` API key and call one of:
 - `POST /v1/embeddings`
 - `GET /v1/models`
 
-The Gateway identifies the Agent, checks its Virtual Model grant and limits, resolves the
-Virtual Model, builds a deterministic fallback chain, calls real Providers, and records
-metadata after completion. Provider request bodies remain opaque and are never written to
-operational logs.
+The Gateway identifies the Agent, checks its Virtual Model grant, conditionally enforces limits,
+resolves the Virtual Model, builds a deterministic fallback chain, calls real Providers, and
+records metadata after completion. Provider request bodies remain opaque and are never written
+to operational logs.
 
 Supported routing strategies are:
 
@@ -79,9 +79,17 @@ Each Agent has:
 - an enabled state
 - allowed Virtual Models
 - an optional default Virtual Model
+- an explicit Limits enabled state
 - optional budget, RPM, TPM, concurrency, and per-request token limits
 
-Limits are enforcement controls. They do not generate alerts or external notifications.
+Agent creation requires at least one allowed Virtual Model. The default, when set, must be one of
+those allowed models. Agent configuration, API-key creation, model grants, and initial Limits
+rules are committed atomically.
+
+Limits are enforcement controls. When disabled, Gateway skips all Limits reads and checks while
+preserving configured rules for later re-enablement. They do not generate alerts or external
+notifications. Disabling an Agent preserves its key and configuration; enabling it restores the
+same access.
 
 ## Usage and Activity
 

@@ -12,6 +12,11 @@ import { FlatIcon } from "../_components/flat-icon";
 
 type CreatedAgentDetails = {
   apiKey: string;
+  configurationGuide: {
+    codeBlocks: Array<{ code: string; label: string }>;
+    steps: string[];
+    title: string;
+  };
   gatewayBaseUrl: string;
   keyPrefix: string;
   virtualModelName: string;
@@ -36,6 +41,11 @@ export function AgentCreateDialogClient({
     setSubmitting(true);
     try {
       const form = event.currentTarget;
+      if (new FormData(form).getAll("allowedVirtualModelIds").length === 0) {
+        setFailure({ message: "Select at least one allowed Virtual Model." });
+        form.querySelector<HTMLInputElement>('input[name="allowedVirtualModelIds"]')?.focus();
+        return;
+      }
       const response = await fetch(form.getAttribute("action") ?? "/api/agents", {
         body: new FormData(form),
         credentials: "same-origin",
@@ -53,6 +63,7 @@ export function AgentCreateDialogClient({
       }
       if (
         !payload.apiKey ||
+        !payload.configurationGuide ||
         !payload.gatewayBaseUrl ||
         !payload.keyPrefix ||
         !payload.virtualModelName
@@ -62,6 +73,7 @@ export function AgentCreateDialogClient({
       }
       setCreatedAgent({
         apiKey: payload.apiKey,
+        configurationGuide: payload.configurationGuide,
         gatewayBaseUrl: payload.gatewayBaseUrl,
         keyPrefix: payload.keyPrefix,
         virtualModelName: payload.virtualModelName,
@@ -105,18 +117,26 @@ export function AgentCreateDialogClient({
             </dd>
           </div>
           <div>
-            <dt>Agent API key prefix</dt>
-            <dd className="mono">{createdAgent.keyPrefix}</dd>
-          </div>
-          <div>
             <dt>Gateway URL</dt>
             <dd>{createdAgent.gatewayBaseUrl}</dd>
           </div>
-          <div>
-            <dt>Virtual Model Name</dt>
-            <dd>{createdAgent.virtualModelName}</dd>
-          </div>
         </dl>
+        <section className="agent-configuration-guide">
+          <h3>{createdAgent.configurationGuide.title}</h3>
+          <ol>
+            {createdAgent.configurationGuide.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          {createdAgent.configurationGuide.codeBlocks.map((block) => (
+            <div key={block.label}>
+              <h4>{block.label}</h4>
+              <pre>
+                <code>{block.code}</code>
+              </pre>
+            </div>
+          ))}
+        </section>
       </ConsoleDialog>
     );
   }

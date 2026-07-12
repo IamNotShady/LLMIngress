@@ -58,13 +58,14 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Agent creation now renders the selected/default Virtual Model name in the one-time connection dialog instead of `<Virtual Model Name>`. The Virtual Models search input now tolerates pre-hydration browser caret-color mutations without a hydration error.
 - Agent creation now requires an Allowed Virtual Model and atomically commits the Agent, API key, model grants, optional default, explicit Limits switch, and rules. Default choices follow the selected grants, while the one-time result shows the API key, Gateway URL, and platform-specific connection guidance.
 - Gateway now treats `agents.limits_enabled` as the sole Limits switch and performs no Limits database work while it is false. Disabling Limits preserves its rules. Agent Enable/Disable preserves the same API key and configuration, and the Agents list now shows Virtual Model names and Enabled state without the dynamic Status or Available VM columns.
+- Limits page rules and runtime KPIs now join through `agents` and include only rows where the Agent is enabled, Limits are enabled, and the Agent is not deleted. Agents management uses a separate saved-rules read so disabling Limits still preserves and restores its configuration.
 
 ## Verification
 
-Final 2026-07-12 result: focused Agent unit/database/Console E2E, isolated live-browser QA,
-`pnpm run db:migrate:check`, and `pnpm run verify` passed with 62 files/327 tests.
-All 9 milestones passed `pnpm run verify:features`. Coverage is 49.22% statements,
-49.37% lines, 41.84% branches, and 52.22% functions.
+Final 2026-07-12 result: focused Agent/Limits unit/database/Console E2E, isolated live-browser
+QA, `pnpm run db:migrate:check`, and `pnpm run verify` passed with 62 files/327 tests.
+All 9 milestones passed `pnpm run verify:features`. Coverage is 49.17% statements,
+49.34% lines, 41.84% branches, and 52.05% functions.
 
 Database-backed checks use:
 

@@ -43,7 +43,7 @@
       "verification": "pnpm exec vitest run tests/features/agent-management-contract.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts tests/features/refactor-agent-limit-domain-types.unit.test.ts && pnpm test:e2e tests/e2e/agent-management-contract.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts",
       "dependencies": ["gateway-protocol-execution"],
       "status": "passing",
-      "evidence": "2026-07-12: Agent creation atomically commits the API key, required Virtual Model grants, default model, Limits switch, and rules. Gateway skips Limits access while the switch is off, preserved rules resume when re-enabled, and disabling/re-enabling restores the same key without deleting configuration or history. Focused verification passes 13 unit and 7 database/real-process E2E checks; pnpm run verify passes 62 files/327 tests and all 9 feature regressions pass."
+      "evidence": "2026-07-12: Agent creation atomically commits the API key, required Virtual Model grants, default model, Limits switch, and rules. Gateway skips Limits access while the switch is off, preserved rules resume when re-enabled, and disabling/re-enabling restores the same key without deleting configuration or history. Limits list queries and runtime KPIs include only enabled Agents with Limits enabled while Agents management can still restore preserved rules. Focused verification passes 13 unit and 8 database/real-process E2E checks; pnpm run verify passes 62 files/327 tests and all 9 feature regressions pass."
     },
     {
       "id": "usage-and-activity",
@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-12: Agents require an Allowed Virtual Model, restrict Default Model choices to selected grants, and show one-time API Key, Gateway URL, and platform-specific setup guidance. The list shows Virtual Model names and Enabled state with reversible Enable/Disable actions; dynamic Status and Available VM columns are removed. Focused unit/Console E2E, isolated live-browser QA with no console errors, pnpm run verify (62 files/327 tests), and all 9 feature regressions pass."
+      "evidence": "2026-07-12: Agents require an Allowed Virtual Model, restrict Default Model choices to selected grants, and show one-time API Key, Gateway URL, and platform-specific setup guidance. The Agents list shows Virtual Model names and Enabled state with reversible Enable/Disable actions; the Limits list and KPIs exclude disabled Agents and Agents with Limits disabled. Focused Agent/Console verification, pnpm run verify (62 files/327 tests), and all 9 feature regressions pass."
     },
     {
       "id": "release-guards",

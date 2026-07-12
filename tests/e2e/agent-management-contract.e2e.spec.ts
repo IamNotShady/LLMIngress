@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import {
+  listAgentLimitRuntimeSnapshots,
+  listAgentLimits,
+  listSavedAgentLimits,
+} from "../../packages/db/src/console-agent-limits";
+import {
   type AgentLimitRuleInput,
   createAgentWithSettings,
   normalizeAgentFormInput,
@@ -96,6 +101,9 @@ test("Agent creation is atomic and explicit switches preserve credentials, grant
       limitCount: 1,
       limitsEnabled: false,
     });
+    await expect(listSavedAgentLimits(fixture.databaseUrl)).resolves.toMatchObject([
+      { agentId: created.id, limitType: "rpm", limitValue: 60 },
+    ]);
 
     await setAgentEnabled({ databaseUrl: fixture.databaseUrl, enabled: false, id: created.id });
     await expect(
@@ -148,6 +156,70 @@ test("Agent creation is atomic and explicit switches preserve credentials, grant
       limitCount: 1,
       limitsEnabled: true,
     });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("Limits list and runtime metrics include only enabled Agents with Limits enabled", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_limits_list_${randomUUID().replaceAll("-", "_")}`,
+  });
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const visibleAgentId = randomUUID();
+    const disabledAgentId = randomUUID();
+    const limitsDisabledAgentId = randomUUID();
+    const noRulesAgentId = randomUUID();
+
+    await withDedicatedPostgresClient(fixture.databaseUrl, async (client) => {
+      await client.query(
+        `insert into agents (id, name, enabled, limits_enabled)
+         values ($1, 'visible-limits', true, true),
+                ($2, 'disabled-agent', false, true),
+                ($3, 'limits-disabled', true, false),
+                ($4, 'no-rules', true, true)`,
+        [visibleAgentId, disabledAgentId, limitsDisabledAgentId, noRulesAgentId],
+      );
+      await client.query(
+        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
+         values ($1, $2, 'rpm', 'minute', 60, 'requests'),
+                ($3, $4, 'rpm', 'minute', 60, 'requests'),
+                ($5, $6, 'rpm', 'minute', 60, 'requests')`,
+        [
+          randomUUID(),
+          visibleAgentId,
+          randomUUID(),
+          disabledAgentId,
+          randomUUID(),
+          limitsDisabledAgentId,
+        ],
+      );
+      await client.query(
+        `insert into rate_limit_windows (
+           id, agent_id, limit_type, window_start, window_end, request_count
+         ) values
+           ($1, $2, 'rpm', now() - interval '1 minute', now() + interval '1 minute', 5),
+           ($3, $4, 'rpm', now() - interval '1 minute', now() + interval '1 minute', 9),
+           ($5, $6, 'rpm', now() - interval '1 minute', now() + interval '1 minute', 11)`,
+        [
+          randomUUID(),
+          visibleAgentId,
+          randomUUID(),
+          disabledAgentId,
+          randomUUID(),
+          limitsDisabledAgentId,
+        ],
+      );
+    });
+
+    await expect(listAgentLimits(fixture.databaseUrl)).resolves.toMatchObject([
+      { agentId: visibleAgentId, limitType: "rpm", limitValue: 60 },
+    ]);
+    await expect(listAgentLimitRuntimeSnapshots(fixture.databaseUrl)).resolves.toMatchObject([
+      { agentId: visibleAgentId, currentRpm: 5 },
+    ]);
   } finally {
     await fixture.dispose();
   }

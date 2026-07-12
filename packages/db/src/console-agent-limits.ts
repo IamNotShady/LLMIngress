@@ -179,6 +179,10 @@ export function formatAgentLimitSummaries(
 }
 
 export async function listAgentLimits(databaseUrl?: string): Promise<ConsoleAgentLimit[]> {
+  return withPooledPostgresClient(databaseUrl, (client) => readVisibleAgentLimits(client));
+}
+
+export async function listSavedAgentLimits(databaseUrl?: string): Promise<ConsoleAgentLimit[]> {
   return withPooledPostgresClient(databaseUrl, (client) => readAgentLimits(client));
 }
 
@@ -357,6 +361,39 @@ async function readAgentLimits(
   }));
 }
 
+async function readVisibleAgentLimits(client: AgentLimitQueryClient): Promise<ConsoleAgentLimit[]> {
+  const result = await client.query<AgentLimitRow>(
+    `
+      select agent_limits.id::text,
+             agent_limits.agent_id::text as agent_id,
+             agent_limits.limit_type,
+             agent_limits.period,
+             agent_limits.limit_value::text,
+             agent_limits.unit,
+             agent_limits.enabled,
+             agent_limits.enforcement_policy,
+             agent_limits.manual_bypass
+      from agent_limits
+      inner join agents on agents.id = agent_limits.agent_id
+      where agents.enabled = true
+        and agents.limits_enabled = true
+        and agents.deleted_at is null
+      order by agent_limits.agent_id, agent_limits.limit_type
+    `,
+  );
+  return result.rows.map((row) => ({
+    agentId: row.agent_id,
+    enabled: row.enabled,
+    enforcementPolicy: row.enforcement_policy,
+    id: row.id,
+    limitType: row.limit_type,
+    limitValue: Number(row.limit_value),
+    manualBypass: row.manual_bypass,
+    period: row.period,
+    unit: row.unit,
+  }));
+}
+
 async function readAgentLimitBudgetUsage(
   client: AgentLimitQueryClient,
 ): Promise<AgentLimitBudgetUsageRow[]> {
@@ -369,10 +406,14 @@ async function readAgentLimitBudgetUsage(
                ) * 100
              )::text as budget_usage_percent
       from agent_limits
+      join agents on agents.id = agent_limits.agent_id
       join budget_periods
         on budget_periods.agent_id = agent_limits.agent_id
        and budget_periods.period_type = agent_limits.period
       where agent_limits.enabled = true
+        and agents.enabled = true
+        and agents.limits_enabled = true
+        and agents.deleted_at is null
         and agent_limits.limit_type = 'budget'
         and now() >= budget_periods.period_start
         and now() < budget_periods.period_end
@@ -395,8 +436,12 @@ async function readAgentLimitRateWindows(
              max(rate_limit_windows.active_count)
                filter (where rate_limit_windows.limit_type = 'concurrency') as current_concurrency
       from rate_limit_windows
+      join agents on agents.id = rate_limit_windows.agent_id
       where now() >= rate_limit_windows.window_start
         and now() < rate_limit_windows.window_end
+        and agents.enabled = true
+        and agents.limits_enabled = true
+        and agents.deleted_at is null
       group by rate_limit_windows.agent_id
     `,
   );
@@ -431,11 +476,15 @@ async function readAgentLimitErrorCounts(
                  and request_activity.started_at >= now() - interval '24 hours'
              )::integer as rate_limit_hits_24h
       from request_activity
+      join agents on agents.id = request_activity.agent_id
       where request_activity.error_code in (
         'rate_limit_exceeded',
         'cost_budget_exceeded',
         'token_budget_exceeded'
       )
+        and agents.enabled = true
+        and agents.limits_enabled = true
+        and agents.deleted_at is null
       group by request_activity.agent_id
     `,
   );

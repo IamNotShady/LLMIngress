@@ -66,11 +66,11 @@
     {
       "id": "console-core",
       "name": "Console Core",
-      "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation and forms.",
+      "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation, consistent desktop content widths, and readable paginated lists.",
       "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-12: All retained Console mutation forms intercept API failures so field errors render beside the matching input and operation errors stay in the current dialog. Provider relative timestamps use one server-supplied reference time and no longer hydrate with minute-boundary mismatches. Provider delete-race and Virtual Model duplicate-name real-process E2E pass."
+      "evidence": "2026-07-12: The desktop sidebar is 280px with 15px navigation labels. Activity and Limits share the 1600px content boundary used by Providers and Virtual Models, and Activity pages contain 20 rows. Focused unit/real-process E2E, pnpm run verify (62 files/319 tests), browser screenshots, and all 9 feature regressions pass without horizontal overflow."
     },
     {
       "id": "release-guards",

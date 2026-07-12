@@ -65,6 +65,32 @@ async function seedAuditData(databaseUrl: string) {
       [otherActivityId, otherAgentId, virtualModelId],
     );
     await client.query(
+      `insert into request_activity (
+         id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+         protocol, model, stream, status, http_status, latency_ms,
+         started_at, completed_at,
+         agent_name_snapshot, virtual_model_name_snapshot
+       )
+       select
+         gen_random_uuid(),
+         'gw_audit_page_' || page_number,
+         $1,
+         $2,
+         'llmi_audit_other',
+         'chat_completions',
+         'audit-model',
+         false,
+         'succeeded',
+         200,
+         800,
+         now() - interval '4 days' - page_number * interval '1 minute',
+         now() - interval '4 days' - page_number * interval '1 minute',
+         'audit-other-agent',
+         'audit-probe-vm'
+       from generate_series(1, 19) as page_number`,
+      [otherAgentId, virtualModelId],
+    );
+    await client.query(
       `insert into request_usage (
          id, request_activity_id, agent_id, virtual_model_id,
          input_tokens, output_tokens, total_tokens, token_source
@@ -176,6 +202,29 @@ test("console audit fixes keep time windows honest and prevent activity timestam
             ).toBeVisible();
             await expectActivityTimeCellContained(page);
           }
+
+          await page.setViewportSize({ width: 1920, height: 1080 });
+          await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
+          await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
+          await expect(page.locator(".pager-status")).toHaveText("1–20 of 21");
+
+          const sidebarMetrics = await page.locator(".sidebar").evaluate((sidebar) => ({
+            labelFontSize: getComputedStyle(sidebar.querySelector(".nav-item-label") as HTMLElement)
+              .fontSize,
+            width: getComputedStyle(sidebar).width,
+          }));
+          expect(sidebarMetrics).toEqual({ labelFontSize: "15px", width: "280px" });
+
+          const pageWidths: number[] = [];
+          for (const path of ["/providers", "/models", "/activity", "/limits"]) {
+            await page.goto(`${baseUrl}${path}`, { waitUntil: "networkidle" });
+            pageWidths.push(
+              await page
+                .locator(".page")
+                .evaluate((pageElement) => pageElement.getBoundingClientRect().width),
+            );
+          }
+          expect(pageWidths).toEqual([1600, 1600, 1600, 1600]);
 
           await page.goto(`${baseUrl}/activity?agentId=${seeded.agentId}`, {
             waitUntil: "networkidle",

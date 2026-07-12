@@ -26,6 +26,21 @@ const consoleSectionSource = () =>
 const css = () => appSource("globals.css");
 
 describe("console UI audit confirmed fixes static contract", () => {
+  test("sidebar and wide list pages use the shared desktop layout scale", () => {
+    const stylesheet = css();
+    expect(stylesheet).toMatch(/--sidebar-width:\s*17\.5rem/);
+    expect(stylesheet).toMatch(/\.nav-item-label\s*\{[^}]*font-size:\s*var\(--text-base\)/s);
+    expect(stylesheet).toMatch(/\.limits-page\s*\{[^}]*max-width:\s*100rem/s);
+    expect(stylesheet).toMatch(/\.activity-page\s*\{[^}]*max-width:\s*100rem/s);
+  });
+
+  test("activity uses a dedicated twenty-row page size", () => {
+    const activity = sectionSource("activity-section.tsx");
+    expect(activity).toContain("const ACTIVITY_PAGE_SIZE = 20;");
+    expect(activity).toContain("limit: ACTIVITY_PAGE_SIZE");
+    expect(activity).toContain("Math.ceil(total / ACTIVITY_PAGE_SIZE)");
+  });
+
   test("activity timestamp cells cannot paint into request id cells", () => {
     const stylesheet = css();
     expect(stylesheet).toMatch(

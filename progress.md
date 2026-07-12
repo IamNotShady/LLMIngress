@@ -54,10 +54,11 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Provider API-key and Subscription templates now expose editable base URLs with HTTPS/loopback validation, while OAuth issuer/token endpoints remain fixed. API-key persistence rejects non-API-key Providers before creating key/config/job rows.
 - Every Provider probe now runs as one composite model-refresh handler: Provider HTTP completes first, then one short transaction revalidates the Provider/credential snapshot and atomically commits model changes plus Provider/model health. Legacy connectivity jobs call the same handler, Job-ID retries are idempotent, and Gateway paired health writes use the same atomic DB API.
 - Provider API models are no longer filtered when both context and price are unknown. They remain available for chat-compatible probes and render as `Unknown` in the Console.
+- Console desktop navigation now uses a 280px sidebar with 15px labels. Activity and Limits share the same 1600px content boundary as Providers and Virtual Models, and Activity pagination now returns 20 requests per page.
 
 ## Verification
 
-Final 2026-07-12 result: `pnpm run verify` passed with 62 test files and 317 tests,
+Final 2026-07-12 result: `pnpm run verify` passed with 62 test files and 319 tests,
 and `pnpm run verify:features` re-verified all 9 milestones. Coverage is 47.98%
 statements, 48.13% lines, 40.33% branches, and 50.54% functions.
 

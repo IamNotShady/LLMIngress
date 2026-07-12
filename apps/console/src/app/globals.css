@@ -45,7 +45,7 @@
   --font-display: var(--font-body);
   --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
 
-  --sidebar-width: 15.625rem;
+  --sidebar-width: 17.5rem;
   --content-max: 76rem;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -344,7 +344,7 @@ pre,
   text-decoration: none;
 }
 .nav-item-label {
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 500;
 }
 .nav-item-hint {
@@ -2838,7 +2838,7 @@ button.table-row-link {
 
 /* ---- Limits reference layout ---- */
 .limits-page {
-  max-width: none;
+  max-width: 100rem;
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
     clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);
@@ -3097,7 +3097,7 @@ button.table-row-link {
 
 /* ---- Activity reference workspace ---- */
 .activity-page {
-  max-width: none;
+  max-width: 100rem;
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
     clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);

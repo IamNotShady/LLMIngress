@@ -21,7 +21,7 @@ import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
 import { Pager } from "../_components/list-ui";
-import { buildQueryHref, PAGE_SIZE, readPageParam } from "../_lib/pagination";
+import { buildQueryHref, readPageParam } from "../_lib/pagination";
 import {
   ActivityStatusPill,
   type ConsoleSearchParams,
@@ -30,6 +30,8 @@ import {
   formatDateTime,
   readSingleSearchParam,
 } from "./sections";
+
+const ACTIVITY_PAGE_SIZE = 20;
 
 function formatActivityLatency(latencyMs: number | null): string {
   if (latencyMs === null) {
@@ -264,7 +266,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
     listVirtualModels(),
     listProviders(),
     countConsoleActivities({ filters }),
-    listConsoleActivities({ filters, limit: PAGE_SIZE, page }),
+    listConsoleActivities({ filters, limit: ACTIVITY_PAGE_SIZE, page }),
   ]);
   const selectedListActivity = selectedActivityId
     ? (activities.find((activity) => activity.id === selectedActivityId) ?? null)
@@ -275,12 +277,12 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
   const selectedActivity = selectedDetail?.activity ?? selectedListActivity;
   const activityDetailCloseHref = buildQueryHref(searchParams, { activityId: undefined });
   const view = {
-    from: total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1,
+    from: total === 0 ? 0 : (page - 1) * ACTIVITY_PAGE_SIZE + 1,
     items: activities,
     page,
-    to: total === 0 ? 0 : (page - 1) * PAGE_SIZE + activities.length,
+    to: total === 0 ? 0 : (page - 1) * ACTIVITY_PAGE_SIZE + activities.length,
     total,
-    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    totalPages: Math.max(1, Math.ceil(total / ACTIVITY_PAGE_SIZE)),
   };
 
   return (

@@ -99,7 +99,7 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
 
       const responsesResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
-          input: "ping",
+          input: [{ content: [{ text: "ping", type: "input_text" }], role: "user" }],
           model: "vm-provider-responses-4xx",
         }),
         headers: {

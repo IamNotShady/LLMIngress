@@ -86,11 +86,13 @@ type ProviderRow = {
 };
 
 type WorkerConnectivityProvider = ConnectivityCheckProvider & {
+  providerModelId: string;
   provider_type: ProviderRow["provider_type"];
 };
 
 type ProviderModelRow = {
   context_window: number | null;
+  id: string;
   input_usd_per_million_tokens: string | null;
   model_id: string;
   output_usd_per_million_tokens: string | null;
@@ -176,7 +178,7 @@ export function createProviderConnectivityCheckJobHandler(
       provider,
       requestedProviderApiKeyId: payload.providerApiKeyId,
     });
-    await recordProviderHealthEvent({
+    const healthEvent = {
       databaseUrl: options.databaseUrl,
       errorCode: result.errorCode,
       errorMessage: result.errorMessage,
@@ -213,6 +215,11 @@ export function createProviderConnectivityCheckJobHandler(
       providerId: provider.id,
       status: result.status,
       trigger: job.trigger === "manual" ? "manual" : "worker_probe",
+    } as const;
+    await recordProviderHealthEvent(healthEvent);
+    await recordProviderHealthEvent({
+      ...healthEvent,
+      providerModelId: provider.providerModelId,
     });
     return result;
   };
@@ -279,7 +286,8 @@ async function readProvider(
 
     const modelResult = await client.query<ProviderModelRow>(
       `
-        select model_id,
+        select id::text,
+               model_id,
                context_window,
                coalesce(
                  manual_input_usd_per_million_tokens,
@@ -298,7 +306,8 @@ async function readProvider(
       [providerId],
     );
     const modelId = selectProviderProbeModel(modelResult.rows.map(toProbeModelCandidate));
-    if (!modelId) {
+    const providerModelId = modelResult.rows.find((model) => model.model_id === modelId)?.id;
+    if (!modelId || !providerModelId) {
       throw new Error("Provider has no ordinary chat-compatible models for connectivity check.");
     }
 
@@ -308,6 +317,7 @@ async function readProvider(
       id: row.id,
       modelId,
       providerKey: row.provider_key,
+      providerModelId,
       provider_type: row.provider_type,
     };
   });

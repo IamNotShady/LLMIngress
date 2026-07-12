@@ -1,10 +1,13 @@
 import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
+import { createLogger } from "@llmingress/logging";
 import {
   classifyProviderFailureStatus,
   shouldRecordProviderRequestPathHealthFailure,
 } from "@llmingress/provider/connectivity";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
+
+const logger = createLogger("gateway");
 
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
@@ -135,6 +138,16 @@ export async function executeProviderFallbackAttempts<
         };
       }
 
+      logger.error(
+        buildGatewayProviderErrorLog({
+          attemptOrder,
+          candidate,
+          requestId: input.requestId,
+          result,
+        }),
+        "gateway provider request failed",
+      );
+
       const failedAttempt = buildFallbackFailedAttempt({
         attemptOrder,
         providerApiKey,
@@ -164,6 +177,39 @@ export async function executeProviderFallbackAttempts<
   }
 
   return undefined;
+}
+
+export function buildGatewayProviderErrorLog(input: {
+  attemptOrder: number;
+  candidate: FallbackChainCandidate;
+  requestId?: string;
+  result: FallbackAttemptErrorLike;
+}): {
+  attemptOrder: number;
+  errorCode: string;
+  errorMessage: string;
+  modelId: string;
+  providerId: string;
+  providerKey: string;
+  providerModelId: string;
+  providerResponseBody: unknown;
+  providerResponseHeaders: Record<string, string>;
+  requestId?: string;
+  statusCode: number | null;
+} {
+  return {
+    attemptOrder: input.attemptOrder,
+    errorCode: input.result.errorCode,
+    errorMessage: input.result.errorMessage,
+    modelId: input.candidate.modelId,
+    providerId: input.candidate.providerId,
+    providerKey: input.candidate.providerKey,
+    providerModelId: input.candidate.providerModelId,
+    providerResponseBody: input.result.body ?? null,
+    providerResponseHeaders: input.result.headers ?? {},
+    ...(input.requestId ? { requestId: input.requestId } : {}),
+    statusCode: input.result.statusCode,
+  };
 }
 
 export function buildFallbackFailedAttempt(input: {

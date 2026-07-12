@@ -27,6 +27,11 @@ Gateway supports Chat Completions, Responses, Anthropic Messages, Embeddings, an
 Virtual Model discovery. Protocol handlers read only fields required for authentication,
 routing, capability validation, limits, and accounting. Agent payloads are otherwise passed
 through with the Virtual Model name replaced by the selected real model id.
+Provider protocol headers are preserved, while browser transport headers such as `Origin`,
+`Referer`, browser `User-Agent`, and every `Sec-*` header are removed before Provider dispatch.
+Responses requests use one strict canonical boundary: `input` must be a non-empty item array and
+message content must already be structured parts. Gateway does not repair string input, force
+Provider parameters, remove rejected fields, or bridge Provider SSE into non-streaming JSON.
 
 Each request captures an immutable configuration snapshot. Config reload builds and validates
 a replacement snapshot, then swaps it atomically. Reload failure keeps the last-known-good
@@ -50,9 +55,11 @@ JSON and Streaming share one fallback attempt executor. A Streaming attempt succ
 after first-byte read-ahead. Provider failures before the first client byte may advance to
 another credential or candidate; failures after output begins are not replayed.
 
-Background recording tasks are tracked and drained during shutdown. Prompt, response, and
-tool content are not valid logging inputs. Logger redaction provides a second barrier for
-authorization headers, cookies, keys, tokens, and body fields.
+Background recording tasks are tracked and drained during shutdown. Request prompts, successful
+responses, and tool content are not valid logging inputs. Failed Provider responses are logged in
+full with their status and response headers for diagnosis, without request bodies or credential
+headers. Logger redaction provides a second barrier for authorization headers, cookies, keys,
+tokens, and request body fields.
 
 ## Configuration and Routing
 
@@ -110,9 +117,9 @@ Deletes run in batches of at most 1,000 and check the shutdown signal between ba
 ## Provider Model Data
 
 Worker model refresh merges the Provider API with models.dev, OpenRouter, LiteLLM, and Vercel.
-Missing values remain unknown; model names are not used to infer core capabilities. Explicit
-source conflicts resolve to unknown until a manual override is provided. Manual values take
-precedence over synchronized values.
+The first available value wins in that order, so lower-priority sources only fill missing fields.
+Missing values remain unknown; model names are not used to infer core capabilities. Manual values
+take precedence over synchronized values.
 
 Provider credentials remain encrypted with the deployment master key. Authenticated Provider
 HTTP calls do not follow redirects. Connectivity probes and model-list requests share the same

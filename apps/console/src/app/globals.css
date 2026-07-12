@@ -584,6 +584,11 @@ pre,
 .field-error.is-visible {
   display: block;
 }
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+  border-color: var(--danger);
+}
 .form-error {
   margin: 0;
   padding: var(--space-xs) var(--space-sm);
@@ -1392,7 +1397,7 @@ body:has(.console-dialog[open]) {
   gap: var(--space-md);
 }
 .overview-stat-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .agents-stat-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1734,25 +1739,6 @@ body:has(.console-dialog[open]) {
   margin: var(--space-sm) 0 0;
   color: var(--text-subtle);
   font-size: var(--text-xs);
-}
-.model-capability-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(7rem, 1fr));
-  gap: var(--space-2xs);
-  min-width: 18rem;
-}
-.model-capability-form input,
-.model-capability-form select {
-  min-height: 1.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
-  color: var(--text);
-  font-size: var(--text-2xs);
-  padding: 0 var(--space-xs);
-}
-.model-capability-form button {
-  justify-content: center;
 }
 .providers-table {
   min-width: 780px;

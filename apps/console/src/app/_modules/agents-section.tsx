@@ -12,9 +12,11 @@ import {
 import { formatConsoleCompactCount, formatConsoleUsd } from "@llmingress/db/console-format";
 import type { ConsoleVirtualModel } from "@llmingress/db/console-virtual-models";
 import { ConsoleDialog } from "../_components/console-dialog";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
+import { AgentCreateDialogClient } from "./agent-create-dialog-client";
 import { loadAgentsSectionData } from "./agents-section-data";
 import {
   type ConsoleSearchParams,
@@ -112,119 +114,102 @@ function AgentCreateDialog({
   virtualModels: readonly ConsoleVirtualModel[];
 }) {
   return (
-    <ConsoleDialog
-      ariaLabelledby="new-agent-dialog-title"
-      className="console-dialog"
-      closeHref={closeHref}
-      triggerId="agent-create-dialog-trigger"
-    >
-      <div className="console-dialog-head">
-        <h2 id="new-agent-dialog-title">New agent</h2>
-        <a className="secondary-button" href={closeHref}>
-          <FlatIcon name="cancel" />
-          <span>Close</span>
-        </a>
-      </div>
-      <form className="provider-create-form" action="/api/agents" id="new-agent" method="post">
-        <input type="hidden" name="action" value="create" />
-        <label htmlFor="agent-name">Agent name</label>
-        <input id="agent-name" name="name" required />
-        <label htmlFor="agent-integration-platform">Integration platform</label>
-        <select
-          id="agent-integration-platform"
-          name="integrationPlatform"
-          required
-          defaultValue="other"
-        >
-          {agentIntegrationPlatforms.map((platform) => (
-            <option key={platform} value={platform}>
-              {formatAgentIntegrationPlatformLabel(platform)}
-            </option>
-          ))}
-        </select>
-        <span className="form-label" id="agent-allowed-virtual-models-label">
-          Allowed virtual models
-        </span>
-        <AgentAllowedVirtualModelsCheckboxes
-          labelId="agent-allowed-virtual-models-label"
-          selectedVirtualModelIds={[]}
-          virtualModels={virtualModels}
+    <AgentCreateDialogClient closeHref={closeHref}>
+      <input type="hidden" name="action" value="create" />
+      <label htmlFor="agent-name">Agent name</label>
+      <input id="agent-name" name="name" required />
+      <label htmlFor="agent-integration-platform">Integration platform</label>
+      <select
+        id="agent-integration-platform"
+        name="integrationPlatform"
+        required
+        defaultValue="other"
+      >
+        {agentIntegrationPlatforms.map((platform) => (
+          <option key={platform} value={platform}>
+            {formatAgentIntegrationPlatformLabel(platform)}
+          </option>
+        ))}
+      </select>
+      <span className="form-label" id="agent-allowed-virtual-models-label">
+        Allowed virtual models
+      </span>
+      <AgentAllowedVirtualModelsCheckboxes
+        labelId="agent-allowed-virtual-models-label"
+        selectedVirtualModelIds={[]}
+        virtualModels={virtualModels}
+      />
+      <label htmlFor="agent-default-virtual-model">Default virtual model</label>
+      <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
+        <option value="">No default virtual model</option>
+        {virtualModels.map((virtualModel) => (
+          <option key={virtualModel.id} value={virtualModel.id}>
+            {formatVirtualModelOptionLabel(virtualModel)}
+          </option>
+        ))}
+      </select>
+      <label className="checkbox-label agent-limit-toggle" htmlFor="agent-enable-limits">
+        <input id="agent-enable-limits" name="enableLimits" type="checkbox" value="true" />
+        <span>Enable limits</span>
+      </label>
+      <div className="agent-create-limit-fields">
+        <label htmlFor="agent-budget-usd">Budget USD limit</label>
+        <input
+          id="agent-budget-usd"
+          name="budgetUsd"
+          type="number"
+          min="0.000001"
+          step="0.000001"
+          defaultValue={defaultAgentLimitFormValues.budgetUsd}
         />
-        <label htmlFor="agent-default-virtual-model">Default virtual model</label>
-        <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
-          <option value="">No default virtual model</option>
-          {virtualModels.map((virtualModel) => (
-            <option key={virtualModel.id} value={virtualModel.id}>
-              {formatVirtualModelOptionLabel(virtualModel)}
-            </option>
-          ))}
+        <label htmlFor="agent-budget-period">Budget period</label>
+        <select
+          id="agent-budget-period"
+          name="budgetPeriod"
+          defaultValue={defaultAgentLimitFormValues.budgetPeriod}
+        >
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+          <option value="month">Month</option>
         </select>
-        <label className="checkbox-label agent-limit-toggle" htmlFor="agent-enable-limits">
-          <input id="agent-enable-limits" name="enableLimits" type="checkbox" value="true" />
-          <span>Enable limits</span>
-        </label>
-        <div className="agent-create-limit-fields">
-          <label htmlFor="agent-budget-usd">Budget USD limit</label>
-          <input
-            id="agent-budget-usd"
-            name="budgetUsd"
-            type="number"
-            min="0.000001"
-            step="0.000001"
-            defaultValue={defaultAgentLimitFormValues.budgetUsd}
-          />
-          <label htmlFor="agent-budget-period">Budget period</label>
-          <select
-            id="agent-budget-period"
-            name="budgetPeriod"
-            defaultValue={defaultAgentLimitFormValues.budgetPeriod}
-          >
-            <option value="day">Day</option>
-            <option value="week">Week</option>
-            <option value="month">Month</option>
-          </select>
-          <label htmlFor="agent-rpm">RPM limit</label>
-          <input
-            id="agent-rpm"
-            name="rpm"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={defaultAgentLimitFormValues.rpm}
-          />
-          <label htmlFor="agent-tpm">TPM limit</label>
-          <input
-            id="agent-tpm"
-            name="tpm"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={defaultAgentLimitFormValues.tpm}
-          />
-          <label htmlFor="agent-concurrency">Concurrency limit</label>
-          <input
-            id="agent-concurrency"
-            name="concurrency"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={defaultAgentLimitFormValues.concurrency}
-          />
-          <label htmlFor="agent-token-limit">Token limit</label>
-          <input
-            id="agent-token-limit"
-            name="tokenLimit"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={defaultAgentLimitFormValues.tokenLimit}
-          />
-        </div>
-        <button type="submit">
-          <span>Create</span>
-        </button>
-      </form>
-    </ConsoleDialog>
+        <label htmlFor="agent-rpm">RPM limit</label>
+        <input
+          id="agent-rpm"
+          name="rpm"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.rpm}
+        />
+        <label htmlFor="agent-tpm">TPM limit</label>
+        <input
+          id="agent-tpm"
+          name="tpm"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.tpm}
+        />
+        <label htmlFor="agent-concurrency">Concurrency limit</label>
+        <input
+          id="agent-concurrency"
+          name="concurrency"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.concurrency}
+        />
+        <label htmlFor="agent-token-limit">Token limit</label>
+        <input
+          id="agent-token-limit"
+          name="tokenLimit"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.tokenLimit}
+        />
+      </div>
+    </AgentCreateDialogClient>
   );
 }
 
@@ -262,7 +247,11 @@ function AgentEditDialog({
           <span>Close</span>
         </a>
       </div>
-      <form className="provider-edit-form" action="/api/agents" method="post">
+      <ConsoleMutationForm
+        action="/api/agents"
+        className="provider-edit-form"
+        fallbackError="Agent update failed."
+      >
         <input type="hidden" name="action" value="saveAll" />
         <input type="hidden" name="id" value={agent.id} />
         <label htmlFor={`agent-name-${agent.id}`}>Agent name</label>
@@ -382,7 +371,7 @@ function AgentEditDialog({
         <button type="submit">
           <span>Save</span>
         </button>
-      </form>
+      </ConsoleMutationForm>
     </ConsoleDialog>
   );
 }
@@ -439,14 +428,14 @@ function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHre
           <FlatIcon name="cancel" />
           <span>Cancel</span>
         </a>
-        <form action="/api/agents" method="post">
+        <ConsoleMutationForm action="/api/agents" fallbackError="Agent deletion failed.">
           <input type="hidden" name="action" value="delete" />
           <input type="hidden" name="id" value={agent.id} />
           <button className="agent-delete-confirm" type="submit">
             <FlatIcon name="delete" />
             <span>Delete</span>
           </button>
-        </form>
+        </ConsoleMutationForm>
       </div>
     </ConsoleDialog>
   );

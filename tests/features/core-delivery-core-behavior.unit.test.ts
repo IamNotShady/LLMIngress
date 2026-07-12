@@ -90,7 +90,7 @@ describe("core delivery behavior coverage", () => {
         defaultAgentCount: 0,
         routePolicyCount: 1,
       }),
-    ).toContain("route policy");
+    ).toBeNull();
     expect(
       getVirtualModelDeleteDependencyError({
         allowedAgentCount: 0,
@@ -132,9 +132,17 @@ describe("core delivery behavior coverage", () => {
     expect(isValidPlaygroundGatewayBaseUrl("not a url")).toBe(false);
     expect(buildPlaygroundChatRequest(input)).toMatchObject({ model: "virtual", stream: true });
     expect(buildPlaygroundMessagesRequest(input)).toMatchObject({ system: "system" });
-    expect(buildPlaygroundResponsesRequest(input)).toMatchObject({
+    expect(buildPlaygroundResponsesRequest(input)).toEqual({
+      input: [
+        {
+          content: [{ text: "hello", type: "input_text" }],
+          role: "user",
+        },
+      ],
       instructions: "system",
+      model: "virtual",
       store: false,
+      stream: true,
     });
     expect(readPlaygroundResponseText({ choices: [{ message: { content: " answer " } }] })).toBe(
       "answer",

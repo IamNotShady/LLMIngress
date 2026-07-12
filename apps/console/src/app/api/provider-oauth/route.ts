@@ -65,6 +65,9 @@ export const POST = withConsoleAuth(async (request) => {
       providerOAuthId: result.connection.id,
     });
   } catch (error) {
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return consoleActionErrorResponse(error, "Provider OAuth operation failed.");
+    }
     const providerId = readText(form, "providerId");
     if (providerId && (action === "start" || action === "complete")) {
       const verdict = classifyConsoleActionError(error, "Provider OAuth operation failed.");

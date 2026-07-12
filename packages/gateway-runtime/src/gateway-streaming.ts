@@ -1,6 +1,5 @@
 import type { Readable } from "node:stream";
 import { selectRouteAttempts } from "@llmingress/domain";
-import { createLogger } from "@llmingress/logging";
 import type { NormalizedAnthropicMessagesRequest } from "@llmingress/provider/anthropic";
 import {
   fetchCredentialedProviderRequest,
@@ -74,8 +73,6 @@ import {
   assertGatewayRequestWithinVirtualModelContract,
   assertGatewayVirtualModelCapabilityContract,
 } from "./gateway-virtual-model-capabilities.ts";
-
-const logger = createLogger("gateway");
 
 export type GatewayStreamingProtocol = "chat_completions" | "messages" | "responses";
 
@@ -385,16 +382,6 @@ async function callStreamingProvider(input: {
   const response = responseResult.response;
   if (!response.ok || !response.body) {
     const providerError = await readProviderErrorBody(response);
-    logger.error(
-      {
-        modelId: attemptedCandidate.modelId,
-        providerKey: attemptedCandidate.providerKey,
-        requestId: input.requestId,
-        statusCode: response.status,
-        url: providerUrl,
-      },
-      "gateway provider streaming request failed",
-    );
     const errorCode: GatewayErrorCode =
       response.status === 429
         ? "provider_rate_limited"

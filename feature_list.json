@@ -16,7 +16,7 @@
       "verification": "pnpm exec vitest run tests/features/provider-model-capability-sync.unit.test.ts tests/features/console-provider-dependency-guard.unit.test.ts tests/features/provider-authenticated-http-safety.unit.test.ts && pnpm test:e2e tests/e2e/provider-model-capability-sync.e2e.spec.ts tests/e2e/console-provider-dependency-guard.e2e.spec.ts tests/e2e/provider-authenticated-http-safety.e2e.spec.ts",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-11: Provider/model sync, credentials, HTTP safety, and dependency behavior pass focused unit and E2E coverage."
+      "evidence": "2026-07-11: Provider/model sync preserves Provider API > models.dev > OpenRouter > LiteLLM > Vercel priority, removes conflict-to-unknown calculation, and a successful connectivity probe restores both Provider and selected-model health. Focused unit and database E2E coverage pass."
     },
     {
       "id": "virtual-model-routing",
@@ -25,7 +25,7 @@
       "verification": "pnpm exec vitest run tests/features/virtual-model-capability-contract.unit.test.ts tests/features/virtual-model-endpoint-routing.unit.test.ts tests/features/gateway-fallback-health.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-capability-contract.e2e.spec.ts tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts tests/e2e/gateway-fallback-health.e2e.spec.ts",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-11: Capability consistency, endpoint protocol selection, health filtering, and fallback state-machine behavior pass."
+      "evidence": "2026-07-12: Capability consistency, endpoint protocol selection, health filtering, and fallback behavior pass. Virtual Model deletion now blocks only Agent defaults/grants and transactionally retires the Virtual Model's owned Route Policy. Real Console E2E verifies route-owned deletion and inline duplicate-name errors."
     },
     {
       "id": "gateway-protocol-execution",
@@ -34,7 +34,7 @@
       "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts tests/features/gateway-metadata-only-logging.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts tests/e2e/gateway-metadata-only-logging.e2e.spec.ts",
       "dependencies": ["virtual-model-routing"],
       "status": "passing",
-      "evidence": "2026-07-11: All four public protocols, streaming/error fidelity, secret-free logs, and provider smoke E2E pass. Activity assertions now wait up to five seconds for the intentionally asynchronous metadata write."
+      "evidence": "2026-07-11: All four public protocols, streaming/error fidelity, request-metadata-only logs, and provider smoke E2E pass. Responses requires canonical list input and performs no Codex parameter rewriting or SSE-to-JSON bridging. Gateway strips browser transport headers before Provider dispatch, Provider failures log their complete upstream response, and Claude Code Messages retains its required Agent SDK identity and Subscription headers."
     },
     {
       "id": "agent-access-and-limits",
@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-11: All eight retained pages were rendered against a fresh database. Core onboarding, accurate Gateway target labeling, actionable empty states, Virtual Model recovery guidance, responsive navigation, shared pooling, compact KPIs, UTC Usage dates, and server-side model pagination pass focused unit and real-process E2E."
+      "evidence": "2026-07-12: All retained Console mutation forms intercept API failures so field errors render beside the matching input and operation errors stay in the current dialog. Provider relative timestamps use one server-supplied reference time and no longer hydrate with minute-boundary mismatches. Provider delete-race and Virtual Model duplicate-name real-process E2E pass."
     },
     {
       "id": "release-guards",
@@ -79,7 +79,7 @@
       "verification": "pnpm exec vitest run tests/features/core-baseline-compression.unit.test.ts tests/features/core-delivery-hardening.unit.test.ts tests/features/core-delivery-core-behavior.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/core-baseline-compression.e2e.spec.ts tests/e2e/core-delivery-hardening.e2e.spec.ts tests/e2e/v1-platform.e2e.spec.ts tests/e2e/v1-release-guards.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-11: One reproducible 24-table baseline, native accessible dialogs, strict parseArgs CLIs, four non-root compiled runtime images, deleted-surface guards, and enforced 45/45/38/50 coverage thresholds pass."
+      "evidence": "2026-07-11: One reproducible 24-table baseline, native accessible dialogs, strict parseArgs CLIs, four non-root compiled runtime images, deleted-surface guards, and enforced 45/45/38/50 coverage thresholds pass. Release guards were revalidated after the transient routing E2E startup failure passed in isolation."
     }
   ]
 }

@@ -10,12 +10,15 @@ const providerRequestHeaderDenylist = new Set([
   "expect",
   "host",
   "keep-alive",
+  "origin",
   "proxy-authenticate",
   "proxy-authorization",
+  "referer",
   "te",
   "trailer",
   "transfer-encoding",
   "upgrade",
+  "user-agent",
   "x-api-key",
 ]);
 
@@ -26,7 +29,11 @@ export function readGatewayProviderRequestHeaders(
 
   for (const [rawName, rawValue] of Object.entries(headers)) {
     const name = rawName.toLowerCase();
-    if (providerRequestHeaderDenylist.has(name) || name.startsWith("proxy-")) {
+    if (
+      providerRequestHeaderDenylist.has(name) ||
+      name.startsWith("proxy-") ||
+      name.startsWith("sec-")
+    ) {
       continue;
     }
 

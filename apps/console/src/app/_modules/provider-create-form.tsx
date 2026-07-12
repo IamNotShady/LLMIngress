@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon, type FlatIconName } from "../_components/flat-icon";
 
 export type ProviderCreateChoice = {
@@ -64,7 +65,11 @@ export function ProviderCreateForm({
   };
 
   return (
-    <form className="provider-create-form" action="/api/providers" method="post">
+    <ConsoleMutationForm
+      action="/api/providers"
+      className="provider-create-form"
+      fallbackError="Provider creation failed."
+    >
       <input type="hidden" name="action" value={choice.action} />
       <input type="hidden" name="providerKey" value={choice.providerKey} />
       <input type="hidden" name="providerType" value={choice.providerType} />
@@ -164,7 +169,7 @@ export function ProviderCreateForm({
       <button type="submit">
         <span>Create</span>
       </button>
-    </form>
+    </ConsoleMutationForm>
   );
 }
 

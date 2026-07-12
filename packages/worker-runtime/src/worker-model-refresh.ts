@@ -145,7 +145,6 @@ type ProviderModelRow = {
 
 const workerManagedCapabilityMetadataKeys = [
   "syncedCapabilities",
-  "conflicts",
   "tools",
   "reasoning",
   "reasoningLevels",
@@ -397,7 +396,6 @@ function buildProviderModelCapabilityMetadata(
   },
 ): Record<string, unknown> {
   const resolved = resolveProviderModelCapabilities({
-    conflicts: entry.capabilityConflicts,
     registrySources: entry.registrySources,
     registrySyncedAt: entry.syncedAt.toISOString(),
     syncedCapabilities: input.syncedCapabilities,
@@ -422,7 +420,6 @@ function applyExistingManualCapabilities(
   const syncedCapabilities =
     listedMetadata.syncedCapabilities ?? buildSyncedCapabilitiesFromListedModel(listed);
   const resolved = resolveProviderModelCapabilities({
-    conflicts: listedMetadata.conflicts,
     manualCapabilities: existingMetadata.manualCapabilities,
     registrySources: listedMetadata.registrySources,
     registrySyncedAt: listedMetadata.registrySyncedAt,
@@ -464,9 +461,6 @@ function readCapabilityMetadata(
 ): ProviderModelCapabilityMetadata {
   const record = value ?? {};
   return {
-    conflicts: isRecord(record.conflicts)
-      ? (record.conflicts as ProviderModelCapabilityMetadata["conflicts"])
-      : undefined,
     manualCapabilities: isRecord(record.manualCapabilities)
       ? (record.manualCapabilities as ProviderModelCapabilityMetadata["manualCapabilities"])
       : undefined,

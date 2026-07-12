@@ -43,12 +43,20 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - `c16fed90` — added shared pooling, parallel Console reads, compact KPIs, correct Usage dates, and server-paginated models.
 - Core delivery hardening is implemented: native accessible dialogs, strict migration CLIs, four compiled non-root runtime images, and enforced JSON coverage thresholds.
 - Post-slimming Console audit completed across all eight retained pages: fresh installs now show the core Provider → Virtual Model → Agent → Playground path, empty states link to their prerequisites, and the sidebar no longer implies Gateway readiness without a health signal.
+- Provider model capability refresh now keeps the first available value by source priority and no longer computes conflicts that erase explicit values; the current OpenAI Codex model catalog was refreshed and restored GPT-5.4-Mini and GPT-5.5 to 272K context.
+- Successful Provider connectivity checks now restore the selected probe model's health as well as the Provider health. The current GPT-5.4-Mini route candidate was recovered from `unhealthy` to `healthy`, so it is no longer removed from the fallback chain.
+- Gateway fallback failures log the complete Provider response body, response headers, status, Provider, model, and request ID without logging the outbound request or credentials. Provider HTTP 400 failures remain request-level errors and do not change Provider or model health.
+- Responses now has a strict boundary: Playground sends canonical list input, Gateway rejects string input before routing, and Codex adapters no longer force `store`/`stream`, remove parameters, rewrite input, or bridge SSE into non-streaming JSON. Claude Code Messages retains its required Agent SDK system identity.
+- Provider API Key creation now stays on the Providers page and shows the one-time plaintext in the shared native dialog; closing the dialog returns to the refreshed key list instead of leaving users on a standalone HTML page.
+- Gateway Provider dispatch now strips browser `Origin`, `Referer`, browser `User-Agent`, and all `Sec-*` headers while preserving protocol headers. The Claude Code Subscription adapter retains `anthropic-dangerous-direct-browser-access: true` because the official Claude Code CLI sends it; removing the forwarded browser Origin fixes the Organization CORS rejection without changing Subscription identity.
+- Console mutation forms now submit with same-origin fetch and keep API failures in the current screen or dialog. Structured errors with a field render as red text beside that input; Provider delete races and other operation-level conflicts render inline instead of navigating to raw JSON.
+- Provider relative timestamps use one server-generated reference timestamp, removing the `49 min ago` / `50 min ago` hydration mismatch. Virtual Model deletion now checks only Agent default/grant usage and transactionally retires its owned Route Policy.
 
 ## Verification
 
-Final 2026-07-11 result: migration check passed, `pnpm run verify` passed with 60 test files
-and 304 tests, and `pnpm run verify:features` re-verified all 9 milestones. Coverage is
-48.14% statements, 48.28% lines, 40.81% branches, and 50.83% functions.
+Final 2026-07-12 result: migration check passed, `pnpm run verify` passed with 61 test files
+and 313 tests, and `pnpm run verify:features` re-verified all 9 milestones. Coverage is 48.01%
+statements, 48.17% lines, 40.50% branches, and 50.87% functions.
 
 Database-backed checks use:
 

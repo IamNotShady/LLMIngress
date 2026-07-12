@@ -13,7 +13,10 @@ import {
   joinProviderStreamingUrl,
   resolveProviderStreamingDialect,
 } from "../../packages/provider/src/dialect";
-import { claudeCodeBetaFlags } from "../../packages/provider/src/subscription";
+import {
+  claudeCodeBetaFlags,
+  claudeCodeSystemPrompt,
+} from "../../packages/provider/src/subscription";
 
 const protocolHeaders = (apiKey: string) => ({
   authorization: `Bearer ${apiKey}`,
@@ -74,20 +77,16 @@ describe("provider streaming dialects", () => {
       "content-type": "application/json",
       originator: "codex_cli_rs",
     });
-    expect(
-      dialect.transformBody(
-        {
-          input: "hello",
-          stream: true,
-          temperature: 0.2,
-        },
-        "responses",
-      ),
-    ).toMatchObject({
-      input: "hello",
-      stream: true,
+    const body = {
+      input: [{ content: [{ text: "hello", type: "input_text" }], role: "user" }],
+      max_output_tokens: 1024,
+      metadata: { source: "client" },
+      store: true,
+      stream: false,
       temperature: 0.2,
-    });
+      top_p: 0.9,
+    };
+    expect(dialect.transformBody(body, "responses")).toBe(body);
   });
 
   it("maps Claude Code subscriptions to the messages dialect", () => {
@@ -105,6 +104,7 @@ describe("provider streaming dialects", () => {
     );
     expect(headers).toMatchObject({
       authorization: "Bearer claude-token",
+      "anthropic-dangerous-direct-browser-access": "true",
       "anthropic-version": "2024-01-01",
       "content-type": "application/json",
       "x-app": "cli",
@@ -116,7 +116,10 @@ describe("provider streaming dialects", () => {
     }
     expect(new Set(betas).size).toBe(betas.length);
     expect(dialect.transformBody({ system: "Use terse replies." }, "messages")).toEqual({
-      system: "Use terse replies.",
+      system: [
+        { text: claudeCodeSystemPrompt, type: "text" },
+        { text: "Use terse replies.", type: "text" },
+      ],
     });
   });
 
@@ -232,9 +235,11 @@ describe("provider adapter headers", () => {
 
   it("merges Claude Code Agent beta headers with required subscription beta flags", async () => {
     let upstreamHeaders = new Headers();
+    let upstreamBody: Record<string, unknown> = {};
     const adapter = createClaudeCodeProviderAdapter({
       fetch: async (_url, init) => {
         upstreamHeaders = new Headers(init?.headers);
+        upstreamBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
         return new Response(JSON.stringify({ id: "msg_123", type: "message" }), {
           headers: { "content-type": "application/json" },
           status: 200,
@@ -269,6 +274,7 @@ describe("provider adapter headers", () => {
       expect(betas).toContain(requiredBeta);
     }
     expect(new Set(betas).size).toBe(betas.length);
+    expect(upstreamBody.system).toEqual([{ text: claudeCodeSystemPrompt, type: "text" }]);
   });
 });
 

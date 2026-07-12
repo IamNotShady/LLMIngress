@@ -13,9 +13,11 @@ import {
 } from "@llmingress/db/console-providers";
 import { listProviderModelPage } from "@llmingress/db/console-route-policies";
 import { ConsoleDialog } from "../_components/console-dialog";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref } from "../_lib/pagination";
 import { ProviderCreateForm } from "./provider-create-form";
+import { ProviderKeyCreateDialogClient } from "./provider-key-create-dialog-client";
 import { ProvidersClientSection } from "./providers-client-section";
 import {
   type ConsoleSearchParams,
@@ -148,7 +150,11 @@ function ProviderEditDialog({
           <span>Close</span>
         </a>
       </div>
-      <form className="provider-create-form" action="/api/providers" method="post">
+      <ConsoleMutationForm
+        action="/api/providers"
+        className="provider-create-form"
+        fallbackError="Provider update failed."
+      >
         <input type="hidden" name="action" value="update" />
         <input type="hidden" name="id" value={provider.id} />
         {formError ? (
@@ -192,58 +198,7 @@ function ProviderEditDialog({
         <button type="submit">
           <span>Save</span>
         </button>
-      </form>
-    </ConsoleDialog>
-  );
-}
-
-function ProviderKeyCreateDialog({
-  closeHref,
-  provider,
-}: {
-  closeHref: string;
-  provider: ConsoleProvider;
-}) {
-  return (
-    <ConsoleDialog
-      ariaLabelledby="provider-key-create-title"
-      className="console-dialog provider-key-dialog"
-      closeHref={closeHref}
-      triggerId={`provider-key-${provider.id}-trigger`}
-    >
-      <div className="console-dialog-head">
-        <h2 id="provider-key-create-title">New {provider.displayName} API key</h2>
-        <a className="secondary-button" href={closeHref}>
-          <FlatIcon name="cancel" />
-          <span>Close</span>
-        </a>
-      </div>
-      <form className="provider-create-form" action="/api/provider-keys" method="post">
-        <input type="hidden" name="providerId" value={provider.id} />
-        <label htmlFor="provider-key-create-value">Provider API key</label>
-        <input
-          autoComplete="off"
-          id="provider-key-create-value"
-          name="providerApiKey"
-          required
-          type="password"
-        />
-        <label htmlFor="provider-key-create-label">Label</label>
-        <input id="provider-key-create-label" maxLength={100} name="label" type="text" />
-        <label htmlFor="provider-key-create-priority">Priority</label>
-        <input
-          defaultValue={100}
-          id="provider-key-create-priority"
-          max={100}
-          min={0}
-          name="priority"
-          step={1}
-          type="number"
-        />
-        <button type="submit">
-          <span>Save</span>
-        </button>
-      </form>
+      </ConsoleMutationForm>
     </ConsoleDialog>
   );
 }
@@ -303,7 +258,11 @@ function ProviderOAuthCreateDialog({
               <span>Open authorization URL</span>
             </a>
           </div>
-          <form className="provider-create-form" action="/api/provider-oauth" method="post">
+          <ConsoleMutationForm
+            action="/api/provider-oauth"
+            className="provider-create-form"
+            fallbackError="Provider OAuth connection failed."
+          >
             <input type="hidden" name="action" value="complete" />
             <input type="hidden" name="providerId" value={provider.id} />
             <input type="hidden" name="providerOAuthId" value={providerOAuthId} />
@@ -334,7 +293,7 @@ function ProviderOAuthCreateDialog({
               <FlatIcon name="confirm" />
               <span>Connect OAuth</span>
             </button>
-          </form>
+          </ConsoleMutationForm>
         </>
       ) : null}
     </ConsoleDialog>
@@ -430,14 +389,14 @@ function ProviderDeleteDialog({
           <span>Cancel</span>
         </a>
         {hasBlockers ? null : (
-          <form action="/api/providers" method="post">
+          <ConsoleMutationForm action="/api/providers" fallbackError="Provider deletion failed.">
             <input type="hidden" name="action" value="delete" />
             <input type="hidden" name="id" value={provider.id} />
             <button className="agent-delete-confirm" type="submit">
               <FlatIcon name="delete" />
               <span>Delete provider</span>
             </button>
-          </form>
+          </ConsoleMutationForm>
         )}
       </div>
     </ConsoleDialog>
@@ -472,14 +431,17 @@ function ProviderKeyDeleteDialog({
           <FlatIcon name="cancel" />
           <span>Cancel</span>
         </a>
-        <form action="/api/provider-keys" method="post">
+        <ConsoleMutationForm
+          action="/api/provider-keys"
+          fallbackError="Provider API key deletion failed."
+        >
           <input type="hidden" name="action" value="delete" />
           <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />
           <button className="agent-delete-confirm" type="submit">
             <FlatIcon name="delete" />
             <span>Delete key</span>
           </button>
-        </form>
+        </ConsoleMutationForm>
       </div>
     </ConsoleDialog>
   );
@@ -508,6 +470,7 @@ function orderProvidersForConsole(providers: ConsoleProvider[]): ConsoleProvider
   });
 }
 export async function ProvidersSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
+  const renderedAtMs = Date.now();
   const [providerRows, providerHealthSummaries, providerKeys, providerOAuthConnections] =
     await Promise.all([
       listProviders(),
@@ -595,6 +558,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
         providerModelPage={providerModelPage}
         providerOAuthConnections={providerOAuthConnections}
         providers={providers}
+        renderedAtMs={renderedAtMs}
         modelQuery={modelQuery}
         searchParams={searchParams}
       />
@@ -618,9 +582,10 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
             priorityValue={providerOAuthPriorityValue}
           />
         ) : (
-          <ProviderKeyCreateDialog
+          <ProviderKeyCreateDialogClient
             closeHref={providerKeyDialogCloseHref}
-            provider={selectedProvider}
+            providerId={selectedProvider.id}
+            providerName={selectedProvider.displayName}
           />
         )
       ) : null}

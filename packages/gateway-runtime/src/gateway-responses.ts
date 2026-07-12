@@ -47,7 +47,10 @@ export function normalizeOpenAIResponsesRequest(
     return invalidResponsesRequest(requestId);
   }
 
-  const input = readResponsesInput(body.input) ?? [];
+  const input = readResponsesInput(body.input);
+  if (input === null) {
+    return invalidResponsesRequest(requestId);
+  }
 
   const instructions = readOptionalStringOrNull(body.instructions);
 
@@ -141,10 +144,7 @@ export async function executeGatewayOpenAIResponse(input: {
   });
 }
 
-function readResponsesInput(value: unknown): string | NormalizedOpenAIResponsesInputItem[] | null {
-  if (typeof value === "string" && value.trim()) {
-    return value;
-  }
+function readResponsesInput(value: unknown): NormalizedOpenAIResponsesInputItem[] | null {
   if (!Array.isArray(value) || value.length === 0) {
     return null;
   }
@@ -159,6 +159,9 @@ function readResponsesInput(value: unknown): string | NormalizedOpenAIResponsesI
 function readResponsesInputItem(value: unknown): NormalizedOpenAIResponsesInputItem | null {
   if (!isRecord(value)) {
     return null;
+  }
+  if (value.type === "message") {
+    return readResponsesInputMessage(value);
   }
   if (typeof value.type === "string" && value.type.trim()) {
     return value;
@@ -190,10 +193,7 @@ function readResponsesMessageContent(
   value: unknown,
   role: NormalizedOpenAIResponsesInputMessage["role"],
 ): NormalizedOpenAIResponsesInputMessage["content"] | null {
-  if (typeof value === "string" && (value.trim() || role === "assistant")) {
-    return value;
-  }
-  if (!Array.isArray(value) || value.length === 0) {
+  if (!Array.isArray(value) || (value.length === 0 && role !== "assistant")) {
     return null;
   }
   if (value.some((part) => !isRecord(part))) {

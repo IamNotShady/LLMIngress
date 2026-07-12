@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
 import {
+  buildGatewayProviderErrorLog,
   executeProviderFallbackAttempts,
   type FallbackChainCandidate,
   type FallbackFailedAttempt,
@@ -10,6 +11,45 @@ import {
 } from "../../packages/gateway-runtime/src/gateway-fallback-chain";
 
 describe("gateway fallback health", () => {
+  it("keeps the complete Provider error response in the server log payload", () => {
+    const body = {
+      detail: "Input must be a list",
+      error: { code: "invalid_request", metadata: { field: "input" } },
+    };
+    const headers = {
+      "content-type": "application/json",
+      "x-provider-request-id": "provider-request-1",
+    };
+
+    expect(
+      buildGatewayProviderErrorLog({
+        attemptOrder: 2,
+        candidate: fallbackCandidate({ modelId: "provider-model" }),
+        requestId: "gateway-request-1",
+        result: {
+          body,
+          errorCode: "invalid_request",
+          errorMessage: "Provider rejected the request.",
+          headers,
+          ok: false,
+          statusCode: 400,
+        },
+      }),
+    ).toEqual({
+      attemptOrder: 2,
+      errorCode: "invalid_request",
+      errorMessage: "Provider rejected the request.",
+      modelId: "provider-model",
+      providerId: "provider-1",
+      providerKey: "openai",
+      providerModelId: "pm-1",
+      providerResponseBody: body,
+      providerResponseHeaders: headers,
+      requestId: "gateway-request-1",
+      statusCode: 400,
+    });
+  });
+
   it("tries the next credential on auth, quota, and rate-limit failures", async () => {
     const calls: string[] = [];
     const fallbackAttempts: FallbackFailedAttempt[] = [];
@@ -126,7 +166,7 @@ describe("gateway fallback health", () => {
     );
   });
 
-  it("falls back for recognized client request errors without polluting provider health", async () => {
+  it("falls back for any Provider HTTP 400 without polluting provider health", async () => {
     const calls: string[] = [];
     const fallbackAttempts: FallbackFailedAttempt[] = [];
     const recordHealthEvent = vi.fn();
@@ -136,8 +176,8 @@ describe("gateway fallback health", () => {
         calls.push(`${candidate.providerModelId}:${providerApiKey.keyPrefix}`);
         if (candidate.providerModelId === "pm-1") {
           return {
-            errorCode: "invalid_request_error",
-            errorMessage: "unsupported parameter temperature",
+            errorCode: "provider_http_error",
+            errorMessage: "Input must be a list",
             ok: false,
             statusCode: 400,
           };

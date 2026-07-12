@@ -67,6 +67,9 @@ export const POST = withConsoleAuth(async (request) => {
       );
     }
   } catch (error) {
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
     const verdict = classifyConsoleActionError(error, "Provider action failed.");
     if (verdict.status === 500) {
       return consoleActionErrorResponse(error, "Provider action failed.");

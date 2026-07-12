@@ -43,7 +43,7 @@ const defaultGatewayErrorMessage: Record<GatewayErrorCode, string> = {
   invalid_messages_request:
     "Anthropic messages request must include max_tokens and at least one message.",
   invalid_responses_request:
-    "Responses request must include stateless string input or message input.",
+    "Responses request must include a non-empty input item list with structured message content.",
   missing_agent_api_key: "Agent API key is required.",
   missing_model: "Model is required and no default Virtual Model is configured.",
   provider_credentials_missing: "Provider credentials are not configured for the selected route.",

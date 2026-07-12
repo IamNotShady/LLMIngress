@@ -8,6 +8,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  withClaudeCodeSystemPrompt,
 } from "../subscription.js";
 import {
   isRecord,
@@ -84,11 +85,15 @@ export function createClaudeCodeProviderAdapter(
   return {
     messages: async ({ headers, request, target }): Promise<AnthropicAdapterResult> => {
       try {
+        const payload = buildAnthropicMessagesPayload(request, target);
         const response = await fetchCredentialedProviderRequest(
           fetchImpl,
           buildClaudeCodeMessagesUrl(target.baseUrl),
           {
-            body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
+            body: JSON.stringify({
+              ...payload,
+              system: withClaudeCodeSystemPrompt(payload.system),
+            }),
             headers: buildClaudeCodeSubscriptionHeaders(target.apiKey ?? "", headers),
             method: "POST",
             signal: AbortSignal.timeout(timeoutMs),

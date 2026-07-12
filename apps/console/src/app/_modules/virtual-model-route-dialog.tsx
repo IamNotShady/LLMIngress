@@ -2,6 +2,7 @@
 
 import { type DragEvent, useMemo, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 
 type Strategy = "fixed" | "cost_first" | "random";
@@ -169,7 +170,11 @@ export function VirtualModelRouteDialogClient({
           </a>
         </div>
         <div className="vm-editor-grid">
-          <form className="vm-editor-form" action="/api/virtual-models" method="post">
+          <ConsoleMutationForm
+            action="/api/virtual-models"
+            className="vm-editor-form"
+            fallbackError="Virtual Model operation failed."
+          >
             <input
               type="hidden"
               name="action"
@@ -332,7 +337,7 @@ export function VirtualModelRouteDialogClient({
                 <span>{virtualModel ? "Save" : "Create"}</span>
               </button>
             </div>
-          </form>
+          </ConsoleMutationForm>
         </div>
       </ConsoleDialog>
 

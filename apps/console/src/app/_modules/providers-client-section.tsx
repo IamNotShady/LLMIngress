@@ -4,13 +4,12 @@ import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provid
 import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-keys";
 import type { ConsoleProviderOAuthConnection } from "@llmingress/db/console-provider-oauth";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
-import type {
-  ConsoleProviderModelOption,
-  ConsoleProviderModelPage,
-} from "@llmingress/db/console-route-policies";
+import type { ConsoleProviderModelPage } from "@llmingress/db/console-route-policies";
 import { type FormEvent, Fragment, useMemo, useState } from "react";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
+import { formatRelativeDateTime } from "../_lib/provider-relative-time";
 
 export function ProvidersClientSection({
   initialSelectedProviderId,
@@ -20,6 +19,7 @@ export function ProvidersClientSection({
   providerModelPage,
   providerOAuthConnections,
   providers,
+  renderedAtMs,
   searchParams,
 }: {
   initialSelectedProviderId?: string;
@@ -29,6 +29,7 @@ export function ProvidersClientSection({
   providerModelPage: ConsoleProviderModelPage;
   providerOAuthConnections: ConsoleProviderOAuthConnection[];
   providers: ConsoleProvider[];
+  renderedAtMs: number;
   searchParams: ConsoleSearchParams;
 }) {
   const providerHealthByProviderId = useMemo(
@@ -49,28 +50,12 @@ export function ProvidersClientSection({
     providers[0] ??
     null;
   const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
-  const [savingCapabilityModelId, setSavingCapabilityModelId] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const refreshProviderModels = async (event: FormEvent<HTMLFormElement>, providerId: string) => {
     event.preventDefault();
     const form = event.currentTarget;
+    setRefreshError(null);
     setRefreshingProviderId(providerId);
-    try {
-      await fetch(form.action, {
-        method: "POST",
-        body: new FormData(form),
-        credentials: "same-origin",
-        headers: { accept: "application/json" },
-      });
-    } catch {
-      // ponytail: no toast yet; surface enqueue failures when refresh status UI exists.
-    } finally {
-      setRefreshingProviderId(null);
-    }
-  };
-  const saveModelCapabilities = async (event: FormEvent<HTMLFormElement>, modelId: string) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    setSavingCapabilityModelId(modelId);
     try {
       const response = await fetch(form.action, {
         method: "POST",
@@ -78,13 +63,14 @@ export function ProvidersClientSection({
         credentials: "same-origin",
         headers: { accept: "application/json" },
       });
-      if (response.ok) {
-        window.location.reload();
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        setRefreshError(payload.error ?? "Provider model refresh failed.");
       }
     } catch {
-      // Keep the table usable; detailed form errors are returned by the API.
+      setRefreshError("Provider model refresh failed.");
     } finally {
-      setSavingCapabilityModelId(null);
+      setRefreshingProviderId(null);
     }
   };
   const selectedProvider = initialProvider;
@@ -102,6 +88,11 @@ export function ProvidersClientSection({
         <div className="providers-main-column">
           <div className="chart-card providers-list-card">
             <h2 className="chart-card-title">Provider list</h2>
+            {refreshError ? (
+              <p className="form-error" role="alert">
+                {refreshError}
+              </p>
+            ) : null}
             {providers.length === 0 ? (
               <p>No providers configured.</p>
             ) : (
@@ -215,7 +206,7 @@ export function ProvidersClientSection({
                                   selected: provider.id,
                                 })}
                               >
-                                {formatProviderLastConnection(providerHealth)}
+                                {formatProviderLastConnection(providerHealth, renderedAtMs)}
                               </a>
                             </td>
                             <td>
@@ -255,7 +246,10 @@ export function ProvidersClientSection({
                                     >
                                       <FlatIcon name="edit" />
                                     </a>
-                                    <form action="/api/providers" method="post">
+                                    <ConsoleMutationForm
+                                      action="/api/providers"
+                                      fallbackError="Provider disable failed."
+                                    >
                                       <input type="hidden" name="action" value="disable" />
                                       <input type="hidden" name="id" value={provider.id} />
                                       <button
@@ -266,7 +260,7 @@ export function ProvidersClientSection({
                                       >
                                         <FlatIcon name="disable" />
                                       </button>
-                                    </form>
+                                    </ConsoleMutationForm>
                                     <a
                                       className="provider-action-button provider-action-delete row-action-button row-action-danger"
                                       href={buildQueryHref(searchParams, {
@@ -282,7 +276,10 @@ export function ProvidersClientSection({
                                   </>
                                 ) : (
                                   <>
-                                    <form action="/api/providers" method="post">
+                                    <ConsoleMutationForm
+                                      action="/api/providers"
+                                      fallbackError="Provider enable failed."
+                                    >
                                       <input type="hidden" name="action" value="enable" />
                                       <input type="hidden" name="id" value={provider.id} />
                                       <button
@@ -293,7 +290,7 @@ export function ProvidersClientSection({
                                       >
                                         <FlatIcon name="enable" />
                                       </button>
-                                    </form>
+                                    </ConsoleMutationForm>
                                     <a
                                       className="provider-action-button provider-action-delete row-action-button row-action-danger"
                                       href={buildQueryHref(searchParams, {
@@ -328,10 +325,10 @@ export function ProvidersClientSection({
                                             : "API keys"}
                                       </h3>
                                       {provider.providerType === "subscription" ? (
-                                        <form
+                                        <ConsoleMutationForm
                                           action="/api/provider-oauth"
                                           className="provider-oauth-add-form"
-                                          method="post"
+                                          fallbackError="Provider OAuth start failed."
                                         >
                                           <input type="hidden" name="action" value="start" />
                                           <input
@@ -349,7 +346,7 @@ export function ProvidersClientSection({
                                           >
                                             <FlatIcon name="key" />
                                           </button>
-                                        </form>
+                                        </ConsoleMutationForm>
                                       ) : provider.providerType === "local" ? null : (
                                         <a
                                           className="provider-key-add-button"
@@ -397,13 +394,16 @@ export function ProvidersClientSection({
                                                         />
                                                       </td>
                                                       <td>
-                                                        {formatProviderOAuthLastTest(connection)}
+                                                        {formatProviderOAuthLastTest(
+                                                          connection,
+                                                          renderedAtMs,
+                                                        )}
                                                       </td>
                                                       <td>
                                                         <span className="provider-table-actions">
-                                                          <form
+                                                          <ConsoleMutationForm
                                                             action="/api/provider-oauth"
-                                                            method="post"
+                                                            fallbackError="Provider OAuth update failed."
                                                           >
                                                             <input
                                                               type="hidden"
@@ -445,10 +445,10 @@ export function ProvidersClientSection({
                                                                 }
                                                               />
                                                             </button>
-                                                          </form>
-                                                          <form
+                                                          </ConsoleMutationForm>
+                                                          <ConsoleMutationForm
                                                             action="/api/provider-oauth"
-                                                            method="post"
+                                                            fallbackError="Provider OAuth deletion failed."
                                                           >
                                                             <input
                                                               type="hidden"
@@ -468,7 +468,7 @@ export function ProvidersClientSection({
                                                             >
                                                               <FlatIcon name="delete" />
                                                             </button>
-                                                          </form>
+                                                          </ConsoleMutationForm>
                                                         </span>
                                                       </td>
                                                     </tr>
@@ -490,7 +490,10 @@ export function ProvidersClientSection({
                                                     />
                                                   </td>
                                                   <td>
-                                                    {formatProviderApiKeyLastTest(providerKey)}
+                                                    {formatProviderApiKeyLastTest(
+                                                      providerKey,
+                                                      renderedAtMs,
+                                                    )}
                                                   </td>
                                                   <td>
                                                     <a
@@ -547,7 +550,6 @@ export function ProvidersClientSection({
                 type="search"
                 placeholder="Search models"
               />
-              <button type="submit">Search</button>
             </form>
           ) : null}
         </div>
@@ -572,8 +574,6 @@ export function ProvidersClientSection({
                   <th>Reasoning</th>
                   <th>Streaming</th>
                   <th>Status</th>
-                  <th>Capability source</th>
-                  <th>Override</th>
                 </tr>
               </thead>
               <tbody>
@@ -597,76 +597,6 @@ export function ProvidersClientSection({
                     <td>{formatBooleanFeature(model.supportsStreaming)}</td>
                     <td>
                       <ModelAvailabilityPill value={model.availability} />
-                    </td>
-                    <td>{formatCapabilityStatus(model)}</td>
-                    <td>
-                      <form
-                        action="/api/provider-model-capabilities"
-                        className="model-capability-form"
-                        onSubmit={(event) => saveModelCapabilities(event, model.id)}
-                      >
-                        <input type="hidden" name="providerModelId" value={model.id} />
-                        <input
-                          aria-label={`${model.modelId} input modalities`}
-                          name="inputModalities"
-                          defaultValue={(model.inputModalities ?? []).join(",")}
-                          placeholder="text,image"
-                        />
-                        <input
-                          aria-label={`${model.modelId} output modalities`}
-                          name="outputModalities"
-                          defaultValue={(model.outputModalities ?? []).join(",")}
-                          placeholder="text"
-                        />
-                        <input
-                          aria-label={`${model.modelId} max context tokens`}
-                          name="maxContextTokens"
-                          defaultValue={model.contextWindow ?? ""}
-                          inputMode="numeric"
-                          placeholder="128000"
-                        />
-                        <input
-                          aria-label={`${model.modelId} max output tokens`}
-                          name="maxOutputTokens"
-                          defaultValue={model.maxOutputTokens ?? ""}
-                          inputMode="numeric"
-                          placeholder="4096"
-                        />
-                        <select
-                          aria-label={`${model.modelId} function calling support`}
-                          name="supportsFunctionCalling"
-                          defaultValue={String(model.supportsFunctionCalling ?? false)}
-                        >
-                          <option value="true">Function yes</option>
-                          <option value="false">Function no</option>
-                        </select>
-                        <select
-                          aria-label={`${model.modelId} reasoning support`}
-                          name="supportsReasoning"
-                          defaultValue={String(model.supportsReasoning ?? false)}
-                        >
-                          <option value="true">Reasoning yes</option>
-                          <option value="false">Reasoning no</option>
-                        </select>
-                        <button
-                          className="provider-row-action"
-                          disabled={savingCapabilityModelId === model.id}
-                          name="action"
-                          type="submit"
-                          value="save"
-                        >
-                          Save
-                        </button>
-                        <button
-                          className="provider-row-action"
-                          disabled={savingCapabilityModelId === model.id}
-                          name="action"
-                          type="submit"
-                          value="clear"
-                        >
-                          Clear
-                        </button>
-                      </form>
                     </td>
                   </tr>
                 ))}
@@ -841,39 +771,31 @@ function formatProviderType(provider: ConsoleProvider): string {
 
 function formatProviderLastConnection(
   providerHealth: ConsoleProviderHealthSummary | undefined,
+  referenceTimeMs: number,
 ): string {
   if (!providerHealth?.latestProbeAt) {
     return "-";
   }
 
-  return formatRelativeDateTime(providerHealth.latestProbeAt);
+  return formatRelativeDateTime(providerHealth.latestProbeAt, referenceTimeMs);
 }
 
-function formatProviderApiKeyLastTest(providerKey: ProviderApiKeyMetadata): string {
-  return providerKey.lastTestedAt ? formatRelativeDateTime(providerKey.lastTestedAt) : "-";
+function formatProviderApiKeyLastTest(
+  providerKey: ProviderApiKeyMetadata,
+  referenceTimeMs: number,
+): string {
+  return providerKey.lastTestedAt
+    ? formatRelativeDateTime(providerKey.lastTestedAt, referenceTimeMs)
+    : "-";
 }
 
-function formatProviderOAuthLastTest(connection: ConsoleProviderOAuthConnection): string {
-  return connection.lastTestedAt ? formatRelativeDateTime(connection.lastTestedAt) : "-";
-}
-
-function formatRelativeDateTime(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  const elapsedMs = Date.now() - date.getTime();
-  if (elapsedMs < 60_000) {
-    return "just now";
-  }
-  if (elapsedMs < 3_600_000) {
-    return `${Math.floor(elapsedMs / 60_000)} min ago`;
-  }
-  if (elapsedMs < 86_400_000) {
-    return `${Math.floor(elapsedMs / 3_600_000)} h ago`;
-  }
-  return date.toISOString().slice(0, 10);
+function formatProviderOAuthLastTest(
+  connection: ConsoleProviderOAuthConnection,
+  referenceTimeMs: number,
+): string {
+  return connection.lastTestedAt
+    ? formatRelativeDateTime(connection.lastTestedAt, referenceTimeMs)
+    : "-";
 }
 
 function formatModelContext(contextWindow: number | null): string {
@@ -911,29 +833,6 @@ function formatNullableBooleanFeature(value: boolean | null): string {
 
 function formatModalities(value: readonly string[] | null): string {
   return value && value.length > 0 ? value.join(", ") : "Unknown";
-}
-
-function formatCapabilityStatus(model: ConsoleProviderModelOption): string {
-  const metadata = model.capabilityMetadata;
-  const hasManual =
-    metadata.manualCapabilities && Object.keys(metadata.manualCapabilities).length > 0;
-  if (hasManual) {
-    return "Manual override";
-  }
-  if (metadata.conflicts && Object.keys(metadata.conflicts).length > 0) {
-    return "Conflict";
-  }
-  if (
-    model.inputModalities === null ||
-    model.outputModalities === null ||
-    model.contextWindow === null ||
-    model.maxOutputTokens === null ||
-    model.supportsFunctionCalling === null ||
-    model.supportsReasoning === null
-  ) {
-    return "Unknown";
-  }
-  return "Synced";
 }
 
 function formatModelAvailability(value: string): string {

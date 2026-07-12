@@ -99,6 +99,13 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           "content-type": "application/json",
           cookie: "agent-session=secret",
           ...openAIHeaderProbe,
+          origin: "http://console.test",
+          referer: "http://console.test/playground",
+          "sec-browser-probe": "must-not-forward",
+          "sec-ch-ua": '"Chromium";v="126"',
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "cross-site",
+          "user-agent": "browser-user-agent",
           "x-api-key": "agent-x-key-should-not-leak",
           "x-client-request-id": "client-chat-1",
           "x-request-id": "agent-chat-request",
@@ -121,6 +128,14 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       );
       expect(readHeader(fakeProvider.requests[0]?.headers, "x-api-key")).toBeUndefined();
       expect(readHeader(fakeProvider.requests[0]?.headers, "cookie")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "origin")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "referer")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "sec-browser-probe")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "sec-ch-ua")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "sec-fetch-site")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "user-agent")).not.toBe(
+        "browser-user-agent",
+      );
       const providerBody = fakeProvider.requests[0]?.bodyJson;
       expect(isRecord(providerBody) ? providerBody.max_completion_tokens : undefined).toBe(64);
       expect(isRecord(providerBody) ? providerBody.max_tokens : undefined).toBe(12);
@@ -186,7 +201,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
           background: true,
           conversation: "conv_123",
           include: ["file_search_call.results"],
-          input: [{ content: "run pwd", role: "user" }, toolOutput],
+          input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
           max_tool_calls: 3,
           metadata: { trace: "responses" },
           model: "vm-request-hygiene-responses",
@@ -222,7 +237,7 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
         background: true,
         conversation: "conv_123",
         include: ["file_search_call.results"],
-        input: [{ content: "run pwd", role: "user" }, toolOutput],
+        input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
         max_tool_calls: 3,
         metadata: { trace: "responses" },
         model: "fake-model",
@@ -282,8 +297,9 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
         type: "reasoning",
       };
       const assistantPlaceholder = {
-        content: "",
+        content: [],
         role: "assistant",
+        type: "message",
       };
       const reasoningReplayResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
@@ -310,13 +326,10 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
         stream: true,
       });
 
-      const providerOwnedResponsesResponse = await fetch(`${baseUrl}/v1/responses`, {
+      const invalidResponsesResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
-          input: { provider: "owned" },
+          input: "provider-owned string input",
           model: "vm-request-hygiene-responses",
-          parallel_tool_calls: "provider-owned",
-          tool_choice: "provider-owned",
-          tools: ["provider-owned"],
         }),
         headers: {
           authorization: `Bearer ${responsesAgentApiKey}`,
@@ -324,17 +337,13 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
         },
         method: "POST",
       });
-      await providerOwnedResponsesResponse.text();
+      const invalidResponsesBody = await invalidResponsesResponse.json();
 
-      expect(providerOwnedResponsesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(6);
-      expect(fakeProvider.requests[5]?.bodyJson).toMatchObject({
-        input: { provider: "owned" },
-        model: "fake-model",
-        parallel_tool_calls: "provider-owned",
-        tool_choice: "provider-owned",
-        tools: ["provider-owned"],
+      expect(invalidResponsesResponse.status).toBe(400);
+      expect(invalidResponsesBody).toMatchObject({
+        error: { code: "invalid_responses_request" },
       });
+      expect(fakeProvider.requests).toHaveLength(5);
 
       const messagesResponse = await fetch(`${baseUrl}/v1/messages`, {
         body: JSON.stringify({
@@ -357,15 +366,15 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       await messagesResponse.text();
 
       expect(messagesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(7);
-      expect(readHeader(fakeProvider.requests[6]?.headers, "anthropic-beta")).toBe(
+      expect(fakeProvider.requests).toHaveLength(6);
+      expect(readHeader(fakeProvider.requests[5]?.headers, "anthropic-beta")).toBe(
         "context-1m-2025-08-07",
       );
-      expect(readHeader(fakeProvider.requests[6]?.headers, "anthropic-version")).toBe("2024-01-01");
-      expect(readHeader(fakeProvider.requests[6]?.headers, "x-api-key")).toBe("fake-provider-key");
+      expect(readHeader(fakeProvider.requests[5]?.headers, "anthropic-version")).toBe("2024-01-01");
+      expect(readHeader(fakeProvider.requests[5]?.headers, "x-api-key")).toBe("fake-provider-key");
       expect(messagesResponse.headers.get("request-id")).toBe("fake-provider-request");
       expect(messagesResponse.headers.get("anthropic-ratelimit-requests-remaining")).toBe("88");
-      const messagesProviderBody = fakeProvider.requests[6]?.bodyJson;
+      const messagesProviderBody = fakeProvider.requests[5]?.bodyJson;
       expect(messagesProviderBody).toMatchObject({
         betas: ["mcp-client-2025-04-04"],
         container: { type: "auto" },
@@ -393,8 +402,8 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       await providerOwnedMessagesResponse.text();
 
       expect(providerOwnedMessagesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(8);
-      expect(fakeProvider.requests[7]?.bodyJson).toMatchObject({
+      expect(fakeProvider.requests).toHaveLength(7);
+      expect(fakeProvider.requests[6]?.bodyJson).toMatchObject({
         max_tokens: "provider-owned",
         messages: "provider-owned",
         model: "fake-model",
@@ -420,12 +429,12 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
       await providerOwnedEmbeddingsResponse.text();
 
       expect(providerOwnedEmbeddingsResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(9);
-      expectOpenAIProviderHeaders(fakeProvider.requests[8]?.headers);
-      expect(readHeader(fakeProvider.requests[8]?.headers, "x-client-request-id")).toBe(
+      expect(fakeProvider.requests).toHaveLength(8);
+      expectOpenAIProviderHeaders(fakeProvider.requests[7]?.headers);
+      expect(readHeader(fakeProvider.requests[7]?.headers, "x-client-request-id")).toBe(
         "client-embeddings-1",
       );
-      expect(fakeProvider.requests[8]?.bodyJson).toMatchObject({
+      expect(fakeProvider.requests[7]?.bodyJson).toMatchObject({
         dimensions: "provider-owned",
         encoding_format: "provider-owned",
         input: { provider: "owned" },

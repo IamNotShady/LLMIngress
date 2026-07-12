@@ -2,6 +2,7 @@ import {
   type ConsoleProviderModelOption,
   listProviderModelOptions,
 } from "@llmingress/db/console-route-policies";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import { type ConsoleSearchParams, readSingleSearchParam } from "./sections";
@@ -42,7 +43,11 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
           <dd>{estimateLabel}</dd>
         </div>
       </dl>
-      <form className="price-form" action="/api/prices/override" method="post">
+      <ConsoleMutationForm
+        action="/api/prices/override"
+        className="price-form"
+        fallbackError="Price override failed."
+      >
         <input type="hidden" name="providerKey" value={model.providerKey} />
         <input type="hidden" name="modelId" value={model.modelId} />
         <input type="hidden" name="redirectModel" value={model.id} />
@@ -69,7 +74,7 @@ function ModelPricePanel({ model }: { model: ConsoleProviderModelOption }) {
         <button type="submit">
           <span>Save</span>
         </button>
-      </form>
+      </ConsoleMutationForm>
     </div>
   );
 }

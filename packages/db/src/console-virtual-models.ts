@@ -104,9 +104,6 @@ export function normalizeVirtualModelFormInput(
 export function getVirtualModelDeleteDependencyError(
   input: VirtualModelDependencyCounts,
 ): string | null {
-  if (input.routePolicyCount > 0) {
-    return "Cannot delete Virtual Model referenced by a route policy.";
-  }
   if (input.defaultAgentCount > 0) {
     return "Cannot delete Virtual Model used as an Agent default.";
   }
@@ -308,6 +305,17 @@ export async function deleteVirtualModel(input: {
           virtualModelId: input.id,
         });
       }
+
+      await client.query(
+        `
+          update route_policies
+          set deleted_at = now(),
+              updated_at = now()
+          where virtual_model_id = $1
+            and deleted_at is null
+        `,
+        [input.id],
+      );
 
       const result = await client.query<{ id: string }>(
         `

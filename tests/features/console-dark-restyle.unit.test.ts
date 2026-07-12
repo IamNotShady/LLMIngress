@@ -231,7 +231,7 @@ describe("console dark restyle static contract", () => {
   });
 
   test("dialog form submit buttons stay compact and text-only", () => {
-    const agentSection = moduleSource("agents-section.tsx");
+    const agentCreateDialog = moduleSource("agent-create-dialog-client.tsx");
     const sections = consoleSectionSource();
     const providerCreateForm = readFileSync(
       join(appDir, "_modules/provider-create-form.tsx"),
@@ -242,9 +242,10 @@ describe("console dark restyle static contract", () => {
       "utf8",
     );
     const stylesheet = css();
-    const agentCreateForm = agentSection.slice(
-      agentSection.indexOf('action="/api/agents" id="new-agent"'),
-      agentSection.indexOf("</form>", agentSection.indexOf('action="/api/agents" id="new-agent"')),
+    const agentCreateFormStart = agentCreateDialog.indexOf("<form");
+    const agentCreateForm = agentCreateDialog.slice(
+      agentCreateFormStart,
+      agentCreateDialog.indexOf("</form>", agentCreateFormStart),
     );
     const providerCreateSubmit = providerCreateForm.slice(
       providerCreateForm.lastIndexOf('<button type="submit">'),
@@ -254,7 +255,7 @@ describe("console dark restyle static contract", () => {
       ),
     );
 
-    expect(agentCreateForm).toContain("<span>Create</span>");
+    expect(agentCreateForm).toContain('<span>{submitting ? "Creating…" : "Create"}</span>');
     expect(agentCreateForm).not.toContain("FlatIcon");
     expect(providerCreateSubmit).toContain("<span>Create</span>");
     expect(providerCreateSubmit).not.toContain("FlatIcon");

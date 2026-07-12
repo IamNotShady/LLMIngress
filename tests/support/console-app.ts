@@ -19,6 +19,7 @@ export async function signInFromFirstRun(page: Page, baseUrl: string) {
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 export async function getFreePort(): Promise<number> {
@@ -83,6 +84,7 @@ export function startConsoleProcess(options: {
       env: {
         ...process.env,
         CONSOLE_PORT: String(options.port),
+        CONSOLE_PUBLIC_BASE_URL: `http://localhost:${options.port}`,
         DATABASE_URL: options.databaseUrl,
         MASTER_KEY: "test-master-key",
         ...options.env,

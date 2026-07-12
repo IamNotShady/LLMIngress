@@ -71,7 +71,6 @@ export async function updateProviderModelManualCapabilities(input: {
       const metadata = readCapabilityMetadata(row.capability_metadata);
       const syncedCapabilities = metadata.syncedCapabilities ?? buildSyncedCapabilitiesFromRow(row);
       const resolved = resolveProviderModelCapabilities({
-        conflicts: metadata.conflicts,
         manualCapabilities,
         registrySources: metadata.registrySources,
         registrySyncedAt: metadata.registrySyncedAt,
@@ -160,9 +159,6 @@ function buildSyncedCapabilitiesFromRow(
 function readCapabilityMetadata(value: unknown): ProviderModelCapabilityMetadata {
   const record = isRecord(value) ? value : {};
   return {
-    conflicts: isRecord(record.conflicts)
-      ? (record.conflicts as ProviderModelCapabilityMetadata["conflicts"])
-      : undefined,
     manualCapabilities: isRecord(record.manualCapabilities)
       ? (record.manualCapabilities as ProviderModelCapabilityMetadata["manualCapabilities"])
       : undefined,

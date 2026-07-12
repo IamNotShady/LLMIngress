@@ -36,7 +36,7 @@ export type NormalizedOpenAIChatRequest = {
 
 export type NormalizedOpenAIResponsesInputMessage = Record<string, unknown> & {
   role: "developer" | "system" | "user" | "assistant";
-  content: unknown;
+  content: Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIResponsesInputItem =
@@ -44,7 +44,7 @@ export type NormalizedOpenAIResponsesInputItem =
   | Record<string, unknown>;
 
 export type NormalizedOpenAIResponsesRequest = {
-  input: string | NormalizedOpenAIResponsesInputItem[];
+  input: NormalizedOpenAIResponsesInputItem[];
   instructions?: string | null;
   maxOutputTokens?: number;
   payload: Record<string, unknown>;

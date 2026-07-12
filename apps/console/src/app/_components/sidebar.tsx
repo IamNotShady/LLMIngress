@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { consoleNavItems, findActiveNavItem } from "../_lib/nav";
+import { ConsoleMutationForm } from "./console-mutation-form";
 import { FlatIcon } from "./flat-icon";
 
 type SidebarProps = {
@@ -102,12 +103,12 @@ export function Sidebar({
           </span>
         </div>
         <div className="sidebar-footer-row">
-          <form action="/api/auth/logout" method="post">
+          <ConsoleMutationForm action="/api/auth/logout" fallbackError="Logout failed.">
             <button className="secondary-button" type="submit">
               <FlatIcon name="lock" />
               <span>Sign out</span>
             </button>
-          </form>
+          </ConsoleMutationForm>
         </div>
       </div>
     </aside>

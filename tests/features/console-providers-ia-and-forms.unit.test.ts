@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { formatRelativeDateTime } from "../../apps/console/src/app/_lib/provider-relative-time";
 
 const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
@@ -12,6 +13,42 @@ const routeDialog = () =>
   readFileSync(join(appDir, "_modules/virtual-model-route-dialog.tsx"), "utf8");
 
 describe("console providers IA and form polish static contract", () => {
+  test("relative Provider timestamps use one server-provided reference time", () => {
+    const renderedAt = Date.parse("2026-07-12T00:50:00.000Z");
+    expect(formatRelativeDateTime("2026-07-12T00:00:30.000Z", renderedAt)).toBe("49 min ago");
+    expect(formatRelativeDateTime("2026-07-12T00:00:30.000Z", renderedAt + 60_000)).toBe(
+      "50 min ago",
+    );
+  });
+
+  test("all retained Console mutation forms intercept API errors", () => {
+    const files = [
+      "apps/console/src/app/_components/auth-screens.tsx",
+      "apps/console/src/app/_components/sidebar.tsx",
+      "apps/console/src/app/_modules/agent-create-dialog-client.tsx",
+      "apps/console/src/app/_modules/agents-section.tsx",
+      "apps/console/src/app/_modules/limits-section.tsx",
+      "apps/console/src/app/_modules/models-section.tsx",
+      "apps/console/src/app/_modules/provider-create-form.tsx",
+      "apps/console/src/app/_modules/provider-key-create-dialog-client.tsx",
+      "apps/console/src/app/_modules/providers-client-section.tsx",
+      "apps/console/src/app/_modules/providers-section.tsx",
+      "apps/console/src/app/_modules/virtual-model-route-dialog.tsx",
+      "apps/console/src/app/_modules/virtual-models-section.tsx",
+    ];
+
+    for (const file of files) {
+      const source = readFileSync(join(rootDir, file), "utf8");
+      const nativeMutationForms = source
+        .split("<form")
+        .slice(1)
+        .map((form) => form.split("</form>")[0] ?? "")
+        .filter((form) => form.includes('action="/api/'))
+        .filter((form) => !form.includes("onSubmit="));
+      expect(nativeMutationForms, file).toEqual([]);
+    }
+  });
+
   test("providers page has one representation: the summary-card grid is gone", () => {
     const source = sectionSource("providers-section.tsx");
     expect(source).not.toContain("provider-card-grid");

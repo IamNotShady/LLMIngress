@@ -1,7 +1,5 @@
 import {
-  type ModelCapabilityConflicts,
   type ModelCapabilityField,
-  type ModelCapabilitySyncSource,
   type ModelInputModality,
   type ModelOutputModality,
   normalizeModelInputModalities,
@@ -43,7 +41,6 @@ export type ProviderModelSyncedPrice = {
 };
 
 export type ProviderModelRegistryEntry = {
-  capabilityConflicts?: ModelCapabilityConflicts;
   inputModalities?: ModelInputModality[] | null;
   maxContextTokens?: number | null;
   maxOutputTokens?: number | null;
@@ -685,20 +682,6 @@ function mergeRegistryCapabilityField(
     return;
   }
 
-  const sourceName = source.registrySources?.[field] ?? "provider_models_api";
-  const currentConflicts = target.capabilityConflicts?.[field] ?? [];
-  if (currentConflicts.length > 0) {
-    target.capabilityConflicts = {
-      ...(target.capabilityConflicts ?? {}),
-      [field]: addConflictValue(currentConflicts, {
-        source: sourceName as ModelCapabilitySyncSource,
-        value: sourceValue,
-      }),
-    };
-    setRegistryEntryCapabilityField(target, field, null);
-    return;
-  }
-
   const targetValue = target[field];
   if (targetValue === undefined || targetValue === null) {
     setRegistryEntryCapabilityField(target, field, sourceValue);
@@ -708,28 +691,7 @@ function mergeRegistryCapabilityField(
         [field]: source.registrySources[field],
       };
     }
-    return;
   }
-
-  if (capabilityValueEqual(targetValue, sourceValue)) {
-    return;
-  }
-
-  target.capabilityConflicts = {
-    ...(target.capabilityConflicts ?? {}),
-    [field]: [
-      {
-        source: (target.registrySources?.[field] ??
-          "provider_models_api") as ModelCapabilitySyncSource,
-        value: targetValue,
-      },
-      {
-        source: sourceName as ModelCapabilitySyncSource,
-        value: sourceValue,
-      },
-    ],
-  };
-  setRegistryEntryCapabilityField(target, field, null);
 }
 
 function setRegistryEntryCapabilityField(
@@ -757,21 +719,6 @@ function setRegistryEntryCapabilityField(
       target.supportsReasoning = value as boolean | null;
       return;
   }
-}
-
-function capabilityValueEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function addConflictValue(
-  values: { source: ModelCapabilitySyncSource; value: unknown }[],
-  next: { source: ModelCapabilitySyncSource; value: unknown },
-): { source: ModelCapabilitySyncSource; value: unknown }[] {
-  return values.some(
-    (value) => value.source === next.source && capabilityValueEqual(value.value, next.value),
-  )
-    ? values
-    : [...values, next];
 }
 
 function registrySources(input: {

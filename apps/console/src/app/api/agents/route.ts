@@ -36,7 +36,10 @@ export const POST = withConsoleAuth(async (request) => {
         id: result.id,
         saveLimits: readText(form, "enableLimits") === "true",
       });
-      return renderOneTimeAgentResponse(result);
+      return renderOneTimeAgentResponse(
+        result,
+        request.headers.get("accept")?.includes("application/json") ? "json" : "html",
+      );
     } else if (action === "update") {
       await updateAgent({
         agent: normalizeAgentFormInput({

@@ -143,7 +143,7 @@ describe("provider model capability sync", () => {
     });
   });
 
-  it("records explicit source conflicts and lets manual capabilities win", () => {
+  it("keeps higher-priority capability values and lets manual capabilities win", () => {
     const [merged] = mergeProviderModelRegistryEntries(
       [
         {
@@ -174,15 +174,11 @@ describe("provider model capability sync", () => {
       ],
     );
 
-    expect(merged?.maxOutputTokens).toBeNull();
-    expect(merged?.capabilityConflicts?.maxOutputTokens).toEqual([
-      { source: "models.dev", value: 4096 },
-      { source: "litellm", value: 8192 },
-    ]);
+    expect(merged?.maxOutputTokens).toBe(4096);
+    expect(merged).not.toHaveProperty("capabilityConflicts");
 
     expect(
       resolveProviderModelCapabilities({
-        conflicts: merged?.capabilityConflicts,
         manualCapabilities: { maxOutputTokens: 8192 },
         syncedCapabilities: merged,
       }).effectiveCapabilities,

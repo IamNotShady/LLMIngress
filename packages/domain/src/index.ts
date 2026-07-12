@@ -39,21 +39,11 @@ export type SyncedModelCapabilities = {
 
 export type ModelCapabilityField = keyof SyncedModelCapabilities;
 
-export type ModelCapabilityConflictValue = {
-  source: ModelCapabilitySyncSource;
-  value: unknown;
-};
-
-export type ModelCapabilityConflicts = Partial<
-  Record<ModelCapabilityField, ModelCapabilityConflictValue[]>
->;
-
 export type ModelCapabilitySources = Partial<
   Record<ModelCapabilityField, ModelCapabilitySyncSource>
 >;
 
 export type ProviderModelCapabilityMetadata = {
-  conflicts?: ModelCapabilityConflicts;
   manualCapabilities?: Partial<SyncedModelCapabilities>;
   registrySources?: ModelCapabilitySources;
   registrySyncedAt?: string;
@@ -145,7 +135,6 @@ export function normalizeModelOutputModalities(value: unknown): ModelOutputModal
 }
 
 export function resolveProviderModelCapabilities(input: {
-  conflicts?: ModelCapabilityConflicts | null;
   manualCapabilities?: Partial<SyncedModelCapabilities> | null;
   syncedCapabilities?: Partial<SyncedModelCapabilities> | null;
   registrySources?: ModelCapabilitySources | null;
@@ -153,18 +142,12 @@ export function resolveProviderModelCapabilities(input: {
 }): ResolvedProviderModelCapabilities {
   const syncedCapabilities = normalizePartialSyncedModelCapabilities(input.syncedCapabilities);
   const manualCapabilities = normalizePartialSyncedModelCapabilities(input.manualCapabilities);
-  const conflicts = input.conflicts ?? {};
   const effectiveCapabilities = { ...emptySyncedModelCapabilities };
 
   for (const field of modelCapabilityFields) {
     const manual = manualCapabilities[field];
     if (manual !== undefined) {
       setCapabilityField(effectiveCapabilities, field, manual);
-      continue;
-    }
-
-    if ((conflicts[field]?.length ?? 0) > 0) {
-      setCapabilityField(effectiveCapabilities, field, null);
       continue;
     }
 
@@ -175,7 +158,6 @@ export function resolveProviderModelCapabilities(input: {
   return {
     effectiveCapabilities,
     metadata: compactProviderModelCapabilityMetadata({
-      conflicts,
       manualCapabilities,
       registrySources: input.registrySources ?? undefined,
       registrySyncedAt: input.registrySyncedAt ?? undefined,
@@ -718,7 +700,6 @@ function compactProviderModelCapabilityMetadata(
   metadata: ProviderModelCapabilityMetadata,
 ): ProviderModelCapabilityMetadata {
   return omitUndefined({
-    conflicts: compactCapabilityConflicts(metadata.conflicts),
     manualCapabilities: compactCapabilityObject(metadata.manualCapabilities),
     registrySources:
       metadata.registrySources && Object.keys(metadata.registrySources).length > 0
@@ -739,18 +720,6 @@ function compactCapabilityObject(
     Object.entries(value).filter(([, entry]) => entry !== undefined),
   ) as Partial<SyncedModelCapabilities>;
   return Object.keys(entries).length > 0 ? entries : undefined;
-}
-
-function compactCapabilityConflicts(
-  conflicts: ModelCapabilityConflicts | undefined,
-): ModelCapabilityConflicts | undefined {
-  if (!conflicts) {
-    return undefined;
-  }
-  const compacted = Object.fromEntries(
-    Object.entries(conflicts).filter(([, values]) => Array.isArray(values) && values.length > 0),
-  ) as ModelCapabilityConflicts;
-  return Object.keys(compacted).length > 0 ? compacted : undefined;
 }
 
 function setCapabilityField(

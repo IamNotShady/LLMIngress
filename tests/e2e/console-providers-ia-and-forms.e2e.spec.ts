@@ -82,6 +82,12 @@ test("providers page shows one provider representation with a searchable capped 
           await page.goto(`${baseUrl}/providers`, { waitUntil: "networkidle" });
           await expect(page.locator(".provider-card-grid")).toHaveCount(0);
           await expect(page.locator(".provider-summary-card")).toHaveCount(0);
+          const hydrationErrors: string[] = [];
+          page.on("console", (message) => {
+            if (message.type() === "error" && message.text().includes("Hydration failed")) {
+              hydrationErrors.push(message.text());
+            }
+          });
           await expect(
             page.locator(".providers-list-card tr", { hasText: "IA Probe Provider" }).first(),
           ).toBeVisible();
@@ -96,10 +102,52 @@ test("providers page shows one provider representation with a searchable capped 
           await expect(libraryRows).toHaveCount(1);
           await expect(libraryRows.first()).toContainText("ia-needle-model");
           expect(new URL(page.url()).searchParams.get("modelQuery")).toBe("ia-needle");
+          expect(hydrationErrors).toEqual([]);
 
           // The page no longer balloons to thousands of pixels.
           const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
           expect(pageHeight).toBeLessThan(4500);
+
+          // Saving a Provider API key stays on the Providers page and reveals
+          // the one-time plaintext in a modal instead of navigating away.
+          const addApiKey = page.getByRole("link", { name: "Add API key" });
+          await expect(addApiKey).toHaveCount(1);
+          await addApiKey.click();
+          const createKeyDialog = page.getByRole("dialog", {
+            name: "New IA Probe Provider API key",
+          });
+          await expect(createKeyDialog).toBeVisible();
+          await createKeyDialog.getByLabel("Provider API key").fill("provider-key-dialog-e2e");
+          await createKeyDialog.getByLabel("Label").fill("E2E key");
+          await createKeyDialog.getByRole("button", { name: "Save" }).click();
+
+          const savedKeyDialog = page.getByRole("dialog", { name: "Provider API key saved" });
+          await expect(savedKeyDialog).toBeVisible();
+          await expect(
+            page.getByRole("heading", { level: 1, name: "Providers & Models", exact: true }),
+          ).toBeVisible();
+          await expect(savedKeyDialog.getByLabel("Provider API key")).toHaveValue(
+            "provider-key-dialog-e2e",
+          );
+          await savedKeyDialog.getByRole("link", { name: "Close" }).click();
+          await expect(savedKeyDialog).toHaveCount(0);
+
+          await page.goto(
+            `${baseUrl}/providers?selected=${providerId}&providerDelete=${providerId}`,
+            {
+              waitUntil: "networkidle",
+            },
+          );
+          const deleteProviderDialog = page.getByRole("dialog", { name: "Delete provider?" });
+          await expect(deleteProviderDialog).toBeVisible();
+          await addProviderDeleteRaceBlocker(fixture.databaseUrl, providerId);
+          await deleteProviderDialog.getByRole("button", { name: "Delete provider" }).click();
+          await expect(page).toHaveURL(
+            `${baseUrl}/providers?selected=${providerId}&providerDelete=${providerId}`,
+          );
+          await expect(
+            deleteProviderDialog.getByText("Provider is still used by active route policies."),
+          ).toBeVisible();
 
           // --- Agents KPIs on mobile: two columns, no truncated values.
           await page.setViewportSize({ width: 390, height: 844 });
@@ -130,3 +178,33 @@ test("providers page shows one provider representation with a searchable capped 
     await fixture.dispose();
   }
 });
+
+async function addProviderDeleteRaceBlocker(databaseUrl: string, providerId: string) {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
+    const providerModel = await client.query<{ id: string }>(
+      "select id::text from provider_models where provider_id = $1 order by model_id limit 1",
+      [providerId],
+    );
+    const providerModelId = providerModel.rows[0]?.id;
+    if (!providerModelId) {
+      throw new Error("Provider model is required for delete race fixture.");
+    }
+    const virtualModelId = randomUUID();
+    const routePolicyId = randomUUID();
+    await client.query(
+      `insert into virtual_models (id, name, description, enabled)
+       values ($1, $2, 'Provider delete race', true)`,
+      [virtualModelId, `provider-delete-race-${virtualModelId}`],
+    );
+    await client.query(
+      `insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
+       values ($1, $2, 'fixed', 'chat_completions')`,
+      [routePolicyId, virtualModelId],
+    );
+    await client.query(
+      `insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order)
+       values ($1, $2, $3, 1)`,
+      [randomUUID(), routePolicyId, providerModelId],
+    );
+  });
+}

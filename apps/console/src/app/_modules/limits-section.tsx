@@ -12,6 +12,7 @@ import {
   listAgentVirtualModelAccess,
 } from "@llmingress/db/console-agents";
 import { ConsoleDialog } from "../_components/console-dialog";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
@@ -63,7 +64,11 @@ function LimitsConfigDialog({
           <span>Close</span>
         </a>
       </div>
-      <form className="limits-config-form" action="/api/agent-limits" method="post">
+      <ConsoleMutationForm
+        action="/api/agent-limits"
+        className="limits-config-form"
+        fallbackError="Agent limit update failed."
+      >
         <input type="hidden" name="action" value="saveLimitRules" />
         <input type="hidden" name="agentId" value={agent.id} />
         <div className="limits-form-grid">
@@ -192,7 +197,7 @@ function LimitsConfigDialog({
             <span>Save</span>
           </button>
         </div>
-      </form>
+      </ConsoleMutationForm>
     </ConsoleDialog>
   );
 }
@@ -221,14 +226,17 @@ function LimitsDeleteDialog({
           <FlatIcon name="cancel" />
           <span>Cancel</span>
         </a>
-        <form action="/api/agent-limits" method="post">
+        <ConsoleMutationForm
+          action="/api/agent-limits"
+          fallbackError="Agent limit deletion failed."
+        >
           <input type="hidden" name="action" value="deleteLimitRules" />
           <input type="hidden" name="agentId" value={agent.id} />
           <button className="agent-delete-confirm" type="submit">
             <FlatIcon name="delete" />
             <span>Delete</span>
           </button>
-        </form>
+        </ConsoleMutationForm>
       </div>
     </ConsoleDialog>
   );

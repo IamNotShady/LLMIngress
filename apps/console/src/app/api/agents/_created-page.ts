@@ -1,15 +1,31 @@
 import { gatewayPublicBaseUrl } from "@llmingress/config";
 import { NextResponse } from "next/server";
 
-export function renderOneTimeAgentResponse(input: {
-  keyPrefix: string | null;
-  plaintext: string;
-}): NextResponse {
+export function renderOneTimeAgentResponse(
+  input: {
+    keyPrefix: string | null;
+    plaintext: string;
+  },
+  format: "html" | "json" = "html",
+): NextResponse {
   const connectionDetails = buildAgentConnectionDetails({
     apiKey: input.plaintext,
     gatewayBaseUrl: gatewayPublicBaseUrl(),
     model: "<Virtual Model Name>",
   });
+  const keyPrefix = input.keyPrefix ?? connectionDetails.apiKey.slice(0, 12);
+
+  if (format === "json") {
+    return NextResponse.json(
+      {
+        apiKey: connectionDetails.apiKey,
+        gatewayBaseUrl: connectionDetails.gatewayBaseUrl,
+        keyPrefix,
+        virtualModelName: connectionDetails.model,
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
 
   return new NextResponse(
     `<!doctype html>
@@ -45,7 +61,7 @@ export function renderOneTimeAgentResponse(input: {
           </div>
           <div>
             <dt>Agent API key prefix</dt>
-            <dd>${escapeHtml(input.keyPrefix ?? connectionDetails.apiKey.slice(0, 12))}</dd>
+            <dd>${escapeHtml(keyPrefix)}</dd>
           </div>
           <div>
             <dt>Gateway URL</dt>

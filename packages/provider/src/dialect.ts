@@ -5,6 +5,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  withClaudeCodeSystemPrompt,
 } from "./subscription.js";
 
 export type ProviderStreamingDialect = {
@@ -33,6 +34,10 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
         ? buildClaudeCodeMessagesUrl(baseUrl)
         : joinProviderStreamingUrl(baseUrl, pathSuffix),
     supportsPathSuffix: (pathSuffix) => pathSuffix === "messages",
+    transformBody: (body, pathSuffix) =>
+      pathSuffix === "messages"
+        ? { ...body, system: withClaudeCodeSystemPrompt(body.system) }
+        : body,
   },
   openai_codex: {
     buildHeaders: (apiKey, protocolHeaders) =>

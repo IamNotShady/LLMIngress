@@ -37,6 +37,17 @@ export const POST = withConsoleAuth(async (request) => {
       providerId,
     });
 
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return NextResponse.json(
+        {
+          action: result.action,
+          apiKey: plaintext.trim(),
+          keyPrefix: result.metadata.keyPrefix,
+        },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
+
     return new NextResponse(
       renderOneTimeProviderKeyPage({
         action: result.action,

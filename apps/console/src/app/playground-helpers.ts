@@ -20,14 +20,14 @@ export type PlaygroundMessagesRequest = {
 export type PlaygroundProtocol = "chat_completions" | "messages" | "responses";
 
 export type PlaygroundResponsesRequest = {
-  input: string;
+  input: Array<{
+    content: Array<{ text: string; type: "input_text" }>;
+    role: "user";
+  }>;
   instructions?: string;
-  max_output_tokens: number;
   model: string;
   store: false;
   stream: boolean;
-  temperature: number;
-  top_p: number;
 };
 
 export type PlaygroundRequestInput = {
@@ -88,14 +88,16 @@ export function buildPlaygroundResponsesRequest(
 ): PlaygroundResponsesRequest {
   const systemPrompt = input.systemPrompt?.trim();
   return {
-    input: input.prompt.trim(),
+    input: [
+      {
+        content: [{ text: input.prompt.trim(), type: "input_text" }],
+        role: "user",
+      },
+    ],
     ...(systemPrompt ? { instructions: systemPrompt } : {}),
-    max_output_tokens: input.maxTokens,
     model: input.model.trim(),
     store: false,
     stream: input.stream ?? false,
-    temperature: input.temperature,
-    top_p: input.topP,
   };
 }
 

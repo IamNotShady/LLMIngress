@@ -607,7 +607,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                     <tr>
                       <th>Agent</th>
                       <th>API Key Prefix</th>
-                      <th>Default VM</th>
+                      <th>Default Virtual Model</th>
                       <th>Virtual Models</th>
                       <th className="num">Requests 24h</th>
                       <th className="num">24h Cost</th>

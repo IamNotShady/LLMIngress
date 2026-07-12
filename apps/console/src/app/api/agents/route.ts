@@ -4,6 +4,7 @@ import {
   saveAgentLimitRules,
 } from "@llmingress/db/console-agent-limits";
 import {
+  type AgentVirtualModelAccess,
   createAgent,
   deleteAgent,
   normalizeAgentFormInput,
@@ -30,14 +31,17 @@ export const POST = withConsoleAuth(async (request) => {
           name: readText(form, "name"),
         }),
       });
-      await saveAgentRelatedSettings({
+      const access = await saveAgentRelatedSettings({
         clearLimitsWhenDisabled: false,
         form,
         id: result.id,
         saveLimits: readText(form, "enableLimits") === "true",
       });
       return renderOneTimeAgentResponse(
-        result,
+        {
+          ...result,
+          virtualModelName: readAgentConnectionVirtualModelName(access),
+        },
         request.headers.get("accept")?.includes("application/json") ? "json" : "html",
       );
     } else if (action === "update") {
@@ -94,8 +98,8 @@ async function saveAgentRelatedSettings(input: {
   form: FormData;
   id: string;
   saveLimits: boolean;
-}): Promise<void> {
-  await updateAgentVirtualModelAccess({
+}): Promise<AgentVirtualModelAccess> {
+  const access = await updateAgentVirtualModelAccess({
     access: normalizeAgentVirtualModelAccessFormInput({
       allowedVirtualModelIds: readTextValues(input.form, "allowedVirtualModelIds"),
       defaultVirtualModelId: readText(input.form, "defaultVirtualModelId") ?? null,
@@ -108,7 +112,7 @@ async function saveAgentRelatedSettings(input: {
         agentId: input.id,
       });
     }
-    return;
+    return access;
   }
   await saveAgentLimitRules({
     limits: normalizeAgentLimitFormInput({
@@ -121,4 +125,9 @@ async function saveAgentRelatedSettings(input: {
       tpm: readRequiredText(input.form, "tpm"),
     }),
   });
+  return access;
+}
+
+function readAgentConnectionVirtualModelName(access: AgentVirtualModelAccess): string | null {
+  return access.defaultVirtualModel?.name ?? access.allowedVirtualModels[0]?.name ?? null;
 }

@@ -435,6 +435,7 @@ export async function VirtualModelsSection({
           name="vmQuery"
           placeholder="Search Virtual Model name"
           defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}
+          suppressHydrationWarning
         />
         <button type="submit">
           <span>Filter</span>

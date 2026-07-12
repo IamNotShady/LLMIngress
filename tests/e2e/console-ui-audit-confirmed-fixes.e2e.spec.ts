@@ -152,8 +152,29 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
+        const consoleErrors: string[] = [];
+        page.on("console", (message) => {
+          if (message.type() === "error") {
+            consoleErrors.push(message.text());
+          }
+        });
 
         try {
+          await page.addInitScript(() => {
+            const applyCaretMutation = () => {
+              const input = document.querySelector<HTMLInputElement>('input[name="vmQuery"]');
+              if (input) {
+                input.style.caretColor = "transparent";
+              }
+            };
+
+            new MutationObserver(applyCaretMutation).observe(document, {
+              childList: true,
+              subtree: true,
+            });
+            applyCaretMutation();
+          });
+
           await waitForConsole(baseUrl, consoleApp);
           await signInFromFirstRun(page, baseUrl);
 
@@ -183,6 +204,7 @@ test("console audit fixes keep time windows honest and prevent activity timestam
 
           await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
           await expect(page.locator(".vm-table thead")).toContainText("Failure rate total");
+          expect(consoleErrors.filter((error) => error.includes("hydration"))).toEqual([]);
 
           await page.goto(`${baseUrl}/agents?agentDialog=new`, { waitUntil: "networkidle" });
           await expect(page.locator("#agent-allowed-virtual-models")).toHaveCount(0);
@@ -190,6 +212,14 @@ test("console audit fixes keep time windows honest and prevent activity timestam
             page.locator('input[name="allowedVirtualModelIds"][type="checkbox"]'),
           ).toHaveCount(1);
           await expect(page.locator("#agent-type")).toHaveCount(0);
+          await page.getByLabel("Agent name").fill("audit-created-agent");
+          await page.getByLabel("audit-probe-vm").check();
+          await page.getByLabel("Default virtual model").selectOption({ label: "audit-probe-vm" });
+          await page.getByRole("button", { name: "Create" }).click();
+          const createdAgentDialog = page.getByRole("dialog", { name: "Agent created" });
+          await expect(createdAgentDialog).toBeVisible();
+          await expect(createdAgentDialog).toContainText("audit-probe-vm");
+          await expect(createdAgentDialog).not.toContainText("<Virtual Model Name>");
 
           for (const viewport of [
             { width: 1280, height: 800 },

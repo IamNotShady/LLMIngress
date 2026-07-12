@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-12: The desktop sidebar is 280px with 15px navigation labels. Activity and Limits share the 1600px content boundary used by Providers and Virtual Models, and Activity pages contain 20 rows. Focused unit/real-process E2E, pnpm run verify (62 files/319 tests), browser screenshots, and all 9 feature regressions pass without horizontal overflow."
+      "evidence": "2026-07-12: The desktop sidebar is 280px with 15px navigation labels. Activity and Limits share the 1600px content boundary used by Providers and Virtual Models, and Activity pages contain 20 rows. Playground now omits blank Temperature, Top P, and Max Tokens values from Chat Completions and Messages requests. Agent creation now renders the selected/default Virtual Model name instead of the placeholder, and the Virtual Models search input tolerates pre-hydration browser caret mutations without hydration errors. Focused unit tests, focused Console E2E, pnpm run verify (62 files/321 tests), and all 9 feature regressions pass."
     },
     {
       "id": "release-guards",

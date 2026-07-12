@@ -55,12 +55,20 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Every Provider probe now runs as one composite model-refresh handler: Provider HTTP completes first, then one short transaction revalidates the Provider/credential snapshot and atomically commits model changes plus Provider/model health. Legacy connectivity jobs call the same handler, Job-ID retries are idempotent, and Gateway paired health writes use the same atomic DB API.
 - Provider API models are no longer filtered when both context and price are unknown. They remain available for chat-compatible probes and render as `Unknown` in the Console.
 - Console desktop navigation now uses a 280px sidebar with 15px labels. Activity and Limits share the same 1600px content boundary as Providers and Virtual Models, and Activity pagination now returns 20 requests per page.
+- Playground treats Temperature, Top P, and Max Tokens as optional request values. Clearing any of these inputs now omits the corresponding `temperature`, `top_p`, or `max_tokens` property instead of substituting a default and sending it to Gateway.
+- Agent creation now renders the selected/default Virtual Model name in the one-time connection dialog instead of `<Virtual Model Name>`. The Virtual Models search input now tolerates pre-hydration browser caret-color mutations without a hydration error.
 
 ## Verification
 
-Final 2026-07-12 result: `pnpm run verify` passed with 62 test files and 319 tests,
-and `pnpm run verify:features` re-verified all 9 milestones. Coverage is 47.98%
-statements, 48.13% lines, 40.33% branches, and 50.54% functions.
+Final 2026-07-12 result: `pnpm run verify` passed with 62 test files and 321 tests,
+and `pnpm run verify:features` re-verified all 9 milestones. Coverage is 48.02%
+statements, 48.17% lines, 40.52% branches, and 50.58% functions.
+
+Console follow-up fixes: focused unit tests, focused real-process Console E2E, the
+live-browser Agent-created-dialog check, `pnpm run verify`, and `pnpm run verify:features`
+all pass. The first `verify:features` attempt hit transient isolated Console startup
+failures after an existing dev server/Next lock; a clean rerun passed all 9 feature
+regressions.
 
 Database-backed checks use:
 

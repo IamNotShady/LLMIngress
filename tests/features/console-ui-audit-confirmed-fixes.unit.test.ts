@@ -127,6 +127,15 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(limitsDialogHead).toContain('<FlatIcon name="cancel" />');
   });
 
+  test("virtual model search tolerates pre-hydration browser caret mutations", () => {
+    const sourceText = sectionSource("virtual-models-section.tsx");
+    const searchInput = sourceText.slice(
+      sourceText.indexOf('aria-label="Search Virtual Model Name"'),
+      sourceText.indexOf('defaultValue={readSingleSearchParam(searchParams.vmQuery) ?? ""}') + 160,
+    );
+    expect(searchInput).toContain("suppressHydrationWarning");
+  });
+
   test("playground API key hint matches LLMIngress keys", () => {
     expect(appSource("playground.tsx")).toContain('placeholder="llmi_************************"');
     expect(appSource("playground.tsx")).not.toContain("sk-************************8fA7");

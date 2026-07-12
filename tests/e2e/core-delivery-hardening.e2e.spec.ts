@@ -69,6 +69,84 @@ test("native Console dialog traps focus, closes with Escape, and restores its tr
   }
 });
 
+test("Playground omits blank optional numeric parameters from Gateway requests", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_playground_optional_${randomUUID().replaceAll("-", "_")}`,
+  });
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await withProcessLock("llmingress-console-next-dev", async () => {
+      const consoleApp = startConsoleProcess({
+        databaseUrl: fixture.databaseUrl,
+        env: { GATEWAY_PUBLIC_BASE_URL: "http://gateway.test" },
+        port: await getFreePort(),
+      });
+      try {
+        const baseUrl = `http://localhost:${consoleApp.port}`;
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        let requestBody: Record<string, unknown> | null = null;
+        try {
+          await page.route("http://gateway.test/**", async (route) => {
+            const request = route.request();
+            const headers = {
+              "access-control-allow-headers": "authorization,content-type,x-request-id",
+              "access-control-allow-methods": "GET,POST,OPTIONS",
+              "access-control-allow-origin": baseUrl,
+              "content-type": "application/json",
+            };
+            if (request.method() === "OPTIONS") {
+              await route.fulfill({ headers, status: 204 });
+              return;
+            }
+            if (new URL(request.url()).pathname === "/v1/models") {
+              await route.fulfill({
+                body: JSON.stringify({ data: [{ id: "virtual-model" }] }),
+                headers,
+                status: 200,
+              });
+              return;
+            }
+            requestBody = request.postDataJSON() as Record<string, unknown>;
+            await route.fulfill({
+              body: JSON.stringify({ content: [{ text: "ok", type: "text" }] }),
+              headers,
+              status: 200,
+            });
+          });
+
+          await waitForConsole(baseUrl, consoleApp);
+          await signInFromFirstRun(page, baseUrl);
+          await page.goto(`${baseUrl}/playground`, { waitUntil: "networkidle" });
+          await page.locator("#playground-agent-api-key").fill("llmi_test");
+          await expect(page.locator("#playground-model option[value='virtual-model']")).toHaveCount(
+            1,
+          );
+          await page.locator("#playground-endpoint").selectOption("messages");
+          await page.locator("#playground-temperature").fill("");
+          await page.locator("#playground-top-p").fill("");
+          await page.locator("#playground-max-tokens").fill("");
+          await page.getByRole("button", { name: "Send" }).click();
+
+          await expect.poll(() => requestBody).not.toBeNull();
+          expect(requestBody).not.toHaveProperty("temperature");
+          expect(requestBody).not.toHaveProperty("top_p");
+          expect(requestBody).not.toHaveProperty("max_tokens");
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await stopConsoleProcess(consoleApp);
+      }
+    });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
 test("migration CLIs reject unknown arguments before database access", async () => {
   for (const script of ["scripts/migrate.ts", "scripts/migration-status.ts"]) {
     await expect(

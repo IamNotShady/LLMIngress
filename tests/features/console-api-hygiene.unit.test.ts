@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleActionError } from "../../apps/console/src/app/api/_error-classify";
+import { renderOneTimeAgentResponse } from "../../apps/console/src/app/api/agents/_created-page";
 
 const guardedRoutes = [
   "apps/console/src/app/api/agent-limits/route.ts",
@@ -77,6 +78,21 @@ describe("console api hygiene", () => {
     const source = readFileSync("apps/console/src/app/api/agents/route.ts", "utf8");
     expect(source).not.toContain("<!doctype");
     expect(source).toContain("renderOneTimeAgentResponse");
+  });
+
+  it("returns the actual virtual model name in one-time agent connection details", async () => {
+    const response = renderOneTimeAgentResponse(
+      {
+        keyPrefix: "llmi_test_key",
+        plaintext: "llmi_test_key_value",
+        virtualModelName: "audit-probe-vm",
+      },
+      "json",
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      virtualModelName: "audit-probe-vm",
+    });
   });
 
   it("sanitizes provider action errors before surfacing them", () => {

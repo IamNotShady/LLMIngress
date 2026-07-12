@@ -5,13 +5,14 @@ export function renderOneTimeAgentResponse(
   input: {
     keyPrefix: string | null;
     plaintext: string;
+    virtualModelName: string | null;
   },
   format: "html" | "json" = "html",
 ): NextResponse {
   const connectionDetails = buildAgentConnectionDetails({
     apiKey: input.plaintext,
     gatewayBaseUrl: gatewayPublicBaseUrl(),
-    model: "<Virtual Model Name>",
+    model: input.virtualModelName ?? "No Virtual Model configured",
   });
   const keyPrefix = input.keyPrefix ?? connectionDetails.apiKey.slice(0, 12);
 

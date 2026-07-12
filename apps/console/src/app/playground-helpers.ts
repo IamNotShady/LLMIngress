@@ -1,20 +1,20 @@
 export type PlaygroundChatRequest = {
-  max_tokens: number;
+  max_tokens?: number;
   messages: Array<{ content: string; role: "system" | "user" }>;
   model: string;
   stream: boolean;
-  temperature: number;
-  top_p: number;
+  temperature?: number;
+  top_p?: number;
 };
 
 export type PlaygroundMessagesRequest = {
-  max_tokens: number;
+  max_tokens?: number;
   messages: Array<{ content: string; role: "user" }>;
   model: string;
   stream: boolean;
   system?: string;
-  temperature: number;
-  top_p: number;
+  temperature?: number;
+  top_p?: number;
 };
 
 export type PlaygroundProtocol = "chat_completions" | "messages" | "responses";
@@ -31,13 +31,13 @@ export type PlaygroundResponsesRequest = {
 };
 
 export type PlaygroundRequestInput = {
-  maxTokens: number;
+  maxTokens?: number;
   model: string;
   prompt: string;
   stream?: boolean;
   systemPrompt?: string;
-  temperature: number;
-  topP: number;
+  temperature?: number;
+  topP?: number;
 };
 
 export function normalizePlaygroundGatewayBaseUrl(value: string): string {
@@ -53,18 +53,26 @@ export function isValidPlaygroundGatewayBaseUrl(value: string): boolean {
   }
 }
 
+export function readOptionalPlaygroundNumber(value: string): number | undefined {
+  if (!value.trim()) {
+    return undefined;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
 export function buildPlaygroundChatRequest(input: PlaygroundRequestInput): PlaygroundChatRequest {
   const systemPrompt = input.systemPrompt?.trim();
   return {
-    max_tokens: input.maxTokens,
+    ...(input.maxTokens === undefined ? {} : { max_tokens: input.maxTokens }),
     messages: [
       ...(systemPrompt ? [{ content: systemPrompt, role: "system" as const }] : []),
       { content: input.prompt.trim(), role: "user" },
     ],
     model: input.model.trim(),
     stream: input.stream ?? false,
-    temperature: input.temperature,
-    top_p: input.topP,
+    ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+    ...(input.topP === undefined ? {} : { top_p: input.topP }),
   };
 }
 
@@ -73,13 +81,13 @@ export function buildPlaygroundMessagesRequest(
 ): PlaygroundMessagesRequest {
   const systemPrompt = input.systemPrompt?.trim();
   return {
-    max_tokens: input.maxTokens,
+    ...(input.maxTokens === undefined ? {} : { max_tokens: input.maxTokens }),
     messages: [{ content: input.prompt.trim(), role: "user" }],
     model: input.model.trim(),
     stream: input.stream ?? false,
     ...(systemPrompt ? { system: systemPrompt } : {}),
-    temperature: input.temperature,
-    top_p: input.topP,
+    ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+    ...(input.topP === undefined ? {} : { top_p: input.topP }),
   };
 }
 

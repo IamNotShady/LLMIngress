@@ -22,6 +22,7 @@ import {
   formatPlaygroundFetchError,
   isValidPlaygroundGatewayBaseUrl,
   normalizePlaygroundGatewayBaseUrl,
+  readOptionalPlaygroundNumber,
   readPlaygroundResponseText,
   readPlaygroundStreamResponseText,
 } from "../../apps/console/src/app/playground-helpers.ts";
@@ -124,8 +125,36 @@ describe("core delivery behavior coverage", () => {
     expect(isValidPlaygroundGatewayBaseUrl("https://gateway.test")).toBe(true);
     expect(isValidPlaygroundGatewayBaseUrl("file:///tmp/model")).toBe(false);
     expect(isValidPlaygroundGatewayBaseUrl("not a url")).toBe(false);
-    expect(buildPlaygroundChatRequest(input)).toMatchObject({ model: "virtual", stream: true });
-    expect(buildPlaygroundMessagesRequest(input)).toMatchObject({ system: "system" });
+    expect(buildPlaygroundChatRequest(input)).toMatchObject({
+      max_tokens: 64,
+      model: "virtual",
+      stream: true,
+      temperature: 0.2,
+      top_p: 0.9,
+    });
+    expect(buildPlaygroundMessagesRequest(input)).toMatchObject({
+      max_tokens: 64,
+      system: "system",
+      temperature: 0.2,
+      top_p: 0.9,
+    });
+    const inputWithoutOptionalParameters = {
+      ...input,
+      maxTokens: undefined,
+      temperature: undefined,
+      topP: undefined,
+    };
+    for (const request of [
+      buildPlaygroundChatRequest(inputWithoutOptionalParameters),
+      buildPlaygroundMessagesRequest(inputWithoutOptionalParameters),
+    ]) {
+      expect(request).not.toHaveProperty("max_tokens");
+      expect(request).not.toHaveProperty("temperature");
+      expect(request).not.toHaveProperty("top_p");
+    }
+    expect(readOptionalPlaygroundNumber("")).toBeUndefined();
+    expect(readOptionalPlaygroundNumber("  ")).toBeUndefined();
+    expect(readOptionalPlaygroundNumber("0.4")).toBe(0.4);
     expect(buildPlaygroundResponsesRequest(input)).toEqual({
       input: [
         {

@@ -35,9 +35,9 @@ import {
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
+import { isRecord } from "@llmingress/util";
 import {
   isProviderOAuthTokenExpired,
-  isRecord,
   readEncryptedSecret,
   readProviderOAuthTokenBlob,
   readWorkerMasterKeySource,

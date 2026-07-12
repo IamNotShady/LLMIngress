@@ -1,5 +1,5 @@
 import { withPooledPostgresClient } from "@llmingress/db/client";
-import { formatConsoleUsd } from "@llmingress/db/console-format";
+import { isRecord } from "@llmingress/util";
 import { consoleValidationError } from "./console-operation-error.ts";
 
 export type ConsoleActivity = {
@@ -31,7 +31,6 @@ export type ConsoleActivity = {
   totalCostUsd: string | null;
   totalTokens: number | null;
   virtualModelId: string | null;
-  virtualModelDisplayName: string | null;
   virtualModelName: string | null;
 };
 
@@ -127,7 +126,6 @@ type ActivityRow = {
   total_cost_usd: string | null;
   total_tokens: number | null;
   virtual_model_id: string | null;
-  virtual_model_display_name: string | null;
   virtual_model_name: string | null;
 };
 
@@ -212,8 +210,6 @@ export async function listConsoleActivities(
                coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
                  as provider_model_name,
                request_activity.virtual_model_id::text as virtual_model_id,
-               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
-                 as virtual_model_display_name,
                coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
                  as virtual_model_name,
                request_usage.input_tokens,
@@ -320,8 +316,6 @@ export async function getConsoleActivityDetail(input: {
                coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
                  as provider_model_name,
                request_activity.virtual_model_id::text as virtual_model_id,
-               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
-                 as virtual_model_display_name,
                coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
                  as virtual_model_name,
                request_usage.input_tokens,
@@ -469,22 +463,6 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
   };
 }
 
-export function formatConsoleActivityCost(totalCostUsd: string | null): string {
-  return formatConsoleUsd(totalCostUsd);
-}
-
-export function formatConsoleActivityTokens(input: {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-}): string {
-  if (input.inputTokens === null || input.outputTokens === null || input.totalTokens === null) {
-    return "Token usage unavailable";
-  }
-
-  return `${input.totalTokens} total tokens (${input.inputTokens} input, ${input.outputTokens} output)`;
-}
-
 export function formatConsoleActivityRouteReason(routeReason: unknown): string {
   if (isRecord(routeReason) && typeof routeReason.message === "string") {
     const message = routeReason.message.trim();
@@ -494,24 +472,6 @@ export function formatConsoleActivityRouteReason(routeReason: unknown): string {
   }
 
   return "No route reason recorded";
-}
-
-export function formatConsoleActivityFallbackAttempts(
-  fallbackEvents: readonly ConsoleFallbackEvent[],
-): string[] {
-  const failedEvents = fallbackEvents.filter((event) => event.status === "failed");
-  if (failedEvents.length === 0) {
-    return ["No fallback attempts"];
-  }
-
-  return failedEvents.map((event, index) => {
-    const attemptOrder = Number.isFinite(event.attemptOrder) ? event.attemptOrder : index + 1;
-    const errorCode = event.errorCode?.trim() || "unknown_error";
-    const providerModelId = event.providerModelId?.trim() || "unknown provider model";
-    const firstByte = event.failedBeforeFirstByte ? " before first byte" : "";
-
-    return `Attempt ${attemptOrder}: ${errorCode}${firstByte} on ${providerModelId}`;
-  });
 }
 
 export function formatConsoleActivityMetadata(metadata: unknown): string[] {
@@ -550,7 +510,6 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     totalCostUsd: row.total_cost_usd,
     totalTokens: row.total_tokens,
     virtualModelId: row.virtual_model_id,
-    virtualModelDisplayName: row.virtual_model_display_name,
     virtualModelName: row.virtual_model_name,
   };
 }
@@ -659,8 +618,4 @@ function collectMetadataLines(prefix: string, value: unknown, lines: string[]): 
     const nextPrefix = prefix ? `${prefix}.${key}` : key;
     collectMetadataLines(nextPrefix, child, lines);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

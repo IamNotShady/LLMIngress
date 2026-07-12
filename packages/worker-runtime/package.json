@@ -19,6 +19,7 @@
     "@llmingress/domain": "workspace:*",
     "@llmingress/logging": "workspace:*",
     "@llmingress/provider": "workspace:*",
-    "@llmingress/security": "workspace:*"
+    "@llmingress/security": "workspace:*",
+    "@llmingress/util": "workspace:*"
   }
 }

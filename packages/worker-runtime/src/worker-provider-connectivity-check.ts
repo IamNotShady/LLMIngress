@@ -1,5 +1,5 @@
 import type { MasterKeySource } from "@llmingress/security/master-key";
-import { isRecord } from "./worker-credential-utils.ts";
+import { isRecord } from "@llmingress/util";
 import type { JobHandler } from "./worker-job-runner.ts";
 import { refreshProviderModels } from "./worker-model-refresh.ts";
 

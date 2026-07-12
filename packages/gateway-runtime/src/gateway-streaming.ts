@@ -14,6 +14,7 @@ import type {
   NormalizedOpenAIChatRequest,
   NormalizedOpenAIResponsesRequest,
 } from "@llmingress/provider/openai";
+import { isRecord } from "@llmingress/util";
 import type { GatewayRequestActivityRoute } from "./gateway-activity-recorder.ts";
 import {
   enforceGatewayAgentLimits,
@@ -60,7 +61,6 @@ import { normalizeOpenAIResponsesRequest } from "./gateway-responses.ts";
 import {
   assertGatewayRoutePolicyEndpointProtocol,
   buildGatewayRequestActivityRoute,
-  isRecord,
   requireGatewayRoutePolicyForVirtualModel,
 } from "./gateway-runtime-helpers.ts";
 import {

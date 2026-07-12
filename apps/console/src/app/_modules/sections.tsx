@@ -44,9 +44,6 @@ export function toneToNumClass(tone: "danger" | "warn" | undefined): string | un
 }
 
 export function formatActivityVirtualModelLabel(activity: ConsoleActivity): string {
-  if (activity.virtualModelDisplayName && activity.virtualModelName) {
-    return activity.virtualModelName;
-  }
   return activity.virtualModelName ?? activity.model ?? "Unknown virtual model";
 }
 

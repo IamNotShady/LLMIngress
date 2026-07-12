@@ -1,3 +1,4 @@
+import { omitUndefined } from "@llmingress/util";
 import { consoleValidationError } from "./console-operation-error.ts";
 import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
 import type { ProviderType } from "./console-providers.ts";
@@ -315,20 +316,6 @@ export function listOpenAICompatibleProviderTemplates(): OpenAICompatibleProvide
   );
 }
 
-export function listOllamaProviderTemplates(): OllamaProviderTemplate[] {
-  return [readProviderTemplate("ollama") as OllamaProviderTemplate];
-}
-
-export function listLocalProviderTemplates(): LocalProviderTemplate[] {
-  return localProviderTemplateIds.map((id) => readProviderTemplate(id) as LocalProviderTemplate);
-}
-
-export function listSubscriptionProviderTemplates(): SubscriptionProviderTemplate[] {
-  return subscriptionProviderTemplateIds.map(
-    (id) => readProviderTemplate(id) as SubscriptionProviderTemplate,
-  );
-}
-
 export function listProviderTemplateSelectorGroups(): ProviderTemplateSelectorGroup[] {
   return providerTemplateSelectorGroups.map((group) => ({
     id: group.id,
@@ -345,56 +332,6 @@ export function getOpenAICompatibleProviderTemplate(
   }
 
   return readProviderTemplate(templateId) as OpenAICompatibleProviderTemplate;
-}
-
-export function getOllamaProviderTemplate(
-  templateId: string | null | undefined,
-): OllamaProviderTemplate {
-  if (templateId !== "ollama") {
-    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
-  }
-
-  return readProviderTemplate(templateId) as OllamaProviderTemplate;
-}
-
-export function getOpenRouterProviderTemplate(
-  templateId: string | null | undefined,
-): OpenRouterProviderTemplate {
-  if (templateId !== "openrouter") {
-    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
-  }
-
-  return readProviderTemplate(templateId) as OpenRouterProviderTemplate;
-}
-
-export function getGoogleProviderTemplate(
-  templateId: string | null | undefined,
-): GoogleProviderTemplate {
-  if (templateId !== "google") {
-    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
-  }
-
-  return readProviderTemplate(templateId) as GoogleProviderTemplate;
-}
-
-export function getLocalProviderTemplate(
-  templateId: string | null | undefined,
-): LocalProviderTemplate {
-  if (!isLocalProviderTemplateId(templateId)) {
-    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
-  }
-
-  return readProviderTemplate(templateId) as LocalProviderTemplate;
-}
-
-export function getSubscriptionProviderTemplate(
-  templateId: string | null | undefined,
-): SubscriptionProviderTemplate {
-  if (!isSubscriptionProviderTemplateId(templateId)) {
-    throw providerTemplateValidation("Provider must use a whitelisted provider template.");
-  }
-
-  return readProviderTemplate(templateId) as SubscriptionProviderTemplate;
 }
 
 export function normalizeProviderTemplateFormInput(
@@ -472,18 +409,6 @@ function isOpenAICompatibleProviderTemplateId(
   return isOneOf(openAICompatibleProviderTemplateIds, value);
 }
 
-function isLocalProviderTemplateId(
-  value: string | null | undefined,
-): value is LocalProviderTemplateId {
-  return isOneOf(localProviderTemplateIds, value);
-}
-
-function isSubscriptionProviderTemplateId(
-  value: string | null | undefined,
-): value is SubscriptionProviderTemplateId {
-  return isOneOf(subscriptionProviderTemplateIds, value);
-}
-
 function isOneOf<T extends string>(values: readonly T[], value: unknown): value is T {
   return typeof value === "string" && values.some((entry) => entry === value);
 }
@@ -499,10 +424,4 @@ function copyEndpoints(endpoints: ProviderEndpoints): ProviderEndpoints {
 
 function providerTemplateValidation(message: string) {
   return consoleValidationError(message, "provider_template_invalid");
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
 }

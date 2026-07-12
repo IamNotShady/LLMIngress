@@ -1,4 +1,5 @@
 import { getPostgresPool } from "@llmingress/db/client";
+import { isRecord } from "@llmingress/util";
 
 export type GatewayVirtualModel = {
   displayName: string;
@@ -138,8 +139,4 @@ function virtualModelAccessErrorMessage(code: GatewayVirtualModelAccessErrorCode
     return "Model is required and no default Virtual Model is configured.";
   }
   return "Virtual Model is not allowed for this Agent API key.";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

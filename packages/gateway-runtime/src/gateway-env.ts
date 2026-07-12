@@ -1,3 +1,5 @@
+import { parsePositiveInt } from "@llmingress/util";
+
 export type GatewayEnvironment = Record<string, string | undefined>;
 
 export function gatewayBodyLimitBytes(env: GatewayEnvironment = process.env): number {
@@ -5,15 +7,11 @@ export function gatewayBodyLimitBytes(env: GatewayEnvironment = process.env): nu
 }
 
 export function gatewayStreamConnectTimeoutMs(env: GatewayEnvironment = process.env): number {
-  return readPositiveIntegerValue(env.GATEWAY_STREAM_CONNECT_TIMEOUT_MS, 30_000);
+  return parsePositiveInt(env.GATEWAY_STREAM_CONNECT_TIMEOUT_MS, 30_000);
 }
 
 export function gatewayStreamIdleTimeoutMs(env: GatewayEnvironment = process.env): number {
-  return readPositiveIntegerValue(env.GATEWAY_STREAM_IDLE_TIMEOUT_MS, 120_000);
-}
-
-export function gatewayBudgetReservationTtlSeconds(env: GatewayEnvironment = process.env): number {
-  return readPositiveIntegerValue(env.GATEWAY_BUDGET_RESERVATION_TTL_SECONDS, 1_800);
+  return parsePositiveInt(env.GATEWAY_STREAM_IDLE_TIMEOUT_MS, 120_000);
 }
 
 export function gatewayListenHost(env: GatewayEnvironment = process.env): string {
@@ -43,7 +41,7 @@ export function gatewayShutdownDrainMs(env: GatewayEnvironment = process.env): n
 }
 
 export function gatewayReadinessTimeoutMs(env: GatewayEnvironment = process.env): number {
-  return readPositiveIntegerValue(env.GATEWAY_READINESS_TIMEOUT_MS, 1_000);
+  return parsePositiveInt(env.GATEWAY_READINESS_TIMEOUT_MS, 1_000);
 }
 
 function readTrimmedEnv(value: string | undefined): string | undefined {
@@ -77,9 +75,4 @@ function readNonNegativeIntegerEnv(
     throw new Error(`${String(name)} must be a non-negative integer.`);
   }
   return parsed;
-}
-
-function readPositiveIntegerValue(value: string | undefined, fallback: number): number {
-  const parsed = Number(value ?? "");
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }

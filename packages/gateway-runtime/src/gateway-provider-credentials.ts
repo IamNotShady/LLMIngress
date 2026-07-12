@@ -17,11 +17,11 @@ import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
+import { isRecord } from "@llmingress/util";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError } from "./gateway-errors.ts";
 import type { FallbackChainCandidate, FallbackProviderApiKey } from "./gateway-fallback-chain.ts";
-import { isRecord } from "./gateway-runtime-helpers.ts";
 
 type ProviderCredentialRow = {
   base_url: string | null;

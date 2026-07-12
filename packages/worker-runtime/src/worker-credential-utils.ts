@@ -1,6 +1,7 @@
 import type { ProviderOAuthTokenBlob } from "@llmingress/provider/oauth";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { EncryptedSecret } from "@llmingress/security/secret-encryption";
+import { isRecord } from "@llmingress/util";
 
 export function readWorkerMasterKeySource(
   env: Record<string, string | undefined> = process.env,
@@ -66,8 +67,4 @@ export function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlo
 
 export function isProviderOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
   return token.expiresAt !== null && token.expiresAt <= Date.now() + 60_000;
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

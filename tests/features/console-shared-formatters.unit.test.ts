@@ -84,7 +84,6 @@ describe("console pages consume the shared formatters", () => {
     const usage = readFileSync(join(rootDir, "packages/db/src/console-usage.ts"), "utf8");
     const activity = readFileSync(join(rootDir, "packages/db/src/console-activity.ts"), "utf8");
     expect(usage).toContain("formatConsoleUsd(");
-    expect(activity).toContain("formatConsoleUsd(");
     expect(usage).not.toContain("toFixed(8)");
     expect(activity).not.toContain("toFixed(8)");
   });

@@ -1,4 +1,5 @@
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { isRecord } from "@llmingress/util";
 import type { AnthropicContentBlock } from "./adapters/anthropic.js";
 
 export type SubscriptionProviderKey = "claude_code" | "openai_codex";
@@ -32,10 +33,6 @@ export const claudeCodeBetaFlags =
 export const claudeCodeStainlessPackageVersion = "0.80.0";
 export const claudeCodeStainlessRuntimeVersion = "v24.14.0";
 export const claudeCodeUserAgent = "claude-cli/2.1.92 (external, sdk-cli)";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function isSubscriptionProviderKey(
   providerKey: string | null | undefined,

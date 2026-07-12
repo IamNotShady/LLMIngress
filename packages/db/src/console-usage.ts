@@ -438,25 +438,6 @@ export function formatConsoleUsageCost(totalCostUsd: string | null): string {
   return formatConsoleUsd(totalCostUsd);
 }
 
-export function formatConsoleUsageTokens(input: {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-}): string {
-  return `${input.totalTokens} total tokens (${input.inputTokens} input, ${input.outputTokens} output)`;
-}
-
-export function formatConsoleUsageBreakdownStats(input: {
-  failureCount: number;
-  requestCount: number;
-  totalCostUsd: string | null;
-  totalTokens: number;
-}): string {
-  const requestLabel = input.requestCount === 1 ? "request" : "requests";
-  const failureLabel = input.failureCount === 1 ? "failure" : "failures";
-  return `${input.requestCount} ${requestLabel} - ${input.failureCount} ${failureLabel} - ${input.totalTokens} tokens - cost ${formatConsoleUsageCost(input.totalCostUsd)}`;
-}
-
 function rowToConsoleUsageBreakdown(row: UsageBreakdownRow): ConsoleUsageBreakdown {
   return {
     avgLatencyMs: readOptionalNumber(row.avg_latency_ms),

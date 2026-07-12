@@ -33,14 +33,3 @@ export function mapGatewayErrorStatus(code: string, fallbackStatus = 500): numbe
     ? gatewayErrorStatusByCode[code as GatewayErrorCode]
     : fallbackStatus;
 }
-
-export function readGatewayErrorCode(body: unknown): string | null {
-  if (!isRecord(body) || !isRecord(body.error)) {
-    return null;
-  }
-  return typeof body.error.code === "string" && body.error.code.trim() ? body.error.code : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}

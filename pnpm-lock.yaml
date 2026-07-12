@@ -17,6 +17,9 @@ importers:
       '@llmingress/gateway-runtime':
         specifier: workspace:*
         version: link:packages/gateway-runtime
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:packages/util
       '@llmingress/worker-runtime':
         specifier: workspace:*
         version: link:packages/worker-runtime
@@ -62,6 +65,9 @@ importers:
       '@llmingress/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../../packages/util
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -143,18 +149,21 @@ importers:
       '@llmingress/security':
         specifier: workspace:*
         version: link:../security
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
       pg:
         specifier: ^8.21.0
         version: 8.21.0
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
 
   packages/domain:
     dependencies:
       '@llmingress/billing':
         specifier: workspace:*
         version: link:../billing
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
 
   packages/gateway-runtime:
     dependencies:
@@ -176,6 +185,9 @@ importers:
       '@llmingress/security':
         specifier: workspace:*
         version: link:../security
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
 
   packages/logging:
     dependencies:
@@ -188,8 +200,13 @@ importers:
       '@llmingress/domain':
         specifier: workspace:*
         version: link:../domain
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
 
   packages/security: {}
+
+  packages/util: {}
 
   packages/worker-runtime:
     dependencies:
@@ -211,6 +228,9 @@ importers:
       '@llmingress/security':
         specifier: workspace:*
         version: link:../security
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
 
 packages:
 

@@ -1,3 +1,4 @@
+import { joinUrl } from "@llmingress/util";
 import { describe, expect, it } from "vitest";
 import {
   buildAnthropicMessagesPayload,
@@ -9,10 +10,7 @@ import {
   checkProviderConnectivity,
   selectProviderProbeModel,
 } from "../../packages/provider/src/connectivity";
-import {
-  joinProviderStreamingUrl,
-  resolveProviderStreamingDialect,
-} from "../../packages/provider/src/dialect";
+import { resolveProviderStreamingDialect } from "../../packages/provider/src/dialect";
 import {
   claudeCodeBetaFlags,
   claudeCodeSystemPrompt,
@@ -27,7 +25,7 @@ describe("provider streaming dialects", () => {
   it("uses default URL and protocol headers for ordinary providers", () => {
     const dialect = resolveProviderStreamingDialect("unknown_provider");
 
-    expect(joinProviderStreamingUrl("https://provider.test/v1", "chat/completions")).toBe(
+    expect(joinUrl("https://provider.test/v1", "chat/completions")).toBe(
       "https://provider.test/v1/chat/completions",
     );
     expect(dialect.buildUrl("https://provider.test/v1", "chat/completions")).toBe(

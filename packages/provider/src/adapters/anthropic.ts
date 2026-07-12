@@ -1,12 +1,11 @@
+import { isRecord, joinUrl, omitUndefined } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,
   isProviderRedirectRejectedError,
 } from "../authenticated-http.js";
 import { mergeHttpHeaders, readHttpHeader, readProviderResponseHeaders } from "../headers.js";
 import {
-  isRecord,
   isRetryableHttpStatus,
-  joinProviderUrl,
   providerRequestTimeoutMs,
   readProviderRequestId,
   readResponseBody,
@@ -145,7 +144,7 @@ export function buildAnthropicMessagesPayload(
 }
 
 export function buildAnthropicMessagesUrl(baseUrl: string): string {
-  return joinProviderUrl(baseUrl, "messages");
+  return joinUrl(baseUrl, "messages");
 }
 
 function mapProviderError(
@@ -215,10 +214,4 @@ function readProviderError(body: unknown): { code: string; message: string } {
     code: "provider_http_error",
     message: "Provider request failed.",
   };
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
 }

@@ -2,11 +2,9 @@
 // console skin. recharts accepts any CSS color string, including var(--token).
 export const chartAccent = "var(--chart-1)";
 export const chartOk = "var(--ok)";
-export const chartWarn = "var(--warn)";
-export const chartDanger = "var(--danger)";
 
 // Ordered categorical palette for breakdown donuts (cycled when exhausted).
-export const chartCategorical = [
+const chartCategorical = [
   "var(--chart-1)",
   "var(--chart-2)",
   "var(--chart-3)",

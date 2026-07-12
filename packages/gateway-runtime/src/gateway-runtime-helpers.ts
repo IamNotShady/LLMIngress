@@ -13,30 +13,6 @@ export type GatewayActivityRouteCandidate = GatewayRouteCandidateSnapshot & {
   providerApiKeyPrefix?: string;
 };
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
-}
-
-export function requireGatewayRoutePolicy(
-  snapshot: GatewayConfigSnapshot,
-  routePolicyId: string,
-): GatewayRoutePolicySnapshot {
-  const routePolicy = snapshot.routePolicies.find((candidate) => candidate.id === routePolicyId);
-  if (!routePolicy) {
-    throw new GatewayPipelineError(
-      "route_not_found",
-      `Route policy ${routePolicyId} was not found.`,
-    );
-  }
-  return routePolicy;
-}
-
 export function requireGatewayRoutePolicyForVirtualModel(
   snapshot: GatewayConfigSnapshot,
   virtualModelId: string,

@@ -101,17 +101,6 @@ export function toProviderApiKeyMetadata(row: ProviderApiKeyStorageRow): Provide
   };
 }
 
-export function formatProviderApiKeyTestStatusLabel(status: ProviderApiKeyTestStatus): string {
-  return {
-    auth_failed: "Auth failed",
-    healthy: "Healthy",
-    network_error: "Network error",
-    quota_limited: "Quota limited",
-    unhealthy: "Unhealthy",
-    unknown: "Unknown",
-  }[status];
-}
-
 export function readConsoleMasterKeySource(
   env: Record<string, string | undefined> = process.env,
 ): MasterKeySource {

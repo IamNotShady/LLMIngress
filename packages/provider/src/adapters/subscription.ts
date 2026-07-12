@@ -1,3 +1,4 @@
+import { isRecord } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,
   isProviderRedirectRejectedError,
@@ -11,7 +12,6 @@ import {
   withClaudeCodeSystemPrompt,
 } from "../subscription.js";
 import {
-  isRecord,
   isRetryableHttpStatus,
   providerRequestTimeoutMs,
   readProviderRequestId,

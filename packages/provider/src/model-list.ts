@@ -1,4 +1,5 @@
 import type { ModelInputModality, ModelOutputModality } from "@llmingress/domain";
+import { isRecord } from "@llmingress/util";
 
 export type ListedProviderModel = {
   capabilityMetadata?: Record<string, unknown>;
@@ -311,8 +312,4 @@ async function readResponseBody(response: Response): Promise<unknown> {
   } catch {
     return { raw: text };
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

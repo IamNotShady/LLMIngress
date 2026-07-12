@@ -3264,15 +3264,6 @@ button.table-row-link {
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
-.activity-legacy-timeline {
-  margin: var(--space-xs) 0 0;
-  padding-left: var(--space-md);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-.activity-legacy-timeline li + li {
-  margin-top: var(--space-2xs);
-}
 .activity-metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

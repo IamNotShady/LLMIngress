@@ -1,3 +1,5 @@
+import { isRecord } from "@llmingress/util";
+
 export type PlaygroundChatRequest = {
   max_tokens?: number;
   messages: Array<{ content: string; role: "system" | "user" }>;
@@ -212,8 +214,4 @@ function readJsonRecord(value: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

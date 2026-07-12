@@ -57,18 +57,15 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Console desktop navigation now uses a 280px sidebar with 15px labels. Activity and Limits share the same 1600px content boundary as Providers and Virtual Models, and Activity pagination now returns 20 requests per page.
 - Playground treats Temperature, Top P, and Max Tokens as optional request values. Clearing any of these inputs now omits the corresponding `temperature`, `top_p`, or `max_tokens` property instead of substituting a default and sending it to Gateway.
 - Agent creation now renders the selected/default Virtual Model name in the one-time connection dialog instead of `<Virtual Model Name>`. The Virtual Models search input now tolerates pre-hydration browser caret-color mutations without a hydration error.
+- Dead-code cleanup removed the Ollama adapter, `/api/route-policies`, 28 dead exports, the static price registry, branded IDs, and the legacy fallback timeline; shared helpers moved to `packages/util`. Kept for manual overrides pending re-wiring: `models-section.tsx` and the prices/capabilities override APIs.
 
 ## Verification
 
-Final 2026-07-12 result: `pnpm run verify` passed with 62 test files and 321 tests,
-and `pnpm run verify:features` re-verified all 9 milestones. Coverage is 48.02%
-statements, 48.17% lines, 40.52% branches, and 50.58% functions.
-
-Console follow-up fixes: focused unit tests, focused real-process Console E2E, the
-live-browser Agent-created-dialog check, `pnpm run verify`, and `pnpm run verify:features`
-all pass. The first `verify:features` attempt hit transient isolated Console startup
-failures after an existing dev server/Next lock; a clean rerun passed all 9 feature
-regressions.
+Final 2026-07-12 result (after dead-code cleanup): `pnpm run verify` passed with 61
+test files and 318 tests, and `pnpm run verify:features` re-verified all 9 milestones.
+Coverage is 48.78% statements, 48.95% lines, 41.24% branches, and 51.87% functions.
+`verify:features` fails while a leftover `next dev` holds the Console dev lock; stop
+it and rerun.
 
 Database-backed checks use:
 

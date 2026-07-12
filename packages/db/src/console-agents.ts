@@ -91,10 +91,6 @@ type AgentRow = {
   unhealthy_reachable_provider_count: number;
 };
 
-type AgentDependencyCounts = {
-  requestAttributionCount: number;
-};
-
 type AgentQueryClient = {
   query: <T = Record<string, unknown>>(
     text: string,
@@ -196,10 +192,6 @@ export function deriveAgentStatus(input: {
   const now = input.now ?? new Date();
   const onlineWindowMs = input.onlineWindowMs ?? 15 * 60 * 1000;
   return now.getTime() - latestRequestAt.getTime() <= onlineWindowMs ? "online" : "offline";
-}
-
-export function getAgentDeleteDependencyError(_input: AgentDependencyCounts): string | null {
-  return null;
 }
 
 export async function listAgents(databaseUrl?: string): Promise<ConsoleAgent[]> {
@@ -370,21 +362,6 @@ export function normalizeAgentVirtualModelAccessFormInput(
         : allowedVirtualModelIds,
     defaultVirtualModelId,
   });
-}
-
-export function formatAgentVirtualModelAccess(input: {
-  allowedVirtualModels: AgentVirtualModel[];
-  defaultVirtualModel: AgentVirtualModel | null;
-}): { allowedLabel: string; defaultLabel: string } {
-  return {
-    allowedLabel:
-      input.allowedVirtualModels.length === 0
-        ? "None"
-        : input.allowedVirtualModels.map(formatVirtualModelLabel).join(", "),
-    defaultLabel: input.defaultVirtualModel
-      ? formatVirtualModelLabel(input.defaultVirtualModel)
-      : "None",
-  };
 }
 
 export async function listAgentVirtualModelAccess(
@@ -757,10 +734,6 @@ function assertDefaultVirtualModelIsAllowed(input: {
       { defaultVirtualModelId: input.defaultVirtualModelId },
     );
   }
-}
-
-function formatVirtualModelLabel(virtualModel: AgentVirtualModel): string {
-  return `${virtualModel.displayName} (${virtualModel.name})`;
 }
 
 function normalizeRequiredText(value: string | null | undefined, label: string): string {

@@ -1,12 +1,11 @@
+import { isRecord, joinUrl, omitUndefined } from "@llmingress/util";
 import {
   fetchCredentialedProviderRequest,
   isProviderRedirectRejectedError,
 } from "../authenticated-http.js";
 import { mergeHttpHeaders, readProviderResponseHeaders } from "../headers.js";
 import {
-  isRecord,
   isRetryableHttpStatus,
-  joinProviderUrl,
   providerRequestTimeoutMs,
   readProviderRequestId,
   readResponseBody,
@@ -274,7 +273,7 @@ function buildChatCompletionsPayload(
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
-  return buildProviderUrl(baseUrl, "chat/completions");
+  return joinUrl(baseUrl, "chat/completions");
 }
 
 function buildResponsesPayload(
@@ -285,7 +284,7 @@ function buildResponsesPayload(
 }
 
 function buildResponsesUrl(baseUrl: string): string {
-  return buildProviderUrl(baseUrl, "responses");
+  return joinUrl(baseUrl, "responses");
 }
 
 function buildEmbeddingsPayload(
@@ -296,11 +295,7 @@ function buildEmbeddingsPayload(
 }
 
 function buildEmbeddingsUrl(baseUrl: string): string {
-  return buildProviderUrl(baseUrl, "embeddings");
-}
-
-function buildProviderUrl(baseUrl: string, suffix: string): string {
-  return joinProviderUrl(baseUrl, suffix);
+  return joinUrl(baseUrl, "embeddings");
 }
 
 function mapProviderError(
@@ -365,10 +360,4 @@ function readProviderError(body: unknown): { code: string; message: string } {
     code: "provider_http_error",
     message: "Provider request failed.",
   };
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
 }

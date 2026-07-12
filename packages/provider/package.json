@@ -36,10 +36,6 @@
       "types": "./src/oauth.ts",
       "default": "./src/oauth.ts"
     },
-    "./ollama": {
-      "types": "./src/adapters/ollama.ts",
-      "default": "./src/adapters/ollama.ts"
-    },
     "./openai": {
       "types": "./src/adapters/openai.ts",
       "default": "./src/adapters/openai.ts"
@@ -66,6 +62,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@llmingress/domain": "workspace:*"
+    "@llmingress/domain": "workspace:*",
+    "@llmingress/util": "workspace:*"
   }
 }

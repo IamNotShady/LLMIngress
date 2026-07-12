@@ -3,6 +3,7 @@ import {
   type ModelTokenPrice,
   type PricedModelTokenPrice,
 } from "@llmingress/billing/price-registry";
+import { omitUndefined } from "@llmingress/util";
 
 export const routeEndpointProtocols = [
   "chat_completions",
@@ -331,13 +332,13 @@ export type RouteReason = {
 
 export type RouteDecision = {
   modelId: string;
-  providerId: ProviderId;
+  providerId: string;
   providerKey: string;
-  providerModelId: ProviderModelId;
-  routePolicyId: RoutePolicyId;
+  providerModelId: string;
+  routePolicyId: string;
   routeReason: RouteReason;
   strategy: RoutePolicyStrategy;
-  virtualModelId: VirtualModelId;
+  virtualModelId: string;
   virtualModelName: string;
 };
 
@@ -576,10 +577,10 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
 }): RouteDecision {
   return {
     modelId: input.candidate.modelId,
-    providerId: asProviderId(input.candidate.providerId),
+    providerId: input.candidate.providerId,
     providerKey: input.candidate.providerKey,
-    providerModelId: asProviderModelId(input.candidate.providerModelId),
-    routePolicyId: asRoutePolicyId(input.routePolicy.id),
+    providerModelId: input.candidate.providerModelId,
+    routePolicyId: input.routePolicy.id,
     routeReason: {
       candidateExplanations: input.evaluated.map((evaluated) => ({
         candidateOrder: evaluated.candidate.candidateOrder,
@@ -600,7 +601,7 @@ function createDecision<TCandidate extends RouteCandidate>(input: {
       strategy: input.routePolicy.strategy,
     },
     strategy: input.routePolicy.strategy,
-    virtualModelId: asVirtualModelId(input.routePolicy.virtualModelId),
+    virtualModelId: input.routePolicy.virtualModelId,
     virtualModelName: input.routePolicy.virtualModelName,
   };
 }
@@ -852,10 +853,6 @@ function readOptionalPositiveInteger(value: unknown, name: string): number | und
   return value;
 }
 
-function omitUndefined<T extends Record<string, unknown>>(input: T): T {
-  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as T;
-}
-
 export const agentLimitTypes = ["budget", "concurrency", "rpm", "token", "tpm"] as const;
 export type AgentLimitType = (typeof agentLimitTypes)[number];
 
@@ -867,30 +864,3 @@ export type AgentLimitPeriod = (typeof agentLimitPeriods)[number];
 
 export const agentLimitUnits = ["requests", "tokens", "usd"] as const;
 export type AgentLimitUnit = (typeof agentLimitUnits)[number];
-
-declare const brandSymbol: unique symbol;
-
-export type Brand<TValue, TBrand extends string> = TValue & {
-  readonly [brandSymbol]: TBrand;
-};
-
-export type RoutePolicyId = Brand<string, "RoutePolicyId">;
-export type VirtualModelId = Brand<string, "VirtualModelId">;
-export type ProviderId = Brand<string, "ProviderId">;
-export type ProviderModelId = Brand<string, "ProviderModelId">;
-
-export function asRoutePolicyId(value: string): RoutePolicyId {
-  return value as RoutePolicyId;
-}
-
-export function asVirtualModelId(value: string): VirtualModelId {
-  return value as VirtualModelId;
-}
-
-export function asProviderId(value: string): ProviderId {
-  return value as ProviderId;
-}
-
-export function asProviderModelId(value: string): ProviderModelId {
-  return value as ProviderModelId;
-}

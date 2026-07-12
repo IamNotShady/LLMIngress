@@ -7,6 +7,7 @@ export type ConnectivityCheckProvider = {
 };
 
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { isRecord } from "@llmingress/util";
 import { buildAnthropicMessagesUrl, buildAnthropicProviderHeaders } from "./adapters/anthropic.js";
 import {
   fetchCredentialedProviderRequest,
@@ -475,10 +476,6 @@ function normalizeTimeoutMs(value: number | undefined): number {
     return Math.floor(value);
   }
   return defaultTimeoutMs;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 class ProviderProbeTimeoutError extends Error {

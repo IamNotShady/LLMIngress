@@ -20,6 +20,7 @@ import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { EncryptedSecret } from "@llmingress/security/secret-encryption";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
+import { isRecord } from "@llmingress/util";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 import { listProviders } from "./console-providers.ts";
 
@@ -248,10 +249,6 @@ function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
     // handled by final throw
   }
   throw new Error("Stored provider OAuth token was not recognized.");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function createPkcePair(): { codeChallenge: string; codeVerifier: string; state: string } {

@@ -4,7 +4,6 @@ import {
   type ConsoleActivityFiltersInput,
   type ConsoleFallbackEvent,
   countConsoleActivities,
-  formatConsoleActivityFallbackAttempts,
   formatConsoleActivityMetadata,
   formatConsoleActivityRouteReason,
   getConsoleActivityDetail,
@@ -52,7 +51,6 @@ function ActivityReferenceDetail({
   const activity = detail?.activity ?? fallbackActivity;
   const metadataLines = buildActivityMetadataLines(activity, detail?.requestMetadata ?? {});
   const fallbackEvents = detail?.fallbackEvents ?? [];
-  const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(fallbackEvents);
 
   return (
     <ConsoleDialog
@@ -107,11 +105,7 @@ function ActivityReferenceDetail({
       <div>
         <p className="detail-section-label">Fallback timeline</p>
         {fallbackEvents.length === 0 ? (
-          <ul className="activity-legacy-timeline">
-            {fallbackAttemptLines.map((attempt) => (
-              <li key={attempt}>{attempt}</li>
-            ))}
-          </ul>
+          <p className="activity-empty-timeline">No fallback attempts</p>
         ) : (
           <ol className="activity-timeline">
             {fallbackEvents.map((event) => (

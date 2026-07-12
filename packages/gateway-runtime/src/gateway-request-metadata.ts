@@ -4,6 +4,7 @@ import type {
   NormalizedOpenAIChatRequest,
   NormalizedOpenAIResponsesRequest,
 } from "@llmingress/provider/openai";
+import { isRecord } from "@llmingress/util";
 import { gatewayDebugRequestMetadata } from "./gateway-env.ts";
 
 export type GatewayRequestProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
@@ -313,8 +314,4 @@ function safeStringify(value: unknown): string {
   } catch {
     return "";
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

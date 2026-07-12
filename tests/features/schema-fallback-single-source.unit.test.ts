@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import {
-  formatConsoleActivityFallbackAttempts,
-  listConsoleActivities,
-} from "../../packages/db/src/console-activity";
+import { listConsoleActivities } from "../../packages/db/src/console-activity";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import { recordCompletedGatewayRequestActivity } from "../../packages/gateway-runtime/src/gateway-activity-recorder";
@@ -109,26 +106,6 @@ describe("schema fallback single source", () => {
       const activity = activities[0] as { fallbackFailedAttemptCount?: number } | undefined;
       expect(activity?.fallbackFailedAttemptCount).toBe(3);
     });
-  });
-
-  it("formats fallback attempt lines from fallback event rows", () => {
-    expect(
-      formatConsoleActivityFallbackAttempts([
-        {
-          attemptOrder: 1,
-          createdAt: new Date("2026-07-05T00:00:00.000Z"),
-          errorCode: "provider_request_failed",
-          errorMessage: "failed",
-          failedBeforeFirstByte: true,
-          providerApiKeyId: null,
-          providerApiKeyPrefix: null,
-          providerModelDisplayName: "Schema Model",
-          providerModelId: "provider-model-1",
-          providerModelName: "gpt-schema",
-          status: "failed",
-        },
-      ]),
-    ).toEqual(["Attempt 1: provider_request_failed before first byte on provider-model-1"]);
   });
 });
 

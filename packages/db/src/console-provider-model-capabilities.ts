@@ -5,6 +5,7 @@ import {
   resolveProviderModelCapabilities,
   type SyncedModelCapabilities,
 } from "@llmingress/domain";
+import { isRecord } from "@llmingress/util";
 import { createConfigPublisher } from "./config-versions.ts";
 import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
@@ -181,8 +182,4 @@ function stripCapabilityMetadata(value: unknown): Record<string, unknown> {
   delete record.registrySyncedAt;
   delete record.syncedCapabilities;
   return record;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

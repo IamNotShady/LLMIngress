@@ -8,6 +8,7 @@ import {
   type OpenAIProviderAdapter,
 } from "@llmingress/provider/openai";
 import { createCodexSubscriptionAdapter } from "@llmingress/provider/subscription-adapters";
+import { isRecord, omitUndefined } from "@llmingress/util";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import {
   createGatewayErrorBody,
@@ -19,7 +20,6 @@ import {
   type GatewayProtocolResponse,
 } from "./gateway-protocol-request.ts";
 import { buildOpenAIResponsesRequestMetadata } from "./gateway-request-metadata.ts";
-import { isRecord, omitUndefined } from "./gateway-runtime-helpers.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
 export type GatewayResponsesResponse = GatewayProtocolResponse;

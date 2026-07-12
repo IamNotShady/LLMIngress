@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type PostgresQueryClient, withPostgresTransaction } from "@llmingress/db/client";
+import { isRecord } from "@llmingress/util";
 import type { FallbackFailedAttempt } from "./gateway-fallback-chain.ts";
 import type { GatewayRequestMetadata } from "./gateway-request-metadata.ts";
 import { readGatewayProviderTokenUsage } from "./gateway-usage-collector.ts";
@@ -412,10 +413,6 @@ export function readGatewayActivityError(
     errorCode,
     errorMessage: typeof errorMessage === "string" ? errorMessage : null,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readGatewayFinishReason(responseBody: unknown): string | undefined {

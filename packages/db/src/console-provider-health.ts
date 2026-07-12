@@ -168,37 +168,6 @@ async function providerHealthSoftDeleteColumnsAvailable(
   return result.rows[0]?.available ?? false;
 }
 
-export function formatProviderHealthStatus(
-  status: ConsoleProviderHealthStatus | null | undefined,
-): string {
-  return (
-    {
-      auth_failed: "Auth failed",
-      checking: "Checking",
-      healthy: "Healthy",
-      network_error: "Network error",
-      quota_limited: "Quota limited",
-      unhealthy: "Unhealthy",
-      unknown: "Unknown",
-    }[status ?? "unknown"] ?? "Unknown"
-  );
-}
-
-export function formatProviderHealthLatestProbe(input: {
-  latestProbeAt: Date | null;
-  trigger: ConsoleProviderHealthTrigger | null;
-}): string {
-  if (!input.latestProbeAt) {
-    return "Latest probe: Never";
-  }
-
-  return `Latest probe: ${input.latestProbeAt.toISOString()} via ${input.trigger ?? "unknown"}`;
-}
-
-export function formatProviderHealthFailureCount(consecutiveFailures: number): string {
-  return `Consecutive failures: ${consecutiveFailures}`;
-}
-
 export function formatProviderHealthStaleStatus(input: {
   latestProbeAt: Date | null;
   now?: Date;

@@ -1,4 +1,5 @@
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { isRecord } from "@llmingress/util";
 import type { SubscriptionProviderKey } from "./subscription.js";
 
 export type ProviderOAuthTokenBlob = {
@@ -272,8 +273,4 @@ async function readJsonBody(response: Response): Promise<unknown> {
 
 function readOAuthConfig(providerKey: SubscriptionProviderKey): ProviderOAuthConfig {
   return providerOAuthConfigs[providerKey];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

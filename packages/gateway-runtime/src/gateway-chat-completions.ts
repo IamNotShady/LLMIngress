@@ -10,6 +10,7 @@ import {
 import { createOpenRouterProviderAdapter } from "@llmingress/provider/openrouter";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
+import { isRecord, omitUndefined } from "@llmingress/util";
 import type { GatewayConfigSnapshot } from "./gateway-config-reload.ts";
 import {
   createGatewayErrorBody,
@@ -21,7 +22,6 @@ import {
   type GatewayProtocolResponse,
 } from "./gateway-protocol-request.ts";
 import { buildOpenAIChatCompletionRequestMetadata } from "./gateway-request-metadata.ts";
-import { isRecord, omitUndefined } from "./gateway-runtime-helpers.ts";
 import type { GatewayVirtualModel } from "./gateway-virtual-model-access.ts";
 
 export type GatewayChatCompletionResponse = GatewayProtocolResponse;

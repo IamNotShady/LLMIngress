@@ -377,23 +377,6 @@ export function listProviderRouteEndpointProtocols(input: {
   return [];
 }
 
-export function mergeRoutePolicyEditorProviderModelOptions(
-  filteredOptions: readonly ConsoleProviderModelOption[],
-  selectedCandidates: readonly ConsoleProviderModelOption[],
-): ConsoleProviderModelOption[] {
-  const merged = [...filteredOptions];
-  const existingIds = new Set(merged.map((option) => option.id));
-
-  for (const candidate of selectedCandidates) {
-    if (!existingIds.has(candidate.id)) {
-      merged.push(candidate);
-      existingIds.add(candidate.id);
-    }
-  }
-
-  return merged;
-}
-
 export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): string {
   if (price.status === "unknown_price") {
     return "Unknown price";
@@ -402,10 +385,7 @@ export function formatProviderModelPriceStatusLabel(price: ModelTokenPrice): str
   if (price.source === "manual_override") {
     return "Priced (manual override)";
   }
-  if (price.source === "price_sync") {
-    return "Priced (price sync)";
-  }
-  return "Priced (built-in)";
+  return "Priced (price sync)";
 }
 
 export function formatProviderModelOptionLabel(input: {

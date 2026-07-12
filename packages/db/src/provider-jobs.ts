@@ -62,10 +62,6 @@ export function buildProviderProbeJobPayload(
   return { followUpProbe: true, providerId, source };
 }
 
-export function buildModelRefreshJobPayload(providerId: string): ProviderProbeJobPayload {
-  return buildProviderProbeJobPayload(providerId, "manual_probe");
-}
-
 export function buildJobCreatedNotificationPayload(jobId: string): { jobId: string } {
   return { jobId };
 }

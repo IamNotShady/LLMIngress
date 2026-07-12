@@ -1,7 +1,3 @@
-export const BUILT_IN_PRICE_REGISTRY_VERSION = "mvp-static-2026-06-13";
-
-export type PriceProviderKey = "anthropic" | "openai";
-
 export type PricedModelTokenPrice = {
   cachedInputUsdPerMillionTokens?: number;
   currency: "USD";
@@ -11,7 +7,7 @@ export type PricedModelTokenPrice = {
   priceVersion: string;
   providerKey: string;
   snapshotDate: string;
-  source: "built_in_static_snapshot" | "manual_override" | "price_sync";
+  source: "manual_override" | "price_sync";
   sourceUrl: string;
   status: "priced";
   unit: "per_1m_tokens";
@@ -21,7 +17,7 @@ export type UnknownModelTokenPrice = {
   modelId: string;
   priceVersion: string;
   providerKey: string;
-  reason: "model_not_in_builtin_registry" | "no_current_price";
+  reason: "no_current_price";
   status: "unknown_price";
 };
 
@@ -64,111 +60,6 @@ export type UnavailableTokenCost = {
   reason: "unknown_price";
   status: "unavailable";
 };
-
-type PriceRegistryEntry = Omit<
-  PricedModelTokenPrice,
-  "modelId" | "priceVersion" | "snapshotDate" | "source" | "status" | "unit"
->;
-
-const priceRegistry = new Map<string, PriceRegistryEntry>(
-  [
-    openai("gpt-4.1", 2, 8, "https://developers.openai.com/api/docs/models/gpt-4.1"),
-    openai("gpt-4.1-2025-04-14", 2, 8, "https://developers.openai.com/api/docs/models/gpt-4.1"),
-    openai("gpt-4.1-mini", 0.4, 1.6, "https://developers.openai.com/api/docs/models/gpt-4.1-mini"),
-    openai(
-      "gpt-4.1-mini-2025-04-14",
-      0.4,
-      1.6,
-      "https://developers.openai.com/api/docs/models/gpt-4.1-mini",
-    ),
-    openai("gpt-4.1-nano", 0.1, 0.4, "https://developers.openai.com/api/docs/models/gpt-4.1-nano"),
-    openai(
-      "gpt-4.1-nano-2025-04-14",
-      0.1,
-      0.4,
-      "https://developers.openai.com/api/docs/models/gpt-4.1-nano",
-    ),
-    anthropic(
-      "claude-fable-5",
-      10,
-      50,
-      "https://platform.claude.com/docs/en/about-claude/models/overview",
-    ),
-    anthropic(
-      "claude-opus-4-8",
-      5,
-      25,
-      "https://platform.claude.com/docs/en/about-claude/models/overview",
-    ),
-    anthropic(
-      "claude-sonnet-4-6",
-      3,
-      15,
-      "https://platform.claude.com/docs/en/about-claude/models/overview",
-    ),
-    anthropic(
-      "claude-haiku-4-5",
-      1,
-      5,
-      "https://platform.claude.com/docs/en/about-claude/models/overview",
-    ),
-    anthropic(
-      "claude-haiku-4-5-20251001",
-      1,
-      5,
-      "https://platform.claude.com/docs/en/about-claude/models/overview",
-    ),
-  ].map((entry) => [registryKey(entry.providerKey, entry.modelId), entry]),
-);
-
-export function resolveModelTokenPrice(input: {
-  modelId: string;
-  providerKey: string;
-}): ModelTokenPrice {
-  const providerKey = input.providerKey.trim().toLowerCase();
-  const modelId = input.modelId.trim();
-  const entry = priceRegistry.get(registryKey(providerKey, modelId));
-
-  if (!entry) {
-    return {
-      modelId,
-      priceVersion: BUILT_IN_PRICE_REGISTRY_VERSION,
-      providerKey,
-      reason: "model_not_in_builtin_registry",
-      status: "unknown_price",
-    };
-  }
-
-  return {
-    ...entry,
-    modelId,
-    priceVersion: BUILT_IN_PRICE_REGISTRY_VERSION,
-    snapshotDate: "2026-06-13",
-    source: "built_in_static_snapshot",
-    status: "priced",
-    unit: "per_1m_tokens",
-  };
-}
-
-export function listBuiltInModelTokenPrices(): PricedModelTokenPrice[] {
-  return [...priceRegistry.entries()]
-    .map(([key, entry]) => {
-      const separatorIndex = key.indexOf(":");
-      const modelId = separatorIndex === -1 ? key : key.slice(separatorIndex + 1);
-      return {
-        ...entry,
-        modelId,
-        priceVersion: BUILT_IN_PRICE_REGISTRY_VERSION,
-        snapshotDate: "2026-06-13",
-        source: "built_in_static_snapshot" as const,
-        status: "priced" as const,
-        unit: "per_1m_tokens" as const,
-      };
-    })
-    .sort((left, right) =>
-      `${left.providerKey}:${left.modelId}`.localeCompare(`${right.providerKey}:${right.modelId}`),
-    );
-}
 
 export function resolveEffectiveModelTokenPrice(input: {
   manualOverride?: ManualPriceOverride | null;
@@ -254,43 +145,6 @@ export function calculateTokenCostUsd(
     status: "estimated",
     totalCostUsd: roundUsd(inputCostUsd + outputCostUsd),
   };
-}
-
-function openai(
-  modelId: string,
-  inputUsdPerMillionTokens: number,
-  outputUsdPerMillionTokens: number,
-  sourceUrl: string,
-): PriceRegistryEntry & { modelId: string } {
-  return {
-    cachedInputUsdPerMillionTokens: inputUsdPerMillionTokens / 4,
-    currency: "USD",
-    inputUsdPerMillionTokens,
-    modelId,
-    outputUsdPerMillionTokens,
-    providerKey: "openai",
-    sourceUrl,
-  };
-}
-
-function anthropic(
-  modelId: string,
-  inputUsdPerMillionTokens: number,
-  outputUsdPerMillionTokens: number,
-  sourceUrl: string,
-): PriceRegistryEntry & { modelId: string } {
-  return {
-    currency: "USD",
-    inputUsdPerMillionTokens,
-    modelId,
-    outputUsdPerMillionTokens,
-    providerKey: "anthropic",
-    sourceUrl,
-  };
-}
-
-function registryKey(providerKey: string, modelId: string): string {
-  return `${providerKey}:${modelId}`;
 }
 
 function matchesManualOverride(

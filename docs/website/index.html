@@ -97,6 +97,14 @@ pre { margin: 0; }
 
 .wrap { max-width: 1120px; margin-inline: auto; padding-inline: var(--gutter); }
 
+/* pixel star field — fixed backdrop behind the content layer */
+.stars {
+  position: fixed; inset: 0; z-index: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+main, .footer { position: relative; z-index: 1; }
+
 .skip {
   position: absolute; left: -9999px; top: 12px; z-index: 100;
   background: var(--accent); color: var(--ink);
@@ -584,6 +592,7 @@ pre { margin: 0; }
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
+<canvas class="stars" id="stars" aria-hidden="true"></canvas>
 
 <!-- ================= navbar ================= -->
 <header class="nav">
@@ -1227,6 +1236,134 @@ document.addEventListener('click', function (e) {
     if (!menu.contains(e.target)) menu.removeAttribute('open');
   });
 });
+
+/* pixel star field backdrop (adapted from uicapsule/background-pixel-stars,
+   recolored to the brand palette; static under prefers-reduced-motion) */
+(function () {
+  var canvas = document.getElementById('stars');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  var COLORS = ['#efeef5', '#d7c8ff', '#b494ff', '#8b6cff', '#93899f'];
+  var DENSITY = 3e-5;        /* stars per px² */
+  var PX = 4;                /* star pixel size */
+  var FPS = 16;
+  var TWINKLE_CHANCE = 0.7;  /* fraction of stars that twinkle */
+  var TW_MIN = 2, TW_MAX = 4;      /* twinkle period, seconds */
+  var RESPAWN_MS = 5000, RESPAWN_FRAC = 0.15;
+  var TRAIL_PX = 2;
+
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var stars = [], shooting = [], last = 0;
+
+  function makeStar() {
+    return {
+      x: Math.floor(Math.random() * (canvas.width / PX)) * PX,
+      y: Math.floor(Math.random() * (canvas.height / PX)) * PX,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      base: Math.random() * 0.45 + 0.25,
+      twinkle: Math.random() < TWINKLE_CHANCE,
+      period: TW_MIN + Math.random() * (TW_MAX - TW_MIN),
+      timer: Math.random() * TW_MAX
+    };
+  }
+
+  function init() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    stars = [];
+    var n = Math.floor(canvas.width * canvas.height * DENSITY);
+    for (var i = 0; i < n; i++) stars.push(makeStar());
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(function (s) {
+      var op = s.base;
+      if (s.twinkle && !reduced) {
+        op = (s.timer / s.period) % 1 < 0.5 ? s.base : s.base * 0.3;
+      }
+      ctx.globalAlpha = op;
+      ctx.fillStyle = s.color;
+      ctx.fillRect(s.x, s.y, PX, PX);
+    });
+    ctx.globalAlpha = 1;
+    shooting.forEach(function (m) {
+      m.trail.forEach(function (t) {
+        ctx.globalAlpha = t.op;
+        ctx.fillStyle = '#b494ff';
+        ctx.fillRect(t.x, t.y, TRAIL_PX, TRAIL_PX);
+      });
+      ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.translate(m.x, m.y);
+      ctx.rotate(m.angle);
+      ctx.fillStyle = '#efeef5';
+      /* 4×2 pixel head, corners clipped */
+      for (var r = 0; r < 2; r++) for (var c = 0; c < 4; c++) {
+        if ((c === 0 && r === 1) || (c === 3 && r === 0)) continue;
+        ctx.fillRect(c * TRAIL_PX, r * TRAIL_PX, TRAIL_PX, TRAIL_PX);
+      }
+      ctx.restore();
+    });
+  }
+
+  function spawnShooting() {
+    if (document.visibilityState === 'visible') {
+      shooting.push({
+        x: Math.random() * canvas.width, y: 0,
+        angle: (45 + Math.random() * 90) * Math.PI / 180,
+        speed: 8 + Math.random() * 5, dist: 0, trail: []
+      });
+    }
+    setTimeout(spawnShooting, 6000 + Math.random() * 8000);
+  }
+
+  function step(dt) {
+    stars.forEach(function (s) { s.timer += dt; });
+    shooting = shooting.map(function (m) {
+      m.trail.push({ x: m.x, y: m.y, op: 0.8 });
+      m.trail = m.trail.map(function (t) { t.op -= 0.08; return t; })
+        .filter(function (t) { return t.op > 0; });
+      m.x += m.speed * Math.cos(m.angle);
+      m.y += m.speed * Math.sin(m.angle);
+      return m;
+    }).filter(function (m) {
+      return m.x > -30 && m.x < canvas.width + 30 && m.y < canvas.height + 30;
+    });
+  }
+
+  function tick(t) {
+    requestAnimationFrame(tick);
+    if (t - last < 1000 / FPS) return;
+    last = t;
+    step(1 / FPS);
+    draw();
+  }
+
+  var respawn = setInterval(function () {
+    var n = Math.max(1, Math.floor(stars.length * RESPAWN_FRAC));
+    for (var i = 0; i < n; i++) {
+      stars[Math.floor(Math.random() * stars.length)] = makeStar();
+    }
+  }, RESPAWN_MS);
+
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { init(); if (reduced) draw(); }, 150);
+  });
+
+  init();
+  if (reduced) {
+    clearInterval(respawn);
+    draw();               /* static field, no motion */
+  } else {
+    spawnShooting();
+    requestAnimationFrame(tick);
+  }
+})();
 </script>
 </body>
 </html>

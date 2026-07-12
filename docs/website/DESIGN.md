@@ -125,8 +125,18 @@ Wrapping: `h2`/`h3` use `text-wrap: balance`, body copy uses
 - Topology: 2px light dots travel agent→core→provider paths via SVG
   `animateMotion` (staggered loops). Purely narrative, not decorative.
 - Hover: buttons/links 150ms; transform/opacity only, no layout animation.
-- `prefers-reduced-motion: reduce` disables entrances and hides traveling
-  dots (static diagram remains fully legible).
+- Pixel star field backdrop: a fixed full-viewport `<canvas>` behind the
+  content layer (`z-index 0`; `main`/footer at 1) draws a sparse 4px pixel
+  starfield in brand hues (`#efeef5 #d7c8ff #b494ff #8b6cff #93899f`,
+  density 3e-5/px², 16fps, 70% of stars twinkle, occasional pixel shooting
+  star every 6–14s). Adapted from `uicapsule/background-pixel-stars`,
+  recolored to the palette. Stars show only where sections are transparent
+  (hero, features, compatibility, deploy, final CTA); `--bg-raised` bands
+  occlude them, preserving the section rhythm. `aria-hidden`,
+  `pointer-events: none`.
+- `prefers-reduced-motion: reduce` disables entrances, hides traveling
+  dots (static diagram remains fully legible), and renders the star field
+  as a static frame — no twinkle, no shooting stars.
 
 ## 4. Page Structure
 

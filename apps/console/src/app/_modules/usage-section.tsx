@@ -260,7 +260,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
       <div className="chart-card usage-summary-card">
         <h2 className="chart-card-title">Provider / Model summary</h2>
         <div className="data-table-wrap">
-          <table className="data-table usage-summary-table">
+          <table className="data-table bounded-table usage-summary-table">
             <thead>
               <tr>
                 <th>Provider</th>

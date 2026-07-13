@@ -97,7 +97,7 @@ export function ProvidersClientSection({
               <p>No providers configured.</p>
             ) : (
               <div className="data-table-wrap">
-                <table className="data-table providers-table">
+                <table className="data-table bounded-table providers-table">
                   <thead>
                     <tr>
                       <th>Provider</th>
@@ -366,7 +366,7 @@ export function ProvidersClientSection({
                                       <p>Local providers do not require API keys.</p>
                                     ) : (
                                       <div className="data-table-wrap">
-                                        <table className="data-table provider-key-table">
+                                        <table className="data-table bounded-table provider-key-table">
                                           <thead>
                                             <tr>
                                               <th>Label</th>
@@ -559,7 +559,7 @@ export function ProvidersClientSection({
           <p>No provider models discovered yet.</p>
         ) : (
           <div className="data-table-wrap">
-            <table className="data-table model-library-table">
+            <table className="data-table bounded-table model-library-table">
               <thead>
                 <tr>
                   <th>Provider</th>

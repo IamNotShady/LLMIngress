@@ -454,7 +454,7 @@ export async function VirtualModelsSection({
               </p>
             ) : (
               <div className="data-table-wrap">
-                <table className="data-table vm-table">
+                <table className="data-table bounded-table vm-table">
                   <thead>
                     <tr>
                       <th>Virtual Model</th>

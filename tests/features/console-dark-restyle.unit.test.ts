@@ -150,10 +150,8 @@ describe("console dark restyle static contract", () => {
       sections.indexOf('<form className="vm-filter-bar"'),
       sections.indexOf('<div className="vm-shell">'),
     );
-    const vmTable = sections.slice(
-      sections.indexOf('<table className="data-table vm-table">'),
-      sections.indexOf("</table>", sections.indexOf('<table className="data-table vm-table">')),
-    );
+    const vmTableStart = sections.indexOf('<table className="data-table bounded-table vm-table">');
+    const vmTable = sections.slice(vmTableStart, sections.indexOf("</table>", vmTableStart));
 
     expect(modelsPage).not.toContain("FlatIcon");
     expect(modelsPage).toContain('className="page models-page"');

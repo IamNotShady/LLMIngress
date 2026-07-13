@@ -1531,18 +1531,6 @@ body:has(.console-dialog[open]) {
 .agents-table td {
   padding: 0.78rem var(--space-sm);
 }
-.agents-table th:nth-child(4),
-.agents-table td:nth-child(4) {
-  width: 13rem;
-  min-width: 13rem;
-  max-width: 13rem;
-}
-.agents-table th:nth-child(5),
-.agents-table td:nth-child(5) {
-  width: 6.25rem;
-  min-width: 6.25rem;
-  max-width: 6.25rem;
-}
 .agent-detail-card {
   display: flex;
   flex-direction: column;
@@ -3594,6 +3582,247 @@ button.table-row-link {
   .activity-metric-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- Bounded list tables ---- */
+.bounded-table {
+  table-layout: fixed;
+}
+.bounded-table > thead > tr > th,
+.bounded-table > tbody > tr > td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bounded-table > tbody > tr > td > .table-row-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-requests-table {
+  min-width: 64rem;
+}
+.overview-requests-table :is(th, td):nth-child(1) {
+  width: 12%;
+}
+.overview-requests-table :is(th, td):nth-child(2),
+.overview-requests-table :is(th, td):nth-child(3),
+.overview-requests-table :is(th, td):nth-child(4) {
+  width: 17%;
+}
+.overview-requests-table :is(th, td):nth-child(5) {
+  width: 14%;
+}
+.overview-requests-table :is(th, td):nth-child(6) {
+  width: 7%;
+}
+.overview-requests-table :is(th, td):nth-child(7),
+.overview-requests-table :is(th, td):nth-child(8) {
+  width: 8%;
+}
+
+.agents-table {
+  min-width: 72rem;
+}
+.agents-table :is(th, td):nth-child(1) {
+  width: 15%;
+}
+.agents-table :is(th, td):nth-child(2) {
+  width: 12%;
+}
+.agents-table :is(th, td):nth-child(3) {
+  width: 17%;
+}
+.agents-table :is(th, td):nth-child(4) {
+  width: 16%;
+}
+.agents-table :is(th, td):nth-child(5) {
+  width: 9%;
+}
+.agents-table :is(th, td):nth-child(6) {
+  width: 10%;
+}
+.agents-table :is(th, td):nth-child(7) {
+  width: 8%;
+}
+.agents-table :is(th, td):nth-child(8) {
+  width: 13%;
+}
+
+.providers-table {
+  min-width: 52rem;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(1) {
+  width: 22%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(2) {
+  width: 10%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(3) {
+  width: 16%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(4),
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(5) {
+  width: 7%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(6) {
+  width: 18%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(7) {
+  width: 20%;
+}
+
+.provider-key-table {
+  min-width: 42rem;
+}
+.provider-key-table :is(th, td):nth-child(1),
+.provider-key-table :is(th, td):nth-child(4),
+.provider-key-table :is(th, td):nth-child(5) {
+  width: 25%;
+}
+.provider-key-table :is(th, td):nth-child(2) {
+  width: 10%;
+}
+.provider-key-table :is(th, td):nth-child(3) {
+  width: 15%;
+}
+
+.model-library-table {
+  min-width: 78rem;
+}
+.model-library-table :is(th, td):nth-child(1) {
+  width: 10%;
+}
+.model-library-table :is(th, td):nth-child(2) {
+  width: 19%;
+}
+.model-library-table :is(th, td):nth-child(3),
+.model-library-table :is(th, td):nth-child(5),
+.model-library-table :is(th, td):nth-child(6) {
+  width: 7%;
+}
+.model-library-table :is(th, td):nth-child(4) {
+  width: 8%;
+}
+.model-library-table :is(th, td):nth-child(7),
+.model-library-table :is(th, td):nth-child(8) {
+  width: 9%;
+}
+.model-library-table :is(th, td):nth-child(9),
+.model-library-table :is(th, td):nth-child(10),
+.model-library-table :is(th, td):nth-child(11),
+.model-library-table :is(th, td):nth-child(12) {
+  width: 6%;
+}
+
+.usage-summary-table {
+  min-width: 60rem;
+}
+.usage-summary-table :is(th, td):nth-child(1) {
+  width: 18%;
+}
+.usage-summary-table :is(th, td):nth-child(2) {
+  width: 24%;
+}
+.usage-summary-table :is(th, td):nth-child(3) {
+  width: 10%;
+}
+.usage-summary-table :is(th, td):nth-child(4) {
+  width: 11%;
+}
+.usage-summary-table :is(th, td):nth-child(5) {
+  width: 12%;
+}
+.usage-summary-table :is(th, td):nth-child(6) {
+  width: 13%;
+}
+.usage-summary-table :is(th, td):nth-child(7) {
+  width: 12%;
+}
+
+.limits-rule-table :is(th, td):nth-child(1) {
+  width: 16%;
+}
+.limits-rule-table :is(th, td):nth-child(2) {
+  width: 12%;
+}
+.limits-rule-table :is(th, td):nth-child(3),
+.limits-rule-table :is(th, td):nth-child(4),
+.limits-rule-table :is(th, td):nth-child(7) {
+  width: 10%;
+}
+.limits-rule-table :is(th, td):nth-child(5) {
+  width: 7%;
+}
+.limits-rule-table :is(th, td):nth-child(6),
+.limits-rule-table :is(th, td):nth-child(8),
+.limits-rule-table :is(th, td):nth-child(9) {
+  width: 8%;
+}
+.limits-rule-table :is(th, td):nth-child(10) {
+  width: 11%;
+}
+
+.activity-table th,
+.activity-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-table th:nth-child(2),
+.activity-table td:nth-child(2) {
+  width: 8.4rem;
+}
+
+.vm-table {
+  min-width: 72rem;
+}
+.vm-table :is(th, td):nth-child(1) {
+  width: 16%;
+}
+.vm-table :is(th, td):nth-child(2) {
+  width: 9%;
+}
+.vm-table :is(th, td):nth-child(3),
+.vm-table :is(th, td):nth-child(8),
+.vm-table :is(th, td):nth-child(9) {
+  width: 8%;
+}
+.vm-table :is(th, td):nth-child(4) {
+  width: 19%;
+}
+.vm-table :is(th, td):nth-child(5),
+.vm-table :is(th, td):nth-child(6) {
+  width: 10%;
+}
+.vm-table :is(th, td):nth-child(7) {
+  width: 12%;
+}
+
+.vm-candidate-table {
+  min-width: 68rem;
+}
+.vm-candidate-table :is(th, td):nth-child(1),
+.vm-candidate-table :is(th, td):nth-child(8),
+.vm-candidate-table :is(th, td):nth-child(9) {
+  width: 8%;
+}
+.vm-candidate-table :is(th, td):nth-child(2) {
+  width: 14%;
+}
+.vm-candidate-table :is(th, td):nth-child(3) {
+  width: 19%;
+}
+.vm-candidate-table :is(th, td):nth-child(4) {
+  width: 9%;
+}
+.vm-candidate-table :is(th, td):nth-child(5),
+.vm-candidate-table :is(th, td):nth-child(6) {
+  width: 11%;
+}
+.vm-candidate-table :is(th, td):nth-child(7) {
+  width: 12%;
 }
 
 /* ============================================================================

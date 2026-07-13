@@ -189,7 +189,7 @@ export async function OverviewSection() {
             <p>No activity recorded.</p>
           ) : (
             <div className="data-table-wrap">
-              <table className="data-table">
+              <table className="data-table bounded-table overview-requests-table">
                 <thead>
                   <tr>
                     <th>Time</th>

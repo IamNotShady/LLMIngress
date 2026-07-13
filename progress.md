@@ -49,7 +49,7 @@ existing password/session authentication boundary.
 - Console mutation forms now submit with same-origin fetch and keep API failures in the current screen or dialog. Structured errors with a field render as red text beside that input; Provider delete races and other operation-level conflicts render inline instead of navigating to raw JSON.
 - Provider relative timestamps use one server-generated reference timestamp, removing the `49 min ago` / `50 min ago` hydration mismatch. Virtual Model deletion now checks only Agent default/grant usage and transactionally retires its owned Route Policy.
 - Every Provider probe now runs as one composite model-refresh handler: Provider HTTP completes first, then one short transaction revalidates the Provider/credential snapshot and atomically commits model changes plus Provider/model health. Legacy connectivity jobs call the same handler, Job-ID retries are idempotent, and Gateway paired health writes use the same atomic DB API.
-- Console desktop navigation now uses a 280px sidebar with 15px labels. Activity and Limits share the same 1600px content boundary as Providers and Virtual Models, and Activity pagination now returns 20 requests per page.
+- All 11 current Console list tables use fixed column allocations and contained ellipsis for long text. Activity bounds Request ID explicitly, and long Agent or Virtual Model names cannot paint into adjacent cells.
 - Playground treats Temperature, Top P, and Max Tokens as optional request values. Clearing any of these inputs now omits the corresponding `temperature`, `top_p`, or `max_tokens` property instead of substituting a default and sending it to Gateway.
 - Agent creation now renders the selected/default Virtual Model name in the one-time connection dialog instead of `<Virtual Model Name>`. The Virtual Models search input now tolerates pre-hydration browser caret-color mutations without a hydration error.
 - Agent creation now requires an Allowed Virtual Model and atomically commits the Agent, API key, model grants, optional default, explicit Limits switch, and rules. Default choices follow the selected grants, while the one-time result shows the API key, Gateway URL, and platform-specific connection guidance.
@@ -59,9 +59,9 @@ existing password/session authentication boundary.
 
 ## Verification
 
-Final 2026-07-13 result: the no-Origin Console contract unit/real-process E2E,
-`pnpm run verify` (62 files/326 tests), and all 9 milestone regressions passed. Coverage is 49.02% statements,
-49.18% lines, 41.53% branches, and 51.94% functions.
+Final 2026-07-13 result: the list-containment and no-Origin Console contract unit/real-process E2E,
+`pnpm run verify` (62 files/328 tests), and all 9 milestone regressions passed. Coverage is 48.86% statements,
+49.02% lines, 41.3% branches, and 51.75% functions.
 
 Database-backed checks use:
 

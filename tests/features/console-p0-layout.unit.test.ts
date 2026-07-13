@@ -6,6 +6,20 @@ const rootDir = process.cwd();
 const appDir = join(rootDir, "apps/console/src/app");
 const css = () => readFileSync(join(appDir, "globals.css"), "utf8");
 
+const currentListTables = [
+  ["_modules/overview-section.tsx", "overview-requests-table"],
+  ["_modules/agents-section.tsx", "agents-table"],
+  ["_modules/providers-client-section.tsx", "providers-table"],
+  ["_modules/providers-client-section.tsx", "provider-key-table"],
+  ["_modules/providers-client-section.tsx", "model-library-table"],
+  ["_modules/virtual-models-section.tsx", "vm-table"],
+  ["_modules/usage-section.tsx", "usage-summary-table"],
+  ["_modules/limits-section.tsx", "limits-rule-table"],
+  ["_modules/activity-section.tsx", "activity-table"],
+  ["_modules/virtual-model-route-dialog.tsx", "vm-candidate-table"],
+  ["_modules/virtual-model-route-dialog.tsx", "vm-model-picker-table"],
+] as const;
+
 describe("console P0 layout static contract", () => {
   test("chart cards cannot widen their grid track past the container", () => {
     // Grid/flex items default to min-width:auto, so a nowrap table inside a
@@ -26,6 +40,33 @@ describe("console P0 layout static contract", () => {
     // the row actions behind the card edge.
     expect(css()).toMatch(/\.limits-rule-table\s*\{[^}]*min-width:\s*56rem/s);
     expect(css()).not.toMatch(/\.limits-rule-table\s*\{[^}]*min-width:\s*64rem/s);
+  });
+
+  test("every current list uses a fixed bounded table contract", () => {
+    for (const [file, tableClass] of currentListTables) {
+      const source = readFileSync(join(appDir, file), "utf8");
+      expect(source, tableClass).toMatch(
+        new RegExp(
+          `className="[^"]*bounded-table[^"]*${tableClass}|className="[^"]*${tableClass}[^"]*bounded-table`,
+        ),
+      );
+    }
+
+    const stylesheet = css();
+    expect(stylesheet).toMatch(/\.bounded-table\s*\{[^}]*table-layout:\s*fixed/s);
+    expect(stylesheet).toMatch(
+      /\.bounded-table\s*>\s*thead\s*>\s*tr\s*>\s*th,[\s\S]*?\.bounded-table\s*>\s*tbody\s*>\s*tr\s*>\s*td\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/s,
+    );
+  });
+
+  test("activity allocates Request ID explicitly instead of giving it leftover width", () => {
+    const stylesheet = css();
+    expect(stylesheet).toMatch(
+      /\.activity-table th:nth-child\(2\),\s*\.activity-table td:nth-child\(2\)\s*\{[^}]*width:\s*8\.4rem/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.activity-table th,[\s\S]*?\.activity-table td\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/s,
+    );
   });
 
   test("trend chart renders an explicit empty state for empty windows", () => {

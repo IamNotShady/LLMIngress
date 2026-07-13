@@ -426,7 +426,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
           <div className="limits-rule-card">
             <h2 className="limits-section-title">Limit Rules</h2>
             <div className="data-table-wrap limits-rule-table-wrap">
-              <table className="data-table limits-rule-table">
+              <table className="data-table bounded-table limits-rule-table">
                 <thead>
                   <tr>
                     <th>Agent</th>

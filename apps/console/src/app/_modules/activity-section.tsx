@@ -357,7 +357,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
         <div className="activity-table-region">
           <h2 className="activity-region-title">Request list</h2>
           <div className="data-table-wrap activity-table-wrap">
-            <table className="data-table activity-table">
+            <table className="data-table bounded-table activity-table">
               <thead>
                 <tr>
                   <th>Time</th>

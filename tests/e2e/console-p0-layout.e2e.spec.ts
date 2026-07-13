@@ -20,51 +20,144 @@ async function pageOverflowPx(page: Page): Promise<number> {
   );
 }
 
+async function expectTableColumnsContained(page: Page, selectors: string[]) {
+  const audits = await page.evaluate((tableSelectors) => {
+    return tableSelectors.map((selector) => {
+      const table = document.querySelector<HTMLTableElement>(selector);
+      if (!table) {
+        return { maxColumnShare: 1, selector, unsafeCells: ["missing table"] };
+      }
+
+      const tableWidth = table.getBoundingClientRect().width;
+      const headers = Array.from(table.querySelectorAll(":scope > thead > tr > th"));
+      const unsafeCells = Array.from(
+        table.querySelectorAll<HTMLTableCellElement>(":scope > tbody > tr > td"),
+      )
+        .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+        .filter((cell) => getComputedStyle(cell).overflowX === "visible")
+        .map((cell) => cell.textContent?.trim().slice(0, 80) ?? "");
+      const maxColumnShare = Math.max(
+        0,
+        ...headers.map((header) => header.getBoundingClientRect().width / tableWidth),
+      );
+
+      return { maxColumnShare, selector, unsafeCells };
+    });
+  }, selectors);
+
+  for (const audit of audits) {
+    expect(audit.unsafeCells, audit.selector).toEqual([]);
+    expect(audit.maxColumnShare, audit.selector).toBeLessThanOrEqual(0.34);
+  }
+}
+
 // Seeds an agent, a virtual model, recent request activity (wide snapshots),
 // and a full set of limit rules — the data shapes that reproduced the
 // production layout breakages a fresh database hides.
 async function seedConsoleData(databaseUrl: string) {
   const agentId = randomUUID();
   const virtualModelId = randomUUID();
+  const providerId = randomUUID();
+  const providerModelId = randomUUID();
+  const routePolicyId = randomUUID();
+  const agentName = "layout-probe-agent-with-a-name-that-must-not-overlap-adjacent-columns";
+  const virtualModelName =
+    "layout-probe-virtual-model-with-a-name-that-must-not-overlap-adjacent-columns";
+  const providerName = "Layout Probe Provider With An Excessively Long Display Name";
+  const providerModelName = "claude-sonnet-5-extended-thinking-with-a-long-display-name";
+  const providerModelKey = `anthropic/${providerModelName}`;
 
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, key_prefix, key_hash, enabled, limits_enabled)
-       values ($1, 'layout-probe-agent', 'llmi_layout_probe', 'test-hash', true, true)`,
-      [agentId],
+      `insert into virtual_models (id, name, description, enabled)
+       values ($1, $2, 'Layout probe', true)`,
+      [virtualModelId, virtualModelName],
     );
     await client.query(
-      `insert into virtual_models (id, name, description, enabled)
-       values ($1, 'layout-probe-virtual-model', 'Layout probe', true)`,
-      [virtualModelId],
+      `insert into providers (
+         id, provider_type, provider_key, display_name, base_url, enabled
+       )
+       values ($1, 'api_key', 'openai', $2, 'https://example.test/v1', true)`,
+      [providerId, providerName],
+    );
+    await client.query(
+      `insert into provider_models (
+         id, provider_id, model_id, display_name, context_window,
+         max_output_tokens, supports_streaming, supports_function_calling,
+         supports_reasoning, availability
+       )
+       values ($1, $2, $3, $4, 200000, 32000, true, true, true, 'available')`,
+      [providerModelId, providerId, providerModelKey, providerModelName],
+    );
+    await client.query(
+      `insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
+       values ($1, $2, 'fixed', 'chat_completions')`,
+      [routePolicyId, virtualModelId],
+    );
+    await client.query(
+      `insert into route_policy_candidates (
+         id, route_policy_id, provider_model_id, candidate_order
+       ) values ($1, $2, $3, 1)`,
+      [randomUUID(), routePolicyId, providerModelId],
+    );
+    await client.query(
+      `insert into agents (
+         id, name, key_prefix, key_hash, default_virtual_model_id, enabled, limits_enabled
+       ) values ($1, $2, 'llmi_layout_probe', 'test-hash', $3, true, true)`,
+      [agentId, agentName, virtualModelId],
+    );
+    await client.query(
+      `insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)`,
+      [agentId, virtualModelId],
     );
 
     for (let i = 0; i < 8; i++) {
+      const activityId = randomUUID();
       await client.query(
         `insert into request_activity (
-           id, request_id, agent_id, virtual_model_id, agent_key_prefix,
+           id, request_id, agent_id, virtual_model_id, route_policy_id,
+           provider_id, provider_model_id, agent_key_prefix,
            protocol, model, stream, status, http_status, latency_ms,
            started_at, completed_at,
            agent_name_snapshot, virtual_model_name_snapshot,
            provider_display_name_snapshot, provider_model_display_name_snapshot
          )
          values (
-           $1, $2, $3, $4, 'llmi_layout_probe',
-           'chat_completions', 'anthropic/claude-sonnet-5-extended-thinking', false,
-           $5, $6, 1234,
-           now() - make_interval(mins => $7), now() - make_interval(mins => $7),
-           'layout-probe-agent', 'layout-probe-virtual-model',
-           'Layout Probe Provider Inc.', 'claude-sonnet-5-extended-thinking'
+           $1, $2, $3, $4, $5, $6, $7, 'llmi_layout_probe',
+           'chat_completions', $8, false, $9, $10, 1234,
+           now() - make_interval(mins => $11), now() - make_interval(mins => $11),
+           $12, $13, $14, $15
          )`,
         [
-          randomUUID(),
-          `gw_${randomUUID()}`,
+          activityId,
+          `playground_${Date.now()}_${randomUUID()}_request-id-with-extra-width`,
           agentId,
           virtualModelId,
+          routePolicyId,
+          providerId,
+          providerModelId,
+          providerModelKey,
           i === 0 ? "failed" : "succeeded",
           i === 0 ? 502 : 200,
           i * 5,
+          agentName,
+          virtualModelName,
+          providerName,
+          providerModelName,
         ],
+      );
+      await client.query(
+        `insert into request_usage (
+           id, request_activity_id, agent_id, virtual_model_id, provider_model_id,
+           input_tokens, output_tokens, total_tokens, token_source
+         ) values ($1, $2, $3, $4, $5, 12000, 345, 12345, 'provider')`,
+        [randomUUID(), activityId, agentId, virtualModelId, providerModelId],
+      );
+      await client.query(
+        `insert into request_costs (
+           id, request_activity_id, agent_id, provider_model_id, total_cost_usd, cost_source
+         ) values ($1, $2, $3, $4, '0.42', 'provider')`,
+        [randomUUID(), activityId, agentId, providerModelId],
       );
     }
 
@@ -83,6 +176,8 @@ async function seedConsoleData(databaseUrl: string) {
       );
     }
   });
+
+  return { providerId, virtualModelId };
 }
 
 test("console keeps layout integrity with real data: no overflow, visible limits actions, chart empty states, mobile nav drawer", async ({
@@ -128,7 +223,7 @@ test("console keeps layout integrity with real data: no overflow, visible limits
           }
 
           // --- Seed real request + limit data, then re-check the layouts it broke.
-          await seedConsoleData(fixture.databaseUrl);
+          const seeded = await seedConsoleData(fixture.databaseUrl);
 
           await page.goto(baseUrl);
           await expect(page.getByText("layout-probe-agent").first()).toBeVisible();
@@ -140,6 +235,33 @@ test("console keeps layout integrity with real data: no overflow, visible limits
               .locator(".chart-empty"),
           ).toHaveCount(0);
 
+          // Every current list owns its column proportions and contains long
+          // text instead of allowing it to paint across adjacent columns.
+          await page.setViewportSize({ width: 1904, height: 1080 });
+          await expectTableColumnsContained(page, [".overview-requests-table"]);
+          await page.goto(`${baseUrl}/agents`);
+          await expectTableColumnsContained(page, [".agents-table"]);
+          await page.goto(`${baseUrl}/providers?selected=${seeded.providerId}`);
+          await expectTableColumnsContained(page, [
+            ".providers-table",
+            ".provider-key-table",
+            ".model-library-table",
+          ]);
+          await page.goto(`${baseUrl}/models`);
+          await expectTableColumnsContained(page, [".vm-table"]);
+          await page.goto(`${baseUrl}/usage`);
+          await expectTableColumnsContained(page, [".usage-summary-table"]);
+          await page.goto(`${baseUrl}/limits`);
+          await expectTableColumnsContained(page, [".limits-rule-table"]);
+          await page.goto(`${baseUrl}/activity`);
+          await expectTableColumnsContained(page, [".activity-table"]);
+          await page.goto(`${baseUrl}/models?virtualModelDialog=${seeded.virtualModelId}`);
+          await expect(page.locator(".vm-candidate-table")).toBeVisible();
+          await expectTableColumnsContained(page, [".vm-candidate-table"]);
+          await page.getByRole("button", { name: "Add Model" }).click();
+          await expect(page.locator(".vm-model-picker-table")).toBeVisible();
+          await expectTableColumnsContained(page, [".vm-model-picker-table"]);
+
           // Overview stays inside the viewport at both checkpoints; the
           // recent-requests table scrolls inside its card instead of widening
           // the page.
@@ -148,6 +270,7 @@ test("console keeps layout integrity with real data: no overflow, visible limits
             { width: 390, height: 844 },
           ]) {
             await page.setViewportSize(viewport);
+            await page.goto(baseUrl);
             await expect.poll(() => pageOverflowPx(page)).toBeLessThanOrEqual(0);
           }
           const recentWrap = page

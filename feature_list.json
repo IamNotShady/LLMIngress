@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-p0-layout.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-p0-layout.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-13: The Console layout E2E now seeds its Agent with Limits enabled and asserts the expected action row before measuring bounds, so fixture drift fails quickly instead of holding the shared Console lock for 240 seconds. The layout unit contract, three focused Console E2E, the full 79-test Playwright suite, pnpm run verify (62 files/327 tests), and all 9 feature regressions pass."
+      "evidence": "2026-07-13: All 11 current Console list tables use fixed column allocations and contained ellipsis for long text. A 1904px live audit and long-text real-process E2E cover page lists, Provider nested lists, and Virtual Model candidate/picker dialogs with zero page or unsafe cell overflow. pnpm run verify (62 files/328 tests) and all 9 feature regressions pass."
     },
     {
       "id": "release-guards",

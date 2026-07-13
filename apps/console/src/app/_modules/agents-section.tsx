@@ -602,7 +602,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
               <p>No agents match the selected filters.</p>
             ) : (
               <div className="data-table-wrap">
-                <table className="data-table agents-table">
+                <table className="data-table bounded-table agents-table">
                   <thead>
                     <tr>
                       <th>Agent</th>

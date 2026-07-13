@@ -38,9 +38,6 @@ existing password/session authentication boundary.
 
 ## Delivery Progress
 
-- The root README now follows a product-first format with project identity, capability summary,
-  Docker quick start, request example, protocol and Provider coverage, architecture, development,
-  verification, and contributor links grounded in the current product and code.
 - Core delivery hardening is implemented: native accessible dialogs, strict migration CLIs, four compiled non-root runtime images, and enforced JSON coverage thresholds.
 - Post-slimming Console audit completed across all eight retained pages: fresh installs now show the core Provider → Virtual Model → Agent → Playground path, empty states link to their prerequisites, and the sidebar no longer implies Gateway readiness without a health signal.
 - Provider model capability refresh now keeps the first available value by source priority and no longer computes conflicts that erase explicit values; the current OpenAI Codex model catalog was refreshed and restored GPT-5.4-Mini and GPT-5.5 to 272K context.
@@ -58,7 +55,7 @@ existing password/session authentication boundary.
 - Agent creation now requires an Allowed Virtual Model and atomically commits the Agent, API key, model grants, optional default, explicit Limits switch, and rules. Default choices follow the selected grants, while the one-time result shows the API key, Gateway URL, and platform-specific connection guidance.
 - Gateway now treats `agents.limits_enabled` as the sole Limits switch and performs no Limits database work while it is false. Disabling Limits preserves its rules. Agent Enable/Disable preserves the same API key and configuration, and the Agents list now shows Virtual Model names and Enabled state without the dynamic Status or Available VM columns.
 - Limits lists/KPIs include only active Agents with Limits enabled. The layout E2E seed now enables Limits explicitly and fails fast if its action row is absent; rows expose Edit only, with no delete UI.
-- Console no longer validates request Origin on login, setup, logout, or authenticated writes. The obsolete `CONSOLE_PUBLIC_BASE_URL` setting was removed; missing, null, and cross-site Origin requests now reach the normal form or session-authentication boundary.
+- Console first-run setup now creates the administrator with a password only; its setup-token environment, lock mode, form, and API branches were removed. Console writes also skip request-Origin validation and rely on password/session authentication.
 
 ## Verification
 

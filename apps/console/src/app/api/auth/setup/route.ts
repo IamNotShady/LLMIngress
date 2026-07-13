@@ -1,4 +1,3 @@
-import { readConsoleSetupMode } from "@llmingress/config";
 import { createAdminPassword, isConsoleInitialized } from "@llmingress/db/console-auth";
 import { consoleValidationError } from "@llmingress/db/console-operation-error";
 import type { NextRequest } from "next/server";
@@ -15,25 +14,7 @@ export const POST = withConsoleErrorBoundary(async (request: NextRequest) => {
     );
   }
 
-  const setupMode = readConsoleSetupMode();
-  if (setupMode.kind === "locked") {
-    return NextResponse.json(
-      {
-        error: "Console setup is locked until CONSOLE_SETUP_TOKEN is configured.",
-        code: "console_setup_locked",
-      },
-      { status: 503 },
-    );
-  }
-
   const form = await request.formData();
-  if (setupMode.kind === "token_required" && readText(form, "setupToken") !== setupMode.token) {
-    return NextResponse.json(
-      { error: "Console setup token is invalid.", code: "console_setup_token_invalid" },
-      { status: 403 },
-    );
-  }
-
   const password = readText(form, "password");
   if (!password) {
     throw consoleValidationError("Admin password is required.", "form_field_required", {

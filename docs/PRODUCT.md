@@ -140,7 +140,7 @@ must not generate persistent jobs during idle operation.
 
 LLMIngress runs as Console, Gateway, Worker, and PostgreSQL services. Published ports bind
 to loopback by default. Production deployment requires independent random values for the
-master key, database password, and Console setup token.
+master key and database password.
 
 Gateway health endpoints:
 

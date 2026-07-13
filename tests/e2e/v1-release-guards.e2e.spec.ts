@@ -22,7 +22,6 @@ test("v1 release verification runner and docker compose contracts stay runnable"
 
   const composeEnv = {
     ...process.env,
-    CONSOLE_SETUP_TOKEN: "s".repeat(32),
     MASTER_KEY: "m".repeat(32),
     POSTGRES_PASSWORD: "p".repeat(32),
   };

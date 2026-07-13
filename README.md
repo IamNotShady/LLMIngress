@@ -33,8 +33,7 @@ then control routing, access, limits, fallback, and usage from one Console.
 
 ### Docker Compose
 
-Clone the repository and generate independent secrets for encryption, PostgreSQL, and first-run
-Console setup:
+Clone the repository and generate independent secrets for encryption and PostgreSQL:
 
 ```bash
 git clone https://github.com/IamNotShady/LLMIngress.git
@@ -42,13 +41,12 @@ cd LLMIngress
 
 export MASTER_KEY="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
 export POSTGRES_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
-export CONSOLE_SETUP_TOKEN="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
 
 docker compose up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000), enter the generated setup token, and create
-the administrator password. Compose runs migrations once, then starts the complete stack:
+Open [http://localhost:3000](http://localhost:3000) and create the administrator password. Compose
+runs migrations once, then starts the complete stack:
 
 | Service | Address | Purpose |
 | --- | --- | --- |

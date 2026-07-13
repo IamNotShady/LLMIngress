@@ -57,11 +57,6 @@ export type BootstrapRuntimeConfig = {
   securityWarnings: string[];
 };
 
-export type ConsoleSetupMode =
-  | { kind: "locked" }
-  | { kind: "password_only" }
-  | { kind: "token_required"; token: string };
-
 const insecurePublicDefaultMasterKey = "test-master-key-change-me";
 
 export function loadBootstrapRuntimeConfig(
@@ -205,38 +200,4 @@ export function readConsoleListenHost(
   env: Record<string, string | undefined> = process.env,
 ): string {
   return env.CONSOLE_HOST?.trim() || "127.0.0.1";
-}
-
-export function readConsoleSetupMode(
-  env: Record<string, string | undefined> = process.env,
-): ConsoleSetupMode {
-  const setupToken = readConsoleSetupToken(env);
-  if (setupToken) {
-    return { kind: "token_required", token: setupToken };
-  }
-  if (isLoopbackHost(readConsoleListenHost(env))) {
-    return { kind: "password_only" };
-  }
-  return { kind: "locked" };
-}
-
-export function isLoopbackHost(host: string): boolean {
-  const normalizedHost = host.trim().toLowerCase();
-  return (
-    normalizedHost === "127.0.0.1" ||
-    normalizedHost === "localhost" ||
-    normalizedHost === "::1" ||
-    normalizedHost === "[::1]"
-  );
-}
-
-function readConsoleSetupToken(env: Record<string, string | undefined>): string | null {
-  const value = env.CONSOLE_SETUP_TOKEN?.trim();
-  if (!value) {
-    return null;
-  }
-  if (value.length < 32) {
-    throw new Error("CONSOLE_SETUP_TOKEN must be at least 32 characters.");
-  }
-  return value;
 }

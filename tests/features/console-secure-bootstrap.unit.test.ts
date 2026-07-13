@@ -4,7 +4,7 @@ import { createTestPostgresFixture, runMigrations } from "@llmingress/db";
 import { createAdminPassword } from "@llmingress/db/console-auth";
 import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
-import { loadBootstrapRuntimeConfig, readConsoleSetupMode } from "../../packages/config/src/index";
+import { loadBootstrapRuntimeConfig } from "../../packages/config/src/index";
 
 describe("console secure bootstrap", () => {
   it("keeps compose secrets required and host publishes loopback-bound by default", () => {
@@ -13,7 +13,7 @@ describe("console secure bootstrap", () => {
 
     expect(compose).toContain(`${shell}{MASTER_KEY:?MASTER_KEY is required}`);
     expect(compose).toContain(`${shell}{POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}`);
-    expect(compose).toContain(`${shell}{CONSOLE_SETUP_TOKEN:?CONSOLE_SETUP_TOKEN is required}`);
+    expect(compose).not.toContain("CONSOLE_SETUP_TOKEN");
     expect(compose).not.toContain(`${shell}{MASTER_KEY:-`);
     expect(compose).not.toContain("POSTGRES_PASSWORD: postgres");
 
@@ -33,28 +33,23 @@ describe("console secure bootstrap", () => {
     expect(compose).not.toContain(`"${shell}{POSTGRES_PORT:-55432}:5432"`);
   });
 
-  it("requires setup tokens only for configured tokens or non-loopback console hosts", () => {
-    expect(readConsoleSetupMode({ CONSOLE_HOST: "127.0.0.1" })).toEqual({
-      kind: "password_only",
-    });
-    expect(readConsoleSetupMode({ CONSOLE_HOST: "localhost" })).toEqual({
-      kind: "password_only",
-    });
-    expect(readConsoleSetupMode({ CONSOLE_HOST: "0.0.0.0" })).toEqual({
-      kind: "locked",
-    });
-    expect(
-      readConsoleSetupMode({
-        CONSOLE_HOST: "0.0.0.0",
-        CONSOLE_SETUP_TOKEN: "s".repeat(32),
-      }),
-    ).toEqual({
-      kind: "token_required",
-      token: "s".repeat(32),
-    });
-    expect(() => readConsoleSetupMode({ CONSOLE_SETUP_TOKEN: "short" })).toThrow(
-      /CONSOLE_SETUP_TOKEN/,
-    );
+  it("has no setup token runtime or documented configuration surface", () => {
+    const files = [
+      ".env.example",
+      "README.md",
+      "docs/PRODUCT.md",
+      "packages/config/src/index.ts",
+      "apps/console/src/app/(dashboard)/layout.tsx",
+      "apps/console/src/app/_components/auth-screens.tsx",
+      "apps/console/src/app/_components/console-mutation-form.tsx",
+      "apps/console/src/app/api/auth/setup/route.ts",
+    ];
+
+    for (const file of files) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(
+        /CONSOLE_SETUP_TOKEN|console_setup_token|SetupLocked|readConsoleSetupMode|requiresSetupToken|setupToken/,
+      );
+    }
   });
 
   it("rejects the old public default master key in production unless explicitly allowed", () => {

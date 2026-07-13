@@ -85,7 +85,6 @@ describe("gateway-lifecycle-drain", () => {
           },
         };
       },
-      createHealthSummaryChangedListener: async () => ({ close: async () => undefined }),
       loadLatestSnapshot: async () => {
         loadCount += 1;
         if (loadCount === 1) {
@@ -117,17 +116,12 @@ describe("gateway-lifecycle-drain", () => {
   });
 
   it("coalesces notifications during an active reload into one trailing reload", async () => {
-    let healthChanged: (() => void) | undefined;
+    let configChanged: ((notification: { version: number }) => void) | undefined;
     let releaseReload: (() => void) | undefined;
     let loadCount = 0;
     const runtime = createGatewayConfigRuntime({
-      createConfigChangedListener: async () => ({ close: async () => undefined }),
-      createHealthSummaryChangedListener: async (callback) => {
-        healthChanged = () =>
-          callback({
-            providerId: "provider-1",
-            status: "healthy",
-          });
+      createConfigChangedListener: async (callback) => {
+        configChanged = callback;
         return { close: async () => undefined };
       },
       loadLatestSnapshot: async () => {
@@ -147,10 +141,10 @@ describe("gateway-lifecycle-drain", () => {
     });
 
     await runtime.start();
-    healthChanged?.();
+    configChanged?.({ version: 2 });
     await Promise.resolve();
-    healthChanged?.();
-    healthChanged?.();
+    configChanged?.({ version: 3 });
+    configChanged?.({ version: 4 });
     releaseReload?.();
     await eventually(() => loadCount >= 3);
     await delay(20);

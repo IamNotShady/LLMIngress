@@ -8,7 +8,7 @@ providers while enforcing usage limits and recording operational usage metadata.
 LLMIngress intentionally concentrates on four capabilities:
 
 1. Provider and real-model management.
-2. Virtual Model routing, health filtering, and fallback.
+2. Virtual Model routing, Provider-connection filtering, and fallback.
 3. Agent authentication, permissions, rate limits, budgets, and concurrency limits.
 4. Activity, token usage, latency, failure, fallback, and actual-cost reporting.
 
@@ -36,9 +36,9 @@ Supported routing strategies are:
 - `cost_first`
 - `random`
 
-Provider and model health can remove unhealthy candidates. Failure before the first client
-byte may advance through credentials or fallback candidates. Failure after bytes have been
-sent is never replayed.
+Confirmed unhealthy API keys/OAuth tokens are removed from credential fallback; models do not
+have health state. Failure before the first client byte may advance through credentials or
+fallback candidates. Failure after bytes have been sent is never replayed.
 
 ## Providers and Models
 
@@ -50,6 +50,13 @@ Provider types:
 
 The Console supports provider creation, enable/disable, dependency-protected deletion,
 multiple API keys, subscription OAuth, connectivity checks, and model refresh.
+
+Connection health is tracked independently for each API key or OAuth token. Local Providers use
+one logical connection. A probe tries up to three distinct chat models and succeeds when any one
+works. `provider_health_summary` stores only unhealthy connections; missing rows are healthy.
+Failures retry after 5, 10, 30, then 60 minutes, while successful recovery removes the summary.
+Credential creation, material modification, enablement, and manual Console actions trigger exact
+connection probes. Gateway credential errors trigger the same asynchronous Worker probe.
 
 Model metadata can come from the Provider API, models.dev, OpenRouter, LiteLLM, and Vercel.
 Users can manually resolve missing or conflicting capability and price data.
@@ -101,13 +108,13 @@ LLMIngress records metadata required for operations and accounting:
 - status, error category, and latency
 - input/output/total tokens
 - actual or estimated cost and price source
-- fallback attempts and Provider health events
+- fallback attempts and Provider-connection health events
 
 Prompt content, response content, tool arguments, credentials, cookies, and authorization
 headers are never written to operational logs.
 
 Console reporting includes request count, tokens, latency, failure rate, actual/estimated
-cost, fallback history, and Provider health history.
+cost, fallback history, and Provider-connection health history.
 
 ## Console
 
@@ -130,7 +137,7 @@ secret encryption remain required.
 Persistent Worker jobs are limited to:
 
 - `model_refresh`
-- `provider_connectivity_check`
+- `provider_connection_probe`
 - `price_sync`
 
 Retention and stale-concurrency repair are idempotent internal maintenance operations and

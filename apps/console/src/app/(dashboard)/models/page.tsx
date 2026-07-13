@@ -12,7 +12,7 @@ export default async function VirtualModelsPage({
     <div className="page models-page">
       <PageHeader
         title="Virtual Models"
-        description="Combine compatible Provider Models under one routed model name with health filtering and fallback."
+        description="Combine compatible Provider Models under one routed model name with credential and candidate fallback."
         actions={
           <a
             className="btn"

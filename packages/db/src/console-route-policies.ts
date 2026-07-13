@@ -109,15 +109,9 @@ export type RoutePolicyEditorFilters = {
   providerKey: string | null;
 };
 
-export type RoutePolicyEditorProviderHealth = {
-  id: string;
-  status: string | null | undefined;
-};
-
-export type RoutePolicyHealthWarningCandidate = {
-  modelHealthStatus?: string | null;
+export type RoutePolicyConnectionHealthWarningCandidate = {
+  allConnectionsUnhealthy: boolean;
   optionLabel: string;
-  providerHealthStatus?: string | null;
 };
 
 export type RouteReasonMetadataInput = {
@@ -276,24 +270,15 @@ export function buildRoutePolicyWarnings(
   return warnings;
 }
 
-export function buildRoutePolicyHealthWarnings(
-  candidates: readonly RoutePolicyHealthWarningCandidate[],
+export function buildRoutePolicyConnectionHealthWarnings(
+  candidates: readonly RoutePolicyConnectionHealthWarningCandidate[],
 ): string[] {
   const warnings: string[] = [];
 
   for (const candidate of candidates) {
-    if (isWarningHealthStatus(candidate.providerHealthStatus)) {
+    if (candidate.allConnectionsUnhealthy) {
       warnings.push(
-        `Health warning: ${candidate.optionLabel} provider health is ${formatRoutePolicyHealthStatus(
-          candidate.providerHealthStatus,
-        )}.`,
-      );
-    }
-    if (isWarningHealthStatus(candidate.modelHealthStatus)) {
-      warnings.push(
-        `Health warning: ${candidate.optionLabel} model health is ${formatRoutePolicyHealthStatus(
-          candidate.modelHealthStatus,
-        )}.`,
+        `Health warning: ${candidate.optionLabel} has no healthy Provider connections.`,
       );
     }
   }
@@ -338,18 +323,6 @@ export function filterRoutePolicyEditorProviderModelOptions(
     }
     return true;
   });
-}
-
-export function filterRoutePolicyEditorHealthyProviderModelOptions(
-  options: readonly ConsoleProviderModelOption[],
-  providerHealth: readonly RoutePolicyEditorProviderHealth[],
-): ConsoleProviderModelOption[] {
-  const unhealthyProviderIds = new Set(
-    providerHealth
-      .filter((summary) => isWarningHealthStatus(summary.status))
-      .map((summary) => summary.id),
-  );
-  return options.filter((option) => !unhealthyProviderIds.has(option.providerId));
 }
 
 export function listProviderRouteEndpointProtocols(input: {
@@ -964,26 +937,6 @@ function normalizeOptionalEndpointProtocol(
 
 function isRouteEndpointProtocol(value: string): value is RouteEndpointProtocol {
   return routeEndpointProtocols.includes(value as RouteEndpointProtocol);
-}
-
-function isWarningHealthStatus(value: string | null | undefined): value is string {
-  return (
-    value === "auth_failed" ||
-    value === "network_error" ||
-    value === "quota_limited" ||
-    value === "unhealthy"
-  );
-}
-
-function formatRoutePolicyHealthStatus(value: string): string {
-  return (
-    {
-      auth_failed: "Auth failed",
-      network_error: "Network error",
-      quota_limited: "Quota limited",
-      unhealthy: "Unhealthy",
-    }[value] ?? `${value.charAt(0).toUpperCase()}${value.slice(1)}`
-  );
 }
 
 function normalizeOptionalFilter(value: string | null | undefined): string | null {

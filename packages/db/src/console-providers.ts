@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { withPooledPostgresClient } from "@llmingress/db/client";
 import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
+import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
 import {
   consoleConflictError,
   consoleNotFoundError,
@@ -322,6 +323,9 @@ export async function updateProvider(input: {
         value: input.baseUrl,
       });
       baseUrlChanged = nextBaseUrl !== existing.base_url;
+      if (baseUrlChanged) {
+        await clearProviderHealthForCurrentConnections(client, input.id, existing.provider_type);
+      }
       const result = await client.query<ProviderRow>(
         `
           update providers
@@ -363,6 +367,15 @@ export async function setProviderEnabled(input: {
       if (!input.enabled) {
         await assertProviderHasNoActiveRoutePolicyDependencies(client, input.id);
       }
+      const current = await client.query<{ provider_type: ProviderType }>(
+        "select provider_type from providers where id = $1 and deleted_at is null",
+        [input.id],
+      );
+      const providerType = current.rows[0]?.provider_type;
+      if (!providerType) {
+        throw consoleNotFoundError("Provider was not found.", "provider_not_found");
+      }
+      await clearProviderHealthForCurrentConnections(client, input.id, providerType);
       const result = await client.query<ProviderRow>(
         `
           update providers
@@ -423,7 +436,7 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
               error_code = 'provider_deleted',
               error_message = 'Provider was deleted before the job started.'
           where status = 'pending'
-            and job_type in ('provider_connectivity_check', 'model_refresh')
+            and job_type in ('provider_connection_probe', 'model_refresh')
             and payload->>'providerId' = $1
         `,
         [input.id],
@@ -452,8 +465,22 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
         `,
         [input.id],
       );
-      await client.query("delete from provider_api_keys where provider_id = $1", [input.id]);
-      await client.query("delete from provider_oauth where provider_id = $1", [input.id]);
+      await client.query(
+        `
+          update provider_api_keys
+          set deleted_at = now(), enabled = false, updated_at = now()
+          where provider_id = $1 and deleted_at is null
+        `,
+        [input.id],
+      );
+      await client.query(
+        `
+          update provider_oauth
+          set deleted_at = now(), enabled = false, updated_at = now()
+          where provider_id = $1 and deleted_at is null
+        `,
+        [input.id],
+      );
       await client.query("delete from provider_health_summary where provider_id = $1", [input.id]);
       await client.query("delete from provider_health_events where provider_id = $1", [input.id]);
       await client.query(
@@ -468,6 +495,31 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
       );
     },
   });
+}
+
+async function clearProviderHealthForCurrentConnections(
+  client: ConfigPublishClient,
+  providerId: string,
+  providerType: ProviderType,
+): Promise<void> {
+  if (providerType === "local") {
+    await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: providerId,
+      providerId,
+    });
+    return;
+  }
+  const table = providerType === "api_key" ? "provider_api_keys" : "provider_oauth";
+  const result = await client.query<{ id: string }>(
+    `select id::text from ${table} where provider_id = $1 and deleted_at is null`,
+    [providerId],
+  );
+  for (const connection of result.rows) {
+    await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: connection.id,
+      providerId,
+    });
+  }
 }
 
 export async function lockProvidersForProviderModels(
@@ -651,14 +703,14 @@ async function readProviderDependencyImpact(
             select count(*)::integer
             from jobs
             where status = 'pending'
-              and job_type in ('provider_connectivity_check', 'model_refresh')
+              and job_type in ('provider_connection_probe', 'model_refresh')
               and payload->>'providerId' = $1::text
           ) as pending_job_count,
           (
             select count(*)::integer
             from jobs
             where status = 'running'
-              and job_type in ('provider_connectivity_check', 'model_refresh')
+              and job_type in ('provider_connection_probe', 'model_refresh')
               and payload->>'providerId' = $1::text
           ) as running_job_count
       `,

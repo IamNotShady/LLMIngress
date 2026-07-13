@@ -104,7 +104,7 @@ describe("gateway error fidelity", () => {
     }
   });
 
-  it("throws provider_credentials_missing when every candidate lacks credentials", async () => {
+  it("throws provider_connection_unavailable when every candidate lacks healthy credentials", async () => {
     const fixture = await createTestPostgresFixture({
       databaseNamePrefix: `llmingress_error_missing_${randomUUID().replaceAll("-", "_")}`,
     });
@@ -120,7 +120,7 @@ describe("gateway error fidelity", () => {
           masterKeySource: readGatewayMasterKeySource({ MASTER_KEY: "test-master-key" }),
         }),
       ).rejects.toMatchObject({
-        code: "provider_credentials_missing",
+        code: "provider_connection_unavailable",
       });
     } finally {
       await fixture.dispose();
@@ -224,7 +224,6 @@ function candidateSnapshot(
     candidateOrder: 1,
     contextWindow: 128_000,
     displayName: "Fake Model",
-    healthStatus: "healthy",
     inputModalities: ["text"],
     maxOutputTokens: 8_192,
     modelId: "fake-model",

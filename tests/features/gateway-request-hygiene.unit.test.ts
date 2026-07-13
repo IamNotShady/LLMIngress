@@ -606,7 +606,6 @@ function candidateSnapshot(
   return {
     candidateOrder: 1,
     displayName: "Fake Model",
-    healthStatus: "healthy",
     modelId: "fake-model",
     price: {
       modelId: "fake-model",

@@ -11,15 +11,22 @@ export type ConsoleProcess = {
 
 export async function signInFromFirstRun(page: Page, baseUrl: string) {
   const password = "correct horse battery staple";
+  const navigationTimeout = 15_000;
 
   await page.goto(baseUrl);
-  await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "First run setup" })).toBeVisible({
+    timeout: navigationTimeout,
+  });
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Create admin" }).click();
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
+    timeout: navigationTimeout,
+  });
   await page.getByLabel("Admin password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible({
+    timeout: navigationTimeout,
+  });
 }
 
 export async function getFreePort(): Promise<number> {
@@ -74,6 +81,7 @@ export function startConsoleProcess(options: {
       "exec",
       "next",
       "dev",
+      "--webpack",
       "--hostname",
       "127.0.0.1",
       "--port",

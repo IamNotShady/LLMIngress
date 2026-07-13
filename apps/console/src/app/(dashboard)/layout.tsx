@@ -25,8 +25,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const providerHealthyCount = providerHealthSummaries.filter(
     (summary) => summary.status === "healthy",
   ).length;
-  const providerUnhealthyCount = providerHealthSummaries.filter((summary) =>
-    ["auth_failed", "network_error", "quota_limited", "unhealthy"].includes(summary.status),
+  const providerUnhealthyCount = providerHealthSummaries.filter(
+    (summary) => summary.status === "unhealthy",
   ).length;
 
   return (

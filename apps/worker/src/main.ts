@@ -11,7 +11,7 @@ import {
 } from "@llmingress/worker-runtime/worker-maintenance-scheduler";
 import { createModelRefreshJobHandler } from "@llmingress/worker-runtime/worker-model-refresh";
 import { createPriceSyncJobHandler } from "@llmingress/worker-runtime/worker-price-sync";
-import { createProviderConnectivityCheckJobHandler } from "@llmingress/worker-runtime/worker-provider-connectivity-check";
+import { createProviderConnectionProbeJobHandler } from "@llmingress/worker-runtime/worker-provider-connection-probe";
 
 const logger = createLogger("worker");
 
@@ -22,7 +22,7 @@ export async function startWorker() {
   const jobRunner = createPostgresJobRunner({
     handlers: {
       model_refresh: createModelRefreshJobHandler({}),
-      provider_connectivity_check: createProviderConnectivityCheckJobHandler({}),
+      provider_connection_probe: createProviderConnectionProbeJobHandler({}),
       price_sync: createPriceSyncJobHandler({}),
     },
     leaseMs: readWorkerJobLeaseMs(),

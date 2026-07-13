@@ -18,10 +18,16 @@ type SavedProviderKey = {
 
 export function ProviderKeyCreateDialogClient({
   closeHref,
+  initialLabel,
+  initialPriority,
+  providerApiKeyId,
   providerId,
   providerName,
 }: {
   closeHref: string;
+  initialLabel?: string | null;
+  initialPriority?: number;
+  providerApiKeyId?: string;
   providerId: string;
   providerName: string;
 }) {
@@ -30,7 +36,9 @@ export function ProviderKeyCreateDialogClient({
   const formRef = useRef<HTMLFormElement>(null);
   const [failure, setFailure] = useState<ConsoleMutationFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const triggerId = `provider-key-${providerId}-trigger`;
+  const triggerId = providerApiKeyId
+    ? `provider-key-rotate-${providerApiKeyId}-trigger`
+    : `provider-key-${providerId}-trigger`;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -124,7 +132,9 @@ export function ProviderKeyCreateDialogClient({
       triggerId={triggerId}
     >
       <div className="console-dialog-head">
-        <h2 id="provider-key-create-title">New {providerName} API key</h2>
+        <h2 id="provider-key-create-title">
+          {providerApiKeyId ? "Rotate" : "New"} {providerName} API key
+        </h2>
         <a className="secondary-button" href={closeHref}>
           <FlatIcon name="cancel" />
           <span>Close</span>
@@ -139,6 +149,9 @@ export function ProviderKeyCreateDialogClient({
         ref={formRef}
       >
         <input type="hidden" name="providerId" value={providerId} />
+        {providerApiKeyId ? (
+          <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />
+        ) : null}
         <label htmlFor="provider-key-create-value">Provider API key</label>
         <input
           autoComplete="off"
@@ -148,10 +161,16 @@ export function ProviderKeyCreateDialogClient({
           type="password"
         />
         <label htmlFor="provider-key-create-label">Label</label>
-        <input id="provider-key-create-label" maxLength={100} name="label" type="text" />
+        <input
+          defaultValue={initialLabel ?? ""}
+          id="provider-key-create-label"
+          maxLength={100}
+          name="label"
+          type="text"
+        />
         <label htmlFor="provider-key-create-priority">Priority</label>
         <input
-          defaultValue={100}
+          defaultValue={initialPriority ?? 100}
           id="provider-key-create-priority"
           max={100}
           min={0}
@@ -161,7 +180,7 @@ export function ProviderKeyCreateDialogClient({
         />
         <ConsoleMutationError failure={failure} formRef={formRef} />
         <button disabled={submitting} type="submit">
-          <span>{submitting ? "Saving…" : "Save"}</span>
+          <span>{submitting ? "Saving…" : providerApiKeyId ? "Rotate" : "Save"}</span>
         </button>
       </form>
     </ConsoleDialog>

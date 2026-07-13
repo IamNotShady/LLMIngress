@@ -11,6 +11,7 @@ export type GatewayErrorCode =
   | "missing_agent_api_key"
   | "missing_model"
   | "provider_credentials_missing"
+  | "provider_connection_unavailable"
   | "provider_protocol_unsupported"
   | "provider_rate_limited"
   | "provider_redirect_rejected"
@@ -45,6 +46,8 @@ const defaultGatewayErrorMessage: Record<GatewayErrorCode, string> = {
   missing_agent_api_key: "Agent API key is required.",
   missing_model: "Model is required and no default Virtual Model is configured.",
   provider_credentials_missing: "Provider credentials are not configured for the selected route.",
+  provider_connection_unavailable:
+    "No healthy provider connections are available for the selected route.",
   provider_protocol_unsupported: "Provider protocol is not supported for this endpoint.",
   provider_rate_limited: "Provider rate limit exceeded.",
   provider_redirect_rejected: "Provider returned a redirect. Configure the final provider URL.",

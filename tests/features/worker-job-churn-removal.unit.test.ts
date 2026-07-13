@@ -7,7 +7,7 @@ describe("Worker job churn removal", () => {
     const handlers = main.slice(main.indexOf("handlers:"), main.indexOf("leaseMs:"));
 
     expect(handlers).toContain("model_refresh:");
-    expect(handlers).toContain("provider_connectivity_check:");
+    expect(handlers).toContain("provider_connection_probe:");
     expect(handlers).toContain("price_sync:");
     expect(handlers).not.toContain("retention_cleanup");
     expect(handlers).not.toContain("stale_concurrency_reconcile");
@@ -40,7 +40,7 @@ describe("Worker job churn removal", () => {
   it("limits the final migrated jobs constraint to core job types", () => {
     const migration = readFileSync("packages/db/migrations/0001_core_baseline.sql", "utf8");
     expect(migration).toContain("'model_refresh'");
-    expect(migration).toContain("'provider_connectivity_check'");
+    expect(migration).toContain("'provider_connection_probe'");
     expect(migration).toContain("'price_sync'");
     expect(migration).not.toContain("'retention_cleanup'");
     expect(migration).not.toContain("'stale_concurrency_reconcile'");

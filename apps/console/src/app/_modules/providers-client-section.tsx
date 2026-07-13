@@ -32,8 +32,18 @@ export function ProvidersClientSection({
   renderedAtMs: number;
   searchParams: ConsoleSearchParams;
 }) {
+  const connectionHealthByKey = useMemo(
+    () =>
+      new Map(
+        providerHealthSummaries.map((summary) => [
+          providerConnectionHealthKey(summary.providerId, summary.id),
+          summary,
+        ]),
+      ),
+    [providerHealthSummaries],
+  );
   const providerHealthByProviderId = useMemo(
-    () => new Map(providerHealthSummaries.map((summary) => [summary.id, summary])),
+    () => groupProviderHealthByProviderId(providerHealthSummaries),
     [providerHealthSummaries],
   );
   const providerKeysByProviderId = useMemo(
@@ -111,7 +121,7 @@ export function ProvidersClientSection({
                   </thead>
                   <tbody>
                     {providers.map((provider) => {
-                      const providerHealth = providerHealthByProviderId.get(provider.id);
+                      const providerHealth = providerHealthByProviderId.get(provider.id) ?? [];
                       const providerKeyCount = readProviderCredentialCount(
                         provider,
                         providerKeysByProviderId,
@@ -149,11 +159,10 @@ export function ProvidersClientSection({
                                 })}
                               >
                                 <ProviderHealthDetailPill
-                                  status={
-                                    provider.enabled
-                                      ? (providerHealth?.status ?? "unknown")
-                                      : "disabled"
-                                  }
+                                  status={formatProviderAggregateHealthStatus(
+                                    provider,
+                                    providerHealth,
+                                  )}
                                 />
                               </a>
                             </td>
@@ -362,160 +371,14 @@ export function ProvidersClientSection({
                                         </a>
                                       )}
                                     </div>
-                                    {provider.providerType === "local" ? (
-                                      <p>Local providers do not require API keys.</p>
-                                    ) : (
-                                      <div className="data-table-wrap">
-                                        <table className="data-table bounded-table provider-key-table">
-                                          <thead>
-                                            <tr>
-                                              <th>Label</th>
-                                              <th>Priority</th>
-                                              <th>Status</th>
-                                              <th>Last tested</th>
-                                              <th>Actions</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {provider.providerType === "subscription" ? (
-                                              selectedProviderOAuthConnections.length === 0 ? (
-                                                <tr>
-                                                  <td colSpan={5}>No OAuth connection stored.</td>
-                                                </tr>
-                                              ) : (
-                                                selectedProviderOAuthConnections.map(
-                                                  (connection) => (
-                                                    <tr key={connection.id}>
-                                                      <td>{connection.label ?? "-"}</td>
-                                                      <td>{connection.priority}</td>
-                                                      <td>
-                                                        <ProviderOAuthTestStatusPill
-                                                          status={connection.lastTestStatus}
-                                                        />
-                                                      </td>
-                                                      <td>
-                                                        {formatProviderOAuthLastTest(
-                                                          connection,
-                                                          renderedAtMs,
-                                                        )}
-                                                      </td>
-                                                      <td>
-                                                        <span className="provider-table-actions">
-                                                          <ConsoleMutationForm
-                                                            action="/api/provider-oauth"
-                                                            fallbackError="Provider OAuth update failed."
-                                                          >
-                                                            <input
-                                                              type="hidden"
-                                                              name="action"
-                                                              value={
-                                                                connection.enabled
-                                                                  ? "disable"
-                                                                  : "enable"
-                                                              }
-                                                            />
-                                                            <input
-                                                              type="hidden"
-                                                              name="providerOAuthId"
-                                                              value={connection.id}
-                                                            />
-                                                            <button
-                                                              className={
-                                                                connection.enabled
-                                                                  ? "provider-key-delete-button row-action-button row-action-danger"
-                                                                  : "provider-action-button provider-action-enable row-action-button"
-                                                              }
-                                                              aria-label={
-                                                                connection.enabled
-                                                                  ? "Disable OAuth connection"
-                                                                  : "Enable OAuth connection"
-                                                              }
-                                                              title={
-                                                                connection.enabled
-                                                                  ? "Disable"
-                                                                  : "Enable"
-                                                              }
-                                                              type="submit"
-                                                            >
-                                                              <FlatIcon
-                                                                name={
-                                                                  connection.enabled
-                                                                    ? "disable"
-                                                                    : "enable"
-                                                                }
-                                                              />
-                                                            </button>
-                                                          </ConsoleMutationForm>
-                                                          <ConsoleMutationForm
-                                                            action="/api/provider-oauth"
-                                                            fallbackError="Provider OAuth deletion failed."
-                                                          >
-                                                            <input
-                                                              type="hidden"
-                                                              name="action"
-                                                              value="delete"
-                                                            />
-                                                            <input
-                                                              type="hidden"
-                                                              name="providerOAuthId"
-                                                              value={connection.id}
-                                                            />
-                                                            <button
-                                                              className="provider-key-delete-button"
-                                                              aria-label="Delete OAuth connection"
-                                                              title="Delete OAuth connection"
-                                                              type="submit"
-                                                            >
-                                                              <FlatIcon name="delete" />
-                                                            </button>
-                                                          </ConsoleMutationForm>
-                                                        </span>
-                                                      </td>
-                                                    </tr>
-                                                  ),
-                                                )
-                                              )
-                                            ) : selectedProviderKeys.length === 0 ? (
-                                              <tr>
-                                                <td colSpan={5}>No provider key stored.</td>
-                                              </tr>
-                                            ) : (
-                                              selectedProviderKeys.map((providerKey) => (
-                                                <tr key={providerKey.id}>
-                                                  <td>{providerKey.label ?? "-"}</td>
-                                                  <td>{providerKey.priority}</td>
-                                                  <td>
-                                                    <ProviderApiKeyTestStatusPill
-                                                      status={providerKey.lastTestStatus}
-                                                    />
-                                                  </td>
-                                                  <td>
-                                                    {formatProviderApiKeyLastTest(
-                                                      providerKey,
-                                                      renderedAtMs,
-                                                    )}
-                                                  </td>
-                                                  <td>
-                                                    <a
-                                                      className="provider-key-delete-button"
-                                                      href={buildQueryHref(searchParams, {
-                                                        providerKeyDelete: providerKey.id,
-                                                        selected: provider.id,
-                                                      })}
-                                                      aria-label="Delete API key"
-                                                      id={`provider-key-delete-${providerKey.id}-trigger`}
-                                                      title="Delete API key"
-                                                    >
-                                                      <FlatIcon name="delete" />
-                                                    </a>
-                                                  </td>
-                                                </tr>
-                                              ))
-                                            )}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
+                                    <ProviderConnectionTable
+                                      connectionHealthByKey={connectionHealthByKey}
+                                      oauthConnections={selectedProviderOAuthConnections}
+                                      provider={provider}
+                                      providerKeys={selectedProviderKeys}
+                                      renderedAtMs={renderedAtMs}
+                                      searchParams={searchParams}
+                                    />
                                   </section>
                                 </section>
                               </td>
@@ -639,20 +502,207 @@ function ProviderHealthDetailPill({ status }: { status: string }) {
   return <ProviderStatusPill label={formatProviderHealthStatusLabel(status)} status={status} />;
 }
 
-function ProviderApiKeyTestStatusPill({
-  status,
+function ProviderConnectionTable({
+  connectionHealthByKey,
+  oauthConnections,
+  provider,
+  providerKeys,
+  renderedAtMs,
+  searchParams,
 }: {
-  status: ProviderApiKeyMetadata["lastTestStatus"];
+  connectionHealthByKey: Map<string, ConsoleProviderHealthSummary>;
+  oauthConnections: ConsoleProviderOAuthConnection[];
+  provider: ConsoleProvider;
+  providerKeys: ProviderApiKeyMetadata[];
+  renderedAtMs: number;
+  searchParams: ConsoleSearchParams;
 }) {
-  return <ProviderStatusPill label={formatProviderTestStatusLabel(status)} status={status} />;
+  const connections =
+    provider.providerType === "local"
+      ? [
+          {
+            enabled: provider.enabled,
+            id: provider.id,
+            kind: "local" as const,
+            label: "Local connection",
+            priority: null,
+          },
+        ]
+      : provider.providerType === "subscription"
+        ? oauthConnections.map((connection) => ({
+            enabled: connection.enabled,
+            id: connection.id,
+            kind: "oauth" as const,
+            label: connection.label ?? "OAuth connection",
+            priority: connection.priority,
+          }))
+        : providerKeys.map((providerKey) => ({
+            enabled: providerKey.enabled,
+            id: providerKey.id,
+            kind: "api_key" as const,
+            label: providerKey.label ?? providerKey.keyPrefix,
+            priority: providerKey.priority,
+          }));
+
+  return (
+    <div className="data-table-wrap">
+      <table className="data-table bounded-table provider-key-table">
+        <thead>
+          <tr>
+            <th>Connection</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Last probed</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {connections.length === 0 ? (
+            <tr>
+              <td colSpan={5}>No provider connection stored.</td>
+            </tr>
+          ) : (
+            connections.map((connection) => {
+              const health = connectionHealthByKey.get(
+                providerConnectionHealthKey(provider.id, connection.id),
+              );
+              const probeEnabled = provider.enabled && connection.enabled;
+              const status = probeEnabled ? (health?.status ?? "healthy") : "disabled";
+              return (
+                <tr key={connection.id}>
+                  <td>
+                    <span className="model-id-cell">
+                      <strong>{connection.label}</strong>
+                      <small className="mono">{connection.id}</small>
+                    </span>
+                  </td>
+                  <td>{connection.priority ?? "-"}</td>
+                  <td title={health?.reasonMessage ?? undefined}>
+                    <ProviderHealthDetailPill status={status} />
+                    {health?.reasonMessage ? <small>{health.reasonMessage}</small> : null}
+                  </td>
+                  <td>{formatConnectionLastProbe(health, renderedAtMs)}</td>
+                  <td>
+                    <span className="provider-table-actions">
+                      <ConsoleMutationForm
+                        action="/api/provider-health-probes"
+                        fallbackError="Provider connection probe failed."
+                      >
+                        <input type="hidden" name="providerId" value={provider.id} />
+                        <input type="hidden" name="providerConnectionId" value={connection.id} />
+                        <button
+                          aria-label={`Probe ${connection.label}`}
+                          className="provider-refresh-button row-action-button"
+                          disabled={!probeEnabled || status === "checking"}
+                          title="Probe connection"
+                          type="submit"
+                        >
+                          <FlatIcon name="refresh" />
+                        </button>
+                      </ConsoleMutationForm>
+                      {connection.kind === "oauth" ? (
+                        <>
+                          <ConsoleMutationForm
+                            action="/api/provider-oauth"
+                            fallbackError="Provider OAuth update failed."
+                          >
+                            <input
+                              type="hidden"
+                              name="action"
+                              value={connection.enabled ? "disable" : "enable"}
+                            />
+                            <input type="hidden" name="providerOAuthId" value={connection.id} />
+                            <button
+                              aria-label={
+                                connection.enabled
+                                  ? "Disable OAuth connection"
+                                  : "Enable OAuth connection"
+                              }
+                              className="provider-action-button row-action-button"
+                              title={connection.enabled ? "Disable" : "Enable"}
+                              type="submit"
+                            >
+                              <FlatIcon name={connection.enabled ? "disable" : "enable"} />
+                            </button>
+                          </ConsoleMutationForm>
+                          <ConsoleMutationForm
+                            action="/api/provider-oauth"
+                            fallbackError="Provider OAuth deletion failed."
+                          >
+                            <input type="hidden" name="action" value="delete" />
+                            <input type="hidden" name="providerOAuthId" value={connection.id} />
+                            <button
+                              aria-label="Delete OAuth connection"
+                              className="provider-key-delete-button"
+                              title="Delete OAuth connection"
+                              type="submit"
+                            >
+                              <FlatIcon name="delete" />
+                            </button>
+                          </ConsoleMutationForm>
+                        </>
+                      ) : connection.kind === "api_key" ? (
+                        <>
+                          <a
+                            aria-label="Rotate API key"
+                            className="provider-action-button row-action-button"
+                            href={buildQueryHref(searchParams, {
+                              providerKeyDialog: provider.id,
+                              providerKeyEdit: connection.id,
+                              selected: provider.id,
+                            })}
+                            id={`provider-key-rotate-${connection.id}-trigger`}
+                            title="Rotate API key"
+                          >
+                            <FlatIcon name="edit" />
+                          </a>
+                          <ConsoleMutationForm
+                            action="/api/provider-keys"
+                            fallbackError="Provider API key update failed."
+                          >
+                            <input
+                              type="hidden"
+                              name="action"
+                              value={connection.enabled ? "disable" : "enable"}
+                            />
+                            <input type="hidden" name="providerApiKeyId" value={connection.id} />
+                            <button
+                              aria-label={connection.enabled ? "Disable API key" : "Enable API key"}
+                              className="provider-action-button row-action-button"
+                              title={connection.enabled ? "Disable" : "Enable"}
+                              type="submit"
+                            >
+                              <FlatIcon name={connection.enabled ? "disable" : "enable"} />
+                            </button>
+                          </ConsoleMutationForm>
+                          <a
+                            aria-label="Delete API key"
+                            className="provider-key-delete-button"
+                            href={buildQueryHref(searchParams, {
+                              providerKeyDelete: connection.id,
+                              selected: provider.id,
+                            })}
+                            id={`provider-key-delete-${connection.id}-trigger`}
+                            title="Delete API key"
+                          >
+                            <FlatIcon name="delete" />
+                          </a>
+                        </>
+                      ) : null}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-function ProviderOAuthTestStatusPill({
-  status,
-}: {
-  status: ConsoleProviderOAuthConnection["lastTestStatus"];
-}) {
-  return <ProviderStatusPill label={formatProviderTestStatusLabel(status)} status={status} />;
+function providerConnectionHealthKey(providerId: string, providerConnectionId: string): string {
+  return `${providerId}:${providerConnectionId}`;
 }
 
 function ModelAvailabilityPill({ value }: { value: string }) {
@@ -676,7 +726,7 @@ function ProviderStatusPill({ label, status }: { label: string; status: string }
   if (normalized === "unknown" || normalized === "disabled") {
     return <span className="pill">{label}</span>;
   }
-  if (normalized === "checking" || normalized === "quota_limited") {
+  if (normalized === "checking") {
     return <span className="pill--warn pill">{label}</span>;
   }
   return <span className="pill--danger pill">{label}</span>;
@@ -696,31 +746,7 @@ function formatProviderHealthStatusLabel(status: string): string {
   if (normalized === "unhealthy") {
     return "Unhealthy";
   }
-  if (normalized === "auth_failed") {
-    return "Auth failed";
-  }
-  if (normalized === "quota_limited") {
-    return "Quota limited";
-  }
-  if (normalized === "network_error") {
-    return "Network error";
-  }
   return "Unknown";
-}
-
-function formatProviderTestStatusLabel(
-  status:
-    | ProviderApiKeyMetadata["lastTestStatus"]
-    | ConsoleProviderOAuthConnection["lastTestStatus"],
-): string {
-  return {
-    auth_failed: "Auth failed",
-    healthy: "Healthy",
-    network_error: "Network error",
-    quota_limited: "Quota limited",
-    unhealthy: "Unhealthy",
-    unknown: "Unknown",
-  }[status];
 }
 
 function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
@@ -741,6 +767,18 @@ function groupProviderOAuthByProviderId(
     const connections = grouped.get(connection.providerId) ?? [];
     connections.push(connection);
     grouped.set(connection.providerId, connections);
+  }
+  return grouped;
+}
+
+function groupProviderHealthByProviderId(
+  summaries: ConsoleProviderHealthSummary[],
+): Map<string, ConsoleProviderHealthSummary[]> {
+  const grouped = new Map<string, ConsoleProviderHealthSummary[]>();
+  for (const summary of summaries) {
+    const providerHealth = grouped.get(summary.providerId) ?? [];
+    providerHealth.push(summary);
+    grouped.set(summary.providerId, providerHealth);
   }
   return grouped;
 }
@@ -770,32 +808,50 @@ function formatProviderType(provider: ConsoleProvider): string {
 }
 
 function formatProviderLastConnection(
-  providerHealth: ConsoleProviderHealthSummary | undefined,
+  providerHealth: ConsoleProviderHealthSummary[],
   referenceTimeMs: number,
 ): string {
-  if (!providerHealth?.latestProbeAt) {
+  const latestProbeAt = providerHealth.reduce<Date | null>(
+    (latest, connection) =>
+      connection.latestProbeAt && (!latest || connection.latestProbeAt > latest)
+        ? connection.latestProbeAt
+        : latest,
+    null,
+  );
+  if (!latestProbeAt) {
     return "-";
   }
 
-  return formatRelativeDateTime(providerHealth.latestProbeAt, referenceTimeMs);
+  return formatRelativeDateTime(latestProbeAt, referenceTimeMs);
 }
 
-function formatProviderApiKeyLastTest(
-  providerKey: ProviderApiKeyMetadata,
+function formatConnectionLastProbe(
+  health: ConsoleProviderHealthSummary | undefined,
   referenceTimeMs: number,
 ): string {
-  return providerKey.lastTestedAt
-    ? formatRelativeDateTime(providerKey.lastTestedAt, referenceTimeMs)
+  return health?.latestProbeAt
+    ? formatRelativeDateTime(health.latestProbeAt, referenceTimeMs)
     : "-";
 }
 
-function formatProviderOAuthLastTest(
-  connection: ConsoleProviderOAuthConnection,
-  referenceTimeMs: number,
+function formatProviderAggregateHealthStatus(
+  provider: ConsoleProvider,
+  health: ConsoleProviderHealthSummary[],
 ): string {
-  return connection.lastTestedAt
-    ? formatRelativeDateTime(connection.lastTestedAt, referenceTimeMs)
-    : "-";
+  if (!provider.enabled) {
+    return "disabled";
+  }
+  const enabled = health.filter((connection) => connection.enabled);
+  if (enabled.length === 0) {
+    return "unknown";
+  }
+  if (enabled.some((connection) => connection.status === "healthy")) {
+    return "healthy";
+  }
+  if (enabled.some((connection) => connection.status === "checking")) {
+    return "checking";
+  }
+  return "unhealthy";
 }
 
 function formatModelContext(contextWindow: number | null): string {

@@ -44,7 +44,7 @@ describe("worker non-core removal", () => {
     ].map(([, jobType]) => jobType);
 
     expect(registeredHandlers.sort()).toEqual(
-      ["model_refresh", "price_sync", "provider_connectivity_check"].sort(),
+      ["model_refresh", "price_sync", "provider_connection_probe"].sort(),
     );
   });
 

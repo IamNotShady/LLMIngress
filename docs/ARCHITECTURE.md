@@ -17,7 +17,7 @@ Browser  -> Console
 - Console owns user-authored configuration and operational views.
 - Worker owns Provider model discovery, connectivity probes, and price synchronization.
 - PostgreSQL is the durable owner of configuration, jobs, runtime counters, usage, cost,
-  fallback, and Provider health history.
+  fallback, and Provider-connection health history.
 
 Shared code used by more than one application belongs under `packages/`.
 
@@ -45,10 +45,10 @@ authenticate Agent
   -> resolve allowed Virtual Model
   -> validate request capability contract
   -> enforce Agent limits when the Agent limits switch is enabled
-  -> order healthy route candidates
-  -> execute credentials and fallback candidates
+  -> order route candidates
+  -> exclude unhealthy Provider connections and execute credential/candidate fallback
   -> stream or return Provider response
-  -> record metadata, usage, cost, fallback, and health
+  -> record metadata, usage, cost, and fallback
 ```
 
 JSON and Streaming share one fallback attempt executor. A Streaming attempt succeeds only
@@ -68,7 +68,9 @@ capabilities and prices, Virtual Models, Route Policies, candidates, and enabled
 
 One Virtual Model maps to one Route Policy. A policy contains an endpoint protocol, strategy,
 and ordered candidate models. Supported strategies are `fixed`, `cost_first`, and `random`.
-Candidate health is applied before ordering. The full ordered result is the fallback chain.
+The full ordered result is the fallback chain. Health does not exist at Provider or model scope;
+Gateway applies connection health only when it attaches API keys, OAuth tokens, or the Local
+Provider's logical connection.
 Console creates a Virtual Model, its Route Policy, and at least one candidate in one transaction;
 the configuration API cannot create a new unroutable Virtual Model.
 
@@ -82,7 +84,7 @@ Candidate models use an optimistic six-field capability contract:
 Console rejects only conflicting known values; unknown values are allowed. Gateway validates
 request requirements only for fields that are known across every candidate.
 
-`cost_first` orders healthy priced candidates by input price plus output price without request
+`cost_first` orders priced candidates by input price plus output price without request
 token weighting. Unknown-price candidates remain eligible at the end of the fallback chain.
 Successful unknown-price requests record zero monetary cost with an unavailable price source.
 
@@ -101,14 +103,15 @@ dedicated connections are reserved for migrations, listeners, and test fixtures.
 The durable Job Runner supports exactly three product operations:
 
 - model refresh
-- Provider connectivity check
+- Provider connection probe
 - price sync
 
-New Provider probe requests are represented by one `model_refresh` job. Its handler fetches and
-enriches the current Provider model list, probes a model selected from that fresh result, then
-atomically commits model changes plus Provider/model health. The legacy connectivity job type is
-accepted as a compatibility entry point, but invokes the same composite handler and never skips
-model refresh. Provider HTTP calls run before the short PostgreSQL transaction.
+`model_refresh` updates catalog data only. `provider_connection_probe` targets one exact current
+connection and tests up to three distinct chat models in ranking order. Any successful model marks
+the connection healthy; all selected models must fail before it is unhealthy. When no stored model
+is available, Worker performs model discovery with the same connection. Successful discovery with
+no eligible chat model is inconclusive and writes no health state. Provider HTTP calls run before
+the short PostgreSQL transaction.
 
 Jobs use PostgreSQL `FOR UPDATE SKIP LOCKED`, leases, heartbeat renewal, attempt fencing,
 bounded retries, and `AbortSignal`. Completion or failure from a Worker that lost its lease
@@ -122,7 +125,7 @@ Retention defaults:
 
 - request Activity, Usage, Cost, and Fallback: 30 days
 - terminal Jobs and Attempts: 7 days
-- Provider health events: 30 days, preserving the event referenced by current summary
+- Provider-connection health events: 30 days, preserving the event referenced by current summary
 
 Deletes run in batches of at most 1,000 and check the shutdown signal between batches.
 
@@ -139,6 +142,29 @@ Provider credentials remain encrypted with the deployment master key. Authentica
 HTTP calls do not follow redirects. Connectivity probes and model-list requests share the same
 credential safety policy.
 
+## Provider Connection Health
+
+Health identity is exactly `(provider_id, provider_connection_id)`. API keys and OAuth tokens use
+their credential row id. A Local Provider uses the Provider id as a logical connection and does not
+load a secret.
+
+`provider_health_summary` is a sparse denylist: it stores only `unhealthy` connections, so an
+absent row means healthy. A successful probe deletes the row. API key/OAuth creation, material
+modification, and enablement enqueue an exact probe; Console can enqueue the same probe manually.
+Gateway credential failures enqueue a probe asynchronously, while network, Provider 5xx, model,
+and client-request failures do not directly change health.
+
+On confirmed failure, Worker records one aggregate event and schedules the exact connection after
+5, 10, 30, then 60 minutes; later failures remain at 60 minutes. Recovery deletes the summary and
+cancels its pending retry. Provider base URL changes and connection rotation/disable/delete clear
+the prior summary. Before committing any result Worker revalidates the current Provider and
+credential snapshot; stale or disabled work is canceled without a result or successor job.
+
+Gateway reads the sparse denylist while loading current credentials, filters only unhealthy
+connections, and continues normal credential/candidate fallback. If a Provider has no usable
+connection, Gateway returns `provider_connection_unavailable`. Model catalog rows have no health
+state and are never filtered by health.
+
 ## Runtime State and Accounting
 
 `agents.limits_enabled` is the sole Agent-level switch for limit enforcement. When it is false,
@@ -149,7 +175,7 @@ be restored without recreation. Gateway keeps low-latency process state where ap
 writes restart-recoverable counters to PostgreSQL.
 
 Completed request metadata is stored in `request_activity`, `request_usage`, `request_costs`,
-and `fallback_events`. Provider health history and current state use
+and `fallback_events`. Provider-connection health history and its sparse unhealthy state use
 `provider_health_events` and `provider_health_summary`. Console analytics read these durable
 tables and never query Prompt content.
 

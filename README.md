@@ -118,7 +118,7 @@ flowchart LR
 - **Gateway** authenticates Agents, enforces enabled limits, resolves Virtual Models, executes
   fallback, and records request metadata.
 - **Console** owns configuration and operational views.
-- **Worker** performs model discovery, Provider connectivity checks, and price synchronization.
+- **Worker** performs model discovery, connection-scoped health probes, and price synchronization.
 - **PostgreSQL** stores durable configuration, jobs, usage, cost, fallback, and health state.
 
 ## Local development

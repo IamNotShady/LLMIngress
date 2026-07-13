@@ -7,7 +7,10 @@ import {
   setProviderEnabled,
   updateProvider,
 } from "@llmingress/db/console-providers";
-import { enqueueProviderProbeLifecycleJob } from "@llmingress/db/provider-jobs";
+import {
+  enqueueProviderConnectionProbeJob,
+  enqueueProviderConnectionProbesForProvider,
+} from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { classifyConsoleActionError } from "../_error-classify";
@@ -29,10 +32,13 @@ export const POST = withConsoleAuth(async (request) => {
           providerType: readText(form, "providerType"),
         }),
       });
-      await enqueueProviderProbeLifecycleJob({
-        providerId: provider.id,
-        source: "provider_created",
-      });
+      if (provider.providerType === "local") {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: provider.id,
+          providerId: provider.id,
+          source: "provider_created",
+        });
+      }
     } else if (action === "createFromTemplate") {
       const provider = await createProviderFromTemplate({
         template: normalizeProviderTemplateFormInput({
@@ -40,10 +46,13 @@ export const POST = withConsoleAuth(async (request) => {
           templateId: readText(form, "templateId"),
         }),
       });
-      await enqueueProviderProbeLifecycleJob({
-        providerId: provider.id,
-        source: "provider_created",
-      });
+      if (provider.providerType === "local") {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: provider.id,
+          providerId: provider.id,
+          source: "provider_created",
+        });
+      }
     } else if (action === "update") {
       const result = await updateProvider({
         baseUrl: readText(form, "baseUrl"),
@@ -51,8 +60,9 @@ export const POST = withConsoleAuth(async (request) => {
         id: readRequiredText(form, "id"),
       });
       if (result.baseUrlChanged) {
-        await enqueueProviderProbeLifecycleJob({
+        await enqueueProviderConnectionProbesForProvider({
           providerId: result.provider.id,
+          resetHealth: true,
           source: "base_url_changed",
         });
       }
@@ -63,8 +73,9 @@ export const POST = withConsoleAuth(async (request) => {
         id: providerId,
       });
       if (action === "enable") {
-        await enqueueProviderProbeLifecycleJob({
+        await enqueueProviderConnectionProbesForProvider({
           providerId,
+          resetHealth: true,
           source: "provider_enabled",
         });
       }

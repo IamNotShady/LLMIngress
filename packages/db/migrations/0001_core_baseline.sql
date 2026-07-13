@@ -224,7 +224,7 @@ CREATE TABLE public.jobs (
     completed_at timestamp with time zone,
     CONSTRAINT jobs_attempt_count_check CHECK ((attempt_count >= 0)),
     CONSTRAINT jobs_check CHECK (((lease_owner IS NULL) = (lease_expires_at IS NULL))),
-    CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connectivity_check'::text, 'price_sync'::text]))),
+    CONSTRAINT jobs_job_type_check CHECK ((job_type = ANY (ARRAY['model_refresh'::text, 'provider_connection_probe'::text, 'price_sync'::text]))),
     CONSTRAINT jobs_max_attempts_check CHECK ((max_attempts > 0)),
     CONSTRAINT jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'canceled'::text]))),
     CONSTRAINT jobs_trigger_check CHECK ((trigger = ANY (ARRAY['manual'::text, 'scheduled'::text, 'system'::text])))
@@ -248,15 +248,11 @@ CREATE TABLE public.provider_api_keys (
     enabled boolean DEFAULT true NOT NULL,
     priority integer DEFAULT 100 NOT NULL,
     last_used_at timestamp with time zone,
-    last_tested_at timestamp with time zone,
-    last_test_status text DEFAULT 'unknown'::text NOT NULL,
-    last_test_error_code text,
-    last_test_error_message text,
+    deleted_at timestamp with time zone,
     CONSTRAINT provider_api_keys_check CHECK (((rotated_at IS NULL) OR (rotated_at >= created_at))),
     CONSTRAINT provider_api_keys_encrypted_key_check CHECK ((jsonb_typeof(encrypted_key) = 'object'::text)),
     CONSTRAINT provider_api_keys_key_id_check CHECK ((length(key_id) > 0)),
     CONSTRAINT provider_api_keys_key_prefix_check CHECK ((length(key_prefix) > 0)),
-    CONSTRAINT provider_api_keys_last_test_status_check CHECK ((last_test_status = ANY (ARRAY['unknown'::text, 'healthy'::text, 'unhealthy'::text, 'auth_failed'::text, 'quota_limited'::text, 'network_error'::text]))),
     CONSTRAINT provider_api_keys_priority_check CHECK ((priority >= 0))
 );
 
@@ -268,7 +264,7 @@ CREATE TABLE public.provider_api_keys (
 CREATE TABLE public.provider_health_events (
     id uuid NOT NULL,
     provider_id uuid NOT NULL,
-    provider_model_id uuid,
+    provider_connection_id uuid NOT NULL,
     job_id uuid,
     trigger text NOT NULL,
     status text NOT NULL,
@@ -278,8 +274,8 @@ CREATE TABLE public.provider_health_events (
     observed_at timestamp with time zone DEFAULT now() NOT NULL,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     CONSTRAINT provider_health_events_latency_ms_check CHECK (((latency_ms IS NULL) OR (latency_ms >= 0))),
-    CONSTRAINT provider_health_events_status_check CHECK ((status = ANY (ARRAY['healthy'::text, 'unhealthy'::text, 'auth_failed'::text, 'quota_limited'::text, 'network_error'::text]))),
-    CONSTRAINT provider_health_events_trigger_check CHECK ((trigger = ANY (ARRAY['request_path'::text, 'worker_probe'::text, 'manual'::text])))
+    CONSTRAINT provider_health_events_status_check CHECK ((status = ANY (ARRAY['healthy'::text, 'unhealthy'::text]))),
+    CONSTRAINT provider_health_events_trigger_check CHECK ((trigger = ANY (ARRAY['worker_probe'::text, 'manual'::text])))
 );
 
 
@@ -290,15 +286,17 @@ CREATE TABLE public.provider_health_events (
 CREATE TABLE public.provider_health_summary (
     id uuid NOT NULL,
     provider_id uuid NOT NULL,
-    provider_model_id uuid,
+    provider_connection_id uuid NOT NULL,
     last_event_id uuid,
-    status text NOT NULL,
-    consecutive_failures integer DEFAULT 0 NOT NULL,
-    last_success_at timestamp with time zone,
+    status text DEFAULT 'unhealthy'::text NOT NULL,
+    consecutive_failures integer DEFAULT 1 NOT NULL,
     last_failure_at timestamp with time zone,
+    reason_code text,
+    reason_message text,
+    next_probe_at timestamp with time zone,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT provider_health_summary_consecutive_failures_check CHECK ((consecutive_failures >= 0)),
-    CONSTRAINT provider_health_summary_status_check CHECK ((status = ANY (ARRAY['unknown'::text, 'healthy'::text, 'unhealthy'::text, 'auth_failed'::text, 'quota_limited'::text, 'network_error'::text])))
+    CONSTRAINT provider_health_summary_consecutive_failures_check CHECK ((consecutive_failures > 0)),
+    CONSTRAINT provider_health_summary_status_check CHECK ((status = 'unhealthy'::text))
 );
 
 
@@ -370,18 +368,14 @@ CREATE TABLE public.provider_oauth (
     pending_expires_at timestamp with time zone,
     encrypted_token jsonb,
     token_expires_at timestamp with time zone,
-    last_test_status text DEFAULT 'unknown'::text NOT NULL,
-    last_tested_at timestamp with time zone,
-    last_test_error_code text,
-    last_test_error_message text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     completed_at timestamp with time zone,
+    deleted_at timestamp with time zone,
     CONSTRAINT provider_oauth_check CHECK (((pending_expires_at IS NULL) OR (pending_state IS NOT NULL))),
     CONSTRAINT provider_oauth_check1 CHECK (((encrypted_token IS NOT NULL) OR (completed_at IS NULL))),
     CONSTRAINT provider_oauth_encrypted_token_check CHECK (((encrypted_token IS NULL) OR (jsonb_typeof(encrypted_token) = 'object'::text))),
     CONSTRAINT provider_oauth_label_check CHECK (((label IS NULL) OR (char_length(label) <= 100))),
-    CONSTRAINT provider_oauth_last_test_status_check CHECK ((last_test_status = ANY (ARRAY['unknown'::text, 'healthy'::text, 'unhealthy'::text, 'auth_failed'::text, 'quota_limited'::text, 'network_error'::text]))),
     CONSTRAINT provider_oauth_priority_check CHECK (((priority >= 0) AND (priority <= 100)))
 );
 
@@ -949,10 +943,17 @@ CREATE INDEX idx_provider_api_keys_provider_updated_at ON public.provider_api_ke
 
 
 --
--- Name: idx_provider_health_events_model_observed_at; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_provider_health_events_connection_observed_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_provider_health_events_model_observed_at ON public.provider_health_events USING btree (provider_model_id, observed_at DESC);
+CREATE INDEX idx_provider_health_events_connection_observed_at ON public.provider_health_events USING btree (provider_connection_id, observed_at DESC);
+
+
+--
+-- Name: uq_provider_health_events_job; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_provider_health_events_job ON public.provider_health_events USING btree (job_id) WHERE (job_id IS NOT NULL);
 
 
 --
@@ -1110,17 +1111,10 @@ CREATE INDEX provider_oauth_provider_enabled_priority_idx ON public.provider_oau
 
 
 --
--- Name: uq_provider_health_summary_provider; Type: INDEX; Schema: public; Owner: -
+-- Name: uq_provider_health_summary_connection; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uq_provider_health_summary_provider ON public.provider_health_summary USING btree (provider_id) WHERE (provider_model_id IS NULL);
-
-
---
--- Name: uq_provider_health_summary_provider_model; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uq_provider_health_summary_provider_model ON public.provider_health_summary USING btree (provider_id, provider_model_id) WHERE (provider_model_id IS NOT NULL);
+CREATE UNIQUE INDEX uq_provider_health_summary_connection ON public.provider_health_summary USING btree (provider_id, provider_connection_id);
 
 
 --

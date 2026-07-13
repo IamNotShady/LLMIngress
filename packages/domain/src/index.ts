@@ -270,18 +270,9 @@ export function validateVirtualModelRequestCapabilities(
   return { ok: true };
 }
 
-export type RouteCandidateHealthStatus =
-  | "healthy"
-  | "unknown"
-  | "auth_failed"
-  | "network_error"
-  | "quota_limited"
-  | "unhealthy";
-
 export type RouteCandidate = {
   candidateOrder: number;
   displayName: string;
-  healthStatus?: RouteCandidateHealthStatus;
   modelId: string;
   price: ModelTokenPrice;
   providerId: string;
@@ -349,13 +340,6 @@ type CandidateEligibility<TCandidate extends RouteCandidate = RouteCandidate> = 
   eligible: boolean;
   reasons: string[];
 };
-
-const INELIGIBLE_HEALTH: ReadonlySet<string> = new Set([
-  "unhealthy",
-  "auth_failed",
-  "quota_limited",
-  "network_error",
-]);
 
 type RouteStrategyContext = {
   estimatedInputTokens: number;
@@ -429,16 +413,11 @@ export function buildRouteAttemptCandidates<TCandidate extends RouteCandidate>(i
     (a, b) => a.candidateOrder - b.candidateOrder,
   );
 
-  // Filter by health status: missing healthStatus treated as "unknown" → eligible
-  const healthEligible = sortedCandidates.filter(
-    (c) => !INELIGIBLE_HEALTH.has(c.healthStatus ?? "unknown"),
-  );
-
-  if (healthEligible.length === 0) {
+  if (sortedCandidates.length === 0) {
     return [];
   }
 
-  return routeStrategyHandlers[routePolicy.strategy].orderCandidates(healthEligible, {
+  return routeStrategyHandlers[routePolicy.strategy].orderCandidates(sortedCandidates, {
     estimatedInputTokens: input.estimatedInputTokens,
     estimatedOutputTokens: input.estimatedOutputTokens,
     random: random ?? Math.random,
@@ -460,14 +439,11 @@ export function selectRouteAttempts<TCandidate extends RouteCandidate>(
   const allCandidatesSorted = [...routePolicy.candidates].sort(
     (a, b) => a.candidateOrder - b.candidateOrder,
   );
-  const evaluated = allCandidatesSorted.map((candidate) => {
-    const eligible = !INELIGIBLE_HEALTH.has(candidate.healthStatus ?? "unknown");
-    return {
-      candidate,
-      eligible,
-      reasons: eligible ? [] : [`health status ${candidate.healthStatus} is not eligible`],
-    };
-  });
+  const evaluated = allCandidatesSorted.map((candidate) => ({
+    candidate,
+    eligible: true,
+    reasons: [],
+  }));
 
   // Build the ordered attempt chain ONCE (single shuffle for random strategy)
   const chain = buildRouteAttemptCandidates({

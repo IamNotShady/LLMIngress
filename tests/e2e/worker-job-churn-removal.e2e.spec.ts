@@ -99,6 +99,7 @@ async function seedExpiredData(
   const preservedEventId = randomUUID();
   const expiredEventId = randomUUID();
   const providerId = randomUUID();
+  const providerConnectionId = randomUUID();
   const old = new Date(now.getTime() - 40 * 86_400_000).toISOString();
   const oldJob = new Date(now.getTime() - 10 * 86_400_000).toISOString();
 
@@ -141,15 +142,15 @@ async function seedExpiredData(
   for (const eventId of [preservedEventId, expiredEventId]) {
     await fixture.query(
       `insert into provider_health_events
-        (id, provider_id, trigger, status, observed_at)
-       values ($1, $2, 'worker_probe', 'healthy', $3)`,
-      [eventId, providerId, old],
+        (id, provider_id, provider_connection_id, trigger, status, observed_at)
+       values ($1, $2, $3, 'worker_probe', 'unhealthy', $4)`,
+      [eventId, providerId, providerConnectionId, old],
     );
   }
   await fixture.query(
     `insert into provider_health_summary
-      (id, provider_id, last_event_id, status)
-     values ($1, $2, $3, 'healthy')`,
-    [randomUUID(), providerId, preservedEventId],
+      (id, provider_id, provider_connection_id, last_event_id, status)
+     values ($1, $2, $3, $4, 'unhealthy')`,
+    [randomUUID(), providerId, providerConnectionId, preservedEventId],
   );
 }

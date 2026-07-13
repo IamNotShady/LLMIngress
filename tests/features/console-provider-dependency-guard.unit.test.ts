@@ -83,9 +83,15 @@ describe("console provider dependency guard", () => {
       await fixture.query(
         `
           insert into jobs (id, job_type, status, trigger, payload)
-          values ($1, 'provider_connectivity_check', 'running', 'system', $2::jsonb)
+          values ($1, 'provider_connection_probe', 'running', 'system', $2::jsonb)
         `,
-        [randomUUID(), JSON.stringify({ providerId: ids.providerId })],
+        [
+          randomUUID(),
+          JSON.stringify({
+            providerConnectionId: ids.providerApiKeyId,
+            providerId: ids.providerId,
+          }),
+        ],
       );
       await expect(
         deleteProvider({ databaseUrl: fixture.databaseUrl, id: ids.providerId }),
@@ -101,10 +107,13 @@ describe("console provider dependency guard", () => {
       );
       await fixture.query(
         `
-          insert into provider_health_summary (id, provider_id, provider_model_id, status)
-          values ($1, $2, null, 'healthy')
+          insert into provider_health_summary (
+            id, provider_id, provider_connection_id, consecutive_failures,
+            reason_code, reason_message, next_probe_at
+          )
+          values ($1, $2, $3, 1, 'auth_failed', 'invalid key', now())
         `,
-        [randomUUID(), ids.providerId],
+        [randomUUID(), ids.providerId, ids.providerApiKeyId],
       );
       await fixture.query(
         `
@@ -119,6 +128,7 @@ describe("console provider dependency guard", () => {
       const state = await fixture.query<{
         canceled_jobs: number;
         key_count: number;
+        key_deleted: boolean;
         model_deleted: boolean;
         provider_deleted: boolean;
         runtime_health_count: number;
@@ -127,15 +137,17 @@ describe("console provider dependency guard", () => {
           select
             (select count(*)::integer from jobs where payload->>'providerId' = $1::text and status = 'canceled') as canceled_jobs,
             (select count(*)::integer from provider_api_keys where provider_id = $1::uuid) as key_count,
+            (select deleted_at is not null from provider_api_keys where id = $3) as key_deleted,
             (select deleted_at is not null from provider_models where id = $2) as model_deleted,
             (select deleted_at is not null from providers where id = $1::uuid) as provider_deleted,
             (select count(*)::integer from provider_health_summary where provider_id = $1::uuid) as runtime_health_count
         `,
-        [ids.providerId, ids.providerModelId],
+        [ids.providerId, ids.providerModelId, ids.providerApiKeyId],
       );
       expect(state.rows[0]).toMatchObject({
         canceled_jobs: 1,
-        key_count: 0,
+        key_count: 1,
+        key_deleted: true,
         model_deleted: true,
         provider_deleted: true,
         runtime_health_count: 0,

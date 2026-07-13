@@ -122,7 +122,7 @@ The retained Console pages are:
 - Limits
 - Playground
 
-Console authentication, first-run setup, CSRF origin checks, stable operation errors, and
+Console authentication, first-run setup, stable operation errors, and
 secret encryption remain required.
 
 ## Worker

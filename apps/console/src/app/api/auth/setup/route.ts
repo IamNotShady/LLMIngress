@@ -3,11 +3,11 @@ import { createAdminPassword, isConsoleInitialized } from "@llmingress/db/consol
 import { consoleValidationError } from "@llmingress/db/console-operation-error";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { withConsoleOrigin } from "../../_auth";
+import { withConsoleErrorBoundary } from "../../_auth";
 import { consoleActionErrorResponse } from "../../_errors";
 import { redirectToConsolePath } from "../../_redirect";
 
-export const POST = withConsoleOrigin(async (request: NextRequest) => {
+export const POST = withConsoleErrorBoundary(async (request: NextRequest) => {
   if (await isConsoleInitialized()) {
     return NextResponse.json(
       { error: "Console is already initialized.", code: "console_already_initialized" },

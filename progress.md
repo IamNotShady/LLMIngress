@@ -33,6 +33,8 @@ Alerts, notifications, Webhook delivery, operational export, database backup, bi
 reconciliation, Runtime/Settings pages, Prometheus metrics, OpenTelemetry tracing, Runtime status
 and error persistence, Route Preview, standalone Routing UI, `quality_first`, legacy route rules,
 Agent type/request-logging switches, and savings/baseline-cost reporting are intentionally absent.
+Console request-Origin enforcement is also intentionally absent; Console writes rely on the
+existing password/session authentication boundary.
 
 ## Delivery Progress
 
@@ -59,12 +61,13 @@ Agent type/request-logging switches, and savings/baseline-cost reporting are int
 - Agent creation now requires an Allowed Virtual Model and atomically commits the Agent, API key, model grants, optional default, explicit Limits switch, and rules. Default choices follow the selected grants, while the one-time result shows the API key, Gateway URL, and platform-specific connection guidance.
 - Gateway now treats `agents.limits_enabled` as the sole Limits switch and performs no Limits database work while it is false. Disabling Limits preserves its rules. Agent Enable/Disable preserves the same API key and configuration, and the Agents list now shows Virtual Model names and Enabled state without the dynamic Status or Available VM columns.
 - Limits lists/KPIs include only active Agents with Limits enabled. The layout E2E seed now enables Limits explicitly and fails fast if its action row is absent; rows expose Edit only, with no delete UI.
+- Console no longer validates request Origin on login, setup, logout, or authenticated writes. The obsolete `CONSOLE_PUBLIC_BASE_URL` setting was removed; missing, null, and cross-site Origin requests now reach the normal form or session-authentication boundary.
 
 ## Verification
 
-Final 2026-07-13 result: the repaired Console layout E2E, all 79 Playwright E2E,
-`pnpm run verify` (62 files/327 tests), and all 9 milestone regressions passed. Coverage is 49.17% statements,
-49.34% lines, 41.84% branches, and 52.05% functions.
+Final 2026-07-13 result: the no-Origin Console contract unit/real-process E2E,
+`pnpm run verify` (62 files/326 tests), and all 9 milestone regressions passed. Coverage is 49.02% statements,
+49.18% lines, 41.53% branches, and 51.94% functions.
 
 Database-backed checks use:
 

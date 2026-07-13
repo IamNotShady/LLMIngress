@@ -31,10 +31,10 @@ test("console api rejects unauthenticated API actions with 401", async () => {
           body: new URLSearchParams({ action: "create" }),
           method: "POST",
         });
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(401);
         expect(await response.json()).toMatchObject({
-          code: "csrf_origin_mismatch",
-          error: "Request origin is not allowed.",
+          code: "authentication_required",
+          error: "Authentication required.",
         });
 
         for (const path of ["/api/providers", "/api/provider-oauth"]) {

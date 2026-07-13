@@ -201,32 +201,6 @@ export function gatewayPublicBaseUrl(
   return env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
 }
 
-export function consolePublicBaseUrl(
-  env: Record<string, string | undefined> = process.env,
-): string | null {
-  const value = env.CONSOLE_PUBLIC_BASE_URL?.trim();
-  if (!value) {
-    return null;
-  }
-
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`CONSOLE_PUBLIC_BASE_URL must be an absolute URL origin: ${message}`);
-  }
-
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("CONSOLE_PUBLIC_BASE_URL must use http or https.");
-  }
-  if (url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
-    throw new Error("CONSOLE_PUBLIC_BASE_URL must be an origin without path, query, or hash.");
-  }
-
-  return url.origin;
-}
-
 export function readConsoleListenHost(
   env: Record<string, string | undefined> = process.env,
 ): string {
@@ -265,58 +239,4 @@ function readConsoleSetupToken(env: Record<string, string | undefined>): string 
     throw new Error("CONSOLE_SETUP_TOKEN must be at least 32 characters.");
   }
   return value;
-}
-
-export type ConsoleOriginValidationInput = {
-  configuredOrigin?: string | null;
-  method: string;
-  originHeader?: string | null;
-  requestUrl: string;
-};
-
-export type ConsoleOriginValidationResult =
-  | { ok: true }
-  | {
-      code: "csrf_origin_mismatch";
-      error: "Request origin is not allowed.";
-      ok: false;
-    };
-
-export function validateConsoleOrigin(
-  input: ConsoleOriginValidationInput,
-): ConsoleOriginValidationResult {
-  if (input.method === "GET" || input.method === "HEAD" || input.method === "OPTIONS") {
-    return { ok: true };
-  }
-
-  const origin = input.originHeader;
-  if (!origin || origin === "null") {
-    return csrfOriginMismatch();
-  }
-
-  let parsedOrigin: URL;
-  try {
-    parsedOrigin = new URL(origin);
-  } catch {
-    return csrfOriginMismatch();
-  }
-
-  if (parsedOrigin.origin !== origin) {
-    return csrfOriginMismatch();
-  }
-
-  const expectedOrigin = input.configuredOrigin ?? new URL(input.requestUrl).origin;
-  if (origin !== expectedOrigin) {
-    return csrfOriginMismatch();
-  }
-
-  return { ok: true };
-}
-
-function csrfOriginMismatch(): ConsoleOriginValidationResult {
-  return {
-    code: "csrf_origin_mismatch",
-    error: "Request origin is not allowed.",
-    ok: false,
-  };
 }

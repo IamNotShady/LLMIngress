@@ -89,7 +89,7 @@ Successful unknown-price requests record zero monetary cost with an unavailable 
 ## Console Control Plane
 
 Console pages are Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and
-Playground. Console APIs perform authenticated, CSRF-protected configuration writes through
+Playground. Console APIs perform authenticated configuration writes through
 the shared config publisher transaction.
 
 Console never proxies Agent traffic and never performs Provider egress. Long Provider actions

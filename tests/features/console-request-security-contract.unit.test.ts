@@ -3,72 +3,16 @@ import { join } from "node:path";
 import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleActionError } from "../../apps/console/src/app/api/_error-classify";
-import { consolePublicBaseUrl, validateConsoleOrigin } from "../../packages/config/src/index";
 
 describe("console request security contract", () => {
-  it("rejects unsafe methods without an exact allowed Origin", () => {
-    const missing = validateConsoleOrigin({
-      method: "POST",
-      originHeader: null,
-      requestUrl: "http://console.local/api/agents",
-    });
-    expect(missing).toMatchObject({
-      code: "csrf_origin_mismatch",
-      error: "Request origin is not allowed.",
-    });
+  it("does not inspect request origins before Console handlers", () => {
+    const authSource = readFileSync("apps/console/src/app/api/_auth.ts", "utf8");
+    const configSource = readFileSync("packages/config/src/index.ts", "utf8");
 
-    const sameOrigin = validateConsoleOrigin({
-      method: "POST",
-      originHeader: "http://console.local",
-      requestUrl: "http://console.local/api/agents",
-    });
-    expect(sameOrigin).toEqual({ ok: true });
-
-    const crossOrigin = validateConsoleOrigin({
-      method: "DELETE",
-      originHeader: "http://evil.test",
-      requestUrl: "http://console.local/api/providers",
-    });
-    expect(crossOrigin.ok).toBe(false);
-
-    const nullOrigin = validateConsoleOrigin({
-      method: "PATCH",
-      originHeader: "null",
-      requestUrl: "http://console.local/api/providers",
-    });
-    expect(nullOrigin.ok).toBe(false);
-
-    const safeGet = validateConsoleOrigin({
-      method: "GET",
-      originHeader: null,
-      requestUrl: "http://console.local/api/playground/result",
-    });
-    expect(safeGet).toEqual({ ok: true });
-  });
-
-  it("uses CONSOLE_PUBLIC_BASE_URL as the only trusted public origin when configured", () => {
-    expect(consolePublicBaseUrl({ CONSOLE_PUBLIC_BASE_URL: "https://console.example" })).toBe(
-      "https://console.example",
-    );
-    expect(() =>
-      consolePublicBaseUrl({ CONSOLE_PUBLIC_BASE_URL: "https://console.example/path" }),
-    ).toThrow(/CONSOLE_PUBLIC_BASE_URL/);
-
-    const configured = validateConsoleOrigin({
-      configuredOrigin: "https://console.example",
-      method: "POST",
-      originHeader: "https://console.example",
-      requestUrl: "http://127.0.0.1:3000/api/agents",
-    });
-    expect(configured).toEqual({ ok: true });
-
-    const forwardedGuess = validateConsoleOrigin({
-      configuredOrigin: "https://console.example",
-      method: "POST",
-      originHeader: "http://127.0.0.1:3000",
-      requestUrl: "http://127.0.0.1:3000/api/agents",
-    });
-    expect(forwardedGuess.ok).toBe(false);
+    expect(authSource).not.toContain('headers.get("origin")');
+    expect(authSource).not.toContain("withConsoleOrigin");
+    expect(configSource).not.toContain("CONSOLE_PUBLIC_BASE_URL");
+    expect(configSource).not.toContain("csrf_origin_mismatch");
   });
 
   it("maps explicit console operation errors by fixed kind without constructor checks", () => {

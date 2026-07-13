@@ -3,11 +3,11 @@
     {
       "id": "core-platform-security",
       "name": "Core Platform Security",
-      "description": "Console setup, authentication, CSRF, secret encryption, safe error boundaries, Gateway readiness, configuration reload, and graceful shutdown protect the core platform.",
+      "description": "Console setup, authentication, secret encryption, safe error boundaries, Gateway readiness, configuration reload, and graceful shutdown protect the core platform.",
       "verification": "pnpm exec vitest run tests/features/console-request-security-contract.unit.test.ts tests/features/console-secure-bootstrap.unit.test.ts tests/features/gateway-lifecycle-drain.unit.test.ts && pnpm test:e2e tests/e2e/console-request-security-contract.e2e.spec.ts tests/e2e/console-secure-bootstrap.e2e.spec.ts tests/e2e/runtime-observability-removal.e2e.spec.ts --workers=1",
       "dependencies": [],
       "status": "passing",
-      "evidence": "2026-07-11: Security/lifecycle unit tests and all five real-process E2E pass. Process-heavy Console E2E run serially to avoid competing Next dev instances."
+      "evidence": "2026-07-13: Console Origin/CSRF checks and CONSOLE_PUBLIC_BASE_URL were removed by product decision. Missing, null, and cross-site Origin requests reach normal authentication or form handling while session authentication remains enforced. Focused unit/real-process E2E, pnpm run verify (62 files/326 tests), and all 9 feature regressions pass."
     },
     {
       "id": "provider-model-management",

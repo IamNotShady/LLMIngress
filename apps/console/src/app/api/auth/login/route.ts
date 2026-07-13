@@ -5,10 +5,10 @@ import {
 } from "@llmingress/db/console-auth";
 import { consoleValidationError } from "@llmingress/db/console-operation-error";
 import { type NextRequest, NextResponse } from "next/server";
-import { withConsoleOrigin } from "../../_auth";
+import { withConsoleErrorBoundary } from "../../_auth";
 import { redirectToConsolePath } from "../../_redirect";
 
-export const POST = withConsoleOrigin(async (request: NextRequest) => {
+export const POST = withConsoleErrorBoundary(async (request: NextRequest) => {
   const password = await readPassword(request);
   if (!password) {
     throw consoleValidationError("Admin password is required.", "form_field_required", {

@@ -21,12 +21,6 @@ the old public default `MASTER_KEY=test-master-key-change-me`; the temporary
 compatibility switch is `LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY=true`, and
 should only be used long enough to migrate a legacy deployment.
 
-When exposing Console through a reverse proxy or any browser-facing origin other
-than the request URL seen by the Node process, set `CONSOLE_PUBLIC_BASE_URL` to
-the exact public origin, for example `https://console.example.com`. Console
-mutating requests require an exact `Origin` match and do not infer the public
-origin from forwarded headers.
-
 If local Postgres already uses port `55432`, override only the host port:
 
 ```bash

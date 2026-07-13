@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import {
   createSecretEncryption,
   type EncryptedSecret,
 } from "@llmingress/security/secret-encryption";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
 export type ProviderApiKeyTestStatus =
   | "auth_failed"
@@ -39,7 +40,7 @@ export type StoredProviderApiKey = {
   keyPrefix: string;
 };
 
-export type ProviderApiKeyStorageRow = PostgresQueryResultRow & {
+export type ProviderApiKeyStorageRow = {
   created_at: Date;
   enabled: boolean;
   id: string;
@@ -100,17 +101,6 @@ export function toProviderApiKeyMetadata(row: ProviderApiKeyStorageRow): Provide
   };
 }
 
-export function formatProviderApiKeyTestStatusLabel(status: ProviderApiKeyTestStatus): string {
-  return {
-    auth_failed: "Auth failed",
-    healthy: "Healthy",
-    network_error: "Network error",
-    quota_limited: "Quota limited",
-    unhealthy: "Unhealthy",
-    unknown: "Unknown",
-  }[status];
-}
-
 export function readConsoleMasterKeySource(
   env: Record<string, string | undefined> = process.env,
 ): MasterKeySource {
@@ -130,7 +120,7 @@ export function readConsoleMasterKeySource(
 export async function listProviderApiKeyMetadata(
   databaseUrl?: string,
 ): Promise<ProviderApiKeyMetadata[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderApiKeyStorageRow>(
       `
         select id::text,
@@ -181,6 +171,29 @@ export async function saveProviderApiKey(input: {
     description: `Save provider API key ${input.providerId}`,
     changes: [{ table: "provider_api_keys", recordId: rowId }],
     write: async (client) => {
+      const provider = await client.query<{ provider_type: string }>(
+        `
+          select provider_type
+          from providers
+          where id = $1
+            and deleted_at is null
+          for update
+        `,
+        [input.providerId],
+      );
+      const providerType = provider.rows[0]?.provider_type;
+      if (!providerType) {
+        throw consoleNotFoundError("Provider was not found.", "provider_not_found", {
+          providerId: input.providerId,
+        });
+      }
+      if (providerType !== "api_key") {
+        throw consoleValidationError(
+          "Provider API keys can only be saved for API Key Providers.",
+          "provider_api_key_unsupported",
+          { providerId: input.providerId, providerType },
+        );
+      }
       const result = await client.query<ProviderApiKeyStorageRow>(
         `
           insert into provider_api_keys (
@@ -243,6 +256,22 @@ export async function deleteProviderApiKey(input: {
     description: `Delete provider API key ${input.providerApiKeyId}`,
     changes: [{ table: "provider_api_keys", recordId: input.providerApiKeyId }],
     write: async (client) => {
+      await client.query(
+        `
+          update request_activity
+          set provider_api_key_id = null
+          where provider_api_key_id = $1
+        `,
+        [input.providerApiKeyId],
+      );
+      await client.query(
+        `
+          update fallback_events
+          set provider_api_key_id = null
+          where provider_api_key_id = $1
+        `,
+        [input.providerApiKeyId],
+      );
       const result = await client.query<{ provider_id: string }>(
         `
           delete from provider_api_keys
@@ -256,7 +285,7 @@ export async function deleteProviderApiKey(input: {
   });
 
   if (!providerId) {
-    throw new Error("Provider API key was not found.");
+    throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found");
   }
   return { providerId };
 }
@@ -264,10 +293,13 @@ export async function deleteProviderApiKey(input: {
 function normalizeProviderApiKeyPlaintext(value: string): string {
   const plaintext = value.trim();
   if (!plaintext) {
-    throw new Error("Provider API key is required.");
+    throw consoleValidationError("Provider API key is required.", "provider_api_key_required");
   }
   if (plaintext.length <= providerKeyPrefixLength) {
-    throw new Error("Provider API key must be longer than the stored prefix.");
+    throw consoleValidationError(
+      "Provider API key must be longer than the stored prefix.",
+      "provider_api_key_too_short",
+    );
   }
   return plaintext;
 }
@@ -279,7 +311,10 @@ function buildProviderKeyPrefix(plaintext: string): string {
 function normalizeOptionalLabel(value: string | null | undefined): string | null {
   const label = value?.trim();
   if (label && label.length > providerApiKeyLabelMaxLength) {
-    throw new Error("Provider API key label must be at most 100 characters.");
+    throw consoleValidationError(
+      "Provider API key label must be at most 100 characters.",
+      "provider_api_key_label_too_long",
+    );
   }
   return label || null;
 }
@@ -289,7 +324,10 @@ function normalizePriority(value: number | undefined): number {
     return 100;
   }
   if (!Number.isInteger(value) || value < 0 || value > providerApiKeyPriorityMax) {
-    throw new Error("Provider API key priority must be between 0 and 100.");
+    throw consoleValidationError(
+      "Provider API key priority must be between 0 and 100.",
+      "provider_api_key_priority_invalid",
+    );
   }
   return value;
 }
@@ -298,21 +336,7 @@ function requireProviderApiKeyRow(
   row: ProviderApiKeyStorageRow | undefined,
 ): ProviderApiKeyStorageRow {
   if (!row) {
-    throw new Error("Provider API key was not found.");
+    throw consoleNotFoundError("Provider API key was not found.", "provider_api_key_not_found");
   }
   return row;
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

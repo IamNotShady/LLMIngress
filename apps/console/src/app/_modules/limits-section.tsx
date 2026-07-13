@@ -11,6 +11,8 @@ import {
   listAgents,
   listAgentVirtualModelAccess,
 } from "@llmingress/db/console-agents";
+import { ConsoleDialog } from "../_components/console-dialog";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
@@ -19,7 +21,6 @@ import {
   findAgentLimit,
   formatDeltaTone,
   groupByAgentId,
-  readAgentAlertThresholdPercent,
   readSingleSearchParam,
 } from "./sections";
 
@@ -41,218 +42,163 @@ function LimitsConfigDialog({
   const tpmLimit = findAgentLimit(limits, "tpm");
   const concurrencyLimit = findAgentLimit(limits, "concurrency");
   const tokenLimit = findAgentLimit(limits, "token");
-  const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
   const usagePercent = runtime.budgetUsagePercent;
   const usageTone = usagePercent >= 95 ? "is-danger" : usagePercent >= 80 ? "is-warn" : "";
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-label="Rule configuration"
-        aria-labelledby={`limits-config-title-${agent.id}`}
-        aria-modal="true"
-        className="console-dialog limits-config-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head limits-config-head">
-          <div>
-            <h2 className="limits-config-title" id={`limits-config-title-${agent.id}`}>
-              Rule configuration
-            </h2>
-            <p>{agent.name}</p>
-          </div>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
-        </div>
-        <form className="limits-config-form" action="/api/agent-limits" method="post">
-          <input type="hidden" name="action" value="saveLimitRules" />
-          <input type="hidden" name="agentId" value={agent.id} />
-          <div className="limits-form-grid">
-            <div className="console-field">
-              <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
-              <input
-                id={`limits-budget-${agent.id}`}
-                name="budgetUsd"
-                type="number"
-                min="0.000001"
-                step="0.000001"
-                defaultValue={formatInputNumber(
-                  budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
-                )}
-                required
-              />
-            </div>
-            <div className="console-field">
-              <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
-              <input
-                id={`limits-token-${agent.id}`}
-                name="tokenLimit"
-                type="number"
-                min="1"
-                step="1"
-                defaultValue={formatInputNumber(
-                  tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
-                )}
-                required
-              />
-            </div>
-            <div className="console-field">
-              <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
-              <select
-                id={`limits-budget-period-${agent.id}`}
-                name="budgetPeriod"
-                defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
-                required
-              >
-                <option value="day">Day</option>
-                <option value="week">Week</option>
-                <option value="month">Month</option>
-              </select>
-            </div>
-            <div className="console-field">
-              <label htmlFor={`limits-alert-threshold-${agent.id}`}>Alert threshold</label>
-              <input
-                id={`limits-alert-threshold-${agent.id}`}
-                name="alertThresholdPercent"
-                type="number"
-                min="1"
-                max="100"
-                step="1"
-                defaultValue={formatInputNumber(alertThresholdPercent)}
-                required
-              />
-            </div>
-          </div>
-          <div className="limits-usage-block">
-            <div className="usage-bar">
-              <div className="usage-bar-head">
-                <span>Current usage</span>
-                <span>{formatUsagePercent(usagePercent)}</span>
-              </div>
-              <div className="usage-bar-track">
-                <div
-                  className={`usage-bar-fill ${usageTone}`.trim()}
-                  style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h3 className="limits-config-subtitle">Rate limit caps</h3>
-            <div className="limits-rate-grid">
-              <div className="console-field">
-                <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
-                <input
-                  id={`limits-rpm-${agent.id}`}
-                  name="rpm"
-                  type="number"
-                  min="1"
-                  step="1"
-                  defaultValue={formatInputNumber(
-                    rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
-                  )}
-                  required
-                />
-              </div>
-              <div className="console-field">
-                <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
-                <input
-                  id={`limits-tpm-${agent.id}`}
-                  name="tpm"
-                  type="number"
-                  min="1"
-                  step="1"
-                  defaultValue={formatInputNumber(
-                    tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
-                  )}
-                  required
-                />
-              </div>
-              <div className="console-field">
-                <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
-                <input
-                  id={`limits-concurrency-${agent.id}`}
-                  name="concurrency"
-                  type="number"
-                  min="1"
-                  step="1"
-                  defaultValue={formatInputNumber(
-                    concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
-                  )}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h3 className="limits-config-subtitle">Allowed Virtual Models</h3>
-            <div className="tag-row">
-              {allowedVirtualModels.length === 0 ? (
-                <span className="tag-chip">All virtual models</span>
-              ) : (
-                allowedVirtualModels.map((virtualModel) => (
-                  <span className="tag-chip" key={virtualModel.id}>
-                    {virtualModel.name}
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
-          <div className="limits-config-actions">
-            <a className="secondary-button" href={closeHref}>
-              Cancel
-            </a>
-            <button type="submit">
-              <span>Save</span>
-            </button>
-          </div>
-        </form>
-      </section>
-    </>
-  );
-}
-
-function LimitsDeleteDialog({
-  agent,
-  closeHref,
-}: {
-  agent: { id: string; name: string };
-  closeHref: string;
-}) {
-  return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby={`limits-delete-dialog-title-${agent.id}`}
-        aria-modal="true"
-        className="console-dialog agent-delete-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <h2 id={`limits-delete-dialog-title-${agent.id}`}>
-            Delete limit rules for {agent.name}?
+    <ConsoleDialog
+      ariaLabelledby={`limits-config-title-${agent.id}`}
+      className="console-dialog limits-config-dialog"
+      closeHref={closeHref}
+      triggerId={`limits-edit-${agent.id}-trigger`}
+    >
+      <div className="console-dialog-head limits-config-head">
+        <div>
+          <h2 className="limits-config-title" id={`limits-config-title-${agent.id}`}>
+            Rule configuration
           </h2>
+          <p>{agent.name}</p>
         </div>
-        <p>This removes every limit rule configured for this Agent API key.</p>
-        <div className="agent-delete-actions">
-          <a className="agent-delete-cancel" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Cancel</span>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <ConsoleMutationForm
+        action="/api/agent-limits"
+        className="limits-config-form"
+        fallbackError="Agent limit update failed."
+      >
+        <input type="hidden" name="action" value="saveLimitRules" />
+        <input type="hidden" name="agentId" value={agent.id} />
+        <div className="limits-form-grid">
+          <div className="console-field">
+            <label htmlFor={`limits-budget-${agent.id}`}>Cost limit (USD)</label>
+            <input
+              id={`limits-budget-${agent.id}`}
+              name="budgetUsd"
+              type="number"
+              min="0.000001"
+              step="0.000001"
+              defaultValue={formatInputNumber(
+                budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd,
+              )}
+              required
+            />
+          </div>
+          <div className="console-field">
+            <label htmlFor={`limits-token-${agent.id}`}>Token limit</label>
+            <input
+              id={`limits-token-${agent.id}`}
+              name="tokenLimit"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={formatInputNumber(
+                tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit,
+              )}
+              required
+            />
+          </div>
+          <div className="console-field">
+            <label htmlFor={`limits-budget-period-${agent.id}`}>Period</label>
+            <select
+              id={`limits-budget-period-${agent.id}`}
+              name="budgetPeriod"
+              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+              required
+            >
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div>
+        </div>
+        <div className="limits-usage-block">
+          <div className="usage-bar">
+            <div className="usage-bar-head">
+              <span>Current usage</span>
+              <span>{formatUsagePercent(usagePercent)}</span>
+            </div>
+            <div className="usage-bar-track">
+              <div
+                className={`usage-bar-fill ${usageTone}`.trim()}
+                style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
+              />
+            </div>
+          </div>
+        </div>
+        <div>
+          <h3 className="limits-config-subtitle">Rate limit caps</h3>
+          <div className="limits-rate-grid">
+            <div className="console-field">
+              <label htmlFor={`limits-rpm-${agent.id}`}>RPM</label>
+              <input
+                id={`limits-rpm-${agent.id}`}
+                name="rpm"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm,
+                )}
+                required
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-tpm-${agent.id}`}>TPM</label>
+              <input
+                id={`limits-tpm-${agent.id}`}
+                name="tpm"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm,
+                )}
+                required
+              />
+            </div>
+            <div className="console-field">
+              <label htmlFor={`limits-concurrency-${agent.id}`}>Concurrency</label>
+              <input
+                id={`limits-concurrency-${agent.id}`}
+                name="concurrency"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={formatInputNumber(
+                  concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency,
+                )}
+                required
+              />
+            </div>
+          </div>
+        </div>
+        <div>
+          <h3 className="limits-config-subtitle">Allowed Virtual Models</h3>
+          <div className="tag-row">
+            {allowedVirtualModels.length === 0 ? (
+              <span className="tag-chip">All virtual models</span>
+            ) : (
+              allowedVirtualModels.map((virtualModel) => (
+                <span className="tag-chip" key={virtualModel.id}>
+                  {virtualModel.name}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="limits-config-actions">
+          <a className="secondary-button" href={closeHref}>
+            Cancel
           </a>
-          <form action="/api/agent-limits" method="post">
-            <input type="hidden" name="action" value="deleteLimitRules" />
-            <input type="hidden" name="agentId" value={agent.id} />
-            <button className="agent-delete-confirm" type="submit">
-              <FlatIcon name="delete" />
-              <span>Delete</span>
-            </button>
-          </form>
+          <button type="submit">
+            <span>Save</span>
+          </button>
         </div>
-      </section>
-    </>
+      </ConsoleMutationForm>
+    </ConsoleDialog>
   );
 }
 
@@ -298,11 +244,9 @@ function getEmptyAgentLimitRuntimeSnapshot(agentId: string): ConsoleAgentLimitRu
 }
 
 function getLimitRuleStatus({
-  alertThresholdPercent,
   enabled,
   usagePercent,
 }: {
-  alertThresholdPercent: number;
   enabled: boolean;
   usagePercent: number;
 }): { className: string; label: string } {
@@ -311,9 +255,6 @@ function getLimitRuleStatus({
   }
   if (usagePercent >= 100) {
     return { className: "pill--danger", label: "Blocked" };
-  }
-  if (usagePercent >= alertThresholdPercent) {
-    return { className: "pill--warn", label: "Warning" };
   }
   return { className: "pill--ok", label: "Normal" };
 }
@@ -371,12 +312,13 @@ function formatInteger(value: number): string {
 export async function LimitsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
   const dialogAgentId = readSingleSearchParam(searchParams.limitDialog);
-  const deleteDialogAgentId = readSingleSearchParam(searchParams.limitDelete);
   const query = readSingleSearchParam(searchParams.q)?.trim() ?? "";
-  const agents = await listAgents();
-  const agentLimits = await listAgentLimits();
-  const runtimeSnapshots = await listAgentLimitRuntimeSnapshots();
-  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
+  const [agents, agentLimits, runtimeSnapshots, agentVirtualModelAccess] = await Promise.all([
+    listAgents(),
+    listAgentLimits(),
+    listAgentLimitRuntimeSnapshots(),
+    listAgentVirtualModelAccess(),
+  ]);
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
   const runtimeByAgentId = new Map(
     runtimeSnapshots.map((snapshot) => [snapshot.agentId, snapshot]),
@@ -397,14 +339,12 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
     const limits = agentLimitsByAgentId.get(agent.id) ?? [];
     const summaries = formatAgentLimitSummaries(limits);
     const runtime = getAgentLimitRuntimeSnapshot(agent.id, runtimeByAgentId);
-    const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
     const budgetUsagePercent = runtime.budgetUsagePercent;
     const status = getLimitRuleStatus({
-      alertThresholdPercent,
       enabled: agent.enabled,
       usagePercent: budgetUsagePercent,
     });
-    return { agent, alertThresholdPercent, budgetUsagePercent, limits, runtime, status, summaries };
+    return { agent, budgetUsagePercent, limits, runtime, status, summaries };
   });
   const filteredRows = query
     ? rows.filter((row) => {
@@ -428,18 +368,12 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
     (sum, snapshot) => sum + snapshot.rateLimitHits24h,
     0,
   );
-  const nearBudgetCount = rows.filter(
-    (row) => row.budgetUsagePercent >= row.alertThresholdPercent,
-  ).length;
+  const nearBudgetCount = rows.filter((row) => row.budgetUsagePercent >= 100).length;
   const dialogLimits = dialogAgent ? (agentLimitsByAgentId.get(dialogAgent.id) ?? []) : [];
   const dialogRuntime = dialogAgent
     ? getAgentLimitRuntimeSnapshot(dialogAgent.id, runtimeByAgentId)
     : null;
   const dialogCloseHref = buildQueryHref(searchParams, { limitDialog: undefined });
-  const deleteDialogAgent = deleteDialogAgentId
-    ? (agents.find((agent) => agent.id === deleteDialogAgentId) ?? null)
-    : null;
-  const deleteDialogCloseHref = buildQueryHref(searchParams, { limitDelete: undefined });
 
   return (
     <section className="limits-dashboard" aria-label="Limits">
@@ -463,7 +397,7 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
               icon="B"
               label="Keys near budget"
               value={String(nearBudgetCount)}
-              delta="At alert threshold"
+              delta="At configured limit"
             />
             <StatCard
               icon="L"
@@ -510,7 +444,26 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                 <tbody>
                   {filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={10}>No limit rules configured.</td>
+                      <td colSpan={10}>
+                        {agents.length === 0 ? (
+                          <>
+                            <a className="empty-state-action" href="/agents?agentDialog=new">
+                              Create an Agent and enable limits
+                            </a>{" "}
+                            to add budget, token, RPM, TPM, and concurrency rules.
+                          </>
+                        ) : query ? (
+                          "No limit rules match the search."
+                        ) : (
+                          <>
+                            No limit rules configured. Edit an Agent from the{" "}
+                            <a className="empty-state-action" href="/agents">
+                              Agents page
+                            </a>{" "}
+                            to enable them.
+                          </>
+                        )}
+                      </td>
                     </tr>
                   ) : (
                     filteredRows.map((row) => {
@@ -539,27 +492,15 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                             </span>
                           </td>
                           <td className="limits-rule-action-cell">
-                            <span className="limits-rule-actions">
-                              <span className="agent-table-actions">
-                                <a
-                                  aria-label={`Edit ${row.agent.name}`}
-                                  className="link-button agent-action-edit row-action-button"
-                                  href={editHref}
-                                  title="Edit"
-                                >
-                                  <FlatIcon name="edit" />
-                                </a>
-                              </span>
+                            <span className="agent-table-actions">
                               <a
-                                aria-label={`Delete ${row.agent.name}`}
-                                className="limits-rule-delete-button row-action-button row-action-danger"
-                                href={buildQueryHref(searchParams, {
-                                  limitDelete: row.agent.id,
-                                  limitDialog: undefined,
-                                })}
-                                title="Delete"
+                                aria-label={`Edit ${row.agent.name}`}
+                                className="link-button agent-action-edit row-action-button"
+                                href={editHref}
+                                id={`limits-edit-${row.agent.id}-trigger`}
+                                title="Edit"
                               >
-                                <FlatIcon name="delete" />
+                                <FlatIcon name="edit" />
                               </a>
                             </span>
                           </td>
@@ -581,9 +522,6 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
           allowedVirtualModels={getLimitsVisibleVirtualModels(accessById.get(dialogAgent.id))}
           runtime={dialogRuntime ?? getEmptyAgentLimitRuntimeSnapshot(dialogAgent.id)}
         />
-      ) : null}
-      {deleteDialogAgent ? (
-        <LimitsDeleteDialog agent={deleteDialogAgent} closeHref={deleteDialogCloseHref} />
       ) : null}
     </section>
   );

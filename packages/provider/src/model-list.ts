@@ -1,12 +1,22 @@
+import type { ModelInputModality, ModelOutputModality } from "@llmingress/domain";
+import { isRecord } from "@llmingress/util";
+
 export type ListedProviderModel = {
   capabilityMetadata?: Record<string, unknown>;
   contextWindow?: number | null;
   displayName: string;
+  inputModalities?: ModelInputModality[] | null;
+  maxOutputTokens?: number | null;
   modelId: string;
+  outputModalities?: ModelOutputModality[] | null;
+  supportsFunctionCalling?: boolean | null;
+  supportsReasoning?: boolean | null;
   supportsStreaming?: boolean | null;
   supportsTools?: boolean | null;
 };
 
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { fetchCredentialedProviderRequest } from "./authenticated-http.js";
 import {
   buildClaudeCodeModelListUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -22,7 +32,9 @@ export async function fetchListedProviderModels(input: {
 }): Promise<ListedProviderModel[]> {
   const fetchImpl = input.fetch ?? globalThis.fetch;
   const request = buildProviderModelListRequest(input);
-  const response = await fetchImpl(request.url, request.init);
+  const response = input.apiKey
+    ? await fetchCredentialedProviderRequest(fetchImpl, request.url, request.init)
+    : await fetchImpl(request.url, request.init);
   const body = await readResponseBody(response);
 
   if (!response.ok) {
@@ -49,9 +61,9 @@ export function buildProviderModelListRequest(input: {
   url: string;
 } {
   const init: RequestInit = { method: "GET" };
-  const providerKey = input.providerKey?.toLowerCase();
+  const style = resolveProviderDescriptor(input.providerKey).modelListStyle;
 
-  if (providerKey === "openai_codex" && input.apiKey) {
+  if (style === "codex" && input.apiKey) {
     init.headers = buildCodexSubscriptionHeaders(input.apiKey);
     return {
       init,
@@ -59,7 +71,7 @@ export function buildProviderModelListRequest(input: {
     };
   }
 
-  if (providerKey === "claude_code" && input.apiKey) {
+  if (style === "claude_code" && input.apiKey) {
     init.headers = buildClaudeCodeSubscriptionHeaders(input.apiKey);
     return {
       init,
@@ -67,14 +79,14 @@ export function buildProviderModelListRequest(input: {
     };
   }
 
-  if (providerKey === "lmstudio") {
+  if (style === "lmstudio") {
     return {
       init,
       url: buildLmStudioModelListUrl(input.baseUrl),
     };
   }
 
-  if (providerKey === "anthropic") {
+  if (style === "anthropic") {
     init.headers = input.apiKey
       ? {
           "anthropic-version": "2023-06-01",
@@ -85,7 +97,7 @@ export function buildProviderModelListRequest(input: {
           "anthropic-version": "2023-06-01",
           "content-type": "application/json",
         };
-  } else if (providerKey === "openrouter" && input.apiKey) {
+  } else if (style === "openrouter" && input.apiKey) {
     init.headers = {
       "HTTP-Referer": "https://llmingress.local",
       "X-OpenRouter-Title": "LLMIngress",
@@ -300,8 +312,4 @@ async function readResponseBody(response: Response): Promise<unknown> {
   } catch {
     return { raw: text };
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

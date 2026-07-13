@@ -4,7 +4,7 @@ import { formatConsoleTimestamp } from "../../packages/db/src/console-format";
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -27,10 +27,10 @@ async function seedFormatterData(databaseUrl: string) {
   const todayStartedAt = new Date(now.getTime() - 30 * 60 * 1000);
   const oldStartedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
-       values ($1, 'format-probe-agent', 'terminal', 'llmi_format_probe', 'test-hash', true)`,
+      `insert into agents (id, name, key_prefix, key_hash, enabled)
+       values ($1, 'format-probe-agent', 'llmi_format_probe', 'test-hash', true)`,
       [agentId],
     );
     await client.query(

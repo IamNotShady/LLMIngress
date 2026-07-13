@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
-import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 import { createFakeProviderServer } from "../support/fake-provider";
 import {
   getFreePort,
@@ -76,7 +76,7 @@ async function seedV1ProviderCoverageRoutes(
   const seededVirtualModelIds: string[] = [];
 
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'V1 Provider Smoke Agent', 'coding', true)",
+    "insert into agents (id, name, enabled) values ($1, 'V1 Provider Smoke Agent', true)",
     [seedAgentId],
   );
 
@@ -130,12 +130,16 @@ async function seedV1ProviderCoverageRoutes(
           provider_id,
           model_id,
           display_name,
+          input_modalities,
+          output_modalities,
           context_window,
+          max_output_tokens,
           supports_streaming,
-          supports_tools,
+          supports_function_calling,
+          supports_reasoning,
           availability
         )
-        values ($1, $2, $3, $4, 128000, true, true, 'available')
+        values ($1, $2, $3, $4, array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
       `,
       [providerModelId, providerId, scenario.modelId, scenario.modelDisplayName],
     );
@@ -147,8 +151,8 @@ async function seedV1ProviderCoverageRoutes(
       [virtualModelId, scenario.virtualModelName, scenario.virtualModelDisplayName],
     );
     await fixture.query(
-      "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
-      [routePolicyId, virtualModelId],
+      "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', $3)",
+      [routePolicyId, virtualModelId, scenario.endpoint],
     );
     await fixture.query(
       `
@@ -290,43 +294,49 @@ async function expectRequestActivityRows(
   fixture: Fixture,
   scenarios: readonly V1ProviderCoverageScenario[],
 ): Promise<void> {
-  const result = await fixture.query<{
-    http_status: number;
-    model: string;
-    model_id: string;
-    protocol: string;
-    provider_key: string;
-    request_id: string;
-    status: string;
-  }>(
-    `
-      select request_activity.request_id,
-             request_activity.protocol,
-             request_activity.model,
-             request_activity.status,
-             request_activity.http_status,
-             providers.provider_key,
-             provider_models.model_id
-      from request_activity
-      join providers on providers.id = request_activity.provider_id
-      join provider_models on provider_models.id = request_activity.provider_model_id
-      where request_activity.request_id = any($1::text[])
-      order by array_position($1::text[], request_activity.request_id)
-    `,
-    [scenarios.map((scenario) => scenario.requestId)],
-  );
+  const expected = scenarios.map((scenario) => ({
+    http_status: 200,
+    model: scenario.virtualModelName,
+    model_id: scenario.modelId,
+    protocol: scenario.endpoint,
+    provider_key: scenario.providerKey,
+    request_id: scenario.requestId,
+    status: "succeeded",
+  }));
 
-  expect(result.rows).toEqual(
-    scenarios.map((scenario) => ({
-      http_status: 200,
-      model: scenario.virtualModelName,
-      model_id: scenario.modelId,
-      protocol: scenario.endpoint,
-      provider_key: scenario.providerKey,
-      request_id: scenario.requestId,
-      status: "succeeded",
-    })),
-  );
+  await expect
+    .poll(
+      async () => {
+        const result = await fixture.query<{
+          http_status: number;
+          model: string;
+          model_id: string;
+          protocol: string;
+          provider_key: string;
+          request_id: string;
+          status: string;
+        }>(
+          `
+            select request_activity.request_id,
+                   request_activity.protocol,
+                   request_activity.model,
+                   request_activity.status,
+                   request_activity.http_status,
+                   providers.provider_key,
+                   provider_models.model_id
+            from request_activity
+            join providers on providers.id = request_activity.provider_id
+            join provider_models on provider_models.id = request_activity.provider_model_id
+            where request_activity.request_id = any($1::text[])
+            order by array_position($1::text[], request_activity.request_id)
+          `,
+          [scenarios.map((scenario) => scenario.requestId)],
+        );
+        return result.rows;
+      },
+      { timeout: 5_000 },
+    )
+    .toEqual(expected);
 }
 
 function readHeader(

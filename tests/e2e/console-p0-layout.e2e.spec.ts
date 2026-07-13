@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -27,10 +27,10 @@ async function seedConsoleData(databaseUrl: string) {
   const agentId = randomUUID();
   const virtualModelId = randomUUID();
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
-       values ($1, 'layout-probe-agent', 'terminal', 'llmi_layout_probe', 'test-hash', true)`,
+      `insert into agents (id, name, key_prefix, key_hash, enabled, limits_enabled)
+       values ($1, 'layout-probe-agent', 'llmi_layout_probe', 'test-hash', true, true)`,
       [agentId],
     );
     await client.query(
@@ -77,8 +77,8 @@ async function seedConsoleData(databaseUrl: string) {
     ] as const;
     for (const [limitType, period, limitValue, unit] of limitRules) {
       await client.query(
-        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, alert_threshold)
-         values ($1, $2, $3, $4, $5, $6, 80)`,
+        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
+         values ($1, $2, $3, $4, $5, $6)`,
         [randomUUID(), agentId, limitType, period, limitValue, unit],
       );
     }
@@ -163,7 +163,9 @@ test("console keeps layout integrity with real data: no overflow, visible limits
           expect(
             await limitsWrap.evaluate((el) => el.scrollWidth - el.clientWidth),
           ).toBeLessThanOrEqual(1);
-          const lastActionCell = page.locator(".limits-rule-action-cell").last();
+          const actionCells = page.locator(".limits-rule-action-cell");
+          await expect(actionCells).toHaveCount(1);
+          const lastActionCell = actionCells.last();
           const actionBox = await lastActionCell.boundingBox();
           const wrapBox = await limitsWrap.boundingBox();
           expect(actionBox).not.toBeNull();

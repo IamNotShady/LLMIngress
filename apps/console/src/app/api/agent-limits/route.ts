@@ -20,14 +20,16 @@ export const POST = withConsoleAuth(async (request) => {
       return redirectToConsolePath("/limits");
     }
     if (action !== "saveLimitRules") {
-      return NextResponse.json({ error: "Unknown Agent limit action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown Agent limit action.", code: "agent_limit_action_unknown" },
+        { status: 400 },
+      );
     }
 
     const agentId = readRequiredText(form, "agentId", "agentApiKeyId");
     await saveAgentLimitRules({
       limits: normalizeAgentLimitFormInput({
         agentId,
-        alertThresholdPercent: readText(form, "alertThresholdPercent"),
         budgetPeriod: readRequiredText(form, "budgetPeriod"),
         budgetUsd: readRequiredText(form, "budgetUsd"),
         concurrency: readText(form, "concurrency"),

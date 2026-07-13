@@ -8,9 +8,17 @@
       "types": "./src/adapters/anthropic.ts",
       "default": "./src/adapters/anthropic.ts"
     },
+    "./authenticated-http": {
+      "types": "./src/authenticated-http.ts",
+      "default": "./src/authenticated-http.ts"
+    },
     "./connectivity": {
       "types": "./src/connectivity.ts",
       "default": "./src/connectivity.ts"
+    },
+    "./descriptor": {
+      "types": "./src/descriptor.ts",
+      "default": "./src/descriptor.ts"
     },
     "./dialect": {
       "types": "./src/dialect.ts",
@@ -27,10 +35,6 @@
     "./oauth": {
       "types": "./src/oauth.ts",
       "default": "./src/oauth.ts"
-    },
-    "./ollama": {
-      "types": "./src/adapters/ollama.ts",
-      "default": "./src/adapters/ollama.ts"
     },
     "./openai": {
       "types": "./src/adapters/openai.ts",
@@ -56,5 +60,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@llmingress/domain": "workspace:*",
+    "@llmingress/util": "workspace:*"
   }
 }

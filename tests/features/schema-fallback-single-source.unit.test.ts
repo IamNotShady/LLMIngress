@@ -1,14 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import {
-  formatConsoleActivityFallbackAttempts,
-  listConsoleActivities,
-} from "../../packages/db/src/console-activity";
-import { recordCompletedGatewayRequestActivity } from "../../packages/db/src/gateway-activity-recorder";
+import { listConsoleActivities } from "../../packages/db/src/console-activity";
 import type { TestPostgresFixture } from "../../packages/db/src/index";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { evaluateFallbackExhaustionAlerts } from "../../packages/db/src/worker-fallback-exhaustion-alerts";
-import { buildJsonlRequestLogRecord } from "../../packages/db/src/worker-jsonl-export";
+import { recordCompletedGatewayRequestActivity } from "../../packages/gateway-runtime/src/gateway-activity-recorder";
 
 describe("schema fallback single source", () => {
   it("migrated schema removes request_activity.fallback_attempts and adds retry columns", async () => {
@@ -34,7 +29,6 @@ describe("schema fallback single source", () => {
         model: "schema-vm",
         protocol: "chat_completions",
         requestId: "req-schema-fallback-record",
-        requestLoggingEnabled: true,
         responseBody: {
           error: { code: "provider_request_failed", message: "Provider failed." },
         },
@@ -82,7 +76,6 @@ describe("schema fallback single source", () => {
           model: "schema-vm",
           protocol: "chat_completions",
           requestId: "req-schema-no-jsonb",
-          requestLoggingEnabled: true,
           responseBody: { id: "ok" },
           route: {
             fallbackAttempts: [],
@@ -114,137 +107,6 @@ describe("schema fallback single source", () => {
       expect(activity?.fallbackFailedAttemptCount).toBe(3);
     });
   });
-
-  it("jsonl export synthesizes legacy fallbackAttempts from fallback_events", () => {
-    const record = buildJsonlRequestLogRecord({
-      activity: {
-        agent_id: "agent-1",
-        agent_key_prefix: "llmi_schema",
-        agent_name: "Schema Agent",
-        agent_type: "coding",
-        completed_at: new Date("2026-07-05T00:00:01.000Z"),
-        created_at: new Date("2026-07-05T00:00:00.000Z"),
-        error_code: null,
-        error_message: null,
-        fallback_attempts: [],
-        http_status: 200,
-        id: "activity-1",
-        latency_ms: 1,
-        model: "schema-vm",
-        protocol: "chat_completions",
-        provider_display_name: null,
-        provider_id: null,
-        provider_key: null,
-        provider_model_display_name: null,
-        provider_model_id: "provider-model-1",
-        provider_model_model_id: "gpt-schema",
-        request_id: "req-jsonl",
-        route_policy_id: null,
-        route_reason: {},
-        started_at: new Date("2026-07-05T00:00:00.000Z"),
-        status: "succeeded",
-        stream: false,
-        virtual_model_id: null,
-        virtual_model_name: null,
-      } as never,
-      cost: null,
-      fallbackEvents: [
-        {
-          attempt_order: 1,
-          created_at: new Date("2026-07-05T00:00:00.500Z"),
-          error_code: "provider_request_failed",
-          error_message: "failed",
-          failed_before_first_byte: true,
-          provider_api_key_id: null,
-          provider_api_key_prefix: null,
-          provider_key: "openai",
-          provider_model_id: "provider-model-1",
-          provider_model_model_id: "gpt-schema",
-          request_activity_id: "activity-1",
-          retryable: false,
-          status: "failed",
-          status_code: 400,
-        },
-        {
-          attempt_order: 2,
-          created_at: new Date("2026-07-05T00:00:00.600Z"),
-          error_code: null,
-          error_message: null,
-          failed_before_first_byte: false,
-          provider_api_key_id: null,
-          provider_api_key_prefix: null,
-          provider_key: "openai",
-          provider_model_id: "provider-model-2",
-          provider_model_model_id: "gpt-schema-2",
-          request_activity_id: "activity-1",
-          retryable: null,
-          status: "succeeded",
-          status_code: null,
-        },
-      ] as never,
-      usage: null,
-    }) as { fallbackAttempts: unknown };
-
-    expect(record.fallbackAttempts).toEqual([
-      {
-        attemptOrder: 1,
-        errorCode: "provider_request_failed",
-        errorMessage: "failed",
-        failedBeforeFirstByte: true,
-        providerApiKeyId: "[REDACTED]",
-        providerApiKeyPrefix: null,
-        providerModelId: "provider-model-1",
-        retryable: false,
-        statusCode: 400,
-      },
-    ]);
-  });
-
-  it("fallback exhaustion alerts aggregate attempts from fallback_events", async () => {
-    await withMigratedFixture(async (fixture) => {
-      await ensureFallbackRetryColumns(fixture);
-      await seedNotificationChannel(fixture);
-      await seedFailedActivityWithFallbackEvents(fixture);
-
-      await expect(
-        evaluateFallbackExhaustionAlerts({
-          databaseUrl: fixture.databaseUrl,
-          now: () => new Date("2026-07-05T00:05:00.000Z"),
-          payload: { windowMs: 15 * 60 * 1000 },
-        }),
-      ).resolves.toMatchObject({ queuedAlertCount: 1 });
-
-      const payload = await readLatestNotificationPayload(fixture);
-      expect(payload).toMatchObject({
-        fallbackAttempts: [
-          { attemptOrder: 1, retryable: true, statusCode: 503 },
-          { attemptOrder: 2, retryable: true, statusCode: 502 },
-          { attemptOrder: 3, retryable: false, statusCode: 400 },
-        ],
-        fallbackEventCount: 3,
-      });
-    });
-  });
-
-  it("formats fallback attempt lines from fallback event rows", () => {
-    expect(
-      formatConsoleActivityFallbackAttempts([
-        {
-          attemptOrder: 1,
-          createdAt: new Date("2026-07-05T00:00:00.000Z"),
-          errorCode: "provider_request_failed",
-          errorMessage: "failed",
-          failedBeforeFirstByte: true,
-          providerApiKeyId: null,
-          providerApiKeyPrefix: null,
-          providerModelDisplayName: "Schema Model",
-          providerModelId: "provider-model-1",
-          providerModelName: "gpt-schema",
-          status: "failed",
-        },
-      ]),
-    ).toEqual(["Attempt 1: provider_request_failed before first byte on provider-model-1"]);
-  });
 });
 
 async function withMigratedFixture<T>(
@@ -275,7 +137,7 @@ async function seedRuntimeEntities(fixture: TestPostgresFixture) {
     virtualModelId: randomUUID(),
   };
   await fixture.query(
-    "insert into agents (id, name, agent_type, key_prefix) values ($1, 'Schema Agent', 'coding', 'llmi_schema')",
+    "insert into agents (id, name, key_prefix) values ($1, 'Schema Agent', 'llmi_schema')",
     [ids.agentId],
   );
   await fixture.query(
@@ -350,16 +212,6 @@ async function seedFailedActivityWithFallbackEvents(fixture: TestPostgresFixture
   return { ...ids, activityId };
 }
 
-async function seedNotificationChannel(fixture: TestPostgresFixture): Promise<void> {
-  await fixture.query(
-    `
-      insert into notification_channels (id, channel_type, display_name, enabled, config)
-      values ($1, 'webhook', 'Fallback Alert Hook', true, '{"url":"http://127.0.0.1:9/webhook"}'::jsonb)
-    `,
-    [randomUUID()],
-  );
-}
-
 async function columnExists(
   fixture: TestPostgresFixture,
   tableName: string,
@@ -390,17 +242,4 @@ async function readFallbackEventRetryMetadata(fixture: TestPostgresFixture) {
     `,
   );
   return result.rows[0];
-}
-
-async function readLatestNotificationPayload(fixture: TestPostgresFixture) {
-  const result = await fixture.query<{ payload: unknown }>(
-    `
-      select payload
-      from notification_events
-      where event_type = 'fallback_exhaustion'
-      order by created_at desc
-      limit 1
-    `,
-  );
-  return result.rows[0]?.payload;
 }

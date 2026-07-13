@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import type { TestPostgresFixture } from "../../packages/db/src/index";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 import {
   enforceGatewayAgentLimits,
   recordGatewayBudgetUsage,
-} from "../../packages/db/src/gateway-agent-limits";
-import type { TestPostgresFixture } from "../../packages/db/src/index";
-import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
-import { createDefaultPeriodicTasks } from "../../packages/db/src/worker-periodic-scheduler";
-import { reconcileGatewayConcurrencyWindows } from "../../packages/db/src/worker-stale-concurrency";
+} from "../../packages/gateway-runtime/src/gateway-agent-limits";
+import { createCoreMaintenanceTasks } from "../../packages/worker-runtime/src/worker-maintenance-scheduler";
+import { reconcileGatewayConcurrencyWindows } from "../../packages/worker-runtime/src/worker-stale-concurrency";
 
 describe("gateway settlement integrity", () => {
   it("rejects a cost budget without budget reservation state", async () => {
@@ -66,8 +66,6 @@ describe("gateway settlement integrity", () => {
         requestId: "req-budget-success",
         usageCost: {
           actualPrice: pricedModel(),
-          baselinePrice: pricedModel(),
-          baselineProviderModelId: randomUUID(),
           estimatedInputTokens: 100,
           estimatedOutputTokens: 100,
           providerModelId: randomUUID(),
@@ -84,6 +82,60 @@ describe("gateway settlement integrity", () => {
       expect(Number(row?.cost_used_usd)).toBe(0.0002);
       expect(Number(row?.tokens_used)).toBe(200);
       expect(await budgetReservationsTableExists(fixture)).toBe(false);
+    });
+  });
+
+  it("allows unknown-priced budget requests and records tokens with zero cost", async () => {
+    await withMigratedFixture(async (fixture) => {
+      const agentId = await seedAgent(fixture);
+      await seedAgentLimit(fixture, agentId, {
+        limitType: "budget",
+        limitValue: 10,
+        period: "day",
+        unit: "usd",
+      });
+
+      const unknownPrice = {
+        modelId: "unknown-price-model",
+        priceVersion: "test-unknown",
+        providerKey: "openai",
+        reason: "no_current_price" as const,
+        status: "unknown_price" as const,
+      };
+      const decision = await enforceGatewayAgentLimits({
+        agentId,
+        budgetPrice: unknownPrice,
+        databaseUrl: fixture.databaseUrl,
+        requestId: "req-budget-unknown-price",
+        requestMetadata: requestMetadata({ estimatedInputTokens: 100, estimatedOutputTokens: 100 }),
+      });
+
+      expect(decision.ok).toBe(true);
+      if (!decision.ok) {
+        return;
+      }
+      await recordGatewayBudgetUsage({
+        agentId,
+        budgetSettlement: decision.budgetSettlement,
+        databaseUrl: fixture.databaseUrl,
+        requestId: "req-budget-unknown-price",
+        usageCost: {
+          actualPrice: unknownPrice,
+          estimatedInputTokens: 100,
+          estimatedOutputTokens: 100,
+          providerModelId: randomUUID(),
+          providerUsage: {
+            cachedInputTokens: 0,
+            inputTokens: 120,
+            outputTokens: 80,
+            reasoningTokens: 0,
+          },
+        },
+      });
+
+      const row = await readLatestBudgetPeriod(fixture, agentId);
+      expect(Number(row?.cost_used_usd)).toBe(0);
+      expect(Number(row?.tokens_used)).toBe(200);
     });
   });
 
@@ -118,8 +170,6 @@ describe("gateway settlement integrity", () => {
         requestId: "req-budget-disabled",
         usageCost: {
           actualPrice: pricedModel(),
-          baselinePrice: pricedModel(),
-          baselineProviderModelId: randomUUID(),
           estimatedInputTokens: 100,
           estimatedOutputTokens: 100,
           providerModelId: randomUUID(),
@@ -156,17 +206,11 @@ describe("gateway settlement integrity", () => {
     });
   });
 
-  it("registers stale concurrency reconciliation in periodic tasks", () => {
-    expect(createDefaultPeriodicTasks()).toContainEqual(
+  it("registers stale concurrency reconciliation as direct maintenance", () => {
+    expect(createCoreMaintenanceTasks()).toContainEqual(
       expect.objectContaining({
         id: "stale-concurrency-reconcile",
         intervalMs: 300_000,
-        jobType: "stale_concurrency_reconcile",
-      }),
-    );
-    expect(createDefaultPeriodicTasks()).not.toContainEqual(
-      expect.objectContaining({
-        jobType: "stale_reservation_cleanup",
       }),
     );
   });
@@ -189,7 +233,7 @@ async function withMigratedFixture<T>(
 async function seedAgent(fixture: TestPostgresFixture): Promise<string> {
   const agentId = randomUUID();
   await fixture.query(
-    "insert into agents (id, name, agent_type, enabled) values ($1, 'Settlement Agent', 'coding', true)",
+    "insert into agents (id, name, enabled) values ($1, 'Settlement Agent', true)",
     [agentId],
   );
   return agentId;

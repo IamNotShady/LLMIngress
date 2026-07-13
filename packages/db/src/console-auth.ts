@@ -6,7 +6,8 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { promisify } from "node:util";
-import { PostgresClient, readPostgresDatabaseUrl } from "@llmingress/db/client";
+import { readPostgresDatabaseUrl, withPooledPostgresClient } from "@llmingress/db/client";
+import { consoleConflictError, consoleValidationError } from "./console-operation-error.ts";
 
 export const sessionCookieName = "llmingress_console_session";
 
@@ -28,11 +29,6 @@ export type ConsoleAuthState = "setup" | "login" | "authenticated";
 export type ConsoleSession = {
   expiresAt: Date;
   token: string;
-};
-
-export type ConsoleSecuritySummary = {
-  activeSessionCount: number;
-  adminPasswordSet: boolean;
 };
 
 export async function hashAdminPassword(password: string): Promise<string> {
@@ -86,35 +82,11 @@ export async function readConsoleAuthState(
 }
 
 export async function isConsoleInitialized(databaseUrl?: string): Promise<boolean> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<{ exists: boolean }>(
       "select exists(select 1 from console_admins where id = 1) as exists",
     );
     return result.rows[0]?.exists ?? false;
-  });
-}
-
-export async function getConsoleSecuritySummary(
-  databaseUrl = readPostgresDatabaseUrl(),
-): Promise<ConsoleSecuritySummary> {
-  return withClient(databaseUrl, async (client) => {
-    const result = await client.query<{
-      active_session_count: number;
-      admin_password_set: boolean;
-    }>(
-      `
-        select exists(select 1 from console_admins where id = 1) as admin_password_set,
-               (
-                 select count(*)::integer
-                 from console_sessions
-                 where expires_at > now()
-               ) as active_session_count
-      `,
-    );
-    return {
-      activeSessionCount: result.rows[0]?.active_session_count ?? 0,
-      adminPasswordSet: result.rows[0]?.admin_password_set ?? false,
-    };
   });
 }
 
@@ -130,15 +102,24 @@ export async function createAdminPassword(
   const databaseUrl = maybePassword ? databaseUrlOrPassword : undefined;
   const password = maybePassword ?? databaseUrlOrPassword;
   if (!password) {
-    throw new Error("Admin password is required.");
+    throw consoleValidationError("Admin password is required.", "form_field_required", {
+      field: "password",
+    });
   }
   const passwordHash = await hashAdminPassword(password);
 
-  await withClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
-    await client.query("insert into console_admins (id, password_hash) values (1, $1)", [
-      passwordHash,
-    ]);
-  });
+  try {
+    await withPooledPostgresClient(databaseUrl ?? readPostgresDatabaseUrl(), async (client) => {
+      await client.query("insert into console_admins (id, password_hash) values (1, $1)", [
+        passwordHash,
+      ]);
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw consoleConflictError("Console is already initialized.", "console_already_initialized");
+    }
+    throw error;
+  }
 }
 
 export async function loginConsoleAdmin(password: string): Promise<ConsoleSession | null>;
@@ -153,9 +134,11 @@ export async function loginConsoleAdmin(
   const databaseUrl = maybePassword ? databaseUrlOrPassword : undefined;
   const password = maybePassword ?? databaseUrlOrPassword;
   if (!password) {
-    throw new Error("Admin password is required.");
+    throw consoleValidationError("Admin password is required.", "form_field_required", {
+      field: "password",
+    });
   }
-  const admin = await withClient(databaseUrl, async (client) => {
+  const admin = await withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<AdminRow>(
       "select password_hash from console_admins where id = 1",
     );
@@ -187,7 +170,7 @@ export async function verifyConsoleSession(
   }
 
   const tokenHash = hashSessionToken(sessionToken);
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<SessionRow>(
       `
         select id
@@ -219,7 +202,7 @@ export async function deleteConsoleSession(
     return;
   }
 
-  await withClient(databaseUrl, async (client) => {
+  await withPooledPostgresClient(databaseUrl, async (client) => {
     await client.query("delete from console_sessions where token_hash = $1", [
       hashSessionToken(sessionToken),
     ]);
@@ -238,15 +221,27 @@ export function getSessionCookieOptions(expiresAt: Date) {
 
 function assertUsablePassword(password: string): void {
   if (password.length < 8) {
-    throw new Error("Admin password must be at least 8 characters.");
+    throw consoleValidationError(
+      "Admin password must be at least 8 characters.",
+      "admin_password_too_short",
+    );
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
 }
 
 async function createConsoleSession(databaseUrl: string | undefined): Promise<ConsoleSession> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + sessionDurationMs);
 
-  await withClient(databaseUrl, async (client) => {
+  await withPooledPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `
         insert into console_sessions (id, token_hash, expires_at)
@@ -261,20 +256,6 @@ async function createConsoleSession(databaseUrl: string | undefined): Promise<Co
 
 function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("base64url");
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient(databaseUrl ? { connectionString: databaseUrl } : {});
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }
 
 function resolveDatabaseUrlAndSessionToken(

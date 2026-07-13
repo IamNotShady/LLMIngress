@@ -26,6 +26,25 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
       virtualModelName: "vm-provider-4xx",
     });
+    const responsesAgentApiKey = "llmi_resp_error_fidelity_key_094";
+    const embeddingsAgentApiKey = "llmi_embed_error_fidelity_key_094";
+    await seedOpenAIGatewayRoute({
+      agentApiKey: responsesAgentApiKey,
+      endpointProtocol: "responses",
+      fixture,
+      providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
+      virtualModelName: "vm-provider-responses-4xx",
+    });
+    await seedOpenAIGatewayRoute({
+      agentApiKey: embeddingsAgentApiKey,
+      endpointProtocol: "embeddings",
+      fixture,
+      providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
+      virtualModelName: "vm-provider-embeddings-4xx",
+    });
+    await fixture.query(
+      "update provider_models set output_modalities = array['text', 'embedding']::text[]",
+    );
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
@@ -80,11 +99,11 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
 
       const responsesResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
-          input: "ping",
-          model: "vm-provider-4xx",
+          input: [{ content: [{ text: "ping", type: "input_text" }], role: "user" }],
+          model: "vm-provider-responses-4xx",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -99,10 +118,10 @@ test("gateway passes through non-retryable provider 4xx body and status", async 
       const embeddingsResponse = await fetch(`${baseUrl}/v1/embeddings`, {
         body: JSON.stringify({
           input: "ping",
-          model: "vm-provider-4xx",
+          model: "vm-provider-embeddings-4xx",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${embeddingsAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -132,6 +151,7 @@ test("gateway messages endpoint passes through non-retryable provider 4xx body a
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const seeded = await seedOpenAIGatewayRoute({
       agentApiKey: `${agentApiKey}_messages`,
+      endpointProtocol: "messages",
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=bad-request`,
       virtualModelName: "vm-provider-messages-4xx",
@@ -324,12 +344,16 @@ async function seedMissingCredentialCandidate(
         provider_id,
         model_id,
         display_name,
+        input_modalities,
+        output_modalities,
         context_window,
+        max_output_tokens,
         supports_streaming,
-        supports_tools,
+        supports_function_calling,
+        supports_reasoning,
         availability
       )
-      values ($1, $2, 'fake-model', 'Fake Model Missing Key', 128000, true, true, 'available')
+      values ($1, $2, 'fake-model', 'Fake Model Missing Key', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
     `,
     [providerModelId, providerId],
   );

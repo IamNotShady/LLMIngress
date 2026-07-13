@@ -1,29 +1,27 @@
 import {
   type ConsoleAgentLimit,
   defaultAgentLimitFormValues,
-  listAgentLimits,
 } from "@llmingress/db/console-agent-limits";
 import {
-  type AgentDerivedStatus,
   type AgentIntegrationPlatform,
-  type AgentType,
   type AgentVirtualModelAccess,
   agentIntegrationPlatforms,
   type ConsoleAgent,
-  listAgents,
-  listAgentVirtualModelAccess,
 } from "@llmingress/db/console-agents";
 import { formatConsoleCompactCount, formatConsoleUsd } from "@llmingress/db/console-format";
-import { getConsoleUsageSummary } from "@llmingress/db/console-usage";
-import { type ConsoleVirtualModel, listVirtualModels } from "@llmingress/db/console-virtual-models";
+import type { ConsoleVirtualModel } from "@llmingress/db/console-virtual-models";
+import { ConsoleDialog } from "../_components/console-dialog";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
+import { AgentCreateDialogClient } from "./agent-create-dialog-client";
+import { AgentVirtualModelFields } from "./agent-virtual-model-fields";
+import { loadAgentsSectionData } from "./agents-section-data";
 import {
   type ConsoleSearchParams,
   findAgentLimit,
   groupByAgentId,
-  readAgentAlertThresholdPercent,
   readSingleSearchParam,
 } from "./sections";
 
@@ -44,73 +42,68 @@ function AgentViewDialog({
   const tpmLimit = findAgentLimit(limits, "tpm");
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby={`agent-view-dialog-title-${agent.id}`}
-        aria-modal="true"
-        className="console-dialog agent-view-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <div className="agent-view-dialog-title">
-            <h2 id={`agent-view-dialog-title-${agent.id}`}>{agent.name}</h2>
-            <AgentStatusPill status={agent.status} />
-          </div>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
+    <ConsoleDialog
+      ariaLabelledby={`agent-view-dialog-title-${agent.id}`}
+      className="console-dialog agent-view-dialog"
+      closeHref={closeHref}
+      initialFocus="close"
+      triggerId={`agent-view-${agent.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <h2 id={`agent-view-dialog-title-${agent.id}`}>{agent.name}</h2>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <dl className="agent-detail-fields">
+        <div>
+          <dt>Platform</dt>
+          <dd>{formatAgentIntegrationPlatformLabel(agent.integrationPlatform)}</dd>
         </div>
-        <dl className="agent-detail-fields">
-          <div>
-            <dt>Type</dt>
-            <dd>{formatAgentTypeLabel(agent.agentType)}</dd>
-          </div>
-          <div>
-            <dt>Platform</dt>
-            <dd>{formatAgentIntegrationPlatformLabel(agent.integrationPlatform)}</dd>
-          </div>
-          <div>
-            <dt>Created</dt>
-            <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
-          </div>
-          <div>
-            <dt>Default model</dt>
-            <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
-          </div>
-        </dl>
-        <section className="agent-detail-section">
-          <h3>Allowed Virtual Models</h3>
-          <div className="agent-chip-list">
-            {(access?.allowedVirtualModels ?? []).map((virtualModel) => (
-              <span className="agent-chip" key={virtualModel.id}>
-                {virtualModel.name}
-              </span>
-            ))}
-          </div>
-        </section>
-        <section className="agent-detail-section">
-          <h3>Budget / Limit</h3>
-          <div className="agent-limit-row">
-            <span>Budget</span>
-            <strong>{formatAgentBudgetLimit(budgetLimit)}</strong>
-          </div>
-          <div className="agent-limit-row">
-            <span>RPM</span>
-            <strong>{formatAgentNumericLimit(rpmLimit)}</strong>
-          </div>
-          <div className="agent-limit-row">
-            <span>TPM</span>
-            <strong>{formatAgentNumericLimit(tpmLimit)}</strong>
-          </div>
-          <div className="agent-limit-row">
-            <span>Token limit</span>
-            <strong>{formatAgentTokenLimit(tokenLimit)}</strong>
-          </div>
-        </section>
+        <div>
+          <dt>Created</dt>
+          <dd>{formatAgentDetailDate(agent.createdAt)}</dd>
+        </div>
+        <div>
+          <dt>Enabled</dt>
+          <dd>{agent.enabled ? "True" : "False"}</dd>
+        </div>
+        <div>
+          <dt>Default model</dt>
+          <dd>{access?.defaultVirtualModel?.name ?? "None"}</dd>
+        </div>
+      </dl>
+      <section className="agent-detail-section">
+        <h3>Allowed Virtual Models</h3>
+        <div className="agent-chip-list">
+          {(access?.allowedVirtualModels ?? []).map((virtualModel) => (
+            <span className="agent-chip" key={virtualModel.id}>
+              {virtualModel.name}
+            </span>
+          ))}
+        </div>
       </section>
-    </>
+      <section className="agent-detail-section">
+        <h3>Budget / Limit</h3>
+        <div className="agent-limit-row">
+          <span>Budget</span>
+          <strong>{formatAgentBudgetLimit(budgetLimit)}</strong>
+        </div>
+        <div className="agent-limit-row">
+          <span>RPM</span>
+          <strong>{formatAgentNumericLimit(rpmLimit)}</strong>
+        </div>
+        <div className="agent-limit-row">
+          <span>TPM</span>
+          <strong>{formatAgentNumericLimit(tpmLimit)}</strong>
+        </div>
+        <div className="agent-limit-row">
+          <span>Token limit</span>
+          <strong>{formatAgentTokenLimit(tokenLimit)}</strong>
+        </div>
+      </section>
+    </ConsoleDialog>
   );
 }
 
@@ -122,150 +115,90 @@ function AgentCreateDialog({
   virtualModels: readonly ConsoleVirtualModel[];
 }) {
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby="new-agent-dialog-title"
-        aria-modal="true"
-        className="console-dialog"
-        role="dialog"
+    <AgentCreateDialogClient closeHref={closeHref}>
+      <input type="hidden" name="action" value="create" />
+      <label htmlFor="agent-name">Agent name</label>
+      <input id="agent-name" name="name" required />
+      <label htmlFor="agent-integration-platform">Integration platform</label>
+      <select
+        id="agent-integration-platform"
+        name="integrationPlatform"
+        required
+        defaultValue="other"
       >
-        <div className="console-dialog-head">
-          <h2 id="new-agent-dialog-title">New agent</h2>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
-        </div>
-        <form className="provider-create-form" action="/api/agents" id="new-agent" method="post">
-          <input type="hidden" name="action" value="create" />
-          <label htmlFor="agent-name">Agent name</label>
-          <input id="agent-name" name="name" required />
-          <label htmlFor="agent-type">Agent type</label>
-          <select id="agent-type" name="agentType" required defaultValue="coding">
-            <option value="coding">Coding</option>
-            <option value="desktop">Desktop</option>
-            <option value="terminal">Terminal</option>
-            <option value="ide">IDE</option>
-            <option value="other">Other</option>
-          </select>
-          <label htmlFor="agent-integration-platform">Integration platform</label>
-          <select
-            id="agent-integration-platform"
-            name="integrationPlatform"
-            required
-            defaultValue="other"
-          >
-            {agentIntegrationPlatforms.map((platform) => (
-              <option key={platform} value={platform}>
-                {formatAgentIntegrationPlatformLabel(platform)}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="agent-request-logging">Request logging</label>
-          <select
-            id="agent-request-logging"
-            name="requestLoggingEnabled"
-            required
-            defaultValue="true"
-          >
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
-          </select>
-          <span className="form-label" id="agent-allowed-virtual-models-label">
-            Allowed virtual models
-          </span>
-          <AgentAllowedVirtualModelsCheckboxes
-            labelId="agent-allowed-virtual-models-label"
-            selectedVirtualModelIds={[]}
-            virtualModels={virtualModels}
-          />
-          <label htmlFor="agent-default-virtual-model">Default virtual model</label>
-          <select id="agent-default-virtual-model" name="defaultVirtualModelId" defaultValue="">
-            <option value="">No default virtual model</option>
-            {virtualModels.map((virtualModel) => (
-              <option key={virtualModel.id} value={virtualModel.id}>
-                {formatVirtualModelOptionLabel(virtualModel)}
-              </option>
-            ))}
-          </select>
-          <label className="checkbox-label agent-limit-toggle" htmlFor="agent-enable-limits">
-            <input id="agent-enable-limits" name="enableLimits" type="checkbox" value="true" />
-            <span>Enable limits</span>
-          </label>
-          <div className="agent-create-limit-fields">
-            <label htmlFor="agent-budget-usd">Budget USD limit</label>
-            <input
-              id="agent-budget-usd"
-              name="budgetUsd"
-              type="number"
-              min="0.000001"
-              step="0.000001"
-              defaultValue={defaultAgentLimitFormValues.budgetUsd}
-            />
-            <label htmlFor="agent-budget-period">Budget period</label>
-            <select
-              id="agent-budget-period"
-              name="budgetPeriod"
-              defaultValue={defaultAgentLimitFormValues.budgetPeriod}
-            >
-              <option value="day">Day</option>
-              <option value="week">Week</option>
-              <option value="month">Month</option>
-            </select>
-            <label htmlFor="agent-alert-threshold">Alert threshold (%)</label>
-            <input
-              id="agent-alert-threshold"
-              name="alertThresholdPercent"
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              defaultValue={defaultAgentLimitFormValues.alertThresholdPercent}
-            />
-            <label htmlFor="agent-rpm">RPM limit</label>
-            <input
-              id="agent-rpm"
-              name="rpm"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={defaultAgentLimitFormValues.rpm}
-            />
-            <label htmlFor="agent-tpm">TPM limit</label>
-            <input
-              id="agent-tpm"
-              name="tpm"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={defaultAgentLimitFormValues.tpm}
-            />
-            <label htmlFor="agent-concurrency">Concurrency limit</label>
-            <input
-              id="agent-concurrency"
-              name="concurrency"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={defaultAgentLimitFormValues.concurrency}
-            />
-            <label htmlFor="agent-token-limit">Token limit</label>
-            <input
-              id="agent-token-limit"
-              name="tokenLimit"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={defaultAgentLimitFormValues.tokenLimit}
-            />
-          </div>
-          <button type="submit">
-            <span>Create</span>
-          </button>
-        </form>
-      </section>
-    </>
+        {agentIntegrationPlatforms.map((platform) => (
+          <option key={platform} value={platform}>
+            {formatAgentIntegrationPlatformLabel(platform)}
+          </option>
+        ))}
+      </select>
+      <AgentVirtualModelFields
+        idPrefix="agent"
+        initialSelectedVirtualModelIds={[]}
+        virtualModels={virtualModels.map(({ id, name }) => ({ id, name }))}
+      />
+      <label className="checkbox-label agent-limit-toggle" htmlFor="agent-enable-limits">
+        <input id="agent-enable-limits" name="enableLimits" type="checkbox" value="true" />
+        <span>Enable limits</span>
+      </label>
+      <div className="agent-create-limit-fields">
+        <label htmlFor="agent-budget-usd">Budget USD limit</label>
+        <input
+          id="agent-budget-usd"
+          name="budgetUsd"
+          type="number"
+          min="0.000001"
+          step="0.000001"
+          defaultValue={defaultAgentLimitFormValues.budgetUsd}
+        />
+        <label htmlFor="agent-budget-period">Budget period</label>
+        <select
+          id="agent-budget-period"
+          name="budgetPeriod"
+          defaultValue={defaultAgentLimitFormValues.budgetPeriod}
+        >
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+          <option value="month">Month</option>
+        </select>
+        <label htmlFor="agent-rpm">RPM limit</label>
+        <input
+          id="agent-rpm"
+          name="rpm"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.rpm}
+        />
+        <label htmlFor="agent-tpm">TPM limit</label>
+        <input
+          id="agent-tpm"
+          name="tpm"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.tpm}
+        />
+        <label htmlFor="agent-concurrency">Concurrency limit</label>
+        <input
+          id="agent-concurrency"
+          name="concurrency"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.concurrency}
+        />
+        <label htmlFor="agent-token-limit">Token limit</label>
+        <input
+          id="agent-token-limit"
+          name="tokenLimit"
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={defaultAgentLimitFormValues.tokenLimit}
+        />
+      </div>
+    </AgentCreateDialogClient>
   );
 }
 
@@ -287,282 +220,202 @@ function AgentEditDialog({
   const rpmLimit = findAgentLimit(limits, "rpm");
   const tokenLimit = findAgentLimit(limits, "token");
   const tpmLimit = findAgentLimit(limits, "tpm");
-  const alertThresholdPercent = readAgentAlertThresholdPercent(limits);
-  const limitsEnabled = limits.length > 0;
+  const limitsEnabled = agent.limitsEnabled;
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby={`agent-dialog-title-${agent.id}`}
-        aria-modal="true"
-        className="console-dialog"
-        role="dialog"
+    <ConsoleDialog
+      ariaLabelledby={`agent-dialog-title-${agent.id}`}
+      className="console-dialog"
+      closeHref={closeHref}
+      triggerId={`agent-edit-${agent.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <h2 id={`agent-dialog-title-${agent.id}`}>Edit {agent.name}</h2>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
+      <ConsoleMutationForm
+        action="/api/agents"
+        className="provider-edit-form"
+        fallbackError="Agent update failed."
       >
-        <div className="console-dialog-head">
-          <h2 id={`agent-dialog-title-${agent.id}`}>Edit {agent.name}</h2>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
-        </div>
-        <form className="provider-edit-form" action="/api/agents" method="post">
-          <input type="hidden" name="action" value="saveAll" />
-          <input type="hidden" name="id" value={agent.id} />
-          <label htmlFor={`agent-name-${agent.id}`}>Agent name</label>
-          <input id={`agent-name-${agent.id}`} name="name" defaultValue={agent.name} required />
-          <label htmlFor={`agent-type-${agent.id}`}>Agent type</label>
-          <select
-            id={`agent-type-${agent.id}`}
-            name="agentType"
-            defaultValue={agent.agentType}
-            required
-          >
-            <option value="coding">Coding</option>
-            <option value="desktop">Desktop</option>
-            <option value="terminal">Terminal</option>
-            <option value="ide">IDE</option>
-            <option value="other">Other</option>
-          </select>
-          <label htmlFor={`agent-integration-platform-${agent.id}`}>Integration platform</label>
-          <select
-            id={`agent-integration-platform-${agent.id}`}
-            name="integrationPlatform"
-            defaultValue={agent.integrationPlatform}
-            required
-          >
-            {agentIntegrationPlatforms.map((platform) => (
-              <option key={platform} value={platform}>
-                {formatAgentIntegrationPlatformLabel(platform)}
-              </option>
-            ))}
-          </select>
-          <label htmlFor={`agent-request-logging-${agent.id}`}>Request logging</label>
-          <select
-            id={`agent-request-logging-${agent.id}`}
-            name="requestLoggingEnabled"
-            defaultValue={String(agent.requestLoggingEnabled)}
-            required
-          >
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
-          </select>
-          <span className="form-label" id={`agent-allowed-virtual-models-label-${agent.id}`}>
-            Allowed virtual models
-          </span>
-          <AgentAllowedVirtualModelsCheckboxes
-            labelId={`agent-allowed-virtual-models-label-${agent.id}`}
-            selectedVirtualModelIds={access.allowedVirtualModels.map(
-              (virtualModel) => virtualModel.id,
-            )}
-            virtualModels={virtualModels}
+        <input type="hidden" name="action" value="saveAll" />
+        <input type="hidden" name="id" value={agent.id} />
+        <label htmlFor={`agent-name-${agent.id}`}>Agent name</label>
+        <input id={`agent-name-${agent.id}`} name="name" defaultValue={agent.name} required />
+        <label htmlFor={`agent-integration-platform-${agent.id}`}>Integration platform</label>
+        <select
+          id={`agent-integration-platform-${agent.id}`}
+          name="integrationPlatform"
+          defaultValue={agent.integrationPlatform}
+          required
+        >
+          {agentIntegrationPlatforms.map((platform) => (
+            <option key={platform} value={platform}>
+              {formatAgentIntegrationPlatformLabel(platform)}
+            </option>
+          ))}
+        </select>
+        <AgentVirtualModelFields
+          idPrefix={`agent-${agent.id}`}
+          initialDefaultVirtualModelId={access.defaultVirtualModel?.id ?? ""}
+          initialSelectedVirtualModelIds={access.allowedVirtualModels.map(
+            (virtualModel) => virtualModel.id,
+          )}
+          virtualModels={virtualModels.map(({ id, name }) => ({ id, name }))}
+        />
+        <label
+          className="checkbox-label agent-limit-toggle"
+          htmlFor={`agent-enable-limits-${agent.id}`}
+        >
+          <input
+            id={`agent-enable-limits-${agent.id}`}
+            name="enableLimits"
+            type="checkbox"
+            value="true"
+            defaultChecked={limitsEnabled}
           />
-          <label htmlFor={`agent-default-virtual-model-${agent.id}`}>Default virtual model</label>
+          <span>Enable limits</span>
+        </label>
+        <div className="agent-limit-fields">
+          <label htmlFor={`agent-budget-usd-${agent.id}`}>Budget USD limit</label>
+          <input
+            id={`agent-budget-usd-${agent.id}`}
+            name="budgetUsd"
+            type="number"
+            min="0.000001"
+            step="0.000001"
+            defaultValue={budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd}
+            required
+          />
+          <label htmlFor={`agent-budget-period-${agent.id}`}>Budget period</label>
           <select
-            id={`agent-default-virtual-model-${agent.id}`}
-            name="defaultVirtualModelId"
-            defaultValue={access.defaultVirtualModel?.id ?? ""}
+            id={`agent-budget-period-${agent.id}`}
+            name="budgetPeriod"
+            defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
+            required
           >
-            <option value="">No default virtual model</option>
-            {virtualModels.map((virtualModel) => (
-              <option key={virtualModel.id} value={virtualModel.id}>
-                {formatVirtualModelOptionLabel(virtualModel)}
-              </option>
-            ))}
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
           </select>
-          <label
-            className="checkbox-label agent-limit-toggle"
-            htmlFor={`agent-enable-limits-${agent.id}`}
-          >
-            <input
-              id={`agent-enable-limits-${agent.id}`}
-              name="enableLimits"
-              type="checkbox"
-              value="true"
-              defaultChecked={limitsEnabled}
-            />
-            <span>Enable limits</span>
-          </label>
-          <div className="agent-limit-fields">
-            <label htmlFor={`agent-budget-usd-${agent.id}`}>Budget USD limit</label>
-            <input
-              id={`agent-budget-usd-${agent.id}`}
-              name="budgetUsd"
-              type="number"
-              min="0.000001"
-              step="0.000001"
-              defaultValue={budgetLimit?.limitValue ?? defaultAgentLimitFormValues.budgetUsd}
-              required
-            />
-            <label htmlFor={`agent-budget-period-${agent.id}`}>Budget period</label>
-            <select
-              id={`agent-budget-period-${agent.id}`}
-              name="budgetPeriod"
-              defaultValue={budgetLimit?.period ?? defaultAgentLimitFormValues.budgetPeriod}
-              required
-            >
-              <option value="day">Day</option>
-              <option value="week">Week</option>
-              <option value="month">Month</option>
-            </select>
-            <label htmlFor={`agent-alert-threshold-${agent.id}`}>Alert threshold (%)</label>
-            <input
-              id={`agent-alert-threshold-${agent.id}`}
-              name="alertThresholdPercent"
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              defaultValue={alertThresholdPercent}
-              required
-            />
-            <label htmlFor={`agent-rpm-${agent.id}`}>RPM limit</label>
-            <input
-              id={`agent-rpm-${agent.id}`}
-              name="rpm"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
-              required
-            />
-            <label htmlFor={`agent-tpm-${agent.id}`}>TPM limit</label>
-            <input
-              id={`agent-tpm-${agent.id}`}
-              name="tpm"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
-              required
-            />
-            <label htmlFor={`agent-concurrency-${agent.id}`}>Concurrency limit</label>
-            <input
-              id={`agent-concurrency-${agent.id}`}
-              name="concurrency"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency}
-              required
-            />
-            <label htmlFor={`agent-token-limit-${agent.id}`}>Token limit</label>
-            <input
-              id={`agent-token-limit-${agent.id}`}
-              name="tokenLimit"
-              type="number"
-              min="1"
-              step="1"
-              defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
-              required
-            />
-          </div>
-          <button type="submit">
-            <span>Save</span>
-          </button>
-        </form>
-      </section>
-    </>
-  );
-}
-
-function AgentAllowedVirtualModelsCheckboxes({
-  labelId,
-  selectedVirtualModelIds,
-  virtualModels,
-}: {
-  labelId: string;
-  selectedVirtualModelIds: readonly string[];
-  virtualModels: readonly ConsoleVirtualModel[];
-}) {
-  const selectedIds = new Set(selectedVirtualModelIds);
-  if (virtualModels.length === 0) {
-    return <p className="form-hint">No virtual models configured.</p>;
-  }
-  return (
-    <fieldset aria-labelledby={labelId} className="agent-vm-checkbox-list">
-      {virtualModels.map((virtualModel) => {
-        const inputId = `${labelId}-${virtualModel.id}`;
-        return (
-          <label className="checkbox-label" htmlFor={inputId} key={virtualModel.id}>
-            <input
-              defaultChecked={selectedIds.has(virtualModel.id)}
-              id={inputId}
-              name="allowedVirtualModelIds"
-              type="checkbox"
-              value={virtualModel.id}
-            />
-            <span>{formatVirtualModelOptionLabel(virtualModel)}</span>
-          </label>
-        );
-      })}
-    </fieldset>
+          <label htmlFor={`agent-rpm-${agent.id}`}>RPM limit</label>
+          <input
+            id={`agent-rpm-${agent.id}`}
+            name="rpm"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={rpmLimit?.limitValue ?? defaultAgentLimitFormValues.rpm}
+            required
+          />
+          <label htmlFor={`agent-tpm-${agent.id}`}>TPM limit</label>
+          <input
+            id={`agent-tpm-${agent.id}`}
+            name="tpm"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={tpmLimit?.limitValue ?? defaultAgentLimitFormValues.tpm}
+            required
+          />
+          <label htmlFor={`agent-concurrency-${agent.id}`}>Concurrency limit</label>
+          <input
+            id={`agent-concurrency-${agent.id}`}
+            name="concurrency"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={concurrencyLimit?.limitValue ?? defaultAgentLimitFormValues.concurrency}
+            required
+          />
+          <label htmlFor={`agent-token-limit-${agent.id}`}>Token limit</label>
+          <input
+            id={`agent-token-limit-${agent.id}`}
+            name="tokenLimit"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={tokenLimit?.limitValue ?? defaultAgentLimitFormValues.tokenLimit}
+            required
+          />
+        </div>
+        <button type="submit">
+          <span>Save</span>
+        </button>
+      </ConsoleMutationForm>
+    </ConsoleDialog>
   );
 }
 
 function AgentDeleteDialog({ agent, closeHref }: { agent: ConsoleAgent; closeHref: string }) {
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-labelledby={`agent-delete-dialog-title-${agent.id}`}
-        aria-modal="true"
-        className="console-dialog agent-delete-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <h2 id={`agent-delete-dialog-title-${agent.id}`}>Delete {agent.name}?</h2>
-        </div>
-        <p>This removes the Agent and its API key.</p>
-        <div className="agent-delete-actions">
-          <a className="agent-delete-cancel" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Cancel</span>
-          </a>
-          <form action="/api/agents" method="post">
-            <input type="hidden" name="action" value="delete" />
-            <input type="hidden" name="id" value={agent.id} />
-            <button className="agent-delete-confirm" type="submit">
-              <FlatIcon name="delete" />
-              <span>Delete</span>
-            </button>
-          </form>
-        </div>
-      </section>
-    </>
+    <ConsoleDialog
+      ariaLabelledby={`agent-delete-dialog-title-${agent.id}`}
+      className="console-dialog agent-delete-dialog"
+      closeHref={closeHref}
+      initialFocus="cancel"
+      triggerId={`agent-delete-${agent.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <h2 id={`agent-delete-dialog-title-${agent.id}`}>Delete {agent.name}?</h2>
+      </div>
+      <p>This removes the Agent and its API key.</p>
+      <div className="agent-delete-actions">
+        <a className="agent-delete-cancel" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Cancel</span>
+        </a>
+        <ConsoleMutationForm action="/api/agents" fallbackError="Agent deletion failed.">
+          <input type="hidden" name="action" value="delete" />
+          <input type="hidden" name="id" value={agent.id} />
+          <button className="agent-delete-confirm" type="submit">
+            <FlatIcon name="delete" />
+            <span>Delete</span>
+          </button>
+        </ConsoleMutationForm>
+      </div>
+    </ConsoleDialog>
   );
 }
 
-function formatAgentTypeLabel(agentType: string): string {
-  const labels: Record<string, string> = {
-    coding: "CLI",
-    desktop: "Agent",
-    ide: "IDE",
-    other: "Agent",
-    terminal: "Terminal",
-  };
-  return labels[agentType] ?? agentType;
+function AgentEnabledToggleForm({ agent }: { agent: ConsoleAgent }) {
+  if (agent.enabled) {
+    return (
+      <ConsoleMutationForm action="/api/agents" fallbackError="Agent disable failed.">
+        <input type="hidden" name="action" value="disable" />
+        <input type="hidden" name="id" value={agent.id} />
+        <button
+          aria-label={`Disable ${agent.name}`}
+          className="agent-action-toggle row-action-button"
+          title="Disable"
+          type="submit"
+        >
+          <FlatIcon name="disable" />
+        </button>
+      </ConsoleMutationForm>
+    );
+  }
+
+  return (
+    <ConsoleMutationForm action="/api/agents" fallbackError="Agent enable failed.">
+      <input type="hidden" name="action" value="enable" />
+      <input type="hidden" name="id" value={agent.id} />
+      <button
+        aria-label={`Enable ${agent.name}`}
+        className="agent-action-toggle row-action-button"
+        title="Enable"
+        type="submit"
+      >
+        <FlatIcon name="enable" />
+      </button>
+    </ConsoleMutationForm>
+  );
 }
-
-type AgentTypeFilter = "all" | AgentType;
-
-type AgentStatusFilter = "all" | AgentDerivedStatus;
 
 type AgentPlatformFilter = "all" | AgentIntegrationPlatform;
-
-const agentTypeFilters: readonly AgentType[] = ["coding", "desktop", "terminal", "ide", "other"];
-
-const agentStatusFilters: readonly AgentDerivedStatus[] = ["online", "offline", "high-risk"];
-
-function readAgentTypeFilter(value: string | undefined): AgentTypeFilter {
-  return agentTypeFilters.includes(value as AgentType) ? (value as AgentType) : "all";
-}
-
-function readAgentStatusFilter(value: string | undefined): AgentStatusFilter {
-  return agentStatusFilters.includes(value as AgentDerivedStatus)
-    ? (value as AgentDerivedStatus)
-    : "all";
-}
 
 function readAgentPlatformFilter(value: string | undefined): AgentPlatformFilter {
   return agentIntegrationPlatforms.includes(value as AgentIntegrationPlatform)
@@ -575,18 +428,10 @@ function filterAgents(
   filters: {
     agentPlatformFilter: AgentPlatformFilter;
     agentSearch: string;
-    agentStatusFilter: AgentStatusFilter;
-    agentTypeFilter: AgentTypeFilter;
   },
 ): ConsoleAgent[] {
   const normalizedSearch = filters.agentSearch.toLowerCase();
   return agents.filter((agent) => {
-    if (filters.agentTypeFilter !== "all" && agent.agentType !== filters.agentTypeFilter) {
-      return false;
-    }
-    if (filters.agentStatusFilter !== "all" && agent.status !== filters.agentStatusFilter) {
-      return false;
-    }
     if (
       filters.agentPlatformFilter !== "all" &&
       agent.integrationPlatform !== filters.agentPlatformFilter
@@ -599,8 +444,6 @@ function filterAgents(
     return [
       agent.name,
       agent.keyPrefix ?? "",
-      agent.agentType,
-      formatAgentTypeLabel(agent.agentType),
       formatAgentIntegrationPlatformLabel(agent.integrationPlatform),
     ].some((value) => value.toLowerCase().includes(normalizedSearch));
   });
@@ -618,16 +461,6 @@ function formatAgentIntegrationPlatformLabel(platform: AgentIntegrationPlatform)
     other: "Other",
   };
   return labels[platform];
-}
-
-function AgentStatusPill({ status }: { status: AgentDerivedStatus }) {
-  if (status === "online") {
-    return <span className="pill--ok pill">Online</span>;
-  }
-  if (status === "high-risk") {
-    return <span className="pill--danger pill">High risk</span>;
-  }
-  return <span className="pill--warn pill">Offline</span>;
 }
 
 function formatAgentKeyPrefixDisplay(keyPrefix: string): string {
@@ -666,35 +499,21 @@ function formatAgentTokenLimit(limit: ConsoleAgentLimit | undefined): string {
   return `${formatConsoleCompactCount(limit.limitValue)} / ${limit.period}`;
 }
 
-function formatVirtualModelOptionLabel(virtualModel: {
-  description?: string;
-  displayName?: string;
-  name: string;
-}): string {
-  return virtualModel.name;
-}
 export async function AgentsSection({ searchParams }: { searchParams: ConsoleSearchParams }) {
-  const usageToday = await getConsoleUsageSummary({ window: "24h" });
-  const agents = await listAgents();
-  const agentVirtualModelAccess = await listAgentVirtualModelAccess();
-  const agentLimits = await listAgentLimits();
-  const virtualModels = await listVirtualModels();
+  const { agentLimits, agentVirtualModelAccess, agents, usageToday, virtualModels } =
+    await loadAgentsSectionData();
   const agentVirtualModelAccessByAgentId = new Map(
     agentVirtualModelAccess.map((access) => [access.agentId, access]),
   );
   const agentLimitsByAgentId = groupByAgentId(agentLimits);
-  const onlineAgentCount = agents.filter((agent) => agent.status === "online").length;
+  const enabledAgentCount = agents.filter((agent) => agent.enabled).length;
   const usageTodayByAgentId = new Map(usageToday.agentBreakdowns.map((agent) => [agent.id, agent]));
-  const agentTypeFilter = readAgentTypeFilter(readSingleSearchParam(searchParams.agentType));
-  const agentStatusFilter = readAgentStatusFilter(readSingleSearchParam(searchParams.agentStatus));
   const agentPlatformFilter = readAgentPlatformFilter(
     readSingleSearchParam(searchParams.agentPlatform),
   );
   const agentSearch = readSingleSearchParam(searchParams.agentSearch)?.trim() ?? "";
   const visibleAgents = filterAgents(agents, {
     agentSearch,
-    agentStatusFilter,
-    agentTypeFilter,
     agentPlatformFilter,
   });
   const selectedAgentId = readSingleSearchParam(searchParams.selected);
@@ -726,7 +545,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
         <div className="agents-main-column">
           <div className="stat-grid agents-stat-grid">
             <StatCard icon="AG" label="Agents" value={String(agents.length)} />
-            <StatCard icon="ON" label="Online" value={String(onlineAgentCount)} />
+            <StatCard icon="ON" label="Enabled" value={String(enabledAgentCount)} />
             <StatCard
               icon="RQ"
               label="Requests 24h"
@@ -737,30 +556,6 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
           <form action="/agents" method="get">
             <fieldset className="agents-filter-bar">
               <legend className="sr-only">Agent filters</legend>
-              <div className="console-field">
-                <label htmlFor="agent-filter-type">Type</label>
-                <select id="agent-filter-type" name="agentType" defaultValue={agentTypeFilter}>
-                  <option value="all">All</option>
-                  <option value="coding">Coding</option>
-                  <option value="terminal">Terminal</option>
-                  <option value="ide">IDE</option>
-                  <option value="desktop">Desktop</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div className="console-field">
-                <label htmlFor="agent-filter-status">Status</label>
-                <select
-                  id="agent-filter-status"
-                  name="agentStatus"
-                  defaultValue={agentStatusFilter}
-                >
-                  <option value="all">All</option>
-                  <option value="online">Online</option>
-                  <option value="offline">Offline</option>
-                  <option value="high-risk">High risk</option>
-                </select>
-              </div>
               <div className="console-field">
                 <label htmlFor="agent-filter-platform">Platform</label>
                 <select
@@ -797,7 +592,12 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
           <div className="chart-card agents-list-card">
             <h2 className="chart-card-title">Agent list</h2>
             {agents.length === 0 ? (
-              <p>No agents yet — create one below.</p>
+              <p>
+                <a className="empty-state-action" href="?agentDialog=new">
+                  Create an Agent
+                </a>{" "}
+                to issue an API key and grant Virtual Model access.
+              </p>
             ) : visibleAgents.length === 0 ? (
               <p>No agents match the selected filters.</p>
             ) : (
@@ -806,13 +606,12 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                   <thead>
                     <tr>
                       <th>Agent</th>
-                      <th>Type</th>
                       <th>API Key Prefix</th>
-                      <th>Default VM</th>
-                      <th className="num">Available VM</th>
+                      <th>Default Virtual Model</th>
+                      <th>Virtual Models</th>
                       <th className="num">Requests 24h</th>
                       <th className="num">24h Cost</th>
-                      <th>Status</th>
+                      <th>Enabled</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -834,13 +633,12 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                           key={agent.id}
                         >
                           <td>
-                            <a className="table-row-link" href={agentViewHref}>
+                            <a
+                              className="table-row-link"
+                              href={agentViewHref}
+                              id={`agent-view-${agent.id}-trigger`}
+                            >
                               {agent.name}
-                            </a>
-                          </td>
-                          <td>
-                            <a className="table-row-link" href={agentViewHref}>
-                              {formatAgentTypeLabel(agent.agentType)}
                             </a>
                           </td>
                           <td className="mono">
@@ -855,9 +653,18 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                               {access?.defaultVirtualModel?.name ?? "None"}
                             </a>
                           </td>
-                          <td className="num">
-                            <a className="table-row-link" href={agentViewHref}>
-                              {access?.allowedVirtualModels.length ?? 0}
+                          <td>
+                            <a
+                              className="agent-virtual-model-names table-row-link"
+                              href={agentViewHref}
+                              title={
+                                access?.allowedVirtualModels
+                                  .map((model) => model.name)
+                                  .join(", ") || "None"
+                              }
+                            >
+                              {access?.allowedVirtualModels.map((model) => model.name).join(", ") ||
+                                "None"}
                             </a>
                           </td>
                           <td className="num">
@@ -872,11 +679,12 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                           </td>
                           <td>
                             <a className="table-row-link" href={agentViewHref}>
-                              <AgentStatusPill status={agent.status} />
+                              {agent.enabled ? "True" : "False"}
                             </a>
                           </td>
                           <td>
                             <span className="agent-table-actions">
+                              <AgentEnabledToggleForm agent={agent} />
                               <a
                                 aria-label={`Edit ${agent.name}`}
                                 className="link-button agent-action-edit row-action-button"
@@ -884,6 +692,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                                   agentDialog: agent.id,
                                   agentView: undefined,
                                 })}
+                                id={`agent-edit-${agent.id}-trigger`}
                                 title="Edit"
                               >
                                 <FlatIcon name="edit" />
@@ -896,6 +705,7 @@ export async function AgentsSection({ searchParams }: { searchParams: ConsoleSea
                                   agentView: undefined,
                                   deleteAgent: agent.id,
                                 })}
+                                id={`agent-delete-${agent.id}-trigger`}
                                 title="Delete"
                               >
                                 <FlatIcon name="delete" />

@@ -1,15 +1,9 @@
-export function joinProviderUrl(baseUrl: string, path: string): string {
-  const url = new URL(baseUrl);
-  const basePath = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  const suffix = path.startsWith("/") ? path : `/${path}`;
-  url.pathname = `${basePath}${suffix}`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
-}
+import { isRecord, parsePositiveInt } from "@llmingress/util";
 
 export function providerRequestTimeoutMs(
   env: Record<string, string | undefined> = process.env,
 ): number {
-  return readPositiveIntegerEnv(env.PROVIDER_REQUEST_TIMEOUT_MS, 30_000);
+  return parsePositiveInt(env.PROVIDER_REQUEST_TIMEOUT_MS, 30_000);
 }
 
 export async function readResponseBody(response: Response): Promise<unknown> {
@@ -34,16 +28,4 @@ export function readProviderRequestId(body: unknown): string | null {
 
 export function isRetryableHttpStatus(statusCode: number): boolean {
   return statusCode === 429 || statusCode >= 500;
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readPositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (value === undefined) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }

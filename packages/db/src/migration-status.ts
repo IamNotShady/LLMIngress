@@ -48,34 +48,9 @@ type AppliedMigrationRow = QueryResultRow & {
 
 export const shippedSqlMigrations: MigrationStatusMigration[] = [
   {
-    checksum: "1b894e463ec7a3297f78f313ec476104390121725c5c700c837f75ba6517e5de",
+    checksum: "5c3699fe7e9c482899b18b53f3d343fd9045a05d496dfea332bb7457e7b69506",
     id: "0001",
-    name: "v1_baseline",
-  },
-  {
-    checksum: "cec33c998433f2bac833da83f04e2481ef6e62419a46009a094c2dc6a3338fe2",
-    id: "0002",
-    name: "stale_concurrency_job_type",
-  },
-  {
-    checksum: "3861906dac167fc9b71d8be0359564000d560f17240b7e4f4ac6f3a56103a3d1",
-    id: "0003",
-    name: "remove_budget_reservations",
-  },
-  {
-    checksum: "b49690f559aa4cc3faf2ca13d4925394751fbd351635c5ac5b6c0b65c9b16a89",
-    id: "0004",
-    name: "relax_vocab_checks",
-  },
-  {
-    checksum: "6996ebfcbce4e4715d3019344a91627da8eaf209af693d3c74782d46670786f2",
-    id: "0005",
-    name: "drop_notification_deliveries",
-  },
-  {
-    checksum: "0e8ef3395df6a9c2583b9380542305717b6568d80ea248321d68323803430992",
-    id: "0006",
-    name: "fallback_single_source",
+    name: "core_baseline",
   },
 ];
 

@@ -28,6 +28,15 @@ test("v1 platform migrates an empty database and reports schema status", async (
       pendingCount: 0,
       status: "up_to_date",
     });
+    const foreignKeys = await fixture.query<{ foreign_key_count: string }>(
+      `
+        select count(*)::text as foreign_key_count
+        from pg_constraint
+        where contype = 'f'
+          and connamespace = 'public'::regnamespace
+      `,
+    );
+    expect(Number(foreignKeys.rows[0]?.foreign_key_count ?? 0)).toBe(0);
 
     const cliResult = spawnSync(
       "pnpm",

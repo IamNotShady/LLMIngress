@@ -49,8 +49,6 @@ test("all dashboard pages render signed-in without horizontal overflow", async (
             "/routing",
             "/limits",
             "/usage",
-            "/runtime",
-            "/settings",
           ];
           for (const route of routes) {
             await page.goto(`${baseUrl}${route}`);

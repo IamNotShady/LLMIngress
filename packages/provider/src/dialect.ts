@@ -1,3 +1,4 @@
+import { joinUrl } from "@llmingress/util";
 import { openRouterAttributionHeaders } from "./adapters/openrouter.js";
 import { mergeHttpHeaders } from "./headers.js";
 import {
@@ -5,6 +6,7 @@ import {
   buildClaudeCodeSubscriptionHeaders,
   buildCodexResponsesUrl,
   buildCodexSubscriptionHeaders,
+  withClaudeCodeSystemPrompt,
 } from "./subscription.js";
 
 export type ProviderStreamingDialect = {
@@ -19,7 +21,7 @@ export type ProviderStreamingDialect = {
 
 const defaultDialect: ProviderStreamingDialect = {
   buildHeaders: (apiKey, protocolHeaders) => protocolHeaders(apiKey),
-  buildUrl: joinProviderStreamingUrl,
+  buildUrl: joinUrl,
   supportsPathSuffix: () => true,
   transformBody: (body) => body,
 };
@@ -31,16 +33,18 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
     buildUrl: (baseUrl, pathSuffix) =>
       pathSuffix === "messages"
         ? buildClaudeCodeMessagesUrl(baseUrl)
-        : joinProviderStreamingUrl(baseUrl, pathSuffix),
+        : joinUrl(baseUrl, pathSuffix),
     supportsPathSuffix: (pathSuffix) => pathSuffix === "messages",
+    transformBody: (body, pathSuffix) =>
+      pathSuffix === "messages"
+        ? { ...body, system: withClaudeCodeSystemPrompt(body.system) }
+        : body,
   },
   openai_codex: {
     buildHeaders: (apiKey, protocolHeaders) =>
       buildCodexSubscriptionHeaders(apiKey, protocolHeaders(apiKey)),
     buildUrl: (baseUrl, pathSuffix) =>
-      pathSuffix === "responses"
-        ? buildCodexResponsesUrl(baseUrl)
-        : joinProviderStreamingUrl(baseUrl, pathSuffix),
+      pathSuffix === "responses" ? buildCodexResponsesUrl(baseUrl) : joinUrl(baseUrl, pathSuffix),
     supportsPathSuffix: (pathSuffix) => pathSuffix === "responses",
   },
   openrouter: {
@@ -51,11 +55,4 @@ const dialects: Record<string, Partial<ProviderStreamingDialect>> = {
 
 export function resolveProviderStreamingDialect(providerKey: string): ProviderStreamingDialect {
   return { ...defaultDialect, ...dialects[providerKey] };
-}
-
-export function joinProviderStreamingUrl(baseUrl: string, pathSuffix: string): string {
-  const url = new URL(baseUrl);
-  const path = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
-  url.pathname = `${path}/${pathSuffix}`.replaceAll(/\/{2,}/g, "/");
-  return url.toString();
 }

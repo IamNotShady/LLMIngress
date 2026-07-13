@@ -29,17 +29,15 @@ export const consoleNavItems: ConsoleNavItem[] = [
   },
   {
     label: "Virtual Models",
-    pageTitle: "Virtual Models / Routes",
+    pageTitle: "Virtual Models",
     href: "/models",
     hint: "Names, routes & fallback",
     icon: "VM",
   },
   { label: "Activity", href: "/activity", hint: "Recent requests", icon: "AC" },
-  { label: "Usage & Cost", href: "/usage", hint: "Spend, tokens, savings", icon: "UC" },
+  { label: "Usage & Cost", href: "/usage", hint: "Spend, tokens, latency", icon: "UC" },
   { label: "Limits", href: "/limits", hint: "Budgets & rate limits", icon: "LI" },
   { label: "Playground", href: "/playground", hint: "Send a live request", icon: "PG" },
-  { label: "Gateway Runtime", href: "/runtime", hint: "Status & migrations", icon: "GW" },
-  { label: "Settings", href: "/settings", hint: "Preferences & alerts", icon: "ST" },
 ];
 
 /** Resolve the active nav item for a given pathname (longest matching href wins). */

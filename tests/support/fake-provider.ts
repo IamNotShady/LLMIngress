@@ -11,6 +11,7 @@ export type FakeProviderMode =
   | "stream"
   | "error"
   | "bad-request"
+  | "unsupported-parameter"
   | "rate-limit"
   | "timeout"
   | "stream-stall"
@@ -347,6 +348,16 @@ async function handleRequest(
       return;
     }
 
+    if (mode === "unsupported-parameter") {
+      writeJson(response, 400, {
+        error: {
+          code: "invalid_request_error",
+          message: "unsupported parameter temperature",
+        },
+      });
+      return;
+    }
+
     if (mode === "rate-limit") {
       writeJson(response, 429, {
         error: {
@@ -399,6 +410,7 @@ function readMode(url: URL): FakeProviderMode {
     mode === "stream" ||
     mode === "error" ||
     mode === "bad-request" ||
+    mode === "unsupported-parameter" ||
     mode === "rate-limit" ||
     mode === "timeout" ||
     mode === "stream-stall" ||

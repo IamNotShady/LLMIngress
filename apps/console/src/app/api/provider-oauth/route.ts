@@ -5,10 +5,7 @@ import {
   setProviderOAuthConnectionEnabled,
   startProviderOAuthConnection,
 } from "@llmingress/db/console-provider-oauth";
-import {
-  enqueueProviderConnectivityCheckJob,
-  enqueueProviderModelRefreshJob,
-} from "@llmingress/db/provider-jobs";
+import { enqueueProviderProbeLifecycleJob } from "@llmingress/db/provider-jobs";
 import type { NextRequest, NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { classifyConsoleActionError } from "../_error-classify";
@@ -29,8 +26,10 @@ export const POST = withConsoleAuth(async (request) => {
         priority: readNumber(form, "priority"),
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      await enqueueProviderModelRefreshJob({ providerId: result.providerId });
-      await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
+      await enqueueProviderProbeLifecycleJob({
+        providerId: result.providerId,
+        source: "oauth_ready",
+      });
       return redirectToProvider(result.providerId);
     }
 
@@ -47,7 +46,12 @@ export const POST = withConsoleAuth(async (request) => {
         enabled: action === "enable",
         providerOAuthId: readRequiredText(form, "providerOAuthId"),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: result.providerId });
+      if (result.enabled) {
+        await enqueueProviderProbeLifecycleJob({
+          providerId: result.providerId,
+          source: "oauth_ready",
+        });
+      }
       return redirectToProvider(result.providerId);
     }
 
@@ -65,11 +69,19 @@ export const POST = withConsoleAuth(async (request) => {
       providerOAuthId: result.connection.id,
     });
   } catch (error) {
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return consoleActionErrorResponse(error, "Provider OAuth operation failed.");
+    }
     const providerId = readText(form, "providerId");
     if (providerId && (action === "start" || action === "complete")) {
+      const verdict = classifyConsoleActionError(error, "Provider OAuth operation failed.");
+      if (verdict.status === 500) {
+        return consoleActionErrorResponse(error, "Provider OAuth operation failed.");
+      }
       return redirectToProviderOAuthDialog(request, {
         authorizeUrl: readText(form, "providerAuthorizeUrl"),
-        error: classifyConsoleActionError(error, "Provider OAuth operation failed.").message,
+        error: verdict.message,
+        errorCode: verdict.code,
         label: readNullableText(form, "label"),
         priority: readNumber(form, "priority"),
         providerId,
@@ -90,6 +102,7 @@ function redirectToProviderOAuthDialog(
   input: {
     authorizeUrl?: string;
     error?: string;
+    errorCode?: string;
     label?: string | null;
     priority?: number;
     providerId: string;
@@ -104,6 +117,9 @@ function redirectToProviderOAuthDialog(
   }
   if (input.error) {
     url.searchParams.set("providerOAuthError", input.error);
+  }
+  if (input.errorCode) {
+    url.searchParams.set("providerOAuthErrorCode", input.errorCode);
   }
   if (input.providerOAuthId) {
     url.searchParams.set("providerOAuthId", input.providerOAuthId);

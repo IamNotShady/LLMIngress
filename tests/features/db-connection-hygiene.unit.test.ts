@@ -1,40 +1,29 @@
 import { existsSync, readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
-import { closePostgresPools, getPostgresPool } from "../../packages/db/src/client";
+import { describe, expect, it } from "vitest";
 
 const pooledModules = [
   "packages/db/src/providers.ts",
   "packages/db/src/provider-jobs.ts",
-  "packages/db/src/worker-model-refresh.ts",
-  "packages/db/src/worker-provider-connectivity-check.ts",
+  "packages/worker-runtime/src/worker-model-refresh.ts",
 ];
 
 describe("db connection hygiene", () => {
-  it("logs postgres pool background errors instead of swallowing them", async () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const pool = getPostgresPool("postgresql://postgres:postgres@127.0.0.1:1/never-connects");
-      pool.emit("error", new Error("boom"));
-      expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining("postgres pool error"),
-        expect.any(Error),
-      );
-    } finally {
-      await closePostgresPools();
-      spy.mockRestore();
-    }
+  it("logs postgres pool background errors instead of swallowing them", () => {
+    const source = readFileSync("packages/db/src/client.ts", "utf8");
+    expect(source).toContain('logger.error({ err: error }, "postgres pool error")');
+    expect(source).not.toContain("console.error");
   });
 
   it("uses the pooled client in provider and worker modules", () => {
     for (const file of pooledModules) {
       const source = readFileSync(file, "utf8");
       expect(source, file).not.toMatch(/\bwithPostgresClient\(/);
-      expect(source, file).toContain("withPooledPostgresClient");
+      expect(source, file).toMatch(/with(?:PooledPostgresClient|PostgresTransaction)/);
     }
   });
 
   it("does not silently swallow concurrency release failures", () => {
-    const source = readFileSync("packages/db/src/gateway-protocol-request.ts", "utf8");
+    const source = readFileSync("packages/gateway-runtime/src/gateway-protocol-request.ts", "utf8");
     expect(source).not.toContain("catch(() => undefined)");
   });
 
@@ -46,9 +35,11 @@ describe("db connection hygiene", () => {
     expect(workerSource).toContain("closePostgresPools");
   });
 
-  it("renames the stuttering runtime-status module and drops the dead observability package", () => {
-    expect(existsSync("packages/db/src/gateway-gateway-runtime-status.ts")).toBe(false);
-    expect(existsSync("packages/db/src/gateway-runtime-status.ts")).toBe(true);
+  it("keeps runtime-status and the dead observability package removed", () => {
+    expect(existsSync("packages/gateway-runtime/src/gateway-gateway-runtime-status.ts")).toBe(
+      false,
+    );
+    expect(existsSync("packages/gateway-runtime/src/gateway-runtime-status.ts")).toBe(false);
     expect(existsSync(["packages", "observability"].join("/"))).toBe(false);
   });
 });

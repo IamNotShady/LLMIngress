@@ -4,12 +4,13 @@ import {
   composeGatewayProviderStreamPipeline,
   createReadaheadStream,
   wrapProviderStreamWithActivityCompletion,
-} from "../../packages/db/src/gateway-stream-pipeline";
+} from "../../packages/gateway-runtime/src/gateway-stream-pipeline";
 import { createOpenAIProviderAdapter } from "../../packages/provider/src/adapters/openai";
 import {
   createClaudeCodeProviderAdapter,
   createCodexSubscriptionAdapter,
 } from "../../packages/provider/src/adapters/subscription";
+import { resolveProviderStreamingDialect } from "../../packages/provider/src/dialect";
 
 describe("provider call timeouts", () => {
   it("fails a hung non-streaming provider call within the timeout", async () => {
@@ -35,7 +36,12 @@ describe("provider call timeouts", () => {
       timeoutMs: 20,
     });
     const result = await adapter.response?.({
-      request: { input: "hi", payload: { input: "hi" } },
+      request: {
+        input: [{ content: [{ text: "hi", type: "input_text" }], role: "user" }],
+        payload: {
+          input: [{ content: [{ text: "hi", type: "input_text" }], role: "user" }],
+        },
+      },
       target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
     });
 
@@ -126,10 +132,12 @@ describe("responses tool passthrough", () => {
 
     const result = await adapter.response?.({
       request: {
-        input: [{ content: "run pwd", role: "user" }, toolOutput],
+        input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
         payload: {
-          input: [{ content: "run pwd", role: "user" }, toolOutput],
+          input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
           parallel_tool_calls: false,
+          store: true,
+          stream: false,
           tool_choice: "required",
           tools: [tool],
         },
@@ -143,17 +151,17 @@ describe("responses tool passthrough", () => {
     expect(result?.ok).toBe(true);
     expect(capture.calls[0]?.url).toBe("http://provider.test/v1/codex/responses");
     expect(capture.calls[0]?.body).toMatchObject({
-      input: [{ content: "run pwd", role: "user" }, toolOutput],
+      input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
       model: "m",
       parallel_tool_calls: false,
+      store: true,
+      stream: false,
       tool_choice: "required",
       tools: [tool],
     });
-    expect(capture.calls[0]?.body).not.toHaveProperty("store");
-    expect(capture.calls[0]?.body).not.toHaveProperty("stream");
   });
 
-  it("does not synthesize a Codex subscription response body", async () => {
+  it("does not convert a Codex SSE response into a non-streaming JSON response", async () => {
     const raw = 'data: {"output_text":"provider text"}\n\n';
     const adapter = createCodexSubscriptionAdapter({
       fetch: (async () =>
@@ -165,7 +173,14 @@ describe("responses tool passthrough", () => {
     });
 
     const result = await adapter.response?.({
-      request: { input: "hi", payload: { input: "hi" } },
+      request: {
+        input: [{ content: [{ text: "hi", type: "input_text" }], role: "user" }],
+        payload: {
+          input: [{ content: [{ text: "hi", type: "input_text" }], role: "user" }],
+          stream: false,
+        },
+        stream: false,
+      },
       target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
     });
 
@@ -173,6 +188,64 @@ describe("responses tool passthrough", () => {
     if (result?.ok) {
       expect(result.body).toEqual({ raw });
     }
+  });
+
+  it("passes the canonical Responses body to Codex without forcing or dropping fields", async () => {
+    const capture = createJsonCaptureFetch();
+    const adapter = createCodexSubscriptionAdapter({ fetch: capture.fetch, timeoutMs: 200 });
+    const canonicalInput = [
+      { content: [{ text: "hello", type: "input_text" }], role: "user" as const },
+    ];
+
+    const result = await adapter.response?.({
+      request: {
+        input: canonicalInput,
+        maxOutputTokens: 1024,
+        payload: {
+          input: canonicalInput,
+          max_output_tokens: 1024,
+          metadata: { source: "client" },
+          prompt_cache_retention: "24h",
+          safety_identifier: "client-user",
+          store: true,
+          stream: false,
+          temperature: 0.7,
+          top_p: 0.9,
+          truncation: "auto",
+        },
+        temperature: 0.7,
+      },
+      target: { apiKey: "k", baseUrl: "http://provider.test/v1", modelId: "m" },
+    });
+
+    expect(result?.ok).toBe(true);
+    expect(capture.calls[0]?.body).toEqual({
+      input: canonicalInput,
+      max_output_tokens: 1024,
+      metadata: { source: "client" },
+      model: "m",
+      prompt_cache_retention: "24h",
+      safety_identifier: "client-user",
+      store: true,
+      stream: false,
+      temperature: 0.7,
+      top_p: 0.9,
+      truncation: "auto",
+    });
+  });
+
+  it("leaves streaming Codex request bodies unchanged", () => {
+    const requestBody = {
+      input: [{ content: [{ text: "hello", type: "input_text" }], role: "user" }],
+      max_output_tokens: 1024,
+      store: true,
+      stream: true,
+      temperature: 0.7,
+      top_p: 0.9,
+    };
+    expect(
+      resolveProviderStreamingDialect("openai_codex").transformBody(requestBody, "responses"),
+    ).toBe(requestBody);
   });
 });
 
@@ -219,7 +292,6 @@ describe("streaming backpressure", () => {
 
   it("cancels the readahead reader through the composed stream pipeline when the client side closes", async () => {
     let cancelCalls = 0;
-    let runtimeErrorRecords = 0;
     const stalled = new ReadableStream<Uint8Array>({
       cancel() {
         cancelCalls += 1;
@@ -253,9 +325,6 @@ describe("streaming backpressure", () => {
       idleTimeoutMs: 10_000,
       lease: undefined,
       reader,
-      recordRuntimeError: async () => {
-        runtimeErrorRecords += 1;
-      },
     });
     const wrapped = wrapProviderStreamWithActivityCompletion(source, {
       completeActivity: async () => undefined,
@@ -266,8 +335,6 @@ describe("streaming backpressure", () => {
     await delay(10);
     wrapped.destroy();
     await waitFor(() => cancelCalls === 1);
-
-    expect(runtimeErrorRecords).toBe(0);
   });
 });
 

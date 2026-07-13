@@ -4,48 +4,49 @@ import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingres
 import type {
   GatewayRequestActivityProtocol,
   GatewayRequestActivityRoute,
-} from "@llmingress/db/gateway-activity-recorder";
-import { authenticateGatewayRequest } from "@llmingress/db/gateway-auth";
-import { executeGatewayOpenAIChatCompletion } from "@llmingress/db/gateway-chat-completions";
+} from "@llmingress/gateway-runtime/gateway-activity-recorder";
+import { authenticateGatewayRequest } from "@llmingress/gateway-runtime/gateway-auth";
+import { gatewayBackgroundTasks } from "@llmingress/gateway-runtime/gateway-background-tasks";
+import { executeGatewayOpenAIChatCompletion } from "@llmingress/gateway-runtime/gateway-chat-completions";
 import {
   createGatewayConfigRuntime,
   type GatewayConfigRuntime,
   type GatewayConfigSnapshot,
-} from "@llmingress/db/gateway-config-reload";
-import { executeGatewayOpenAIEmbeddings } from "@llmingress/db/gateway-embeddings";
+} from "@llmingress/gateway-runtime/gateway-config-reload";
+import { executeGatewayOpenAIEmbeddings } from "@llmingress/gateway-runtime/gateway-embeddings";
 import {
   gatewayBodyLimitBytes,
   gatewayConfigNotifications,
   gatewayConfigReconcileIntervalMs,
-  gatewayHeartbeatIntervalMs,
-  gatewayInstanceId,
   gatewayListenHost,
-  gatewayMetricsToken,
-} from "@llmingress/db/gateway-env";
-import { gatewayRequestIdHeader } from "@llmingress/db/gateway-error-mapping";
-import { readGatewayProviderRequestHeaders } from "@llmingress/db/gateway-header-passthrough";
-import { executeGatewayAnthropicMessages } from "@llmingress/db/gateway-messages";
-import { getPrometheusMetricsDocument } from "@llmingress/db/gateway-metrics";
+  gatewayReadinessTimeoutMs,
+  gatewayShutdownDrainMs,
+} from "@llmingress/gateway-runtime/gateway-env";
+import { gatewayRequestIdHeader } from "@llmingress/gateway-runtime/gateway-error-mapping";
+import { readGatewayProviderRequestHeaders } from "@llmingress/gateway-runtime/gateway-header-passthrough";
+import { readGatewayHealthStatus } from "@llmingress/gateway-runtime/gateway-health";
+import { executeGatewayAnthropicMessages } from "@llmingress/gateway-runtime/gateway-messages";
 import {
   type GatewayRequestMetadata,
   gatewayRequestMetadataHeader,
   serializeGatewayRequestMetadata,
   shouldExposeGatewayRequestMetadata,
-} from "@llmingress/db/gateway-request-metadata";
-import { executeGatewayOpenAIResponse } from "@llmingress/db/gateway-responses";
+} from "@llmingress/gateway-runtime/gateway-request-metadata";
+import { executeGatewayOpenAIResponse } from "@llmingress/gateway-runtime/gateway-responses";
 import {
   executeGatewayStreamingRequest,
   type GatewayStreamingProtocol,
   type GatewayStreamingResult,
   readGatewayStreamingFlag,
-} from "@llmingress/db/gateway-streaming";
-import type { GatewayUsageCostDetails } from "@llmingress/db/gateway-usage-recorder";
+} from "@llmingress/gateway-runtime/gateway-streaming";
+import type { GatewayUsageCostDetails } from "@llmingress/gateway-runtime/gateway-usage-recorder";
 import {
   type GatewayVirtualModel,
   listAllowedGatewayVirtualModels,
   readRequestedModelName,
   resolveGatewayVirtualModelRequest,
-} from "@llmingress/db/gateway-virtual-model-access";
+} from "@llmingress/gateway-runtime/gateway-virtual-model-access";
+import { createLogger, createPinoLoggerOptions } from "@llmingress/logging";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply } from "fastify";
 import { gatewayCorsHeaders } from "./cors.js";
 import {
@@ -53,12 +54,15 @@ import {
   executeRecordedGatewayStreamingRequest,
 } from "./request-recording.js";
 
+const logger = createLogger("gateway");
+
 type CreateGatewayAppOptions = {
   configRuntime?: GatewayConfigRuntime;
 };
 
 type GatewayJsonEndpointExecutionInput = {
   agentId: string;
+  limitsEnabled: boolean;
   providerRequestHeaders: Record<string, string>;
   requestBody: unknown;
   requestId: string;
@@ -85,7 +89,7 @@ type GatewayJsonEndpointDefinition = {
 export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
   const app = Fastify({
     bodyLimit: gatewayBodyLimitBytes(),
-    logger: true,
+    logger: createPinoLoggerOptions(),
   });
 
   app.addHook("onRequest", async (request, reply) => {
@@ -99,34 +103,19 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
     }
   });
 
-  app.get("/health", async () => {
-    const snapshot = options.configRuntime?.getSnapshot();
-
-    return {
-      configVersion: snapshot?.version ?? null,
-      providerCount: snapshot?.providers.length ?? 0,
-      service: "gateway",
-      status: "ok",
-    };
+  app.get("/health/live", async () => {
+    return { service: "gateway", status: "ok" };
   });
 
-  app.get("/metrics", async (request, reply) => {
-    const requiredToken = gatewayMetricsToken();
-    if (requiredToken) {
-      const authorization = firstRequestHeaderValue(request.headers.authorization);
-      if (authorization !== `Bearer ${requiredToken}`) {
-        return reply.code(401).send({
-          error: {
-            code: "unauthorized_metrics_access",
-            message: "Metrics access requires a valid bearer token.",
-          },
-        });
-      }
-    }
-
-    const document = await getPrometheusMetricsDocument({});
-    return reply.header("content-type", document.contentType).send(document.body);
-  });
+  const readinessHandler = async (_request: unknown, reply: FastifyReply) => {
+    const health = await readGatewayHealthStatus({
+      configRuntime: options.configRuntime,
+      timeoutMs: gatewayReadinessTimeoutMs(),
+    });
+    return reply.code(health.statusCode).send(health.body);
+  };
+  app.get("/health", readinessHandler);
+  app.get("/health/ready", readinessHandler);
 
   registerGatewayJsonEndpoint(app, options, {
     execute: (input) => executeGatewayOpenAIChatCompletion(input),
@@ -181,7 +170,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 
   app.addHook("onClose", async () => {
     await options.configRuntime?.stop();
-    await closePostgresPools();
   });
 
   return app;
@@ -190,10 +178,9 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 export async function startGateway() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
+  logBootstrapSecurityWarnings(config.securityWarnings);
   const configRuntime = createGatewayConfigRuntime({
     enableNotifications: gatewayConfigNotifications(),
-    gatewayInstanceId: gatewayInstanceId(),
-    heartbeatIntervalMs: gatewayHeartbeatIntervalMs(),
     reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
   });
   await configRuntime.start();
@@ -205,16 +192,49 @@ export async function startGateway() {
     port: config.gatewayPort,
   });
 
+  let shuttingDown = false;
   const shutdown = async () => {
-    await app.close();
-    process.exit(0);
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
+    let exitCode = 0;
+    try {
+      await app.close();
+      const drainResult = await gatewayBackgroundTasks.drain({
+        timeoutMs: gatewayShutdownDrainMs(),
+      });
+      if (drainResult.timedOut) {
+        exitCode = 1;
+        logger.error({ pending: drainResult.pending }, "gateway background task drain timed out");
+      }
+      await closePostgresPools();
+    } catch (error) {
+      exitCode = 1;
+      logger.error({ err: error }, "gateway shutdown failed");
+    }
+
+    process.exit(exitCode);
   };
   process.once("SIGTERM", () => {
-    void shutdown();
+    shutdown().catch((error: unknown) => {
+      logger.error({ err: error }, "gateway shutdown failed");
+      process.exit(1);
+    });
   });
   process.once("SIGINT", () => {
-    void shutdown();
+    shutdown().catch((error: unknown) => {
+      logger.error({ err: error }, "gateway shutdown failed");
+      process.exit(1);
+    });
   });
+}
+
+function logBootstrapSecurityWarnings(warnings: string[]): void {
+  for (const warning of warnings) {
+    logger.warn({ securityWarning: true }, warning);
+  }
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {
@@ -262,9 +282,7 @@ function registerGatewayJsonEndpoint(
       agentKeyPrefix: auth.agentApiKey.keyPrefix,
       method: request.method,
       protocol: endpoint.protocol,
-      requestBody: request.body,
       requestId: auth.requestId,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       url: request.url,
       virtualModelName: virtualModelAccess.virtualModel.name,
     });
@@ -279,6 +297,7 @@ function registerGatewayJsonEndpoint(
           execute: () =>
             executeGatewayStreamingRequest({
               agentId: auth.agentApiKey.id,
+              limitsEnabled: auth.agentApiKey.limitsEnabled,
               protocol: streamingProtocol,
               providerRequestHeaders,
               requestBody: request.body,
@@ -289,7 +308,6 @@ function registerGatewayJsonEndpoint(
           logger: request.log,
           model: virtualModelAccess.virtualModel.name,
           protocol: endpoint.protocol,
-          requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
           requestId: auth.requestId,
           virtualModelId: virtualModelAccess.virtualModel.id,
         }),
@@ -303,6 +321,7 @@ function registerGatewayJsonEndpoint(
       execute: () =>
         endpoint.execute({
           agentId: auth.agentApiKey.id,
+          limitsEnabled: auth.agentApiKey.limitsEnabled,
           providerRequestHeaders,
           requestBody: request.body,
           requestId: auth.requestId,
@@ -312,7 +331,6 @@ function registerGatewayJsonEndpoint(
       logger: request.log,
       model: virtualModelAccess.virtualModel.name,
       protocol: endpoint.protocol,
-      requestLoggingEnabled: auth.agentApiKey.requestLoggingEnabled,
       requestId: auth.requestId,
       virtualModelId: virtualModelAccess.virtualModel.id,
     });
@@ -399,24 +417,17 @@ type GatewayAgentRequestLogInput = {
   agentKeyPrefix: string;
   method: string;
   protocol: GatewayRequestActivityProtocol;
-  requestBody: unknown;
   requestId: string;
-  requestLoggingEnabled: boolean;
   url: string;
   virtualModelName: string;
 };
 
 export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) {
-  if (!input.requestLoggingEnabled) {
-    return null;
-  }
-
   return {
     agentId: input.agentId,
     agentKeyPrefix: input.agentKeyPrefix,
     method: input.method,
     protocol: input.protocol,
-    requestBody: input.requestBody,
     requestId: input.requestId,
     url: input.url,
     virtualModel: input.virtualModelName,
@@ -425,15 +436,12 @@ export function buildGatewayAgentRequestLog(input: GatewayAgentRequestLogInput) 
 
 function logGatewayAgentRequest(logger: FastifyBaseLogger, input: GatewayAgentRequestLogInput) {
   const payload = buildGatewayAgentRequestLog(input);
-  if (!payload) {
-    return;
-  }
   logger.info(payload, "gateway agent request");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   startGateway().catch((error: unknown) => {
-    console.error(error);
+    logger.error({ err: error }, "gateway startup failed");
     process.exit(1);
   });
 }

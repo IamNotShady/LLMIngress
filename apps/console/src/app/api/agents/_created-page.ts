@@ -1,14 +1,44 @@
+import { gatewayPublicBaseUrl } from "@llmingress/config";
+import type { AgentIntegrationPlatform } from "@llmingress/db/console-agents";
 import { NextResponse } from "next/server";
 
-export function renderOneTimeAgentResponse(input: {
-  keyPrefix: string | null;
-  plaintext: string;
-}): NextResponse {
+export type AgentConfigurationGuide = {
+  codeBlocks: Array<{ code: string; label: string }>;
+  steps: string[];
+  title: string;
+};
+
+export function renderOneTimeAgentResponse(
+  input: {
+    keyPrefix: string | null;
+    integrationPlatform: AgentIntegrationPlatform;
+    plaintext: string;
+    virtualModelName: string | null;
+  },
+  format: "html" | "json" = "html",
+): NextResponse {
   const connectionDetails = buildAgentConnectionDetails({
     apiKey: input.plaintext,
-    gatewayBaseUrl: process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000",
-    model: "<Virtual Model Name>",
+    gatewayBaseUrl: gatewayPublicBaseUrl(),
+    integrationPlatform: input.integrationPlatform,
+    model: input.virtualModelName ?? "No Virtual Model configured",
   });
+  const configurationGuide = buildAgentConfigurationGuide(connectionDetails);
+  const keyPrefix = input.keyPrefix ?? connectionDetails.apiKey.slice(0, 12);
+
+  if (format === "json") {
+    return NextResponse.json(
+      {
+        apiKey: connectionDetails.apiKey,
+        configurationGuide,
+        gatewayBaseUrl: connectionDetails.gatewayBaseUrl,
+        integrationPlatform: connectionDetails.integrationPlatform,
+        keyPrefix,
+        virtualModelName: connectionDetails.model,
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
 
   return new NextResponse(
     `<!doctype html>
@@ -43,18 +73,20 @@ export function renderOneTimeAgentResponse(input: {
             <dd><code>${escapeHtml(connectionDetails.apiKey)}</code></dd>
           </div>
           <div>
-            <dt>Agent API key prefix</dt>
-            <dd>${escapeHtml(input.keyPrefix ?? connectionDetails.apiKey.slice(0, 12))}</dd>
-          </div>
-          <div>
             <dt>Gateway URL</dt>
             <dd>${escapeHtml(connectionDetails.gatewayBaseUrl)}</dd>
           </div>
-          <div>
-            <dt>Virtual Model Name</dt>
-            <dd>${escapeHtml(connectionDetails.model)}</dd>
-          </div>
         </dl>
+      </section>
+      <section aria-label="Platform configuration">
+        <h2>${escapeHtml(configurationGuide.title)}</h2>
+        <ol>${configurationGuide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+        ${configurationGuide.codeBlocks
+          .map(
+            (block) =>
+              `<h3>${escapeHtml(block.label)}</h3><pre><code>${escapeHtml(block.code)}</code></pre>`,
+          )
+          .join("")}
       </section>
       <a href="/agents">Back to dashboard</a>
     </main>
@@ -82,19 +114,163 @@ function escapeHtml(value: string): string {
 type AgentConnectionDetails = {
   apiKey: string;
   gatewayBaseUrl: string;
+  integrationPlatform: AgentIntegrationPlatform;
   model: string;
 };
 
 function buildAgentConnectionDetails(input: {
   apiKey: string;
   gatewayBaseUrl: string;
+  integrationPlatform: AgentIntegrationPlatform;
   model: string;
 }): AgentConnectionDetails {
   return {
     apiKey: normalizeSnippetField(input.apiKey, "API key"),
     gatewayBaseUrl: normalizeGatewayBaseUrl(input.gatewayBaseUrl),
+    integrationPlatform: input.integrationPlatform,
     model: normalizeSnippetField(input.model || "<Virtual Model Name>", "model"),
   };
+}
+
+export function buildAgentConfigurationGuide(
+  input: AgentConnectionDetails,
+): AgentConfigurationGuide {
+  const gatewayBaseUrl = normalizeGatewayBaseUrl(input.gatewayBaseUrl);
+  const openAiBaseUrl = `${gatewayBaseUrl}/v1`;
+  const model = normalizeSnippetField(input.model, "model");
+  const apiKey = normalizeSnippetField(input.apiKey, "API key");
+
+  if (input.integrationPlatform === "codex") {
+    return {
+      title: "Configure Codex",
+      steps: [
+        "Export the Agent API key in your shell.",
+        "Add the LLMIngress provider to the user-level ~/.codex/config.toml file.",
+        "Start Codex; the configured Virtual Model will be sent through LLMIngress.",
+      ],
+      codeBlocks: [
+        { label: "Shell", code: `export LLMINGRESS_API_KEY=${shellQuote(apiKey)}` },
+        {
+          label: "~/.codex/config.toml",
+          code: `model = ${JSON.stringify(model)}\nmodel_provider = "llmingress"\n\n[model_providers.llmingress]\nname = "LLMIngress"\nbase_url = ${JSON.stringify(openAiBaseUrl)}\nenv_key = "LLMINGRESS_API_KEY"\nwire_api = "responses"`,
+        },
+      ],
+    };
+  }
+
+  if (input.integrationPlatform === "claude-code") {
+    return {
+      title: "Configure Claude Code",
+      steps: [
+        "Export the LLMIngress Agent key and Gateway URL.",
+        "Start Claude Code with the selected Virtual Model.",
+      ],
+      codeBlocks: [
+        {
+          label: "Shell",
+          code: `export ANTHROPIC_AUTH_TOKEN=${shellQuote(apiKey)}\nexport ANTHROPIC_BASE_URL=${shellQuote(gatewayBaseUrl)}\nclaude --model ${shellQuote(model)}`,
+        },
+      ],
+    };
+  }
+
+  if (input.integrationPlatform === "cursor") {
+    return uiGuide("Configure Cursor", [
+      "Open Cursor Settings, then open Models.",
+      `Enter the Agent API key ${apiKey} in the OpenAI API key field.`,
+      `Set Override OpenAI Base URL to ${openAiBaseUrl}.`,
+      `Add or select the model ${model}, then verify the connection.`,
+    ]);
+  }
+
+  if (input.integrationPlatform === "opencode") {
+    return {
+      title: "Configure OpenCode",
+      steps: [
+        "Run /connect in OpenCode and store the Agent API key for the llmingress provider.",
+        "Add the provider and Virtual Model to your OpenCode configuration.",
+      ],
+      codeBlocks: [
+        {
+          label: "opencode.json",
+          code: JSON.stringify(
+            {
+              provider: {
+                llmingress: {
+                  models: { [model]: { name: model } },
+                  name: "LLMIngress",
+                  npm: "@ai-sdk/openai-compatible",
+                  options: { baseURL: openAiBaseUrl },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  }
+
+  if (input.integrationPlatform === "hermes") {
+    return uiGuide("Configure Hermes", [
+      "Run hermes model and choose Custom endpoint.",
+      `Enter ${openAiBaseUrl} as the API base URL.`,
+      `Enter ${apiKey} as the API key and ${model} as the model name.`,
+    ]);
+  }
+
+  if (input.integrationPlatform === "openclaw") {
+    return {
+      title: "Configure OpenClaw",
+      steps: ["Add LLMIngress as a custom provider, then select its Virtual Model."],
+      codeBlocks: [
+        {
+          label: "openclaw.json",
+          code: JSON.stringify(
+            {
+              agents: { defaults: { model: { primary: `llmingress/${model}` } } },
+              models: {
+                providers: {
+                  llmingress: {
+                    api: "openai-responses",
+                    apiKey,
+                    baseUrl: openAiBaseUrl,
+                    models: [{ id: model, name: model }],
+                  },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  }
+
+  if (input.integrationPlatform === "github-copilot") {
+    return uiGuide("Configure GitHub Copilot", [
+      "Open GitHub Copilot app settings, then Model providers.",
+      "Choose Add provider and select an OpenAI-compatible HTTP endpoint.",
+      `Enter ${openAiBaseUrl} as the base URL and ${apiKey} as the API key.`,
+      `Add ${model} as an available model and save the provider.`,
+    ]);
+  }
+
+  return uiGuide("Configure your integration", [
+    `Use ${gatewayBaseUrl} as the Gateway URL.`,
+    `Send ${apiKey} as a Bearer API key.`,
+    `Use ${model} as the Virtual Model name.`,
+  ]);
+}
+
+function uiGuide(title: string, steps: string[]): AgentConfigurationGuide {
+  return { codeBlocks: [], steps, title };
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
 function normalizeGatewayBaseUrl(value: string): string {

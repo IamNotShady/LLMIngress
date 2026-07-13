@@ -1,9 +1,9 @@
 import {
   type ConsoleActivity,
   type ConsoleActivityDetail,
+  type ConsoleActivityFiltersInput,
   type ConsoleFallbackEvent,
   countConsoleActivities,
-  formatConsoleActivityFallbackAttempts,
   formatConsoleActivityMetadata,
   formatConsoleActivityRouteReason,
   getConsoleActivityDetail,
@@ -17,9 +17,10 @@ import {
 } from "@llmingress/db/console-format";
 import { listProviders } from "@llmingress/db/console-providers";
 import { listVirtualModels } from "@llmingress/db/console-virtual-models";
+import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
 import { Pager } from "../_components/list-ui";
-import { buildQueryHref, PAGE_SIZE, readPageParam } from "../_lib/pagination";
+import { buildQueryHref, readPageParam } from "../_lib/pagination";
 import {
   ActivityStatusPill,
   type ConsoleSearchParams,
@@ -28,6 +29,8 @@ import {
   formatDateTime,
   readSingleSearchParam,
 } from "./sections";
+
+const ACTIVITY_PAGE_SIZE = 20;
 
 function formatActivityLatency(latencyMs: number | null): string {
   if (latencyMs === null) {
@@ -48,114 +51,106 @@ function ActivityReferenceDetail({
   const activity = detail?.activity ?? fallbackActivity;
   const metadataLines = buildActivityMetadataLines(activity, detail?.requestMetadata ?? {});
   const fallbackEvents = detail?.fallbackEvents ?? [];
-  const fallbackAttemptLines = formatConsoleActivityFallbackAttempts(fallbackEvents);
 
   return (
-    <>
-      <div className="console-dialog-scrim" aria-hidden="true" />
-      <section
-        aria-label="Request detail"
-        aria-labelledby="activity-detail-title"
-        aria-modal="true"
-        className="console-dialog activity-detail-dialog"
-        role="dialog"
-      >
-        <div className="console-dialog-head">
-          <div className="agent-view-dialog-title">
-            <h2 id="activity-detail-title">Request detail</h2>
-            <ActivityStatusPill status={activity.status} />
-          </div>
-          <a className="secondary-button" href={closeHref}>
-            <FlatIcon name="cancel" />
-            <span>Close</span>
-          </a>
+    <ConsoleDialog
+      ariaLabelledby="activity-detail-title"
+      className="console-dialog activity-detail-dialog"
+      closeHref={closeHref}
+      initialFocus="close"
+      triggerId={`activity-${activity.id}-trigger`}
+    >
+      <div className="console-dialog-head">
+        <div className="agent-view-dialog-title">
+          <h2 id="activity-detail-title">Request detail</h2>
+          <ActivityStatusPill status={activity.status} />
         </div>
+        <a className="secondary-button" href={closeHref}>
+          <FlatIcon name="cancel" />
+          <span>Close</span>
+        </a>
+      </div>
 
-        <dl className="detail-field-list activity-detail-fields">
-          <div className="detail-field">
-            <dt>Request ID</dt>
-            <dd>{activity.requestId}</dd>
-          </div>
-          <div className="detail-field">
-            <dt>Agent</dt>
-            <dd>{activity.agentName ?? "Unknown agent"}</dd>
-          </div>
-          <div className="detail-field">
-            <dt>API Key Prefix</dt>
-            <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
-          </div>
-          <div className="detail-field">
-            <dt>Virtual Model</dt>
-            <dd>{formatActivityVirtualModelLabel(activity)}</dd>
-          </div>
-          <div className="detail-field">
-            <dt>Provider / Model</dt>
-            <dd>{formatActivityProviderModelLabel(activity)}</dd>
-          </div>
-          <div className="detail-field">
-            <dt>Strategy</dt>
-            <dd>{formatRouteReasonStrategy(activity.routeReason)}</dd>
-          </div>
-          <div className="detail-field detail-field-wide">
-            <dt>Route reason</dt>
-            <dd>{formatConsoleActivityRouteReason(activity.routeReason)}</dd>
-          </div>
-        </dl>
+      <dl className="detail-field-list activity-detail-fields">
+        <div className="detail-field">
+          <dt>Request ID</dt>
+          <dd>{activity.requestId}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Agent</dt>
+          <dd>{activity.agentName ?? "Unknown agent"}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>API Key Prefix</dt>
+          <dd>{activity.agentKeyPrefix ?? "Unknown"}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Virtual Model</dt>
+          <dd>{formatActivityVirtualModelLabel(activity)}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Provider / Model</dt>
+          <dd>{formatActivityProviderModelLabel(activity)}</dd>
+        </div>
+        <div className="detail-field">
+          <dt>Strategy</dt>
+          <dd>{formatRouteReasonStrategy(activity.routeReason)}</dd>
+        </div>
+        <div className="detail-field detail-field-wide">
+          <dt>Route reason</dt>
+          <dd>{formatConsoleActivityRouteReason(activity.routeReason)}</dd>
+        </div>
+      </dl>
 
+      <div>
+        <p className="detail-section-label">Fallback timeline</p>
+        {fallbackEvents.length === 0 ? (
+          <p className="activity-empty-timeline">No fallback attempts</p>
+        ) : (
+          <ol className="activity-timeline">
+            {fallbackEvents.map((event) => (
+              <li key={`${event.attemptOrder}:${event.status}`}>
+                <span className={activityTimelineStepClass(event.status)}>
+                  {event.attemptOrder}
+                </span>
+                <span>
+                  <strong>{formatFallbackEventModel(event)}</strong>
+                  <em>{formatFallbackEventResult(event)}</em>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      <div className="activity-metric-grid">
         <div>
-          <p className="detail-section-label">Fallback timeline</p>
-          {fallbackEvents.length === 0 ? (
-            <ul className="activity-legacy-timeline">
-              {fallbackAttemptLines.map((attempt) => (
-                <li key={attempt}>{attempt}</li>
-              ))}
-            </ul>
-          ) : (
-            <ol className="activity-timeline">
-              {fallbackEvents.map((event) => (
-                <li key={`${event.attemptOrder}:${event.status}`}>
-                  <span className={activityTimelineStepClass(event.status)}>
-                    {event.attemptOrder}
-                  </span>
-                  <span>
-                    <strong>{formatFallbackEventModel(event)}</strong>
-                    <em>{formatFallbackEventResult(event)}</em>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+          <span>Tokens</span>
+          <strong>{formatConsoleCount(activity.totalTokens)}</strong>
         </div>
-
-        <div className="activity-metric-grid">
-          <div>
-            <span>Tokens</span>
-            <strong>{formatConsoleCount(activity.totalTokens)}</strong>
-          </div>
-          <div>
-            <span>Cost</span>
-            <strong>{formatConsoleUsd(activity.totalCostUsd)}</strong>
-          </div>
-          <div>
-            <span>Latency</span>
-            <strong>{formatActivityLatency(activity.latencyMs)}</strong>
-          </div>
-        </div>
-
-        {activity.errorMessage || activity.errorCode ? (
-          <div>
-            <p className="detail-section-label">Error info</p>
-            <p className="callout callout--warn">{formatActivityError(activity)}</p>
-          </div>
-        ) : null}
-
         <div>
-          <p className="detail-section-label">Request metadata</p>
-          <pre className="code-block activity-metadata-block">{metadataLines.join("\n")}</pre>
-          <p className="callout">Prompt / response bodies are not stored.</p>
+          <span>Cost</span>
+          <strong>{formatConsoleUsd(activity.totalCostUsd)}</strong>
         </div>
-      </section>
-    </>
+        <div>
+          <span>Latency</span>
+          <strong>{formatActivityLatency(activity.latencyMs)}</strong>
+        </div>
+      </div>
+
+      {activity.errorMessage || activity.errorCode ? (
+        <div>
+          <p className="detail-section-label">Error info</p>
+          <p className="callout callout--warn">{formatActivityError(activity)}</p>
+        </div>
+      ) : null}
+
+      <div>
+        <p className="detail-section-label">Request metadata</p>
+        <pre className="code-block activity-metadata-block">{metadataLines.join("\n")}</pre>
+        <p className="callout">Prompt / response bodies are not stored.</p>
+      </div>
+    </ConsoleDialog>
   );
 }
 
@@ -259,13 +254,13 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
     requestIdQuery: readSingleSearchParam(searchParams.q),
     status: readSingleSearchParam(searchParams.status),
     virtualModelId: readSingleSearchParam(searchParams.virtualModelId),
-  };
+  } satisfies ConsoleActivityFiltersInput;
   const [agents, virtualModels, providers, total, activities] = await Promise.all([
     listAgents(),
     listVirtualModels(),
     listProviders(),
     countConsoleActivities({ filters }),
-    listConsoleActivities({ filters, limit: PAGE_SIZE, page }),
+    listConsoleActivities({ filters, limit: ACTIVITY_PAGE_SIZE, page }),
   ]);
   const selectedListActivity = selectedActivityId
     ? (activities.find((activity) => activity.id === selectedActivityId) ?? null)
@@ -276,12 +271,12 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
   const selectedActivity = selectedDetail?.activity ?? selectedListActivity;
   const activityDetailCloseHref = buildQueryHref(searchParams, { activityId: undefined });
   const view = {
-    from: total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1,
+    from: total === 0 ? 0 : (page - 1) * ACTIVITY_PAGE_SIZE + 1,
     items: activities,
     page,
-    to: total === 0 ? 0 : (page - 1) * PAGE_SIZE + activities.length,
+    to: total === 0 ? 0 : (page - 1) * ACTIVITY_PAGE_SIZE + activities.length,
     total,
-    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    totalPages: Math.max(1, Math.ceil(total / ACTIVITY_PAGE_SIZE)),
   };
 
   return (
@@ -392,7 +387,10 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
                     >
                       <td className="mono">{formatConsoleTimestamp(activity.startedAt)}</td>
                       <td className="mono">
-                        <a href={buildQueryHref(searchParams, { activityId: activity.id })}>
+                        <a
+                          href={buildQueryHref(searchParams, { activityId: activity.id })}
+                          id={`activity-${activity.id}-trigger`}
+                        >
                           {activity.requestId}
                         </a>
                       </td>

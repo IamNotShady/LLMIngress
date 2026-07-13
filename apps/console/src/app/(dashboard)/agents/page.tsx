@@ -14,7 +14,7 @@ export default async function AgentsPage({
         title="Agents"
         description="Agents, their API key, virtual model access, and limits."
         actions={
-          <a className="btn" href="?agentDialog=new">
+          <a className="btn" href="?agentDialog=new" id="agent-create-dialog-trigger">
             <span>Create Agent</span>
           </a>
         }

@@ -1,18 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { closePostgresPools } from "../../packages/db/src/client";
-import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
 import {
   toGatewayErrorResponseParts,
   truncateProviderMessage,
-} from "../../packages/db/src/gateway-errors";
-import { buildFallbackExhaustionError } from "../../packages/db/src/gateway-fallback-chain";
+} from "../../packages/gateway-runtime/src/gateway-errors";
+import { buildFallbackExhaustionError } from "../../packages/gateway-runtime/src/gateway-fallback-chain";
 import {
   attachGatewayProviderCredentialsLeniently,
   readGatewayMasterKeySource,
-} from "../../packages/db/src/gateway-provider-credentials";
-import { executeGatewayStreamingRequest } from "../../packages/db/src/gateway-streaming";
-import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+} from "../../packages/gateway-runtime/src/gateway-provider-credentials";
+import { executeGatewayStreamingRequest } from "../../packages/gateway-runtime/src/gateway-streaming";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 describe("gateway error fidelity", () => {
@@ -151,7 +151,7 @@ describe("gateway error fidelity", () => {
           if (authorization?.includes("bad-retry-key")) {
             return new Response(JSON.stringify({ error: { message: "retry me" } }), {
               headers: { "content-type": "application/json" },
-              status: 500,
+              status: 401,
             });
           }
           return new Response(
@@ -181,6 +181,7 @@ describe("gateway error fidelity", () => {
                   providerModelId,
                 }),
               ],
+              endpointProtocol: "chat_completions",
               id: "route-1",
               strategy: "fixed",
               virtualModelId: "vm-1",
@@ -221,9 +222,13 @@ function candidateSnapshot(
 ): GatewayRouteCandidateSnapshot {
   return {
     candidateOrder: 1,
+    contextWindow: 128_000,
     displayName: "Fake Model",
     healthStatus: "healthy",
+    inputModalities: ["text"],
+    maxOutputTokens: 8_192,
     modelId: "fake-model",
+    outputModalities: ["text"],
     price: {
       modelId: "fake-model",
       priceVersion: "test",
@@ -234,6 +239,9 @@ function candidateSnapshot(
     providerId: overrides.providerId ?? randomUUID(),
     providerKey: "openai",
     providerModelId: randomUUID(),
+    supportsFunctionCalling: true,
+    supportsReasoning: false,
+    supportsTools: true,
     ...overrides,
   };
 }

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
@@ -61,50 +60,6 @@ async function readFirstStreamChunk(response: Response): Promise<string> {
   return firstChunk.value ? new TextDecoder().decode(firstChunk.value) : "";
 }
 
-async function createSlowOtelServer(input: { delayMs: number }): Promise<{
-  close: () => Promise<void>;
-  requestCount: () => number;
-  url: string;
-}> {
-  let requestCount = 0;
-  const server = createServer((request, response) => {
-    requestCount += 1;
-    request.resume();
-    setTimeout(() => {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end("{}");
-    }, input.delayMs);
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      server.off("error", reject);
-      resolve();
-    });
-  });
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    throw new Error("Failed to start OTEL test server.");
-  }
-  return {
-    close: () => closeServer(server),
-    requestCount: () => requestCount,
-    url: `http://127.0.0.1:${address.port}/v1/traces`,
-  };
-}
-
-async function closeServer(server: Server): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
-}
-
 async function readStreamBody(response: Response): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) {
@@ -144,12 +99,12 @@ async function installSlowRequestActivityInsertTrigger(input: {
   `);
 }
 
-async function installSlowGatewayObservabilityTriggers(input: {
+async function installSlowGatewayMetadataTriggers(input: {
   fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>;
   seconds: number;
 }) {
   await input.fixture.query(`
-    create or replace function slow_gateway_observability_write()
+    create or replace function slow_gateway_metadata_write()
     returns trigger
     language plpgsql
     as $$
@@ -163,13 +118,13 @@ async function installSlowGatewayObservabilityTriggers(input: {
     create trigger slow_fallback_events_insert
     before insert on fallback_events
     for each row
-    execute function slow_gateway_observability_write();
+    execute function slow_gateway_metadata_write();
   `);
   await input.fixture.query(`
     create trigger slow_provider_api_keys_update
     before update on provider_api_keys
     for each row
-    execute function slow_gateway_observability_write();
+    execute function slow_gateway_metadata_write();
   `);
 }
 
@@ -317,12 +272,11 @@ test("gateway completes streaming response before slow completed activity insert
   }
 });
 
-test("gateway returns non-streaming response before slow provider observability writes finish", async () => {
+test("gateway returns non-streaming response before slow provider metadata writes finish", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_observability_async_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_metadata_async_${randomUUID().replaceAll("-", "_")}`,
   });
   const fakeProvider = await createFakeProviderServer();
-  const otel = await createSlowOtelServer({ delayMs: 2_000 });
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
@@ -330,16 +284,12 @@ test("gateway returns non-streaming response before slow provider observability 
       agentApiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
-      virtualModelName: "vm-observability-async",
+      virtualModelName: "vm-metadata-async",
     });
-    await installSlowGatewayObservabilityTriggers({ fixture, seconds: 2 });
+    await installSlowGatewayMetadataTriggers({ fixture, seconds: 2 });
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
-      env: {
-        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: otel.url,
-        OTEL_TRACES_EXPORTER: "otlp",
-      },
       port: await getFreePort(),
     });
 
@@ -351,7 +301,7 @@ test("gateway returns non-streaming response before slow provider observability 
       const response = await postChatCompletion({
         agentApiKey,
         baseUrl,
-        model: "vm-observability-async",
+        model: "vm-metadata-async",
       });
       const elapsedMs = Date.now() - startedAt;
       const body = await response.json();
@@ -361,25 +311,21 @@ test("gateway returns non-streaming response before slow provider observability 
         choices: [{ message: { content: "fake provider response", role: "assistant" } }],
       });
       expect(elapsedMs).toBeLessThan(1_500);
-      await expect.poll(() => otel.requestCount()).toBeGreaterThan(0);
-
       await delay(2_200);
     } finally {
       await stopGatewayProcess(gateway);
     }
   } finally {
-    await otel.close();
     await fakeProvider.close();
     await fixture.dispose();
   }
 });
 
-test("gateway streams first chunk before slow provider observability writes finish", async () => {
+test("gateway streams first chunk before slow provider metadata writes finish", async () => {
   const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_stream_observability_${randomUUID().replaceAll("-", "_")}`,
+    databaseNamePrefix: `llmingress_stream_metadata_${randomUUID().replaceAll("-", "_")}`,
   });
   const fakeProvider = await createFakeProviderServer();
-  const otel = await createSlowOtelServer({ delayMs: 2_000 });
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
@@ -387,16 +333,12 @@ test("gateway streams first chunk before slow provider observability writes fini
       agentApiKey,
       fixture,
       providerBaseUrl: `${fakeProvider.url}?mode=stream&stream_end_ms=2500`,
-      virtualModelName: "vm-stream-observability",
+      virtualModelName: "vm-stream-metadata",
     });
-    await installSlowGatewayObservabilityTriggers({ fixture, seconds: 2 });
+    await installSlowGatewayMetadataTriggers({ fixture, seconds: 2 });
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
-      env: {
-        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: otel.url,
-        OTEL_TRACES_EXPORTER: "otlp",
-      },
       port: await getFreePort(),
     });
 
@@ -408,7 +350,7 @@ test("gateway streams first chunk before slow provider observability writes fini
       const response = await postStreamingChatCompletion({
         agentApiKey,
         baseUrl,
-        model: "vm-stream-observability",
+        model: "vm-stream-metadata",
       });
       const firstChunk = await readFirstStreamChunk(response);
       const elapsedMs = Date.now() - startedAt;
@@ -416,14 +358,11 @@ test("gateway streams first chunk before slow provider observability writes fini
       expect(response.status).toBe(200);
       expect(firstChunk).toContain("fake");
       expect(elapsedMs).toBeLessThan(1_500);
-      await expect.poll(() => otel.requestCount()).toBeGreaterThan(0);
-
       await delay(2_200);
     } finally {
       await stopGatewayProcess(gateway);
     }
   } finally {
-    await otel.close();
     await fakeProvider.close();
     await fixture.dispose();
   }
@@ -538,12 +477,16 @@ async function seedFallbackProviderCandidate(input: {
         provider_id,
         model_id,
         display_name,
+        input_modalities,
+        output_modalities,
         context_window,
+        max_output_tokens,
         supports_streaming,
-        supports_tools,
+        supports_function_calling,
+        supports_reasoning,
         availability
       )
-      values ($1, $2, 'fake-model', 'Fake Fallback Model', 128000, true, true, 'available')
+      values ($1, $2, 'fake-model', 'Fake Fallback Model', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
     `,
     [providerModelId, providerId],
   );

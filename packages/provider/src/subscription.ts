@@ -1,4 +1,29 @@
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { isRecord } from "@llmingress/util";
+import type { AnthropicContentBlock } from "./adapters/anthropic.js";
+
 export type SubscriptionProviderKey = "claude_code" | "openai_codex";
+
+export const claudeCodeSystemPrompt =
+  "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
+
+export function withClaudeCodeSystemPrompt(system: unknown): AnthropicContentBlock[] {
+  const identifier: AnthropicContentBlock = { text: claudeCodeSystemPrompt, type: "text" };
+  if (Array.isArray(system)) {
+    const [first] = system;
+    if (isRecord(first) && first.text === claudeCodeSystemPrompt) {
+      return system as AnthropicContentBlock[];
+    }
+    return [identifier, ...(system as AnthropicContentBlock[])];
+  }
+  if (typeof system === "string" && system.trim().length > 0) {
+    if (system.trimStart().startsWith(claudeCodeSystemPrompt)) {
+      return [{ text: system, type: "text" }];
+    }
+    return [identifier, { text: system, type: "text" }];
+  }
+  return [identifier];
+}
 
 export const codexClientVersion = "0.128.0";
 export const codexOriginator = "codex_cli_rs";
@@ -12,7 +37,7 @@ export const claudeCodeUserAgent = "claude-cli/2.1.92 (external, sdk-cli)";
 export function isSubscriptionProviderKey(
   providerKey: string | null | undefined,
 ): providerKey is SubscriptionProviderKey {
-  return providerKey === "openai_codex" || providerKey === "claude_code";
+  return resolveProviderDescriptor(providerKey).subscription === true;
 }
 
 export function buildCodexSubscriptionHeaders(

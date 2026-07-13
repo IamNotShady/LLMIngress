@@ -17,8 +17,8 @@ export {
   closePostgresPools,
   getPostgresPool,
   PostgresClient,
+  withDedicatedPostgresClient,
   withPooledPostgresClient,
-  withPostgresClient,
   withPostgresTransaction,
 } from "./client.js";
 export type {
@@ -34,6 +34,7 @@ export {
   CONFIG_CHANGED_CHANNEL,
   createConfigChangedListener,
   createConfigPublisher,
+  publishConfigChangeWithClient,
 } from "./config-versions.js";
 export type {
   AppliedMigrationStatus,

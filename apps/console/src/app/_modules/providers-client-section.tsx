@@ -4,29 +4,32 @@ import type { ConsoleProviderHealthSummary } from "@llmingress/db/console-provid
 import type { ProviderApiKeyMetadata } from "@llmingress/db/console-provider-keys";
 import type { ConsoleProviderOAuthConnection } from "@llmingress/db/console-provider-oauth";
 import type { ConsoleProvider } from "@llmingress/db/console-providers";
-import type { ConsoleProviderModelOption } from "@llmingress/db/console-route-policies";
-import { type FormEvent, Fragment, useEffect, useMemo, useState } from "react";
+import type { ConsoleProviderModelPage } from "@llmingress/db/console-route-policies";
+import { type FormEvent, Fragment, useMemo, useState } from "react";
+import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
-
-// Hard cap on rendered model rows; search narrows the rest.
-const MODEL_LIBRARY_PAGE_SIZE = 50;
+import { formatRelativeDateTime } from "../_lib/provider-relative-time";
 
 export function ProvidersClientSection({
   initialSelectedProviderId,
+  modelQuery,
   providerHealthSummaries,
   providerKeys,
-  providerModelOptions,
+  providerModelPage,
   providerOAuthConnections,
   providers,
+  renderedAtMs,
   searchParams,
 }: {
   initialSelectedProviderId?: string;
+  modelQuery: string;
   providerHealthSummaries: ConsoleProviderHealthSummary[];
   providerKeys: ProviderApiKeyMetadata[];
-  providerModelOptions: ConsoleProviderModelOption[];
+  providerModelPage: ConsoleProviderModelPage;
   providerOAuthConnections: ConsoleProviderOAuthConnection[];
   providers: ConsoleProvider[];
+  renderedAtMs: number;
   searchParams: ConsoleSearchParams;
 }) {
   const providerHealthByProviderId = useMemo(
@@ -41,65 +44,43 @@ export function ProvidersClientSection({
     () => groupProviderOAuthByProviderId(providerOAuthConnections),
     [providerOAuthConnections],
   );
-  const providerModelsByProviderId = useMemo(
-    () => groupProviderModelsByProviderId(providerModelOptions),
-    [providerModelOptions],
-  );
   const initialProvider =
     providers.find((provider) => provider.id === initialSelectedProviderId) ??
     providers.find((provider) => provider.providerKey === "openai") ??
     providers[0] ??
     null;
-  const initialProviderId = initialProvider?.id ?? null;
-  const [selectedProviderId, setSelectedProviderId] = useState(initialProviderId);
   const [refreshingProviderId, setRefreshingProviderId] = useState<string | null>(null);
-  const [modelQuery, setModelQuery] = useState("");
-  useEffect(() => {
-    setSelectedProviderId(initialProviderId);
-  }, [initialProviderId]);
-  const toggleProvider = (providerId: string) => {
-    setSelectedProviderId((currentProviderId) =>
-      currentProviderId === providerId ? null : providerId,
-    );
-  };
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const refreshProviderModels = async (event: FormEvent<HTMLFormElement>, providerId: string) => {
     event.preventDefault();
     const form = event.currentTarget;
+    setRefreshError(null);
     setRefreshingProviderId(providerId);
     try {
-      await fetch(form.action, {
+      const response = await fetch(form.action, {
         method: "POST",
         body: new FormData(form),
         credentials: "same-origin",
         headers: { accept: "application/json" },
       });
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        setRefreshError(payload.error ?? "Provider model refresh failed.");
+      }
     } catch {
-      // ponytail: no toast yet; surface enqueue failures when refresh status UI exists.
+      setRefreshError("Provider model refresh failed.");
     } finally {
       setRefreshingProviderId(null);
     }
   };
-  const selectedProvider = selectedProviderId
-    ? (providers.find((provider) => provider.id === selectedProviderId) ?? null)
-    : null;
+  const selectedProvider = initialProvider;
   const selectedProviderKeys = selectedProvider
     ? (providerKeysByProviderId.get(selectedProvider.id) ?? [])
     : [];
   const selectedProviderOAuthConnections = selectedProvider
     ? (providerOAuthByProviderId.get(selectedProvider.id) ?? [])
     : [];
-  const selectedProviderModels = selectedProvider
-    ? (providerModelsByProviderId.get(selectedProvider.id) ?? [])
-    : [];
-  const normalizedModelQuery = modelQuery.trim().toLowerCase();
-  const filteredModels = normalizedModelQuery
-    ? selectedProviderModels.filter((model) =>
-        `${model.modelId} ${model.modelDisplayName} ${model.providerDisplayName}`
-          .toLowerCase()
-          .includes(normalizedModelQuery),
-      )
-    : selectedProviderModels;
-  const visibleModels = filteredModels.slice(0, MODEL_LIBRARY_PAGE_SIZE);
+  const selectedProviderModels = providerModelPage.items;
 
   return (
     <>
@@ -107,6 +88,11 @@ export function ProvidersClientSection({
         <div className="providers-main-column">
           <div className="chart-card providers-list-card">
             <h2 className="chart-card-title">Provider list</h2>
+            {refreshError ? (
+              <p className="form-error" role="alert">
+                {refreshError}
+              </p>
+            ) : null}
             {providers.length === 0 ? (
               <p>No providers configured.</p>
             ) : (
@@ -126,7 +112,6 @@ export function ProvidersClientSection({
                   <tbody>
                     {providers.map((provider) => {
                       const providerHealth = providerHealthByProviderId.get(provider.id);
-                      const providerModels = providerModelsByProviderId.get(provider.id) ?? [];
                       const providerKeyCount = readProviderCredentialCount(
                         provider,
                         providerKeysByProviderId,
@@ -141,21 +126,27 @@ export function ProvidersClientSection({
                         <Fragment key={provider.id}>
                           <tr className={isSelected ? "is-selected" : "is-clickable"}>
                             <td>
-                              <button
+                              <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                type="button"
-                                onClick={() => toggleProvider(provider.id)}
+                                href={buildQueryHref(searchParams, {
+                                  modelPage: undefined,
+                                  modelQuery: undefined,
+                                  selected: provider.id,
+                                })}
                               >
                                 <strong>{provider.displayName}</strong>
-                              </button>
+                              </a>
                             </td>
                             <td>
-                              <button
+                              <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                type="button"
-                                onClick={() => toggleProvider(provider.id)}
+                                href={buildQueryHref(searchParams, {
+                                  modelPage: undefined,
+                                  modelQuery: undefined,
+                                  selected: provider.id,
+                                })}
                               >
                                 <ProviderHealthDetailPill
                                   status={
@@ -164,47 +155,59 @@ export function ProvidersClientSection({
                                       : "disabled"
                                   }
                                 />
-                              </button>
+                              </a>
                             </td>
                             <td>
-                              <button
+                              <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                type="button"
-                                onClick={() => toggleProvider(provider.id)}
+                                href={buildQueryHref(searchParams, {
+                                  modelPage: undefined,
+                                  modelQuery: undefined,
+                                  selected: provider.id,
+                                })}
                               >
                                 {formatProviderType(provider)}
-                              </button>
+                              </a>
                             </td>
                             <td className="num">
-                              <button
+                              <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                type="button"
-                                onClick={() => toggleProvider(provider.id)}
+                                href={buildQueryHref(searchParams, {
+                                  modelPage: undefined,
+                                  modelQuery: undefined,
+                                  selected: provider.id,
+                                })}
                               >
                                 {providerKeyCount}
-                              </button>
+                              </a>
                             </td>
                             <td className="num">
-                              <button
+                              <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                type="button"
-                                onClick={() => toggleProvider(provider.id)}
+                                href={buildQueryHref(searchParams, {
+                                  modelPage: undefined,
+                                  modelQuery: undefined,
+                                  selected: provider.id,
+                                })}
                               >
-                                {providerModels.length}
-                              </button>
+                                {provider.providerModelCount}
+                              </a>
                             </td>
                             <td>
-                              <button
+                              <a
                                 aria-expanded={isSelected}
                                 className="table-row-link"
-                                type="button"
-                                onClick={() => toggleProvider(provider.id)}
+                                href={buildQueryHref(searchParams, {
+                                  modelPage: undefined,
+                                  modelQuery: undefined,
+                                  selected: provider.id,
+                                })}
                               >
-                                {formatProviderLastConnection(providerHealth)}
-                              </button>
+                                {formatProviderLastConnection(providerHealth, renderedAtMs)}
+                              </a>
                             </td>
                             <td>
                               <span className="provider-table-actions">
@@ -238,11 +241,15 @@ export function ProvidersClientSection({
                                         selected: provider.id,
                                       })}
                                       aria-label={`Edit ${provider.displayName}`}
+                                      id={`provider-edit-${provider.id}-trigger`}
                                       title="Edit"
                                     >
                                       <FlatIcon name="edit" />
                                     </a>
-                                    <form action="/api/providers" method="post">
+                                    <ConsoleMutationForm
+                                      action="/api/providers"
+                                      fallbackError="Provider disable failed."
+                                    >
                                       <input type="hidden" name="action" value="disable" />
                                       <input type="hidden" name="id" value={provider.id} />
                                       <button
@@ -253,7 +260,7 @@ export function ProvidersClientSection({
                                       >
                                         <FlatIcon name="disable" />
                                       </button>
-                                    </form>
+                                    </ConsoleMutationForm>
                                     <a
                                       className="provider-action-button provider-action-delete row-action-button row-action-danger"
                                       href={buildQueryHref(searchParams, {
@@ -261,6 +268,7 @@ export function ProvidersClientSection({
                                         selected: provider.id,
                                       })}
                                       aria-label={`Delete ${provider.displayName}`}
+                                      id={`provider-delete-${provider.id}-trigger`}
                                       title="Delete"
                                     >
                                       <FlatIcon name="delete" />
@@ -268,7 +276,10 @@ export function ProvidersClientSection({
                                   </>
                                 ) : (
                                   <>
-                                    <form action="/api/providers" method="post">
+                                    <ConsoleMutationForm
+                                      action="/api/providers"
+                                      fallbackError="Provider enable failed."
+                                    >
                                       <input type="hidden" name="action" value="enable" />
                                       <input type="hidden" name="id" value={provider.id} />
                                       <button
@@ -279,7 +290,7 @@ export function ProvidersClientSection({
                                       >
                                         <FlatIcon name="enable" />
                                       </button>
-                                    </form>
+                                    </ConsoleMutationForm>
                                     <a
                                       className="provider-action-button provider-action-delete row-action-button row-action-danger"
                                       href={buildQueryHref(searchParams, {
@@ -287,6 +298,7 @@ export function ProvidersClientSection({
                                         selected: provider.id,
                                       })}
                                       aria-label={`Delete ${provider.displayName}`}
+                                      id={`provider-delete-${provider.id}-trigger`}
                                       title="Delete"
                                     >
                                       <FlatIcon name="delete" />
@@ -313,10 +325,10 @@ export function ProvidersClientSection({
                                             : "API keys"}
                                       </h3>
                                       {provider.providerType === "subscription" ? (
-                                        <form
+                                        <ConsoleMutationForm
                                           action="/api/provider-oauth"
                                           className="provider-oauth-add-form"
-                                          method="post"
+                                          fallbackError="Provider OAuth start failed."
                                         >
                                           <input type="hidden" name="action" value="start" />
                                           <input
@@ -328,12 +340,13 @@ export function ProvidersClientSection({
                                           <button
                                             aria-label="Add OAuth connection"
                                             className="provider-key-add-button"
+                                            id={`provider-key-${provider.id}-trigger`}
                                             title="Add OAuth connection"
                                             type="submit"
                                           >
                                             <FlatIcon name="key" />
                                           </button>
-                                        </form>
+                                        </ConsoleMutationForm>
                                       ) : provider.providerType === "local" ? null : (
                                         <a
                                           className="provider-key-add-button"
@@ -342,6 +355,7 @@ export function ProvidersClientSection({
                                             selected: provider.id,
                                           })}
                                           aria-label="Add API key"
+                                          id={`provider-key-${provider.id}-trigger`}
                                           title="Add API key"
                                         >
                                           <FlatIcon name="key" />
@@ -380,13 +394,16 @@ export function ProvidersClientSection({
                                                         />
                                                       </td>
                                                       <td>
-                                                        {formatProviderOAuthLastTest(connection)}
+                                                        {formatProviderOAuthLastTest(
+                                                          connection,
+                                                          renderedAtMs,
+                                                        )}
                                                       </td>
                                                       <td>
                                                         <span className="provider-table-actions">
-                                                          <form
+                                                          <ConsoleMutationForm
                                                             action="/api/provider-oauth"
-                                                            method="post"
+                                                            fallbackError="Provider OAuth update failed."
                                                           >
                                                             <input
                                                               type="hidden"
@@ -428,10 +445,10 @@ export function ProvidersClientSection({
                                                                 }
                                                               />
                                                             </button>
-                                                          </form>
-                                                          <form
+                                                          </ConsoleMutationForm>
+                                                          <ConsoleMutationForm
                                                             action="/api/provider-oauth"
-                                                            method="post"
+                                                            fallbackError="Provider OAuth deletion failed."
                                                           >
                                                             <input
                                                               type="hidden"
@@ -451,7 +468,7 @@ export function ProvidersClientSection({
                                                             >
                                                               <FlatIcon name="delete" />
                                                             </button>
-                                                          </form>
+                                                          </ConsoleMutationForm>
                                                         </span>
                                                       </td>
                                                     </tr>
@@ -473,7 +490,10 @@ export function ProvidersClientSection({
                                                     />
                                                   </td>
                                                   <td>
-                                                    {formatProviderApiKeyLastTest(providerKey)}
+                                                    {formatProviderApiKeyLastTest(
+                                                      providerKey,
+                                                      renderedAtMs,
+                                                    )}
                                                   </td>
                                                   <td>
                                                     <a
@@ -483,6 +503,7 @@ export function ProvidersClientSection({
                                                         selected: provider.id,
                                                       })}
                                                       aria-label="Delete API key"
+                                                      id={`provider-key-delete-${providerKey.id}-trigger`}
                                                       title="Delete API key"
                                                     >
                                                       <FlatIcon name="delete" />
@@ -516,22 +537,26 @@ export function ProvidersClientSection({
           <h2 className="chart-card-title">
             Model library{selectedProvider ? ` - ${selectedProvider.displayName}` : ""}
           </h2>
-          {selectedProviderModels.length > 0 ? (
-            <label className="model-library-search">
-              <span className="sr-only">Search models</span>
+          {selectedProvider ? (
+            <form className="model-library-search" action="/providers" method="get">
+              <input type="hidden" name="selected" value={selectedProvider.id} />
+              <label className="sr-only" htmlFor="provider-model-query">
+                Search models
+              </label>
               <input
+                defaultValue={modelQuery}
+                id="provider-model-query"
+                name="modelQuery"
                 type="search"
                 placeholder="Search models"
-                value={modelQuery}
-                onChange={(event) => setModelQuery(event.target.value)}
               />
-            </label>
+            </form>
           ) : null}
         </div>
-        {selectedProviderModels.length === 0 ? (
+        {providerModelPage.total === 0 && modelQuery ? (
+          <p>No models match “{modelQuery}”.</p>
+        ) : providerModelPage.total === 0 ? (
           <p>No provider models discovered yet.</p>
-        ) : filteredModels.length === 0 ? (
-          <p>No models match “{modelQuery.trim()}”.</p>
         ) : (
           <div className="data-table-wrap">
             <table className="data-table model-library-table">
@@ -540,15 +565,19 @@ export function ProvidersClientSection({
                   <th>Provider</th>
                   <th>Model ID</th>
                   <th>Context</th>
+                  <th>Output cap</th>
+                  <th>Input</th>
+                  <th>Output</th>
                   <th>Input price</th>
                   <th>Output price</th>
-                  <th>Tools</th>
+                  <th>Function</th>
+                  <th>Reasoning</th>
                   <th>Streaming</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleModels.map((model) => (
+                {selectedProviderModels.map((model) => (
                   <tr key={model.id}>
                     <td>{model.providerDisplayName}</td>
                     <td>
@@ -558,9 +587,13 @@ export function ProvidersClientSection({
                       </span>
                     </td>
                     <td>{formatModelContext(model.contextWindow)}</td>
+                    <td>{formatModelContext(model.maxOutputTokens)}</td>
+                    <td>{formatModalities(model.inputModalities)}</td>
+                    <td>{formatModalities(model.outputModalities)}</td>
                     <td>{formatModelPrice(model.inputUsdPerMillionTokens)}</td>
                     <td>{formatModelPrice(model.outputUsdPerMillionTokens)}</td>
-                    <td>{formatBooleanFeature(model.supportsTools)}</td>
+                    <td>{formatNullableBooleanFeature(model.supportsFunctionCalling)}</td>
+                    <td>{formatNullableBooleanFeature(model.supportsReasoning)}</td>
                     <td>{formatBooleanFeature(model.supportsStreaming)}</td>
                     <td>
                       <ModelAvailabilityPill value={model.availability} />
@@ -569,11 +602,31 @@ export function ProvidersClientSection({
                 ))}
               </tbody>
             </table>
-            {filteredModels.length > visibleModels.length ? (
-              <p className="model-library-truncation-note">
-                Showing first {visibleModels.length} of {filteredModels.length} models — search to
-                narrow the list.
-              </p>
+            {providerModelPage.pageCount > 1 ? (
+              <nav className="model-library-truncation-note" aria-label="Model pages">
+                {providerModelPage.page > 1 ? (
+                  <a
+                    href={buildQueryHref(searchParams, {
+                      modelPage: String(providerModelPage.page - 1),
+                    })}
+                  >
+                    Previous
+                  </a>
+                ) : null}
+                <span>
+                  Page {providerModelPage.page} of {providerModelPage.pageCount} ·{" "}
+                  {providerModelPage.total} models
+                </span>
+                {providerModelPage.page < providerModelPage.pageCount ? (
+                  <a
+                    href={buildQueryHref(searchParams, {
+                      modelPage: String(providerModelPage.page + 1),
+                    })}
+                  >
+                    Next
+                  </a>
+                ) : null}
+              </nav>
             ) : null}
           </div>
         )}
@@ -670,16 +723,6 @@ function formatProviderTestStatusLabel(
   }[status];
 }
 
-function groupProviderModelsByProviderId(providerModels: ConsoleProviderModelOption[]) {
-  const grouped = new Map<string, ConsoleProviderModelOption[]>();
-  for (const model of providerModels) {
-    const models = grouped.get(model.providerId) ?? [];
-    models.push(model);
-    grouped.set(model.providerId, models);
-  }
-  return grouped;
-}
-
 function groupProviderKeysByProviderId(providerKeys: ProviderApiKeyMetadata[]) {
   const grouped = new Map<string, ProviderApiKeyMetadata[]>();
   for (const providerKey of providerKeys) {
@@ -728,39 +771,31 @@ function formatProviderType(provider: ConsoleProvider): string {
 
 function formatProviderLastConnection(
   providerHealth: ConsoleProviderHealthSummary | undefined,
+  referenceTimeMs: number,
 ): string {
   if (!providerHealth?.latestProbeAt) {
     return "-";
   }
 
-  return formatRelativeDateTime(providerHealth.latestProbeAt);
+  return formatRelativeDateTime(providerHealth.latestProbeAt, referenceTimeMs);
 }
 
-function formatProviderApiKeyLastTest(providerKey: ProviderApiKeyMetadata): string {
-  return providerKey.lastTestedAt ? formatRelativeDateTime(providerKey.lastTestedAt) : "-";
+function formatProviderApiKeyLastTest(
+  providerKey: ProviderApiKeyMetadata,
+  referenceTimeMs: number,
+): string {
+  return providerKey.lastTestedAt
+    ? formatRelativeDateTime(providerKey.lastTestedAt, referenceTimeMs)
+    : "-";
 }
 
-function formatProviderOAuthLastTest(connection: ConsoleProviderOAuthConnection): string {
-  return connection.lastTestedAt ? formatRelativeDateTime(connection.lastTestedAt) : "-";
-}
-
-function formatRelativeDateTime(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  const elapsedMs = Date.now() - date.getTime();
-  if (elapsedMs < 60_000) {
-    return "just now";
-  }
-  if (elapsedMs < 3_600_000) {
-    return `${Math.floor(elapsedMs / 60_000)} min ago`;
-  }
-  if (elapsedMs < 86_400_000) {
-    return `${Math.floor(elapsedMs / 3_600_000)} h ago`;
-  }
-  return date.toISOString().slice(0, 10);
+function formatProviderOAuthLastTest(
+  connection: ConsoleProviderOAuthConnection,
+  referenceTimeMs: number,
+): string {
+  return connection.lastTestedAt
+    ? formatRelativeDateTime(connection.lastTestedAt, referenceTimeMs)
+    : "-";
 }
 
 function formatModelContext(contextWindow: number | null): string {
@@ -790,6 +825,14 @@ function formatDecimal(value: number): string {
 
 function formatBooleanFeature(value: boolean): string {
   return value ? "Yes" : "No";
+}
+
+function formatNullableBooleanFeature(value: boolean | null): string {
+  return value === null ? "Unknown" : formatBooleanFeature(value);
+}
+
+function formatModalities(value: readonly string[] | null): string {
+  return value && value.length > 0 ? value.join(", ") : "Unknown";
 }
 
 function formatModelAvailability(value: string): string {

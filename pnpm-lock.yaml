@@ -14,6 +14,15 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:packages/db
+      '@llmingress/gateway-runtime':
+        specifier: workspace:*
+        version: link:packages/gateway-runtime
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:packages/util
+      '@llmingress/worker-runtime':
+        specifier: workspace:*
+        version: link:packages/worker-runtime
       '@playwright/test':
         specifier: ^1.60.0
         version: 1.60.0
@@ -26,6 +35,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.8
         version: 4.1.8(vitest@4.1.8)
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -47,6 +59,15 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../../packages/logging
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../../packages/util
       next:
         specifier: ^16.2.9
         version: 16.2.9(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -75,6 +96,12 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@llmingress/gateway-runtime':
+        specifier: workspace:*
+        version: link:../../packages/gateway-runtime
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../../packages/logging
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -87,25 +114,44 @@ importers:
       '@llmingress/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../../packages/logging
+      '@llmingress/worker-runtime':
+        specifier: workspace:*
+        version: link:../../packages/worker-runtime
 
   packages/billing: {}
 
-  packages/config: {}
+  packages/config:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
   packages/db:
     dependencies:
       '@llmingress/billing':
         specifier: workspace:*
         version: link:../billing
+      '@llmingress/config':
+        specifier: workspace:*
+        version: link:../config
       '@llmingress/domain':
         specifier: workspace:*
         version: link:../domain
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../logging
       '@llmingress/provider':
         specifier: workspace:*
         version: link:../provider
       '@llmingress/security':
         specifier: workspace:*
         version: link:../security
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -115,10 +161,76 @@ importers:
       '@llmingress/billing':
         specifier: workspace:*
         version: link:../billing
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
 
-  packages/provider: {}
+  packages/gateway-runtime:
+    dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@llmingress/db':
+        specifier: workspace:*
+        version: link:../db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../logging
+      '@llmingress/provider':
+        specifier: workspace:*
+        version: link:../provider
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../security
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
+
+  packages/logging:
+    dependencies:
+      pino:
+        specifier: ^9.13.1
+        version: 9.14.0
+
+  packages/provider:
+    dependencies:
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
 
   packages/security: {}
+
+  packages/util: {}
+
+  packages/worker-runtime:
+    dependencies:
+      '@llmingress/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@llmingress/db':
+        specifier: workspace:*
+        version: link:../db
+      '@llmingress/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@llmingress/logging':
+        specifier: workspace:*
+        version: link:../logging
+      '@llmingress/provider':
+        specifier: workspace:*
+        version: link:../provider
+      '@llmingress/security':
+        specifier: workspace:*
+        version: link:../security
+      '@llmingress/util':
+        specifier: workspace:*
+        version: link:../util
 
 packages:
 
@@ -1244,6 +1356,9 @@ packages:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
 
+  pino-abstract-transport@2.0.0:
+    resolution: {integrity: sha512-F63x5tizV6WCh4R6RHyi2Ml+M70DNRXt/+HANowMflpgGFMAym/VKm6G7ZOQRjqN7XbGxK1Lg9t6ZrtzOaivMw==}
+
   pino-abstract-transport@3.0.0:
     resolution: {integrity: sha512-wlfUczU+n7Hy/Ha5j9a/gZNy7We5+cXp8YL+X+PG8S0KXxw7n/JXA3c46Y0zQznIJ83URJiwy7Lh56WLokNuxg==}
 
@@ -1252,6 +1367,10 @@ packages:
 
   pino@10.3.1:
     resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
+    hasBin: true
+
+  pino@9.14.0:
+    resolution: {integrity: sha512-8OEwKp5juEvb/MjpIc4hjqfgCNysrS94RIOMXYvpYCdm/jglrKEiAYmiumbmGhCvs+IcInsphYDFwqrjr7398w==}
     hasBin: true
 
   playwright-core@1.60.0:
@@ -1430,6 +1549,9 @@ packages:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
 
+  thread-stream@3.2.0:
+    resolution: {integrity: sha512-zLBvqpwr4Esa0kRjcrzGU6zL25lePWaCLMx0RQFrmteozIfeNdaMLpG5U7PeHzvlFkAWaRKA9/KVW4F60iB+qw==}
+
   thread-stream@4.2.0:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
@@ -1576,6 +1698,9 @@ packages:
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
     engines: {node: '>=0.4'}
+
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
 
@@ -2455,6 +2580,10 @@ snapshots:
 
   picomatch@4.0.4: {}
 
+  pino-abstract-transport@2.0.0:
+    dependencies:
+      split2: 4.2.0
+
   pino-abstract-transport@3.0.0:
     dependencies:
       split2: 4.2.0
@@ -2474,6 +2603,20 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
       thread-stream: 4.2.0
+
+  pino@9.14.0:
+    dependencies:
+      '@pinojs/redact': 0.4.0
+      atomic-sleep: 1.0.0
+      on-exit-leak-free: 2.1.2
+      pino-abstract-transport: 2.0.0
+      pino-std-serializers: 7.1.0
+      process-warning: 5.0.0
+      quick-format-unescaped: 4.0.4
+      real-require: 0.2.0
+      safe-stable-stringify: 2.5.0
+      sonic-boom: 4.2.1
+      thread-stream: 3.2.0
 
   playwright-core@1.60.0: {}
 
@@ -2659,6 +2802,10 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
+  thread-stream@3.2.0:
+    dependencies:
+      real-require: 0.2.0
+
   thread-stream@4.2.0:
     dependencies:
       real-require: 1.0.0
@@ -2767,3 +2914,5 @@ snapshots:
       stackback: 0.0.2
 
   xtend@4.0.2: {}
+
+  zod@3.25.76: {}

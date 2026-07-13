@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type PostgresQueryResultRow, withPooledPostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 
 export type {
   PostgresQueryClient,
@@ -45,7 +45,7 @@ export type ProviderOAuthRuntimeConnection = ProviderOAuthMetadata & {
   providerKey: string;
 };
 
-type ProviderOAuthRow = PostgresQueryResultRow & {
+type ProviderOAuthRow = {
   completed_at: Date | null;
   created_at: Date;
   enabled: boolean;

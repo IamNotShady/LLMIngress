@@ -24,6 +24,10 @@
       "types": "./src/provider-health.ts",
       "default": "./src/provider-health.ts"
     },
+    "./price-rows": {
+      "types": "./src/price-rows.ts",
+      "default": "./src/price-rows.ts"
+    },
     "./provider-jobs": {
       "types": "./src/provider-jobs.ts",
       "default": "./src/provider-jobs.ts"
@@ -44,10 +48,6 @@
       "types": "./src/console-agents.ts",
       "default": "./src/console-agents.ts"
     },
-    "./console-analytics": {
-      "types": "./src/console-analytics.ts",
-      "default": "./src/console-analytics.ts"
-    },
     "./console-auth": {
       "types": "./src/console-auth.ts",
       "default": "./src/console-auth.ts"
@@ -56,13 +56,9 @@
       "types": "./src/console-format.ts",
       "default": "./src/console-format.ts"
     },
-    "./console-import-export": {
-      "types": "./src/console-import-export.ts",
-      "default": "./src/console-import-export.ts"
-    },
-    "./console-notification-channels": {
-      "types": "./src/console-notification-channels.ts",
-      "default": "./src/console-notification-channels.ts"
+    "./console-operation-error": {
+      "types": "./src/console-operation-error.ts",
+      "default": "./src/console-operation-error.ts"
     },
     "./console-price-overrides": {
       "types": "./src/console-price-overrides.ts",
@@ -75,6 +71,10 @@
     "./console-provider-keys": {
       "types": "./src/console-provider-keys.ts",
       "default": "./src/console-provider-keys.ts"
+    },
+    "./console-provider-model-capabilities": {
+      "types": "./src/console-provider-model-capabilities.ts",
+      "default": "./src/console-provider-model-capabilities.ts"
     },
     "./console-provider-oauth": {
       "types": "./src/console-provider-oauth.ts",
@@ -92,14 +92,6 @@
       "types": "./src/console-route-policies.ts",
       "default": "./src/console-route-policies.ts"
     },
-    "./console-route-preview": {
-      "types": "./src/console-route-preview.ts",
-      "default": "./src/console-route-preview.ts"
-    },
-    "./console-runtime": {
-      "types": "./src/console-runtime.ts",
-      "default": "./src/console-runtime.ts"
-    },
     "./console-usage": {
       "types": "./src/console-usage.ts",
       "default": "./src/console-usage.ts"
@@ -107,158 +99,6 @@
     "./console-virtual-models": {
       "types": "./src/console-virtual-models.ts",
       "default": "./src/console-virtual-models.ts"
-    },
-    "./gateway-activity-recorder": {
-      "types": "./src/gateway-activity-recorder.ts",
-      "default": "./src/gateway-activity-recorder.ts"
-    },
-    "./gateway-auth": {
-      "types": "./src/gateway-auth.ts",
-      "default": "./src/gateway-auth.ts"
-    },
-    "./gateway-agent-limits": {
-      "types": "./src/gateway-agent-limits.ts",
-      "default": "./src/gateway-agent-limits.ts"
-    },
-    "./gateway-chat-completions": {
-      "types": "./src/gateway-chat-completions.ts",
-      "default": "./src/gateway-chat-completions.ts"
-    },
-    "./gateway-provider-credentials": {
-      "types": "./src/gateway-provider-credentials.ts",
-      "default": "./src/gateway-provider-credentials.ts"
-    },
-    "./gateway-protocol-request": {
-      "types": "./src/gateway-protocol-request.ts",
-      "default": "./src/gateway-protocol-request.ts"
-    },
-    "./gateway-config-reload": {
-      "types": "./src/gateway-config-reload.ts",
-      "default": "./src/gateway-config-reload.ts"
-    },
-    "./gateway-embeddings": {
-      "types": "./src/gateway-embeddings.ts",
-      "default": "./src/gateway-embeddings.ts"
-    },
-    "./gateway-error-mapping": {
-      "types": "./src/gateway-error-mapping.ts",
-      "default": "./src/gateway-error-mapping.ts"
-    },
-    "./gateway-header-passthrough": {
-      "types": "./src/gateway-header-passthrough.ts",
-      "default": "./src/gateway-header-passthrough.ts"
-    },
-    "./gateway-env": {
-      "types": "./src/gateway-env.ts",
-      "default": "./src/gateway-env.ts"
-    },
-    "./gateway-messages": {
-      "types": "./src/gateway-messages.ts",
-      "default": "./src/gateway-messages.ts"
-    },
-    "./gateway-metrics": {
-      "types": "./src/gateway-metrics.ts",
-      "default": "./src/gateway-metrics.ts"
-    },
-    "./gateway-request-metadata": {
-      "types": "./src/gateway-request-metadata.ts",
-      "default": "./src/gateway-request-metadata.ts"
-    },
-    "./gateway-responses": {
-      "types": "./src/gateway-responses.ts",
-      "default": "./src/gateway-responses.ts"
-    },
-    "./gateway-stream-pipeline": {
-      "types": "./src/gateway-stream-pipeline.ts",
-      "default": "./src/gateway-stream-pipeline.ts"
-    },
-    "./gateway-streaming": {
-      "types": "./src/gateway-streaming.ts",
-      "default": "./src/gateway-streaming.ts"
-    },
-    "./gateway-tracing": {
-      "types": "./src/gateway-tracing.ts",
-      "default": "./src/gateway-tracing.ts"
-    },
-    "./gateway-usage-collector": {
-      "types": "./src/gateway-usage-collector.ts",
-      "default": "./src/gateway-usage-collector.ts"
-    },
-    "./gateway-usage-recorder": {
-      "types": "./src/gateway-usage-recorder.ts",
-      "default": "./src/gateway-usage-recorder.ts"
-    },
-    "./gateway-virtual-model-access": {
-      "types": "./src/gateway-virtual-model-access.ts",
-      "default": "./src/gateway-virtual-model-access.ts"
-    },
-    "./worker-backup": {
-      "types": "./src/worker-backup.ts",
-      "default": "./src/worker-backup.ts"
-    },
-    "./worker-billing-reconciliation": {
-      "types": "./src/worker-billing-reconciliation.ts",
-      "default": "./src/worker-billing-reconciliation.ts"
-    },
-    "./worker-budget-threshold-alerts": {
-      "types": "./src/worker-budget-threshold-alerts.ts",
-      "default": "./src/worker-budget-threshold-alerts.ts"
-    },
-    "./worker-cost-report-export": {
-      "types": "./src/worker-cost-report-export.ts",
-      "default": "./src/worker-cost-report-export.ts"
-    },
-    "./worker-fallback-exhaustion-alerts": {
-      "types": "./src/worker-fallback-exhaustion-alerts.ts",
-      "default": "./src/worker-fallback-exhaustion-alerts.ts"
-    },
-    "./worker-job-runner": {
-      "types": "./src/worker-job-runner.ts",
-      "default": "./src/worker-job-runner.ts"
-    },
-    "./worker-jsonl-export": {
-      "types": "./src/worker-jsonl-export.ts",
-      "default": "./src/worker-jsonl-export.ts"
-    },
-    "./worker-model-refresh": {
-      "types": "./src/worker-model-refresh.ts",
-      "default": "./src/worker-model-refresh.ts"
-    },
-    "./worker-notification-dispatcher": {
-      "types": "./src/worker-notification-dispatcher.ts",
-      "default": "./src/worker-notification-dispatcher.ts"
-    },
-    "./worker-periodic-scheduler": {
-      "types": "./src/worker-periodic-scheduler.ts",
-      "default": "./src/worker-periodic-scheduler.ts"
-    },
-    "./worker-price-sync": {
-      "types": "./src/worker-price-sync.ts",
-      "default": "./src/worker-price-sync.ts"
-    },
-    "./worker-provider-connectivity-check": {
-      "types": "./src/worker-provider-connectivity-check.ts",
-      "default": "./src/worker-provider-connectivity-check.ts"
-    },
-    "./worker-provider-failure-alerts": {
-      "types": "./src/worker-provider-failure-alerts.ts",
-      "default": "./src/worker-provider-failure-alerts.ts"
-    },
-    "./worker-rate-limit-alerts": {
-      "types": "./src/worker-rate-limit-alerts.ts",
-      "default": "./src/worker-rate-limit-alerts.ts"
-    },
-    "./worker-retention-cleanup": {
-      "types": "./src/worker-retention-cleanup.ts",
-      "default": "./src/worker-retention-cleanup.ts"
-    },
-    "./worker-stale-concurrency": {
-      "types": "./src/worker-stale-concurrency.ts",
-      "default": "./src/worker-stale-concurrency.ts"
-    },
-    "./worker-webhook-export": {
-      "types": "./src/worker-webhook-export.ts",
-      "default": "./src/worker-webhook-export.ts"
     }
   },
   "scripts": {
@@ -266,10 +106,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "pg": "^8.21.0",
     "@llmingress/billing": "workspace:*",
+    "@llmingress/config": "workspace:*",
     "@llmingress/domain": "workspace:*",
+    "@llmingress/logging": "workspace:*",
     "@llmingress/provider": "workspace:*",
-    "@llmingress/security": "workspace:*"
+    "@llmingress/security": "workspace:*",
+    "@llmingress/util": "workspace:*",
+    "pg": "^8.21.0"
   }
 }

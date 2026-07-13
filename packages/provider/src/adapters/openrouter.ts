@@ -1,3 +1,4 @@
+import { isRecord } from "@llmingress/util";
 import {
   createOpenAIProviderAdapter,
   type OpenAIAdapterError,
@@ -64,8 +65,4 @@ function readOpenRouterProviderError(
     code: `openrouter_${statusCode}`,
     message: "OpenRouter request failed.",
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

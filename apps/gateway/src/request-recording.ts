@@ -2,22 +2,21 @@ import { randomUUID } from "node:crypto";
 import {
   type GatewayRequestActivityProtocol,
   type GatewayRequestActivityRoute,
-  readGatewayActivityError,
   recordCompletedGatewayRequestActivity,
-} from "@llmingress/db/gateway-activity-recorder";
+} from "@llmingress/gateway-runtime/gateway-activity-recorder";
 import {
   type GatewayBudgetSettlement,
   recordGatewayBudgetUsage,
-} from "@llmingress/db/gateway-agent-limits";
-import type { GatewayRequestMetadata } from "@llmingress/db/gateway-request-metadata";
-import { wrapProviderStreamWithActivityCompletion } from "@llmingress/db/gateway-stream-pipeline";
-import type { GatewayStreamingResult } from "@llmingress/db/gateway-streaming";
-import { recordGatewayRequestTrace } from "@llmingress/db/gateway-tracing";
+} from "@llmingress/gateway-runtime/gateway-agent-limits";
+import { runGatewayBackgroundTask } from "@llmingress/gateway-runtime/gateway-background-tasks";
+import type { GatewayRequestMetadata } from "@llmingress/gateway-runtime/gateway-request-metadata";
+import { wrapProviderStreamWithActivityCompletion } from "@llmingress/gateway-runtime/gateway-stream-pipeline";
+import type { GatewayStreamingResult } from "@llmingress/gateway-runtime/gateway-streaming";
 import {
   buildGatewayProviderUsageResponseBody,
   createGatewayStreamingUsageCollector,
-} from "@llmingress/db/gateway-usage-collector";
-import type { GatewayUsageCostDetails } from "@llmingress/db/gateway-usage-recorder";
+} from "@llmingress/gateway-runtime/gateway-usage-collector";
+import type { GatewayUsageCostDetails } from "@llmingress/gateway-runtime/gateway-usage-recorder";
 import type { FastifyBaseLogger } from "fastify";
 
 export type GatewayJsonEndpointResponse = {
@@ -32,30 +31,29 @@ export type GatewayJsonEndpointResponse = {
 
 export type GatewayRequestRecorder = {
   recordActivity: typeof recordCompletedGatewayRequestActivity;
-  recordTrace: typeof recordGatewayRequestTrace;
 };
 
 export const defaultGatewayRequestRecorder: GatewayRequestRecorder = {
   recordActivity: recordCompletedGatewayRequestActivity,
-  recordTrace: recordGatewayRequestTrace,
 };
 
 function runRecordingTask(input: {
   activityId?: string;
   logger: FastifyBaseLogger;
   message: string;
+  name: string;
   requestId: string;
   task: () => Promise<void>;
 }): void {
-  void input.task().catch((error) => {
-    input.logger.error(
-      {
-        ...(input.activityId ? { activityId: input.activityId } : {}),
-        err: error,
-        requestId: input.requestId,
-      },
-      input.message,
-    );
+  runGatewayBackgroundTask({
+    logger: input.logger,
+    message: input.message,
+    metadata: {
+      ...(input.activityId ? { activityId: input.activityId } : {}),
+      requestId: input.requestId,
+    },
+    name: input.name,
+    task: input.task,
   });
 }
 
@@ -67,7 +65,6 @@ export async function executeRecordedGatewayJsonRequest(input: {
   model: string;
   protocol: GatewayRequestActivityProtocol;
   recorder?: GatewayRequestRecorder;
-  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }): Promise<GatewayJsonEndpointResponse> {
@@ -98,23 +95,6 @@ export async function executeRecordedGatewayJsonRequest(input: {
     usageCost: response.statusCode < 400 ? usageCost : undefined,
   });
 
-  runRecordingTask({
-    logger: input.logger,
-    message: "gateway trace recording failed",
-    requestId: input.requestId,
-    task: () =>
-      recorder.recordTrace({
-        errorCode: readGatewayActivityError(response.body)?.errorCode ?? null,
-        httpStatus: response.statusCode,
-        modelId: response.activity?.modelId ?? null,
-        protocol: input.protocol,
-        providerKey: response.activity?.providerKey ?? null,
-        requestId: input.requestId,
-        startedAt: activity.startedAt,
-        status: response.statusCode < 400 ? "succeeded" : "failed",
-      }),
-  });
-
   return response;
 }
 
@@ -126,7 +106,6 @@ export async function executeRecordedGatewayStreamingRequest(input: {
   model: string;
   protocol: GatewayRequestActivityProtocol;
   recorder?: GatewayRequestRecorder;
-  requestLoggingEnabled: boolean;
   requestId: string;
   virtualModelId: string;
 }): Promise<GatewayStreamingResult> {
@@ -198,7 +177,6 @@ function scheduleRecordActivity(input: {
     model: string;
     protocol: GatewayRequestActivityProtocol;
     requestId: string;
-    requestLoggingEnabled: boolean;
     virtualModelId: string;
   };
   requestMetadata?: GatewayRequestMetadata;
@@ -213,6 +191,7 @@ function scheduleRecordActivity(input: {
     activityId: input.activity.id,
     logger: input.input.logger,
     message: "gateway activity recording failed",
+    name: "gateway.activity",
     requestId: input.input.requestId,
     task: () =>
       input.recorder.recordActivity({
@@ -222,7 +201,6 @@ function scheduleRecordActivity(input: {
         model: input.input.model,
         protocol: input.input.protocol,
         requestId: input.input.requestId,
-        requestLoggingEnabled: input.input.requestLoggingEnabled,
         requestMetadata: input.requestMetadata,
         responseBody: input.responseBody,
         route: input.route,
@@ -248,6 +226,7 @@ function scheduleBudgetUsage(input: {
   runRecordingTask({
     logger: input.input.logger,
     message: input.message,
+    name: "gateway.budget",
     requestId: input.input.requestId,
     task: () =>
       recordGatewayBudgetUsage({

@@ -1,5 +1,6 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
-import { formatConsoleUsd } from "@llmingress/db/console-format";
+import { withPooledPostgresClient } from "@llmingress/db/client";
+import { isRecord } from "@llmingress/util";
+import { consoleValidationError } from "./console-operation-error.ts";
 
 export type ConsoleActivity = {
   agentKeyPrefix: string | null;
@@ -30,7 +31,6 @@ export type ConsoleActivity = {
   totalCostUsd: string | null;
   totalTokens: number | null;
   virtualModelId: string | null;
-  virtualModelDisplayName: string | null;
   virtualModelName: string | null;
 };
 
@@ -95,7 +95,7 @@ export type ConsoleActivityDetail = {
 type ConsoleActivityProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 type ConsoleActivityStatus = "canceled" | "failed" | "started" | "succeeded";
 
-type ActivityRow = PostgresQueryResultRow & {
+type ActivityRow = {
   agent_key_prefix: string | null;
   agent_name: string | null;
   completed_at: Date | null;
@@ -126,11 +126,10 @@ type ActivityRow = PostgresQueryResultRow & {
   total_cost_usd: string | null;
   total_tokens: number | null;
   virtual_model_id: string | null;
-  virtual_model_display_name: string | null;
   virtual_model_name: string | null;
 };
 
-type FallbackEventRow = PostgresQueryResultRow & {
+type FallbackEventRow = {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -174,10 +173,7 @@ export async function listConsoleActivities(
     typeof input === "string"
       ? normalizeActivityListInput({ databaseUrl: input, limit })
       : normalizeActivityListInput(input);
-  const client = new PostgresClient({ connectionString: listInput.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(listInput.databaseUrl, async (client) => {
     const where = buildActivityWhereClause(listInput.filters);
     const result = await client.query<ActivityRow>(
       `
@@ -214,8 +210,6 @@ export async function listConsoleActivities(
                coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
                  as provider_model_name,
                request_activity.virtual_model_id::text as virtual_model_id,
-               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
-                 as virtual_model_display_name,
                coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
                  as virtual_model_name,
                request_usage.input_tokens,
@@ -246,9 +240,7 @@ export async function listConsoleActivities(
     );
 
     return result.rows.map(rowToConsoleActivity);
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function countConsoleActivities(input: {
@@ -260,12 +252,9 @@ export async function countConsoleActivities(input: {
     page: _filterPage,
     ...filters
   } = normalizeConsoleActivityFilters(input.filters ?? {});
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const where = buildActivityWhereClause(filters);
-    const result = await client.query<PostgresQueryResultRow & { count: string }>(
+    const result = await client.query<{ count: string }>(
       `
         select count(*)::text as count
         from request_activity
@@ -274,9 +263,7 @@ export async function countConsoleActivities(input: {
       where.values,
     );
     return Number.parseInt(result.rows[0]?.count ?? "0", 10);
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function getConsoleActivityDetail(input: {
@@ -285,13 +272,13 @@ export async function getConsoleActivityDetail(input: {
   requestId?: string;
 }): Promise<ConsoleActivityDetail | null> {
   if (!input.activityId && !input.requestId) {
-    throw new Error("Activity detail requires activityId or requestId.");
+    throw consoleValidationError(
+      "Activity detail requires activityId or requestId.",
+      "activity_detail_key_required",
+    );
   }
 
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ActivityRow>(
       `
         select request_activity.id::text,
@@ -329,8 +316,6 @@ export async function getConsoleActivityDetail(input: {
                coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
                  as provider_model_name,
                request_activity.virtual_model_id::text as virtual_model_id,
-               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
-                 as virtual_model_display_name,
                coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
                  as virtual_model_name,
                request_usage.input_tokens,
@@ -391,9 +376,7 @@ export async function getConsoleActivityDetail(input: {
       requestMetadata: row.request_metadata ?? {},
       responseMetadata: row.response_metadata ?? {},
     };
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export function normalizeConsoleActivityFilters(
@@ -480,22 +463,6 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
   };
 }
 
-export function formatConsoleActivityCost(totalCostUsd: string | null): string {
-  return formatConsoleUsd(totalCostUsd);
-}
-
-export function formatConsoleActivityTokens(input: {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-}): string {
-  if (input.inputTokens === null || input.outputTokens === null || input.totalTokens === null) {
-    return "Token usage unavailable";
-  }
-
-  return `${input.totalTokens} total tokens (${input.inputTokens} input, ${input.outputTokens} output)`;
-}
-
 export function formatConsoleActivityRouteReason(routeReason: unknown): string {
   if (isRecord(routeReason) && typeof routeReason.message === "string") {
     const message = routeReason.message.trim();
@@ -505,24 +472,6 @@ export function formatConsoleActivityRouteReason(routeReason: unknown): string {
   }
 
   return "No route reason recorded";
-}
-
-export function formatConsoleActivityFallbackAttempts(
-  fallbackEvents: readonly ConsoleFallbackEvent[],
-): string[] {
-  const failedEvents = fallbackEvents.filter((event) => event.status === "failed");
-  if (failedEvents.length === 0) {
-    return ["No fallback attempts"];
-  }
-
-  return failedEvents.map((event, index) => {
-    const attemptOrder = Number.isFinite(event.attemptOrder) ? event.attemptOrder : index + 1;
-    const errorCode = event.errorCode?.trim() || "unknown_error";
-    const providerModelId = event.providerModelId?.trim() || "unknown provider model";
-    const firstByte = event.failedBeforeFirstByte ? " before first byte" : "";
-
-    return `Attempt ${attemptOrder}: ${errorCode}${firstByte} on ${providerModelId}`;
-  });
 }
 
 export function formatConsoleActivityMetadata(metadata: unknown): string[] {
@@ -561,7 +510,6 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     totalCostUsd: row.total_cost_usd,
     totalTokens: row.total_tokens,
     virtualModelId: row.virtual_model_id,
-    virtualModelDisplayName: row.virtual_model_display_name,
     virtualModelName: row.virtual_model_name,
   };
 }
@@ -670,8 +618,4 @@ function collectMetadataLines(prefix: string, value: unknown, lines: string[]): 
     const nextPrefix = prefix ? `${prefix}.${key}` : key;
     collectMetadataLines(nextPrefix, child, lines);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

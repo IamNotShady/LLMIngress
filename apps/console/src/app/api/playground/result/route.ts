@@ -5,7 +5,10 @@ import { withConsoleAuth } from "../../_auth";
 export const GET = withConsoleAuth(async (request) => {
   const requestId = request.nextUrl.searchParams.get("requestId")?.trim();
   if (!requestId) {
-    return NextResponse.json({ error: "requestId is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "requestId is required.", code: "request_id_required" },
+      { status: 400 },
+    );
   }
 
   const detail = await getConsoleActivityDetail({ requestId });

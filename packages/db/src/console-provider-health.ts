@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { type PostgresQueryClient, withPooledPostgresClient } from "@llmingress/db/client";
 
 export type ConsoleStoredProviderHealthStatus =
   | "auth_failed"
@@ -40,11 +40,11 @@ export type ListConsoleProviderHealthSummariesInput = {
   staleAfterMs?: number;
 };
 
-type ActiveProviderConnectivityCheckJobRow = PostgresQueryResultRow & {
+type ActiveProviderConnectivityCheckJobRow = {
   provider_id: string | null;
 };
 
-type StoredProviderHealthSummaryRow = PostgresQueryResultRow & {
+type StoredProviderHealthSummaryRow = {
   consecutive_failures: number | null;
   display_name: string;
   id: string;
@@ -54,7 +54,7 @@ type StoredProviderHealthSummaryRow = PostgresQueryResultRow & {
   trigger: ConsoleProviderHealthTrigger | null;
 };
 
-type ProviderModelHealthSummaryRow = PostgresQueryResultRow & {
+type ProviderModelHealthSummaryRow = {
   consecutive_failures: number | null;
   display_name: string;
   id: string;
@@ -70,10 +70,7 @@ const defaultHealthStaleAfterMs = 5 * 60 * 1000;
 export async function listConsoleProviderHealthSummaries(
   input: ListConsoleProviderHealthSummariesInput = {},
 ): Promise<ConsoleProviderHealthSummary[]> {
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const hasSoftDeleteColumns = await providerHealthSoftDeleteColumnsAvailable(client);
     const providerDeletedFilter = hasSoftDeleteColumns ? "where providers.deleted_at is null" : "";
     const providerModelDeletedFilter = hasSoftDeleteColumns
@@ -124,7 +121,7 @@ export async function listConsoleProviderHealthSummaries(
       `
           select distinct payload ->> 'providerId' as provider_id
           from jobs
-          where job_type = 'provider_connectivity_check'
+          where job_type in ('model_refresh', 'provider_connectivity_check')
             and status in ('pending', 'running')
             and payload ->> 'providerId' is not null
         `,
@@ -153,12 +150,12 @@ export async function listConsoleProviderHealthSummaries(
         staleAfterMs,
       }),
     );
-  } finally {
-    await client.end();
-  }
+  });
 }
 
-async function providerHealthSoftDeleteColumnsAvailable(client: PostgresClient): Promise<boolean> {
+async function providerHealthSoftDeleteColumnsAvailable(
+  client: PostgresQueryClient,
+): Promise<boolean> {
   const result = await client.query<{ available: boolean }>(
     `
       select count(*) = 2 as available
@@ -169,37 +166,6 @@ async function providerHealthSoftDeleteColumnsAvailable(client: PostgresClient):
     `,
   );
   return result.rows[0]?.available ?? false;
-}
-
-export function formatProviderHealthStatus(
-  status: ConsoleProviderHealthStatus | null | undefined,
-): string {
-  return (
-    {
-      auth_failed: "Auth failed",
-      checking: "Checking",
-      healthy: "Healthy",
-      network_error: "Network error",
-      quota_limited: "Quota limited",
-      unhealthy: "Unhealthy",
-      unknown: "Unknown",
-    }[status ?? "unknown"] ?? "Unknown"
-  );
-}
-
-export function formatProviderHealthLatestProbe(input: {
-  latestProbeAt: Date | null;
-  trigger: ConsoleProviderHealthTrigger | null;
-}): string {
-  if (!input.latestProbeAt) {
-    return "Latest probe: Never";
-  }
-
-  return `Latest probe: ${input.latestProbeAt.toISOString()} via ${input.trigger ?? "unknown"}`;
-}
-
-export function formatProviderHealthFailureCount(consecutiveFailures: number): string {
-  return `Consecutive failures: ${consecutiveFailures}`;
 }
 
 export function formatProviderHealthStaleStatus(input: {

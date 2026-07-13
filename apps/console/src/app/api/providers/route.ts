@@ -7,10 +7,11 @@ import {
   setProviderEnabled,
   updateProvider,
 } from "@llmingress/db/console-providers";
-import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
+import { enqueueProviderProbeLifecycleJob } from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { classifyConsoleActionError } from "../_error-classify";
+import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText } from "../_form";
 import { redirectToConsolePath } from "../_redirect";
 
@@ -28,7 +29,10 @@ export const POST = withConsoleAuth(async (request) => {
           providerType: readText(form, "providerType"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      await enqueueProviderProbeLifecycleJob({
+        providerId: provider.id,
+        source: "provider_created",
+      });
     } else if (action === "createFromTemplate") {
       const provider = await createProviderFromTemplate({
         template: normalizeProviderTemplateFormInput({
@@ -36,14 +40,22 @@ export const POST = withConsoleAuth(async (request) => {
           templateId: readText(form, "templateId"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      await enqueueProviderProbeLifecycleJob({
+        providerId: provider.id,
+        source: "provider_created",
+      });
     } else if (action === "update") {
-      const provider = await updateProvider({
+      const result = await updateProvider({
         baseUrl: readText(form, "baseUrl"),
         displayName: readRequiredText(form, "displayName"),
         id: readRequiredText(form, "id"),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      if (result.baseUrlChanged) {
+        await enqueueProviderProbeLifecycleJob({
+          providerId: result.provider.id,
+          source: "base_url_changed",
+        });
+      }
     } else if (action === "enable" || action === "disable") {
       const providerId = readRequiredText(form, "id");
       await setProviderEnabled({
@@ -51,8 +63,9 @@ export const POST = withConsoleAuth(async (request) => {
         id: providerId,
       });
       if (action === "enable") {
-        await enqueueProviderConnectivityCheckJob({
+        await enqueueProviderProbeLifecycleJob({
           providerId,
+          source: "provider_enabled",
         });
       }
     } else if (action === "delete") {
@@ -60,20 +73,31 @@ export const POST = withConsoleAuth(async (request) => {
         id: readRequiredText(form, "id"),
       });
     } else {
-      return NextResponse.json({ error: "Unknown provider action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown provider action.", code: "provider_action_unknown" },
+        { status: 400 },
+      );
     }
   } catch (error) {
-    const rawMessage = error instanceof Error ? error.message : "Provider action failed.";
-    const normalized = normalizeProviderActionError(rawMessage);
-    const message =
-      normalized === rawMessage
-        ? classifyConsoleActionError(error, "Provider action failed.").message
-        : normalized;
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
+    const verdict = classifyConsoleActionError(error, "Provider action failed.");
+    if (verdict.status === 500) {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
+    if (action === "disable" || action === "delete") {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
     if (action === "create" || action === "createFromTemplate") {
       const redirectUrl = new URL("/providers", request.url);
       redirectUrl.searchParams.set("providerDialog", "new");
-      redirectUrl.searchParams.set("providerError", message);
-      redirectUrl.searchParams.set("providerErrorField", "providerKey");
+      redirectUrl.searchParams.set("providerError", verdict.message);
+      redirectUrl.searchParams.set("providerErrorCode", verdict.code);
+      redirectUrl.searchParams.set(
+        "providerErrorField",
+        typeof verdict.details?.field === "string" ? verdict.details.field : "providerKey",
+      );
       setSearchParam(redirectUrl, "providerKeyValue", readText(form, "providerKey"));
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
@@ -82,8 +106,12 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "update") {
       const redirectUrl = new URL("/providers", request.url);
       setSearchParam(redirectUrl, "providerDialog", readText(form, "id"));
-      redirectUrl.searchParams.set("providerError", message);
-      redirectUrl.searchParams.set("providerErrorField", "form");
+      redirectUrl.searchParams.set("providerError", verdict.message);
+      redirectUrl.searchParams.set("providerErrorCode", verdict.code);
+      redirectUrl.searchParams.set(
+        "providerErrorField",
+        typeof verdict.details?.field === "string" ? verdict.details.field : "form",
+      );
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
       return redirectToConsolePath(redirectUrl);
@@ -98,11 +126,4 @@ function setSearchParam(url: URL, name: string, value: string | undefined): void
   if (value) {
     url.searchParams.set(name, value);
   }
-}
-
-function normalizeProviderActionError(message: string): string {
-  if (message.includes("providers_provider_key_key")) {
-    return "Provider type already exists.";
-  }
-  return message;
 }

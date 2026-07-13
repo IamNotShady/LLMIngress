@@ -2,8 +2,6 @@
 // lives entirely in the URL (?page=N) so pages stay server-rendered, stable, and
 // bookmarkable, and work without client JS.
 
-export const PAGE_SIZE = 8;
-
 export type ConsoleSearchParams = Record<string, string | string[] | undefined>;
 
 export type PageView<T> = {
@@ -17,29 +15,13 @@ export type PageView<T> = {
   to: number;
 };
 
-export function readSingleParam(value: string | string[] | undefined): string | undefined {
+function readSingleParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
 export function readPageParam(searchParams: ConsoleSearchParams, param = "page"): number {
   const raw = Number.parseInt(readSingleParam(searchParams[param]) ?? "1", 10);
   return Number.isFinite(raw) && raw > 0 ? raw : 1;
-}
-
-export function paginate<T>(items: T[], page: number, pageSize = PAGE_SIZE): PageView<T> {
-  const total = items.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const current = Math.min(Math.max(1, page), totalPages);
-  const start = (current - 1) * pageSize;
-  const pageItems = items.slice(start, start + pageSize);
-  return {
-    items: pageItems,
-    page: current,
-    totalPages,
-    total,
-    from: total === 0 ? 0 : start + 1,
-    to: start + pageItems.length,
-  };
 }
 
 /**

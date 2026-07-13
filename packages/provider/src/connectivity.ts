@@ -6,6 +6,13 @@ export type ConnectivityCheckProvider = {
   providerKey: string;
 };
 
+import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
+import { isRecord } from "@llmingress/util";
+import { buildAnthropicMessagesUrl, buildAnthropicProviderHeaders } from "./adapters/anthropic.js";
+import {
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "./authenticated-http.js";
 import {
   buildClaudeCodeMessagesUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -121,6 +128,25 @@ export async function checkProviderConnectivity(
     };
   } catch (error) {
     const latencyMs = Math.max(0, nowMs() - startedAt);
+    if (isProviderRedirectRejectedError(error)) {
+      return {
+        checkedAt,
+        errorCode: error.code,
+        errorMessage: error.message,
+        latencyMs,
+        ok: false,
+        probeModelId: options.provider.modelId,
+        providerId: options.provider.id,
+        providerKey: options.provider.providerKey,
+        retryable: error.retryable,
+        status: classifyProviderFailureStatus({
+          errorCode: error.code,
+          errorMessage: error.message,
+          statusCode: error.statusCode,
+        }),
+        statusCode: error.statusCode,
+      };
+    }
     const timedOut = error instanceof ProviderProbeTimeoutError;
 
     return {
@@ -155,9 +181,9 @@ function buildProviderConnectivityRequest(input: {
   apiKey?: string | null;
   provider: ConnectivityCheckProvider;
 }): { init: RequestInit; url: string } {
-  const providerKey = input.provider.providerKey.toLowerCase();
+  const descriptor = resolveProviderDescriptor(input.provider.providerKey);
 
-  if (providerKey === "openai_codex") {
+  if (descriptor.connectivityProbeStyle === "codex") {
     return {
       init: {
         body: JSON.stringify({
@@ -174,7 +200,7 @@ function buildProviderConnectivityRequest(input: {
     };
   }
 
-  if (providerKey === "claude_code") {
+  if (descriptor.connectivityProbeStyle === "claude_code") {
     return {
       init: {
         body: JSON.stringify({
@@ -187,6 +213,21 @@ function buildProviderConnectivityRequest(input: {
         method: "POST",
       },
       url: buildClaudeCodeMessagesUrl(input.provider.baseUrl),
+    };
+  }
+
+  if (descriptor.connectivityProbeStyle === "anthropic") {
+    return {
+      init: {
+        body: JSON.stringify({
+          max_tokens: 1,
+          messages: [{ content: "ping", role: "user" }],
+          model: input.provider.modelId,
+        }),
+        headers: buildAnthropicProviderHeaders(input.apiKey ?? "", undefined),
+        method: "POST",
+      },
+      url: buildAnthropicMessagesUrl(input.provider.baseUrl),
     };
   }
 
@@ -254,24 +295,7 @@ export function shouldRecordProviderRequestPathHealthFailure(input: {
   errorMessage?: string | null;
   statusCode?: number | null;
 }): boolean {
-  if (input.statusCode !== 400) {
-    return true;
-  }
-
-  const errorCode = (input.errorCode ?? "").toLowerCase();
-  if (
-    errorCode === "bad_request" ||
-    errorCode === "bad_request_error" ||
-    errorCode === "invalid_request" ||
-    errorCode === "invalid_request_error"
-  ) {
-    return false;
-  }
-
-  const text = `${input.errorCode ?? ""} ${input.errorMessage ?? ""}`.toLowerCase();
-  return !/cannot both be specified|deprecated|unsupported[_ -]?(parameter|model)|unsupported (parameter|model)|not supported for this model|temperature|top[_ -]?p|top[_ -]?k|sampling/.test(
-    text,
-  );
+  return input.statusCode !== 400;
 }
 
 type ProbeModelRank = {
@@ -284,12 +308,7 @@ type ProbeModelRank = {
 };
 
 function isEligibleProbeModel(candidate: ProviderProbeModelCandidate): boolean {
-  return (
-    typeof candidate.contextWindow === "number" &&
-    Number.isFinite(candidate.contextWindow) &&
-    candidate.contextWindow > 0 &&
-    !isObviouslyNonChatModel(candidate.modelId)
-  );
+  return !isObviouslyNonChatModel(candidate.modelId);
 }
 
 function rankProbeModel(candidate: ProviderProbeModelCandidate): ProbeModelRank {
@@ -320,7 +339,7 @@ function compareProbeModelRank(left: ProbeModelRank, right: ProbeModelRank): num
 
 function buildProbeTokenLimit(provider: ConnectivityCheckProvider): Record<string, number> {
   if (
-    provider.providerKey.toLowerCase() === "openai" &&
+    resolveProviderDescriptor(provider.providerKey).reasoningAwareProbe === true &&
     isOpenAIReasoningStyleModel(provider.modelId)
   ) {
     return { max_completion_tokens: 16 };
@@ -393,7 +412,10 @@ async function fetchWithTimeout(
   }, timeoutMs);
 
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
+    return await fetchCredentialedProviderRequest(fetchImpl, url, {
+      ...init,
+      signal: controller.signal,
+    });
   } catch (error) {
     if (controller.signal.aborted) {
       throw new ProviderProbeTimeoutError();
@@ -454,10 +476,6 @@ function normalizeTimeoutMs(value: number | undefined): number {
     return Math.floor(value);
   }
   return defaultTimeoutMs;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 class ProviderProbeTimeoutError extends Error {

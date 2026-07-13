@@ -7,7 +7,7 @@ import {
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -41,6 +41,7 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
         }),
       }),
     ).rejects.toThrow(/endpoint messages is not supported/i);
+    await seedVirtualModelRoutePolicy(fixture.databaseUrl, seeded);
 
     await withProcessLock("llmingress-console-next-dev", async () => {
       const consoleApp = startConsoleProcess({
@@ -52,6 +53,18 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
         const baseUrl = `http://localhost:${consoleApp.port}`;
         const context = await browser.newContext();
         const page = await context.newPage();
+        const browserErrors: string[] = [];
+        const mutationRequests: string[] = [];
+        page.on("console", (message) => {
+          if (message.type() === "error") {
+            browserErrors.push(message.text());
+          }
+        });
+        page.on("request", (request) => {
+          if (request.method() === "POST") {
+            mutationRequests.push(request.url());
+          }
+        });
 
         try {
           await waitForConsole(baseUrl, consoleApp);
@@ -73,6 +86,39 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
           await expect(picker).toContainText("GPT Chat");
           await expect(picker).toContainText("Codex Responses");
           await expect(picker).not.toContainText("Claude Messages");
+
+          await picker.getByRole("button", { name: "Codex Responses" }).click();
+          await page.getByLabel("Virtual Model name", { exact: true }).fill("vm-endpoint-api");
+          await page.getByLabel("Description").fill("Duplicate model name");
+          await page.getByRole("button", { name: "Create", exact: true }).click();
+          await expect(page).toHaveURL(/virtualModelDialog=new/);
+          await expect(page.getByRole("alert")).toBeVisible();
+          expect(browserErrors).toEqual([]);
+          expect(mutationRequests).toContain(`${baseUrl}/api/virtual-models`);
+          await expect(page.getByText("Virtual Model name already exists.")).toBeVisible();
+          await expect(page.getByLabel("Virtual Model name", { exact: true })).toHaveAttribute(
+            "aria-invalid",
+            "true",
+          );
+
+          await page.goto(`${baseUrl}/models?virtualModelDelete=${seeded.virtualModelId}`, {
+            waitUntil: "networkidle",
+          });
+          const deleteDialog = page.getByRole("dialog", { name: "Delete vm-endpoint-api?" });
+          await expect(deleteDialog).not.toContainText("Route Policy");
+          await deleteDialog.getByRole("button", { name: "Delete" }).click();
+          await expect(page).toHaveURL(`${baseUrl}/models`);
+          await expect(page.getByText("vm-endpoint-api", { exact: true })).toHaveCount(0);
+
+          const routePolicyState = await withDedicatedPostgresClient(
+            fixture.databaseUrl,
+            async (client) =>
+              client.query<{ deleted_at: Date | null }>(
+                "select deleted_at from route_policies where id = $1",
+                [seeded.routePolicyId],
+              ),
+          );
+          expect(routePolicyState.rows[0]?.deleted_at).toBeInstanceOf(Date);
         } finally {
           await context.close();
         }
@@ -87,6 +133,7 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
 
 async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
   openAiModelId: string;
+  routePolicyId: string;
   virtualModelId: string;
 }> {
   const openAiProviderId = randomUUID();
@@ -96,8 +143,9 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
   const anthropicModelId = randomUUID();
   const codexModelId = randomUUID();
   const virtualModelId = randomUUID();
+  const routePolicyId = randomUUID();
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
       `
         insert into providers (id, provider_type, provider_key, display_name, enabled)
@@ -122,14 +170,18 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
           provider_id,
           model_id,
           display_name,
+          input_modalities,
+          output_modalities,
           context_window,
+          max_output_tokens,
           supports_streaming,
-          supports_tools,
+          supports_function_calling,
+          supports_reasoning,
           availability
         )
-        values ($1, $2, 'gpt-chat', 'GPT Chat', 128000, true, true, 'available'),
-               ($3, $4, 'claude-msg', 'Claude Messages', 200000, true, true, 'available'),
-               ($5, $6, 'codex-resp', 'Codex Responses', 128000, true, true, 'available')
+        values ($1, $2, 'gpt-chat', 'GPT Chat', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available'),
+               ($3, $4, 'claude-msg', 'Claude Messages', array['text']::text[], array['text']::text[], 200000, 8192, true, true, false, 'available'),
+               ($5, $6, 'codex-resp', 'Codex Responses', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
       `,
       [
         openAiModelId,
@@ -151,6 +203,32 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
 
   return {
     openAiModelId,
+    routePolicyId,
     virtualModelId,
   };
+}
+
+async function seedVirtualModelRoutePolicy(
+  databaseUrl: string,
+  input: { routePolicyId: string; virtualModelId: string },
+) {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
+    const providerModel = await client.query<{ id: string }>(
+      "select id::text from provider_models where model_id = 'codex-resp'",
+    );
+    const providerModelId = providerModel.rows[0]?.id;
+    if (!providerModelId) {
+      throw new Error("Codex model is required for Virtual Model route fixture.");
+    }
+    await client.query(
+      `insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
+       values ($1, $2, 'fixed', 'responses')`,
+      [input.routePolicyId, input.virtualModelId],
+    );
+    await client.query(
+      `insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order)
+       values ($1, $2, $3, 1)`,
+      [randomUUID(), input.routePolicyId, providerModelId],
+    );
+  });
 }

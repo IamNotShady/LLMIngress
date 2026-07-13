@@ -2,20 +2,19 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { gatewayCorsHeaders } from "../../apps/gateway/src/cors";
 import { closePostgresPools } from "../../packages/db/src/client";
-import { readGatewayRequestId } from "../../packages/db/src/gateway-auth";
-import { normalizeOpenAIChatCompletionRequest } from "../../packages/db/src/gateway-chat-completions";
-import type { GatewayRouteCandidateSnapshot } from "../../packages/db/src/gateway-config-reload";
-import { normalizeOpenAIEmbeddingsRequest } from "../../packages/db/src/gateway-embeddings";
-import { readGatewayProviderRequestHeaders } from "../../packages/db/src/gateway-header-passthrough";
-import { normalizeAnthropicMessagesRequest } from "../../packages/db/src/gateway-messages";
+import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { readGatewayRequestId } from "../../packages/gateway-runtime/src/gateway-auth";
+import { normalizeOpenAIChatCompletionRequest } from "../../packages/gateway-runtime/src/gateway-chat-completions";
+import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
+import { normalizeOpenAIEmbeddingsRequest } from "../../packages/gateway-runtime/src/gateway-embeddings";
+import { readGatewayProviderRequestHeaders } from "../../packages/gateway-runtime/src/gateway-header-passthrough";
+import { normalizeAnthropicMessagesRequest } from "../../packages/gateway-runtime/src/gateway-messages";
 import {
   attachGatewayProviderCredentials,
   refreshProviderOAuthTokenWithLock,
-} from "../../packages/db/src/gateway-provider-credentials";
-import { estimateTextTokens } from "../../packages/db/src/gateway-request-metadata";
-import { normalizeOpenAIResponsesRequest } from "../../packages/db/src/gateway-responses";
-import { selectGatewayBaselineCandidate } from "../../packages/db/src/gateway-runtime-helpers";
-import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+} from "../../packages/gateway-runtime/src/gateway-provider-credentials";
+import { estimateTextTokens } from "../../packages/gateway-runtime/src/gateway-request-metadata";
+import { normalizeOpenAIResponsesRequest } from "../../packages/gateway-runtime/src/gateway-responses";
 import { createSecretEncryption } from "../../packages/security/src/secret-encryption";
 
 describe("gateway request hygiene", () => {
@@ -40,8 +39,14 @@ describe("gateway request hygiene", () => {
         "openai-beta": "responses=v1",
         "openai-organization": "org_123",
         "openai-project": "proj_123",
+        origin: "http://console.local",
         "proxy-authorization": "Basic secret",
+        referer: "http://console.local/playground",
+        "sec-ch-ua": '"Chromium";v="126"',
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
         "transfer-encoding": "chunked",
+        "user-agent": "browser-user-agent",
         "x-api-key": "agent-x-key",
         "x-client-request-id": "client-req-1",
         "x-provider-feature": ["one", "two"],
@@ -77,21 +82,6 @@ describe("gateway request hygiene", () => {
     expect(estimateTextTokens(["你好ab"])).toBe(3);
   });
 
-  it("selects the baseline candidate without mutating the route snapshot", () => {
-    const second = candidateSnapshot({ candidateOrder: 2 });
-    const first = candidateSnapshot({ candidateOrder: 1 });
-    const routePolicy = {
-      candidates: [second, first],
-      id: "route-1",
-      strategy: "fixed",
-      virtualModelId: "vm-1",
-      virtualModelName: "vm",
-    };
-
-    expect(selectGatewayBaselineCandidate(routePolicy)).toBe(first);
-    expect(routePolicy.candidates).toEqual([second, first]);
-  });
-
   it("normalizes whitelisted OpenAI passthrough parameters and max_completion_tokens", () => {
     const requestBody = {
       max_completion_tokens: 2048,
@@ -117,7 +107,7 @@ describe("gateway request hygiene", () => {
     }
   });
 
-  it("keeps provider-owned request shapes readable without local schema rejection", () => {
+  it("rejects malformed Responses input while leaving other protocol boundaries unchanged", () => {
     const chatBody = {
       max_completion_tokens: "provider-owned",
       messages: "provider-owned",
@@ -150,14 +140,11 @@ describe("gateway request hygiene", () => {
     const messages = normalizeAnthropicMessagesRequest(messagesBody, "req-1");
 
     expect(chat.ok).toBe(true);
-    expect(responses.ok).toBe(true);
+    expect(responses.ok).toBe(false);
     expect(embeddings.ok).toBe(true);
     expect(messages.ok).toBe(true);
     if (chat.ok) {
       expect(chat.request.payload).toEqual(chatBody);
-    }
-    if (responses.ok) {
-      expect(responses.request.payload).toEqual(responsesBody);
     }
     if (embeddings.ok) {
       expect(embeddings.request.payload).toEqual(embeddingsBody);
@@ -236,7 +223,7 @@ describe("gateway request hygiene", () => {
     };
     const normalized = normalizeOpenAIResponsesRequest(
       {
-        input: "pwd",
+        input: [{ content: [{ text: "pwd", type: "input_text" }], role: "user" }],
         parallel_tool_calls: false,
         tool_choice: "required",
         tools: [tool],
@@ -260,14 +247,17 @@ describe("gateway request hygiene", () => {
     };
     const normalized = normalizeOpenAIResponsesRequest(
       {
-        input: [{ content: "run pwd", role: "user" }, toolOutput],
+        input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
       },
       "req-1",
     );
 
     expect(normalized.ok).toBe(true);
     if (normalized.ok) {
-      expect(normalized.request.input).toEqual([{ content: "run pwd", role: "user" }, toolOutput]);
+      expect(normalized.request.input).toEqual([
+        { content: [{ text: "run pwd", type: "input_text" }], role: "user" },
+        toolOutput,
+      ]);
     }
   });
 
@@ -353,7 +343,7 @@ describe("gateway request hygiene", () => {
     }
   });
 
-  it("normalizes Responses reasoning-only assistant replay placeholders", () => {
+  it("rejects Responses string input and shorthand string message content", () => {
     const reasoningItem = {
       encrypted_content: "encrypted-reasoning",
       summary: [],
@@ -363,26 +353,21 @@ describe("gateway request hygiene", () => {
       content: "",
       role: "assistant",
     };
-    const normalized = normalizeOpenAIResponsesRequest(
-      {
-        input: [reasoningItem, assistantPlaceholder],
-        store: false,
-      },
-      "req-1",
-    );
-
-    expect(normalized.ok).toBe(true);
-    if (normalized.ok) {
-      expect(normalized.request.input).toEqual([reasoningItem, assistantPlaceholder]);
-    }
+    expect(normalizeOpenAIResponsesRequest({ input: "hi" }, "req-1")).toMatchObject({
+      ok: false,
+      statusCode: 400,
+    });
     expect(
-      normalizeOpenAIResponsesRequest({ input: [{ content: "", role: "user" }] }, "req-1").ok,
-    ).toBe(true);
+      normalizeOpenAIResponsesRequest(
+        { input: [reasoningItem, assistantPlaceholder], store: false },
+        "req-1",
+      ),
+    ).toMatchObject({ ok: false, statusCode: 400 });
   });
 
   it("keeps provider-owned Responses fields in the raw provider payload", () => {
     const requestBody = {
-      input: "hi",
+      input: [{ content: [{ text: "hi", type: "input_text" }], role: "user" }],
       parallel_tool_calls: "provider-owned",
       tool_choice: "provider-owned",
       tools: ["provider-owned"],

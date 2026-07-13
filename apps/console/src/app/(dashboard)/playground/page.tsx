@@ -1,8 +1,9 @@
+import { gatewayPublicBaseUrl } from "@llmingress/config";
 import { PageHeader } from "../../_components/page-header";
 import { Playground } from "../../playground";
 
 function getPlaygroundGatewayBaseUrl(): string {
-  return process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
+  return gatewayPublicBaseUrl();
 }
 
 export default function PlaygroundPage() {

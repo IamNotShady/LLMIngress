@@ -1,8 +1,11 @@
+import { isRecord, joinUrl, omitUndefined } from "@llmingress/util";
+import {
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "../authenticated-http.js";
 import { mergeHttpHeaders, readProviderResponseHeaders } from "../headers.js";
 import {
-  isRecord,
   isRetryableHttpStatus,
-  joinProviderUrl,
   providerRequestTimeoutMs,
   readProviderRequestId,
   readResponseBody,
@@ -32,7 +35,7 @@ export type NormalizedOpenAIChatRequest = {
 
 export type NormalizedOpenAIResponsesInputMessage = Record<string, unknown> & {
   role: "developer" | "system" | "user" | "assistant";
-  content: unknown;
+  content: Record<string, unknown>[];
 };
 
 export type NormalizedOpenAIResponsesInputItem =
@@ -40,7 +43,7 @@ export type NormalizedOpenAIResponsesInputItem =
   | Record<string, unknown>;
 
 export type NormalizedOpenAIResponsesRequest = {
-  input: string | NormalizedOpenAIResponsesInputItem[];
+  input: NormalizedOpenAIResponsesInputItem[];
   instructions?: string | null;
   maxOutputTokens?: number;
   payload: Record<string, unknown>;
@@ -155,12 +158,16 @@ export function createOpenAIProviderAdapter(
   return {
     chatCompletion: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildChatCompletionsUrl(target.baseUrl), {
-          body: JSON.stringify(buildChatCompletionsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildChatCompletionsUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildChatCompletionsPayload(request, target)),
+            headers: buildProviderHeaders(target.apiKey, options.headers, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
 
@@ -181,12 +188,16 @@ export function createOpenAIProviderAdapter(
     },
     embeddings: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildEmbeddingsUrl(target.baseUrl), {
-          body: JSON.stringify(buildEmbeddingsPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildEmbeddingsUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildEmbeddingsPayload(request, target)),
+            headers: buildProviderHeaders(target.apiKey, options.headers, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
 
@@ -207,12 +218,16 @@ export function createOpenAIProviderAdapter(
     },
     response: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildResponsesUrl(target.baseUrl), {
-          body: JSON.stringify(buildResponsesPayload(request, target)),
-          headers: buildProviderHeaders(target.apiKey, options.headers, headers),
-          method: "POST",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildResponsesUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildResponsesPayload(request, target)),
+            headers: buildProviderHeaders(target.apiKey, options.headers, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
         const body = await readResponseBody(response);
         const responseHeaders = readProviderResponseHeaders(response.headers);
 
@@ -258,7 +273,7 @@ function buildChatCompletionsPayload(
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
-  return buildProviderUrl(baseUrl, "chat/completions");
+  return joinUrl(baseUrl, "chat/completions");
 }
 
 function buildResponsesPayload(
@@ -269,7 +284,7 @@ function buildResponsesPayload(
 }
 
 function buildResponsesUrl(baseUrl: string): string {
-  return buildProviderUrl(baseUrl, "responses");
+  return joinUrl(baseUrl, "responses");
 }
 
 function buildEmbeddingsPayload(
@@ -280,11 +295,7 @@ function buildEmbeddingsPayload(
 }
 
 function buildEmbeddingsUrl(baseUrl: string): string {
-  return buildProviderUrl(baseUrl, "embeddings");
-}
-
-function buildProviderUrl(baseUrl: string, suffix: string): string {
-  return joinProviderUrl(baseUrl, suffix);
+  return joinUrl(baseUrl, "embeddings");
 }
 
 function mapProviderError(
@@ -306,6 +317,18 @@ function mapProviderError(
 }
 
 function mapRequestFailure(error: unknown, timeoutMs: number): OpenAIAdapterError {
+  if (isProviderRedirectRejectedError(error)) {
+    return {
+      body: null,
+      errorCode: error.code,
+      errorMessage: error.message,
+      headers: {},
+      ok: false,
+      retryable: error.retryable,
+      statusCode: error.statusCode,
+    };
+  }
+
   return {
     body: null,
     errorCode: "provider_request_failed",
@@ -337,10 +360,4 @@ function readProviderError(body: unknown): { code: string; message: string } {
     code: "provider_http_error",
     message: "Provider request failed.",
   };
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
 }

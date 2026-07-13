@@ -1,3 +1,5 @@
+import { consoleValidationError } from "@llmingress/db/console-operation-error";
+
 export function readText(form: FormData, name: string): string | undefined {
   const value = form.get(name);
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -10,7 +12,7 @@ export function readRequiredText(form: FormData, name: string, ...fallbackNames:
       return value;
     }
   }
-  throw new Error(`${name} is required.`);
+  throw consoleValidationError(`${name} is required.`, "form_field_required", { field: name });
 }
 
 export function readNullableText(form: FormData, name: string): string | null | undefined {

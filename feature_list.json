@@ -1,300 +1,85 @@
 {
   "features": [
     {
-      "id": "v1-platform",
-      "name": "V1 Platform Foundation",
-      "description": "Workspace scripts, env loading, bootstrap config, PostgreSQL migration runner, and migration status checks keep a fresh local install runnable from the standard startup path.",
-      "verification": "pnpm exec vitest run tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/v1-platform.e2e.spec.ts",
+      "id": "core-platform-security",
+      "name": "Core Platform Security",
+      "description": "Console setup, authentication, CSRF, secret encryption, safe error boundaries, Gateway readiness, configuration reload, and graceful shutdown protect the core platform.",
+      "verification": "pnpm exec vitest run tests/features/console-request-security-contract.unit.test.ts tests/features/console-secure-bootstrap.unit.test.ts tests/features/gateway-lifecycle-drain.unit.test.ts && pnpm test:e2e tests/e2e/console-request-security-contract.e2e.spec.ts tests/e2e/console-secure-bootstrap.e2e.spec.ts tests/e2e/runtime-observability-removal.e2e.spec.ts --workers=1",
       "dependencies": [],
       "status": "passing",
-      "evidence": "2026-07-02: V1 history compression replaces the per-feature platform tracker entries with one milestone contract. Baseline before compression: pnpm run verify passed; verify:features re-verified all 127 previous passing features after merging dev fix dfe72244, with batch E2E fallback completing green."
+      "evidence": "2026-07-11: Security/lifecycle unit tests and all five real-process E2E pass. Process-heavy Console E2E run serially to avoid competing Next dev instances."
     },
     {
-      "id": "v1-gateway-routing",
-      "name": "V1 Gateway Routing And Provider Coverage",
-      "description": "Gateway authenticates agent requests, routes chat and messages traffic across core remote and local providers, records request activity, and keeps provider template coverage available for V1.",
-      "verification": "pnpm exec vitest run tests/features/v1-gateway-routing.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
-      "dependencies": [
-        "v1-platform"
-      ],
+      "id": "provider-model-management",
+      "name": "Provider Model Management",
+      "description": "Provider credentials, editable API roots, OAuth, composite model-refresh probes, atomic Provider/model health, complete Provider-listed model discovery, manual overrides, dependency guards, and price synchronization remain supported.",
+      "verification": "pnpm exec vitest run tests/features/provider-probe-lifecycle.unit.test.ts tests/features/provider-model-capability-sync.unit.test.ts tests/features/console-provider-templates.unit.test.ts tests/features/console-provider-dependency-guard.unit.test.ts tests/features/provider-authenticated-http-safety.unit.test.ts && pnpm test:e2e tests/e2e/provider-probe-lifecycle.e2e.spec.ts tests/e2e/provider-model-capability-sync.e2e.spec.ts tests/e2e/console-provider-dependency-guard.e2e.spec.ts tests/e2e/provider-authenticated-http-safety.e2e.spec.ts --workers=1",
+      "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-02: Consolidated Gateway/provider feature history into the V1 provider coverage smoke. It covers OpenAI, Anthropic, Google, OpenRouter, Ollama, LM Studio, llama.cpp, provider request capture, auth headers, and request activity persistence. 2026-07-06: Refactored Console provider templates into one provider endpoint registry keyed by provider id; provider-level capabilities were removed in favor of endpoints while model capabilities remain on provider_models. Verification passed: focused provider-template/schema-vocab/v1-routing unit tests, pnpm run typecheck, pnpm run lint, pnpm run verify, v1-console E2E after clearing an existing local Console dev lock, and pnpm run verify:features with all 21 passing features re-verified. 2026-07-06 follow-up: Refreshed Console provider template endpoint metadata from official docs traversal: Google adds embeddings, OpenRouter and local Ollama/LM Studio/llama.cpp add embeddings/messages/responses, and xAI/Qwen/MiniMax add responses while DeepSeek/Moonshot/Z.ai stay on same-base chat/models. Verification passed: provider-template red/green unit test, focused schema-vocab/v1-routing/provider-template unit tests, pnpm run typecheck, pnpm run lint, pnpm run verify, and pnpm run verify:features with all 21 passing features re-verified."
+      "evidence": "2026-07-12: Remote API-key and Subscription base URLs are editable with server-side URL/type validation. Every probe refreshes the Provider model list and performs remote I/O before one short transaction atomically commits models plus Provider/model health. Unknown-context/unpriced Provider-listed models remain visible, stale snapshots do not commit, and Job-ID retries are idempotent. Focused unit/database E2E, pnpm run verify (62 files/317 tests), and all 9 feature regressions pass."
     },
     {
-      "id": "v1-console",
-      "name": "V1 Console Experience",
-      "description": "Console first-run auth and the main operational sections remain reachable through the flat navigation shell with theme switching and page-level routing.",
-      "verification": "pnpm exec vitest run tests/features/v1-console.unit.test.ts && pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts",
-      "dependencies": [
-        "v1-platform"
-      ],
+      "id": "virtual-model-routing",
+      "name": "Virtual Model Routing",
+      "description": "Virtual Models are atomically created with one Route Policy and at least one candidate, reject conflicting known capability values while allowing unknowns, and route with fixed, input-plus-output cost_first, or random ordering, health filtering, unknown-price fallback, and fallback execution.",
+      "verification": "pnpm exec vitest run tests/features/virtual-model-capability-contract.unit.test.ts tests/features/virtual-model-endpoint-routing.unit.test.ts tests/features/gateway-fallback-health.unit.test.ts tests/features/refactor-route-strategy-registry.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-capability-contract.e2e.spec.ts tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts tests/e2e/gateway-fallback-health.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts --workers=1",
+      "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-02: Consolidated Console feature history into the V1 navigation and shell smoke. The retained checks cover first-run setup, sign-in, all main module routes, active navigation state, and theme switching. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. 2026-07-06 Docker redirect fix: Console API redirects now use relative Location headers so Docker host port mappings like 13000:3000 do not bounce auth/form submissions to the container's internal 0.0.0.0:3000 URL; focused v1-console unit, Console typecheck, lint, Docker rebuild, auth redirect header check, Gateway health, Console HTTP 200, and pnpm run verify passed."
+      "evidence": "2026-07-12: Virtual Model routing remains unchanged. Settlement fixtures now explicitly enable Agent Limits before asserting accounting; focused verification passes 26 unit and 12 database/real-Gateway E2E checks."
     },
     {
-      "id": "v1-worker-ops",
-      "name": "V1 Worker Operations",
-      "description": "Worker jobs cover usage breakdowns, JSONL and cost exports, webhook and notification dispatch, alerts, metrics, traces, backup, migration status, and retention cleanup.",
-      "verification": "pnpm exec vitest run tests/features/v1-worker-ops.unit.test.ts tests/features/provider-dialect.unit.test.ts && pnpm test:e2e tests/e2e/v1-worker-ops.e2e.spec.ts",
-      "dependencies": [
-        "v1-platform"
-      ],
+      "id": "gateway-protocol-execution",
+      "name": "Gateway Protocol Execution",
+      "description": "Gateway executes Chat Completions, Responses, Messages, and Embeddings with provider header/body transparency, streaming safety, and metadata-only logs.",
+      "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts tests/features/gateway-metadata-only-logging.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts tests/e2e/gateway-metadata-only-logging.e2e.spec.ts",
+      "dependencies": ["virtual-model-routing"],
       "status": "passing",
-      "evidence": "2026-07-02: Consolidated Worker/ops feature history into the V1 daily operations smoke covering export, alert, notification, metrics, tracing, backup, migration, and retention behavior. 2026-07-05 provider connectivity fix: OpenAI probes skip completion-only instruct models, use max_completion_tokens for GPT-5-style chat probes, and use a 16-token cap so live GPT-5 nano probes return healthy instead of false unhealthy. Verification passed: focused provider-dialect unit, live local OpenAI probe wrote provider_health_summary.status=healthy and provider_api_keys.last_test_status=healthy, pnpm run verify, and pnpm run verify:features with all 21 passing features re-verified. 2026-07-05 Anthropic Sonnet 5 messages fix: provider-dialect unit now verifies Sonnet 5 payload cleanup strips deprecated temperature/top_p/top_k, and a live local Gateway /v1/messages request with temperature/top_p routed to claude_code / claude-sonnet-5 returned HTTP 200 with text ok."
+      "evidence": "2026-07-11: All four public protocols, streaming/error fidelity, request-metadata-only logs, and provider smoke E2E pass. Responses requires canonical list input and performs no Codex parameter rewriting or SSE-to-JSON bridging. Gateway strips browser transport headers before Provider dispatch, Provider failures log their complete upstream response, and Claude Code Messages retains its required Agent SDK identity and Subscription headers."
     },
     {
-      "id": "v1-release-guards",
-      "name": "V1 Release Guards And Cleanup Invariants",
-      "description": "CI-facing scripts, feature regression runner, Docker Compose stack contract, and prior ponytail cleanup invariants stay intact after V1 artifact compression.",
-      "verification": "pnpm exec vitest run tests/features/v1-release-guards.unit.test.ts && pnpm test:e2e tests/e2e/v1-release-guards.e2e.spec.ts",
-      "dependencies": [
-        "v1-platform",
-        "v1-gateway-routing",
-        "v1-console",
-        "v1-worker-ops"
-      ],
+      "id": "agent-access-and-limits",
+      "name": "Agent Access And Limits",
+      "description": "Agent API keys, required Virtual Model grants, atomic creation, explicit Limits enablement, reversible Agent enable/disable, RPM, TPM, token, budget, and concurrency limits are enforced without non-core Agent modes or logging switches.",
+      "verification": "pnpm exec vitest run tests/features/agent-management-contract.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts tests/features/refactor-agent-limit-domain-types.unit.test.ts && pnpm test:e2e tests/e2e/agent-management-contract.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts",
+      "dependencies": ["gateway-protocol-execution"],
       "status": "passing",
-      "evidence": "2026-07-02: Replaced historical cleanup/test-runner feature entries with one release-guard milestone that keeps verify:features dry-run coverage, Docker Compose config, thin app shells, deleted stale artifacts, and retired Console complexity under test."
+      "evidence": "2026-07-12: Agent creation atomically commits the API key, required Virtual Model grants, default model, Limits switch, and rules. Gateway skips Limits access while the switch is off, preserved rules resume when re-enabled, and disabling/re-enabling restores the same key without deleting configuration or history. Limits list queries and runtime KPIs include only enabled Agents with Limits enabled while Agents management can still restore preserved rules. Focused verification passes 13 unit and 8 database/real-process E2E checks; pnpm run verify passes 62 files/327 tests and all 9 feature regressions pass."
     },
     {
-      "id": "console-dark-restyle",
-      "name": "Console Dark Restyle",
-      "description": "The Console serves a dark-only skin from the real app: dark canvas and Geist fonts render on live pages, primary buttons are compact 30px violet, the theme toggle is gone, and pages show no horizontal overflow at 1280px and 390px.",
-      "verification": "pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts && pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts",
-      "dependencies": [
-        "v1-console"
-      ],
+      "id": "usage-and-activity",
+      "name": "Usage And Activity",
+      "description": "Activity, token usage, latency, failure rate, fallback, Provider health, and actual or estimated request cost are recorded and reported without savings baselines.",
+      "verification": "pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts tests/e2e/schema-fallback-single-source.e2e.spec.ts",
+      "dependencies": ["agent-access-and-limits"],
       "status": "passing",
-      "evidence": "2026-07-03: Unit + E2E green (dark canvas, Geist, violet 30px buttons, no toggle, no overflow at 1280/390). pnpm run verify and verify:features green after restyle. Follow-up layout/browser checks keep Overview Recent requests full-width and move gateway URL, config version, uptime, and provider health counts into the sidebar runtime card. Follow-up shell cleanup removes the duplicate topbar gateway pill, Help link, and Signed in as admin footer row; browser confirmed the enlarged runtime card, no horizontal overflow, and no console warnings/errors. Follow-up spacing tweak raises the sidebar runtime card to 8.5rem and loosens summary line spacing; targeted unit and browser checks passed, full regression skipped for UI-only tuning. Follow-up Agents filter polish renames Apply filters to Query and aligns the submit button height with the search input; targeted unit and browser checks passed. Follow-up Agents button icon cleanup removes the Query/Create Agent icons; targeted unit and browser checks passed, full regression skipped for UI-only tuning. Follow-up Agents detail dialog replaces the right-side selected agent card with a read-only row-click dialog and lets the KPIs, filters, and list span the full content width; targeted unit, typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Agents detail dialog layout tightens the read-only dialog to 42rem and aligns fields in grouped cards; targeted unit, typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Agents detail field layout changes the read-only dialog summary fields to full-width same-line label/value rows; targeted unit, typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider cleanup removes provider default_priority from Provider detail, Console provider queries/types, Gateway credential ordering, and the baseline schema; unit, typecheck, lint, migrate-check, pnpm run verify, verify:features, and browser checks passed. Follow-up Provider list selection moves Provider list/detail/model-library selection into client state; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider inline detail moves Provider detail into an expanded Provider list row; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider inline detail compacting removes the expanded-row title/stats/refresh summary and keeps only credential details; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider refresh action moves model refresh into each Provider row Actions menu using the existing refresh endpoint; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider row toggle lets a second click on the same Provider row collapse its inline credential details; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider local refresh submits row refresh through client fetch and JSON endpoint response, keeping the URL and page state unchanged; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider header/runtime polish aligns the sidebar gateway status dot with its label and removes the Add Provider leading icon; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models button polish removes the Create Virtual Model and Query leading icons, renames Apply to Query, and aligns Query with the search input; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models detail dialog removes the right-side Virtual Model card and opens read-only details from row clicks; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models route editor layout removes the current-strategy side note and lets the editor fill the dialog; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models detail dialog layout widens the read-only detail dialog and arranges cards two per row; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models route editor width removes the right-side blank area by narrowing the edit dialog and keeping candidate table scrolling internal; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Activity detail dialog removes the right-side Request detail panel and opens request details in a read-only dialog from Request ID links; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Activity filter button polish changes the Activity filter submit button to text-only Query and aligns it with the Request ID input; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models route editor width/action polish widens the edit dialog to 56rem and centers Cancel / Save; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Usage filter button polish changes the Usage filter submit button to text-only Query and aligns it with the Provider select; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Limits rule dialog removes the right-side Rule configuration panel and opens it only from row Edit actions as a modal; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Limits save button text shortens the rule dialog submit button to Save; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Playground action order moves Clear before Send and shortens Send test to Send; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Limits action alignment centers Cancel and Save and removes the Save icon; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Provider disabled refresh guard disables row refresh for disabled Providers while keeping enabled Providers refreshable; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models edit action style reuses the Agents row edit button styling; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Limits edit action style reuses the Agents row edit button styling; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Playground action alignment removes the Clear/Send icons and centers the action row; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Settings notification button polish shortens the webhook notification submit button to Save, removes its icon, and centers it at normal button width; targeted unit, Console typecheck, lint, and SSR/source checks passed, in-app Browser control timed out during navigation/DOM reads, full regression skipped for UI-only tuning. Follow-up Limits action width gives Cancel and Save the same fixed width in the rule dialog; targeted unit, Console typecheck, and lint passed, full regression skipped for UI-only tuning. Follow-up Console UI consistency sweep fixes the remaining Usage query height mismatch and compacts text-only Agent/Provider dialog submit buttons plus the Virtual Model Add Model action; targeted unit, Console typecheck, lint, and browser route/dialog sweep passed, full regression skipped for UI-only tuning. Follow-up Agent create action alignment right-aligns compact single-submit dialog actions while preserving centered multi-action rows; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Virtual Models action alignment right-aligns the route editor dialog Cancel/submit row; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up filter button wording renames all Console filter-submit buttons from Query to Filter; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Limits action realignment right-aligns the rule dialog Cancel/Save row while preserving equal button widths; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. Follow-up Limits header cleanup removes the rule dialog header API key prefix while keeping title/agent/Close visible; targeted unit, Console typecheck, lint, and browser checks passed, full regression skipped for UI-only tuning. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. Follow-up Virtual Models page alignment adds the same left-aligned page shell as Agents and Providers; targeted unit, browser measurement/screenshot, lint, and Console typecheck passed. Full regression skipped per user request for this UI-only tuning pass. Follow-up Gateway Runtime page alignment adds the same left-aligned page shell as Agents and Providers; targeted unit, browser measurement/screenshot, lint, and Console typecheck passed. In-app Browser DOM snapshot API errored, so rendered verification used evaluate/screenshot in the same in-app Browser. Full regression skipped for this UI-only tuning pass. Follow-up Settings page alignment adds the same left-aligned page shell as Agents and Providers; targeted unit, browser measurement/screenshot, lint, and Console typecheck passed. In-app Browser DOM snapshot API remained unavailable, so rendered verification used evaluate/screenshot in the same in-app Browser. Full regression skipped for this UI-only tuning pass."
+      "evidence": "2026-07-11: Core request recording, usage/cost settlement, fallback history, and resilience checks pass."
     },
     {
-      "id": "console-p0-layout",
-      "name": "Console P0 Layout Integrity",
-      "description": "With real request data the console shows no horizontal overflow at 1280px and 390px (the Overview recent-requests table scrolls inside its card instead of widening the page), the Limits rules table fits fully inside its card at 1280px including row actions, trend charts render an explicit empty-state message instead of a blank card when the window has no data, and at mobile width the sidebar navigation collapses behind a menu toggle that reveals nav links on demand and closes again after navigating.",
-      "verification": "pnpm exec vitest run tests/features/console-p0-layout.unit.test.ts && pnpm test:e2e tests/e2e/console-p0-layout.e2e.spec.ts",
-      "dependencies": [
-        "console-dark-restyle"
-      ],
+      "id": "worker-model-operations",
+      "name": "Worker Model Operations",
+      "description": "Worker persists only model refresh, Provider connectivity, and price sync jobs; retention and stale concurrency maintenance run directly under advisory locks.",
+      "verification": "pnpm exec vitest run tests/features/worker-job-churn-removal.unit.test.ts tests/features/v1-worker-ops.unit.test.ts tests/features/worker-lease-recovery.unit.test.ts && pnpm test:e2e tests/e2e/worker-job-churn-removal.e2e.spec.ts tests/e2e/v1-worker-ops.e2e.spec.ts tests/e2e/worker-lease-recovery.e2e.spec.ts",
+      "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-03: TDD red->green. Unit (5 static contracts) + E2E green: seeded request/limit data, no horizontal overflow at 1280/390 on overview+limits, recent-requests table scrolls inside its card, limits actions fully visible at 1280, trend charts show chart-empty message on empty windows, mobile menu toggle reveals nav and closes after navigation. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. 2026-07-04 PR #15 CI fix: relaxed the Limits table wrapper overflow assertion to tolerate the 1px Chromium rounding seen in GitHub Actions; focused unit, focused E2E, lint, and full pnpm test:e2e passed."
+      "evidence": "2026-07-11: Core leased jobs, fencing/recovery, advisory-lock maintenance, retention, and zero maintenance-job churn pass."
     },
     {
-      "id": "console-semantic-status",
-      "name": "Console Semantic Status Colors And Quiet Destructive Actions",
-      "description": "Status colors match meaning across the console: KPI deltas are tinted by metric polarity (cost down is good, over-limit up is bad) with neutral zero-change, failure rates at or above alert thresholds render warn/danger on Overview, Usage and Virtual Models KPIs and table cells, runtime heartbeat staleness and db:migrate:check state render as status pills, intentionally disabled providers/models show neutral chips instead of error red, and row-level delete actions are visually quiet with the Limits row delete gated behind a confirm dialog.",
-      "verification": "pnpm exec vitest run tests/features/console-semantic-status.unit.test.ts && pnpm test:e2e tests/e2e/console-semantic-status.e2e.spec.ts",
-      "dependencies": [
-        "console-p0-layout"
-      ],
+      "id": "console-core",
+      "name": "Console Core",
+      "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation, consistent desktop content widths, readable paginated lists, and complete Agent setup and enable/disable controls.",
+      "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-p0-layout.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-p0-layout.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
+      "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-03: TDD red->green. Unit (7 static contracts) + E2E green: seeded 37.5% failure rate renders danger on Overview/VM KPIs and VM table cell, unchanged cost delta neutral while request growth reads good, stale heartbeat warns and db:migrate:check shows an ok pill, disabled provider chip is neutral gray, agent row delete is transparent at rest, limits row delete opens a confirm dialog and confirming removes the rules. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. 2026-07-05 follow-up removed stale provider/model probe timestamps from Virtual Model route warnings while keeping non-healthy health statuses visible, and changed route candidate availability badges from Healthy to Available. Focused route-policy warning unit, typecheck, lint, pnpm test, pnpm run verify, focused v1-console E2E after a transient startup conflict, and second pnpm run verify:features passed with all 21 passing features re-verified."
+      "evidence": "2026-07-13: The Console layout E2E now seeds its Agent with Limits enabled and asserts the expected action row before measuring bounds, so fixture drift fails quickly instead of holding the shared Console lock for 240 seconds. The layout unit contract, three focused Console E2E, the full 79-test Playwright suite, pnpm run verify (62 files/327 tests), and all 9 feature regressions pass."
     },
     {
-      "id": "console-shared-formatters",
-      "name": "Console Shared Value Formatters",
-      "description": "Every console page formats the same value the same way via a shared formatter module: token counts are full locale numbers in tables and compact only in KPI cards, USD costs use one smart-precision rule (two decimals at or above one cent, three significant digits below, $0.00 for zero, never eight-decimal noise), missing values render as an em dash instead of the previous Unavailable/N-A/hyphen mix, and request timestamps outside the current day carry a date qualifier so lists spanning days read unambiguously.",
-      "verification": "pnpm exec vitest run tests/features/console-shared-formatters.unit.test.ts && pnpm test:e2e tests/e2e/console-shared-formatters.e2e.spec.ts",
-      "dependencies": [
-        "console-p0-layout"
-      ],
+      "id": "release-guards",
+      "name": "Release Guards",
+      "description": "One 24-table core database baseline, deleted-surface guards, verification scripts, build contracts, and repository hygiene keep the pre-release product reproducible.",
+      "verification": "pnpm exec vitest run tests/features/core-baseline-compression.unit.test.ts tests/features/core-delivery-hardening.unit.test.ts tests/features/core-delivery-core-behavior.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/core-baseline-compression.e2e.spec.ts tests/e2e/core-delivery-hardening.e2e.spec.ts tests/e2e/v1-platform.e2e.spec.ts tests/e2e/v1-release-guards.e2e.spec.ts --workers=1",
+      "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-03: TDD red->green. Unit (formatter behavior + call-site contracts) + E2E green: seeded sub-cent cost renders $0.0000843 identically on Overview and Activity, token cells show full 92,535 counts, failed request shows em dashes (no N/A/Unavailable), 3-day-old row carries a date-qualified timestamp while today's row is HH:MM:SS, Usage total cost has no 8-decimal noise. 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified. 2026-07-09: stabilized timestamp E2E seeding across local midnight by asserting rendered text against formatConsoleTimestamp; focused unit+E2E passed."
-    },
-    {
-      "id": "console-providers-ia-and-forms",
-      "name": "Console Providers IA And Form Polish",
-      "description": "The Providers page shows one representation of providers (the actionable list, with the duplicate summary-card grid removed) and the model library is searchable and capped at 50 visible rows with a truncation note instead of rendering hundreds of rows, the Agents KPI grid collapses to two columns on mobile so values never truncate, Settings display-only selects look disabled and the webhook form carries example placeholders, and the Virtual Model dialog submit reads Create when creating and Save when editing.",
-      "verification": "pnpm exec vitest run tests/features/console-providers-ia-and-forms.unit.test.ts && pnpm test:e2e tests/e2e/console-providers-ia-and-forms.e2e.spec.ts",
-      "dependencies": [
-        "console-p0-layout"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-03: TDD red->green. Unit (5 static contracts) + E2E green: card grid gone with the provider list as single representation, 60 seeded models render capped at 50 with truncation note and live search narrowing to the needle model, providers page height < 4500px, agents KPI grid is 2 columns at 390 with zero truncated values, settings selects styled disabled (not-allowed cursor) with webhook placeholders, VM create dialog submit reads Create. Batch-2 contracts updated for the removed duplicate pill (list-row locator, providers-client-section-only pill check). 2026-07-03 regression: pnpm run verify:features failed because Console E2E startup exited with code 1 before serving HTTP 200; investigating shared Console startup root cause. Environment triage: stale Next dev PID 47013 held the Console dev lock; after stopping it, focused v1-console E2E passed. Re-running full verify:features with all features restored to passing. Final rerun: pnpm run verify:features passed after clearing the stale local Next dev process, with all 10 passing features re-verified."
-    },
-    {
-      "id": "console-ui-audit-confirmed-fixes",
-      "name": "Console UI Audit Confirmed Fixes",
-      "description": "The Console fixes the confirmed audit issues without broad redesign: Activity timestamps cannot overlap Request IDs, Overview 24h widgets do not show all-time fallback data, Usage defaults to the configured 7-day window, Agents and Virtual Models labels state their actual time windows, row actions use one compact icon-button contract, dialogs/forms use consistent copy and display labels, isolated page eyebrows are removed, and the Playground key hint uses the llmi_ prefix.",
-      "verification": "pnpm exec vitest run tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts",
-      "dependencies": [
-        "console-providers-ia-and-forms",
-        "console-shared-formatters"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Focused unit and E2E passed for Activity timestamp overflow at desktop/mobile, honest Overview 24h recent/top-cost data, 7d Usage default, Online/Cost 24h/Failure rate total labels, checkbox virtual-model grants, compact row action classes, Close icon consistency, removed page eyebrows, and llmi_ Playground placeholder. Console typecheck, lint, pnpm run verify, and pnpm run verify:features passed; verify:features re-verified all 11 passing features after adding this tracker entry. Follow-up Playground action alignment right-aligns Clear and Send; focused unit, in-app browser measurement/screenshot, lint, Console typecheck, pnpm run verify, focused v1-console E2E after transient startup contention, and pnpm run verify:features passed. Follow-up fixed the missed Agent Budget period option display labels in Create/Edit Agent dialogs from day/week/month to Day/Week/Month while preserving submitted values; focused unit, browser check, lint, and Console typecheck passed. Activity timestamp ellipsis plus older P2 consistency/data-mouth issues remain out of scope for this patch."
-    },
-    {
-      "id": "gateway-db-pool",
-      "name": "Gateway Postgres Connection Pool",
-      "description": "Gateway request-path database access goes through a process-level pg.Pool: a 30-request burst against a running gateway keeps total postgres connections bounded by the pool max instead of opening connections per query, and pools close on app shutdown.",
-      "verification": "pnpm exec vitest run tests/features/gateway-db-pool.unit.test.ts && pnpm test:e2e tests/e2e/gateway-db-pool.e2e.spec.ts",
-      "dependencies": [
-        "v1-gateway-routing"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Added process-level pg.Pool helpers, migrated Gateway request-path short DB operations and transactions to pooled access while leaving LISTEN/low-frequency paths alone, extracted shared Gateway E2E process helpers, and added a 30-request burst E2E with a short request_activity sleep trigger proving Postgres connections stay bounded by the pool. Focused unit, v1 gateway routing E2E, focused gateway-db-pool E2E, pnpm run verify, and pnpm run verify:features passed."
-    },
-    {
-      "id": "gateway-recording-resilience",
-      "name": "Gateway Recording Resilience",
-      "description": "A running gateway still returns the LLM response with HTTP 200 when activity/usage/trace recording writes fail (up to the request_activity table being dropped), logging failures at error level instead of failing the agent request.",
-      "verification": "pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts && pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts",
-      "dependencies": [
-        "gateway-db-pool"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Moved Gateway recording wrappers into apps/gateway/src/request-recording.ts, injected a recorder for unit coverage, kept JSON and streaming responses resilient to activity/usage/trace write failures, downgraded concurrency-release failures so they cannot override chat responses, and removed provider body from streaming failure stderr logs. Focused unit and E2E passed; pnpm run verify passed; pnpm run verify:features passed with all 12 previously passing features re-verified before status update. 2026-07-05 follow-up: JSON activity completion, successful JSON usage/cost, JSON trace recording, streaming non-ok completion, and successful stream EOF usage/completion are now best-effort background recording tasks; createActivity remains awaited and streaming budget settlement remains awaited before EOF. Added unit coverage for blocked/rejected background writes and an E2E slow request_activity update trigger. Verification passed: focused unit, focused E2E, Gateway typecheck, pnpm run verify, and pnpm run verify:features with all 18 passing features re-verified. 2026-07-05 observability follow-up: provider trace export, fallback_events attempt inserts, provider API key last-used updates, and streaming runtime_errors inserts are now best-effort background tasks; budget, rate-limit/concurrency, provider fetch, first-byte read-ahead, createActivity, and stream budget settlement remain synchronous. Added unit coverage for blocked fallback writes, fallback continuation, nonblocking runtime error propagation, and static no-await fitness; extended Gateway E2E with slow OTEL/fallback_events/provider_api_keys writes for non-streaming response and streaming first chunk latency. Verification passed: focused unit, focused E2E, DB typecheck, Gateway typecheck, pnpm run verify, and pnpm run verify:features with all 18 passing features re-verified. 2026-07-05 completed-activity follow-up: Gateway no longer inserts request_activity at request start; it generates an in-memory activity id and records completed request_activity, fallback_events, and successful request_usage/request_costs together in a best-effort background transaction after JSON response or stream completion/error. Fallback_events inserts were removed from the fallback hot path, requestActivityId was removed from Gateway protocol/streaming execution inputs, and streaming finalization no longer waits for Activity recording before ending output. Added unit coverage for blocked/rejected completed Activity recording, no immediate fallback_events writes, and static no-requestActivityId fitness; extended Gateway E2E with slow request_activity insert checks for non-streaming and streaming EOF plus failed+succeeded fallback_events persistence. Verification passed: focused unit, focused E2E, DB typecheck, Gateway typecheck, stream robustness unit, cohesion/settlement/recording unit batch, pnpm run verify, and pnpm run verify:features with all 18 passing features re-verified."
-    },
-    {
-      "id": "gateway-stream-robustness",
-      "name": "Gateway Stream Robustness",
-      "description": "Provider calls time out (non-streaming request timeout; streaming connect, first-chunk, and mid-stream idle timeouts) against a running gateway with a stalling fake provider, slow clients cause bounded buffering via pipe backpressure, and client disconnects cancel the upstream provider stream.",
-      "verification": "pnpm exec vitest run tests/features/gateway-stream-robustness.unit.test.ts && pnpm test:e2e tests/e2e/gateway-stream-robustness.e2e.spec.ts",
-      "dependencies": [
-        "gateway-db-pool"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Added provider request timeouts for non-streaming OpenAI/Anthropic adapter calls, Gateway streaming connect and mid-response idle timeouts, backpressure-preserving activity stream wrapping, and upstream destruction on client close. Added fake provider stream-stall mode plus E2E coverage for hung non-streaming providers and streams that stall after the first chunk. Focused unit and E2E passed; pnpm run verify passed; pnpm run verify:features passed with all 13 previously passing features re-verified before status update. Follow-up stream cancellation hardening closes the intermediate error-recording wrapper gap, cancels the readahead reader on destroy, adds subscription adapter request timeouts for Codex and Claude Code paths, and verifies client abort closes the fake provider stream; focused unit/E2E, provider/db typecheck, lint, pnpm run verify, and pnpm run verify:features passed with all 17 passing features re-verified."
-    },
-    {
-      "id": "gateway-settlement-integrity",
-      "name": "Gateway Settlement Integrity",
-      "description": "Gateway checks budget from current budget_periods usage at request start without reservations, records successful JSON and streaming usage into budget_periods after completion, rejects exceeded budgets before provider calls, and a periodic worker job reconciles leaked concurrency counters from request_activity.",
-      "verification": "pnpm exec vitest run tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/gateway-settlement-integrity.e2e.spec.ts",
-      "dependencies": [
-        "gateway-db-pool",
-        "gateway-recording-resilience"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Budget reservations now finalize with provider actual usage when available, keep reserved-estimate fallback when usage is unavailable, late-finalize expired reservations without double-releasing reserved amounts, and use configurable reservation TTL. Streaming budget settlement moved to Gateway stream completion so collected SSE usage can drive actual finalization. Added stale_concurrency_reconcile worker job, migration 0002, periodic scheduling, Worker handler registration, and architecture notes for quiet-window reconciliation tradeoffs. Focused unit and E2E passed; pnpm run db:migrate:check passed; pnpm run verify passed; pnpm run verify:features passed with all 14 previously passing features re-verified before status update. 2026-07-05 follow-up removed Gateway budget reservations entirely: request start now checks current budget_periods usage without writing reservations, successful JSON/streaming responses record budget usage after completion, failed/aborted requests do not charge budget, and migration 0003 drops budget_reservations plus budget_periods reserved columns and stale_reservation_cleanup. Focused unit/E2E, DB/Gateway typechecks, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features passed with all 18 passing features re-verified."
-    },
-    {
-      "id": "gateway-error-fidelity",
-      "name": "Gateway Error Fidelity",
-      "description": "Gateway error handling is typed instead of string-matched, non-retryable provider 4xx responses pass through the provider body with the upstream status code to the agent, a fallback candidate with missing credentials is skipped instead of failing the request, and streaming attempts iterate provider API keys like the non-streaming chain.",
-      "verification": "pnpm exec vitest run tests/features/gateway-error-fidelity.unit.test.ts && pnpm test:e2e tests/e2e/gateway-error-fidelity.e2e.spec.ts",
-      "dependencies": [
-        "gateway-stream-robustness"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Added typed GatewayPipelineError handling, provider_rejected_request upstream 4xx status/message passthrough, provider_rate_limited mapping, sanitized provider-message truncation, lenient non-streaming credential attachment that skips missing-key candidates, and streaming provider API key retry iteration. Added fake provider bad-request mode plus focused unit and E2E coverage for typed fallback errors, missing credential fallback, provider 400 passthrough, and streaming multi-key retry. Focused unit and E2E passed; pnpm run lint plus @llmingress/db and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 15 previously passing features re-verified before status update. 2026-07-06 provider response passthrough follow-up returns non-retryable provider 4xx bodies/status directly for Chat, streaming Chat, Responses, Embeddings, and Messages instead of wrapping them in provider_rejected_request; 429/5xx/network failures keep fallback semantics. Red E2E failed before implementation; focused E2E/unit, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 header/error fidelity follow-up returns provider response headers with provider 400 bodies/status and returns final exhausted provider 429 body/status/headers after fallback attempts instead of a Gateway provider_rate_limited envelope. Red E2E failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, pnpm run verify:features, git diff --check, and jq empty feature_list.json passed with all 22 passing features re-verified."
-    },
-    {
-      "id": "gateway-request-hygiene",
-      "name": "Gateway Request Hygiene",
-      "description": "A running gateway accepts 2MB chat bodies under a configurable body limit, rejects malformed client x-request-id values, estimates CJK tokens realistically, protects /metrics behind an optional bearer token, forwards OpenAI-compatible Responses, Chat Completions, Embeddings, and Anthropic Messages provider payloads from the Agent body with only virtual model replacement, and refreshes provider OAuth tokens under a row lock so concurrent requests refresh exactly once.",
-      "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/gateway-request-hygiene.e2e.spec.ts",
-      "dependencies": [
-        "gateway-db-pool",
-        "gateway-error-fidelity"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-04: TDD red->green. Added configurable Gateway bodyLimit defaulting to 10 MiB, safe x-request-id validation, non-mutating baseline candidate selection, CJK-aware token estimation, optional /metrics bearer token enforcement, OpenAI chat passthrough whitelist with max_completion_tokens precedence, streaming payload passthrough parity, OAuth row-lock refresh single-flight, and OAuth request timeout. Documented chat passthrough scope, multimodal and TPM non-goals, and the current Gateway runtime module boundary. Focused unit and E2E passed; pnpm run lint plus @llmingress/db, @llmingress/provider, and @llmingress/gateway typecheck passed; pnpm run verify passed; pnpm run verify:features passed with all 16 previously passing features re-verified before status update. Follow-up OAuth credential read releases the outer pooled client before loading/refreshing subscription OAuth tokens and covers pool max=1 expired-token refresh; focused unit, db/provider typecheck, lint, pnpm run verify, and pnpm run verify:features passed with all 17 passing features re-verified. 2026-07-06 follow-up preserves Responses tools/tool_choice/parallel_tool_calls across normal, streaming, and Codex subscription payloads, validates malformed Responses tool fields, and keeps raw typed Responses input items such as function_call_output unchanged. Red unit/E2E failed before implementation; focused unit/E2E, db/provider/gateway typechecks, lint, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 image follow-up preserves Responses multimodal content-part arrays such as input_text plus input_image data URLs so Hermes vision requests reach the provider instead of failing Gateway normalization. Red unit/E2E failed first; focused unit/E2E, db/provider/gateway typechecks, lint, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 official field passthrough follow-up replaces endpoint-specific request whitelists with raw-field passthrough for OpenAI-compatible Responses, Chat Completions, Embeddings, and Anthropic Messages while keeping Gateway-owned model/routing fields normalized; Chat multimodal/audio/file/function/custom-tool fields, Responses store/previous_response_id/conversation/metadata/reasoning/text fields, Embeddings token-array input/user fields, and Messages container/context_management/mcp_servers/betas now reach providers in JSON and streaming paths. Red unit failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 Hermes reasoning replay follow-up allows Responses assistant replay placeholders with empty content after reasoning items while still rejecting empty user messages, fixing Hermes browser/navigation turns that failed before provider execution with invalid_responses_request. Red unit failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 raw passthrough follow-up stops rebuilding provider request bodies for OpenAI-compatible Chat, Responses, Embeddings, Anthropic Messages, Codex subscription Responses, and Claude Code Messages; provider payloads now come from the Agent body with only virtual model replacement, and Codex subscription responses are no longer synthesized. Red unit/E2E failed before implementation; focused unit/E2E, provider-dialect tests, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 read-only ingress follow-up relaxes Chat, Responses, Messages, and Embeddings request readers so provider-owned request shapes are not locally rejected, removes streaming stream_options usage injection, and keeps provider responses read-only for status/request-id/usage extraction without synthesized success bodies. Red unit/E2E failed before implementation; focused unit/E2E, provider-dialect tests, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified. 2026-07-06 header transparency follow-up forwards safe Agent protocol headers to Chat, Responses, Embeddings, and Messages JSON and streaming paths while stripping Agent auth/transport headers; OpenAI/OpenRouter/Anthropic/Claude Code adapters now merge protocol headers with provider auth and subscription beta/version rules, and provider response headers including request ids and rate-limit headers are returned to Agents. Red unit/E2E failed before implementation; focused unit/E2E, lint, typecheck, pnpm run verify, pnpm run verify:features, git diff --check, and jq empty feature_list.json passed with all 22 passing features re-verified. 2026-07-06 subscription-header regression fix stops the streaming Claude Code path from forwarding the injected x-api-key OAuth credential alongside the subscription Bearer; buildClaudeCodeSubscriptionHeaders now strips x-api-key from forwarded headers before merging impersonation headers (authorization was already owned by the impersonation set and codex never receives x-api-key, so both stay untouched). Red provider-dialect unit failed before implementation; focused provider-dialect/gateway-request-hygiene unit, empirical streaming header trace, lint, typecheck, pnpm run verify, and pnpm run verify:features passed with all 22 passing features re-verified."
-    },
-    {
-      "id": "gateway-cohesion-refactor",
-      "name": "Gateway Cohesion Refactor",
-      "description": "Gateway runtime modules hold single responsibilities behind enforced structural invariants: provider credentials live in their own module, one gateway error-code union with no casts, SSE usage parsing is separate from usage recording, all four JSON protocol endpoints share one orchestration template (with upstream 4xx passthrough aligned across endpoints), streaming provider dialects resolve through a registry instead of providerKey string dispatch, stream wrapper composition has a single owner, agent limits are enforced by one gateway-agent-limits executor, and gateway env access plus agent naming are consolidated — all verified by a fitness test over module sources and by unchanged endpoint behavior.",
-      "verification": "pnpm exec vitest run tests/features/gateway-cohesion-refactor.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts",
-      "dependencies": [
-        "gateway-error-fidelity",
-        "gateway-settlement-integrity",
-        "gateway-stream-robustness"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-05: Implemented through seven TDD slices in commits 951dd98c, db25a1c6, 93307302, 9d7ce2a2, b0f9ba1f, ae7e817b, and f47ea659. Added structural fitness coverage for provider credential ownership, the single gateway error-code union, usage collector separation, shared JSON protocol orchestration, provider streaming dialect registry usage, stream pipeline/budget settlement ownership, centralized env readers, and agentId naming. Behavior alignment was limited to provider 4xx passthrough across all JSON endpoints and chat all-subscription candidate failures returning provider_protocol_unsupported. Focused slice tests, db/provider/gateway typechecks, pnpm run verify, and pnpm run verify:features passed during the slice work; final pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features passed with all 18 passing feature verifications re-run. Follow-up fixed the Console Activity agent filter S7 rename escape by passing agentId through ActivitySection, added E2E coverage for /activity?agentId filtering, expanded the naming fitness scan to Console and Worker sources with only the agent-limits form compatibility alias allowed, and passed focused tests, Console typecheck, pnpm run verify, and pnpm run verify:features. Follow-up consolidated Gateway `agent_limits` reads behind one shared enabled-limits reader; JSON and streaming request paths now read once and pass the same snapshot to rate-limit and budget execution while keeping their existing transaction semantics. Added structural fitness coverage and passed focused tests, DB/Gateway typechecks, lint, pnpm run verify, and pnpm run verify:features. 2026-07-05 follow-up replaced separate gateway-rate-limits/gateway-budgets modules with gateway-agent-limits as the unified request-start executor and deleted the old modules from runtime/package exports. Focused cohesion/settlement/recording tests, DB/Gateway typechecks, pnpm run verify, and pnpm run verify:features passed with all 18 passing features re-verified."
-    },
-    {
-      "id": "schema-vocab-checks-relaxed",
-      "name": "Schema Vocab Checks Relaxed",
-      "description": "Product vocabulary values (job_type, agent integration_platform, provider_template_id) are validated only at the application layer; the database accepts values outside today's vocabulary while machine-state CHECK constraints (status, trigger, agent_type, numeric ranges) remain enforced.",
-      "verification": "pnpm exec vitest run tests/features/schema-vocab-checks-relaxed.unit.test.ts && pnpm test:e2e tests/e2e/schema-vocab-checks-relaxed.e2e.spec.ts",
-      "dependencies": [
-        "v1-platform"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-05: TDD red->green. Added migration 0004_relax_vocab_checks to drop product vocabulary CHECK constraints for jobs.job_type, agents.integration_platform, and providers.provider_template_id while keeping machine-state CHECK constraints enforced and existing application-layer validation intact. RED focused test failed on jobs_job_type_check, agents_integration_platform_check, and providers_template_id_whitelisted. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 19 passing features re-verified."
-    },
-    {
-      "id": "schema-notification-deliveries-removed",
-      "name": "Schema Notification Deliveries Removed",
-      "description": "The write-only notification_deliveries audit table is removed; notification retry state lives solely on notification_events (attempt_count, last_error_*, status), the dispatcher no longer records per-attempt audit rows, and backups no longer include the table. webhook_deliveries stays as the webhook export dedup ledger.",
-      "verification": "pnpm exec vitest run tests/features/schema-notification-deliveries-removed.unit.test.ts && pnpm test:e2e tests/e2e/schema-notification-deliveries-removed.e2e.spec.ts",
-      "dependencies": [
-        "v1-worker-ops"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-05: TDD red->green. Added migration 0005_drop_notification_deliveries to remove the write-only notification_deliveries table, simplified notification dispatch recording to update notification_events only, and removed the table from backup artifacts while keeping webhook_deliveries unchanged. RED unit failed on missing notification_deliveries when simulating the dropped table plus schema/backup assertions; RED E2E failed because the table still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 20 passing features re-verified."
-    },
-    {
-      "id": "schema-fallback-single-source",
-      "name": "Schema Fallback Single Source",
-      "description": "fallback_events is the single source of truth for retry chains: fallback_events gains retryable/status_code, the request_activity.fallback_attempts jsonb column is dropped, Console activity list/detail, jsonl export (legacy fallbackAttempts shape preserved), and fallback exhaustion alerts all derive attempts from fallback_events rows.",
-      "verification": "pnpm exec vitest run tests/features/schema-fallback-single-source.unit.test.ts && pnpm test:e2e tests/e2e/schema-fallback-single-source.e2e.spec.ts",
-      "dependencies": [
-        "v1-gateway-routing",
-        "gateway-recording-resilience"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-05: TDD red->green. Added migration 0006_fallback_single_source so fallback_events carries retryable/status_code and request_activity no longer stores fallback_attempts. Console activity counts/details, jsonl export legacy fallbackAttempts, and fallback exhaustion alerts now derive failed retry attempts from fallback_events rows. RED unit failed on the old request_activity.fallback_attempts column, missing retry metadata, recorder writes, Console counts, JSONL fallbackAttempts, and alert payloads; RED E2E failed because the dropped column still existed. Verification passed: focused unit, focused E2E, v1-platform migration manifest test, v1-release-guards unit, pnpm run db:migrate:check, pnpm run verify, and pnpm run verify:features with all 21 passing features re-verified."
-    },
-    {
-      "id": "virtual-model-endpoint-routing",
-      "name": "Virtual Model Endpoint Routing",
-      "description": "Virtual Models and Route Policies require one endpoint protocol (chat_completions, responses, messages, or embeddings), candidate pickers only show provider models whose provider/template supports the selected endpoint, route-policy saves reject incompatible candidates, and Gateway requests are rejected when the request endpoint does not match the saved route policy endpoint while legacy policies without endpointProtocol still run.",
-      "verification": "pnpm exec vitest run tests/features/virtual-model-endpoint-routing.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts",
-      "dependencies": [
-        "v1-gateway-routing",
-        "v1-console"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-06: TDD red->green. Added route_policies.rules.endpointProtocol without a migration, derived supportedEndpoints from provider templates plus direct openai/anthropic providers, filtered Virtual Model and Route Policy candidate pickers by endpoint, rejected incompatible route-policy saves, and added Gateway runtime endpoint mismatch rejection for JSON and streaming paths while keeping legacy policies without endpointProtocol compatible. Verification passed: focused unit, focused E2E, v1-release-guards unit after adding this feature to the allowed tracker list, pnpm run typecheck, pnpm run lint, pnpm run verify, and pnpm run verify:features with all 22 passing features re-verified."
-    },
-    {
-      "id": "gateway-listen-host",
-      "name": "Gateway Listen Host",
-      "description": "Gateway binds 127.0.0.1 by default when the real process starts, honors a GATEWAY_HOST override, and the Docker compose deployment explicitly opts into 0.0.0.0.",
-      "verification": "pnpm exec vitest run tests/features/gateway-listen-host.unit.test.ts && pnpm test:e2e tests/e2e/gateway-listen-host.e2e.spec.ts",
-      "dependencies": [
-        "v1-gateway-routing"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-08: TDD red->green. gatewayListenHost added to gateway-env, main.ts listen uses it, docker-compose pins GATEWAY_HOST=0.0.0.0. Focused unit+E2E, pnpm run verify, and pnpm run verify:features all passed."
-    },
-    {
-      "id": "db-connection-hygiene",
-      "name": "DB Connection Hygiene",
-      "description": "Provider and worker db modules use the shared pg pool instead of one-off connections, pool errors and concurrency-release failures are logged instead of swallowed, the real gateway process exits cleanly (code 0) on SIGTERM after closing pools, worker stop closes pools, and the runtime-status module drops its stuttering filename.",
-      "verification": "pnpm exec vitest run tests/features/db-connection-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/db-connection-hygiene.e2e.spec.ts",
-      "dependencies": [
-        "gateway-db-pool",
-        "v1-worker-ops"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-08: TDD red->green. Pooled clients in providers/provider-jobs/worker-model-refresh/worker-connectivity, pool errors and lease-release failures logged, gateway SIGTERM/SIGINT graceful shutdown exits 0, worker stop closes pools, gateway-runtime-status renamed, dead packages/observability removed. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed."
-    },
-    {
-      "id": "console-api-hygiene",
-      "name": "Console API Hygiene",
-      "description": "Every guarded console API route authenticates through one shared withConsoleAuth wrapper, unexpected errors return 500 with a generic message and server-side log while deliberate validation errors keep 400 with their message, and the agent-created HTML page renders from a dedicated module instead of living inside the route handler.",
-      "verification": "pnpm exec vitest run tests/features/console-api-hygiene.unit.test.ts && pnpm test:e2e tests/e2e/console-api-hygiene.e2e.spec.ts",
-      "dependencies": [
-        "v1-console"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-08: TDD red->green. withConsoleAuth guard across 14 routes, consoleActionErrorResponse maps unexpected errors to 500 without leaking messages, agent-created HTML extracted to _created-page.ts. Focused unit+E2E, pnpm run verify, pnpm run verify:features passed. 2026-07-09: provider-oauth and providers routes sanitize surfaced errors via classifier / consoleActionErrorResponse, no longer exposing internal error.message; added static wiring coverage and unauthenticated E2E coverage."
-    },
-    {
-      "id": "console-sections-split",
-      "name": "Console Sections Split",
-      "description": "Each console dashboard section component lives in its own module under _modules/, sections.tsx keeps only shared helpers under a hard line budget, and every dashboard page still renders signed-in without horizontal overflow at 1280px.",
-      "verification": "pnpm exec vitest run tests/features/console-sections-split.unit.test.ts && pnpm test:e2e tests/e2e/console-sections-split.e2e.spec.ts",
-      "dependencies": [
-        "v1-console",
-        "console-p0-layout"
-      ],
-      "status": "passing",
-      "evidence": "2026-07-08: TDD red->green. Split console dashboard sections into per-section modules, kept sections.tsx as shared helpers under the line budget, and preserved signed-in dashboard rendering without horizontal overflow. Focused unit+E2E, pnpm run verify, and pnpm run verify:features passed."
+      "evidence": "2026-07-12: The single reproducible 24-table baseline includes agents.limits_enabled and its updated manifest checksum. db:migrate:check, pnpm run verify, and all 9 feature regressions pass; progress remains within its compression budget and all release contracts remain enabled."
     }
   ]
 }

@@ -53,6 +53,11 @@ export type RecordProviderHealthEventResult = {
   summaryId: string;
 };
 
+export type RecordProviderAndModelHealthResult = {
+  model: RecordProviderHealthEventResult;
+  provider: RecordProviderHealthEventResult;
+};
+
 type ProviderHealthSummaryRow = QueryResultRow & {
   consecutive_failures: number;
   id: string;
@@ -128,66 +133,92 @@ export async function createHealthSummaryChangedListener(options: {
 export async function recordProviderHealthEvent(
   input: RecordProviderHealthEventInput,
 ): Promise<RecordProviderHealthEventResult> {
+  return withPostgresTransaction(input.databaseUrl, (client) =>
+    recordProviderHealthEventWithClient(client, input),
+  );
+}
+
+export async function recordProviderAndModelHealth(input: {
+  event: Omit<RecordProviderHealthEventInput, "providerModelId">;
+  providerModelId: string;
+}): Promise<RecordProviderAndModelHealthResult> {
+  return withPostgresTransaction(input.event.databaseUrl, (client) =>
+    recordProviderAndModelHealthWithClient(client, input),
+  );
+}
+
+export async function recordProviderAndModelHealthWithClient(
+  client: PostgresQueryClient,
+  input: {
+    event: Omit<RecordProviderHealthEventInput, "providerModelId">;
+    providerModelId: string;
+  },
+): Promise<RecordProviderAndModelHealthResult> {
+  const observedAt = input.event.observedAt ?? new Date();
+  const event = { ...input.event, observedAt };
+  const provider = await recordProviderHealthEventWithClient(client, event);
+  const model = await recordProviderHealthEventWithClient(client, {
+    ...event,
+    providerModelId: input.providerModelId,
+  });
+  return { model, provider };
+}
+
+export async function recordProviderHealthEventWithClient(
+  client: PostgresQueryClient,
+  input: RecordProviderHealthEventInput,
+): Promise<RecordProviderHealthEventResult> {
   const observedAt = input.observedAt ?? new Date();
   const providerModelId = input.providerModelId ?? null;
   const eventId = randomUUID();
+  await client.query("select pg_advisory_xact_lock(hashtext($1))", [
+    `${input.providerId}:${providerModelId ?? "provider"}`,
+  ]);
 
-  return withPostgresTransaction(input.databaseUrl, async (client) => {
-    await client.query("select pg_advisory_xact_lock(hashtext($1))", [
-      `${input.providerId}:${providerModelId ?? "provider"}`,
-    ]);
-
-    const previous = await readProviderHealthSummaryForUpdate(client, {
-      providerId: input.providerId,
-      providerModelId,
-    });
-    await insertProviderHealthEvent(client, {
-      ...input,
-      eventId,
-      observedAt,
-      providerModelId,
-    });
-
-    const next = buildProviderHealthSummaryUpdate({
-      eventStatus: input.status,
-      observedAt,
-      previous: previous
-        ? {
-            consecutiveFailures: previous.consecutive_failures,
-            lastFailureAt: previous.last_failure_at,
-            lastSuccessAt: previous.last_success_at,
-            status: previous.status,
-          }
-        : null,
-    });
-    const summaryId = previous?.id ?? randomUUID();
-    await upsertProviderHealthSummary(client, {
-      eventId,
-      providerId: input.providerId,
-      providerModelId,
-      summary: next,
-      summaryId,
-      updatedAt: observedAt,
-    });
-
-    const notification = buildHealthSummaryChangedPayload({
-      consecutiveFailures: next.consecutiveFailures,
-      eventId,
-      providerId: input.providerId,
-      providerModelId,
-      status: next.status,
-      summaryId,
-    });
-    await client.query("select pg_notify($1, $2)", [
-      HEALTH_SUMMARY_CHANGED_CHANNEL,
-      JSON.stringify(notification),
-    ]);
-    return {
-      eventId,
-      notification,
-      summaryId,
-    };
+  const previous = await readProviderHealthSummaryForUpdate(client, {
+    providerId: input.providerId,
+    providerModelId,
   });
+  await insertProviderHealthEvent(client, {
+    ...input,
+    eventId,
+    observedAt,
+    providerModelId,
+  });
+  const next = buildProviderHealthSummaryUpdate({
+    eventStatus: input.status,
+    observedAt,
+    previous: previous
+      ? {
+          consecutiveFailures: previous.consecutive_failures,
+          lastFailureAt: previous.last_failure_at,
+          lastSuccessAt: previous.last_success_at,
+          status: previous.status,
+        }
+      : null,
+  });
+  const summaryId = previous?.id ?? randomUUID();
+  await upsertProviderHealthSummary(client, {
+    eventId,
+    providerId: input.providerId,
+    providerModelId,
+    summary: next,
+    summaryId,
+    updatedAt: observedAt,
+  });
+  const notification = buildHealthSummaryChangedPayload({
+    consecutiveFailures: next.consecutiveFailures,
+    eventId,
+    providerId: input.providerId,
+    providerModelId,
+    status: next.status,
+    summaryId,
+  });
+  await client.query("select pg_notify($1, $2)", [
+    HEALTH_SUMMARY_CHANGED_CHANNEL,
+    JSON.stringify(notification),
+  ]);
+  return { eventId, notification, summaryId };
 }
 
 async function readProviderHealthSummaryForUpdate(

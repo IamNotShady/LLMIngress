@@ -3,167 +3,139 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = process.cwd();
-const allowedFeatureIds = [
-  "v1-platform",
-  "v1-gateway-routing",
-  "v1-console",
-  "v1-worker-ops",
-  "v1-release-guards",
-  "console-dark-restyle",
-  "console-p0-layout",
-  "console-semantic-status",
-  "console-shared-formatters",
-  "console-providers-ia-and-forms",
-  "console-ui-audit-confirmed-fixes",
-  "gateway-db-pool",
-  "gateway-recording-resilience",
-  "gateway-stream-robustness",
-  "gateway-settlement-integrity",
-  "gateway-error-fidelity",
-  "gateway-request-hygiene",
-  "gateway-cohesion-refactor",
-  "schema-vocab-checks-relaxed",
-  "schema-notification-deliveries-removed",
-  "schema-fallback-single-source",
-  "virtual-model-endpoint-routing",
-  "gateway-listen-host",
-  "db-connection-hygiene",
-  "console-api-hygiene",
-  "console-sections-split",
+const milestoneIds = [
+  "core-platform-security",
+  "provider-model-management",
+  "virtual-model-routing",
+  "gateway-protocol-execution",
+  "agent-access-and-limits",
+  "usage-and-activity",
+  "worker-model-operations",
+  "console-core",
+  "release-guards",
 ];
 
-const inProgressFeatureIds = new Set([
-  "gateway-db-pool",
-  "gateway-recording-resilience",
-  "gateway-stream-robustness",
-  "gateway-settlement-integrity",
-  "gateway-error-fidelity",
-  "gateway-request-hygiene",
-  "gateway-cohesion-refactor",
-  "schema-vocab-checks-relaxed",
-  "schema-notification-deliveries-removed",
-  "schema-fallback-single-source",
-  "virtual-model-endpoint-routing",
-  "gateway-listen-host",
-  "db-connection-hygiene",
-  "console-api-hygiene",
-  "console-sections-split",
-]);
+const retiredPaths = [
+  "apps/console/src/app/(dashboard)/routing/page.tsx",
+  "apps/console/src/app/(dashboard)/runtime/page.tsx",
+  "apps/console/src/app/(dashboard)/settings/page.tsx",
+  "apps/console/src/app/api/notifications/route.ts",
+  "apps/console/src/app/api/route-policies/preview/route.ts",
+  "packages/db/src/console-notification-channels.ts",
+  "packages/worker-runtime/src/worker-alerts.ts",
+  "packages/worker-runtime/src/worker-backup.ts",
+  "packages/worker-runtime/src/worker-export.ts",
+  "packages/worker-runtime/src/worker-notification-dispatch.ts",
+  "packages/worker-runtime/src/worker-periodic-scheduler.ts",
+  "scripts/backup.ts",
+];
 
-describe("v1 release guards milestone", () => {
-  it("tracks V1 milestones plus accepted post-V1 feature contracts", () => {
-    const featureList = readJson<{
+const retiredProductionTerms = [
+  "notification_channels",
+  "notification_events",
+  "webhook_deliveries",
+  "gateway_runtime_status",
+  "runtime_errors",
+  "quality_first",
+  "request_logging_enabled",
+  "billing_reconciliation",
+];
+
+describe("core release guards", () => {
+  it("tracks exactly nine passing core milestones", () => {
+    const tracker = JSON.parse(readFileSync(join(repoRoot, "feature_list.json"), "utf8")) as {
       features: Array<{ id: string; status: string; verification: string }>;
-    }>("feature_list.json");
-
-    expect(featureList.features.map((feature) => feature.id)).toEqual(allowedFeatureIds);
-    for (const feature of featureList.features) {
-      if (inProgressFeatureIds.has(feature.id)) {
-        expect(["failing", "passing"]).toContain(feature.status);
-      } else {
-        expect(feature.status).toBe("passing");
-      }
-      expect(feature.verification).toContain(`tests/features/${feature.id}.unit.test.ts`);
-      if (feature.id === "gateway-cohesion-refactor") {
-        expect(feature.verification).toContain("tests/e2e/v1-gateway-routing.e2e.spec.ts");
-      } else {
-        expect(feature.verification).toContain(`tests/e2e/${feature.id}.e2e.spec.ts`);
-      }
+    };
+    expect(tracker.features.map(({ id }) => id)).toEqual(milestoneIds);
+    for (const feature of tracker.features) {
+      expect(feature.status).toBe("passing");
+      expect(feature.verification).toContain("tests/features/");
+      expect(feature.verification).toContain("tests/e2e/");
     }
   });
 
-  it("keeps stale generated artifacts and one-off docs out of the repo", () => {
-    const stalePaths = [
-      "apps/worker/.llmingress/backups/llmingress-backup-scheduled-2026-06-17T00-00-00-000Z.json",
-      "apps/worker/.llmingress/backups/llmingress-backup-scheduled-2026-06-18T00-00-00-000Z.json",
+  it("keeps retired routes and modules deleted", () => {
+    expect(retiredPaths.filter((path) => existsSync(join(repoRoot, path)))).toEqual([]);
+  });
+
+  it("keeps retired tables, configuration, and behavior out of production", () => {
+    const sources = listFiles(join(repoRoot, "apps"))
+      .concat(listFiles(join(repoRoot, "packages")))
+      .concat(listFiles(join(repoRoot, "scripts")))
+      .concat([join(repoRoot, ".env.example"), join(repoRoot, "docker-compose.yml")])
+      .filter((path) => existsSync(path))
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
+
+    for (const retired of retiredProductionTerms) {
+      expect(sources, retired).not.toContain(retired);
+    }
+    for (const config of [
+      "GATEWAY_METRICS_TOKEN",
+      "OTEL_",
+      "WORKER_WEBHOOK_",
+      "BACKUP_ENCRYPTION_KEY",
+    ]) {
+      expect(sources, config).not.toContain(config);
+    }
+  });
+
+  it("keeps one core migration and three persistent Worker handlers", () => {
+    expect(
+      readdirSync(join(repoRoot, "packages/db/migrations")).filter((name) => name.endsWith(".sql")),
+    ).toEqual(["0001_core_baseline.sql"]);
+
+    const workerMain = readFileSync(join(repoRoot, "apps/worker/src/main.ts"), "utf8");
+    const handlers = [...workerMain.matchAll(/^\s{6}([a-z_]+): create\w+JobHandler/gm)]
+      .map(([, jobType]) => jobType)
+      .sort();
+    expect(handlers).toEqual(["model_refresh", "price_sync", "provider_connectivity_check"]);
+  });
+
+  it("keeps app shells thin and stale artifacts absent", () => {
+    expect(
+      listFiles(join(repoRoot, "apps/worker/src")).map((file) => relative(repoRoot, file)),
+    ).toEqual(["apps/worker/src/main.ts"]);
+    for (const path of [
       "docs/PLAN.md",
-      "docs/console-ui-operator-grade-polish-implementation.md",
       "session-handoff.md",
       "scripts/console-screenshots.mts",
       "scripts/console-e2e-coverage.ts",
-    ];
-    const gitignore = readFileSync(join(repoRoot, ".gitignore"), "utf8");
-
-    expect(stalePaths.filter((file) => existsSync(join(repoRoot, file)))).toEqual([]);
-    expect(gitignore).toMatch(/(^|\n)\.llmingress\/(\n|$)/);
-    expect(gitignore).toMatch(/(^|\n)\.worktrees\/(\n|$)/);
-  });
-
-  it("keeps app shells thin and shared code in packages", () => {
-    expect(
-      listFiles(join(repoRoot, "apps/console/src/server")).map((file) => relative(repoRoot, file)),
-    ).toEqual([]);
-    expect(
-      listFiles(join(repoRoot, "apps/worker/src"))
-        .map((file) => relative(repoRoot, file))
-        .sort(),
-    ).toEqual(["apps/worker/src/main.ts"]);
-    expect(existsSync(join(repoRoot, "packages/observability/package.json"))).toBe(false);
-
-    const offenders = listSourceFiles("apps", "packages", "scripts", "tests")
-      .filter(
-        (file) => relative(repoRoot, file) !== "tests/features/v1-release-guards.unit.test.ts",
-      )
-      .filter((file) => {
-        const source = readFileSync(file, "utf8");
-        return (
-          source.includes("@llmingress/observability") ||
-          source.includes("packages/observability") ||
-          /apps\/console\/src\/server|apps\/worker\/src\/(?!main)|\.\.\/server/.test(source)
-        );
-      })
-      .map((file) => relative(repoRoot, file));
-
-    expect(offenders).toEqual([]);
-  });
-
-  it("keeps retired Console UI complexity deleted", () => {
-    const consoleModules = listFiles(join(repoRoot, "apps/console/src/app/_modules"))
-      .map((file) => readFileSync(file, "utf8"))
-      .join("\n");
-    const globals = readFileSync(join(repoRoot, "apps/console/src/app/globals.css"), "utf8");
-    const nav = readFileSync(join(repoRoot, "apps/console/src/app/_lib/nav.ts"), "utf8");
-
-    expect(
-      existsSync(join(repoRoot, "apps/console/src/app/_components/date-picker-input.tsx")),
-    ).toBe(false);
-    expect(consoleModules).not.toContain("DatePickerInput");
-    expect(consoleModules).toContain('type="date"');
-    expect(globals).not.toContain("date-picker-");
-    expect(nav).toContain("export const consoleNavItems");
-    expect(nav).not.toContain("consoleNavGroups");
+    ]) {
+      expect(existsSync(join(repoRoot, path)), path).toBe(false);
+    }
   });
 });
-
-function readJson<T>(path: string): T {
-  return JSON.parse(readFileSync(join(repoRoot, path), "utf8")) as T;
-}
-
-function listSourceFiles(...roots: string[]): string[] {
-  return roots.flatMap((root) => listFiles(join(repoRoot, root)));
-}
 
 function listFiles(root: string): string[] {
   if (!existsSync(root)) {
     return [];
   }
   if (
-    root.endsWith("/node_modules") ||
-    root.endsWith("/dist") ||
+    root.endsWith("/.llmingress") ||
     root.endsWith("/.next") ||
-    root.includes("/node_modules/") ||
-    root.includes("/dist/") ||
-    root.includes("/.next/")
+    root.endsWith("/dist") ||
+    root.endsWith("/node_modules")
   ) {
     return [];
   }
-
   return readdirSync(root)
     .map((name) => join(root, name))
     .flatMap((entry) => {
+      if (
+        entry.endsWith("/.llmingress") ||
+        entry.endsWith("/node_modules") ||
+        entry.endsWith("/.next") ||
+        entry.endsWith("/dist") ||
+        entry.includes("/node_modules/") ||
+        entry.includes("/.next/") ||
+        entry.includes("/dist/")
+      ) {
+        return [];
+      }
       if (statSync(entry).isDirectory()) {
         return listFiles(entry);
       }
-      return entry.endsWith(".ts") || entry.endsWith(".tsx") ? [entry] : [];
+      return /\.(?:ts|tsx|sql|json|md|mjs)$/.test(entry) ? [entry] : [];
     });
 }

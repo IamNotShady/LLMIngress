@@ -1,8 +1,12 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import {
+  type AgentLimitRuleInput,
+  replaceAgentLimitRulesWithClient,
+} from "./console-agent-limits.ts";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 
-export type AgentType = "coding" | "desktop" | "terminal" | "ide" | "other";
 export type AgentIntegrationPlatform =
   | "claude-code"
   | "codex"
@@ -12,7 +16,6 @@ export type AgentIntegrationPlatform =
   | "openclaw"
   | "opencode"
   | "other";
-export type AgentDerivedStatus = "high-risk" | "offline" | "online";
 
 export const agentIntegrationPlatforms: readonly AgentIntegrationPlatform[] = [
   "codex",
@@ -26,17 +29,13 @@ export const agentIntegrationPlatforms: readonly AgentIntegrationPlatform[] = [
 ];
 
 export type AgentFormInput = {
-  agentType?: string | null;
   integrationPlatform?: string | null;
   name?: string | null;
-  requestLoggingEnabled?: boolean | string | null;
 };
 
 export type NormalizedAgentFormInput = {
-  agentType: AgentType;
   integrationPlatform: AgentIntegrationPlatform;
   name: string;
-  requestLoggingEnabled: boolean;
 };
 
 export type ConsoleAgent = NormalizedAgentFormInput & {
@@ -45,13 +44,14 @@ export type ConsoleAgent = NormalizedAgentFormInput & {
   hasApiKey: boolean;
   id: string;
   keyPrefix: string | null;
+  limitsEnabled: boolean;
   requestAttributionCount: number;
-  status: AgentDerivedStatus;
   updatedAt: Date;
 };
 
 export type ConsoleAgentCreateResult = ConsoleAgent & {
   plaintext: string;
+  virtualModelAccess: AgentVirtualModelAccess;
 };
 
 export type AgentVirtualModel = {
@@ -72,33 +72,28 @@ export type AgentVirtualModelAccessInput = {
   id?: string | null;
 };
 
-export type NormalizedAgentVirtualModelAccessInput = {
+export type AgentVirtualModelSelectionInput = Omit<AgentVirtualModelAccessInput, "id">;
+
+export type NormalizedAgentVirtualModelSelectionInput = {
   allowedVirtualModelIds: string[];
   defaultVirtualModelId: string | null;
+};
+
+export type NormalizedAgentVirtualModelAccessInput = NormalizedAgentVirtualModelSelectionInput & {
   id: string;
 };
 
-type AgentRow = PostgresQueryResultRow & {
-  agent_type: AgentType;
+type AgentRow = {
   created_at: Date;
   enabled: boolean;
   has_api_key: boolean;
   id: string;
   integration_platform: AgentIntegrationPlatform;
   key_prefix: string | null;
-  latest_request_at: Date | null;
-  limit_usage_ratio: number | string | null;
+  limits_enabled: boolean;
   name: string;
-  recent_failure_count: number;
-  recent_request_count: number;
   request_attribution_count: number;
-  request_logging_enabled: boolean;
   updated_at: Date;
-  unhealthy_reachable_provider_count: number;
-};
-
-type AgentDependencyCounts = {
-  requestAttributionCount: number;
 };
 
 type AgentQueryClient = {
@@ -108,14 +103,14 @@ type AgentQueryClient = {
   ) => Promise<{ rows: T[] }>;
 };
 
-type AgentVirtualModelAccessBaseRow = PostgresQueryResultRow & {
+type AgentVirtualModelAccessBaseRow = {
   agent_id: string;
   default_virtual_model_display_name: string | null;
   default_virtual_model_id: string | null;
   default_virtual_model_name: string | null;
 };
 
-type AgentAllowedVirtualModelRow = PostgresQueryResultRow & {
+type AgentAllowedVirtualModelRow = {
   agent_id: string;
   display_name: string;
   id: string;
@@ -150,77 +145,37 @@ export function prepareAgentApiKeyForStorage(plaintext: string): StoredAgentApiK
 
 export function normalizeAgentFormInput(input: AgentFormInput): NormalizedAgentFormInput {
   const name = input.name?.trim();
-  const agentType = input.agentType?.trim().toLowerCase();
   const integrationPlatform = (input.integrationPlatform ?? "other").trim().toLowerCase();
 
   if (!name) {
-    throw new Error("Agent name is required.");
-  }
-  if (!isAgentType(agentType)) {
-    throw new Error("Agent type must be coding, desktop, terminal, ide, or other.");
+    throw consoleValidationError("Agent name is required.", "agent_name_required", {
+      field: "name",
+    });
   }
   if (!isAgentIntegrationPlatform(integrationPlatform)) {
-    throw new Error(
+    throw consoleValidationError(
       "Agent integration platform must be codex, claude-code, cursor, opencode, hermes, openclaw, github-copilot, or other.",
+      "agent_integration_platform_invalid",
+      { field: "integrationPlatform" },
     );
   }
 
   return {
-    agentType,
     integrationPlatform,
     name,
-    requestLoggingEnabled: normalizeRequestLoggingEnabled(input.requestLoggingEnabled),
   };
 }
 
-export function deriveAgentStatus(input: {
-  latestRequestAt?: Date | string | null;
-  limitUsageRatio?: number | null;
-  now?: Date;
-  onlineWindowMs?: number;
-  recentFailureCount?: number;
-  recentRequestCount?: number;
-  unhealthyReachableProviderCount?: number;
-}): AgentDerivedStatus {
-  const recentRequestCount = input.recentRequestCount ?? 0;
-  const recentFailureCount = input.recentFailureCount ?? 0;
-  const unhealthyReachableProviderCount = input.unhealthyReachableProviderCount ?? 0;
-  const limitUsageRatio = input.limitUsageRatio ?? 0;
-
-  if (
-    unhealthyReachableProviderCount > 0 ||
-    limitUsageRatio >= 1 ||
-    (recentRequestCount >= 5 && recentFailureCount / recentRequestCount >= 0.5)
-  ) {
-    return "high-risk";
-  }
-
-  if (!input.latestRequestAt) {
-    return "offline";
-  }
-
-  const latestRequestAt =
-    input.latestRequestAt instanceof Date ? input.latestRequestAt : new Date(input.latestRequestAt);
-  const now = input.now ?? new Date();
-  const onlineWindowMs = input.onlineWindowMs ?? 15 * 60 * 1000;
-  return now.getTime() - latestRequestAt.getTime() <= onlineWindowMs ? "online" : "offline";
-}
-
-export function getAgentDeleteDependencyError(_input: AgentDependencyCounts): string | null {
-  return null;
-}
-
 export async function listAgents(databaseUrl?: string): Promise<ConsoleAgent[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<AgentRow>(
       `
         select agents.id::text,
                agents.name,
-               agents.agent_type,
                agents.integration_platform,
-               agents.request_logging_enabled,
                agents.key_prefix,
                agents.enabled,
+               agents.limits_enabled,
                agents.created_at,
                agents.updated_at,
                (agents.key_hash is not null) as has_api_key,
@@ -228,117 +183,7 @@ export async function listAgents(databaseUrl?: string): Promise<ConsoleAgent[]> 
                  select count(*)::integer
                  from request_activity
                  where request_activity.agent_id = agents.id
-               ) as request_attribution_count,
-               (
-                 select max(request_activity.started_at)
-                 from request_activity
-                 where request_activity.agent_id = agents.id
-               ) as latest_request_at,
-               (
-                 select count(*)::integer
-                 from request_activity
-                 where request_activity.agent_id = agents.id
-                   and request_activity.started_at >= now() - interval '1 hour'
-               ) as recent_request_count,
-               (
-                 select count(*)::integer
-                 from request_activity
-                 where request_activity.agent_id = agents.id
-                   and request_activity.status = 'failed'
-                   and request_activity.started_at >= now() - interval '1 hour'
-               ) as recent_failure_count,
-               (
-                 select count(distinct provider_health_summary.id)::integer
-                 from agent_virtual_models
-                 join route_policies
-                   on route_policies.virtual_model_id =
-                     agent_virtual_models.virtual_model_id
-                 join route_policy_candidates
-                   on route_policy_candidates.route_policy_id = route_policies.id
-                 join provider_models
-                   on provider_models.id = route_policy_candidates.provider_model_id
-                 join providers
-                   on providers.id = provider_models.provider_id
-                 join provider_health_summary
-                   on provider_health_summary.provider_id = provider_models.provider_id
-                  and (
-                    provider_health_summary.provider_model_id is null
-                    or provider_health_summary.provider_model_id = provider_models.id
-                  )
-                 where agent_virtual_models.agent_id = agents.id
-                   and route_policies.deleted_at is null
-                   and providers.deleted_at is null
-                   and provider_models.deleted_at is null
-                   and provider_health_summary.status in (
-                     'unhealthy',
-                     'auth_failed',
-                     'quota_limited',
-                     'network_error'
-                   )
-               ) as unhealthy_reachable_provider_count,
-               greatest(
-                 coalesce(
-                   (
-                     select max(
-                       (
-                         budget_periods.cost_used_usd / nullif(agent_limits.limit_value, 0)
-                       )::double precision
-                     )
-                     from agent_limits
-                     join budget_periods
-                       on budget_periods.agent_id = agent_limits.agent_id
-                      and budget_periods.period_type = agent_limits.period
-                     where agent_limits.agent_id = agents.id
-                       and agent_limits.enabled = true
-                       and agent_limits.limit_type = 'budget'
-                       and now() >= budget_periods.period_start
-                       and now() < budget_periods.period_end
-                   ),
-                   0
-                 ),
-                 coalesce(
-                   (
-                     select max(
-                       (
-                         rate_limit_windows.request_count::numeric
-                         / nullif(agent_limits.limit_value, 0)
-                       )::double precision
-                     )
-                     from agent_limits
-                     join rate_limit_windows
-                       on rate_limit_windows.agent_id = agent_limits.agent_id
-                      and rate_limit_windows.limit_type = agent_limits.limit_type
-                     where agent_limits.agent_id = agents.id
-                       and agent_limits.enabled = true
-                       and agent_limits.limit_type = 'rpm'
-                       and agent_limits.period = 'minute'
-                       and now() >= rate_limit_windows.window_start
-                       and now() < rate_limit_windows.window_end
-                   ),
-                   0
-                 ),
-                 coalesce(
-                   (
-                     select max(
-                       (
-                         rate_limit_windows.token_count::numeric
-                         / nullif(agent_limits.limit_value, 0)
-                       )::double precision
-                     )
-                     from agent_limits
-                     join rate_limit_windows
-                       on rate_limit_windows.agent_id = agent_limits.agent_id
-                      and rate_limit_windows.limit_type = agent_limits.limit_type
-                     where agent_limits.agent_id = agents.id
-                       and agent_limits.enabled = true
-                       and agent_limits.limit_type = 'tpm'
-                       and agent_limits.period = 'minute'
-                       and now() >= rate_limit_windows.window_start
-                       and now() < rate_limit_windows.window_end
-                   ),
-                   0
-                 )
-               ) as limit_usage_ratio
+               ) as request_attribution_count
         from agents
         where agents.deleted_at is null
         order by agents.name
@@ -352,55 +197,47 @@ export function normalizeAgentVirtualModelAccessInput(
   input: AgentVirtualModelAccessInput,
 ): NormalizedAgentVirtualModelAccessInput {
   const id = normalizeRequiredText(input.id, "Agent id");
+  return {
+    ...normalizeAgentVirtualModelSelectionInput(input),
+    id,
+  };
+}
+
+export function normalizeAgentVirtualModelSelectionInput(
+  input: AgentVirtualModelSelectionInput,
+): NormalizedAgentVirtualModelSelectionInput {
   const allowedVirtualModelIds = Array.from(
     new Set(normalizeTextList(input.allowedVirtualModelIds)),
   );
   const defaultVirtualModelId = normalizeOptionalText(input.defaultVirtualModelId);
 
+  if (allowedVirtualModelIds.length === 0) {
+    throw consoleValidationError(
+      "Select at least one allowed Virtual Model.",
+      "agent_allowed_virtual_model_required",
+      { field: "allowedVirtualModelIds" },
+    );
+  }
   assertDefaultVirtualModelIsAllowed({ allowedVirtualModelIds, defaultVirtualModelId });
 
   return {
     allowedVirtualModelIds,
     defaultVirtualModelId,
-    id,
   };
 }
 
 export function normalizeAgentVirtualModelAccessFormInput(
   input: AgentVirtualModelAccessInput,
 ): NormalizedAgentVirtualModelAccessInput {
-  const defaultVirtualModelId = normalizeOptionalText(input.defaultVirtualModelId);
-  const allowedVirtualModelIds = normalizeTextList(input.allowedVirtualModelIds);
-
-  return normalizeAgentVirtualModelAccessInput({
-    ...input,
-    allowedVirtualModelIds:
-      defaultVirtualModelId && !allowedVirtualModelIds.includes(defaultVirtualModelId)
-        ? [...allowedVirtualModelIds, defaultVirtualModelId]
-        : allowedVirtualModelIds,
-    defaultVirtualModelId,
-  });
-}
-
-export function formatAgentVirtualModelAccess(input: {
-  allowedVirtualModels: AgentVirtualModel[];
-  defaultVirtualModel: AgentVirtualModel | null;
-}): { allowedLabel: string; defaultLabel: string } {
-  return {
-    allowedLabel:
-      input.allowedVirtualModels.length === 0
-        ? "None"
-        : input.allowedVirtualModels.map(formatVirtualModelLabel).join(", "),
-    defaultLabel: input.defaultVirtualModel
-      ? formatVirtualModelLabel(input.defaultVirtualModel)
-      : "None",
-  };
+  return normalizeAgentVirtualModelAccessInput(input);
 }
 
 export async function listAgentVirtualModelAccess(
   databaseUrl?: string,
 ): Promise<AgentVirtualModelAccess[]> {
-  return withClient(databaseUrl, async (client) => readAgentVirtualModelAccess(client));
+  return withPooledPostgresClient(databaseUrl, async (client) =>
+    readAgentVirtualModelAccess(client),
+  );
 }
 
 export async function updateAgentVirtualModelAccess(input: {
@@ -422,27 +259,7 @@ export async function updateAgentVirtualModelAccess(input: {
       await assertAgentExists(client, input.access.id);
       await assertVirtualModelsAvailable(client, input.access.allowedVirtualModelIds);
 
-      await client.query("delete from agent_virtual_models where agent_id = $1", [input.access.id]);
-
-      for (const virtualModelId of input.access.allowedVirtualModelIds) {
-        await client.query(
-          `
-            insert into agent_virtual_models (agent_id, virtual_model_id)
-            values ($1, $2)
-          `,
-          [input.access.id, virtualModelId],
-        );
-      }
-
-      await client.query(
-        `
-          update agents
-          set default_virtual_model_id = $2,
-              updated_at = now()
-          where id = $1
-        `,
-        [input.access.id, input.access.defaultVirtualModelId],
-      );
+      await replaceAgentVirtualModelsWithClient(client, input.access.id, input.access);
 
       savedAccess = requireAgentVirtualModelAccess(
         await readAgentVirtualModelAccessById(client, input.access.id),
@@ -453,9 +270,12 @@ export async function updateAgentVirtualModelAccess(input: {
   return requireAgentVirtualModelAccess(savedAccess);
 }
 
-export async function createAgent(input: {
+export async function createAgentWithSettings(input: {
   agent: NormalizedAgentFormInput;
   databaseUrl?: string;
+  limitRules: readonly AgentLimitRuleInput[];
+  limitsEnabled: boolean;
+  virtualModels: NormalizedAgentVirtualModelSelectionInput;
 }): Promise<ConsoleAgentCreateResult> {
   const agentId = randomUUID();
   const plaintext = generateAgentApiKeyPlaintext();
@@ -466,53 +286,100 @@ export async function createAgent(input: {
   await publisher.publish({
     source: "console",
     description: `Create agent ${input.agent.name}`,
-    changes: [{ table: "agents", recordId: agentId }],
+    changes: [
+      { table: "agents", recordId: agentId },
+      { table: "agent_virtual_models", recordId: agentId },
+      { table: "agent_limits", recordId: agentId },
+    ],
     write: async (client) => {
+      await assertVirtualModelsAvailable(client, input.virtualModels.allowedVirtualModelIds);
       const result = await client.query<AgentRow>(
         `
           insert into agents (
             id,
             name,
-            agent_type,
             integration_platform,
-            request_logging_enabled,
             key_prefix,
             key_hash,
-            enabled
+            enabled,
+            limits_enabled
           )
-          values ($1, $2, $3, $4, $5, $6, $7, true)
+          values ($1, $2, $3, $4, $5, true, $6)
           returning id::text,
                     name,
-                    agent_type,
                     integration_platform,
-                    request_logging_enabled,
                     key_prefix,
                     enabled,
+                    limits_enabled,
                     created_at,
                     updated_at,
                     true as has_api_key,
-                    0::integer as request_attribution_count,
-                    null::timestamptz as latest_request_at,
-                    0::integer as recent_request_count,
-                    0::integer as recent_failure_count,
-                    0::integer as unhealthy_reachable_provider_count,
-                    0::double precision as limit_usage_ratio
+                    0::integer as request_attribution_count
         `,
         [
           agentId,
           input.agent.name,
-          input.agent.agentType,
           input.agent.integrationPlatform,
-          input.agent.requestLoggingEnabled,
           stored.keyPrefix,
           stored.keyHash,
+          input.limitsEnabled,
         ],
       );
-      agent = { ...rowToConsoleAgent(requireRow(result.rows[0])), plaintext };
+      await replaceAgentVirtualModelsWithClient(client, agentId, input.virtualModels);
+      if (input.limitsEnabled) {
+        await replaceAgentLimitRulesWithClient(client, agentId, input.limitRules);
+      }
+      agent = {
+        ...rowToConsoleAgent(requireRow(result.rows[0])),
+        plaintext,
+        virtualModelAccess: requireAgentVirtualModelAccess(
+          await readAgentVirtualModelAccessById(client, agentId),
+        ),
+      };
     },
   });
 
   return requireSavedAgent(agent);
+}
+
+export async function updateAgentWithSettings(input: {
+  agent: NormalizedAgentFormInput;
+  databaseUrl?: string;
+  id: string;
+  limitRules: readonly AgentLimitRuleInput[];
+  limitsEnabled: boolean;
+  virtualModels: NormalizedAgentVirtualModelSelectionInput;
+}): Promise<void> {
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: `Update Agent settings ${input.id}`,
+    changes: [
+      { table: "agents", recordId: input.id },
+      { table: "agent_virtual_models", recordId: input.id },
+      { table: "agent_limits", recordId: input.id },
+    ],
+    write: async (client) => {
+      await assertAgentExists(client, input.id);
+      await assertVirtualModelsAvailable(client, input.virtualModels.allowedVirtualModelIds);
+      await client.query(
+        `
+          update agents
+          set name = $2,
+              integration_platform = $3,
+              limits_enabled = $4,
+              updated_at = now()
+          where id = $1
+            and deleted_at is null
+        `,
+        [input.id, input.agent.name, input.agent.integrationPlatform, input.limitsEnabled],
+      );
+      await replaceAgentVirtualModelsWithClient(client, input.id, input.virtualModels);
+      if (input.limitsEnabled) {
+        await replaceAgentLimitRulesWithClient(client, input.id, input.limitRules);
+      }
+    },
+  });
 }
 
 export async function updateAgent(input: {
@@ -532,19 +399,16 @@ export async function updateAgent(input: {
         `
           update agents
           set name = $2,
-              agent_type = $3,
-              integration_platform = $4,
-              request_logging_enabled = $5,
+              integration_platform = $3,
               updated_at = now()
           where id = $1
             and deleted_at is null
           returning id::text,
                     name,
-                    agent_type,
                     integration_platform,
-                    request_logging_enabled,
                     key_prefix,
                     enabled,
+                    limits_enabled,
                     created_at,
                     updated_at,
                     (key_hash is not null) as has_api_key,
@@ -552,41 +416,29 @@ export async function updateAgent(input: {
                       select count(*)::integer
                       from request_activity
                       where request_activity.agent_id = agents.id
-                    ) as request_attribution_count,
-                    (
-                      select max(request_activity.started_at)
-                      from request_activity
-                      where request_activity.agent_id = agents.id
-                    ) as latest_request_at,
-                    (
-                      select count(*)::integer
-                      from request_activity
-                      where request_activity.agent_id = agents.id
-                        and request_activity.started_at >= now() - interval '1 hour'
-                    ) as recent_request_count,
-                    (
-                      select count(*)::integer
-                      from request_activity
-                      where request_activity.agent_id = agents.id
-                        and request_activity.status = 'failed'
-                        and request_activity.started_at >= now() - interval '1 hour'
-                    ) as recent_failure_count,
-                    0::integer as unhealthy_reachable_provider_count,
-                    0::double precision as limit_usage_ratio
+                    ) as request_attribution_count
         `,
-        [
-          input.id,
-          input.agent.name,
-          input.agent.agentType,
-          input.agent.integrationPlatform,
-          input.agent.requestLoggingEnabled,
-        ],
+        [input.id, input.agent.name, input.agent.integrationPlatform],
       );
       agent = rowToConsoleAgent(requireRow(result.rows[0]));
     },
   });
 
   return requireSavedAgent(agent);
+}
+
+export async function setAgentEnabled(input: {
+  databaseUrl?: string;
+  enabled: boolean;
+  id: string;
+}): Promise<void> {
+  await updateAgentBooleanSetting({
+    databaseUrl: input.databaseUrl,
+    description: `${input.enabled ? "Enable" : "Disable"} Agent ${input.id}`,
+    id: input.id,
+    setClause: "enabled = $2",
+    value: input.enabled,
+  });
 }
 
 export async function deleteAgent(input: { databaseUrl?: string; id: string }): Promise<void> {
@@ -623,8 +475,48 @@ async function assertAgentExists(client: AgentQueryClient, agentId: string): Pro
     [agentId],
   );
   if (!result.rows[0]) {
-    throw new Error("Agent was not found.");
+    throw consoleNotFoundError("Agent was not found.", "agent_not_found", { agentId });
   }
+}
+
+async function replaceAgentVirtualModelsWithClient(
+  client: AgentQueryClient,
+  agentId: string,
+  virtualModels: NormalizedAgentVirtualModelSelectionInput,
+): Promise<void> {
+  await client.query("delete from agent_virtual_models where agent_id = $1", [agentId]);
+  for (const virtualModelId of virtualModels.allowedVirtualModelIds) {
+    await client.query(
+      `insert into agent_virtual_models (agent_id, virtual_model_id) values ($1, $2)`,
+      [agentId, virtualModelId],
+    );
+  }
+  await client.query(
+    `update agents set default_virtual_model_id = $2, updated_at = now() where id = $1`,
+    [agentId, virtualModels.defaultVirtualModelId],
+  );
+}
+
+async function updateAgentBooleanSetting(input: {
+  databaseUrl?: string;
+  description: string;
+  id: string;
+  setClause: "enabled = $2";
+  value: boolean;
+}): Promise<void> {
+  const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
+  await publisher.publish({
+    source: "console",
+    description: input.description,
+    changes: [{ table: "agents", recordId: input.id }],
+    write: async (client) => {
+      await assertAgentExists(client, input.id);
+      await client.query(
+        `update agents set ${input.setClause}, updated_at = now() where id = $1 and deleted_at is null`,
+        [input.id, input.value],
+      );
+    },
+  });
 }
 
 async function assertVirtualModelsAvailable(
@@ -648,7 +540,11 @@ async function assertVirtualModelsAvailable(
   const availableIds = new Set(result.rows.map((row) => row.id));
   const missingId = virtualModelIds.find((id) => !availableIds.has(id));
   if (missingId) {
-    throw new Error(`Allowed Virtual Model was not found or is disabled: ${missingId}`);
+    throw consoleValidationError(
+      `Allowed Virtual Model was not found or is disabled: ${missingId}`,
+      "agent_virtual_model_not_available",
+      { virtualModelId: missingId },
+    );
   }
 }
 
@@ -723,69 +619,34 @@ async function readAgentVirtualModelAccess(
 }
 
 function rowToConsoleAgent(row: AgentRow): ConsoleAgent {
-  const limitUsageRatio = readNumber(row.limit_usage_ratio);
-
   return {
-    agentType: row.agent_type,
     createdAt: new Date(row.created_at),
     enabled: row.enabled,
     hasApiKey: row.has_api_key,
     id: row.id,
     integrationPlatform: row.integration_platform,
     keyPrefix: row.key_prefix,
+    limitsEnabled: row.limits_enabled,
     name: row.name,
     requestAttributionCount: row.request_attribution_count,
-    requestLoggingEnabled: row.request_logging_enabled,
-    status: deriveAgentStatus({
-      latestRequestAt: row.latest_request_at,
-      limitUsageRatio,
-      recentFailureCount: row.recent_failure_count,
-      recentRequestCount: row.recent_request_count,
-      unhealthyReachableProviderCount: row.unhealthy_reachable_provider_count,
-    }),
     updatedAt: new Date(row.updated_at),
   };
-}
-
-function isAgentType(value: string | undefined): value is AgentType {
-  return (
-    value === "coding" ||
-    value === "desktop" ||
-    value === "terminal" ||
-    value === "ide" ||
-    value === "other"
-  );
 }
 
 function isAgentIntegrationPlatform(value: string): value is AgentIntegrationPlatform {
   return agentIntegrationPlatforms.includes(value as AgentIntegrationPlatform);
 }
 
-function normalizeRequestLoggingEnabled(value: boolean | string | null | undefined): boolean {
-  if (value === undefined || value === null || value === "") {
-    return true;
-  }
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["1", "enabled", "on", "true", "yes"].includes(normalized)) {
-    return true;
-  }
-  if (["0", "disabled", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-  throw new Error("Request logging setting must be enabled or disabled.");
-}
-
 function normalizeAgentApiKeyPlaintext(value: string): string {
   const plaintext = value.trim();
   if (!plaintext) {
-    throw new Error("Agent API key plaintext is required.");
+    throw consoleValidationError("Agent API key plaintext is required.", "agent_api_key_required");
   }
   if (plaintext.length <= agentApiKeyPrefixLength) {
-    throw new Error("Agent API key must be longer than the stored prefix.");
+    throw consoleValidationError(
+      "Agent API key must be longer than the stored prefix.",
+      "agent_api_key_too_short",
+    );
   }
   return plaintext;
 }
@@ -798,18 +659,18 @@ function assertDefaultVirtualModelIsAllowed(input: {
     input.defaultVirtualModelId &&
     !input.allowedVirtualModelIds.includes(input.defaultVirtualModelId)
   ) {
-    throw new Error("Default Virtual Model must be included in the allowed Virtual Models.");
+    throw consoleValidationError(
+      "Default Virtual Model must be included in the allowed Virtual Models.",
+      "agent_default_virtual_model_not_allowed",
+      { defaultVirtualModelId: input.defaultVirtualModelId },
+    );
   }
-}
-
-function formatVirtualModelLabel(virtualModel: AgentVirtualModel): string {
-  return `${virtualModel.displayName} (${virtualModel.name})`;
 }
 
 function normalizeRequiredText(value: string | null | undefined, label: string): string {
   const normalized = normalizeOptionalText(value);
   if (!normalized) {
-    throw new Error(`${label} is required.`);
+    throw consoleValidationError(`${label} is required.`, "form_field_required", { field: label });
   }
   return normalized;
 }
@@ -829,20 +690,9 @@ function normalizeTextList(
   });
 }
 
-function readNumber(value: number | string | null | undefined): number {
-  if (typeof value === "number") {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
 function requireRow<T>(row: T | undefined): T {
   if (!row) {
-    throw new Error("Agent was not found.");
+    throw consoleNotFoundError("Agent was not found.", "agent_not_found");
   }
   return row;
 }
@@ -861,18 +711,4 @@ function requireAgentVirtualModelAccess(
     throw new Error("Agent virtual model access was not saved.");
   }
   return access;
-}
-
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
 }

@@ -12,7 +12,7 @@ import { seedOpenAIGatewayRoute } from "../support/gateway-route-seed";
 
 const agentApiKey = "llmi_gateway_request_hygiene_key_094";
 
-test("gateway accepts large bodies, protects metrics, and passes chat parameters through", async () => {
+test("gateway accepts large bodies and passes chat parameters through", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_request_hygiene_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -20,16 +20,53 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
 
   try {
     await runMigrations({ databaseUrl: fixture.databaseUrl });
+    const responsesAgentApiKey = "llmi_resp_request_hygiene_key_094";
+    const messagesAgentApiKey = "llmi_msg_request_hygiene_key_094";
+    const embeddingsAgentApiKey = "llmi_embed_request_hygiene_key_094";
     await seedOpenAIGatewayRoute({
       agentApiKey,
       fixture,
       providerBaseUrl: fakeProvider.url,
       virtualModelName: "vm-request-hygiene",
     });
+    await seedOpenAIGatewayRoute({
+      agentApiKey: responsesAgentApiKey,
+      endpointProtocol: "responses",
+      fixture,
+      providerBaseUrl: fakeProvider.url,
+      virtualModelName: "vm-request-hygiene-responses",
+    });
+    const messagesSeed = await seedOpenAIGatewayRoute({
+      agentApiKey: messagesAgentApiKey,
+      endpointProtocol: "messages",
+      fixture,
+      providerBaseUrl: fakeProvider.url,
+      virtualModelName: "vm-request-hygiene-messages",
+    });
+    await fixture.query("update providers set provider_key = 'anthropic' where id = $1", [
+      messagesSeed.providerId,
+    ]);
+    await seedOpenAIGatewayRoute({
+      agentApiKey: embeddingsAgentApiKey,
+      endpointProtocol: "embeddings",
+      fixture,
+      providerBaseUrl: fakeProvider.url,
+      virtualModelName: "vm-request-hygiene-embeddings",
+    });
+    await fixture.query(
+      `
+        update provider_models
+        set input_modalities = array['text', 'image']::text[],
+            output_modalities = array['text', 'embedding']::text[],
+            context_window = 1000000,
+            max_output_tokens = 8192,
+            supports_function_calling = true,
+            supports_reasoning = true
+      `,
+    );
 
     const gateway = startGatewayProcess({
       databaseUrl: fixture.databaseUrl,
-      env: { GATEWAY_METRICS_TOKEN: "metrics-token" },
       port: await getFreePort(),
     });
 
@@ -41,14 +78,6 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         "openai-organization": "org_agent_123",
         "openai-project": "proj_agent_123",
       };
-
-      const unauthorizedMetrics = await fetch(`${baseUrl}/metrics`);
-      expect(unauthorizedMetrics.status).toBe(401);
-
-      const authorizedMetrics = await fetch(`${baseUrl}/metrics`, {
-        headers: { authorization: "Bearer metrics-token" },
-      });
-      expect(authorizedMetrics.status).toBe(200);
 
       const largeMessage = "x".repeat(2 * 1024 * 1024);
       const response = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -70,6 +99,13 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
           "content-type": "application/json",
           cookie: "agent-session=secret",
           ...openAIHeaderProbe,
+          origin: "http://console.test",
+          referer: "http://console.test/playground",
+          "sec-browser-probe": "must-not-forward",
+          "sec-ch-ua": '"Chromium";v="126"',
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "cross-site",
+          "user-agent": "browser-user-agent",
           "x-api-key": "agent-x-key-should-not-leak",
           "x-client-request-id": "client-chat-1",
           "x-request-id": "agent-chat-request",
@@ -92,6 +128,14 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       );
       expect(readHeader(fakeProvider.requests[0]?.headers, "x-api-key")).toBeUndefined();
       expect(readHeader(fakeProvider.requests[0]?.headers, "cookie")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "origin")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "referer")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "sec-browser-probe")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "sec-ch-ua")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "sec-fetch-site")).toBeUndefined();
+      expect(readHeader(fakeProvider.requests[0]?.headers, "user-agent")).not.toBe(
+        "browser-user-agent",
+      );
       const providerBody = fakeProvider.requests[0]?.bodyJson;
       expect(isRecord(providerBody) ? providerBody.max_completion_tokens : undefined).toBe(64);
       expect(isRecord(providerBody) ? providerBody.max_tokens : undefined).toBe(12);
@@ -157,10 +201,10 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
           background: true,
           conversation: "conv_123",
           include: ["file_search_call.results"],
-          input: [{ content: "run pwd", role: "user" }, toolOutput],
+          input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
           max_tool_calls: 3,
           metadata: { trace: "responses" },
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-responses",
           parallel_tool_calls: false,
           previous_response_id: "resp_123",
           reasoning: { effort: "medium" },
@@ -173,7 +217,7 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
           user: "end-user-123",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
           ...openAIHeaderProbe,
           "x-client-request-id": "client-responses-1",
@@ -193,7 +237,7 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         background: true,
         conversation: "conv_123",
         include: ["file_search_call.results"],
-        input: [{ content: "run pwd", role: "user" }, toolOutput],
+        input: [{ content: [{ text: "run pwd", type: "input_text" }], role: "user" }, toolOutput],
         max_tool_calls: 3,
         metadata: { trace: "responses" },
         model: "fake-model",
@@ -221,11 +265,11 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
               role: "user",
             },
           ],
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-responses",
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -253,18 +297,19 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         type: "reasoning",
       };
       const assistantPlaceholder = {
-        content: "",
+        content: [],
         role: "assistant",
+        type: "message",
       };
       const reasoningReplayResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
           input: [reasoningItem, assistantPlaceholder],
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-responses",
           store: false,
           stream: true,
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -281,31 +326,24 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         stream: true,
       });
 
-      const providerOwnedResponsesResponse = await fetch(`${baseUrl}/v1/responses`, {
+      const invalidResponsesResponse = await fetch(`${baseUrl}/v1/responses`, {
         body: JSON.stringify({
-          input: { provider: "owned" },
-          model: "vm-request-hygiene",
-          parallel_tool_calls: "provider-owned",
-          tool_choice: "provider-owned",
-          tools: ["provider-owned"],
+          input: "provider-owned string input",
+          model: "vm-request-hygiene-responses",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${responsesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
       });
-      await providerOwnedResponsesResponse.text();
+      const invalidResponsesBody = await invalidResponsesResponse.json();
 
-      expect(providerOwnedResponsesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(6);
-      expect(fakeProvider.requests[5]?.bodyJson).toMatchObject({
-        input: { provider: "owned" },
-        model: "fake-model",
-        parallel_tool_calls: "provider-owned",
-        tool_choice: "provider-owned",
-        tools: ["provider-owned"],
+      expect(invalidResponsesResponse.status).toBe(400);
+      expect(invalidResponsesBody).toMatchObject({
+        error: { code: "invalid_responses_request" },
       });
+      expect(fakeProvider.requests).toHaveLength(5);
 
       const messagesResponse = await fetch(`${baseUrl}/v1/messages`, {
         body: JSON.stringify({
@@ -315,12 +353,12 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
           max_tokens: 128,
           mcp_servers: [{ name: "tools", type: "url", url: "https://mcp.example.test" }],
           messages: [{ content: "hello", role: "user" }],
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-messages",
         }),
         headers: {
           "anthropic-beta": "context-1m-2025-08-07",
           "anthropic-version": "2024-01-01",
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${messagesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -328,15 +366,15 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await messagesResponse.text();
 
       expect(messagesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(7);
-      expect(readHeader(fakeProvider.requests[6]?.headers, "anthropic-beta")).toBe(
+      expect(fakeProvider.requests).toHaveLength(6);
+      expect(readHeader(fakeProvider.requests[5]?.headers, "anthropic-beta")).toBe(
         "context-1m-2025-08-07",
       );
-      expect(readHeader(fakeProvider.requests[6]?.headers, "anthropic-version")).toBe("2024-01-01");
-      expect(readHeader(fakeProvider.requests[6]?.headers, "x-api-key")).toBe("fake-provider-key");
+      expect(readHeader(fakeProvider.requests[5]?.headers, "anthropic-version")).toBe("2024-01-01");
+      expect(readHeader(fakeProvider.requests[5]?.headers, "x-api-key")).toBe("fake-provider-key");
       expect(messagesResponse.headers.get("request-id")).toBe("fake-provider-request");
       expect(messagesResponse.headers.get("anthropic-ratelimit-requests-remaining")).toBe("88");
-      const messagesProviderBody = fakeProvider.requests[6]?.bodyJson;
+      const messagesProviderBody = fakeProvider.requests[5]?.bodyJson;
       expect(messagesProviderBody).toMatchObject({
         betas: ["mcp-client-2025-04-04"],
         container: { type: "auto" },
@@ -351,12 +389,12 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
         body: JSON.stringify({
           max_tokens: "provider-owned",
           messages: "provider-owned",
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-messages",
           stream: "provider-owned",
           system: { provider: "owned" },
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${messagesAgentApiKey}`,
           "content-type": "application/json",
         },
         method: "POST",
@@ -364,8 +402,8 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await providerOwnedMessagesResponse.text();
 
       expect(providerOwnedMessagesResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(8);
-      expect(fakeProvider.requests[7]?.bodyJson).toMatchObject({
+      expect(fakeProvider.requests).toHaveLength(7);
+      expect(fakeProvider.requests[6]?.bodyJson).toMatchObject({
         max_tokens: "provider-owned",
         messages: "provider-owned",
         model: "fake-model",
@@ -378,10 +416,10 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
           dimensions: "provider-owned",
           encoding_format: "provider-owned",
           input: { provider: "owned" },
-          model: "vm-request-hygiene",
+          model: "vm-request-hygiene-embeddings",
         }),
         headers: {
-          authorization: `Bearer ${agentApiKey}`,
+          authorization: `Bearer ${embeddingsAgentApiKey}`,
           "content-type": "application/json",
           ...openAIHeaderProbe,
           "x-client-request-id": "client-embeddings-1",
@@ -391,12 +429,12 @@ test("gateway accepts large bodies, protects metrics, and passes chat parameters
       await providerOwnedEmbeddingsResponse.text();
 
       expect(providerOwnedEmbeddingsResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(9);
-      expectOpenAIProviderHeaders(fakeProvider.requests[8]?.headers);
-      expect(readHeader(fakeProvider.requests[8]?.headers, "x-client-request-id")).toBe(
+      expect(fakeProvider.requests).toHaveLength(8);
+      expectOpenAIProviderHeaders(fakeProvider.requests[7]?.headers);
+      expect(readHeader(fakeProvider.requests[7]?.headers, "x-client-request-id")).toBe(
         "client-embeddings-1",
       );
-      expect(fakeProvider.requests[8]?.bodyJson).toMatchObject({
+      expect(fakeProvider.requests[7]?.bodyJson).toMatchObject({
         dimensions: "provider-owned",
         encoding_format: "provider-owned",
         input: { provider: "owned" },

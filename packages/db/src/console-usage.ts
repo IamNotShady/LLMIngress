@@ -1,4 +1,4 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { formatConsoleUsd } from "@llmingress/db/console-format";
 
 export type ConsoleUsageWindow = "24h" | "7d" | "30d";
@@ -12,7 +12,6 @@ export type ConsoleUsageBreakdown = {
   providerLabel: string;
   requestCount: number;
   totalCostUsd: string | null;
-  totalSavingsUsd: string | null;
   totalTokens: number;
 };
 
@@ -23,7 +22,6 @@ export type ConsoleUsageDimensionBreakdown = {
   label: string;
   requestCount: number;
   totalCostUsd: string | null;
-  totalSavingsUsd: string | null;
   totalTokens: number;
 };
 
@@ -33,7 +31,6 @@ export type ConsoleUsageTrendPoint = {
   outputTokens: number;
   requestCount: number;
   totalCostUsd: string | null;
-  totalSavingsUsd: string | null;
   totalTokens: number;
 };
 
@@ -41,36 +38,37 @@ export type ConsoleUsageSummary = {
   agentBreakdowns: ConsoleUsageDimensionBreakdown[];
   avgLatencyMs: number | null;
   breakdowns: ConsoleUsageBreakdown[];
-  costedRequestCount: number;
   failureCount: number;
   inputTokens: number;
-  lowCostRequestCount: number;
   modelBreakdowns: ConsoleUsageDimensionBreakdown[];
   outputTokens: number;
   providerBreakdowns: ConsoleUsageDimensionBreakdown[];
   requestCount: number;
   totalCostUsd: string | null;
-  totalSavingsUsd: string | null;
   totalTokens: number;
   trend: ConsoleUsageTrendPoint[];
   virtualModelBreakdowns: ConsoleUsageDimensionBreakdown[];
   window: ConsoleUsageWindow;
 };
 
-type UsageSummaryRow = PostgresQueryResultRow & {
+export type ConsoleUsageKpis = {
+  failureRate: number;
+  requestCount: number;
+  totalCostUsd: string | null;
+  totalTokens: number;
+};
+
+type UsageSummaryRow = {
   avg_latency_ms: number | string | null;
-  costed_request_count: number;
   failure_count: number;
   input_tokens: string | null;
-  low_cost_request_count: number;
   output_tokens: string | null;
   request_count: number;
   total_cost_usd: string | null;
-  total_savings_usd: string | null;
   total_tokens: string | null;
 };
 
-type UsageBreakdownRow = PostgresQueryResultRow & {
+type UsageBreakdownRow = {
   avg_latency_ms: number | string | null;
   failure_count: number;
   model_id: string | null;
@@ -79,28 +77,25 @@ type UsageBreakdownRow = PostgresQueryResultRow & {
   provider_label: string | null;
   request_count: number;
   total_cost_usd: string | null;
-  total_savings_usd: string | null;
   total_tokens: string | null;
 };
 
-type UsageDimensionBreakdownRow = PostgresQueryResultRow & {
+type UsageDimensionBreakdownRow = {
   avg_latency_ms: number | string | null;
   failure_count: number;
   id: string | null;
   label: string | null;
   request_count: number;
   total_cost_usd: string | null;
-  total_savings_usd: string | null;
   total_tokens: string | null;
 };
 
-type UsageTrendRow = PostgresQueryResultRow & {
+type UsageTrendRow = {
   bucket_start: Date | string;
   input_tokens: string | null;
   output_tokens: string | null;
   request_count: number;
   total_cost_usd: string | null;
-  total_savings_usd: string | null;
   total_tokens: string | null;
 };
 
@@ -125,10 +120,7 @@ export async function getConsoleUsageSummary(input: {
   const scope = buildUsageScope(input, range);
   const bucketUnit =
     range.end.getTime() - range.start.getTime() <= 48 * 60 * 60 * 1000 ? "hour" : "day";
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const summaryResult = await client.query<UsageSummaryRow>(
       `
           select count(request_activity.id)::integer as request_count,
@@ -137,19 +129,11 @@ export async function getConsoleUsageSummary(input: {
                  avg(request_activity.latency_ms) filter (
                    where request_activity.latency_ms is not null
                  )::double precision as avg_latency_ms,
-                 count(request_costs.id) filter (
-                   where request_costs.total_cost_usd is not null
-                 )::integer as costed_request_count,
-                 count(request_costs.id) filter (
-                   where coalesce(request_costs.savings_usd, 0) > 0
-                 )::integer as low_cost_request_count,
                  coalesce(sum(request_usage.input_tokens), 0)::text as input_tokens,
                  coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
+                   as total_cost_usd
           from request_activity
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
@@ -185,9 +169,7 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
+                   as total_cost_usd
           from request_activity
           left join providers on providers.id = request_activity.provider_id
           left join provider_models on provider_models.id = request_activity.provider_model_id
@@ -223,9 +205,7 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
+                   as total_cost_usd
           from request_activity
           left join agents on agents.id = request_activity.agent_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -261,9 +241,7 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
+                   as total_cost_usd
           from request_activity
           left join virtual_models on virtual_models.id = request_activity.virtual_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -294,9 +272,7 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
+                   as total_cost_usd
           from request_activity
           left join providers on providers.id = request_activity.provider_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -366,9 +342,7 @@ export async function getConsoleUsageSummary(input: {
                  )::double precision as avg_latency_ms,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
+                   as total_cost_usd
           from request_activity
           left join provider_models on provider_models.id = request_activity.provider_model_id
           left join request_usage on request_usage.request_activity_id = request_activity.id
@@ -388,9 +362,7 @@ export async function getConsoleUsageSummary(input: {
                  coalesce(sum(request_usage.output_tokens), 0)::text as output_tokens,
                  coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
                  coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
-                   as total_cost_usd,
-                 coalesce(sum(request_costs.savings_usd), 0)::numeric(20, 8)::text
-                   as total_savings_usd
+                   as total_cost_usd
           from request_activity
           left join request_usage on request_usage.request_activity_id = request_activity.id
           left join request_costs on request_costs.request_activity_id = request_activity.id
@@ -406,16 +378,13 @@ export async function getConsoleUsageSummary(input: {
       agentBreakdowns: agentBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       avgLatencyMs: readOptionalNumber(summaryRow?.avg_latency_ms),
       breakdowns: breakdownResult.rows.map(rowToConsoleUsageBreakdown),
-      costedRequestCount: summaryRow?.costed_request_count ?? 0,
       failureCount: summaryRow?.failure_count ?? 0,
       inputTokens: readInteger(summaryRow?.input_tokens),
-      lowCostRequestCount: summaryRow?.low_cost_request_count ?? 0,
       modelBreakdowns: modelBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       outputTokens: readInteger(summaryRow?.output_tokens),
       providerBreakdowns: providerBreakdownResult.rows.map(rowToConsoleUsageDimensionBreakdown),
       requestCount: summaryRow?.request_count ?? 0,
       totalCostUsd: summaryRow?.total_cost_usd ?? null,
-      totalSavingsUsd: summaryRow?.total_savings_usd ?? null,
       totalTokens: readInteger(summaryRow?.total_tokens),
       trend: trendResult.rows.map(rowToConsoleUsageTrendPoint),
       virtualModelBreakdowns: virtualModelBreakdownResult.rows.map(
@@ -423,33 +392,50 @@ export async function getConsoleUsageSummary(input: {
       ),
       window: input.window,
     };
-  } finally {
-    await client.end();
-  }
+  });
+}
+
+export async function getConsolePrevious24HourKpis(
+  input: { databaseUrl?: string; now?: Date } = {},
+): Promise<ConsoleUsageKpis> {
+  const now = input.now ?? new Date();
+  const end = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
+    const result = await client.query<UsageSummaryRow>(
+      `
+        select count(request_activity.id)::integer as request_count,
+               count(request_activity.id) filter (where request_activity.status = 'failed')::integer
+                 as failure_count,
+               null::double precision as avg_latency_ms,
+               '0'::text as input_tokens,
+               '0'::text as output_tokens,
+               coalesce(sum(request_usage.total_tokens), 0)::text as total_tokens,
+               coalesce(sum(request_costs.total_cost_usd), 0)::numeric(20, 8)::text
+                 as total_cost_usd
+        from request_activity
+        left join request_usage on request_usage.request_activity_id = request_activity.id
+        left join request_costs on request_costs.request_activity_id = request_activity.id
+        where request_activity.started_at >= $1
+          and request_activity.started_at < $2
+      `,
+      [start.toISOString(), end.toISOString()],
+    );
+    const row = result.rows[0];
+    const requestCount = row?.request_count ?? 0;
+    const failureCount = row?.failure_count ?? 0;
+    return {
+      failureRate: requestCount > 0 ? failureCount / requestCount : 0,
+      requestCount,
+      totalCostUsd: row?.total_cost_usd ?? null,
+      totalTokens: readInteger(row?.total_tokens),
+    };
+  });
 }
 
 export function formatConsoleUsageCost(totalCostUsd: string | null): string {
   return formatConsoleUsd(totalCostUsd);
-}
-
-export function formatConsoleUsageTokens(input: {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-}): string {
-  return `${input.totalTokens} total tokens (${input.inputTokens} input, ${input.outputTokens} output)`;
-}
-
-export function formatConsoleUsageBreakdownStats(input: {
-  failureCount: number;
-  requestCount: number;
-  totalCostUsd: string | null;
-  totalSavingsUsd: string | null;
-  totalTokens: number;
-}): string {
-  const requestLabel = input.requestCount === 1 ? "request" : "requests";
-  const failureLabel = input.failureCount === 1 ? "failure" : "failures";
-  return `${input.requestCount} ${requestLabel} - ${input.failureCount} ${failureLabel} - ${input.totalTokens} tokens - cost ${formatConsoleUsageCost(input.totalCostUsd)} - savings ${formatConsoleUsageCost(input.totalSavingsUsd)}`;
 }
 
 function rowToConsoleUsageBreakdown(row: UsageBreakdownRow): ConsoleUsageBreakdown {
@@ -462,7 +448,6 @@ function rowToConsoleUsageBreakdown(row: UsageBreakdownRow): ConsoleUsageBreakdo
     providerLabel: row.provider_label ?? "Unknown provider",
     requestCount: row.request_count,
     totalCostUsd: row.total_cost_usd,
-    totalSavingsUsd: row.total_savings_usd,
     totalTokens: readInteger(row.total_tokens),
   };
 }
@@ -477,7 +462,6 @@ function rowToConsoleUsageDimensionBreakdown(
     label: row.label ?? "Unknown",
     requestCount: row.request_count,
     totalCostUsd: row.total_cost_usd,
-    totalSavingsUsd: row.total_savings_usd,
     totalTokens: readInteger(row.total_tokens),
   };
 }
@@ -489,7 +473,6 @@ function rowToConsoleUsageTrendPoint(row: UsageTrendRow): ConsoleUsageTrendPoint
     outputTokens: readInteger(row.output_tokens),
     requestCount: row.request_count,
     totalCostUsd: row.total_cost_usd,
-    totalSavingsUsd: row.total_savings_usd,
     totalTokens: readInteger(row.total_tokens),
   };
 }

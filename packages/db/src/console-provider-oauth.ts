@@ -20,6 +20,8 @@ import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
 import type { EncryptedSecret } from "@llmingress/security/secret-encryption";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
+import { isRecord } from "@llmingress/util";
+import { consoleNotFoundError, consoleValidationError } from "./console-operation-error.ts";
 import { listProviders } from "./console-providers.ts";
 
 export type ConsoleProviderOAuthConnection = ProviderOAuthMetadata;
@@ -64,13 +66,19 @@ export async function startProviderOAuthConnection(
     (candidate) => candidate.id === input.providerId,
   );
   if (!provider) {
-    throw new Error("Provider was not found.");
+    throw consoleNotFoundError("Provider was not found.", "provider_not_found", {
+      providerId: input.providerId,
+    });
   }
   if (
     provider.providerType !== "subscription" ||
     !isSubscriptionProviderKey(provider.providerKey)
   ) {
-    throw new Error("Provider does not support OAuth subscription connections.");
+    throw consoleValidationError(
+      "Provider does not support OAuth subscription connections.",
+      "provider_oauth_unsupported",
+      { providerId: provider.id },
+    );
   }
 
   const pkce = createPkcePair();
@@ -105,18 +113,32 @@ export async function completeProviderOAuthAuthorization(
     providerOAuthId: input.providerOAuthId,
   });
   if (!isSubscriptionProviderKey(pending.providerKey)) {
-    throw new Error("Provider does not support OAuth subscription connections.");
+    throw consoleValidationError(
+      "Provider does not support OAuth subscription connections.",
+      "provider_oauth_unsupported",
+      { providerOAuthId: input.providerOAuthId },
+    );
   }
   if (!pending.pendingCodeVerifier || !pending.pendingState) {
-    throw new Error("OAuth connection is not waiting for authorization.");
+    throw consoleValidationError(
+      "OAuth connection is not waiting for authorization.",
+      "provider_oauth_not_pending",
+      { providerOAuthId: input.providerOAuthId },
+    );
   }
   if (pending.pendingExpiresAt && pending.pendingExpiresAt.getTime() < Date.now()) {
-    throw new Error("OAuth authorization request expired.");
+    throw consoleValidationError("OAuth authorization request expired.", "provider_oauth_expired", {
+      providerOAuthId: input.providerOAuthId,
+    });
   }
 
   const callback = parseProviderOAuthCallbackInput(input.callbackInput);
   if (callback.state && callback.state !== pending.pendingState) {
-    throw new Error("OAuth callback state did not match.");
+    throw consoleValidationError(
+      "OAuth callback state did not match.",
+      "provider_oauth_state_mismatch",
+      { providerOAuthId: input.providerOAuthId },
+    );
   }
 
   const token = await exchangeProviderOAuthCode({
@@ -153,7 +175,11 @@ export async function revokeProviderOAuthConnection(
     providerOAuthId: input.providerOAuthId,
   });
   if (!isSubscriptionProviderKey(connection.providerKey)) {
-    throw new Error("Provider does not support OAuth subscription connections.");
+    throw consoleValidationError(
+      "Provider does not support OAuth subscription connections.",
+      "provider_oauth_unsupported",
+      { providerOAuthId: input.providerOAuthId },
+    );
   }
   const token = readProviderOAuthTokenBlob(
     createSecretEncryption(input.masterKeySource).decrypt(
@@ -223,10 +249,6 @@ function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
     // handled by final throw
   }
   throw new Error("Stored provider OAuth token was not recognized.");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function createPkcePair(): { codeChallenge: string; codeVerifier: string; state: string } {

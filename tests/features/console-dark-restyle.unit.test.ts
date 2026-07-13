@@ -12,16 +12,13 @@ const consoleSectionSource = () =>
   [
     "sections.tsx",
     "overview-section.tsx",
-    "runtime-section.tsx",
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "route-policies-section.tsx",
     "agents-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
-    "settings-section.tsx",
   ]
     .map(moduleSource)
     .join("\n");
@@ -91,12 +88,11 @@ describe("console dark restyle static contract", () => {
     expect(sections).not.toMatch(/"#[0-9a-fA-F]{6}"/);
   });
 
-  test("overview gateway details live in the sidebar runtime card", () => {
+  test("overview gateway details live in the sidebar gateway card", () => {
     const sections = consoleSectionSource();
     const sidebar = readFileSync(join(appDir, "_components/sidebar.tsx"), "utf8");
     expect(sections).not.toContain('<h2 className="detail-panel-title">Gateway status</h2>');
     expect(sidebar).toContain("Gateway URL");
-    expect(sidebar).toContain("Uptime");
     expect(sidebar).toContain("Providers");
     expect(sidebar).toContain("sidebar-runtime-status");
     expect(sidebar).toContain("sidebar-provider-health-count");
@@ -170,24 +166,10 @@ describe("console dark restyle static contract", () => {
     expect(vmTable).toContain('className="link-button agent-action-edit row-action-button"');
     expect(vmTable).toContain('<FlatIcon name="edit" />');
     expect(vmTable).not.toContain('className="table-action-link"');
-    expect(stylesheet).toMatch(
-      /\.providers-page,\s*\.models-page,\s*\.runtime-page,\s*\.settings-page\s*\{[^}]*margin:\s*0/s,
-    );
+    expect(stylesheet).toMatch(/\.providers-page,\s*\.models-page\s*\{[^}]*margin:\s*0/s);
     expect(stylesheet).toMatch(/\.vm-filter-bar button\s*\{[^}]*min-height:\s*2\.25rem/s);
     expect(stylesheet).toMatch(
       /\.vm-filter-bar button\s*\{[^}]*padding-block:\s*var\(--space-xs\)/s,
-    );
-  });
-
-  test("utility console pages use the left-aligned console shell", () => {
-    const runtimePage = readFileSync(join(appDir, "(dashboard)/runtime/page.tsx"), "utf8");
-    const settingsPage = readFileSync(join(appDir, "(dashboard)/settings/page.tsx"), "utf8");
-    const stylesheet = css();
-
-    expect(runtimePage).toContain('className="page runtime-page"');
-    expect(settingsPage).toContain('className="page settings-page"');
-    expect(stylesheet).toMatch(
-      /\.providers-page,\s*\.models-page,\s*\.runtime-page,\s*\.settings-page\s*\{[^}]*margin:\s*0/s,
     );
   });
 
@@ -248,26 +230,8 @@ describe("console dark restyle static contract", () => {
     expect(stylesheet).toMatch(/\.playground-actions button\s*\{[^}]*justify-content:\s*center/s);
   });
 
-  test("settings notification channel submit is a compact centered Save button", () => {
-    const sections = moduleSource("settings-section.tsx");
-    const stylesheet = css();
-    const notificationForm = sections.slice(
-      sections.indexOf('action="/api/notification-channels"'),
-      sections.indexOf("</form>", sections.indexOf('action="/api/notification-channels"')),
-    );
-
-    expect(notificationForm).toContain('className="notification-channel-save-button"');
-    expect(notificationForm).toContain("<span>Save</span>");
-    expect(notificationForm).not.toContain("Create webhook notification channel");
-    expect(notificationForm).not.toContain("FlatIcon");
-    expect(stylesheet).toMatch(
-      /\.notification-channel-save-button\s*\{[^}]*justify-self:\s*center/s,
-    );
-    expect(stylesheet).toMatch(/\.notification-channel-save-button\s*\{[^}]*min-width:\s*6rem/s);
-  });
-
   test("dialog form submit buttons stay compact and text-only", () => {
-    const agentSection = moduleSource("agents-section.tsx");
+    const agentCreateDialog = moduleSource("agent-create-dialog-client.tsx");
     const sections = consoleSectionSource();
     const providerCreateForm = readFileSync(
       join(appDir, "_modules/provider-create-form.tsx"),
@@ -278,9 +242,10 @@ describe("console dark restyle static contract", () => {
       "utf8",
     );
     const stylesheet = css();
-    const agentCreateForm = agentSection.slice(
-      agentSection.indexOf('action="/api/agents" id="new-agent"'),
-      agentSection.indexOf("</form>", agentSection.indexOf('action="/api/agents" id="new-agent"')),
+    const agentCreateFormStart = agentCreateDialog.indexOf("<form");
+    const agentCreateForm = agentCreateDialog.slice(
+      agentCreateFormStart,
+      agentCreateDialog.indexOf("</form>", agentCreateFormStart),
     );
     const providerCreateSubmit = providerCreateForm.slice(
       providerCreateForm.lastIndexOf('<button type="submit">'),
@@ -290,7 +255,7 @@ describe("console dark restyle static contract", () => {
       ),
     );
 
-    expect(agentCreateForm).toContain("<span>Create</span>");
+    expect(agentCreateForm).toContain('<span>{submitting ? "Creating…" : "Create"}</span>');
     expect(agentCreateForm).not.toContain("FlatIcon");
     expect(providerCreateSubmit).toContain("<span>Create</span>");
     expect(providerCreateSubmit).not.toContain("FlatIcon");
@@ -314,7 +279,7 @@ describe("console dark restyle static contract", () => {
     );
     const limitsDialog = sections.slice(
       sections.indexOf("function LimitsConfigDialog"),
-      sections.indexOf("function LimitsDeleteDialog"),
+      sections.indexOf("function getAgentLimitRuntimeSnapshot"),
     );
     const limitsActions = limitsDialog.slice(
       limitsDialog.indexOf('<div className="limits-config-actions">'),
@@ -326,6 +291,7 @@ describe("console dark restyle static contract", () => {
 
     expect(limitsSection).toContain("limitDialog: row.agent.id");
     expect(limitsSection).toContain('<FlatIcon name="edit" />');
+    expect(limitsSection).not.toContain('<FlatIcon name="delete" />');
     expect(limitsSection).toContain('className="agent-table-actions"');
     expect(limitsSection).toContain('className="link-button agent-action-edit row-action-button"');
     expect(limitsSection).not.toContain('className="table-action-link"');
@@ -333,7 +299,7 @@ describe("console dark restyle static contract", () => {
     expect(limitsSection).not.toContain('className="table-row-link"');
     expect(limitsSection).not.toContain("is-clickable");
     expect(limitsDialog).toContain('className="console-dialog limits-config-dialog"');
-    expect(limitsDialog).toContain('aria-modal="true"');
+    expect(limitsDialog).toContain("<ConsoleDialog");
     expect(limitsDialog).toContain("<span>Save</span>");
     expect(limitsDialog).not.toContain("Save rules");
     expect(limitsDialog).not.toContain("formatLimitsKeyPrefix(agent.keyPrefix)");
@@ -390,7 +356,7 @@ describe("console dark restyle static contract", () => {
     expect(sections).not.toContain("?? activities[0] ?? null");
     expect(sections).toContain("activityDetailCloseHref");
     expect(sections).toContain('className="console-dialog activity-detail-dialog"');
-    expect(sections).toContain('aria-modal="true"');
+    expect(sections).toContain("<ConsoleDialog");
     expect(sections).toContain("<span>Close</span>");
     expect(stylesheet).toMatch(/\.activity-shell\s*\{[^}]*display:\s*block/s);
     expect(stylesheet).toMatch(/\.activity-detail-dialog\s*\{[^}]*width:\s*min\(48rem/s);
@@ -421,11 +387,11 @@ describe("console dark restyle static contract", () => {
       "utf8",
     );
     const gatewayChatCompletions = readFileSync(
-      join(rootDir, "packages/db/src/gateway-chat-completions.ts"),
+      join(rootDir, "packages/gateway-runtime/src/gateway-chat-completions.ts"),
       "utf8",
     );
     const baselineMigration = readFileSync(
-      join(rootDir, "packages/db/migrations/0001_v1_baseline.sql"),
+      join(rootDir, "packages/db/migrations/0001_core_baseline.sql"),
       "utf8",
     );
 
@@ -437,7 +403,7 @@ describe("console dark restyle static contract", () => {
     expect(baselineMigration).not.toContain("default_priority");
   });
 
-  test("providers list changes selection locally without route navigation", () => {
+  test("providers list keeps selection and model pagination in page query parameters", () => {
     const sections = moduleSource("providers-section.tsx");
     const providersClientSection = readFileSync(
       join(appDir, "_modules/providers-client-section.tsx"),
@@ -445,19 +411,14 @@ describe("console dark restyle static contract", () => {
     );
 
     expect(sections).toContain("ProvidersClientSection");
-    expect(sections).not.toContain("const providerHref = buildQueryHref(searchParams");
     expect(providersClientSection).toContain('"use client"');
     expect(providersClientSection).toContain("useState");
-    expect(providersClientSection).toContain("toggleProvider(provider.id)");
-    expect(providersClientSection).toContain(
-      "currentProviderId === providerId ? null : providerId",
-    );
-    expect(providersClientSection).toContain("const selectedProvider = selectedProviderId");
-    expect(providersClientSection).toContain(
-      "providers.find((provider) => provider.id === selectedProviderId)",
-    );
-    expect(providersClientSection).toContain('type="button"');
-    expect(providersClientSection).not.toContain("href={providerHref}");
+    expect(providersClientSection).not.toContain("toggleProvider(provider.id)");
+    expect(providersClientSection).toContain("selected: provider.id");
+    expect(providersClientSection).toContain("modelPage: undefined");
+    expect(providersClientSection).toContain("modelQuery: undefined");
+    expect(providersClientSection).toContain('name="modelQuery"');
+    expect(providersClientSection).toContain("providerModelPage.pageCount");
   });
 
   test("provider details expand inline inside the provider list", () => {

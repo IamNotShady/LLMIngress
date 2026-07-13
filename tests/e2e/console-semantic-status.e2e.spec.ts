@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   createTestPostgresFixture,
   runMigrations,
-  withPostgresClient,
+  withDedicatedPostgresClient,
 } from "../../packages/db/src/index";
 import {
   getFreePort,
@@ -16,15 +16,15 @@ import { withProcessLock } from "../support/process-lock";
 
 // Seeds the states whose meaning the console previously miscolored: a 37.5%
 // failure rate (3 of 8 requests failed), an intentionally disabled provider,
-// a stale gateway heartbeat, and an agent with deletable limit rules.
+// and an enabled agent with visible limit rules.
 async function seedSemanticData(databaseUrl: string) {
   const agentId = randomUUID();
   const virtualModelId = randomUUID();
 
-  await withPostgresClient(databaseUrl, async (client) => {
+  await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, agent_type, key_prefix, key_hash, enabled)
-       values ($1, 'semantic-probe-agent', 'terminal', 'llmi_semantic_probe', 'test-hash', true)`,
+      `insert into agents (id, name, key_prefix, key_hash, enabled, limits_enabled)
+       values ($1, 'semantic-probe-agent', 'llmi_semantic_probe', 'test-hash', true, true)`,
       [agentId],
     );
     await client.query(
@@ -67,20 +67,14 @@ async function seedSemanticData(databaseUrl: string) {
       [randomUUID()],
     );
 
-    await client.query(
-      `insert into gateway_runtime_status (id, gateway_instance_id, status, heartbeat_at, started_at)
-       values ($1, 'semantic-probe-gateway', 'ready', now() - interval '10 minutes', now() - interval '2 hours')`,
-      [randomUUID()],
-    );
-
     const limitRules = [
       ["budget", "month", 100, "usd"],
       ["rpm", "minute", 600, "requests"],
     ] as const;
     for (const [limitType, period, limitValue, unit] of limitRules) {
       await client.query(
-        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit, alert_threshold)
-         values ($1, $2, $3, $4, $5, $6, 80)`,
+        `insert into agent_limits (id, agent_id, limit_type, period, limit_value, unit)
+         values ($1, $2, $3, $4, $5, $6)`,
         [randomUUID(), agentId, limitType, period, limitValue, unit],
       );
     }
@@ -135,14 +129,6 @@ test("console colors status by meaning and keeps destructive actions quiet but c
           ).toBeVisible();
           await expect(page.locator(".vm-table .num-danger").first()).toBeVisible();
 
-          // --- Runtime: stale heartbeat warns; migration check is an ok pill.
-          await page.goto(`${baseUrl}/runtime`);
-          const heartbeatCard = page.locator(".stat-card", { hasText: "Heartbeat" });
-          await expect(heartbeatCard).toContainText("Stale");
-          await expect(heartbeatCard.locator(".stat-card-value.is-warn")).toBeVisible();
-          const migrateField = page.locator(".detail-field", { hasText: "db:migrate:check" });
-          await expect(migrateField.locator(".pill--ok")).toContainText("Ready");
-
           // --- Providers: an intentionally disabled provider is neutral gray,
           // not error red.
           await page.goto(`${baseUrl}/providers`);
@@ -161,21 +147,17 @@ test("console colors status by meaning and keeps destructive actions quiet but c
             "rgba(0, 0, 0, 0)",
           );
 
-          // --- Limits: row delete opens a confirm dialog; confirming removes
-          // the rules.
+          // --- Limits: rows retain edit as their only action.
           await page.goto(`${baseUrl}/limits`);
           const limitsRow = page.locator(".limits-rule-table tbody tr", {
             hasText: "semantic-probe-agent",
           });
           await expect(limitsRow).toHaveCount(1);
-          await page.getByRole("link", { name: "Delete semantic-probe-agent" }).click();
-          const confirmDialog = page.getByRole("dialog", {
-            name: /Delete .*semantic-probe-agent.*\?/,
-          });
-          await expect(confirmDialog).toBeVisible();
-          await confirmDialog.getByRole("button", { name: "Delete" }).click();
           await expect(
-            page.locator(".limits-rule-table tbody tr", { hasText: "semantic-probe-agent" }),
+            limitsRow.getByRole("link", { name: "Edit semantic-probe-agent" }),
+          ).toBeVisible();
+          await expect(
+            limitsRow.getByRole("link", { name: "Delete semantic-probe-agent" }),
           ).toHaveCount(0);
         } finally {
           await context.close();

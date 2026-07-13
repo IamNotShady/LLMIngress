@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
-test("schema vocab checks are relaxed while machine states remain constrained", async () => {
+test("extensible labels stay relaxed while persistent jobs remain core-only", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_vocab_e2e_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -14,10 +14,10 @@ test("schema vocab checks are relaxed while machine states remain constrained", 
         "insert into jobs (id, job_type, status, trigger) values ($1, 'future_job_type', 'pending', 'manual')",
         [randomUUID()],
       ),
-    ).resolves.toBeDefined();
+    ).rejects.toThrow(/jobs_job_type_check/);
     await expect(
       fixture.query(
-        "insert into agents (id, name, agent_type, integration_platform) values ($1, 'Vocab E2E Agent', 'coding', 'future-platform')",
+        "insert into agents (id, name, integration_platform) values ($1, 'Vocab E2E Agent', 'future-platform')",
         [randomUUID()],
       ),
     ).resolves.toBeDefined();
@@ -30,7 +30,7 @@ test("schema vocab checks are relaxed while machine states remain constrained", 
 
     await expect(
       fixture.query(
-        "insert into jobs (id, job_type, status, trigger) values ($1, 'backup', 'bogus_status', 'manual')",
+        "insert into jobs (id, job_type, status, trigger) values ($1, 'model_refresh', 'bogus_status', 'manual')",
         [randomUUID()],
       ),
     ).rejects.toThrow(/jobs_status_check/);

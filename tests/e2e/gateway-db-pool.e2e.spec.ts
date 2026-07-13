@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
 import { expect, test } from "@playwright/test";
-import { buildGatewayAgentApiKeyHash } from "../../packages/db/src/gateway-auth";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
 import { createFakeProviderServer } from "../support/fake-provider";
 import {
   getFreePort,
@@ -81,12 +81,11 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
       insert into agents (
         id,
         name,
-        agent_type,
         key_prefix,
         key_hash,
         enabled
       )
-      values ($1, 'Pool Test Agent', 'coding', $2, $3, true)
+      values ($1, 'Pool Test Agent', $2, $3, true)
     `,
     [agentId, agentApiKey.slice(0, 12), buildGatewayAgentApiKeyHash(agentApiKey)],
   );
@@ -119,12 +118,16 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
         provider_id,
         model_id,
         display_name,
+        input_modalities,
+        output_modalities,
         context_window,
+        max_output_tokens,
         supports_streaming,
-        supports_tools,
+        supports_function_calling,
+        supports_reasoning,
         availability
       )
-      values ($1, $2, 'fake-model', 'Fake Model', 128000, true, true, 'available')
+      values ($1, $2, 'fake-model', 'Fake Model', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
     `,
     [providerModelId, providerId],
   );
@@ -137,7 +140,7 @@ async function seedPoolRoute(fixture: Fixture, providerBaseUrl: string): Promise
     virtualModelId,
   ]);
   await fixture.query(
-    "insert into route_policies (id, virtual_model_id, strategy) values ($1, $2, 'fixed')",
+    "insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol) values ($1, $2, 'fixed', 'chat_completions')",
     [routePolicyId, virtualModelId],
   );
   await fixture.query(

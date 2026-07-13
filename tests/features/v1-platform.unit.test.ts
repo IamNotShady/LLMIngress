@@ -90,12 +90,7 @@ describe("v1 platform milestone", () => {
 
   it("keeps the migration manifest aligned with loaded SQL", () => {
     expect(loadSqlMigrations().map(({ id, name }) => ({ id, name }))).toEqual([
-      { id: "0001", name: "v1_baseline" },
-      { id: "0002", name: "stale_concurrency_job_type" },
-      { id: "0003", name: "remove_budget_reservations" },
-      { id: "0004", name: "relax_vocab_checks" },
-      { id: "0005", name: "drop_notification_deliveries" },
-      { id: "0006", name: "fallback_single_source" },
+      { id: "0001", name: "core_baseline" },
     ]);
     expect(shippedSqlMigrations).toEqual(
       loadSqlMigrations().map(({ checksum, id, name }) => ({ checksum, id, name })),

@@ -10,16 +10,13 @@ const sections = () =>
   [
     "sections.tsx",
     "overview-section.tsx",
-    "runtime-section.tsx",
     "usage-section.tsx",
     "activity-section.tsx",
     "virtual-models-section.tsx",
-    "route-policies-section.tsx",
     "agents-section.tsx",
     "limits-section.tsx",
     "models-section.tsx",
     "providers-section.tsx",
-    "settings-section.tsx",
   ]
     .map(sectionSource)
     .join("\n");
@@ -58,7 +55,6 @@ describe("console semantic status static contract", () => {
     expect(statCardBlock(source, "Cost 24h")).toContain('"down-good"');
     expect(statCardBlock(source, "Tokens 24h")).toContain('"up-good"');
     expect(statCardBlock(source, "Failure rate")).toContain('"down-good"');
-    expect(statCardBlock(source, "Savings")).toContain('"up-good"');
     expect(statCardBlock(source, "Over-limit today")).toContain('"down-good"');
   });
 
@@ -76,13 +72,6 @@ describe("console semantic status static contract", () => {
     expect(stylesheet).toMatch(/\.num-warn\s*\{[^}]*var\(--warn\)/s);
   });
 
-  test("runtime heartbeat and migration check are status-colored", () => {
-    const source = sections();
-    expect(statCardBlock(source, "Heartbeat")).toContain("valueTone");
-    expect(source).toContain('<span className="pill--ok pill">Ready</span>');
-    expect(source).toContain('<span className="pill--danger pill">Blocked</span>');
-  });
-
   test("disabled providers and models wear neutral chips, not error red", () => {
     // The provider list/detail pill short-circuits the disabled state before
     // the danger fallback; no rendering path paints Disabled in danger red.
@@ -98,7 +87,7 @@ describe("console semantic status static contract", () => {
     expect(sections()).not.toContain('pill--danger pill">Disabled');
   });
 
-  test("row-level delete actions are quiet, destructive emphasis lives in dialogs", () => {
+  test("row-level destructive emphasis is limited to supported delete actions", () => {
     const stylesheet = css();
     expect(stylesheet).toMatch(
       /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*transparent/s,
@@ -106,24 +95,20 @@ describe("console semantic status static contract", () => {
     expect(stylesheet).not.toMatch(
       /\.agent-table-actions \.agent-action-delete\s*\{[^}]*background:\s*var\(--danger\)/s,
     );
-    expect(stylesheet).toMatch(/\.limits-rule-delete-button\s*\{[^}]*background:\s*transparent/s);
+    expect(stylesheet).not.toContain(".limits-rule-delete-button");
     // The confirm dialog keeps the loud filled danger button.
     expect(stylesheet).toMatch(/\.agent-delete-confirm\s*\{[^}]*var\(--danger\)/s);
   });
 
-  test("limits row delete opens a confirm dialog instead of posting directly", () => {
+  test("limits rows expose edit without a delete action", () => {
     const source = sectionSource("limits-section.tsx");
-    expect(source).toContain("function LimitsDeleteDialog");
-    expect(source).toContain("limitDelete: row.agent.id");
-    // The rules table row itself no longer submits the delete form.
     const limitsSection = source.slice(
       source.indexOf("export async function LimitsSection"),
       source.length,
     );
-    expect(limitsSection).not.toContain('name="action" value="deleteLimitRules"');
-    // The dialog posts the same API action with an explicit confirm.
-    const deleteDialog = source.slice(source.indexOf("function LimitsDeleteDialog"));
-    expect(deleteDialog).toContain('name="action" value="deleteLimitRules"');
-    expect(deleteDialog).toContain('aria-modal="true"');
+    expect(limitsSection).toContain("aria-label={`Edit ");
+    expect(source).not.toContain("function LimitsDeleteDialog");
+    expect(source).not.toContain("limitDelete");
+    expect(source).not.toContain("aria-label={`Delete ");
   });
 });

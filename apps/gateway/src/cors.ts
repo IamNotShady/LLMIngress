@@ -1,4 +1,4 @@
-import { gatewayCorsAllowedOrigins } from "@llmingress/db/gateway-env";
+import { gatewayCorsAllowedOrigins } from "@llmingress/gateway-runtime/gateway-env";
 
 const defaultLocalhostNames = new Set(["127.0.0.1", "localhost", "::1"]);
 

@@ -8,7 +8,6 @@ import { listProviders } from "@llmingress/db/console-providers";
 import {
   type ConsoleUsageDimensionBreakdown,
   type ConsoleUsageTrendPoint,
-  type ConsoleUsageWindow,
   getConsoleUsageSummary,
   parseConsoleUsageWindow,
 } from "@llmingress/db/console-usage";
@@ -16,6 +15,7 @@ import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
 import { StatCard } from "../_components/stat-card";
+import { resolveConsoleUsageDateRange } from "../_lib/usage-date-range";
 import {
   type ConsoleSearchParams,
   failureRateTone,
@@ -55,58 +55,9 @@ function readOptionalFilterParam(value: string | string[] | undefined): string |
   return param ? param : null;
 }
 
-function parseUsageDateStart(value: string | undefined): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return null;
-  }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function parseUsageDateEndExclusive(value: string | undefined): Date | null {
-  const start = parseUsageDateStart(value);
-  if (!start) {
-    return null;
-  }
-  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
-}
-
-function getUsageDateInputValues(input: {
-  dateFromParam: string | undefined;
-  dateToParam: string | undefined;
-  now: Date;
-  window: ConsoleUsageWindow;
-}): { dateFromValue: string; dateToValue: string } {
-  const fallbackFrom = getUsageDateFallbackStart(input.now, input.window);
-  return {
-    dateFromValue: parseUsageDateStart(input.dateFromParam)
-      ? (input.dateFromParam ?? formatUsageDateInput(fallbackFrom))
-      : formatUsageDateInput(fallbackFrom),
-    dateToValue: parseUsageDateStart(input.dateToParam)
-      ? (input.dateToParam ?? formatUsageDateInput(input.now))
-      : formatUsageDateInput(input.now),
-  };
-}
-
-function getUsageDateFallbackStart(now: Date, window: ConsoleUsageWindow): Date {
-  const durationMs = {
-    "24h": 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-  }[window];
-  return new Date(now.getTime() - durationMs);
-}
-
-function formatUsageDateInput(value: Date): string {
-  return value.toISOString().slice(0, 10);
-}
-
 function formatCostTrendPoint(point: ConsoleUsageTrendPoint) {
-  const actualCostUsd = Number(point.totalCostUsd ?? 0);
-  const savingsUsd = Number(point.totalSavingsUsd ?? 0);
   return {
-    actualCostUsd,
-    baselineCostUsd: actualCostUsd + savingsUsd,
+    costUsd: Number(point.totalCostUsd ?? 0),
     label: formatUsageTrendLabel(point.bucketStart),
   };
 }
@@ -150,17 +101,18 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
   const selectedVirtualModelId = readOptionalFilterParam(searchParams.virtualModelId);
   const selectedProviderId = readOptionalFilterParam(searchParams.providerId);
   const now = new Date();
-  const { dateFromValue, dateToValue } = getUsageDateInputValues({
-    dateFromParam,
-    dateToParam,
+  const usageDateRange = resolveConsoleUsageDateRange({
+    dateFrom: dateFromParam,
+    dateTo: dateToParam,
     now,
     window: usageWindow,
   });
+  const { dateFromValue, dateToValue } = usageDateRange;
   const [usageSummary, agents, virtualModels, providers] = await Promise.all([
     getConsoleUsageSummary({
       agentId: selectedAgentId,
-      dateFrom: parseUsageDateStart(dateFromValue),
-      dateTo: parseUsageDateEndExclusive(dateToValue),
+      dateFrom: usageDateRange.start,
+      dateTo: usageDateRange.endExclusive,
       now,
       providerId: selectedProviderId,
       virtualModelId: selectedVirtualModelId,
@@ -175,17 +127,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
     usageSummary.requestCount > 0
       ? `${((usageSummary.failureCount / usageSummary.requestCount) * 100).toFixed(2)}%`
       : "0.00%";
-  const totalCost = Number(usageSummary.totalCostUsd ?? 0);
-  const totalSavings = Number(usageSummary.totalSavingsUsd ?? 0);
-  const savingsRatio =
-    totalCost + totalSavings > 0
-      ? `${((totalSavings / (totalCost + totalSavings)) * 100).toFixed(1)}%`
-      : "0.0%";
-  const baselineCost = totalCost + totalSavings;
-  const lowCostHitRate =
-    usageSummary.costedRequestCount > 0
-      ? `${((usageSummary.lowCostRequestCount / usageSummary.costedRequestCount) * 100).toFixed(1)}%`
-      : "0.0%";
   const avgLatency = formatLatencyMs(usageSummary.avgLatencyMs);
   const costTrend = usageSummary.trend.map(formatCostTrendPoint);
   const tokenTrend = usageSummary.trend.map(formatTokenTrendPoint);
@@ -275,11 +216,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
           value={failureRate}
           valueTone={failureRateTone(usageSummary.failureCount, usageSummary.requestCount)}
         />
-        <StatCard
-          icon="SV"
-          label="Estimated savings"
-          value={formatConsoleUsd(usageSummary.totalSavingsUsd)}
-        />
       </div>
 
       <div className="usage-analysis-grid">
@@ -289,10 +225,7 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
             ariaLabel="Cost trend"
             emptyMessage="No cost recorded in this range."
             data={costTrend}
-            series={[
-              { key: "baselineCostUsd", name: "Baseline (USD)", color: usageTrendBaselineColor },
-              { key: "actualCostUsd", name: "Actual (USD)", color: usageTrendActualColor },
-            ]}
+            series={[{ key: "costUsd", name: "Cost (USD)", color: usageTrendActualColor }]}
           />
         </div>
         <div className="chart-card">
@@ -306,27 +239,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
               { key: "outputTokens", name: "Output tokens", color: usageTrendTokenColor },
             ]}
           />
-        </div>
-        <div className="chart-card usage-savings-card">
-          <h2 className="chart-card-title">Savings overview</h2>
-          <dl className="usage-savings-list">
-            <div>
-              <dt>Saved amount</dt>
-              <dd>{formatConsoleUsd(usageSummary.totalSavingsUsd)}</dd>
-            </div>
-            <div>
-              <dt>Baseline cost</dt>
-              <dd>{formatConsoleUsd(baselineCost.toFixed(8))}</dd>
-            </div>
-            <div>
-              <dt>Savings ratio</dt>
-              <dd>{savingsRatio}</dd>
-            </div>
-            <div>
-              <dt>Low-cost hit rate</dt>
-              <dd>{lowCostHitRate}</dd>
-            </div>
-          </dl>
         </div>
       </div>
 
@@ -358,7 +270,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
                 <th className="num">Cost</th>
                 <th className="num">Avg latency</th>
                 <th className="num">Failure rate</th>
-                <th className="num">Savings</th>
               </tr>
             </thead>
             <tbody>
@@ -384,7 +295,6 @@ export async function UsageSection({ searchParams }: { searchParams: ConsoleSear
                         {formatFailureRate(breakdown.failureCount, breakdown.requestCount)}
                       </span>
                     </td>
-                    <td className="num">{formatConsoleUsd(breakdown.totalSavingsUsd)}</td>
                   </tr>
                 ))
               )}

@@ -29,8 +29,8 @@ async function seedConsoleData(databaseUrl: string) {
 
   await withDedicatedPostgresClient(databaseUrl, async (client) => {
     await client.query(
-      `insert into agents (id, name, key_prefix, key_hash, enabled)
-       values ($1, 'layout-probe-agent', 'llmi_layout_probe', 'test-hash', true)`,
+      `insert into agents (id, name, key_prefix, key_hash, enabled, limits_enabled)
+       values ($1, 'layout-probe-agent', 'llmi_layout_probe', 'test-hash', true, true)`,
       [agentId],
     );
     await client.query(
@@ -163,7 +163,9 @@ test("console keeps layout integrity with real data: no overflow, visible limits
           expect(
             await limitsWrap.evaluate((el) => el.scrollWidth - el.clientWidth),
           ).toBeLessThanOrEqual(1);
-          const lastActionCell = page.locator(".limits-rule-action-cell").last();
+          const actionCells = page.locator(".limits-rule-action-cell");
+          await expect(actionCells).toHaveCount(1);
+          const lastActionCell = actionCells.last();
           const actionBox = await lastActionCell.boundingBox();
           const wrapBox = await limitsWrap.boundingBox();
           expect(actionBox).not.toBeNull();

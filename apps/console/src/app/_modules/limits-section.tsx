@@ -421,6 +421,9 @@ export async function LimitsSection({ searchParams }: { searchParams: ConsoleSea
                 defaultValue={query}
                 placeholder="Search Agent or API Key prefix"
               />
+              <button type="submit">
+                <span>Search</span>
+              </button>
             </form>
           </div>
           <div className="limits-rule-card">

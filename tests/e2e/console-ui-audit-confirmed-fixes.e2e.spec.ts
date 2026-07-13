@@ -38,12 +38,14 @@ async function seedAuditData(databaseUrl: string) {
       `insert into request_activity (
          id, request_id, agent_id, virtual_model_id, agent_key_prefix,
          protocol, model, stream, status, http_status, latency_ms,
+         route_reason,
          started_at, completed_at,
          agent_name_snapshot, virtual_model_name_snapshot
        )
        values (
          $1, 'gw_audit_old_request', $2, $3, 'llmi_audit_old',
          'chat_completions', 'audit-model', false, 'succeeded', 200, 1200,
+         '{"strategy":"cost_first"}'::jsonb,
          now() - interval '3 days', now() - interval '3 days',
          'audit-old-agent', 'audit-probe-vm'
        )`,
@@ -258,6 +260,16 @@ test("console audit fixes keep time windows honest and prevent activity timestam
           await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
           await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
           await expect(page.locator(".pager-status")).toHaveText("1–20 of 21");
+
+          await page.getByRole("link", { name: "gw_audit_old_request" }).click();
+          const activityDetail = page.getByRole("dialog", { name: "Request detail" });
+          await expect(activityDetail.getByText("Cost First", { exact: true })).toBeVisible();
+          await expect(activityDetail.getByText("cost_first", { exact: true })).toHaveCount(0);
+
+          await page.goto(`${baseUrl}/limits`, { waitUntil: "networkidle" });
+          await page.getByRole("searchbox", { name: "Search limit rules" }).fill("audit-old");
+          await page.getByRole("button", { name: "Search" }).click();
+          await expect(page).toHaveURL(/\/limits\?q=audit-old$/);
 
           const sidebarMetrics = await page.locator(".sidebar").evaluate((sidebar) => ({
             labelFontSize: getComputedStyle(sidebar.querySelector(".nav-item-label") as HTMLElement)

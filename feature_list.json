@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-p0-layout.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-p0-layout.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-13: All 11 current Console list tables use fixed column allocations and contained ellipsis for long text. A 1904px live audit and long-text real-process E2E cover page lists, Provider nested lists, and Virtual Model candidate/picker dialogs with zero page or unsafe cell overflow. pnpm run verify (62 files/328 tests) and all 9 feature regressions pass."
+      "evidence": "2026-07-14: A live Chrome audit covered all eight Console pages at 1440x900 and 390x844, including authentication, navigation, dialogs, filters, pagination, client-side validation, and contained table overflow with no Console errors or hydration overlay. Activity route strategies now render as user-facing labels, and Limits search has an explicit responsive Search button. Focused unit and real-process E2E, pnpm run verify (62 files/329 tests), and all 9 feature regressions pass."
     },
     {
       "id": "release-guards",

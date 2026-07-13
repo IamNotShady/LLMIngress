@@ -1,6 +1,6 @@
 # LLMIngress Current State
 
-Updated: 2026-07-13
+Updated: 2026-07-14
 Branch: `dev`
 
 ## Product Scope
@@ -49,18 +49,18 @@ existing password/session authentication boundary.
 - Console mutation forms now submit with same-origin fetch and keep API failures in the current screen or dialog. Structured errors with a field render as red text beside that input; Provider delete races and other operation-level conflicts render inline instead of navigating to raw JSON.
 - Provider relative timestamps use one server-generated reference timestamp, removing the `49 min ago` / `50 min ago` hydration mismatch. Virtual Model deletion now checks only Agent default/grant usage and transactionally retires its owned Route Policy.
 - Every Provider probe now runs as one composite model-refresh handler: Provider HTTP completes first, then one short transaction revalidates the Provider/credential snapshot and atomically commits model changes plus Provider/model health. Legacy connectivity jobs call the same handler, Job-ID retries are idempotent, and Gateway paired health writes use the same atomic DB API.
-- All 11 current Console list tables use fixed column allocations and contained ellipsis for long text. Activity bounds Request ID explicitly, and long Agent or Virtual Model names cannot paint into adjacent cells.
+- Activity bounds Request ID and presents route strategies as user-facing labels. All 11 current Console list tables use fixed column allocations and contained ellipsis, so long Agent or Virtual Model names cannot paint into adjacent cells.
 - Playground treats Temperature, Top P, and Max Tokens as optional request values. Clearing any of these inputs now omits the corresponding `temperature`, `top_p`, or `max_tokens` property instead of substituting a default and sending it to Gateway.
 - Agent creation now renders the selected/default Virtual Model name in the one-time connection dialog instead of `<Virtual Model Name>`. The Virtual Models search input now tolerates pre-hydration browser caret-color mutations without a hydration error.
 - Agent creation now requires an Allowed Virtual Model and atomically commits the Agent, API key, model grants, optional default, explicit Limits switch, and rules. Default choices follow the selected grants, while the one-time result shows the API key, Gateway URL, and platform-specific connection guidance.
 - Gateway now treats `agents.limits_enabled` as the sole Limits switch and performs no Limits database work while it is false. Disabling Limits preserves its rules. Agent Enable/Disable preserves the same API key and configuration, and the Agents list now shows Virtual Model names and Enabled state without the dynamic Status or Available VM columns.
-- Limits lists/KPIs include only active Agents with Limits enabled. The layout E2E seed now enables Limits explicitly and fails fast if its action row is absent; rows expose Edit only, with no delete UI.
+- Limits lists/KPIs include only active Agents with Limits enabled. Search has an explicit responsive submit button; rows expose Edit only, with no delete UI.
 - Console first-run setup now creates the administrator with a password only; its setup-token environment, lock mode, form, and API branches were removed. Console writes also skip request-Origin validation and rely on password/session authentication.
 
 ## Verification
 
-Final 2026-07-13 result: the list-containment and no-Origin Console contract unit/real-process E2E,
-`pnpm run verify` (62 files/328 tests), and all 9 milestone regressions passed. Coverage is 48.86% statements,
+Final 2026-07-14 result: the live Console audit fixes' unit/real-process E2E,
+`pnpm run verify` (62 files/329 tests), and all 9 milestone regressions passed. Coverage is 48.86% statements,
 49.02% lines, 41.3% branches, and 51.75% functions.
 
 Database-backed checks use:

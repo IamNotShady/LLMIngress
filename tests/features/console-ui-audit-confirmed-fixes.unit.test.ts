@@ -142,4 +142,15 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(appSource("playground.tsx")).toContain('placeholder="llmi_************************"');
     expect(appSource("playground.tsx")).not.toContain("sk-************************8fA7");
   });
+
+  test("activity strategy labels and limits search stay user-facing", () => {
+    const activity = sectionSource("activity-section.tsx");
+    const limits = sectionSource("limits-section.tsx");
+
+    expect(activity).toContain('cost_first: "Cost First"');
+    expect(activity).toContain("routeStrategyLabels[routeReason.strategy]");
+    expect(limits).toMatch(
+      /className="limits-search-form"[\s\S]*?<button[^>]*type="submit"[^>]*>[\s\S]*?Search[\s\S]*?<\/button>/,
+    );
+  });
 });

@@ -2899,15 +2899,21 @@ button.table-row-link {
   min-width: 0;
 }
 .limits-toolbar {
-  max-width: 28rem;
+  max-width: 36rem;
 }
 .limits-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-sm);
   min-width: 0;
 }
 .limits-search-form input {
   width: 100%;
   min-height: 2.6rem;
   background: var(--surface);
+}
+.limits-search-form button {
+  min-height: 2.6rem;
 }
 .limits-rule-card {
   min-width: 0;

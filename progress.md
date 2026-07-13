@@ -38,12 +38,6 @@ existing password/session authentication boundary.
 
 ## Delivery Progress
 
-- `6c5343e2` — removed non-core Worker operations.
-- `1427fa01` — removed external observability and added real readiness.
-- `633f270b` — simplified routing, Agents, and cost reporting.
-- `e844f2a6` — removed maintenance Job churn and added direct locked retention.
-- `36b57799` — compressed the pre-release schema and project history to one baseline and nine milestones.
-- `c16fed90` — added shared pooling, parallel Console reads, compact KPIs, correct Usage dates, and server-paginated models.
 - Core delivery hardening is implemented: native accessible dialogs, strict migration CLIs, four compiled non-root runtime images, and enforced JSON coverage thresholds.
 - Post-slimming Console audit completed across all eight retained pages: fresh installs now show the core Provider → Virtual Model → Agent → Playground path, empty states link to their prerequisites, and the sidebar no longer implies Gateway readiness without a health signal.
 - Provider model capability refresh now keeps the first available value by source priority and no longer computes conflicts that erase explicit values; the current OpenAI Codex model catalog was refreshed and restored GPT-5.4-Mini and GPT-5.5 to 272K context.

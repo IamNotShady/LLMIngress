@@ -38,6 +38,9 @@ existing password/session authentication boundary.
 
 ## Delivery Progress
 
+- The root README now follows a product-first format with project identity, capability summary,
+  Docker quick start, request example, protocol and Provider coverage, architecture, development,
+  verification, and contributor links grounded in the current product and code.
 - Core delivery hardening is implemented: native accessible dialogs, strict migration CLIs, four compiled non-root runtime images, and enforced JSON coverage thresholds.
 - Post-slimming Console audit completed across all eight retained pages: fresh installs now show the core Provider → Virtual Model → Agent → Playground path, empty states link to their prerequisites, and the sidebar no longer implies Gateway readiness without a health signal.
 - Provider model capability refresh now keeps the first available value by source priority and no longer computes conflicts that erase explicit values; the current OpenAI Codex model catalog was refreshed and restored GPT-5.4-Mini and GPT-5.5 to 272K context.

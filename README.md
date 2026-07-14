@@ -28,31 +28,39 @@ and control routing, access, limits, fallback, and usage from one Console.
 
 ## Quick start
 
-### Self-hosted with Docker Compose
+### Self-hosted with Docker
 
-Clone the repository and generate independent secrets for credential encryption and PostgreSQL:
+Once a stable release is published, the same command installs a new instance on a Linux VPS with
+Docker Engine 26 or newer, repairs a damaged instance, or upgrades an existing managed instance:
 
 ```bash
-git clone https://github.com/IamNotShady/LLMIngress.git
-cd LLMIngress
-
-export MASTER_KEY="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
-export POSTGRES_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
-
-docker compose up --build
+curl -fsSL https://github.com/IamNotShady/LLMIngress/releases/latest/download/install.sh | bash
 ```
 
-Compose starts PostgreSQL 18.4, applies the baseline migration, then starts Console, Gateway, and
-Worker. Published ports bind to `127.0.0.1` by default.
+The installer pulls one LLMIngress application image and runs Gateway, Console, Worker, and the
+one-shot migration as separate containers. PostgreSQL runs in its own `postgres:18.4-alpine`
+container. Secrets, database data, and upgrade snapshots stay in three Docker named volumes; no
+repository checkout or persistent host directory is required.
 
 | Service | Address | Purpose |
 | --- | --- | --- |
 | Console | [http://localhost:3000](http://localhost:3000) | Configure and observe LLMIngress |
 | Gateway | [http://localhost:4000](http://localhost:4000) | Serve Agent API traffic |
-| PostgreSQL | `localhost:55432` | Store configuration and operational metadata |
+| PostgreSQL | Internal only | Store configuration and operational metadata |
 | Worker | Internal only | Refresh models, probe connections, and synchronize prices |
 
-Runtime and port overrides are documented in [`.env.example`](.env.example).
+Ports bind to `127.0.0.1` by default. A fixed release and custom ports use the release asset
+directly:
+
+```bash
+curl -fsSL https://github.com/IamNotShady/LLMIngress/releases/download/v1.2.3/install.sh \
+  | bash -s -- --console-port 3100 --gateway-port 4100
+```
+
+Upgrades stop the application containers, create and verify a PostgreSQL snapshot, apply schema
+migrations, and health-check the new release. A failed or interrupted upgrade restores the prior
+database and application image. See [Docker deployment](docs/DOCKER_DEPLOYMENT.md) for all options,
+resource names, exposure guidance, and the manual cutover from repository Compose deployments.
 
 ### Send your first request
 
@@ -135,6 +143,11 @@ cp .env.example .env.local
 pnpm run db:migrate
 ./init.sh
 ```
+
+To exercise the production-shaped containers from a checkout, generate `MASTER_KEY` and
+`POSTGRES_PASSWORD` and run `docker compose up --build`. Compose builds the same multi-role
+application image used by releases, while also publishing PostgreSQL on `127.0.0.1:55432` for
+development.
 
 `./init.sh` runs lint, type-checking, unit tests, and the build before starting Console, Gateway,
 and Worker. The standalone verification commands are:

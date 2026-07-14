@@ -154,11 +154,11 @@ test("migration CLIs reject unknown arguments before database access", async () 
   }
 });
 
-test("all runtime image targets are non-root and omit development sources", async () => {
+test("the multi-role runtime image is non-root and omits development sources", async () => {
   test.setTimeout(600_000);
-  for (const target of ["gateway", "worker", "migrate", "console"]) {
-    const image = `llmingress-${target}:delivery-e2e`;
-    await execFileAsync("docker", ["build", "--target", target, "--tag", image, "."], {
+  const image = "llmingress-app:delivery-e2e";
+  try {
+    await execFileAsync("docker", ["build", "--target", "runtime", "--tag", image, "."], {
       cwd: process.cwd(),
       maxBuffer: 20 * 1024 * 1024,
     });
@@ -168,6 +168,12 @@ test("all runtime image targets are non-root and omit development sources", asyn
       { cwd: process.cwd() },
     );
     expect(inspection.stdout.trim()).toBe("llmingress");
+    const entrypoint = await execFileAsync(
+      "docker",
+      ["image", "inspect", "--format", "{{json .Config.Entrypoint}}", image],
+      { cwd: process.cwd() },
+    );
+    expect(JSON.parse(entrypoint.stdout)).toEqual(["/app/docker-entrypoint.sh"]);
     const runtime = await execFileAsync(
       "docker",
       [
@@ -177,10 +183,26 @@ test("all runtime image targets are non-root and omit development sources", asyn
         "sh",
         image,
         "-c",
-        'test "$(id -u)" = 1001 && test ! -e /app/tests && test ! -e /app/packages/src && ! command -v pnpm && ! command -v tsx',
+        [
+          'test "$(id -u)" = 1001',
+          "test -f /app/gateway/main.mjs",
+          "test -f /app/worker/main.mjs",
+          "test -f /app/migrate/main.mjs",
+          "test -f /app/console/apps/console/server.js",
+          "test ! -e /app/tests",
+          "test ! -e /app/packages/src",
+          "! command -v pnpm",
+          "! command -v tsx",
+        ].join(" && "),
       ],
       { cwd: process.cwd() },
     );
     expect(runtime.stderr).toBe("");
+    const version = await execFileAsync("docker", ["run", "--rm", image, "version"], {
+      cwd: process.cwd(),
+    });
+    expect(version.stdout.trim()).toBe("dev");
+  } finally {
+    await execFileAsync("docker", ["image", "rm", "-f", image]).catch(() => undefined);
   }
 });

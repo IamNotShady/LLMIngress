@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { runMigrations } from "@llmingress/db";
+import { readPostgresDatabaseUrl } from "@llmingress/db/client";
 
 type CliOptions = {
   databaseUrl: string;
@@ -12,11 +13,7 @@ function readCliOptions(args: string[], env: NodeJS.ProcessEnv): CliOptions {
     options: { "database-url": { type: "string" } },
     strict: true,
   });
-  const databaseUrl = values["database-url"] ?? env.DATABASE_URL;
-
-  if (!databaseUrl?.trim()) {
-    throw new Error("DATABASE_URL or --database-url is required.");
-  }
+  const databaseUrl = values["database-url"] ?? readPostgresDatabaseUrl({ env });
 
   return { databaseUrl };
 }

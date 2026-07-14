@@ -96,5 +96,13 @@ advisory locks. They create no `jobs` or `job_attempts`. Retention deletes in ba
   closes pools, and exits. Drain-timeout diagnostics contain safe metadata only.
 - Runtime images use compiled output and non-root users. Console uses Next standalone output;
   Gateway and Worker start with `node`.
+- A release contains one non-root application image. Gateway, Console, Worker, and Migration run
+  as separate containers from that image; PostgreSQL 18.4 runs in a separate official container.
+- Installer-managed instances keep database data, runtime secrets/state, and upgrade snapshots in
+  three labeled Docker volumes. Application containers mount runtime state read-only and never
+  receive the database password or Master Key as an inline environment variable.
+- Application upgrades are stop-the-world transactions: stop application writes, verify a custom
+  PostgreSQL dump, migrate, activate and health-check. Failure or an incomplete transaction restores
+  the dump and previous immutable application image before clearing the upgrade journal.
 - The pre-release schema is the single `0001_core_baseline.sql`: 23 product tables plus migration
   history, 24 total. Old development databases are recreated rather than mixed with this schema.

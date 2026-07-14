@@ -66,13 +66,21 @@ create jobs.
 
 Gateway exposes `/health/live`, `/health/ready`, and the readiness-compatible `/health` alias.
 
+### Self-hosted lifecycle
+
+Linux amd64 and arm64 hosts with Docker Engine 26 or newer support release-bound, one-command
+installation and application upgrade. The installer owns its labeled Docker containers, network,
+and volumes, and takes an internal PostgreSQL snapshot before schema migration so a failed or
+interrupted application upgrade can restore the previous release.
+
 ## Unsupported
 
 V1 does not include:
 
 - Runtime, Settings, or standalone Routing pages
 - notifications, alerts, Webhook delivery, or external exports
-- database backup or restore workflows
+- user-operated or scheduled database backup and restore workflows; installer-internal upgrade
+  snapshots are not exposed as a general backup product
 - billing reconciliation or savings/baseline-cost reporting
 - Prometheus metrics or OpenTelemetry tracing
 - persisted runtime heartbeat, status, or error products

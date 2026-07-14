@@ -75,11 +75,11 @@
     {
       "id": "release-guards",
       "name": "Release Guards",
-      "description": "PostgreSQL 18.4 runtime, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
-      "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts --workers=1",
+      "description": "PostgreSQL 18.4 runtime, one-command Docker install and upgrade with rollback, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
+      "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts tests/features/docker-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts tests/e2e/docker-lifecycle.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-14: PostgreSQL 18.4 Compose and CI contracts, real-container version check, 50 focused unit tests, 13 focused E2E tests, verify, 86 total E2E tests, full feature regression, and rebuilt Compose runtime passed."
+      "evidence": "2026-07-14: 54 focused unit and 16 focused E2E tests passed for PostgreSQL 18.4, the single runtime image, one-command install/repair/upgrade, verified backup retention, rollback, downgrade/conflict rejection, retry, and interrupted recovery; verify passed 18 suites/323 tests plus build, all 9 domains regressed, and Compose runtime smoke passed."
     }
   ]
 }

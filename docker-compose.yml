@@ -6,9 +6,16 @@ x-llmingress-env: &llmingress-env
   GATEWAY_HOST: 0.0.0.0
   CONSOLE_PORT: 3000
   CONSOLE_HOST: 0.0.0.0
+  HOSTNAME: 0.0.0.0
+  PORT: 3000
   WORKER_HEARTBEAT_MS: 30000
   GATEWAY_PUBLIC_BASE_URL: ${GATEWAY_PUBLIC_BASE_URL:-http://localhost:4000}
   GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+
+x-llmingress-build: &llmingress-build
+  context: .
+  dockerfile: Dockerfile
+  target: runtime
 
 services:
   postgres:
@@ -28,11 +35,9 @@ services:
       retries: 20
 
   migrate:
-    image: llmingress-migrate:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: migrate
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: migrate
     environment: *llmingress-env
     depends_on:
       postgres:
@@ -40,11 +45,9 @@ services:
     restart: "no"
 
   gateway:
-    image: llmingress-gateway:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: gateway
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: gateway
     environment: *llmingress-env
     depends_on:
       postgres:
@@ -64,11 +67,9 @@ services:
       retries: 12
 
   console:
-    image: llmingress-console:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: console
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: console
     environment: *llmingress-env
     depends_on:
       postgres:
@@ -79,11 +80,9 @@ services:
       - "${CONSOLE_PUBLISH_HOST:-127.0.0.1}:${CONSOLE_PORT:-3000}:3000"
 
   worker:
-    image: llmingress-worker:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: worker
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: worker
     environment: *llmingress-env
     depends_on:
       postgres:

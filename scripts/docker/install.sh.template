@@ -1,0 +1,828 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly TARGET_VERSION="@@LLMINGRESS_VERSION@@"
+readonly TARGET_IMAGE="@@LLMINGRESS_IMAGE@@"
+readonly TARGET_POSTGRES_IMAGE="@@POSTGRES_IMAGE@@"
+readonly MANAGED_LABEL="io.llmingress.managed"
+readonly INSTANCE_LABEL="io.llmingress.instance"
+readonly ROLE_LABEL="io.llmingress.role"
+readonly VERSION_LABEL="io.llmingress.version"
+
+INSTANCE="default"
+CLI_BIND_ADDRESS=""
+CLI_CONSOLE_PORT=""
+CLI_GATEWAY_PORT=""
+CLI_CONSOLE_ORIGIN=""
+CLI_GATEWAY_URL=""
+CLI_BACKUP_RETENTION=""
+
+usage() {
+  cat <<'EOF'
+Install or upgrade a Docker-managed LLMIngress instance.
+
+Usage: install.sh [options]
+
+Options:
+  --instance NAME             Instance name (default: default)
+  --bind-address IPV4         Published address (default: 127.0.0.1)
+  --console-port PORT         Console port (default: 3000)
+  --gateway-port PORT         Gateway port (default: 4000)
+  --console-origin URL        Allowed Console origin
+  --gateway-url URL           Public Gateway URL shown to the Console
+  --backup-retention COUNT    Successful upgrade backups to retain (default: 5)
+  --help                      Show this help
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --instance|--bind-address|--console-port|--gateway-port|--console-origin|--gateway-url|--backup-retention)
+      [[ $# -ge 2 ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 64; }
+      case "$1" in
+        --instance) INSTANCE="$2" ;;
+        --bind-address) CLI_BIND_ADDRESS="$2" ;;
+        --console-port) CLI_CONSOLE_PORT="$2" ;;
+        --gateway-port) CLI_GATEWAY_PORT="$2" ;;
+        --console-origin) CLI_CONSOLE_ORIGIN="$2" ;;
+        --gateway-url) CLI_GATEWAY_URL="$2" ;;
+        --backup-retention) CLI_BACKUP_RETENTION="$2" ;;
+      esac
+      shift 2
+      ;;
+    --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'Unknown option: %s\n' "$1" >&2
+      usage >&2
+      exit 64
+      ;;
+  esac
+done
+
+log() {
+  printf '[llmingress] %s\n' "$*"
+}
+
+die() {
+  printf '[llmingress] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "$1 is required"
+}
+
+validate_integer() {
+  local value="$1" name="$2" minimum="$3" maximum="$4"
+  [[ "$value" =~ ^[0-9]+$ ]] || die "$name must be an integer"
+  (( 10#$value >= minimum && 10#$value <= maximum )) || die "$name must be from $minimum to $maximum"
+}
+
+validate_ipv4() {
+  local value="$1" name="$2" part
+  local -a parts
+  IFS=. read -r -a parts <<< "$value"
+  [[ "${#parts[@]}" == 4 ]] || die "$name must be an IPv4 address"
+  for part in "${parts[@]}"; do
+    validate_integer "$part" "$name" 0 255
+  done
+}
+
+validate_url() {
+  local value="$1" name="$2"
+  [[ "$value" =~ ^https?://[^[:space:]]+$ ]] || die "$name must be an HTTP or HTTPS URL"
+}
+
+validate_runtime_options() {
+  validate_ipv4 "$BIND_ADDRESS" "bind-address"
+  validate_integer "$CONSOLE_PORT" "console-port" 1024 65535
+  validate_integer "$GATEWAY_PORT" "gateway-port" 1024 65535
+  validate_integer "$BACKUP_RETENTION" "backup-retention" 1 100
+  validate_url "$CONSOLE_ORIGIN" "console-origin"
+  validate_url "$GATEWAY_URL" "gateway-url"
+  [[ "$CONSOLE_PORT" != "$GATEWAY_PORT" ]] || die "Console and Gateway ports must differ"
+}
+
+[[ "$INSTANCE" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || die "invalid --instance"
+[[ "$TARGET_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "release version is invalid"
+[[ -z "$CLI_BIND_ADDRESS" ]] || validate_ipv4 "$CLI_BIND_ADDRESS" "bind-address"
+[[ -z "$CLI_CONSOLE_PORT" ]] || validate_integer "$CLI_CONSOLE_PORT" "console-port" 1024 65535
+[[ -z "$CLI_GATEWAY_PORT" ]] || validate_integer "$CLI_GATEWAY_PORT" "gateway-port" 1024 65535
+[[ -z "$CLI_BACKUP_RETENTION" ]] || validate_integer "$CLI_BACKUP_RETENTION" "backup-retention" 1 100
+[[ -z "$CLI_CONSOLE_ORIGIN" ]] || validate_url "$CLI_CONSOLE_ORIGIN" "console-origin"
+[[ -z "$CLI_GATEWAY_URL" ]] || validate_url "$CLI_GATEWAY_URL" "gateway-url"
+
+require_command docker
+require_command curl
+
+docker_version="$(docker version --format '{{.Server.Version}}' 2>/dev/null)" || die "Docker Engine is unavailable"
+docker_major="${docker_version%%.*}"
+[[ "$docker_major" =~ ^[0-9]+$ ]] || die "could not read Docker Engine version"
+(( docker_major >= 26 )) || die "Docker Engine 26 or newer is required"
+[[ "$(docker info --format '{{.OSType}}')" == "linux" ]] || die "the Docker server must run Linux"
+docker_arch="$(docker info --format '{{.Architecture}}')"
+case "$docker_arch" in
+  x86_64|amd64|aarch64|arm64) ;;
+  *) die "unsupported Docker architecture: $docker_arch" ;;
+esac
+
+LOCK_FILE="/tmp/llmingress-${INSTANCE}.lock"
+LOCK_DIRECTORY=""
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || die "another lifecycle command is running for instance $INSTANCE"
+else
+  LOCK_DIRECTORY="${LOCK_FILE}.d"
+  if ! mkdir "$LOCK_DIRECTORY" 2>/dev/null; then
+    [[ -d "$LOCK_DIRECTORY" && ! -L "$LOCK_DIRECTORY" ]] || die "unsafe lifecycle lock path: $LOCK_DIRECTORY"
+    lock_pid="$(cat "$LOCK_DIRECTORY/pid" 2>/dev/null || true)"
+    if [[ "$lock_pid" =~ ^[0-9]+$ ]] && kill -0 "$lock_pid" 2>/dev/null; then
+      die "another lifecycle command is running for instance $INSTANCE"
+    fi
+    rm -rf "$LOCK_DIRECTORY"
+    mkdir "$LOCK_DIRECTORY" || die "could not replace the stale lifecycle lock"
+  fi
+  printf '%s\n' "$$" > "$LOCK_DIRECTORY/pid"
+  trap 'rm -rf "$LOCK_DIRECTORY" 2>/dev/null || true' EXIT
+fi
+
+PREFIX="llmingress-${INSTANCE}"
+POSTGRES_VOLUME="${PREFIX}-postgres"
+CONFIG_VOLUME="${PREFIX}-config"
+BACKUP_VOLUME="${PREFIX}-backups"
+NETWORK="${PREFIX}-network"
+POSTGRES_CONTAINER="${PREFIX}-postgres"
+MIGRATE_CONTAINER="${PREFIX}-migrate"
+GATEWAY_CONTAINER="${PREFIX}-gateway"
+CONSOLE_CONTAINER="${PREFIX}-console"
+WORKER_CONTAINER="${PREFIX}-worker"
+
+ensure_image() {
+  local image="$1"
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    log "Pulling $image"
+    docker pull "$image" >/dev/null
+  fi
+}
+
+resource_label() {
+  local kind="$1" name="$2" label="$3"
+  docker "$kind" inspect --format "{{index .Labels \"$label\"}}" "$name" 2>/dev/null || true
+}
+
+ensure_volume() {
+  local name="$1"
+  if docker volume inspect "$name" >/dev/null 2>&1; then
+    [[ "$(resource_label volume "$name" "$MANAGED_LABEL")" == "true" ]] || die "volume $name is not managed by LLMIngress"
+    [[ "$(resource_label volume "$name" "$INSTANCE_LABEL")" == "$INSTANCE" ]] || die "volume $name belongs to another instance"
+    return
+  fi
+  docker volume create \
+    --label "$MANAGED_LABEL=true" \
+    --label "$INSTANCE_LABEL=$INSTANCE" \
+    "$name" >/dev/null
+}
+
+ensure_network() {
+  if docker network inspect "$NETWORK" >/dev/null 2>&1; then
+    [[ "$(resource_label network "$NETWORK" "$MANAGED_LABEL")" == "true" ]] || die "network $NETWORK is not managed by LLMIngress"
+    [[ "$(resource_label network "$NETWORK" "$INSTANCE_LABEL")" == "$INSTANCE" ]] || die "network $NETWORK belongs to another instance"
+    return
+  fi
+  docker network create \
+    --label "$MANAGED_LABEL=true" \
+    --label "$INSTANCE_LABEL=$INSTANCE" \
+    "$NETWORK" >/dev/null
+}
+
+container_exists() {
+  docker container inspect "$1" >/dev/null 2>&1
+}
+
+assert_managed_container() {
+  local name="$1"
+  container_exists "$name" || return 0
+  [[ "$(docker container inspect --format "{{index .Config.Labels \"$MANAGED_LABEL\"}}" "$name")" == "true" ]] || die "container $name is not managed by LLMIngress"
+  [[ "$(docker container inspect --format "{{index .Config.Labels \"$INSTANCE_LABEL\"}}" "$name")" == "$INSTANCE" ]] || die "container $name belongs to another instance"
+}
+
+for name in "$POSTGRES_VOLUME" "$CONFIG_VOLUME" "$BACKUP_VOLUME"; do
+  ensure_volume "$name"
+done
+ensure_network
+for name in "$POSTGRES_CONTAINER" "$MIGRATE_CONTAINER" "$GATEWAY_CONTAINER" "$CONSOLE_CONTAINER" "$WORKER_CONTAINER"; do
+  assert_managed_container "$name"
+done
+
+ensure_image "$TARGET_POSTGRES_IMAGE"
+ensure_image "$TARGET_IMAGE"
+POSTGRES_UID="$(docker run --rm --entrypoint id "$TARGET_POSTGRES_IMAGE" -u postgres)"
+[[ "$POSTGRES_UID" =~ ^[0-9]+$ ]] || die "could not determine the PostgreSQL user id"
+
+read_config_file() {
+  local filename="$1"
+  docker run --rm \
+    --user 0 \
+    --entrypoint cat \
+    -v "$CONFIG_VOLUME:/state:ro" \
+    "$TARGET_POSTGRES_IMAGE" "/state/$filename" 2>/dev/null
+}
+
+STATE_VERSION=""
+STATE_APP_IMAGE=""
+STATE_POSTGRES_IMAGE=""
+STATE_BIND_ADDRESS=""
+STATE_CONSOLE_PORT=""
+STATE_GATEWAY_PORT=""
+STATE_CONSOLE_ORIGIN=""
+STATE_GATEWAY_URL=""
+STATE_BACKUP_RETENTION=""
+STATE_INSTANCE=""
+
+load_installed_state() {
+  local content key value
+  STATE_VERSION=""
+  STATE_APP_IMAGE=""
+  STATE_POSTGRES_IMAGE=""
+  STATE_BIND_ADDRESS=""
+  STATE_CONSOLE_PORT=""
+  STATE_GATEWAY_PORT=""
+  STATE_CONSOLE_ORIGIN=""
+  STATE_GATEWAY_URL=""
+  STATE_BACKUP_RETENTION=""
+  STATE_INSTANCE=""
+  content="$(read_config_file install-state.env)" || return 1
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      INSTALLED_VERSION) STATE_VERSION="$value" ;;
+      APP_IMAGE) STATE_APP_IMAGE="$value" ;;
+      POSTGRES_IMAGE) STATE_POSTGRES_IMAGE="$value" ;;
+      BIND_ADDRESS) STATE_BIND_ADDRESS="$value" ;;
+      CONSOLE_PORT) STATE_CONSOLE_PORT="$value" ;;
+      GATEWAY_PORT) STATE_GATEWAY_PORT="$value" ;;
+      CONSOLE_ORIGIN) STATE_CONSOLE_ORIGIN="$value" ;;
+      GATEWAY_URL) STATE_GATEWAY_URL="$value" ;;
+      BACKUP_RETENTION) STATE_BACKUP_RETENTION="$value" ;;
+      INSTANCE) STATE_INSTANCE="$value" ;;
+    esac
+  done <<< "$content"
+  [[ "$STATE_INSTANCE" == "$INSTANCE" ]] || die "installed state belongs to another instance"
+  [[ -n "$STATE_VERSION" && -n "$STATE_APP_IMAGE" && -n "$STATE_POSTGRES_IMAGE" ]] || die "installed state is incomplete"
+}
+
+HAS_STATE=false
+if load_installed_state; then
+  HAS_STATE=true
+fi
+
+resolve_runtime_options() {
+  BIND_ADDRESS="${CLI_BIND_ADDRESS:-${STATE_BIND_ADDRESS:-127.0.0.1}}"
+  CONSOLE_PORT="${CLI_CONSOLE_PORT:-${STATE_CONSOLE_PORT:-3000}}"
+  GATEWAY_PORT="${CLI_GATEWAY_PORT:-${STATE_GATEWAY_PORT:-4000}}"
+  CONSOLE_ORIGIN="${CLI_CONSOLE_ORIGIN:-${STATE_CONSOLE_ORIGIN:-http://127.0.0.1:${CONSOLE_PORT}}}"
+  GATEWAY_URL="${CLI_GATEWAY_URL:-${STATE_GATEWAY_URL:-http://127.0.0.1:${GATEWAY_PORT}}}"
+  BACKUP_RETENTION="${CLI_BACKUP_RETENTION:-${STATE_BACKUP_RETENTION:-5}}"
+  validate_runtime_options
+}
+resolve_runtime_options
+
+run_state_command() {
+  local image="$1" command="$2"
+  shift 2
+  docker run --rm \
+    --user 0 \
+    -v "$CONFIG_VOLUME:/state" \
+    "$image" init "$command" --state-directory /state "$@"
+}
+
+configure_runtime() {
+  run_state_command "$TARGET_IMAGE" configure \
+    --instance "$INSTANCE" \
+    --bind-address "$BIND_ADDRESS" \
+    --console-port "$CONSOLE_PORT" \
+    --gateway-port "$GATEWAY_PORT" \
+    --console-origin "$CONSOLE_ORIGIN" \
+    --gateway-url "$GATEWAY_URL" \
+    --backup-retention "$BACKUP_RETENTION" \
+    --postgres-uid "$POSTGRES_UID"
+}
+
+prepare_transaction() {
+  local backup_file="$1"
+  run_state_command "$TARGET_IMAGE" prepare \
+    --instance "$INSTANCE" \
+    --bind-address "$BIND_ADDRESS" \
+    --console-port "$CONSOLE_PORT" \
+    --gateway-port "$GATEWAY_PORT" \
+    --console-origin "$CONSOLE_ORIGIN" \
+    --gateway-url "$GATEWAY_URL" \
+    --backup-retention "$BACKUP_RETENTION" \
+    --postgres-uid "$POSTGRES_UID" \
+    --version "$TARGET_VERSION" \
+    --app-image "$TARGET_IMAGE" \
+    --postgres-image "$TARGET_POSTGRES_IMAGE" \
+    --backup-file "$backup_file"
+}
+
+commit_state() {
+  run_state_command "$TARGET_IMAGE" commit \
+    --instance "$INSTANCE" \
+    --bind-address "$BIND_ADDRESS" \
+    --console-port "$CONSOLE_PORT" \
+    --gateway-port "$GATEWAY_PORT" \
+    --console-origin "$CONSOLE_ORIGIN" \
+    --gateway-url "$GATEWAY_URL" \
+    --backup-retention "$BACKUP_RETENTION" \
+    --version "$TARGET_VERSION" \
+    --app-image "$TARGET_IMAGE" \
+    --postgres-image "$TARGET_POSTGRES_IMAGE"
+}
+
+if [[ "$HAS_STATE" == false ]]; then
+  configure_runtime
+fi
+
+desired_image_id() {
+  docker image inspect --format '{{.Id}}' "$1"
+}
+
+ensure_postgres() {
+  local image="$1" desired_id current_id
+  desired_id="$(desired_image_id "$image")"
+  if container_exists "$POSTGRES_CONTAINER"; then
+    current_id="$(docker container inspect --format '{{.Image}}' "$POSTGRES_CONTAINER")"
+    [[ "$current_id" == "$desired_id" ]] || die "PostgreSQL image drift requires an explicit database upgrade"
+  else
+    docker create \
+      --name "$POSTGRES_CONTAINER" \
+      --network "$NETWORK" \
+      --network-alias postgres \
+      --restart unless-stopped \
+      --label "$MANAGED_LABEL=true" \
+      --label "$INSTANCE_LABEL=$INSTANCE" \
+      --label "$ROLE_LABEL=postgres" \
+      -e POSTGRES_USER=postgres \
+      -e POSTGRES_DB=llmingress \
+      -e POSTGRES_PASSWORD_FILE=/run/llmingress/postgres-password \
+      -v "$POSTGRES_VOLUME:/var/lib/postgresql" \
+      -v "$CONFIG_VOLUME:/run/llmingress:ro" \
+      "$image" >/dev/null
+  fi
+  if [[ "$(docker container inspect --format '{{.State.Running}}' "$POSTGRES_CONTAINER")" != "true" ]]; then
+    docker start "$POSTGRES_CONTAINER" >/dev/null
+  fi
+}
+
+wait_for_postgres() {
+  local deadline=$((SECONDS + 120))
+  until docker exec "$POSTGRES_CONTAINER" pg_isready -U postgres -d llmingress >/dev/null 2>&1; do
+    (( SECONDS < deadline )) || die "PostgreSQL did not become ready"
+    sleep 2
+  done
+}
+
+ACTIVE_POSTGRES_IMAGE="${STATE_POSTGRES_IMAGE:-$TARGET_POSTGRES_IMAGE}"
+ensure_image "$ACTIVE_POSTGRES_IMAGE"
+ensure_postgres "$ACTIVE_POSTGRES_IMAGE"
+wait_for_postgres
+
+remove_managed_container() {
+  local name="$1"
+  container_exists "$name" || return 0
+  assert_managed_container "$name"
+  docker rm -f "$name" >/dev/null
+}
+
+stop_apps() {
+  local name
+  for name in "$GATEWAY_CONTAINER" "$CONSOLE_CONTAINER" "$WORKER_CONTAINER"; do
+    if container_exists "$name" && [[ "$(docker container inspect --format '{{.State.Running}}' "$name")" == "true" ]]; then
+      docker stop -t 30 "$name" >/dev/null
+    fi
+  done
+}
+
+remove_apps() {
+  local name
+  for name in "$GATEWAY_CONTAINER" "$CONSOLE_CONTAINER" "$WORKER_CONTAINER"; do
+    remove_managed_container "$name"
+  done
+}
+
+create_role_container() {
+  local role="$1" image="$2" version="$3" name
+  local -a args
+  name="${PREFIX}-${role}"
+  args=(
+    create
+    --name "$name"
+    --network "$NETWORK"
+    --restart unless-stopped
+    --init
+    --stop-timeout 30
+    --user 1001:1001
+    --label "$MANAGED_LABEL=true"
+    --label "$INSTANCE_LABEL=$INSTANCE"
+    --label "$ROLE_LABEL=$role"
+    --label "$VERSION_LABEL=$version"
+    -e NODE_ENV=production
+    -e LLMINGRESS_BOOTSTRAP_CONFIG=/run/llmingress/bootstrap.json
+    -v "$CONFIG_VOLUME:/run/llmingress:ro"
+  )
+  case "$role" in
+    gateway)
+      args+=(
+        -e GATEWAY_HOST=0.0.0.0
+        -e "GATEWAY_PUBLIC_BASE_URL=$GATEWAY_URL"
+        -e "GATEWAY_CORS_ALLOWED_ORIGINS=$CONSOLE_ORIGIN"
+        -p "$BIND_ADDRESS:$GATEWAY_PORT:$GATEWAY_PORT"
+      )
+      ;;
+    console)
+      args+=(
+        -e HOSTNAME=0.0.0.0
+        -e "PORT=$CONSOLE_PORT"
+        -p "$BIND_ADDRESS:$CONSOLE_PORT:$CONSOLE_PORT"
+      )
+      ;;
+  esac
+  docker "${args[@]}" "$image" "$role" >/dev/null
+  docker start "$name" >/dev/null
+}
+
+ensure_role_container() {
+  local role="$1" image="$2" version="$3" name desired_id current_id current_version
+  name="${PREFIX}-${role}"
+  desired_id="$(desired_image_id "$image")"
+  if container_exists "$name"; then
+    current_id="$(docker container inspect --format '{{.Image}}' "$name")"
+    current_version="$(docker container inspect --format "{{index .Config.Labels \"$VERSION_LABEL\"}}" "$name")"
+    if [[ "$current_id" != "$desired_id" || "$current_version" != "$version" ]]; then
+      remove_managed_container "$name"
+    fi
+  fi
+  if ! container_exists "$name"; then
+    create_role_container "$role" "$image" "$version"
+  elif [[ "$(docker container inspect --format '{{.State.Running}}' "$name")" != "true" ]]; then
+    docker start "$name" >/dev/null
+  fi
+}
+
+ensure_app_stack() {
+  local image="$1" version="$2"
+  ensure_role_container gateway "$image" "$version"
+  ensure_role_container console "$image" "$version"
+  ensure_role_container worker "$image" "$version"
+}
+
+run_migration() {
+  local image="$1" version="$2"
+  remove_managed_container "$MIGRATE_CONTAINER"
+  docker create \
+    --name "$MIGRATE_CONTAINER" \
+    --network "$NETWORK" \
+    --user 1001:1001 \
+    --label "$MANAGED_LABEL=true" \
+    --label "$INSTANCE_LABEL=$INSTANCE" \
+    --label "$ROLE_LABEL=migrate" \
+    --label "$VERSION_LABEL=$version" \
+    -e NODE_ENV=production \
+    -e LLMINGRESS_BOOTSTRAP_CONFIG=/run/llmingress/bootstrap.json \
+    -v "$CONFIG_VOLUME:/run/llmingress:ro" \
+    "$image" migrate >/dev/null || return 1
+  docker start -a "$MIGRATE_CONTAINER" || return 1
+  docker rm "$MIGRATE_CONTAINER" >/dev/null
+}
+
+check_host() {
+  if [[ "$BIND_ADDRESS" == "0.0.0.0" ]]; then
+    printf '127.0.0.1'
+  else
+    printf '%s' "$BIND_ADDRESS"
+  fi
+}
+
+wait_for_apps() {
+  local host deadline name
+  host="$(check_host)"
+  deadline=$((SECONDS + 120))
+  until curl --connect-timeout 2 -fsS "http://${host}:${GATEWAY_PORT}/health/ready" >/dev/null 2>&1 \
+    && curl --connect-timeout 2 -fsS "http://${host}:${CONSOLE_PORT}/" >/dev/null 2>&1 \
+    && [[ "$(docker container inspect --format '{{.State.Running}}' "$WORKER_CONTAINER" 2>/dev/null)" == "true" ]]; do
+    for name in "$GATEWAY_CONTAINER" "$CONSOLE_CONTAINER" "$WORKER_CONTAINER"; do
+      if [[ "$(docker container inspect --format '{{.RestartCount}}' "$name" 2>/dev/null || true)" =~ ^[1-9][0-9]*$ ]]; then
+        return 1
+      fi
+    done
+    (( SECONDS < deadline )) || return 1
+    sleep 2
+  done
+  sleep 2
+  [[ "$(docker container inspect --format '{{.State.Running}}' "$WORKER_CONTAINER")" == "true" ]]
+}
+
+stack_healthy() {
+  local host
+  host="$(check_host)"
+  curl --connect-timeout 2 -fsS "http://${host}:${GATEWAY_PORT}/health/ready" >/dev/null 2>&1 \
+    && curl --connect-timeout 2 -fsS "http://${host}:${CONSOLE_PORT}/" >/dev/null 2>&1 \
+    && [[ "$(docker container inspect --format '{{.State.Running}}' "$WORKER_CONTAINER" 2>/dev/null)" == "true" ]]
+}
+
+assert_ports_available() {
+  local port id own_id
+  for port in "$CONSOLE_PORT" "$GATEWAY_PORT"; do
+    while IFS= read -r id; do
+      [[ -n "$id" ]] || continue
+      own_id="$(docker container inspect --format "{{index .Config.Labels \"$INSTANCE_LABEL\"}}" "$id" 2>/dev/null || true)"
+      [[ "$own_id" == "$INSTANCE" ]] || die "port $port is already published by another container"
+    done < <(docker ps --filter "publish=$port" --format '{{.ID}}')
+  done
+}
+
+create_backup() {
+  local filename="$1"
+  docker run --rm \
+    --user 0 \
+    --network "$NETWORK" \
+    --entrypoint sh \
+    -v "$CONFIG_VOLUME:/run/llmingress:ro" \
+    -v "$BACKUP_VOLUME:/backups" \
+    "$ACTIVE_POSTGRES_IMAGE" -c '
+      set -eu
+      filename="$1"
+      partial="$filename.partial"
+      checksum="$filename.sha256"
+      checksum_partial="$checksum.partial"
+      trap "rm -f /backups/$partial /backups/$checksum_partial" EXIT
+      rm -f "/backups/$partial" "/backups/$checksum_partial"
+      export PGPASSWORD="$(cat /run/llmingress/postgres-password)"
+      pg_dump -h postgres -U postgres -d llmingress --format=custom --no-owner --no-privileges --file="/backups/$partial"
+      pg_restore --list "/backups/$partial" >/dev/null
+      cd /backups
+      digest="$(sha256sum "$partial" | cut -d " " -f 1)"
+      printf "%s  %s\n" "$digest" "$filename" > "$checksum_partial"
+      mv "$checksum_partial" "$checksum"
+      mv "$partial" "$filename"
+    ' sh "$filename"
+}
+
+restore_backup() {
+  local filename="$1"
+  [[ -n "$filename" ]] || return 0
+  docker run --rm \
+    --user 0 \
+    --entrypoint sh \
+    -v "$BACKUP_VOLUME:/backups:ro" \
+    "$ACTIVE_POSTGRES_IMAGE" -c '
+      set -eu
+      cd /backups
+      sha256sum -c "$1.sha256"
+      pg_restore --list "$1" >/dev/null
+    ' sh "$filename" >/dev/null
+  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists --force llmingress
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres llmingress
+  docker run --rm \
+    --user 0 \
+    --network "$NETWORK" \
+    --entrypoint sh \
+    -v "$CONFIG_VOLUME:/run/llmingress:ro" \
+    -v "$BACKUP_VOLUME:/backups:ro" \
+    "$ACTIVE_POSTGRES_IMAGE" -c '
+      set -eu
+      export PGPASSWORD="$(cat /run/llmingress/postgres-password)"
+      pg_restore -h postgres -U postgres -d llmingress --no-owner --no-privileges "/backups/$1"
+    ' sh "$filename"
+}
+
+prune_backups() {
+  docker run --rm \
+    --user 0 \
+    --entrypoint sh \
+    -v "$BACKUP_VOLUME:/backups" \
+    "$ACTIVE_POSTGRES_IMAGE" -c '
+      set -eu
+      keep="$1"
+      old="$(ls -1t /backups/*.dump 2>/dev/null | tail -n "+$((keep + 1))" || true)"
+      for file in $old; do
+        rm -f "$file" "$file.sha256"
+      done
+    ' sh "$BACKUP_RETENTION"
+}
+
+JOURNAL_OLD_VERSION=""
+JOURNAL_OLD_IMAGE=""
+JOURNAL_OLD_POSTGRES_IMAGE=""
+JOURNAL_BACKUP_FILE=""
+
+load_journal() {
+  local content key value
+  JOURNAL_OLD_VERSION=""
+  JOURNAL_OLD_IMAGE=""
+  JOURNAL_OLD_POSTGRES_IMAGE=""
+  JOURNAL_BACKUP_FILE=""
+  content="$(read_config_file transaction/journal.env)" || return 1
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      OLD_VERSION) JOURNAL_OLD_VERSION="$value" ;;
+      OLD_APP_IMAGE) JOURNAL_OLD_IMAGE="$value" ;;
+      OLD_POSTGRES_IMAGE) JOURNAL_OLD_POSTGRES_IMAGE="$value" ;;
+      BACKUP_FILE) JOURNAL_BACKUP_FILE="$value" ;;
+    esac
+  done <<< "$content"
+  [[ -n "$JOURNAL_OLD_VERSION" && -n "$JOURNAL_OLD_IMAGE" ]] || die "upgrade journal is incomplete"
+  [[ "$JOURNAL_OLD_POSTGRES_IMAGE" == "$ACTIVE_POSTGRES_IMAGE" ]] || die "upgrade journal PostgreSQL image does not match the running database"
+}
+
+apply_installed_runtime() {
+  BIND_ADDRESS="$STATE_BIND_ADDRESS"
+  CONSOLE_PORT="$STATE_CONSOLE_PORT"
+  GATEWAY_PORT="$STATE_GATEWAY_PORT"
+  CONSOLE_ORIGIN="$STATE_CONSOLE_ORIGIN"
+  GATEWAY_URL="$STATE_GATEWAY_URL"
+  BACKUP_RETENTION="$STATE_BACKUP_RETENTION"
+}
+
+recover_transaction() {
+  load_journal || return 0
+  log "Recovering interrupted upgrade from $JOURNAL_OLD_VERSION"
+  ensure_image "$JOURNAL_OLD_IMAGE"
+  remove_managed_container "$MIGRATE_CONTAINER"
+  remove_apps
+  restore_backup "$JOURNAL_BACKUP_FILE"
+  run_state_command "$JOURNAL_OLD_IMAGE" rollback
+  load_installed_state || die "rollback state could not be restored"
+  apply_installed_runtime
+  ensure_app_stack "$JOURNAL_OLD_IMAGE" "$JOURNAL_OLD_VERSION"
+  wait_for_apps || die "the previous release did not recover"
+  run_state_command "$JOURNAL_OLD_IMAGE" clear
+  log "Recovered $JOURNAL_OLD_VERSION"
+}
+
+if load_journal; then
+  recover_transaction
+  load_installed_state || die "installed state is missing after recovery"
+  HAS_STATE=true
+  resolve_runtime_options
+fi
+
+semver_core_part() {
+  local version="${1#v}"
+  printf '%s' "${version%%-*}"
+}
+
+semver_prerelease_part() {
+  local version="${1#v}"
+  if [[ "$version" == *-* ]]; then
+    printf '%s' "${version#*-}"
+  fi
+}
+
+is_downgrade() {
+  local target="$1" current="$2" target_core current_core target_pre current_pre
+  local target_major target_minor target_patch current_major current_minor current_patch
+  target_core="$(semver_core_part "$target")"
+  current_core="$(semver_core_part "$current")"
+  IFS=. read -r target_major target_minor target_patch <<< "$target_core"
+  IFS=. read -r current_major current_minor current_patch <<< "$current_core"
+  for pair in "$target_major:$current_major" "$target_minor:$current_minor" "$target_patch:$current_patch"; do
+    local left="${pair%%:*}" right="${pair#*:}"
+    if (( 10#$left < 10#$right )); then return 0; fi
+    if (( 10#$left > 10#$right )); then return 1; fi
+  done
+  target_pre="$(semver_prerelease_part "$target")"
+  current_pre="$(semver_prerelease_part "$current")"
+  [[ -z "$current_pre" && -n "$target_pre" ]] && return 0
+  [[ -n "$current_pre" && -z "$target_pre" ]] && return 1
+  if [[ -n "$target_pre" && -n "$current_pre" ]]; then
+    local index target_part current_part
+    local -a target_parts current_parts
+    IFS=. read -r -a target_parts <<< "$target_pre"
+    IFS=. read -r -a current_parts <<< "$current_pre"
+    for ((index = 0; index < ${#target_parts[@]} || index < ${#current_parts[@]}; index += 1)); do
+      target_part="${target_parts[index]:-}"
+      current_part="${current_parts[index]:-}"
+      [[ "$target_part" == "$current_part" ]] && continue
+      [[ -z "$target_part" ]] && return 0
+      [[ -z "$current_part" ]] && return 1
+      if [[ "$target_part" =~ ^[0-9]+$ && "$current_part" =~ ^[0-9]+$ ]]; then
+        (( 10#$target_part < 10#$current_part )) && return 0
+        return 1
+      fi
+      [[ "$target_part" =~ ^[0-9]+$ ]] && return 0
+      [[ "$current_part" =~ ^[0-9]+$ ]] && return 1
+      [[ "$target_part" < "$current_part" ]] && return 0
+      return 1
+    done
+  fi
+  return 1
+}
+
+activate_target() {
+  run_migration "$TARGET_IMAGE" "$TARGET_VERSION" || return 1
+  remove_apps
+  ensure_app_stack "$TARGET_IMAGE" "$TARGET_VERSION" || return 1
+  wait_for_apps || return 1
+}
+
+if [[ "$HAS_STATE" == false ]]; then
+  assert_ports_available
+  remove_apps
+  log "Installing $TARGET_VERSION"
+  activate_target || die "initial deployment failed; rerun the same command after correcting the error"
+  commit_state
+  prune_backups || log "Warning: old upgrade backups could not be pruned"
+  log "Installed $TARGET_VERSION"
+  log "Console: $CONSOLE_ORIGIN"
+  log "Gateway: $GATEWAY_URL"
+  exit 0
+fi
+
+[[ "$STATE_POSTGRES_IMAGE" == "$TARGET_POSTGRES_IMAGE" ]] || die "PostgreSQL image changes require an explicit database upgrade"
+if is_downgrade "$TARGET_VERSION" "$STATE_VERSION"; then
+  die "downgrade from $STATE_VERSION to $TARGET_VERSION is not supported"
+fi
+if [[ "$TARGET_VERSION" == "$STATE_VERSION" && "$TARGET_IMAGE" != "$STATE_APP_IMAGE" ]]; then
+  die "release $TARGET_VERSION is already installed with a different immutable image"
+fi
+
+CONFIG_CHANGED=false
+if [[ "$BIND_ADDRESS" != "$STATE_BIND_ADDRESS" \
+  || "$CONSOLE_PORT" != "$STATE_CONSOLE_PORT" \
+  || "$GATEWAY_PORT" != "$STATE_GATEWAY_PORT" \
+  || "$CONSOLE_ORIGIN" != "$STATE_CONSOLE_ORIGIN" \
+  || "$GATEWAY_URL" != "$STATE_GATEWAY_URL" \
+  || "$BACKUP_RETENTION" != "$STATE_BACKUP_RETENTION" ]]; then
+  CONFIG_CHANGED=true
+fi
+
+if [[ "$TARGET_VERSION" == "$STATE_VERSION" && "$CONFIG_CHANGED" == false ]]; then
+  ensure_app_stack "$STATE_APP_IMAGE" "$STATE_VERSION"
+  if stack_healthy; then
+    prune_backups || log "Warning: old upgrade backups could not be pruned"
+    log "$STATE_VERSION is already installed and healthy"
+    exit 0
+  fi
+  wait_for_apps || die "the installed release could not be repaired"
+  log "Repaired $STATE_VERSION"
+  exit 0
+fi
+
+RUNTIME_CONFIG_CHANGED=false
+if [[ "$BIND_ADDRESS" != "$STATE_BIND_ADDRESS" \
+  || "$CONSOLE_PORT" != "$STATE_CONSOLE_PORT" \
+  || "$GATEWAY_PORT" != "$STATE_GATEWAY_PORT" \
+  || "$CONSOLE_ORIGIN" != "$STATE_CONSOLE_ORIGIN" \
+  || "$GATEWAY_URL" != "$STATE_GATEWAY_URL" ]]; then
+  RUNTIME_CONFIG_CHANGED=true
+fi
+
+if [[ "$TARGET_VERSION" == "$STATE_VERSION" && "$RUNTIME_CONFIG_CHANGED" == false ]]; then
+  commit_state
+  prune_backups || log "Warning: old upgrade backups could not be pruned"
+  log "Updated backup retention for $STATE_VERSION"
+  exit 0
+fi
+
+assert_ports_available
+ensure_image "$STATE_APP_IMAGE"
+stop_apps
+backup_file=""
+if [[ "$TARGET_VERSION" != "$STATE_VERSION" ]]; then
+  backup_file="upgrade-${TARGET_VERSION}-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  log "Creating verified upgrade backup $backup_file"
+  if ! create_backup "$backup_file"; then
+    apply_installed_runtime
+    ensure_app_stack "$STATE_APP_IMAGE" "$STATE_VERSION"
+    wait_for_apps || die "backup failed and the previous release could not restart"
+    die "upgrade backup failed; the previous release was restarted"
+  fi
+fi
+if ! prepare_transaction "$backup_file"; then
+  if load_journal; then
+    recover_transaction
+  else
+    apply_installed_runtime
+    ensure_app_stack "$STATE_APP_IMAGE" "$STATE_VERSION"
+    wait_for_apps || die "transaction preparation failed and the previous release could not restart"
+  fi
+  die "upgrade transaction could not be prepared"
+fi
+
+log "Activating $TARGET_VERSION"
+if ! activate_target; then
+  log "Target activation failed; restoring $STATE_VERSION"
+  recover_transaction
+  die "upgrade failed and the previous release was restored"
+fi
+
+commit_state
+prune_backups || log "Warning: old upgrade backups could not be pruned"
+log "Installed $TARGET_VERSION"

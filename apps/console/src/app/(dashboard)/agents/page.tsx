@@ -1,5 +1,6 @@
 import { PageHeader } from "../../_components/page-header";
-import { AgentsSection, type ConsoleSearchParams } from "../../_modules/sections";
+import { AgentsSection } from "../../_modules/agents-section";
+import type { ConsoleSearchParams } from "../../_modules/sections";
 
 export default async function AgentsPage({
   searchParams,
@@ -13,7 +14,7 @@ export default async function AgentsPage({
         title="Agents"
         description="Agents, their API key, virtual model access, and limits."
         actions={
-          <a className="btn" href="?agentDialog=new">
+          <a className="btn" href="?agentDialog=new" id="agent-create-dialog-trigger">
             <span>Create Agent</span>
           </a>
         }

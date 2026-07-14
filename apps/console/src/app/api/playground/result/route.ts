@@ -1,16 +1,14 @@
 import { getConsoleActivityDetail } from "@llmingress/db/console-activity";
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../../_auth";
 
-export async function GET(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const GET = withConsoleAuth(async (request) => {
   const requestId = request.nextUrl.searchParams.get("requestId")?.trim();
   if (!requestId) {
-    return NextResponse.json({ error: "requestId is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "requestId is required.", code: "request_id_required" },
+      { status: 400 },
+    );
   }
 
   const detail = await getConsoleActivityDetail({ requestId });
@@ -34,4 +32,4 @@ export async function GET(request: NextRequest) {
       virtualModelName: activity.virtualModelName,
     },
   });
-}
+});

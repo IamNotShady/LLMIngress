@@ -4,23 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { consoleNavItems, findActiveNavItem } from "../_lib/nav";
+import { ConsoleMutationForm } from "./console-mutation-form";
 import { FlatIcon } from "./flat-icon";
 
 type SidebarProps = {
-  gatewayConfigVersionLabel: string;
-  gatewayStatusHealthy: boolean;
-  gatewayStatusLabel: string;
-  gatewayUptimeLabel: string;
   gatewayUrlLabel: string;
   providerHealthyCount: number;
   providerUnhealthyCount: number;
 };
 
 export function Sidebar({
-  gatewayConfigVersionLabel,
-  gatewayStatusHealthy,
-  gatewayStatusLabel,
-  gatewayUptimeLabel,
   gatewayUrlLabel,
   providerHealthyCount,
   providerUnhealthyCount,
@@ -85,15 +78,9 @@ export function Sidebar({
         <div className="sidebar-runtime-card">
           <span className="sidebar-runtime-summary">
             <span className="sidebar-runtime-status">
-              <span
-                className={`sidebar-account-dot${gatewayStatusHealthy ? "" : " is-warn"}`}
-                aria-hidden="true"
-              />
-              <span className="sidebar-runtime-title">{gatewayStatusLabel}</span>
+              <span className="sidebar-runtime-title">Gateway target</span>
             </span>
             <em>Gateway URL {gatewayUrlLabel}</em>
-            <em>Config version {gatewayConfigVersionLabel}</em>
-            <em>Uptime {gatewayUptimeLabel}</em>
             <span className="sidebar-runtime-providers">
               <span>Providers</span>
               <span
@@ -116,12 +103,12 @@ export function Sidebar({
           </span>
         </div>
         <div className="sidebar-footer-row">
-          <form action="/api/auth/logout" method="post">
+          <ConsoleMutationForm action="/api/auth/logout" fallbackError="Logout failed.">
             <button className="secondary-button" type="submit">
               <FlatIcon name="lock" />
               <span>Sign out</span>
             </button>
-          </form>
+          </ConsoleMutationForm>
         </div>
       </div>
     </aside>

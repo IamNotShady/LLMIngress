@@ -1,71 +1,82 @@
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { pathToFileURL } from "node:url";
 import { loadBootstrapRuntimeConfig } from "@llmingress/config";
-import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
-import { createBackupJobHandler } from "@llmingress/db/worker-backup";
-import { createBillingReconciliationJobHandler } from "@llmingress/db/worker-billing-reconciliation";
-import { createBudgetThresholdAlertsJobHandler } from "@llmingress/db/worker-budget-threshold-alerts";
-import { createCostReportExportJobHandler } from "@llmingress/db/worker-cost-report-export";
-import { createFallbackExhaustionAlertsJobHandler } from "@llmingress/db/worker-fallback-exhaustion-alerts";
-import { createPostgresJobRunner } from "@llmingress/db/worker-job-runner";
-import { createJsonlRequestLogExportJobHandler } from "@llmingress/db/worker-jsonl-export";
-import { createModelRefreshJobHandler } from "@llmingress/db/worker-model-refresh";
-import { createNotificationDispatchJobHandler } from "@llmingress/db/worker-notification-dispatcher";
+import { assertPostgresDatabaseConfigured, closePostgresPools } from "@llmingress/db/client";
+import { createLogger } from "@llmingress/logging";
+import { createPostgresJobRunner } from "@llmingress/worker-runtime/worker-job-runner";
 import {
-  createDefaultPeriodicTasks,
-  createPostgresPeriodicScheduler,
-} from "@llmingress/db/worker-periodic-scheduler";
-import { createPriceSyncJobHandler } from "@llmingress/db/worker-price-sync";
-import { createProviderConnectivityCheckJobHandler } from "@llmingress/db/worker-provider-connectivity-check";
-import { createProviderFailureAlertsJobHandler } from "@llmingress/db/worker-provider-failure-alerts";
-import { createRateLimitAlertsJobHandler } from "@llmingress/db/worker-rate-limit-alerts";
-import { createRetentionCleanupJobHandler } from "@llmingress/db/worker-retention-cleanup";
-import { createStaleReservationCleanupJobHandler } from "@llmingress/db/worker-stale-reservations";
-import { createWebhookEventExportJobHandler } from "@llmingress/db/worker-webhook-export";
+  createCoreMaintenanceTasks,
+  createPostgresMaintenanceScheduler,
+} from "@llmingress/worker-runtime/worker-maintenance-scheduler";
+import { createModelRefreshJobHandler } from "@llmingress/worker-runtime/worker-model-refresh";
+import { createPriceSyncJobHandler } from "@llmingress/worker-runtime/worker-price-sync";
+import { createProviderConnectionProbeJobHandler } from "@llmingress/worker-runtime/worker-provider-connection-probe";
+
+const logger = createLogger("worker");
 
 export async function startWorker() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
+  logBootstrapSecurityWarnings(config.securityWarnings);
   const jobRunner = createPostgresJobRunner({
     handlers: {
       model_refresh: createModelRefreshJobHandler({}),
-      provider_connectivity_check: createProviderConnectivityCheckJobHandler({}),
-      provider_failure_alerts: createProviderFailureAlertsJobHandler({}),
-      billing_reconciliation: createBillingReconciliationJobHandler({}),
-      backup: createBackupJobHandler({}),
-      budget_threshold_alerts: createBudgetThresholdAlertsJobHandler({}),
+      provider_connection_probe: createProviderConnectionProbeJobHandler({}),
       price_sync: createPriceSyncJobHandler({}),
-      cost_report_export: createCostReportExportJobHandler({}),
-      fallback_exhaustion_alerts: createFallbackExhaustionAlertsJobHandler({}),
-      jsonl_export: createJsonlRequestLogExportJobHandler({}),
-      notification_dispatch: createNotificationDispatchJobHandler({}),
-      rate_limit_alerts: createRateLimitAlertsJobHandler({}),
-      webhook_export: createWebhookEventExportJobHandler({}),
-      retention_cleanup: createRetentionCleanupJobHandler({}),
-      stale_reservation_cleanup: createStaleReservationCleanupJobHandler({}),
     },
+    leaseMs: readWorkerJobLeaseMs(),
     pollIntervalMs: config.workerHeartbeatMs,
+    shutdownGraceMs: readWorkerShutdownGraceMs(),
     workerId: readWorkerId(),
   });
-  const periodicScheduler = createPostgresPeriodicScheduler({
-    tasks: createDefaultPeriodicTasks(),
+  const maintenanceScheduler = createPostgresMaintenanceScheduler({
+    tasks: createCoreMaintenanceTasks(),
     tickIntervalMs: config.workerHeartbeatMs,
   });
   await jobRunner.start();
-  await periodicScheduler.start();
+  await maintenanceScheduler.start();
 
-  console.log("[worker] started");
+  logger.info("[worker] started");
 
   return {
     async stop() {
-      await periodicScheduler.stop();
+      await maintenanceScheduler.stop();
       await jobRunner.stop();
-      console.log("[worker] stopped");
+      await closePostgresPools();
+      logger.info("[worker] stopped");
     },
   };
 }
 
+function logBootstrapSecurityWarnings(warnings: string[]): void {
+  for (const warning of warnings) {
+    logger.warn({ securityWarning: true }, warning);
+  }
+}
+
 function readWorkerId(): string {
-  return process.env.WORKER_ID?.trim() || `worker-${process.pid}`;
+  return process.env.WORKER_ID?.trim() || `${hostname()}-${process.pid}-${randomUUID()}`;
+}
+
+function readWorkerJobLeaseMs(): number {
+  return readPositiveIntegerEnv("WORKER_JOB_LEASE_MS", 60_000);
+}
+
+function readWorkerShutdownGraceMs(): number {
+  return readPositiveIntegerEnv("WORKER_SHUTDOWN_GRACE_MS", 25_000);
+}
+
+function readPositiveIntegerEnv(name: string, fallback: number): number {
+  const rawValue = process.env[name];
+  if (rawValue === undefined) {
+    return fallback;
+  }
+  const value = Number(rawValue);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return value;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -76,7 +87,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
           .stop()
           .then(() => process.exit(0))
           .catch((error: unknown) => {
-            console.error(error);
+            logger.error({ err: error }, "worker shutdown failed");
             process.exit(1);
           });
       };
@@ -85,7 +96,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.on("SIGTERM", shutdown);
     })
     .catch((error: unknown) => {
-      console.error(error);
+      logger.error({ err: error }, "worker startup failed");
       process.exit(1);
     });
 }

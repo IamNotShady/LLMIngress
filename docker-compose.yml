@@ -1,30 +1,33 @@
-x-llmingress-app: &llmingress-app
-  image: llmingress:local
-  build:
-    context: .
-    dockerfile: Dockerfile
-  environment: &llmingress-env
-    NODE_ENV: production
-    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
-    MASTER_KEY: ${MASTER_KEY:-test-master-key-change-me}
-    GATEWAY_PORT: 4000
-    CONSOLE_PORT: 3000
-    CONSOLE_HOST: 0.0.0.0
-    WORKER_HEARTBEAT_MS: 30000
-    GATEWAY_PUBLIC_BASE_URL: ${GATEWAY_PUBLIC_BASE_URL:-http://localhost:4000}
-    GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+x-llmingress-env: &llmingress-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
+  MASTER_KEY: ${MASTER_KEY:?MASTER_KEY is required}
+  GATEWAY_PORT: 4000
+  GATEWAY_HOST: 0.0.0.0
+  CONSOLE_PORT: 3000
+  CONSOLE_HOST: 0.0.0.0
+  HOSTNAME: 0.0.0.0
+  PORT: 3000
+  WORKER_HEARTBEAT_MS: 30000
+  GATEWAY_PUBLIC_BASE_URL: ${GATEWAY_PUBLIC_BASE_URL:-http://localhost:4000}
+  GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+
+x-llmingress-build: &llmingress-build
+  context: .
+  dockerfile: Dockerfile
+  target: runtime
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18.4-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: postgres
     ports:
-      - "${POSTGRES_PORT:-55432}:5432"
+      - "${POSTGRES_PUBLISH_HOST:-127.0.0.1}:${POSTGRES_PORT:-55432}:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
@@ -32,47 +35,55 @@ services:
       retries: 20
 
   migrate:
-    <<: *llmingress-app
-    command: pnpm run db:migrate
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: migrate
+    environment: *llmingress-env
     depends_on:
       postgres:
         condition: service_healthy
     restart: "no"
 
   gateway:
-    <<: *llmingress-app
-    command: pnpm --filter @llmingress/gateway exec tsx src/main.ts
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: gateway
+    environment: *llmingress-env
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
     ports:
-      - "4000:4000"
+      - "${GATEWAY_PUBLISH_HOST:-127.0.0.1}:${GATEWAY_PORT:-4000}:4000"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+          "node -e \"fetch('http://127.0.0.1:4000/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
         ]
       interval: 10s
       timeout: 5s
       retries: 12
 
   console:
-    <<: *llmingress-app
-    command: pnpm --filter @llmingress/console start
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: console
+    environment: *llmingress-env
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
     ports:
-      - "3000:3000"
+      - "${CONSOLE_PUBLISH_HOST:-127.0.0.1}:${CONSOLE_PORT:-3000}:3000"
 
   worker:
-    <<: *llmingress-app
-    command: pnpm --filter @llmingress/worker exec tsx src/main.ts
+    image: llmingress-app:local
+    build: *llmingress-build
+    command: worker
+    environment: *llmingress-env
     depends_on:
       postgres:
         condition: service_healthy

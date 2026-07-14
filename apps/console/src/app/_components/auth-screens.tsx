@@ -1,6 +1,8 @@
 // Auth screens shown by the dashboard layout when the console is not yet
 // initialized (setup) or the visitor is not signed in (login). Markup mirrors
 // the original inline forms so existing auth flows/tests keep working.
+
+import { ConsoleMutationForm } from "./console-mutation-form";
 import { FlatIcon } from "./flat-icon";
 
 export function FirstRunSetup() {
@@ -10,7 +12,11 @@ export function FirstRunSetup() {
         <p className="eyebrow">LLMIngress</p>
         <h1 id="setup-title">First run setup</h1>
         <p className="page-description">Create the administrator password to secure the console.</p>
-        <form className="form" action="/api/auth/setup" method="post">
+        <ConsoleMutationForm
+          action="/api/auth/setup"
+          className="form"
+          fallbackError="Failed to create admin."
+        >
           <label htmlFor="setup-password">Admin password</label>
           <input
             id="setup-password"
@@ -24,7 +30,7 @@ export function FirstRunSetup() {
             <FlatIcon name="lock" />
             <span>Create admin</span>
           </button>
-        </form>
+        </ConsoleMutationForm>
       </section>
     </main>
   );
@@ -36,7 +42,11 @@ export function Login() {
       <section className="auth-panel" aria-labelledby="login-title">
         <p className="eyebrow">LLMIngress</p>
         <h1 id="login-title">Sign in</h1>
-        <form className="form" action="/api/auth/login" method="post">
+        <ConsoleMutationForm
+          action="/api/auth/login"
+          className="form"
+          fallbackError="Login failed."
+        >
           <label htmlFor="login-password">Admin password</label>
           <input
             id="login-password"
@@ -49,7 +59,7 @@ export function Login() {
             <FlatIcon name="unlock" />
             <span>Sign in</span>
           </button>
-        </form>
+        </ConsoleMutationForm>
       </section>
     </main>
   );

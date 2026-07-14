@@ -1,6 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 import { createConfigPublisher } from "@llmingress/db/config-versions";
+import {
+  consoleConflictError,
+  consoleNotFoundError,
+  consoleValidationError,
+} from "./console-operation-error.ts";
+import {
+  type ConsoleRoutePolicy,
+  createRoutePolicyWithClient,
+  normalizeRoutePolicyFormInput,
+  type RoutePolicyFormInput,
+} from "./console-route-policies.ts";
 
 export type VirtualModelFormInput = {
   description?: string | null;
@@ -10,6 +21,13 @@ export type VirtualModelFormInput = {
 export type NormalizedVirtualModelFormInput = {
   description: string;
   name: string;
+};
+
+export type VirtualModelRouteFormInput = Omit<RoutePolicyFormInput, "virtualModelId">;
+
+export type CreatedVirtualModelWithRoute = {
+  routePolicy: ConsoleRoutePolicy;
+  virtualModel: ConsoleVirtualModel;
 };
 
 export type ConsoleVirtualModel = NormalizedVirtualModelFormInput & {
@@ -35,7 +53,7 @@ type VirtualModelDependencyCounts = {
   routePolicyCount: number;
 };
 
-type VirtualModelRow = PostgresQueryResultRow & {
+type VirtualModelRow = {
   allowed_agent_count: number;
   cost_24h_usd: string | null;
   default_agent_count: number;
@@ -49,13 +67,13 @@ type VirtualModelRow = PostgresQueryResultRow & {
   route_policy_count: number;
 };
 
-type VirtualModelDependencyRow = PostgresQueryResultRow & {
+type VirtualModelDependencyRow = {
   allowed_agent_count: number;
   default_agent_count: number;
   route_policy_count: number;
 };
 
-type VirtualModelFallbackBreakdownRow = PostgresQueryResultRow & {
+type VirtualModelFallbackBreakdownRow = {
   name: string;
   value: number | string;
 };
@@ -74,15 +92,23 @@ export function normalizeVirtualModelFormInput(
   const name = input.name?.trim().toLowerCase().replaceAll(/\s+/g, "-");
 
   if (!name) {
-    throw new Error("Virtual model name is required.");
+    throw consoleValidationError("Virtual model name is required.", "virtual_model_name_required", {
+      field: "name",
+    });
   }
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
-    throw new Error(
+    throw consoleValidationError(
       "Virtual model name must use lowercase letters, numbers, dashes, or underscores.",
+      "virtual_model_name_invalid",
+      { field: "name" },
     );
   }
   if (!description) {
-    throw new Error("Virtual model description is required.");
+    throw consoleValidationError(
+      "Virtual model description is required.",
+      "virtual_model_description_required",
+      { field: "description" },
+    );
   }
 
   return { description, name };
@@ -91,9 +117,6 @@ export function normalizeVirtualModelFormInput(
 export function getVirtualModelDeleteDependencyError(
   input: VirtualModelDependencyCounts,
 ): string | null {
-  if (input.routePolicyCount > 0) {
-    return "Cannot delete Virtual Model referenced by a route policy.";
-  }
   if (input.defaultAgentCount > 0) {
     return "Cannot delete Virtual Model used as an Agent default.";
   }
@@ -104,7 +127,7 @@ export function getVirtualModelDeleteDependencyError(
 }
 
 export async function listVirtualModels(databaseUrl?: string): Promise<ConsoleVirtualModel[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<VirtualModelRow>(buildVirtualModelListSql());
     return result.rows.map(rowToConsoleVirtualModel);
   });
@@ -114,7 +137,7 @@ export async function listVirtualModelFallbackBreakdown(input: {
   databaseUrl?: string;
   virtualModelId: string;
 }): Promise<ConsoleVirtualModelFallbackBreakdown[]> {
-  return withClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<VirtualModelFallbackBreakdownRow>(
       `
         with vm_requests as (
@@ -161,18 +184,29 @@ export async function listVirtualModelFallbackBreakdown(input: {
   });
 }
 
-export async function createVirtualModel(input: {
+export async function createVirtualModelWithRoute(input: {
   databaseUrl?: string;
+  routePolicy: VirtualModelRouteFormInput;
   virtualModel: NormalizedVirtualModelFormInput;
-}): Promise<ConsoleVirtualModel> {
+}): Promise<CreatedVirtualModelWithRoute> {
   const virtualModelId = randomUUID();
+  const routePolicyId = randomUUID();
+  const normalizedRoutePolicy = normalizeRoutePolicyFormInput({
+    ...input.routePolicy,
+    virtualModelId,
+  });
   let virtualModel: ConsoleVirtualModel | undefined;
+  let routePolicy: ConsoleRoutePolicy | undefined;
 
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
-    description: `Create virtual model ${input.virtualModel.name}`,
-    changes: [{ table: "virtual_models", recordId: virtualModelId }],
+    description: `Create virtual model ${input.virtualModel.name} with route`,
+    changes: [
+      { table: "virtual_models", recordId: virtualModelId },
+      { table: "route_policies", recordId: routePolicyId },
+      { table: "route_policy_candidates" },
+    ],
     write: async (client) => {
       await assertVirtualModelNameAvailable(client, input.virtualModel.name);
       const result = await client.query<VirtualModelRow>(
@@ -194,10 +228,18 @@ export async function createVirtualModel(input: {
         [virtualModelId, input.virtualModel.name, input.virtualModel.description],
       );
       virtualModel = rowToConsoleVirtualModel(requireRow(result.rows[0]));
+      routePolicy = await createRoutePolicyWithClient({
+        client,
+        routePolicy: normalizedRoutePolicy,
+        routePolicyId,
+      });
     },
   });
 
-  return requireSavedVirtualModel(virtualModel);
+  return {
+    routePolicy: requireSavedRoutePolicy(routePolicy),
+    virtualModel: requireSavedVirtualModel(virtualModel),
+  };
 }
 
 export async function updateVirtualModel(input: {
@@ -291,8 +333,21 @@ export async function deleteVirtualModel(input: {
         await readVirtualModelDependencyCounts(client, input.id),
       );
       if (dependencyError) {
-        throw new Error(dependencyError);
+        throw consoleConflictError(dependencyError, "virtual_model_dependency_conflict", {
+          virtualModelId: input.id,
+        });
       }
+
+      await client.query(
+        `
+          update route_policies
+          set deleted_at = now(),
+              updated_at = now()
+          where virtual_model_id = $1
+            and deleted_at is null
+        `,
+        [input.id],
+      );
 
       const result = await client.query<{ id: string }>(
         `
@@ -319,7 +374,9 @@ async function assertVirtualModelExists(client: QueryClient, id: string): Promis
     [id],
   );
   if (!result.rows[0]) {
-    throw new Error("Virtual Model was not found.");
+    throw consoleNotFoundError("Virtual Model was not found.", "virtual_model_not_found", {
+      virtualModelId: id,
+    });
   }
 }
 
@@ -340,7 +397,13 @@ async function assertVirtualModelNameAvailable(
     [name, excludingId ?? null],
   );
   if (result.rows[0]) {
-    throw new Error("Virtual Model name already exists.");
+    throw consoleConflictError(
+      "Virtual Model name already exists.",
+      "virtual_model_name_conflict",
+      {
+        name,
+      },
+    );
   }
 }
 
@@ -454,7 +517,7 @@ function rowToConsoleVirtualModel(row: VirtualModelRow): ConsoleVirtualModel {
 
 function requireRow<T>(row: T | undefined): T {
   if (!row) {
-    throw new Error("Virtual Model was not found.");
+    throw consoleNotFoundError("Virtual Model was not found.", "virtual_model_not_found");
   }
   return row;
 }
@@ -468,16 +531,9 @@ function requireSavedVirtualModel(
   return virtualModel;
 }
 
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
+function requireSavedRoutePolicy(routePolicy: ConsoleRoutePolicy | undefined): ConsoleRoutePolicy {
+  if (!routePolicy) {
+    throw new Error("Virtual Model route policy was not saved.");
   }
+  return routePolicy;
 }

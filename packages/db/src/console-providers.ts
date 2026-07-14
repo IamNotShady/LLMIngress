@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { createConfigPublisher } from "@llmingress/db/config-versions";
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/providers";
+import { withPooledPostgresClient } from "@llmingress/db/client";
+import { type ConfigPublishClient, createConfigPublisher } from "@llmingress/db/config-versions";
+import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
+import {
+  consoleConflictError,
+  consoleNotFoundError,
+  consoleValidationError,
+} from "./console-operation-error.ts";
+import { normalizeProviderBaseUrl } from "./console-provider-base-url.ts";
 import {
   isKnownProviderTemplateKey,
   type ProviderTemplateCreateInput,
@@ -25,61 +32,105 @@ export type NormalizedProviderFormInput = {
 export type ConsoleProvider = NormalizedProviderFormInput & {
   enabled: boolean;
   id: string;
+  providerModelCount: number;
   providerTemplateId: string | null;
 };
 
-type ProviderRow = PostgresQueryResultRow & {
+export type ProviderDependencyImpact = {
+  agents: Array<{ id: string; name: string }>;
+  apiKeyCount: number;
+  oauthConnectionCount: number;
+  pendingJobCount: number;
+  providerId: string;
+  providerModels: Array<{ displayName: string; id: string; modelId: string }>;
+  routePolicies: Array<{ id: string; virtualModelId: string; virtualModelName: string }>;
+  runningJobCount: number;
+  virtualModels: Array<{ id: string; name: string }>;
+};
+
+type ProviderRow = {
   base_url: string | null;
   display_name: string;
   enabled: boolean;
   id: string;
   provider_key: string;
+  provider_model_count?: number;
   provider_template_id: string | null;
   provider_type: ProviderType;
 };
 
-const fixedApiKeyProviderBaseUrls = new Map([
-  ["anthropic", "https://api.anthropic.com/v1"],
-  ["openai", "https://api.openai.com/v1"],
-  ["openrouter", "https://openrouter.ai/api/v1"],
-]);
+type ProviderDependencyImpactRow = {
+  agent_id: string | null;
+  agent_name: string | null;
+  provider_model_display_name: string;
+  provider_model_id: string;
+  provider_model_model_id: string;
+  route_policy_id: string;
+  virtual_model_id: string;
+  virtual_model_name: string;
+};
+
+type ProviderDependencyCountsRow = {
+  api_key_count: number;
+  oauth_connection_count: number;
+  pending_job_count: number;
+  running_job_count: number;
+};
 
 export function normalizeProviderFormInput(input: ProviderFormInput): NormalizedProviderFormInput {
   const providerKey = input.providerKey?.trim().toLowerCase();
   const displayName = input.displayName?.trim();
   const providerType = input.providerType?.trim();
-  const baseUrl = input.baseUrl?.trim() || null;
 
   if (!providerKey) {
-    throw new Error("Provider key is required.");
+    throw consoleValidationError("Provider key is required.", "provider_key_required", {
+      field: "providerKey",
+    });
   }
 
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(providerKey)) {
-    throw new Error("Provider key must use lowercase letters, numbers, dashes, or underscores.");
-  }
-
-  if (!displayName) {
-    throw new Error("Provider display name is required.");
-  }
-
-  if (isKnownProviderTemplateKey(providerKey)) {
-    throw new Error(`${displayName} providers must be created from their provider template.`);
-  }
-
-  if (!isProviderType(providerType)) {
-    throw new Error("Provider type must be api_key, local, or subscription.");
-  }
-
-  if (providerType === "local" || providerType === "subscription") {
-    throw new Error(
-      "Local providers and subscription providers must be created from a provider template.",
+    throw consoleValidationError(
+      "Provider key must use lowercase letters, numbers, dashes, or underscores.",
+      "provider_key_invalid",
+      { field: "providerKey" },
     );
   }
 
-  if (baseUrl) {
-    assertUrl(baseUrl);
-    assertProviderBaseUrlAllowed(providerKey, providerType, baseUrl);
+  if (!displayName) {
+    throw consoleValidationError(
+      "Provider display name is required.",
+      "provider_display_name_required",
+      {
+        field: "displayName",
+      },
+    );
   }
+
+  if (isKnownProviderTemplateKey(providerKey)) {
+    throw consoleValidationError(
+      `${displayName} providers must be created from their provider template.`,
+      "provider_template_required",
+      { providerKey },
+    );
+  }
+
+  if (!isProviderType(providerType)) {
+    throw consoleValidationError(
+      "Provider type must be api_key, local, or subscription.",
+      "provider_type_invalid",
+      { field: "providerType" },
+    );
+  }
+
+  if (providerType === "local" || providerType === "subscription") {
+    throw consoleValidationError(
+      "Local providers and subscription providers must be created from a provider template.",
+      "provider_template_required",
+      { providerType },
+    );
+  }
+
+  const baseUrl = normalizeProviderBaseUrl({ providerType, value: input.baseUrl });
 
   return {
     baseUrl,
@@ -90,7 +141,7 @@ export function normalizeProviderFormInput(input: ProviderFormInput): Normalized
 }
 
 export async function listProviders(databaseUrl?: string): Promise<ConsoleProvider[]> {
-  return withClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderRow>(
       `
         select id::text,
@@ -99,7 +150,13 @@ export async function listProviders(databaseUrl?: string): Promise<ConsoleProvid
                provider_template_id,
                display_name,
                base_url,
-               enabled
+               enabled,
+               (
+                 select count(*)::integer
+                 from provider_models
+                 where provider_models.provider_id = providers.id
+                   and provider_models.deleted_at is null
+               ) as provider_model_count
         from providers
         where deleted_at is null
         order by provider_key
@@ -107,6 +164,15 @@ export async function listProviders(databaseUrl?: string): Promise<ConsoleProvid
     );
     return result.rows.map(rowToConsoleProvider);
   });
+}
+
+export async function getProviderDependencyImpact(input: {
+  databaseUrl?: string;
+  providerId: string;
+}): Promise<ProviderDependencyImpact> {
+  return withPooledPostgresClient(input.databaseUrl, async (client) =>
+    readProviderDependencyImpact(client, input.providerId),
+  );
 }
 
 export async function createProvider(input: {
@@ -122,6 +188,7 @@ export async function createProvider(input: {
     description: `Create provider ${input.provider.providerKey}`,
     changes: [{ table: "providers", recordId: providerId }],
     write: async (client) => {
+      await assertProviderKeyAvailable(client, input.provider.providerKey);
       const result = await client.query<ProviderRow>(
         `
           insert into providers (
@@ -169,6 +236,7 @@ export async function createProviderFromTemplate(input: {
     description: `Create provider template ${input.template.id}`,
     changes: [{ table: "providers", recordId: providerId }],
     write: async (client) => {
+      await assertProviderKeyAvailable(client, input.template.providerKey);
       const result = await client.query<ProviderRow>(
         `
           insert into providers (
@@ -210,17 +278,20 @@ export async function updateProvider(input: {
   databaseUrl?: string;
   displayName: string;
   id: string;
-}): Promise<ConsoleProvider> {
+}): Promise<{ baseUrlChanged: boolean; provider: ConsoleProvider }> {
   const displayName = input.displayName.trim();
-  const baseUrl = input.baseUrl?.trim() || null;
   if (!displayName) {
-    throw new Error("Provider display name is required.");
-  }
-  if (baseUrl) {
-    assertUrl(baseUrl);
+    throw consoleValidationError(
+      "Provider display name is required.",
+      "provider_display_name_required",
+      {
+        field: "displayName",
+      },
+    );
   }
 
   let provider: ConsoleProvider | undefined;
+  let baseUrlChanged = false;
   const publisher = createConfigPublisher({ databaseUrl: input.databaseUrl });
   await publisher.publish({
     source: "console",
@@ -247,7 +318,14 @@ export async function updateProvider(input: {
           )
         ).rows[0],
       );
-      const nextBaseUrl = resolveUpdatedBaseUrl(existing, baseUrl);
+      const nextBaseUrl = normalizeProviderBaseUrl({
+        providerType: existing.provider_type,
+        value: input.baseUrl,
+      });
+      baseUrlChanged = nextBaseUrl !== existing.base_url;
+      if (baseUrlChanged) {
+        await clearProviderHealthForCurrentConnections(client, input.id, existing.provider_type);
+      }
       const result = await client.query<ProviderRow>(
         `
           update providers
@@ -270,7 +348,7 @@ export async function updateProvider(input: {
     },
   });
 
-  return requireSavedProvider(provider);
+  return { baseUrlChanged, provider: requireSavedProvider(provider) };
 }
 
 export async function setProviderEnabled(input: {
@@ -285,6 +363,19 @@ export async function setProviderEnabled(input: {
     description: `${input.enabled ? "Enable" : "Disable"} provider ${input.id}`,
     changes: [{ table: "providers", recordId: input.id }],
     write: async (client) => {
+      await lockProvidersById(client, [input.id]);
+      if (!input.enabled) {
+        await assertProviderHasNoActiveRoutePolicyDependencies(client, input.id);
+      }
+      const current = await client.query<{ provider_type: ProviderType }>(
+        "select provider_type from providers where id = $1 and deleted_at is null",
+        [input.id],
+      );
+      const providerType = current.rows[0]?.provider_type;
+      if (!providerType) {
+        throw consoleNotFoundError("Provider was not found.", "provider_not_found");
+      }
+      await clearProviderHealthForCurrentConnections(client, input.id, providerType);
       const result = await client.query<ProviderRow>(
         `
           update providers
@@ -316,6 +407,9 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
     description: `Delete provider ${input.id}`,
     changes: [{ table: "providers", recordId: input.id }],
     write: async (client) => {
+      await lockProvidersById(client, [input.id]);
+      await assertProviderHasNoActiveRoutePolicyDependencies(client, input.id);
+      await assertProviderHasNoRunningJobs(client, input.id);
       const result = await client.query<{ id: string }>(
         `
           update providers
@@ -329,9 +423,75 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
         [input.id],
       );
       if (!result.rows[0]) {
-        throw new Error("Provider was not found.");
+        throw consoleNotFoundError("Provider was not found.", "provider_not_found", {
+          providerId: input.id,
+        });
       }
-      await client.query("delete from provider_api_keys where provider_id = $1", [input.id]);
+      await client.query(
+        `
+          update jobs
+          set status = 'canceled',
+              updated_at = now(),
+              completed_at = now(),
+              error_code = 'provider_deleted',
+              error_message = 'Provider was deleted before the job started.'
+          where status = 'pending'
+            and job_type in ('provider_connection_probe', 'model_refresh')
+            and payload->>'providerId' = $1
+        `,
+        [input.id],
+      );
+      await client.query(
+        `
+          update request_activity
+          set provider_api_key_id = null
+          where provider_api_key_id in (
+            select id
+            from provider_api_keys
+            where provider_id = $1
+          )
+        `,
+        [input.id],
+      );
+      await client.query(
+        `
+          update fallback_events
+          set provider_api_key_id = null
+          where provider_api_key_id in (
+            select id
+            from provider_api_keys
+            where provider_id = $1
+          )
+        `,
+        [input.id],
+      );
+      await client.query(
+        `
+          update provider_api_keys
+          set deleted_at = now(), enabled = false, updated_at = now()
+          where provider_id = $1 and deleted_at is null
+        `,
+        [input.id],
+      );
+      await client.query(
+        `
+          update provider_oauth
+          set encrypted_token = null,
+              token_expires_at = null,
+              pending_state = null,
+              pending_code_verifier = null,
+              pending_code_challenge = null,
+              pending_expires_at = null,
+              completed_at = null,
+              deleted_at = now(),
+              enabled = false,
+              updated_at = now()
+          where provider_id = $1 and deleted_at is null
+        `,
+        [input.id],
+      );
+      await client.query("delete from provider_health_summary where provider_id = $1", [input.id]);
+      await client.query("delete from provider_health_events where provider_id = $1", [input.id]);
       await client.query(
         `
           update provider_models
@@ -346,6 +506,55 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
   });
 }
 
+async function clearProviderHealthForCurrentConnections(
+  client: ConfigPublishClient,
+  providerId: string,
+  providerType: ProviderType,
+): Promise<void> {
+  if (providerType === "local") {
+    await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: providerId,
+      providerId,
+    });
+    return;
+  }
+  const table = providerType === "api_key" ? "provider_api_keys" : "provider_oauth";
+  const result = await client.query<{ id: string }>(
+    `select id::text from ${table} where provider_id = $1 and deleted_at is null`,
+    [providerId],
+  );
+  for (const connection of result.rows) {
+    await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: connection.id,
+      providerId,
+    });
+  }
+}
+
+export async function lockProvidersForProviderModels(
+  client: ConfigPublishClient,
+  providerModelIds: readonly string[],
+): Promise<void> {
+  if (providerModelIds.length === 0) {
+    return;
+  }
+  await client.query(
+    `
+      select providers.id::text
+      from providers
+      where providers.id in (
+        select distinct provider_models.provider_id
+        from provider_models
+        where provider_models.id = any($1::uuid[])
+      )
+        and providers.deleted_at is null
+      order by providers.id
+      for update of providers
+    `,
+    [providerModelIds],
+  );
+}
+
 function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
   return {
     baseUrl: row.base_url,
@@ -353,59 +562,15 @@ function rowToConsoleProvider(row: ProviderRow): ConsoleProvider {
     enabled: row.enabled,
     id: row.id,
     providerKey: row.provider_key,
+    providerModelCount: row.provider_model_count ?? 0,
     providerTemplateId: row.provider_template_id,
     providerType: row.provider_type,
   };
 }
 
-function resolveUpdatedBaseUrl(
-  existing: ProviderRow,
-  requestedBaseUrl: string | null,
-): string | null {
-  if (existing.provider_template_id) {
-    if (requestedBaseUrl && requestedBaseUrl !== existing.base_url) {
-      throw new Error("Template provider base URL cannot be changed.");
-    }
-
-    return existing.base_url;
-  }
-
-  if (requestedBaseUrl) {
-    assertProviderBaseUrlAllowed(existing.provider_key, existing.provider_type, requestedBaseUrl);
-  }
-
-  return requestedBaseUrl;
-}
-
-function assertProviderBaseUrlAllowed(
-  providerKey: string,
-  providerType: ProviderType,
-  baseUrl: string,
-): void {
-  if (providerType === "local") {
-    return;
-  }
-
-  const fixedBaseUrl = fixedApiKeyProviderBaseUrls.get(providerKey);
-  if (fixedBaseUrl && normalizeUrlForComparison(baseUrl) === fixedBaseUrl) {
-    return;
-  }
-
-  throw new Error("Custom OpenAI-compatible endpoints are not allowed.");
-}
-
-function normalizeUrlForComparison(value: string): string {
-  const url = new URL(value);
-  const pathname =
-    url.pathname.length > 1 && url.pathname.endsWith("/")
-      ? url.pathname.slice(0, -1)
-      : url.pathname;
-  return `${url.origin}${pathname}`;
-}
-
 function requireRow(row: ProviderRow | undefined): ProviderRow {
   if (!row) {
-    throw new Error("Provider was not found.");
+    throw consoleNotFoundError("Provider was not found.", "provider_not_found");
   }
   return row;
 }
@@ -421,24 +586,198 @@ function isProviderType(value: string | undefined): value is ProviderType {
   return value === "api_key" || value === "local" || value === "subscription";
 }
 
-function assertUrl(value: string): void {
-  try {
-    new URL(value);
-  } catch {
-    throw new Error("Provider base URL must be a valid URL.");
+async function assertProviderKeyAvailable(
+  client: ConfigPublishClient,
+  providerKey: string,
+): Promise<void> {
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `provider-key:${providerKey}`,
+  ]);
+  const existing = await client.query<{ id: string }>(
+    `
+      select id::text
+      from providers
+      where provider_key = $1
+        and deleted_at is null
+      limit 1
+    `,
+    [providerKey],
+  );
+  if (existing.rows[0]) {
+    throw consoleConflictError("Provider type already exists.", "provider_key_conflict", {
+      providerKey,
+    });
   }
 }
 
-async function withClient<T>(
-  databaseUrl: string | undefined,
-  operation: (client: PostgresClient) => Promise<T>,
-): Promise<T> {
-  const client = new PostgresClient({ connectionString: databaseUrl });
-  await client.connect();
-
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
+async function lockProvidersById(
+  client: ConfigPublishClient,
+  providerIds: readonly string[],
+): Promise<void> {
+  const ids = [...new Set(providerIds)].sort();
+  if (ids.length === 0) {
+    return;
   }
+  await client.query(
+    `
+      select id::text
+      from providers
+      where id = any($1::uuid[])
+        and deleted_at is null
+      order by id
+      for update
+    `,
+    [ids],
+  );
+}
+
+async function assertProviderHasNoActiveRoutePolicyDependencies(
+  client: ConfigPublishClient,
+  providerId: string,
+): Promise<void> {
+  const impact = await readProviderDependencyImpact(client, providerId);
+  if (impact.routePolicies.length > 0) {
+    throw consoleConflictError(
+      "Provider is still used by active route policies.",
+      "provider_dependency_conflict",
+      { impact },
+    );
+  }
+}
+
+async function assertProviderHasNoRunningJobs(
+  client: ConfigPublishClient,
+  providerId: string,
+): Promise<void> {
+  const impact = await readProviderDependencyImpact(client, providerId);
+  if (impact.runningJobCount > 0) {
+    throw consoleConflictError("Provider has running jobs.", "provider_job_running", { impact });
+  }
+}
+
+async function readProviderDependencyImpact(
+  client: ConfigPublishClient,
+  providerId: string,
+): Promise<ProviderDependencyImpact> {
+  const dependencyRows = (
+    await client.query<ProviderDependencyImpactRow>(
+      `
+        select provider_models.id::text as provider_model_id,
+               provider_models.model_id as provider_model_model_id,
+               provider_models.display_name as provider_model_display_name,
+               route_policies.id::text as route_policy_id,
+               virtual_models.id::text as virtual_model_id,
+               coalesce(nullif(virtual_models.description, ''), virtual_models.name) as virtual_model_name,
+               agents.id::text as agent_id,
+               agents.name as agent_name
+        from provider_models
+        join route_policy_candidates
+          on route_policy_candidates.provider_model_id = provider_models.id
+        join route_policies
+          on route_policies.id = route_policy_candidates.route_policy_id
+         and route_policies.deleted_at is null
+        join virtual_models
+          on virtual_models.id = route_policies.virtual_model_id
+         and virtual_models.deleted_at is null
+        left join agents
+          on agents.deleted_at is null
+         and agents.enabled = true
+         and (
+              agents.default_virtual_model_id = virtual_models.id
+              or exists (
+                select 1
+                from agent_virtual_models
+                where agent_virtual_models.agent_id = agents.id
+                  and agent_virtual_models.virtual_model_id = virtual_models.id
+              )
+         )
+        where provider_models.provider_id = $1
+          and provider_models.deleted_at is null
+        order by provider_models.display_name,
+                 route_policies.id,
+                 agents.name nulls last,
+                 agents.id nulls last
+      `,
+      [providerId],
+    )
+  ).rows;
+
+  const countRows = (
+    await client.query<ProviderDependencyCountsRow>(
+      `
+        select
+          (select count(*)::integer from provider_api_keys where provider_id = $1::uuid) as api_key_count,
+          (select count(*)::integer from provider_oauth where provider_id = $1::uuid) as oauth_connection_count,
+          (
+            select count(*)::integer
+            from jobs
+            where status = 'pending'
+              and job_type in ('provider_connection_probe', 'model_refresh')
+              and payload->>'providerId' = $1::text
+          ) as pending_job_count,
+          (
+            select count(*)::integer
+            from jobs
+            where status = 'running'
+              and job_type in ('provider_connection_probe', 'model_refresh')
+              and payload->>'providerId' = $1::text
+          ) as running_job_count
+      `,
+      [providerId],
+    )
+  ).rows[0] ?? {
+    api_key_count: 0,
+    oauth_connection_count: 0,
+    pending_job_count: 0,
+    running_job_count: 0,
+  };
+
+  return {
+    agents: uniqueBy(
+      dependencyRows
+        .filter((row) => row.agent_id && row.agent_name)
+        .map((row) => ({ id: row.agent_id ?? "", name: row.agent_name ?? "" })),
+      (row) => row.id,
+    ),
+    apiKeyCount: countRows.api_key_count,
+    oauthConnectionCount: countRows.oauth_connection_count,
+    pendingJobCount: countRows.pending_job_count,
+    providerId,
+    providerModels: uniqueBy(
+      dependencyRows.map((row) => ({
+        displayName: row.provider_model_display_name,
+        id: row.provider_model_id,
+        modelId: row.provider_model_model_id,
+      })),
+      (row) => row.id,
+    ),
+    routePolicies: uniqueBy(
+      dependencyRows.map((row) => ({
+        id: row.route_policy_id,
+        virtualModelId: row.virtual_model_id,
+        virtualModelName: row.virtual_model_name,
+      })),
+      (row) => row.id,
+    ),
+    runningJobCount: countRows.running_job_count,
+    virtualModels: uniqueBy(
+      dependencyRows.map((row) => ({
+        id: row.virtual_model_id,
+        name: row.virtual_model_name,
+      })),
+      (row) => row.id,
+    ),
+  };
+}
+
+function uniqueBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const value = key(item);
+    if (seen.has(value)) {
+      return false;
+    }
+    seen.add(value);
+    return true;
+  });
 }

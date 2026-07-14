@@ -1,11 +1,13 @@
 import { deleteConsoleSession, sessionCookieName } from "@llmingress/db/console-auth";
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { withConsoleErrorBoundary } from "../../_auth";
+import { redirectToConsolePath } from "../../_redirect";
 
-export async function POST(request: NextRequest) {
+export const POST = withConsoleErrorBoundary(async (request: NextRequest) => {
   const sessionToken = request.cookies.get(sessionCookieName)?.value;
   await deleteConsoleSession(sessionToken);
 
-  const response = NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  const response = redirectToConsolePath("/");
   response.cookies.delete(sessionCookieName);
   return response;
-}
+}, "Logout failed.");

@@ -1,77 +1,80 @@
+import { normalizeAgentLimitRulesInput } from "@llmingress/db/console-agent-limits";
 import {
-  deleteAgentLimitRules,
-  normalizeAgentLimitFormInput,
-  saveAgentLimitRules,
-} from "@llmingress/db/console-agent-limits";
-import {
-  createAgent,
+  createAgentWithSettings,
   deleteAgent,
   normalizeAgentFormInput,
   normalizeAgentVirtualModelAccessFormInput,
+  normalizeAgentVirtualModelSelectionInput,
+  setAgentEnabled,
   updateAgent,
   updateAgentVirtualModelAccess,
+  updateAgentWithSettings,
 } from "@llmingress/db/console-agents";
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText, readTextValues } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
+import { renderOneTimeAgentResponse } from "./_created-page";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const action = readText(form, "action");
 
   try {
     if (action === "create") {
-      const result = await createAgent({
-        agent: normalizeAgentFormInput({
-          agentType: readText(form, "agentType"),
-          integrationPlatform: readText(form, "integrationPlatform"),
-          name: readText(form, "name"),
-          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
+      const limitsEnabled = readText(form, "enableLimits") === "true";
+      const agent = normalizeAgentFormInput({
+        integrationPlatform: readText(form, "integrationPlatform"),
+        name: readText(form, "name"),
+      });
+      const result = await createAgentWithSettings({
+        agent,
+        limitRules: limitsEnabled ? readAgentLimitRules(form) : [],
+        limitsEnabled,
+        virtualModels: normalizeAgentVirtualModelSelectionInput({
+          allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
+          defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
         }),
       });
-      await saveAgentRelatedSettings({
-        clearLimitsWhenDisabled: false,
-        form,
-        id: result.id,
-        saveLimits: readText(form, "enableLimits") === "true",
-      });
-      return renderOneTimeAgentResponse(result);
+      return renderOneTimeAgentResponse(
+        {
+          ...result,
+          integrationPlatform: agent.integrationPlatform,
+          virtualModelName: readAgentConnectionVirtualModelName(result.virtualModelAccess),
+        },
+        request.headers.get("accept")?.includes("application/json") ? "json" : "html",
+      );
     } else if (action === "update") {
       await updateAgent({
         agent: normalizeAgentFormInput({
-          agentType: readText(form, "agentType"),
           integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
-          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         id: readRequiredText(form, "id"),
       });
     } else if (action === "saveAll") {
       const id = readRequiredText(form, "id");
-      await updateAgent({
+      const limitsEnabled = readText(form, "enableLimits") === "true";
+      await updateAgentWithSettings({
         agent: normalizeAgentFormInput({
-          agentType: readText(form, "agentType"),
           integrationPlatform: readText(form, "integrationPlatform"),
           name: readText(form, "name"),
-          requestLoggingEnabled: readText(form, "requestLoggingEnabled"),
         }),
         id,
+        limitRules: limitsEnabled ? readAgentLimitRules(form) : [],
+        limitsEnabled,
+        virtualModels: normalizeAgentVirtualModelSelectionInput({
+          allowedVirtualModelIds: readTextValues(form, "allowedVirtualModelIds"),
+          defaultVirtualModelId: readText(form, "defaultVirtualModelId") ?? null,
+        }),
       });
-      await saveAgentRelatedSettings({
-        clearLimitsWhenDisabled: true,
-        form,
-        id,
-        saveLimits: readText(form, "enableLimits") === "true",
+      return redirectToConsolePath(`/agents?selected=${encodeURIComponent(id)}`);
+    } else if (action === "enable" || action === "disable") {
+      await setAgentEnabled({
+        enabled: action === "enable",
+        id: readRequiredText(form, "id"),
       });
-      return NextResponse.redirect(
-        new URL(`/agents?selected=${encodeURIComponent(id)}`, request.url),
-        { status: 303 },
-      );
     } else if (action === "delete") {
       await deleteAgent({
         id: readRequiredText(form, "id"),
@@ -85,158 +88,32 @@ export async function POST(request: NextRequest) {
         }),
       });
     } else {
-      return NextResponse.json({ error: "Unknown agent action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown agent action.", code: "agent_action_unknown" },
+        { status: 400 },
+      );
     }
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Agent action failed." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Agent action failed.");
   }
 
-  return NextResponse.redirect(new URL("/agents", request.url), { status: 303 });
-}
+  return redirectToConsolePath("/agents");
+});
 
-async function saveAgentRelatedSettings(input: {
-  clearLimitsWhenDisabled: boolean;
-  form: FormData;
-  id: string;
-  saveLimits: boolean;
-}): Promise<void> {
-  await updateAgentVirtualModelAccess({
-    access: normalizeAgentVirtualModelAccessFormInput({
-      allowedVirtualModelIds: readTextValues(input.form, "allowedVirtualModelIds"),
-      defaultVirtualModelId: readText(input.form, "defaultVirtualModelId") ?? null,
-      id: input.id,
-    }),
-  });
-  if (!input.saveLimits) {
-    if (input.clearLimitsWhenDisabled) {
-      await deleteAgentLimitRules({
-        agentId: input.id,
-      });
-    }
-    return;
-  }
-  await saveAgentLimitRules({
-    limits: normalizeAgentLimitFormInput({
-      agentId: input.id,
-      alertThresholdPercent: readText(input.form, "alertThresholdPercent") ?? null,
-      budgetPeriod: readRequiredText(input.form, "budgetPeriod"),
-      budgetUsd: readRequiredText(input.form, "budgetUsd"),
-      concurrency: readText(input.form, "concurrency") ?? null,
-      rpm: readRequiredText(input.form, "rpm"),
-      tokenLimit: readRequiredText(input.form, "tokenLimit"),
-      tpm: readRequiredText(input.form, "tpm"),
-    }),
+function readAgentLimitRules(form: FormData) {
+  return normalizeAgentLimitRulesInput({
+    budgetPeriod: readRequiredText(form, "budgetPeriod"),
+    budgetUsd: readRequiredText(form, "budgetUsd"),
+    concurrency: readText(form, "concurrency") ?? null,
+    rpm: readRequiredText(form, "rpm"),
+    tokenLimit: readRequiredText(form, "tokenLimit"),
+    tpm: readRequiredText(form, "tpm"),
   });
 }
 
-function renderOneTimeAgentResponse(input: {
-  keyPrefix: string | null;
-  plaintext: string;
-}): NextResponse {
-  const connectionDetails = buildAgentConnectionDetails({
-    apiKey: input.plaintext,
-    gatewayBaseUrl: process.env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000",
-    model: "<Virtual Model Name>",
-  });
-
-  return new NextResponse(
-    `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Agent created</title>
-    <style>
-      :root { color: #101828; background: #f6f7f9; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px; }
-      main { width: min(560px, 100%); border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; padding: 28px; }
-      h1 { margin: 0 0 16px; font-size: 28px; line-height: 1.2; }
-      h2 { margin: 0 0 12px; font-size: 18px; line-height: 1.3; }
-      section { margin: 0 0 24px; }
-      dl { display: grid; gap: 10px; margin: 0 0 24px; }
-      dt { color: #667085; font-size: 13px; font-weight: 700; }
-      dd { margin: 0; color: #101828; font-size: 16px; overflow-wrap: anywhere; }
-      code { border: 1px solid #d0d5dd; border-radius: 6px; background: #f9fafb; display: block; padding: 12px; }
-      a { display: inline-flex; min-height: 44px; align-items: center; border-radius: 6px; background: #175cd3; color: #fff; font-weight: 700; padding: 10px 14px; text-decoration: none; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Agent created</h1>
-      <section aria-label="Connection details">
-        <h2>Connection details</h2>
-        <dl>
-          <div>
-            <dt>Agent API key</dt>
-            <dd><code>${escapeHtml(connectionDetails.apiKey)}</code></dd>
-          </div>
-          <div>
-            <dt>Agent API key prefix</dt>
-            <dd>${escapeHtml(input.keyPrefix ?? connectionDetails.apiKey.slice(0, 12))}</dd>
-          </div>
-          <div>
-            <dt>Gateway URL</dt>
-            <dd>${escapeHtml(connectionDetails.gatewayBaseUrl)}</dd>
-          </div>
-          <div>
-            <dt>Virtual Model Name</dt>
-            <dd>${escapeHtml(connectionDetails.model)}</dd>
-          </div>
-        </dl>
-      </section>
-      <a href="/agents">Back to dashboard</a>
-    </main>
-  </body>
-</html>`,
-    {
-      headers: {
-        "cache-control": "no-store",
-        "content-type": "text/html; charset=utf-8",
-      },
-      status: 200,
-    },
-  );
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-type AgentConnectionDetails = {
-  apiKey: string;
-  gatewayBaseUrl: string;
-  model: string;
-};
-
-function buildAgentConnectionDetails(input: {
-  apiKey: string;
-  gatewayBaseUrl: string;
-  model: string;
-}): AgentConnectionDetails {
-  return {
-    apiKey: normalizeSnippetField(input.apiKey, "API key"),
-    gatewayBaseUrl: normalizeGatewayBaseUrl(input.gatewayBaseUrl),
-    model: normalizeSnippetField(input.model || "<Virtual Model Name>", "model"),
-  };
-}
-
-function normalizeGatewayBaseUrl(value: string): string {
-  return normalizeSnippetField(value, "Gateway URL").replace(/\/+$/, "");
-}
-
-function normalizeSnippetField(value: string, label: string): string {
-  const normalized = value.trim();
-  if (!normalized) {
-    throw new Error(`${label} is required for Agent connection details.`);
-  }
-  return normalized;
+function readAgentConnectionVirtualModelName(access: {
+  allowedVirtualModels: Array<{ name: string }>;
+  defaultVirtualModel: { name: string } | null;
+}): string | null {
+  return access.defaultVirtualModel?.name ?? access.allowedVirtualModels[0]?.name ?? null;
 }

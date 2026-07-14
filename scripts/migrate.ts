@@ -1,26 +1,21 @@
+import { parseArgs } from "node:util";
 import { runMigrations } from "@llmingress/db";
+import { readPostgresDatabaseUrl } from "@llmingress/db/client";
 
 type CliOptions = {
   databaseUrl: string;
 };
 
 function readCliOptions(args: string[], env: NodeJS.ProcessEnv): CliOptions {
-  const databaseUrl = readFlagValue(args, "--database-url") ?? env.DATABASE_URL;
-
-  if (!databaseUrl?.trim()) {
-    throw new Error("DATABASE_URL or --database-url is required.");
-  }
+  const { values } = parseArgs({
+    allowPositionals: false,
+    args,
+    options: { "database-url": { type: "string" } },
+    strict: true,
+  });
+  const databaseUrl = values["database-url"] ?? readPostgresDatabaseUrl({ env });
 
   return { databaseUrl };
-}
-
-function readFlagValue(args: string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  if (index === -1) {
-    return undefined;
-  }
-
-  return args[index + 1];
 }
 
 function pluralize(count: number, singular: string): string {

@@ -2,8 +2,9 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { loadBootstrapRuntimeConfig } from "@llmingress/config";
+import { loadBootstrapRuntimeConfig, readConsoleListenHost } from "@llmingress/config";
 import { assertPostgresDatabaseConfigured } from "@llmingress/db/client";
+import { createLogger } from "@llmingress/logging";
 
 type ConsoleMode = "dev" | "start";
 type ConsoleChildProcess = Pick<ChildProcess, "kill" | "on">;
@@ -20,6 +21,8 @@ type ConsoleCommand = {
   env: NodeJS.ProcessEnv;
 };
 
+const logger = createLogger("console");
+
 const shutdownSignals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 const consolePackageRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultConsoleRuntime: ConsoleRuntime = {
@@ -32,7 +35,8 @@ const defaultConsoleRuntime: ConsoleRuntime = {
 export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
-  const consoleHost = process.env.CONSOLE_HOST?.trim() || "127.0.0.1";
+  logBootstrapSecurityWarnings(config.securityWarnings);
+  const consoleHost = readConsoleListenHost();
   const masterKeyEnv =
     config.masterKeySource.kind === "inline"
       ? { MASTER_KEY: config.masterKeySource.value }
@@ -46,6 +50,12 @@ export function buildConsoleCommand(mode: ConsoleMode): ConsoleCommand {
       ...masterKeyEnv,
     },
   };
+}
+
+function logBootstrapSecurityWarnings(warnings: string[]): void {
+  for (const warning of warnings) {
+    logger.warn({ securityWarning: true }, warning);
+  }
 }
 
 export function startConsole(mode: ConsoleMode): void {
@@ -135,7 +145,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     startConsole(readMode(process.argv[2]));
   } catch (error) {
-    console.error(error);
+    logger.error({ err: error }, "console startup failed");
     process.exit(1);
   }
 }

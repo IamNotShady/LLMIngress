@@ -1,19 +1,16 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import {
   deleteProviderApiKey,
   readConsoleMasterKeySource,
   saveProviderApiKey,
+  setProviderApiKeyEnabled,
 } from "@llmingress/db/console-provider-keys";
-import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
+import { enqueueProviderConnectionProbeJob } from "@llmingress/db/provider-jobs";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { consoleActionErrorResponse } from "../_errors";
 import { readNumber, readRequiredText, readText } from "../_form";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
     const action = readText(form, "action") ?? "save";
@@ -27,6 +24,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (action === "enable" || action === "disable") {
+      const result = await setProviderApiKeyEnabled({
+        enabled: action === "enable",
+        providerApiKeyId: readRequiredText(form, "providerApiKeyId"),
+      });
+      if (result.enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: result.id,
+          providerId: result.providerId,
+          resetHealth: true,
+          source: "api_key_saved",
+        });
+      }
+      return NextResponse.redirect(
+        new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
+        303,
+      );
+    }
+
     const providerId = readRequiredText(form, "providerId");
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
@@ -34,12 +50,26 @@ export async function POST(request: NextRequest) {
       masterKeySource: readConsoleMasterKeySource(),
       plaintext,
       priority: readNumber(form, "priority"),
+      providerApiKeyId: readText(form, "providerApiKeyId"),
       providerId,
     });
-    await enqueueProviderConnectivityCheckJob({
-      providerApiKeyId: result.metadata.id,
+    await enqueueProviderConnectionProbeJob({
+      providerConnectionId: result.metadata.id,
       providerId,
+      resetHealth: true,
+      source: "api_key_saved",
     });
+
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return NextResponse.json(
+        {
+          action: result.action,
+          apiKey: plaintext.trim(),
+          keyPrefix: result.metadata.keyPrefix,
+        },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
 
     return new NextResponse(
       renderOneTimeProviderKeyPage({
@@ -56,12 +86,9 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Provider API key operation failed." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Provider API key operation failed.");
   }
-}
+});
 
 function renderOneTimeProviderKeyPage(input: {
   action: "created" | "rotated";

@@ -1,4 +1,3 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
 import { normalizeProviderTemplateFormInput } from "@llmingress/db/console-provider-templates";
 import {
   createProvider,
@@ -8,16 +7,18 @@ import {
   setProviderEnabled,
   updateProvider,
 } from "@llmingress/db/console-providers";
-import { enqueueProviderConnectivityCheckJob } from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
+import {
+  enqueueProviderConnectionProbeJob,
+  enqueueProviderConnectionProbesForProvider,
+} from "@llmingress/db/provider-jobs";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { classifyConsoleActionError } from "../_error-classify";
+import { consoleActionErrorResponse } from "../_errors";
 import { readRequiredText, readText } from "../_form";
+import { redirectToConsolePath } from "../_redirect";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   const form = await request.formData();
   const action = readText(form, "action");
 
@@ -31,7 +32,13 @@ export async function POST(request: NextRequest) {
           providerType: readText(form, "providerType"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      if (provider.providerType === "local") {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: provider.id,
+          providerId: provider.id,
+          source: "provider_created",
+        });
+      }
     } else if (action === "createFromTemplate") {
       const provider = await createProviderFromTemplate({
         template: normalizeProviderTemplateFormInput({
@@ -39,14 +46,26 @@ export async function POST(request: NextRequest) {
           templateId: readText(form, "templateId"),
         }),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      if (provider.providerType === "local") {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: provider.id,
+          providerId: provider.id,
+          source: "provider_created",
+        });
+      }
     } else if (action === "update") {
-      const provider = await updateProvider({
+      const result = await updateProvider({
         baseUrl: readText(form, "baseUrl"),
         displayName: readRequiredText(form, "displayName"),
         id: readRequiredText(form, "id"),
       });
-      await enqueueProviderConnectivityCheckJob({ providerId: provider.id });
+      if (result.baseUrlChanged) {
+        await enqueueProviderConnectionProbesForProvider({
+          providerId: result.provider.id,
+          resetHealth: true,
+          source: "base_url_changed",
+        });
+      }
     } else if (action === "enable" || action === "disable") {
       const providerId = readRequiredText(form, "id");
       await setProviderEnabled({
@@ -54,8 +73,10 @@ export async function POST(request: NextRequest) {
         id: providerId,
       });
       if (action === "enable") {
-        await enqueueProviderConnectivityCheckJob({
+        await enqueueProviderConnectionProbesForProvider({
           providerId,
+          resetHealth: true,
+          source: "provider_enabled",
         });
       }
     } else if (action === "delete") {
@@ -63,46 +84,57 @@ export async function POST(request: NextRequest) {
         id: readRequiredText(form, "id"),
       });
     } else {
-      return NextResponse.json({ error: "Unknown provider action." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown provider action.", code: "provider_action_unknown" },
+        { status: 400 },
+      );
     }
   } catch (error) {
-    const message = normalizeProviderActionError(
-      error instanceof Error ? error.message : "Provider action failed.",
-    );
+    if (request.headers.get("accept")?.includes("application/json")) {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
+    const verdict = classifyConsoleActionError(error, "Provider action failed.");
+    if (verdict.status === 500) {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
+    if (action === "disable" || action === "delete") {
+      return consoleActionErrorResponse(error, "Provider action failed.");
+    }
     if (action === "create" || action === "createFromTemplate") {
       const redirectUrl = new URL("/providers", request.url);
       redirectUrl.searchParams.set("providerDialog", "new");
-      redirectUrl.searchParams.set("providerError", message);
-      redirectUrl.searchParams.set("providerErrorField", "providerKey");
+      redirectUrl.searchParams.set("providerError", verdict.message);
+      redirectUrl.searchParams.set("providerErrorCode", verdict.code);
+      redirectUrl.searchParams.set(
+        "providerErrorField",
+        typeof verdict.details?.field === "string" ? verdict.details.field : "providerKey",
+      );
       setSearchParam(redirectUrl, "providerKeyValue", readText(form, "providerKey"));
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return NextResponse.redirect(redirectUrl, { status: 303 });
+      return redirectToConsolePath(redirectUrl);
     }
     if (action === "update") {
       const redirectUrl = new URL("/providers", request.url);
       setSearchParam(redirectUrl, "providerDialog", readText(form, "id"));
-      redirectUrl.searchParams.set("providerError", message);
-      redirectUrl.searchParams.set("providerErrorField", "form");
+      redirectUrl.searchParams.set("providerError", verdict.message);
+      redirectUrl.searchParams.set("providerErrorCode", verdict.code);
+      redirectUrl.searchParams.set(
+        "providerErrorField",
+        typeof verdict.details?.field === "string" ? verdict.details.field : "form",
+      );
       setSearchParam(redirectUrl, "providerDisplayNameValue", readText(form, "displayName"));
       setSearchParam(redirectUrl, "providerBaseUrlValue", readText(form, "baseUrl"));
-      return NextResponse.redirect(redirectUrl, { status: 303 });
+      return redirectToConsolePath(redirectUrl);
     }
-    return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
+    return redirectToConsolePath("/providers");
   }
 
-  return NextResponse.redirect(new URL("/providers", request.url), { status: 303 });
-}
+  return redirectToConsolePath("/providers");
+});
 
 function setSearchParam(url: URL, name: string, value: string | undefined): void {
   if (value) {
     url.searchParams.set(name, value);
   }
-}
-
-function normalizeProviderActionError(message: string): string {
-  if (message.includes("providers_provider_key_key")) {
-    return "Provider type already exists.";
-  }
-  return message;
 }

@@ -45,7 +45,7 @@
   --font-display: var(--font-body);
   --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
 
-  --sidebar-width: 15.625rem;
+  --sidebar-width: 17.5rem;
   --content-max: 76rem;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -210,7 +210,8 @@ pre,
   animation: none;
 }
 
-.providers-page {
+.providers-page,
+.models-page {
   max-width: 100rem;
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
@@ -343,7 +344,7 @@ pre,
   text-decoration: none;
 }
 .nav-item-label {
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 500;
 }
 .nav-item-hint {
@@ -368,17 +369,6 @@ pre,
   gap: var(--space-xs);
   padding-top: var(--space-md);
   border-top: 1px solid var(--border);
-}
-
-.sidebar-account-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--radius-pill);
-  background: var(--ok);
-  flex: none;
-}
-.sidebar-account-dot.is-warn {
-  background: var(--warn);
 }
 
 .sidebar-footer-row {
@@ -455,6 +445,62 @@ pre,
   flex-direction: column;
   gap: var(--space-lg);
 }
+.core-onboarding {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.75fr) minmax(0, 1.6fr);
+  gap: var(--space-lg);
+  align-items: center;
+  border-color: var(--accent-soft-border);
+  background: linear-gradient(135deg, var(--accent-soft), var(--surface) 52%);
+}
+.core-onboarding-copy h2 {
+  margin: var(--space-2xs) 0;
+  font-size: var(--text-xl);
+}
+.core-onboarding-copy p:last-child {
+  margin: 0;
+  color: var(--text-muted);
+}
+.core-onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.core-onboarding-steps a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 3.25rem;
+  padding: var(--space-sm);
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+.core-onboarding-steps a:hover {
+  border-color: var(--accent-soft-border);
+  color: var(--accent-strong);
+}
+.core-onboarding-steps span {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  color: var(--accent-text);
+  font-family: var(--font-mono);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+}
+.empty-state-action {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
 
 .agents-dashboard {
   display: flex;
@@ -470,16 +516,12 @@ pre,
 
 /* Vertical rhythm for stacked content blocks (paragraph readouts, sub-cards). */
 .provider-item,
-.runtime-item,
-.settings-panel,
 .activity-detail {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
 }
 .provider-item p,
-.runtime-item p,
-.settings-panel p,
 .activity-detail p {
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -496,8 +538,6 @@ pre,
 }
 .card,
 .provider-item,
-.runtime-item,
-.settings-panel,
 .activity-detail {
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -513,8 +553,7 @@ pre,
    Grids / layouts
    ========================================================================== */
 
-.provider-list,
-.settings-grid {
+.provider-list {
   display: grid;
   gap: var(--space-md);
 }
@@ -544,6 +583,11 @@ pre,
 }
 .field-error.is-visible {
   display: block;
+}
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+  border-color: var(--danger);
 }
 .form-error {
   margin: 0;
@@ -638,6 +682,11 @@ label {
   font-weight: 500;
   color: var(--text-muted);
 }
+.form-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+}
 
 input,
 select,
@@ -688,6 +737,17 @@ textarea {
 .checkbox-label input {
   width: auto;
   min-height: 0;
+}
+.agent-vm-checkbox-list {
+  display: grid;
+  min-width: 0;
+  max-height: 11rem;
+  margin: 0;
+  padding: var(--space-2xs);
+  overflow: auto;
+  background: var(--surface-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
 }
 .agent-limit-toggle {
   margin-top: var(--space-2xs);
@@ -1056,16 +1116,13 @@ details.disclosure[open] > .disclosure-summary {
   box-shadow: var(--shadow-pop);
   animation: dialog-in 0.16s var(--ease-out) both;
 }
-.console-dialog-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 49;
+.console-dialog::backdrop {
   background: color-mix(in srgb, var(--canvas) 78%, transparent);
   backdrop-filter: blur(3px) saturate(1.05);
   animation: scrim-in 0.16s var(--ease-out) both;
 }
-html:has(.console-dialog-scrim),
-body:has(.console-dialog-scrim) {
+html:has(.console-dialog[open]),
+body:has(.console-dialog[open]) {
   overflow-x: clip;
 }
 .console-dialog-head {
@@ -1340,7 +1397,7 @@ body:has(.console-dialog-scrim) {
   gap: var(--space-md);
 }
 .overview-stat-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .agents-stat-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1401,7 +1458,7 @@ body:has(.console-dialog-scrim) {
   color: var(--text-subtle);
 }
 
-/* Numeric table cells that crossed an alert threshold. */
+/* Numeric table cells that crossed a configured limit. */
 .num-danger {
   color: var(--danger);
   font-weight: 700;
@@ -1430,7 +1487,7 @@ body:has(.console-dialog-scrim) {
 }
 .agents-filter-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(7rem, 1fr)) minmax(13rem, 1.4fr) max-content;
+  grid-template-columns: minmax(7rem, 1fr) minmax(13rem, 1.4fr) max-content;
   gap: var(--space-sm);
   align-items: end;
   margin: 0;
@@ -1473,18 +1530,6 @@ body:has(.console-dialog-scrim) {
 .agents-table th,
 .agents-table td {
   padding: 0.78rem var(--space-sm);
-}
-.agents-table th:nth-child(4),
-.agents-table td:nth-child(4) {
-  width: 7.25rem;
-  min-width: 7.25rem;
-  max-width: 7.25rem;
-}
-.agents-table th:nth-child(5),
-.agents-table td:nth-child(5) {
-  width: 6.25rem;
-  min-width: 6.25rem;
-  max-width: 6.25rem;
 }
 .agent-detail-card {
   display: flex;
@@ -1980,7 +2025,38 @@ button.table-row-link {
   gap: var(--space-sm);
 }
 .agent-table-actions form {
-  display: none;
+  display: contents;
+}
+.agent-table-actions .agent-action-toggle {
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+.agent-table-actions .agent-action-toggle:hover {
+  color: var(--text) !important;
+  background: var(--surface-inset) !important;
+  border-color: var(--border-strong) !important;
+}
+.agent-virtual-model-names {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-configuration-guide {
+  display: grid;
+  gap: var(--space-sm);
+}
+.agent-configuration-guide pre {
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-sm);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
 }
 .agent-table-actions .link-button {
   appearance: none !important;
@@ -2037,6 +2113,28 @@ button.table-row-link {
   border-color: var(--danger) !important;
   box-shadow: none;
 }
+.row-action-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.1rem !important;
+  min-width: 2.1rem !important;
+  min-height: 2.1rem !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+.row-action-button .flat-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.row-action-danger {
+  color: var(--danger) !important;
+}
+.row-action-danger:hover {
+  color: var(--danger) !important;
+  background: var(--danger-soft) !important;
+  border-color: var(--danger) !important;
+}
 
 /* Compact icon-only action buttons (table rows, section heads). Labeled
    buttons elsewhere keep their icon + text via the normal button styles. */
@@ -2092,6 +2190,10 @@ button.table-row-link {
 .provider-action-enable:hover {
   color: var(--ok);
   background: var(--ok-soft);
+}
+.provider-action-disable:hover {
+  color: var(--warn);
+  background: var(--warn-soft);
 }
 .provider-action-delete,
 .provider-key-delete-button {
@@ -2295,14 +2397,6 @@ button.table-row-link {
   background: var(--accent-soft);
 }
 
-/* Health dots glow in the dark shell. */
-.sidebar-account-dot {
-  box-shadow: var(--glow-ok);
-}
-.sidebar-account-dot.is-warn {
-  box-shadow: var(--glow-warn);
-}
-
 /* ---- Progress / usage bars ---- */
 .usage-bar {
   display: flex;
@@ -2461,20 +2555,6 @@ button.table-row-link {
   border-color: var(--accent-soft-border);
 }
 
-.settings-layout {
-  display: block;
-}
-.settings-sections {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-  min-width: 0;
-}
-.notification-channel-save-button {
-  justify-self: center;
-  min-width: 6rem;
-}
-
 /* ---- Playground reference layout ---- */
 .playground-page {
   max-width: none;
@@ -2572,7 +2652,7 @@ button.table-row-link {
 .playground-actions {
   gap: var(--space-sm);
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
 }
 .playground-actions button {
   min-width: 8rem;
@@ -2750,7 +2830,7 @@ button.table-row-link {
   gap: var(--space-sm);
 }
 .usage-kpi-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .usage-kpi-grid .stat-card {
   background: var(--surface-raised);
@@ -2759,39 +2839,9 @@ button.table-row-link {
 }
 .usage-analysis-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(18rem, 0.45fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
   align-items: stretch;
-}
-.usage-savings-card {
-  gap: var(--space-md);
-}
-.usage-savings-list {
-  display: grid;
-  gap: var(--space-sm);
-  margin: 0;
-}
-.usage-savings-list div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  min-width: 0;
-  padding: var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
-}
-.usage-savings-list dt {
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-.usage-savings-list dd {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-feature-settings: "tnum" 1;
-  color: var(--text);
 }
 .usage-distribution-grid {
   display: grid;
@@ -2807,7 +2857,7 @@ button.table-row-link {
 
 /* ---- Limits reference layout ---- */
 .limits-page {
-  max-width: none;
+  max-width: 100rem;
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
     clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);
@@ -2849,15 +2899,21 @@ button.table-row-link {
   min-width: 0;
 }
 .limits-toolbar {
-  max-width: 28rem;
+  max-width: 36rem;
 }
 .limits-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-sm);
   min-width: 0;
 }
 .limits-search-form input {
   width: 100%;
   min-height: 2.6rem;
   background: var(--surface);
+}
+.limits-search-form button {
+  min-height: 2.6rem;
 }
 .limits-rule-card {
   min-width: 0;
@@ -2902,42 +2958,6 @@ button.table-row-link {
 }
 .limits-rule-action-cell {
   text-align: right;
-}
-.limits-rule-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-xs);
-}
-.limits-rule-delete-button {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2rem;
-  padding: 0 var(--space-sm);
-  color: var(--danger-strong);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-weight: 800;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out),
-    box-shadow 0.15s var(--ease-out), transform 0.05s var(--ease-out);
-}
-.limits-rule-delete-button:hover {
-  background: var(--danger-soft);
-  border-color: var(--danger);
-}
-.limits-rule-delete-button:active {
-  transform: translateY(1px);
-}
-.limits-rule-delete-button:focus-visible {
-  outline: 2px solid var(--danger);
-  outline-offset: 2px;
 }
 .limits-status-pill {
   min-width: 4.3rem;
@@ -3066,7 +3086,7 @@ button.table-row-link {
 
 /* ---- Activity reference workspace ---- */
 .activity-page {
-  max-width: none;
+  max-width: 100rem;
   margin: 0;
   padding: clamp(var(--space-lg), 2vw, var(--space-2xl))
     clamp(var(--space-md), 1.6vw, var(--space-xl)) var(--space-3xl);
@@ -3117,10 +3137,15 @@ button.table-row-link {
 }
 .activity-table th:nth-child(1),
 .activity-table td:nth-child(1) {
-  width: 4.8rem;
+  width: 8.4rem;
+}
+.activity-table td:nth-child(1) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .activity-table td:nth-child(2) {
-  width: 12rem;
+  width: 8.4rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -3228,15 +3253,6 @@ button.table-row-link {
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
-.activity-legacy-timeline {
-  margin: var(--space-xs) 0 0;
-  padding-left: var(--space-md);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-.activity-legacy-timeline li + li {
-  margin-top: var(--space-2xs);
-}
 .activity-metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3265,7 +3281,7 @@ button.table-row-link {
   margin-top: var(--space-xs);
 }
 
-/* ---- Virtual Models / Routes ---- */
+/* ---- Virtual Models ---- */
 .vm-dashboard {
   display: flex;
   flex-direction: column;
@@ -3434,14 +3450,37 @@ button.table-row-link {
 }
 .vm-model-picker-table {
   table-layout: fixed;
+  min-width: 56rem;
 }
 .vm-model-picker-table td,
 .vm-model-picker-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.vm-model-picker-table th:nth-child(1),
+.vm-model-picker-table td:nth-child(1) {
+  width: 14%;
 }
 .vm-model-picker-table th:nth-child(2),
 .vm-model-picker-table td:nth-child(2) {
-  width: 42%;
+  width: 26%;
+}
+.vm-model-picker-table th:nth-child(3),
+.vm-model-picker-table td:nth-child(3),
+.vm-model-picker-table th:nth-child(7),
+.vm-model-picker-table td:nth-child(7) {
+  width: 10%;
+}
+.vm-model-picker-table th:nth-child(4),
+.vm-model-picker-table td:nth-child(4),
+.vm-model-picker-table th:nth-child(5),
+.vm-model-picker-table td:nth-child(5) {
+  width: 12%;
+}
+.vm-model-picker-table th:nth-child(6),
+.vm-model-picker-table td:nth-child(6) {
+  width: 16%;
 }
 .vm-model-select-button {
   appearance: none;
@@ -3493,6 +3532,9 @@ button.table-row-link {
   .overview-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .core-onboarding {
+    grid-template-columns: 1fr;
+  }
   .agents-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3537,12 +3579,256 @@ button.table-row-link {
   .overview-stat-grid {
     grid-template-columns: 1fr;
   }
+  .core-onboarding-steps {
+    grid-template-columns: 1fr;
+  }
   .activity-page {
     padding-inline: var(--space-md);
   }
   .activity-metric-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- Bounded list tables ---- */
+.bounded-table {
+  table-layout: fixed;
+}
+.bounded-table > thead > tr > th,
+.bounded-table > tbody > tr > td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bounded-table > tbody > tr > td > .table-row-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-requests-table {
+  min-width: 64rem;
+}
+.overview-requests-table :is(th, td):nth-child(1) {
+  width: 12%;
+}
+.overview-requests-table :is(th, td):nth-child(2),
+.overview-requests-table :is(th, td):nth-child(3),
+.overview-requests-table :is(th, td):nth-child(4) {
+  width: 17%;
+}
+.overview-requests-table :is(th, td):nth-child(5) {
+  width: 14%;
+}
+.overview-requests-table :is(th, td):nth-child(6) {
+  width: 7%;
+}
+.overview-requests-table :is(th, td):nth-child(7),
+.overview-requests-table :is(th, td):nth-child(8) {
+  width: 8%;
+}
+
+.agents-table {
+  min-width: 72rem;
+}
+.agents-table :is(th, td):nth-child(1) {
+  width: 15%;
+}
+.agents-table :is(th, td):nth-child(2) {
+  width: 12%;
+}
+.agents-table :is(th, td):nth-child(3) {
+  width: 17%;
+}
+.agents-table :is(th, td):nth-child(4) {
+  width: 16%;
+}
+.agents-table :is(th, td):nth-child(5) {
+  width: 9%;
+}
+.agents-table :is(th, td):nth-child(6) {
+  width: 10%;
+}
+.agents-table :is(th, td):nth-child(7) {
+  width: 8%;
+}
+.agents-table :is(th, td):nth-child(8) {
+  width: 13%;
+}
+
+.providers-table {
+  min-width: 52rem;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(1) {
+  width: 22%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(2) {
+  width: 10%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(3) {
+  width: 16%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(4),
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(5) {
+  width: 7%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(6) {
+  width: 18%;
+}
+.providers-table > :is(thead, tbody) > tr > :is(th, td):nth-child(7) {
+  width: 20%;
+}
+
+.provider-key-table {
+  min-width: 42rem;
+}
+.provider-key-table :is(th, td):nth-child(1),
+.provider-key-table :is(th, td):nth-child(4),
+.provider-key-table :is(th, td):nth-child(5) {
+  width: 25%;
+}
+.provider-key-table :is(th, td):nth-child(2) {
+  width: 10%;
+}
+.provider-key-table :is(th, td):nth-child(3) {
+  width: 15%;
+}
+
+.model-library-table {
+  min-width: 78rem;
+}
+.model-library-table :is(th, td):nth-child(1) {
+  width: 10%;
+}
+.model-library-table :is(th, td):nth-child(2) {
+  width: 19%;
+}
+.model-library-table :is(th, td):nth-child(3),
+.model-library-table :is(th, td):nth-child(5),
+.model-library-table :is(th, td):nth-child(6) {
+  width: 7%;
+}
+.model-library-table :is(th, td):nth-child(4) {
+  width: 8%;
+}
+.model-library-table :is(th, td):nth-child(7),
+.model-library-table :is(th, td):nth-child(8) {
+  width: 9%;
+}
+.model-library-table :is(th, td):nth-child(9),
+.model-library-table :is(th, td):nth-child(10),
+.model-library-table :is(th, td):nth-child(11),
+.model-library-table :is(th, td):nth-child(12) {
+  width: 6%;
+}
+
+.usage-summary-table {
+  min-width: 60rem;
+}
+.usage-summary-table :is(th, td):nth-child(1) {
+  width: 18%;
+}
+.usage-summary-table :is(th, td):nth-child(2) {
+  width: 24%;
+}
+.usage-summary-table :is(th, td):nth-child(3) {
+  width: 10%;
+}
+.usage-summary-table :is(th, td):nth-child(4) {
+  width: 11%;
+}
+.usage-summary-table :is(th, td):nth-child(5) {
+  width: 12%;
+}
+.usage-summary-table :is(th, td):nth-child(6) {
+  width: 13%;
+}
+.usage-summary-table :is(th, td):nth-child(7) {
+  width: 12%;
+}
+
+.limits-rule-table :is(th, td):nth-child(1) {
+  width: 16%;
+}
+.limits-rule-table :is(th, td):nth-child(2) {
+  width: 12%;
+}
+.limits-rule-table :is(th, td):nth-child(3),
+.limits-rule-table :is(th, td):nth-child(4),
+.limits-rule-table :is(th, td):nth-child(7) {
+  width: 10%;
+}
+.limits-rule-table :is(th, td):nth-child(5) {
+  width: 7%;
+}
+.limits-rule-table :is(th, td):nth-child(6),
+.limits-rule-table :is(th, td):nth-child(8),
+.limits-rule-table :is(th, td):nth-child(9) {
+  width: 8%;
+}
+.limits-rule-table :is(th, td):nth-child(10) {
+  width: 11%;
+}
+
+.activity-table th,
+.activity-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-table th:nth-child(2),
+.activity-table td:nth-child(2) {
+  width: 8.4rem;
+}
+
+.vm-table {
+  min-width: 72rem;
+}
+.vm-table :is(th, td):nth-child(1) {
+  width: 16%;
+}
+.vm-table :is(th, td):nth-child(2) {
+  width: 9%;
+}
+.vm-table :is(th, td):nth-child(3),
+.vm-table :is(th, td):nth-child(8),
+.vm-table :is(th, td):nth-child(9) {
+  width: 8%;
+}
+.vm-table :is(th, td):nth-child(4) {
+  width: 19%;
+}
+.vm-table :is(th, td):nth-child(5),
+.vm-table :is(th, td):nth-child(6) {
+  width: 10%;
+}
+.vm-table :is(th, td):nth-child(7) {
+  width: 12%;
+}
+
+.vm-candidate-table {
+  min-width: 68rem;
+}
+.vm-candidate-table :is(th, td):nth-child(1),
+.vm-candidate-table :is(th, td):nth-child(8),
+.vm-candidate-table :is(th, td):nth-child(9) {
+  width: 8%;
+}
+.vm-candidate-table :is(th, td):nth-child(2) {
+  width: 14%;
+}
+.vm-candidate-table :is(th, td):nth-child(3) {
+  width: 19%;
+}
+.vm-candidate-table :is(th, td):nth-child(4) {
+  width: 9%;
+}
+.vm-candidate-table :is(th, td):nth-child(5),
+.vm-candidate-table :is(th, td):nth-child(6) {
+  width: 11%;
+}
+.vm-candidate-table :is(th, td):nth-child(7) {
+  width: 12%;
 }
 
 /* ============================================================================

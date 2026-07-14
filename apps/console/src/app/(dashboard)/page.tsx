@@ -1,5 +1,5 @@
 import { PageHeader } from "../_components/page-header";
-import { OverviewSection } from "../_modules/sections";
+import { OverviewSection } from "../_modules/overview-section";
 
 export default function OverviewPage() {
   return (

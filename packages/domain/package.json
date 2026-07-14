@@ -14,6 +14,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@llmingress/billing": "workspace:*"
+    "@llmingress/billing": "workspace:*",
+    "@llmingress/util": "workspace:*"
   }
 }

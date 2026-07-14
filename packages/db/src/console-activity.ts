@@ -1,5 +1,6 @@
-import { PostgresClient, type PostgresQueryResultRow } from "@llmingress/db/client";
-import { formatConsoleUsd } from "@llmingress/db/console-format";
+import { withPooledPostgresClient } from "@llmingress/db/client";
+import { isRecord } from "@llmingress/util";
+import { consoleValidationError } from "./console-operation-error.ts";
 
 export type ConsoleActivity = {
   agentKeyPrefix: string | null;
@@ -7,7 +8,7 @@ export type ConsoleActivity = {
   completedAt: Date | null;
   errorCode: string | null;
   errorMessage: string | null;
-  fallbackAttempts: unknown;
+  fallbackFailedAttemptCount: number;
   httpStatus: number | null;
   id: string;
   inputTokens: number | null;
@@ -30,12 +31,11 @@ export type ConsoleActivity = {
   totalCostUsd: string | null;
   totalTokens: number | null;
   virtualModelId: string | null;
-  virtualModelDisplayName: string | null;
   virtualModelName: string | null;
 };
 
 export type ConsoleActivityFilters = {
-  agentApiKeyId?: string;
+  agentId?: string;
   from?: Date;
   protocol?: ConsoleActivityProtocol;
   providerId?: string;
@@ -55,7 +55,7 @@ export type ConsoleActivityListInput = {
 };
 
 export type ConsoleActivityFiltersInput = {
-  agentApiKeyId?: string | null;
+  agentId?: string | null;
   from?: Date | string | null;
   limit?: number | string | null;
   page?: number | string | null;
@@ -80,7 +80,9 @@ export type ConsoleFallbackEvent = {
   providerModelDisplayName: string | null;
   providerModelId: string | null;
   providerModelName: string | null;
+  retryable: boolean | null;
   status: string;
+  statusCode: number | null;
 };
 
 export type ConsoleActivityDetail = {
@@ -93,13 +95,13 @@ export type ConsoleActivityDetail = {
 type ConsoleActivityProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
 type ConsoleActivityStatus = "canceled" | "failed" | "started" | "succeeded";
 
-type ActivityRow = PostgresQueryResultRow & {
+type ActivityRow = {
   agent_key_prefix: string | null;
   agent_name: string | null;
   completed_at: Date | null;
   error_code: string | null;
   error_message: string | null;
-  fallback_attempts: unknown;
+  fallback_failed_count: number;
   http_status: number | null;
   id: string;
   input_tokens: number | null;
@@ -124,11 +126,10 @@ type ActivityRow = PostgresQueryResultRow & {
   total_cost_usd: string | null;
   total_tokens: number | null;
   virtual_model_id: string | null;
-  virtual_model_display_name: string | null;
   virtual_model_name: string | null;
 };
 
-type FallbackEventRow = PostgresQueryResultRow & {
+type FallbackEventRow = {
   attempt_order: number;
   created_at: Date;
   error_code: string | null;
@@ -139,7 +140,9 @@ type FallbackEventRow = PostgresQueryResultRow & {
   provider_model_display_name: string | null;
   provider_model_id: string | null;
   provider_model_name: string | null;
+  retryable: boolean | null;
   status: string;
+  status_code: number | null;
 };
 
 type NormalizedActivityListInput = {
@@ -170,10 +173,7 @@ export async function listConsoleActivities(
     typeof input === "string"
       ? normalizeActivityListInput({ databaseUrl: input, limit })
       : normalizeActivityListInput(input);
-  const client = new PostgresClient({ connectionString: listInput.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(listInput.databaseUrl, async (client) => {
     const where = buildActivityWhereClause(listInput.filters);
     const result = await client.query<ActivityRow>(
       `
@@ -189,7 +189,7 @@ export async function listConsoleActivities(
                request_activity.started_at,
                request_activity.completed_at,
                request_activity.route_reason,
-               request_activity.fallback_attempts,
+               coalesce(fallback_counts.failed_count, 0)::integer as fallback_failed_count,
                coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
                  as route_policy_strategy,
                request_activity.agent_key_prefix,
@@ -210,8 +210,6 @@ export async function listConsoleActivities(
                coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
                  as provider_model_name,
                request_activity.virtual_model_id::text as virtual_model_id,
-               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
-                 as virtual_model_display_name,
                coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
                  as virtual_model_name,
                request_usage.input_tokens,
@@ -226,6 +224,12 @@ export async function listConsoleActivities(
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
         left join request_costs on request_costs.request_activity_id = request_activity.id
+        left join lateral (
+          select count(*)::integer as failed_count
+          from fallback_events
+          where fallback_events.request_activity_id = request_activity.id
+            and fallback_events.status = 'failed'
+        ) fallback_counts on true
         ${where.sql}
         order by request_activity.started_at desc,
                  request_activity.created_at desc
@@ -236,9 +240,7 @@ export async function listConsoleActivities(
     );
 
     return result.rows.map(rowToConsoleActivity);
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function countConsoleActivities(input: {
@@ -250,12 +252,9 @@ export async function countConsoleActivities(input: {
     page: _filterPage,
     ...filters
   } = normalizeConsoleActivityFilters(input.filters ?? {});
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const where = buildActivityWhereClause(filters);
-    const result = await client.query<PostgresQueryResultRow & { count: string }>(
+    const result = await client.query<{ count: string }>(
       `
         select count(*)::text as count
         from request_activity
@@ -264,9 +263,7 @@ export async function countConsoleActivities(input: {
       where.values,
     );
     return Number.parseInt(result.rows[0]?.count ?? "0", 10);
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export async function getConsoleActivityDetail(input: {
@@ -275,13 +272,13 @@ export async function getConsoleActivityDetail(input: {
   requestId?: string;
 }): Promise<ConsoleActivityDetail | null> {
   if (!input.activityId && !input.requestId) {
-    throw new Error("Activity detail requires activityId or requestId.");
+    throw consoleValidationError(
+      "Activity detail requires activityId or requestId.",
+      "activity_detail_key_required",
+    );
   }
 
-  const client = new PostgresClient({ connectionString: input.databaseUrl });
-  await client.connect();
-
-  try {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ActivityRow>(
       `
         select request_activity.id::text,
@@ -296,7 +293,7 @@ export async function getConsoleActivityDetail(input: {
                request_activity.started_at,
                request_activity.completed_at,
                request_activity.route_reason,
-               request_activity.fallback_attempts,
+               coalesce(fallback_counts.failed_count, 0)::integer as fallback_failed_count,
                request_activity.request_metadata,
                request_activity.response_metadata,
                coalesce(request_activity.route_policy_strategy_snapshot, route_policies.strategy::text)
@@ -319,8 +316,6 @@ export async function getConsoleActivityDetail(input: {
                coalesce(request_activity.provider_model_name_snapshot, provider_models.model_id)
                  as provider_model_name,
                request_activity.virtual_model_id::text as virtual_model_id,
-               coalesce(virtual_models.description, request_activity.virtual_model_name_snapshot)
-                 as virtual_model_display_name,
                coalesce(request_activity.virtual_model_name_snapshot, virtual_models.name)
                  as virtual_model_name,
                request_usage.input_tokens,
@@ -335,6 +330,12 @@ export async function getConsoleActivityDetail(input: {
         left join provider_models on provider_models.id = request_activity.provider_model_id
         left join request_usage on request_usage.request_activity_id = request_activity.id
         left join request_costs on request_costs.request_activity_id = request_activity.id
+        left join lateral (
+          select count(*)::integer as failed_count
+          from fallback_events
+          where fallback_events.request_activity_id = request_activity.id
+            and fallback_events.status = 'failed'
+        ) fallback_counts on true
         where ($1::uuid is null or request_activity.id = $1)
           and ($2::text is null or request_activity.request_id = $2)
         limit 1
@@ -358,6 +359,8 @@ export async function getConsoleActivityDetail(input: {
                fallback_events.provider_model_id::text as provider_model_id,
                provider_models.display_name as provider_model_display_name,
                provider_models.model_id as provider_model_name,
+               fallback_events.retryable,
+               fallback_events.status_code,
                fallback_events.created_at
         from fallback_events
         left join provider_models on provider_models.id = fallback_events.provider_model_id
@@ -373,9 +376,7 @@ export async function getConsoleActivityDetail(input: {
       requestMetadata: row.request_metadata ?? {},
       responseMetadata: row.response_metadata ?? {},
     };
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 export function normalizeConsoleActivityFilters(
@@ -385,7 +386,7 @@ export function normalizeConsoleActivityFilters(
   const protocol = readEnum(input.protocol, activityProtocols);
 
   return {
-    agentApiKeyId: readTrimmed(input.agentApiKeyId),
+    agentId: readTrimmed(input.agentId),
     from: readDate(input.from),
     limit: normalizeLimit(input.limit),
     page: normalizePage(input.page),
@@ -440,8 +441,8 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
   if (filters.virtualModelId) {
     add("request_activity.virtual_model_id = ?::uuid", filters.virtualModelId);
   }
-  if (filters.agentApiKeyId) {
-    add("request_activity.agent_id = ?::uuid", filters.agentApiKeyId);
+  if (filters.agentId) {
+    add("request_activity.agent_id = ?::uuid", filters.agentId);
   }
   if (filters.requestId) {
     add("request_activity.request_id = ?", filters.requestId);
@@ -462,22 +463,6 @@ function buildActivityWhereClause(filters: ConsoleActivityFilters): {
   };
 }
 
-export function formatConsoleActivityCost(totalCostUsd: string | null): string {
-  return formatConsoleUsd(totalCostUsd);
-}
-
-export function formatConsoleActivityTokens(input: {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-}): string {
-  if (input.inputTokens === null || input.outputTokens === null || input.totalTokens === null) {
-    return "Token usage unavailable";
-  }
-
-  return `${input.totalTokens} total tokens (${input.inputTokens} input, ${input.outputTokens} output)`;
-}
-
 export function formatConsoleActivityRouteReason(routeReason: unknown): string {
   if (isRecord(routeReason) && typeof routeReason.message === "string") {
     const message = routeReason.message.trim();
@@ -487,34 +472,6 @@ export function formatConsoleActivityRouteReason(routeReason: unknown): string {
   }
 
   return "No route reason recorded";
-}
-
-export function formatConsoleActivityFallbackAttempts(fallbackAttempts: unknown): string[] {
-  if (!Array.isArray(fallbackAttempts) || fallbackAttempts.length === 0) {
-    return ["No fallback attempts"];
-  }
-
-  return fallbackAttempts.map((attempt, index) => {
-    if (!isRecord(attempt)) {
-      return `Attempt ${index + 1}: unknown fallback result`;
-    }
-
-    const attemptOrder =
-      typeof attempt.attemptOrder === "number" && Number.isFinite(attempt.attemptOrder)
-        ? attempt.attemptOrder
-        : index + 1;
-    const errorCode =
-      typeof attempt.errorCode === "string" && attempt.errorCode.trim()
-        ? attempt.errorCode.trim()
-        : "unknown_error";
-    const providerModelId =
-      typeof attempt.providerModelId === "string" && attempt.providerModelId.trim()
-        ? attempt.providerModelId.trim()
-        : "unknown provider model";
-    const firstByte = attempt.failedBeforeFirstByte === true ? " before first byte" : "";
-
-    return `Attempt ${attemptOrder}: ${errorCode}${firstByte} on ${providerModelId}`;
-  });
 }
 
 export function formatConsoleActivityMetadata(metadata: unknown): string[] {
@@ -530,7 +487,7 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     completedAt: row.completed_at,
     errorCode: row.error_code,
     errorMessage: row.error_message,
-    fallbackAttempts: row.fallback_attempts,
+    fallbackFailedAttemptCount: Number(row.fallback_failed_count),
     httpStatus: row.http_status,
     id: row.id,
     inputTokens: row.input_tokens,
@@ -553,7 +510,6 @@ function rowToConsoleActivity(row: ActivityRow): ConsoleActivity {
     totalCostUsd: row.total_cost_usd,
     totalTokens: row.total_tokens,
     virtualModelId: row.virtual_model_id,
-    virtualModelDisplayName: row.virtual_model_display_name,
     virtualModelName: row.virtual_model_name,
   };
 }
@@ -570,7 +526,9 @@ function rowToConsoleFallbackEvent(row: FallbackEventRow): ConsoleFallbackEvent 
     providerModelDisplayName: row.provider_model_display_name,
     providerModelId: row.provider_model_id,
     providerModelName: row.provider_model_name,
+    retryable: row.retryable,
     status: row.status,
+    statusCode: row.status_code,
   };
 }
 
@@ -660,8 +618,4 @@ function collectMetadataLines(prefix: string, value: unknown, lines: string[]): 
     const nextPrefix = prefix ? `${prefix}.${key}` : key;
     collectMetadataLines(nextPrefix, child, lines);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

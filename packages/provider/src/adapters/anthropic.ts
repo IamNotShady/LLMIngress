@@ -1,7 +1,12 @@
+import { isRecord, joinUrl, omitUndefined } from "@llmingress/util";
 import {
-  isRecord,
+  fetchCredentialedProviderRequest,
+  isProviderRedirectRejectedError,
+} from "../authenticated-http.js";
+import { mergeHttpHeaders, readHttpHeader, readProviderResponseHeaders } from "../headers.js";
+import {
   isRetryableHttpStatus,
-  joinProviderUrl,
+  providerRequestTimeoutMs,
   readProviderRequestId,
   readResponseBody,
 } from "./adapter-http.js";
@@ -12,7 +17,7 @@ export type AnthropicContentBlock = Record<string, unknown> & {
 
 export type AnthropicMessageContent = string | AnthropicContentBlock[];
 
-export type NormalizedAnthropicMessage = {
+export type NormalizedAnthropicMessage = Record<string, unknown> & {
   role: "user" | "assistant";
   content: AnthropicMessageContent;
 };
@@ -21,6 +26,8 @@ export type NormalizedAnthropicMessagesRequest = {
   maxOutputTokens: number;
   metadata?: Record<string, unknown>;
   messages: NormalizedAnthropicMessage[];
+  payload: Record<string, unknown>;
+  passthrough?: Record<string, unknown>;
   serviceTier?: string;
   stream?: boolean;
   stopSequences?: string[];
@@ -41,6 +48,7 @@ export type AnthropicProviderTarget = {
 
 export type AnthropicAdapterSuccess = {
   body: unknown;
+  headers: Record<string, string>;
   ok: true;
   providerRequestId: string | null;
   statusCode: number;
@@ -50,6 +58,7 @@ export type AnthropicAdapterError = {
   body: unknown;
   errorCode: string;
   errorMessage: string;
+  headers: Record<string, string>;
   ok: false;
   retryable: boolean;
   statusCode: number | null;
@@ -59,6 +68,7 @@ export type AnthropicAdapterResult = AnthropicAdapterSuccess | AnthropicAdapterE
 
 export type AnthropicProviderAdapter = {
   messages: (input: {
+    headers?: Record<string, string>;
     request: NormalizedAnthropicMessagesRequest;
     target: AnthropicProviderTarget;
   }) => Promise<AnthropicAdapterResult>;
@@ -66,23 +76,11 @@ export type AnthropicProviderAdapter = {
 
 type CreateAnthropicProviderAdapterOptions = {
   fetch?: typeof globalThis.fetch;
+  timeoutMs?: number;
 };
 
-export type AnthropicMessagesPayload = {
-  max_tokens: number;
-  metadata?: Record<string, unknown>;
-  messages: NormalizedAnthropicMessage[];
+export type AnthropicMessagesPayload = Record<string, unknown> & {
   model: string;
-  service_tier?: string;
-  stream?: boolean;
-  stop_sequences?: string[];
-  system?: AnthropicMessageContent;
-  temperature?: number;
-  thinking?: Record<string, unknown>;
-  tool_choice?: unknown;
-  tools?: unknown[];
-  top_k?: number;
-  top_p?: number;
 };
 
 const anthropicVersion = "2023-06-01";
@@ -91,106 +89,112 @@ export function createAnthropicProviderAdapter(
   options: CreateAnthropicProviderAdapterOptions = {},
 ): AnthropicProviderAdapter {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? providerRequestTimeoutMs();
 
   return {
-    messages: async ({ request, target }) => {
+    messages: async ({ headers, request, target }) => {
       try {
-        const response = await fetchImpl(buildMessagesUrl(target.baseUrl), {
-          body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
-          headers: {
-            "anthropic-version": anthropicVersion,
-            "content-type": "application/json",
-            "x-api-key": target.apiKey,
+        const response = await fetchCredentialedProviderRequest(
+          fetchImpl,
+          buildAnthropicMessagesUrl(target.baseUrl),
+          {
+            body: JSON.stringify(buildAnthropicMessagesPayload(request, target)),
+            headers: buildAnthropicProviderHeaders(target.apiKey, headers),
+            method: "POST",
+            signal: AbortSignal.timeout(timeoutMs),
           },
-          method: "POST",
-        });
+        );
         const body = await readResponseBody(response);
+        const responseHeaders = readProviderResponseHeaders(response.headers);
 
         if (!response.ok) {
-          return mapProviderError(response.status, body);
+          return mapProviderError(response.status, body, responseHeaders);
         }
 
         return {
           body,
+          headers: responseHeaders,
           ok: true,
           providerRequestId: readProviderRequestId(body),
           statusCode: response.status,
         };
       } catch (error) {
-        return {
-          body: null,
-          errorCode: "provider_request_failed",
-          errorMessage: error instanceof Error ? error.message : "Provider request failed.",
-          ok: false,
-          retryable: true,
-          statusCode: null,
-        };
+        return mapRequestFailure(error, timeoutMs);
       }
     },
   };
+}
+
+export function buildAnthropicProviderHeaders(
+  apiKey: string,
+  requestHeaders: Record<string, string> | undefined,
+): Record<string, string> {
+  return mergeHttpHeaders(requestHeaders, {
+    "anthropic-version": readHttpHeader(requestHeaders, "anthropic-version") ?? anthropicVersion,
+    "content-type": "application/json",
+    "x-api-key": apiKey,
+  });
 }
 
 export function buildAnthropicMessagesPayload(
   request: NormalizedAnthropicMessagesRequest,
   target: AnthropicProviderTarget,
 ): AnthropicMessagesPayload {
-  return omitUnsupportedAnthropicSamplingParameters(
-    omitUndefined({
-      max_tokens: request.maxOutputTokens,
-      metadata: request.metadata,
-      messages: request.messages,
-      model: target.modelId,
-      service_tier: request.serviceTier,
-      stream: request.stream,
-      stop_sequences: request.stopSequences,
-      system: request.system,
-      temperature: request.temperature,
-      thinking: request.thinking,
-      tool_choice: request.toolChoice,
-      tools: request.tools,
-      top_k: request.topK,
-      top_p: request.topP,
-    }),
-    target.modelId,
-  ) as AnthropicMessagesPayload;
+  return omitUndefined({ ...request.payload, model: target.modelId }) as AnthropicMessagesPayload;
 }
 
-export function omitUnsupportedAnthropicSamplingParameters<T extends Record<string, unknown>>(
-  payload: T,
-  modelId: string,
-): T {
-  const normalizedModelId = modelId.toLowerCase();
-  const cleaned = { ...payload };
-
-  if (isOpus47OrNewer(normalizedModelId)) {
-    delete cleaned.temperature;
-    delete cleaned.top_k;
-    delete cleaned.top_p;
-    return cleaned;
-  }
-
-  if (normalizedModelId.includes("claude-sonnet-4-6") && cleaned.temperature !== undefined) {
-    delete cleaned.top_p;
-  }
-
-  return cleaned;
+export function buildAnthropicMessagesUrl(baseUrl: string): string {
+  return joinUrl(baseUrl, "messages");
 }
 
-function buildMessagesUrl(baseUrl: string): string {
-  return joinProviderUrl(baseUrl, "messages");
-}
-
-function mapProviderError(statusCode: number, body: unknown): AnthropicAdapterError {
+function mapProviderError(
+  statusCode: number,
+  body: unknown,
+  headers: Record<string, string>,
+): AnthropicAdapterError {
   const providerError = readProviderError(body);
 
   return {
     body,
     errorCode: providerError.code,
     errorMessage: providerError.message,
+    headers,
     ok: false,
     retryable: isRetryableHttpStatus(statusCode),
     statusCode,
   };
+}
+
+function mapRequestFailure(error: unknown, timeoutMs: number): AnthropicAdapterError {
+  if (isProviderRedirectRejectedError(error)) {
+    return {
+      body: null,
+      errorCode: error.code,
+      errorMessage: error.message,
+      headers: {},
+      ok: false,
+      retryable: error.retryable,
+      statusCode: error.statusCode,
+    };
+  }
+
+  return {
+    body: null,
+    errorCode: "provider_request_failed",
+    errorMessage: isTimeoutError(error)
+      ? `Provider request timed out after ${timeoutMs}ms.`
+      : error instanceof Error
+        ? error.message
+        : "Provider request failed.",
+    headers: {},
+    ok: false,
+    retryable: true,
+    statusCode: null,
+  };
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === "TimeoutError";
 }
 
 function readProviderError(body: unknown): { code: string; message: string } {
@@ -210,15 +214,4 @@ function readProviderError(body: unknown): { code: string; message: string } {
     code: "provider_http_error",
     message: "Provider request failed.",
   };
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
-}
-
-function isOpus47OrNewer(modelId: string): boolean {
-  const match = modelId.match(/\bclaude-opus-4[-.](\d+)/);
-  return match ? Number(match[1]) >= 7 : false;
 }

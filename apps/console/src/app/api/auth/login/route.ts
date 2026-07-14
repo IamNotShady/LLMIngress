@@ -3,27 +3,35 @@ import {
   loginConsoleAdmin,
   sessionCookieName,
 } from "@llmingress/db/console-auth";
+import { consoleValidationError } from "@llmingress/db/console-operation-error";
 import { type NextRequest, NextResponse } from "next/server";
+import { withConsoleErrorBoundary } from "../../_auth";
+import { redirectToConsolePath } from "../../_redirect";
 
-export async function POST(request: NextRequest) {
+export const POST = withConsoleErrorBoundary(async (request: NextRequest) => {
   const password = await readPassword(request);
   if (!password) {
-    return NextResponse.json({ error: "Admin password is required." }, { status: 400 });
+    throw consoleValidationError("Admin password is required.", "form_field_required", {
+      field: "password",
+    });
   }
 
   const session = await loginConsoleAdmin(password);
   if (!session) {
-    return NextResponse.json({ error: "Invalid admin password." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Invalid admin password.", code: "invalid_admin_password" },
+      { status: 401 },
+    );
   }
 
-  const response = NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  const response = redirectToConsolePath("/");
   response.cookies.set(
     sessionCookieName,
     session.token,
     getSessionCookieOptions(session.expiresAt),
   );
   return response;
-}
+}, "Login failed.");
 
 async function readPassword(request: NextRequest): Promise<string | undefined> {
   const form = await request.formData();

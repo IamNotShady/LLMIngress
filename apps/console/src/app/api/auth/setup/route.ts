@@ -1,26 +1,37 @@
-import { createAdminPassword } from "@llmingress/db/console-auth";
-import { type NextRequest, NextResponse } from "next/server";
+import { createAdminPassword, isConsoleInitialized } from "@llmingress/db/console-auth";
+import { consoleValidationError } from "@llmingress/db/console-operation-error";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { withConsoleErrorBoundary } from "../../_auth";
+import { consoleActionErrorResponse } from "../../_errors";
+import { redirectToConsolePath } from "../../_redirect";
 
-export async function POST(request: NextRequest) {
-  const password = await readPassword(request);
+export const POST = withConsoleErrorBoundary(async (request: NextRequest) => {
+  if (await isConsoleInitialized()) {
+    return NextResponse.json(
+      { error: "Console is already initialized.", code: "console_already_initialized" },
+      { status: 409 },
+    );
+  }
+
+  const form = await request.formData();
+  const password = readText(form, "password");
   if (!password) {
-    return NextResponse.json({ error: "Admin password is required." }, { status: 400 });
+    throw consoleValidationError("Admin password is required.", "form_field_required", {
+      field: "password",
+    });
   }
 
   try {
     await createAdminPassword(password);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create admin." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Failed to create admin.");
   }
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
-}
+  return redirectToConsolePath("/");
+}, "Failed to create admin.");
 
-async function readPassword(request: NextRequest): Promise<string | undefined> {
-  const form = await request.formData();
-  const password = form.get("password");
-  return typeof password === "string" ? password : undefined;
+function readText(form: FormData, name: string): string | undefined {
+  const value = form.get(name);
+  return typeof value === "string" ? value : undefined;
 }

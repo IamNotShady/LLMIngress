@@ -1,22 +1,13 @@
-import { sessionCookieName, verifyConsoleSession } from "@llmingress/db/console-auth";
-import {
-  enqueueProviderModelRefreshJob,
-  normalizeProviderModelRefreshInput,
-} from "@llmingress/db/provider-jobs";
-import { type NextRequest, NextResponse } from "next/server";
-import { readText } from "../_form";
+import { enqueueProviderModelRefreshJob } from "@llmingress/db/provider-jobs";
+import { NextResponse } from "next/server";
+import { withConsoleAuth } from "../_auth";
+import { consoleActionErrorResponse } from "../_errors";
+import { readRequiredText } from "../_form";
 
-export async function POST(request: NextRequest) {
-  const sessionToken = request.cookies.get(sessionCookieName)?.value;
-  if (!(await verifyConsoleSession(sessionToken))) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
+export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
-    const input = normalizeProviderModelRefreshInput({
-      providerId: readText(form, "providerId"),
-    });
+    const input = { providerId: readRequiredText(form, "providerId") };
     await enqueueProviderModelRefreshJob({ providerId: input.providerId });
     if (request.headers.get("accept")?.includes("application/json")) {
       return NextResponse.json({ ok: true, providerId: input.providerId });
@@ -29,9 +20,6 @@ export async function POST(request: NextRequest) {
       { status: 303 },
     );
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Provider model refresh failed." },
-      { status: 400 },
-    );
+    return consoleActionErrorResponse(error, "Provider model refresh failed.");
   }
-}
+});

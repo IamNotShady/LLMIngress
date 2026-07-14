@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client, type QueryResult, type QueryResultRow } from "pg";
+import { closePostgresPool } from "./client.js";
 import {
   type AppliedMigrationStatus,
   type MigrationStatusSummary,
@@ -13,7 +14,15 @@ export type {
   PostgresQueryResult,
   PostgresQueryResultRow,
 } from "./client.js";
-export { PostgresClient, withPostgresClient } from "./client.js";
+export {
+  closePostgresPool,
+  closePostgresPools,
+  getPostgresPool,
+  PostgresClient,
+  withDedicatedPostgresClient,
+  withPooledPostgresClient,
+  withPostgresTransaction,
+} from "./client.js";
 export type {
   ConfigChange,
   ConfigChangedNotification,
@@ -27,6 +36,7 @@ export {
   CONFIG_CHANGED_CHANNEL,
   createConfigChangedListener,
   createConfigPublisher,
+  publishConfigChangeWithClient,
 } from "./config-versions.js";
 export type {
   AppliedMigrationStatus,
@@ -161,6 +171,13 @@ export async function runMigrations(options: RunMigrationsOptions): Promise<Migr
       const appliedChecksums = new Map(
         appliedRows.rows.map((row): [string, string] => [row.id, row.checksum]),
       );
+      const shippedIds = new Set(migrations.map((migration) => migration.id));
+      const unknownAppliedId = appliedRows.rows.find((row) => !shippedIds.has(row.id))?.id;
+      if (unknownAppliedId) {
+        throw new Error(
+          `Database contains unknown migration ${unknownAppliedId}; refusing to run an older image.`,
+        );
+      }
       const applied: SqlMigration[] = [];
       const skipped: SqlMigration[] = [];
 
@@ -279,6 +296,8 @@ class PostgresFixture implements TestPostgresFixture {
       await this.client.end();
       this.client = undefined;
     }
+
+    await closePostgresPool(this.databaseUrl);
 
     await withClient(this.maintenanceUrl, async (client) => {
       await client.query(

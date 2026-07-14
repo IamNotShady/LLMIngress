@@ -1,179 +1,38 @@
-# LLMIngress Progress
+# LLMIngress V1 Release State
 
-## Current State
+Updated: 2026-07-14
+Branch: `dev`
+Version: V1 pre-release baseline with Docker lifecycle
 
-- Date: 2026-07-03
-- Branch: `worktree-console-dark-restyle`
-- Base: `dev` at `d28e21ac`
-- Status: Console dark restyle verified; UI/UX review batches 1–4 implemented and verified (`console-p0-layout`, `console-semantic-status`, `console-shared-formatters`, `console-providers-ia-and-forms`).
+## Release domains
 
-## 2026-07-04 PR #15 CI Fix
+1. Core Platform Security
+2. Provider Model Management
+3. Virtual Model Routing
+4. Gateway Protocol Execution
+5. Agent Access and Limits
+6. Usage and Activity
+7. Worker Model Operations
+8. Console Core
+9. Release Guards
 
-- Investigated GitHub Actions run `28668889005` / job `85027269182`: CI failed in `tests/e2e/console-p0-layout.e2e.spec.ts` because the Limits rules table wrapper measured `scrollWidth - clientWidth = 1` on the runner while the test required `0`.
-- Kept the product contract intact (page-level no-overflow and action visibility still asserted) and relaxed only the wrapper measurement to a 1px rounding tolerance, matching the existing action-cell tolerance.
-- Verification: `pnpm exec vitest run tests/features/console-p0-layout.unit.test.ts`, `pnpm test:e2e tests/e2e/console-p0-layout.e2e.spec.ts`, `pnpm run lint`, and full `pnpm test:e2e` passed.
+## Baseline
 
-## 2026-07-03 UI/UX Review → console-providers-ia-and-forms (batch 4 of 4)
+- Console pages: Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, Playground.
+- Public protocols: Chat Completions, Responses, Messages, Embeddings, and model discovery.
+- Worker jobs: `model_refresh`, `provider_connection_probe`, `price_sync`.
+- Database: PostgreSQL 18.4 Alpine with `0001_core_baseline.sql`, 23 product tables plus migration history (24 total).
+- Deployment: one release-bound command manages a single application image, separate PostgreSQL, verified upgrade snapshots, and automatic rollback.
+- Historical removal/refactor tests are consolidated into current domain suites and release guards.
 
-- Implemented `console-providers-ia-and-forms` (TDD red→green, seeded-data E2E):
-  - Providers page keeps one representation: the duplicate provider summary-card grid (name/status/keys/models repeated above the actionable list) is removed with its CSS and orphaned helpers.
-  - Model library is client-searchable and capped at 50 visible rows with a "Showing first N of M" note — a 60-model provider no longer renders an 8500px page (E2E asserts < 4500px).
-  - `.agents-stat-grid` collapses to 2 columns at ≤56rem; KPI values no longer truncate at 390.
-  - `input/select/textarea:disabled` get real disabled styling (opacity + not-allowed cursor) so Settings' display-only selects read as such; the webhook form carries example placeholders.
-  - Virtual Model dialog submit reads `Create` when creating, `Save` when editing.
-  - Batch-2 contracts updated for the deleted duplicate pill implementation (provider list-row locator; pill check now targets providers-client-section only).
-- Release guards now accept 10 feature contracts.
+## Latest verification
 
-### Review items intentionally not adopted / deferred
-- "Filter" filter-button wording and right-aligned dialog submit actions stay: both were explicit decisions recorded in the dark-restyle follow-up pass.
-- Deferred (P2, unscheduled): topbar/h1 title duplication + eyebrow system, nav two-letter icon tiles, request-ID/gateway-URL copy affordances, "High risk"/"Connected" metric tooltips, single-segment donut degradation, playground note tone, Usage vs Activity default-window unification.
+- `pnpm run verify`: 18 suites / 323 tests; lint, typecheck, and build passed.
+- Coverage: 49.20% statements, 41.76% branches, 53.22% functions, 49.29% lines.
+- Docker lifecycle: 4 focused unit and 3 real E2E tests passed across install, no-op, repair, upgrade, rollback, retention, conflict/downgrade rejection, retry, and interruption recovery.
+- Feature regression: all 9 standard domains passed; 18 unit and 17 E2E entrypoints, 0 legacy.
+- Compose: one application image, PostgreSQL 18.4, migration, 24 tables, Gateway readiness, Console HTTP, and Worker passed; application containers stopped after smoke.
 
-## 2026-07-03 UI/UX Review → console-shared-formatters (batch 3 of 4)
+## Blockers
 
-- Implemented `console-shared-formatters` (TDD red→green, seeded-data E2E):
-  - New shared module `packages/db/src/console-format.ts` (`@llmingress/db/console-format`): `MISSING_VALUE` (em dash), `formatConsoleCount` (full locale), `formatConsoleCompactCount` (KPI-only 92.5K/1.3M), `formatConsoleUsd` (≥1¢ two decimals, sub-cent three significant digits, $0.00 for zero), `formatConsoleTimestamp` (date-qualified outside the current day).
-  - `sections.tsx` dropped seven local look-alike formatters and the `N/A`/`Unavailable`/`-` null mix; overview recent-requests tokens now show full counts matching Activity.
-  - `formatConsoleUsageCost`/`formatConsoleActivityCost` in packages/db delegate to the shared USD rule (no more 8-decimal noise).
-- Release guards now accept 9 feature contracts.
-
-## 2026-07-03 UI/UX Review → console-semantic-status (batch 2 of 4)
-
-- Implemented `console-semantic-status` (TDD red→green, seeded-data E2E):
-  - `StatCard` delta tones are valence (`good`/`bad`/`neutral`) chosen per metric polarity — cost down and over-limit down are good, requests/tokens/savings up are good, zero change is neutral gray; new optional `valueTone` colors KPI values.
-  - `failureRateTone` (≥5% warn, ≥20% danger) drives the Overview/Usage/Virtual Models failure-rate KPIs and the VM list + Usage summary table cells (`.num-warn`/`.num-danger`).
-  - Runtime: stale/missing heartbeat value renders warn; `db:migrate:check` renders `Ready`/`Blocked` as ok/danger pills.
-  - Intentionally disabled providers/models/candidates show neutral gray chips instead of danger red (both `ProviderStatusPill` copies + `ModelAvailabilityPill` + VM candidate card).
-  - Row-level Delete actions are quiet (transparent at rest, danger-soft on hover); the Limits row Delete now opens a `LimitsDeleteDialog` confirm instead of posting `deleteLimitRules` directly.
-- Release guards now accept 8 feature contracts.
-
-## 2026-07-03 UI/UX Review → console-p0-layout (batch 1 of 4)
-
-- Ran a designer review of the live console (11 pages, 1280/390 screenshots, dialogs, focus states). Fix plan has 4 batches: P0 layout → semantic colors/destructive actions → shared formatters → filters/forms polish. Batches 2–4 are not started.
-- Implemented `console-p0-layout` (TDD red→green, E2E seeds request + limit data because a fresh DB hides all four defects):
-  - `.chart-card` gets `min-width: 0` and the 56rem `.detail-layout` override uses `minmax(0, 1fr)`, so the Overview recent-requests table scrolls inside its card instead of widening the page by 458px at 390.
-  - Limits rules table now fits the 1280 content column with row actions fully visible: cell `padding-inline` md→sm, actions gap sm→xs, headers `Cost limit`→`Budget` and `Token limit`→`Tokens`, table `min-width` 64rem→56rem.
-  - `TrendLineChart` renders a `.chart-empty` message (per-call-site copy) instead of a blank card when the window has no data points.
-  - Sidebar collapses behind a text `Menu` toggle at ≤56rem (aria-expanded/aria-controls, drawer closes after navigation); desktop layout unchanged.
-- Release guards now accept 7 feature contracts (added `console-p0-layout`).
-
-## Compression Summary
-
-- `feature_list.json` now tracks 5 V1 milestone features instead of the previous 127 feature-by-feature delivery records.
-- `tests/features` and `tests/e2e` now keep only the 5 V1 milestone unit/E2E specs.
-- `packages/db/migrations` now ships one destructive pre-release baseline migration: `0001_v1_baseline.sql`.
-- Historical session notes, old feature tests, and old migration steps are intentionally left to git history.
-
-## 2026-07-03 Console Dark Restyle
-
-- Implemented `console-dark-restyle`: Console now serves a dark-only violet skin with Geist / Geist Mono, compact 30px primary buttons, no theme toggle, fixed chart tokens, and responsive no-overflow checks at 1280px and 390px.
-- Follow-up brand icon: selected the policy-slots mark, converted it to maintainable SVG, removed generated PNG drafts, and wired the SVG into the Console sidebar mark plus metadata favicon.
-- Moved `v1-console` from theme-toggle behavior to the dark-only shell contract.
-- Updated release guard expectations for 6 passing feature contracts.
-- Follow-up layout polish: Overview `Recent requests` now spans the content width, with `Gateway status` stacked below it instead of beside it.
-- Follow-up runtime polish: removed the Overview `Gateway status` detail card and moved gateway URL, config version, uptime, and provider health counts into the sidebar runtime card with green/red count dots.
-- Follow-up shell cleanup: removed the duplicate topbar gateway status pill, removed the non-essential Help link, removed the sidebar `Signed in as admin` row, and enlarged the sidebar runtime card.
-- Follow-up runtime-card height tweak: raised the sidebar runtime card minimum height from `7rem` to `7.75rem`.
-- Follow-up runtime-card spacing tweak: raised the sidebar runtime card minimum height to `8.5rem` and loosened the runtime summary line spacing.
-- Follow-up Agents filter polish: renamed the Agents filter submit button from `Apply filters` to `Query` and aligned its height with the search input.
-- Follow-up Agents button icon cleanup: removed the filter icon from `Query` and the add icon from `Create Agent`.
-- Follow-up Agents detail polish: removed the right-side selected agent card and moved read-only agent details into a dialog opened from Agent list rows, letting the Agents KPIs, filters, and list span the full content width.
-- Follow-up Agents detail dialog layout: tightened the read-only dialog to the existing 42rem dialog width and grouped fields into aligned cards.
-- Follow-up Agents detail field layout: changed the read-only dialog summary fields to full-width label/value rows.
-- Follow-up Provider cleanup: removed provider `default_priority` from Provider detail, Console provider types/queries, Gateway credential ordering, and the baseline schema.
-- Follow-up Provider list selection: moved Provider list/detail/model-library selection into a client island so row clicks update the selected provider locally without writing `selected` to the URL or rerunning the page route.
-- Follow-up Provider inline detail: removed the right-side Provider detail card and moved the selected provider's stats plus API key/OAuth/local connection list into an expanded row inside Provider list.
-- Follow-up Provider inline detail compacting: removed the inline Provider details title, refresh/status summary, available model count, and last connected fields so the expanded row starts directly at the credential list with reduced vertical padding.
-- Follow-up Provider refresh action: moved the model refresh affordance into each Provider list row's Actions area and kept it backed by the existing `/api/provider-model-refresh` form endpoint.
-- Follow-up Provider row toggle: clicking an already-expanded Provider row now collapses its inline credential detail instead of keeping it open.
-- Follow-up Provider local refresh: Provider row refresh now submits through a local client fetch and the existing endpoint returns JSON for that path, so clicking refresh no longer navigates or reloads the page.
-- Follow-up Provider header/runtime polish: aligned the sidebar gateway status dot with its status label and removed the leading icon from the `Add Provider` button.
-- Follow-up Virtual Models button polish: removed the leading icon from `Create Virtual Model`, changed the filter submit button to text-only `Query`, and aligned it with the search input.
-- Follow-up Virtual Models detail dialog: removed the right-side Virtual Model detail card and moved read-only model details into a row-click dialog, letting the Virtual Model list span the page width.
-- Follow-up Virtual Models route editor layout: removed the right-side current-strategy note from the route editor dialog and let the editor form occupy the full dialog width.
-- Follow-up Virtual Models detail dialog layout: widened the read-only detail dialog and arranged its cards in a two-column grid.
-- Follow-up Virtual Models route editor width: narrowed the edit route dialog to the editor content width and kept horizontal scrolling inside the candidates table.
-- Follow-up Virtual Models route editor width/action polish: widened the edit route dialog to 56rem and centered the Cancel / Save action row.
-- Follow-up Activity detail dialog: removed the right-side Request detail panel and moved request details into a read-only dialog opened from Request ID links, letting the Request list span the page width.
-- Follow-up Activity filter button polish: changed the Activity filter submit button to text-only `Query` and aligned it with the Request ID input height.
-- Follow-up Usage filter button polish: changed the Usage filter submit button to text-only `Query` and aligned it with the adjacent Provider select height.
-- Follow-up Limits rule dialog: removed the right-side Rule configuration panel and added row-level `Edit` actions that open the existing rule form in a modal dialog.
-- Follow-up Limits save button text: shortened the rule dialog submit button from `Save rules` to `Save`.
-- Follow-up Playground action order: moved `Clear` before the submit action and shortened `Send test` to `Send`.
-- Follow-up Playground action alignment: removed the Playground action icons and centered the `Clear` / `Send` action row.
-- Follow-up Limits action alignment: centered the rule dialog `Cancel` / `Save` actions and removed the `Save` icon.
-- Follow-up Limits action width: made the rule dialog `Cancel` and `Save` actions use the same width.
-- Follow-up Provider disabled refresh guard: disabled row-level model refresh for disabled Providers while keeping enabled Providers refreshable.
-- Follow-up Virtual Models edit action style: changed Virtual Model row `Edit` links to reuse the Agents row edit button styling.
-- Follow-up Limits edit action style: changed Limit Rules row `Edit` links to reuse the Agents row edit button styling.
-- Follow-up Settings notification button polish: shortened the webhook notification submit button to `Save`, removed the icon, and centered it at normal button width.
-- Follow-up Console UI consistency sweep: fixed the remaining Usage query height mismatch and compacted text-only submit buttons in Agent/Provider dialogs plus the Virtual Model Add Model action.
-- Follow-up Agent create action alignment: right-aligned compact single-submit dialog actions while leaving centered multi-action rows unchanged.
-- Follow-up Virtual Models action alignment: right-aligned the route editor dialog `Cancel` / submit action row.
-- Follow-up filter button wording: renamed all Console filter-submit buttons from `Query` to `Filter`.
-- Follow-up Limits action realignment: right-aligned the rule dialog `Cancel` / `Save` action row while preserving equal button widths.
-- Follow-up Limits header cleanup: removed the API key prefix from the rule configuration dialog header.
-- Verification completed:
-  - `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`
-  - `pnpm --filter @llmingress/console run typecheck`
-  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts --workers=1`
-  - `pnpm run verify`
-  - `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features`
-  - Temporary Playwright route scan: 10 Console routes checked at 1280px and 390px with no horizontal overflow.
-  - Follow-up layout check: `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` passed; browser measured `Recent requests` at 1096.98px wide with `Gateway status` below it at 1407px viewport.
-  - Follow-up runtime-card check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts`, `pnpm run verify`, and `pnpm run verify:features` passed; browser confirmed no Overview gateway card, sidebar URL `127.0.0.1:4000`, uptime, and provider counts `12` green / `3` red with no visible healthy/unhealthy words.
-  - Follow-up shell cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm test:e2e tests/e2e/console-dark-restyle.e2e.spec.ts`, `pnpm --filter @llmingress/console run typecheck`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify`, and `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed; browser confirmed no `.topbar-status`, `.topbar-link`, `.sidebar-account`, `Help`, or `Signed in as admin`, runtime card height `117.98px`, no horizontal overflow, and no console warnings/errors.
-  - Follow-up runtime-card height check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed runtime card height `124px`, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up runtime-card spacing check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed runtime card height `141.48px`, summary gap `2.88px`, line-height `19.2px`, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Agents filter check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed `Query` button text, button/search input height `38.80px`, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Agents button icon cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts` passed; browser confirmed `Query` and `Create Agent` each have only text, no `.flat-icon`/`svg`, centered flex alignment, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Agents detail dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `.agents-main-column`, `.agents-stat-grid`, `.agents-filter-bar`, and `.agents-list-card` all span `1112px`, no right-side `.agent-detail-card`, clicking an Agent list row opens one read-only `.agent-view-dialog` with no form controls, close removes it, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Agents detail dialog layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the dialog width is `672px`, fields render as two equal `288px` columns, label/value left edges align, no form controls, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Agents detail field layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the read-only dialog summary uses one field-grid column, four full-width rows with label/value on the same line, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/db run typecheck`, `pnpm --filter @llmingress/console run typecheck`, `pnpm run lint`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run db:migrate:check`, `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify`, and `TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features` passed; browser confirmed Provider detail no longer shows `Default priority`, with no horizontal overflow and no console warnings/errors.
-  - Follow-up Provider list selection check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed clicking `Anthropic111` changes the Provider detail heading locally while URL remains `http://127.0.0.1:3000/providers`, `selected` remains absent, the selected row updates, and there are no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider inline detail check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed clicking `MiniMax` opens one `.provider-inline-detail-row` inside Provider list, removes `.provider-detail-card`, keeps the list full-width at `1097px`, keeps URL `http://127.0.0.1:3000/providers` without `selected`, shows API key status details, has no horizontal overflow, no Next.js overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider inline detail compacting check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `MiniMax` opens one inline detail row that starts with API keys, has no Provider details heading, no provider-detail-stats, no Available models/Last connected text, height `154px`, URL unchanged, no horizontal overflow, no Next.js overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider refresh action check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed 17 Provider list rows all show a row-level refresh button posting to `/api/provider-model-refresh` with a hidden provider id, `MiniMax` selection still opens the compact API keys detail, no horizontal overflow, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider row toggle check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed an expanded Provider row has one inline detail row, clicking the same row collapses to zero inline detail rows and zero expanded buttons, clicking it again restores one inline detail row, with no horizontal overflow and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider local refresh check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed clicking `Refresh models for OPEN AI1` from clean `/providers` keeps the URL unchanged at `/providers`, preserves the selected row and inline detail, keeps the page nonblank, has no horizontal overflow, and produces no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider header/runtime polish check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `Add Provider` has no icon, the button remains 30px tall, the sidebar gateway status dot/title center delta is `0px`, no horizontal overflow, and no console errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models button polish check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `Create Virtual Model` and `Query` have no icons, `Query` matches the search input height at `38.8px`, no horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models detail dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed clicking a Virtual Model row opens one `.vm-view-dialog`, removes `.vm-detail-card`, keeps `.vm-shell` as `block`, expands the list card to `1100.73px`, close returns to `/models`, no horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models route editor layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the route editor dialog has no `.vm-policy-note`, no `Current strategy` text, `.vm-editor-grid` is `display: block`, form/dialog width ratio is `0.957`, Add Model opens and closes normally, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models detail dialog layout check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the read-only `.vm-view-dialog` is `1024px` wide, uses `display: grid` with `479px 479px` columns, places Summary/Candidates and Warnings/Fallback as two cards per row, Close returns to `/models`, no horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models route editor width check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the edit `.vm-route-dialog` is `768px` wide, the form fills it at `0.935` ratio, outer overflow-x is hidden, candidates table overflow-x remains internal auto, Close returns to `/models`, no page horizontal overflow, no framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models route editor width/action check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the edit `.vm-route-dialog` is `896px` wide, the form fills it at `0.944` ratio, `.vm-dialog-actions` is centered with `0px` center delta against the dialog, the candidates table keeps internal horizontal scroll, there is no page horizontal overflow, and there are no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Activity detail dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `/activity` defaults to zero `.activity-detail-dialog` and zero `.activity-detail-panel`, `.activity-shell` is `display: block`, the list region is `1296px` wide at a `1597px` viewport, clicking the first Request ID opens one `role=dialog` / `aria-modal=true` `.activity-detail-dialog` at `768px`, Close returns to `/activity`, there is no page horizontal overflow, and there are no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Activity filter button check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Activity filter submit button reads `Query`, has zero `.flat-icon`/`svg` icons, has height `38.8px` matching the Request ID input at `38.8px`, submits without breaking the page, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Usage filter button check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Usage filter submit button reads `Query`, has zero `.flat-icon`/`svg` icons, has height `37.59px` matching the Provider select at `37.59px`, submits to `/usage` with form params, has no horizontal overflow, no visible framework overlay, and no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Limits rule dialog check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed `/limits` defaults to zero `.limits-config-panel`, zero `.limits-config-dialog`, three row-level `Edit` actions, zero stale row links, zero clickable table rows, `.limits-main` is `display: block`, the Limit Rules card spans the main width at `1295.91px`, clicking `Edit` opens one `role=dialog` / `aria-modal=true` `.limits-config-dialog` at `672px`, Close removes `limitDialog`, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Limits save button text check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog submit button reads `Save`, no `Save rules` text remains, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Playground action order check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Playground actions render as `Clear`, then `Send`, no `Send test` text remains, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Playground action alignment check: targeted unit, Console typecheck, lint, and browser checks passed; browser confirmed the Playground actions render as `Clear`, then `Send`, have zero icons, are centered, no `Send test` text remains, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Limits action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog actions are centered with `0px` center delta, render as `Cancel`, `Save`, have zero icons, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Limits action width check: targeted unit, Console typecheck, and lint passed; CSS now applies the same fixed width to both `.limits-config-actions button` and `.limits-config-actions .secondary-button`. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Provider disabled refresh check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed disabled Provider `Z.ai` has disabled refresh with `Enable provider to refresh models`, enabled Provider `OPEN AI1` remains refreshable, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models edit action style check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed Virtual Model row `Edit` actions use `link-button agent-action-edit`, old `.vm-table .table-action-link` count is `0`, the button is 28px tall with accent background/border, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Limits edit action style check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed Limit Rules row `Edit` actions use `link-button agent-action-edit`, old `.limits-rule-table .table-action-link` count is `0`, Delete remains visible, and there are no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Settings notification button check: targeted unit, Console typecheck, lint, and SSR/source checks passed; markup and CSS confirm the webhook notification submit button renders as text-only `Save`, uses normal centered button width, has zero icons, and no old long label remains. In-app Browser control timed out during navigation/DOM reads, so full visual browser validation was not completed. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Console UI consistency sweep check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser swept the 10 main Console routes with zero horizontal overflow, zero persistent right-side detail panels, text-only Query buttons with `0px` height delta, no console warnings/errors, and confirmed Agent/Provider create plus Virtual Model Add Model dialog actions are compact and icon-free. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Agent create action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the New agent `Create` action is text-only, has zero icons, has `0px` right delta against the form, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Virtual Models action alignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Virtual Model route editor actions render as `Cancel` / `Create`, use `flex-end`, have zero icons, have `0px` right delta, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up filter button wording check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed Agents, Virtual Models, Activity, and Usage filter buttons all render `Filter`, have zero icons, have no remaining visible `Query` buttons, have no horizontal overflow, and have no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Limits action realignment check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog actions render as `Cancel` / `Save`, use `flex-end`, keep equal `116px` widths, have zero icons, have `0px` right delta, and have no horizontal overflow or console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Follow-up Limits header cleanup check: `pnpm exec vitest run tests/features/console-dark-restyle.unit.test.ts`, `pnpm --filter @llmingress/console run typecheck`, and `pnpm run lint` passed; browser confirmed the Limits rule dialog header has no `.mono` key prefix, still shows `Rule configuration`, `test1`, and `Close`, has no horizontal overflow, and has no console warnings/errors. Full regression intentionally skipped for this UI-only tuning pass.
-  - Full regression merge check: initial `pnpm run verify:features` exposed stale local Next dev PID `47013` holding the Console dev lock and making Console E2E startup exit with code 1. After stopping that process, `pnpm test:e2e tests/e2e/v1-console.e2e.spec.ts` passed and the rerun `pnpm run verify:features` passed with all 10 passing features re-verified.
-
-## Required Verification
-
-Use the local PostgreSQL test database:
-
-```bash
-TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run db:migrate:check
-TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify
-TEST_DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:55432/postgres' pnpm run verify:features
-```
-
-## Operational Note
-
-Existing local/dev databases created before this compression should be dropped and recreated. The single baseline is a pre-release reset path, not an upgrade path for already-used installations.
+- None.

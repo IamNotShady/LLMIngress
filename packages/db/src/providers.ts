@@ -1,20 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { type PostgresQueryResultRow, withPostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient, withPostgresTransaction } from "@llmingress/db/client";
+import { clearProviderConnectionHealthWithClient } from "@llmingress/db/provider-health";
 
 export type {
   PostgresQueryClient,
   PostgresQueryResult,
   PostgresQueryResultRow,
 } from "@llmingress/db/client";
-export { PostgresClient, withPostgresClient } from "@llmingress/db/client";
-
-export type ProviderOAuthTestStatus =
-  | "auth_failed"
-  | "healthy"
-  | "network_error"
-  | "quota_limited"
-  | "unknown"
-  | "unhealthy";
+export { PostgresClient, withPooledPostgresClient } from "@llmingress/db/client";
 
 export type ProviderOAuthMetadata = {
   completedAt: Date | null;
@@ -22,10 +15,6 @@ export type ProviderOAuthMetadata = {
   enabled: boolean;
   id: string;
   label: string | null;
-  lastTestErrorCode: string | null;
-  lastTestErrorMessage: string | null;
-  lastTestStatus: ProviderOAuthTestStatus;
-  lastTestedAt: Date | null;
   priority: number;
   providerId: string;
   tokenExpiresAt: Date | null;
@@ -45,16 +34,12 @@ export type ProviderOAuthRuntimeConnection = ProviderOAuthMetadata & {
   providerKey: string;
 };
 
-type ProviderOAuthRow = PostgresQueryResultRow & {
+type ProviderOAuthRow = {
   completed_at: Date | null;
   created_at: Date;
   enabled: boolean;
   id: string;
   label: string | null;
-  last_test_error_code: string | null;
-  last_test_error_message: string | null;
-  last_test_status: ProviderOAuthTestStatus;
-  last_tested_at: Date | null;
   priority: number;
   provider_id: string;
   token_expires_at: Date | null;
@@ -77,7 +62,7 @@ type ProviderOAuthRuntimeRow = ProviderOAuthRow & {
 export async function listProviderOAuthMetadata(
   databaseUrl: string | undefined,
 ): Promise<ProviderOAuthMetadata[]> {
-  return withPostgresClient(databaseUrl, async (client) => {
+  return withPooledPostgresClient(databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         select id::text,
@@ -86,16 +71,13 @@ export async function listProviderOAuthMetadata(
                priority,
                enabled,
                token_expires_at,
-               last_test_status,
-               last_tested_at,
-               last_test_error_code,
-               last_test_error_message,
                created_at,
                updated_at,
                completed_at
         from provider_oauth
         where completed_at is not null
           and encrypted_token is not null
+          and deleted_at is null
         order by provider_id,
                  priority asc,
                  created_at asc,
@@ -117,7 +99,7 @@ export async function createProviderOAuthPendingConnection(input: {
   providerId: string;
 }): Promise<ProviderOAuthMetadata> {
   const rowId = cryptoRandomUUID();
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         insert into provider_oauth (
@@ -137,10 +119,6 @@ export async function createProviderOAuthPendingConnection(input: {
                   priority,
                   enabled,
                   token_expires_at,
-                  last_test_status,
-                  last_tested_at,
-                  last_test_error_code,
-                  last_test_error_message,
                   created_at,
                   updated_at,
                   completed_at
@@ -164,7 +142,7 @@ export async function readProviderOAuthPendingConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<ProviderOAuthPendingConnection> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthPendingRow>(
       `
         select provider_oauth.id::text,
@@ -177,10 +155,6 @@ export async function readProviderOAuthPendingConnection(input: {
                provider_oauth.pending_code_challenge,
                provider_oauth.pending_expires_at,
                provider_oauth.token_expires_at,
-               provider_oauth.last_test_status,
-               provider_oauth.last_tested_at,
-               provider_oauth.last_test_error_code,
-               provider_oauth.last_test_error_message,
                provider_oauth.created_at,
                provider_oauth.updated_at,
                provider_oauth.completed_at,
@@ -188,6 +162,7 @@ export async function readProviderOAuthPendingConnection(input: {
         from provider_oauth
         join providers on providers.id = provider_oauth.provider_id
         where provider_oauth.id = $1
+          and provider_oauth.deleted_at is null
           and providers.deleted_at is null
       `,
       [input.providerOAuthId],
@@ -207,7 +182,7 @@ export async function completeProviderOAuthConnection(input: {
   const shouldUpdateLabel = Object.hasOwn(input, "label");
   const shouldUpdatePriority = input.priority !== undefined;
 
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         update provider_oauth
@@ -222,16 +197,13 @@ export async function completeProviderOAuthConnection(input: {
             completed_at = coalesce(completed_at, now()),
             updated_at = now()
         where id = $1
+          and deleted_at is null
         returning id::text,
                   provider_id::text,
                   label,
                   priority,
                   enabled,
                   token_expires_at,
-                  last_test_status,
-                  last_tested_at,
-                  last_test_error_code,
-                  last_test_error_message,
                   created_at,
                   updated_at,
                   completed_at
@@ -246,7 +218,12 @@ export async function completeProviderOAuthConnection(input: {
         shouldUpdatePriority ? normalizeProviderOAuthPriority(input.priority) : null,
       ],
     );
-    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
+    const row = requireProviderOAuthRow(result.rows[0]);
+    await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: row.id,
+      providerId: row.provider_id,
+    });
+    return toProviderOAuthMetadata(row);
   });
 }
 
@@ -255,30 +232,32 @@ export async function setProviderOAuthConnectionEnabled(input: {
   enabled: boolean;
   providerOAuthId: string;
 }): Promise<ProviderOAuthMetadata> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRow>(
       `
         update provider_oauth
         set enabled = $2,
             updated_at = now()
         where id = $1
+          and deleted_at is null
         returning id::text,
                   provider_id::text,
                   label,
                   priority,
                   enabled,
                   token_expires_at,
-                  last_test_status,
-                  last_tested_at,
-                  last_test_error_code,
-                  last_test_error_message,
                   created_at,
                   updated_at,
                   completed_at
       `,
       [input.providerOAuthId, input.enabled],
     );
-    return toProviderOAuthMetadata(requireProviderOAuthRow(result.rows[0]));
+    const row = requireProviderOAuthRow(result.rows[0]);
+    await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: row.id,
+      providerId: row.provider_id,
+    });
+    return toProviderOAuthMetadata(row);
   });
 }
 
@@ -286,11 +265,22 @@ export async function deleteProviderOAuthConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<{ providerId: string }> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPostgresTransaction(input.databaseUrl, async (client) => {
     const result = await client.query<{ provider_id: string }>(
       `
-        delete from provider_oauth
+        update provider_oauth
+        set encrypted_token = null,
+            token_expires_at = null,
+            pending_state = null,
+            pending_code_verifier = null,
+            pending_code_challenge = null,
+            pending_expires_at = null,
+            completed_at = null,
+            deleted_at = now(),
+            enabled = false,
+            updated_at = now()
         where id = $1
+          and deleted_at is null
         returning provider_id::text
       `,
       [input.providerOAuthId],
@@ -299,6 +289,10 @@ export async function deleteProviderOAuthConnection(input: {
     if (!providerId) {
       throw new Error("Provider OAuth connection was not found.");
     }
+    await clearProviderConnectionHealthWithClient(client, {
+      providerConnectionId: input.providerOAuthId,
+      providerId,
+    });
     return { providerId };
   });
 }
@@ -307,7 +301,7 @@ export async function readProviderOAuthRuntimeConnection(input: {
   databaseUrl?: string;
   providerOAuthId: string;
 }): Promise<ProviderOAuthRuntimeConnection> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRuntimeRow>(
       `
         select provider_oauth.id::text,
@@ -317,10 +311,6 @@ export async function readProviderOAuthRuntimeConnection(input: {
                provider_oauth.enabled,
                provider_oauth.encrypted_token,
                provider_oauth.token_expires_at,
-               provider_oauth.last_test_status,
-               provider_oauth.last_tested_at,
-               provider_oauth.last_test_error_code,
-               provider_oauth.last_test_error_message,
                provider_oauth.created_at,
                provider_oauth.updated_at,
                provider_oauth.completed_at,
@@ -330,6 +320,7 @@ export async function readProviderOAuthRuntimeConnection(input: {
         where provider_oauth.id = $1
           and provider_oauth.completed_at is not null
           and provider_oauth.encrypted_token is not null
+          and provider_oauth.deleted_at is null
           and providers.deleted_at is null
       `,
       [input.providerOAuthId],
@@ -342,7 +333,7 @@ export async function readEnabledCompletedProviderOAuthConnections(input: {
   databaseUrl?: string;
   providerId: string;
 }): Promise<ProviderOAuthRuntimeConnection[]> {
-  return withPostgresClient(input.databaseUrl, async (client) => {
+  return withPooledPostgresClient(input.databaseUrl, async (client) => {
     const result = await client.query<ProviderOAuthRuntimeRow>(
       `
         select provider_oauth.id::text,
@@ -352,10 +343,6 @@ export async function readEnabledCompletedProviderOAuthConnections(input: {
                provider_oauth.enabled,
                provider_oauth.encrypted_token,
                provider_oauth.token_expires_at,
-               provider_oauth.last_test_status,
-               provider_oauth.last_tested_at,
-               provider_oauth.last_test_error_code,
-               provider_oauth.last_test_error_message,
                provider_oauth.created_at,
                provider_oauth.updated_at,
                provider_oauth.completed_at,
@@ -366,6 +353,8 @@ export async function readEnabledCompletedProviderOAuthConnections(input: {
           and provider_oauth.enabled = true
           and provider_oauth.completed_at is not null
           and provider_oauth.encrypted_token is not null
+          and provider_oauth.deleted_at is null
+          and providers.deleted_at is null
         order by provider_oauth.priority asc,
                  provider_oauth.created_at asc,
                  provider_oauth.id asc
@@ -376,30 +365,6 @@ export async function readEnabledCompletedProviderOAuthConnections(input: {
   });
 }
 
-export async function updateProviderOAuthTestResult(input: {
-  databaseUrl?: string;
-  errorCode: string | null;
-  errorMessage: string | null;
-  providerOAuthId: string;
-  status: ProviderOAuthTestStatus;
-  testedAt: string | Date;
-}): Promise<void> {
-  await withPostgresClient(input.databaseUrl, async (client) => {
-    await client.query(
-      `
-        update provider_oauth
-        set last_tested_at = $2::timestamptz,
-            last_test_status = $3,
-            last_test_error_code = $4,
-            last_test_error_message = $5,
-            updated_at = now()
-        where id = $1
-      `,
-      [input.providerOAuthId, input.testedAt, input.status, input.errorCode, input.errorMessage],
-    );
-  });
-}
-
 function toProviderOAuthMetadata(row: ProviderOAuthRow): ProviderOAuthMetadata {
   return {
     completedAt: row.completed_at ? new Date(row.completed_at) : null,
@@ -407,10 +372,6 @@ function toProviderOAuthMetadata(row: ProviderOAuthRow): ProviderOAuthMetadata {
     enabled: row.enabled,
     id: row.id,
     label: row.label,
-    lastTestErrorCode: row.last_test_error_code,
-    lastTestErrorMessage: row.last_test_error_message,
-    lastTestStatus: row.last_test_status,
-    lastTestedAt: row.last_tested_at ? new Date(row.last_tested_at) : null,
     priority: row.priority,
     providerId: row.provider_id,
     tokenExpiresAt: row.token_expires_at ? new Date(row.token_expires_at) : null,

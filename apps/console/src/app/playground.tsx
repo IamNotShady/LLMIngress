@@ -1,5 +1,6 @@
 "use client";
 
+import { isRecord } from "@llmingress/util";
 import { useRef, useState } from "react";
 import {
   buildPlaygroundChatRequest,
@@ -10,6 +11,7 @@ import {
   normalizePlaygroundGatewayBaseUrl,
   type PlaygroundProtocol,
   type PlaygroundRequestInput,
+  readOptionalPlaygroundNumber,
   readPlaygroundResponseText,
   readPlaygroundStreamResponseText,
 } from "./playground-helpers";
@@ -104,7 +106,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
         setStatusTone("error");
         return [];
       }
-      const body = await response.json().catch(() => null);
+      const body: unknown = await response.json().catch(() => null);
 
       if (!response.ok) {
         setStatus(readGatewayErrorMessage(body, "Failed to load allowed models."));
@@ -216,7 +218,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
       }
       const contentType = response.headers.get("content-type") ?? "";
       const isStreamResponse = contentType.includes("text/event-stream");
-      const body = isStreamResponse
+      const body: unknown = isStreamResponse
         ? response.ok
           ? null
           : await response.text().catch(() => "")
@@ -310,7 +312,7 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
                 id="playground-agent-api-key"
                 type="password"
                 autoComplete="off"
-                placeholder="sk-************************8fA7"
+                placeholder="llmi_************************"
                 value={agentApiKey}
                 onBlur={() => {
                   if (agentApiKey.trim() && models.length === 0 && !isLoadingModels) {
@@ -540,7 +542,7 @@ async function fetchPlaygroundRequestDetail(
   if (!response?.ok) {
     return null;
   }
-  const body = await response.json().catch(() => null);
+  const body: unknown = await response.json().catch(() => null);
   return readPlaygroundRequestDetail(body);
 }
 
@@ -643,13 +645,14 @@ function readPlaygroundRequestParams(input: {
   temperature: string;
   topP: string;
 }): Omit<PlaygroundRequestInput, "model"> {
+  const maxTokens = readOptionalPlaygroundNumber(input.maxTokens);
   return {
-    maxTokens: Math.max(1, Math.trunc(readFiniteNumber(input.maxTokens, 1024))),
+    ...(maxTokens === undefined ? {} : { maxTokens: Math.max(1, Math.trunc(maxTokens)) }),
     prompt: input.prompt,
     stream: input.stream === "on",
     systemPrompt: input.systemPrompt,
-    temperature: readFiniteNumber(input.temperature, 0.7),
-    topP: readFiniteNumber(input.topP, 0.9),
+    temperature: readOptionalPlaygroundNumber(input.temperature),
+    topP: readOptionalPlaygroundNumber(input.topP),
   };
 }
 
@@ -684,11 +687,6 @@ function readSafeGatewayBaseUrl(value: string): string | null {
   return normalizePlaygroundGatewayBaseUrl(value);
 }
 
-function readFiniteNumber(value: string, fallback: number): number {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
 function readGatewayModels(body: unknown): PlaygroundModel[] {
   if (!isRecord(body) || !Array.isArray(body.data)) {
     return [];
@@ -717,8 +715,4 @@ function readNumber(value: unknown): number | null {
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

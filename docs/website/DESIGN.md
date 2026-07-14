@@ -165,9 +165,16 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
 - Center-right: anchor links (Onest 15px, `--text-2`, hover `--text`).
   Anchor targets carry `scroll-margin-top: 76px` so the sticky bar never
   covers a section head.
-- Right: `GitHub ↗` ghost button (hairline border). Mobile ≤768px: links
-  collapse into a single `Menu` disclosure (native `<details>`); GitHub button
-  stays visible.
+- Right: `GitHub ↗` ghost button (hairline border) linking to
+  `github.com/IamNotShady/LLMIngress`, with a live star-count pill chip
+  (mono 12px, hairline border, tabular numerals). The count comes from the
+  GitHub REST API on page load, cached in `localStorage` for 1 hour; the
+  chip stays hidden when the API is unreachable or rate-limited, so the
+  button never shows a broken state. Mobile ≤768px: links collapse into a
+  single `Menu` disclosure (native `<details>`), nav gaps tighten, GitHub
+  button stays visible. Progressive narrowing: ≤374px drops the star chip,
+  ≤340px drops the wordmark (icon remains) — no horizontal overflow down
+  to 320px.
 
 ### 4.1 Hero
 
@@ -446,5 +453,6 @@ never reads as an empty list. Five items:
   the prototype keeps everything inline by design.
 - OG image: reuse the hero diagram composition on `--bg` at 1200×630.
 - Favicon: `docs/brand/llmingress-icon.svg`.
-- Real GitHub/docs URLs are placeholders (`#`) in the prototype — replace at
-  publish time.
+- GitHub, docs, license, and changelog links point at
+  `github.com/IamNotShady/LLMIngress` (docs tree, LICENSE blob, releases).
+  External links open in a new tab with `rel="noopener"`.

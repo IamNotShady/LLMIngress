@@ -165,6 +165,12 @@ main, .footer { position: relative; z-index: 1; }
 .nav-links a:hover { color: var(--text); }
 .nav-gh { margin-left: var(--s-2); }
 .nav-gh .btn { padding: 8px 16px; font-size: 0.875rem; }
+.gh-stars {
+  font-family: var(--f-mono); font-size: 0.75rem; font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 2px 9px;
+}
 .nav-menu { display: none; margin-left: auto; position: relative; }
 .nav-menu summary {
   list-style: none; cursor: pointer;
@@ -570,6 +576,9 @@ main, .footer { position: relative; z-index: 1; }
 @media (max-width: 768px) {
   .nav-links { display: none; }
   .nav-menu { display: block; }
+  .nav-in { gap: var(--s-4); }
+  .nav-gh { margin-left: 0; }
+  .nav-gh .btn { padding: 8px 12px; gap: 6px; }
   .pain-row { grid-template-columns: 1fr; gap: var(--s-6); }
   .spec-grid { grid-template-columns: 1fr; row-gap: var(--s-8); }
   .shapes { grid-template-columns: 1fr; }
@@ -579,6 +588,13 @@ main, .footer { position: relative; z-index: 1; }
   .cstat + .cstat { border-left: 0; }
   .cstat:nth-child(even) { border-left: 1px solid var(--line-soft); }
   .cstat:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
+}
+
+@media (max-width: 374px) {
+  .gh-stars { display: none; }
+}
+@media (max-width: 340px) {
+  .brand .wordmark { display: none; }
 }
 
 /* ============ motion safety ============ */
@@ -622,7 +638,7 @@ main, .footer { position: relative; z-index: 1; }
         <a href="#faq">FAQ</a>
       </div>
     </details>
-    <span class="nav-gh"><a class="btn btn-ghost" href="#" rel="noopener">GitHub <span class="ext">↗</span></a></span>
+    <span class="nav-gh"><a class="btn btn-ghost" href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener">GitHub <span class="gh-stars" id="gh-stars" hidden>★ 0</span> <span class="ext">↗</span></a></span>
   </div>
 </header>
 
@@ -641,7 +657,7 @@ main, .footer { position: relative; z-index: 1; }
         <strong>On your machine, with your keys.</strong></p>
       <div class="cta-row rise rise-4">
         <a class="btn btn-primary" href="#deploy">Deploy locally</a>
-        <a class="btn btn-ghost" href="#" rel="noopener">View on GitHub <span class="ext">↗</span></a>
+        <a class="btn btn-ghost" href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener">View on GitHub <span class="ext">↗</span></a>
       </div>
       <p class="trust rise rise-5">Apache-2.0 · Single-user · Keys never leave your box</p>
     </div>
@@ -1113,7 +1129,7 @@ docker compose up --build</pre>
       <h2 id="cta-h">Give your agents one door.</h2>
       <div class="cta-row">
         <a class="btn btn-primary" href="#deploy">Deploy locally</a>
-        <a class="btn btn-ghost" href="#" rel="noopener">Read the docs <span class="ext">↗</span></a>
+        <a class="btn btn-ghost" href="https://github.com/IamNotShady/LLMIngress/tree/main/docs" target="_blank" rel="noopener">Read the docs <span class="ext">↗</span></a>
       </div>
       <p class="one-liner">$ <b>docker compose up --build</b>&nbsp;&nbsp;# Gateway :4000 · Console :3000</p>
     </div>
@@ -1150,10 +1166,10 @@ docker compose up --build</pre>
       <nav aria-label="Project">
         <h4>Project</h4>
         <ul>
-          <li><a href="#" rel="noopener">GitHub ↗</a></li>
-          <li><a href="#" rel="noopener">Docs ↗</a></li>
-          <li><a href="#" rel="noopener">License · Apache-2.0</a></li>
-          <li><a href="#" rel="noopener">Changelog ↗</a></li>
+          <li><a href="https://github.com/IamNotShady/LLMIngress" target="_blank" rel="noopener">GitHub ↗</a></li>
+          <li><a href="https://github.com/IamNotShady/LLMIngress/tree/main/docs" target="_blank" rel="noopener">Docs ↗</a></li>
+          <li><a href="https://github.com/IamNotShady/LLMIngress/blob/main/LICENSE" target="_blank" rel="noopener">License · Apache-2.0</a></li>
+          <li><a href="https://github.com/IamNotShady/LLMIngress/releases" target="_blank" rel="noopener">Changelog ↗</a></li>
         </ul>
       </nav>
     </div>
@@ -1236,6 +1252,41 @@ document.addEventListener('click', function (e) {
     if (!menu.contains(e.target)) menu.removeAttribute('open');
   });
 });
+
+/* live GitHub star count in the nav (1h localStorage cache; chip stays
+   hidden if the API is unreachable or rate-limited) */
+(function () {
+  var el = document.getElementById('gh-stars');
+  if (!el || typeof fetch !== 'function') return;
+  var repo = 'IamNotShady/LLMIngress';
+  var cacheKey = 'gh-stars:' + repo;
+  function compact(n) {
+    if (n >= 10000) return Math.round(n / 1000) + 'k';
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(n);
+  }
+  function render(n) {
+    el.textContent = '★ ' + compact(n);
+    el.hidden = false;
+  }
+  try {
+    var cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if (cached && typeof cached.n === 'number' && Date.now() - cached.t < 3600000) {
+      render(cached.n);
+      return;
+    }
+  } catch (e) { /* ignore cache errors */ }
+  fetch('https://api.github.com/repos/' + repo)
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(String(r.status))); })
+    .then(function (data) {
+      if (typeof data.stargazers_count !== 'number') return;
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ n: data.stargazers_count, t: Date.now() }));
+      } catch (e) { /* storage may be unavailable */ }
+      render(data.stargazers_count);
+    })
+    .catch(function () { /* leave the chip hidden */ });
+})();
 
 /* pixel star field backdrop (adapted from uicapsule/background-pixel-stars,
    recolored to the brand palette; static under prefers-reduced-motion) */

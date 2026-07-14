@@ -1,10 +1,16 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { countProviderAggregateHealthStatuses } from "../../apps/console/src/app/_lib/provider-health";
 import { buildProviderConnectionProbeJobPayload } from "../../packages/db/src/provider-jobs";
 import {
   isProviderCredentialFailure,
   selectProviderProbeModels,
 } from "../../packages/provider/src/connectivity";
+import {
+  type ClaimedJob,
+  createJobRunner,
+  type JobStore,
+} from "../../packages/worker-runtime/src/worker-job-runner";
 import { providerConnectionProbeRetryDelayMs } from "../../packages/worker-runtime/src/worker-provider-connection-probe";
 
 describe("provider connection health", () => {
@@ -90,6 +96,81 @@ describe("provider connection health", () => {
       providerConnectionId: "connection-1",
       providerId: "provider-1",
       source: "manual_probe",
+    });
+  });
+
+  it("counts aggregate Provider health instead of counting connections", () => {
+    expect(
+      countProviderAggregateHealthStatuses([
+        { enabled: true, providerId: "mixed", status: "healthy" },
+        { enabled: true, providerId: "mixed", status: "unhealthy" },
+        { enabled: true, providerId: "failed", status: "unhealthy" },
+        { enabled: true, providerId: "failed", status: "unhealthy" },
+        { enabled: true, providerId: "checking", status: "checking" },
+        { enabled: true, providerId: "checking", status: "unhealthy" },
+        { enabled: false, providerId: "disabled", status: "disabled" },
+      ]),
+    ).toEqual({ healthy: 1, unhealthy: 1 });
+  });
+
+  it("cancels a job when its handler returns a canceled result", async () => {
+    const claimedJob: ClaimedJob = {
+      attemptNumber: 1,
+      id: "probe-canceled",
+      jobType: "provider_connection_probe",
+      maxAttempts: 3,
+      payload: {},
+      priority: 0,
+      trigger: "system",
+    };
+    let claimed = false;
+    let cancelCalls = 0;
+    let completeCalls = 0;
+    let failCalls = 0;
+    const store: JobStore = {
+      cancelJob: async (input) => {
+        cancelCalls += 1;
+        expect(input).toMatchObject({
+          attemptNumber: 1,
+          jobId: "probe-canceled",
+          result: { canceled: true, reason: "provider_disabled_or_missing" },
+          workerId: "provider-health-test",
+        });
+        return true;
+      },
+      claimNextJob: async () => {
+        if (claimed) {
+          return null;
+        }
+        claimed = true;
+        return claimedJob;
+      },
+      completeJob: async () => {
+        completeCalls += 1;
+        return true;
+      },
+      failJob: async () => {
+        failCalls += 1;
+        return true;
+      },
+      renewJobLease: async () => true,
+    };
+    const runner = createJobRunner({
+      handlers: {
+        provider_connection_probe: async () => ({
+          canceled: true,
+          reason: "provider_disabled_or_missing",
+        }),
+      },
+      store,
+      workerId: "provider-health-test",
+    });
+
+    await expect(runner.runOnce()).resolves.toBe(true);
+    expect({ cancelCalls, completeCalls, failCalls }).toEqual({
+      cancelCalls: 1,
+      completeCalls: 0,
+      failCalls: 0,
     });
   });
 

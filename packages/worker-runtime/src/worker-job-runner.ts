@@ -33,6 +33,8 @@ export type CompleteJobInput = {
   workerId: string;
 };
 
+export type CancelJobInput = CompleteJobInput;
+
 export type FailJobInput = {
   attemptNumber: number;
   errorCode: string;
@@ -52,6 +54,7 @@ export type RenewJobLeaseInput = {
 };
 
 export type JobStore = {
+  cancelJob: (input: CancelJobInput) => Promise<boolean>;
   claimNextJob: (input: ClaimNextJobInput) => Promise<ClaimedJob | null>;
   close?: () => Promise<void>;
   completeJob: (input: CompleteJobInput) => Promise<boolean>;
@@ -61,6 +64,11 @@ export type JobStore = {
 };
 
 export type JobHandler = (job: RunningJob) => Promise<unknown>;
+
+export type JobCanceledResult = {
+  canceled: true;
+  reason: string;
+};
 
 export type JobRunner = {
   runOnce: () => Promise<boolean>;
@@ -214,13 +222,18 @@ export function createJobRunner(options: CreateJobRunnerOptions): JobRunner {
           return { nextDelayMs: 0, processed: true };
         }
         const completedAt = now();
-        await options.store.completeJob({
+        const terminalInput = {
           attemptNumber: job.attemptNumber,
           jobId: job.id,
           now: completedAt,
           result,
           workerId: options.workerId,
-        });
+        };
+        if (isJobCanceledResult(result)) {
+          await options.store.cancelJob(terminalInput);
+        } else {
+          await options.store.completeJob(terminalInput);
+        }
         return { nextDelayMs: 0, processed: true };
       } catch (error) {
         if (leaseLost || abortController.signal.aborted) {
@@ -563,6 +576,68 @@ class PostgresJobStore implements JobStore {
     });
   }
 
+  async cancelJob(input: CancelJobInput): Promise<boolean> {
+    return withClient(this.databaseUrl, async (client) => {
+      await client.query("begin");
+
+      try {
+        const result = await client.query(
+          `
+            update jobs
+            set status = 'canceled',
+                result = $4::jsonb,
+                error_code = null,
+                error_message = null,
+                lease_owner = null,
+                lease_expires_at = null,
+                completed_at = $5::timestamptz,
+                updated_at = $5::timestamptz
+            where id = $1
+              and status = 'running'
+              and lease_owner = $2
+              and attempt_count = $3
+              and lease_expires_at > $5::timestamptz
+          `,
+          [
+            input.jobId,
+            input.workerId,
+            input.attemptNumber,
+            stringifyJson(input.result),
+            input.now.toISOString(),
+          ],
+        );
+
+        if (result.rowCount === 1) {
+          await client.query(
+            `
+              update job_attempts
+              set status = 'succeeded',
+                  result = $4::jsonb,
+                  finished_at = $5::timestamptz
+              where job_id = $1
+                and worker_id = $2
+                and attempt_number = $3
+                and status = 'running'
+            `,
+            [
+              input.jobId,
+              input.workerId,
+              input.attemptNumber,
+              stringifyJson(input.result),
+              input.now.toISOString(),
+            ],
+          );
+        }
+
+        await client.query("commit");
+        return result.rowCount === 1;
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      }
+    });
+  }
+
   async failJob(input: FailJobInput): Promise<boolean> {
     return withClient(this.databaseUrl, async (client) => {
       await client.query("begin");
@@ -778,6 +853,14 @@ function rowToClaimedJob(row: JobRow): ClaimedJob {
     priority: row.priority,
     trigger: row.trigger,
   };
+}
+
+function isJobCanceledResult(result: unknown): result is JobCanceledResult {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+  const candidate = result as Record<string, unknown>;
+  return candidate.canceled === true && typeof candidate.reason === "string";
 }
 
 function stringifyJson(value: unknown): string {

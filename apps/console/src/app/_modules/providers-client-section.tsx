@@ -9,6 +9,7 @@ import { type FormEvent, Fragment, useMemo, useState } from "react";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 import { buildQueryHref, type ConsoleSearchParams } from "../_lib/pagination";
+import { aggregateProviderConnectionHealthStatus } from "../_lib/provider-health";
 import { formatRelativeDateTime } from "../_lib/provider-relative-time";
 
 export function ProvidersClientSection({
@@ -841,17 +842,7 @@ function formatProviderAggregateHealthStatus(
   if (!provider.enabled) {
     return "disabled";
   }
-  const enabled = health.filter((connection) => connection.enabled);
-  if (enabled.length === 0) {
-    return "unknown";
-  }
-  if (enabled.some((connection) => connection.status === "healthy")) {
-    return "healthy";
-  }
-  if (enabled.some((connection) => connection.status === "checking")) {
-    return "checking";
-  }
-  return "unhealthy";
+  return aggregateProviderConnectionHealthStatus(health);
 }
 
 function formatModelContext(contextWindow: number | null): string {

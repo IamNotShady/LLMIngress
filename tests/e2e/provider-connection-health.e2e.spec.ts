@@ -3,9 +3,18 @@ import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provi
 import { gatewayBackgroundTasks } from "@llmingress/gateway-runtime/gateway-background-tasks";
 import { attachGatewayProviderCredentials } from "@llmingress/gateway-runtime/gateway-provider-credentials";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
+import { createPostgresJobRunner } from "@llmingress/worker-runtime/worker-job-runner";
 import { createProviderConnectionProbeJobHandler } from "@llmingress/worker-runtime/worker-provider-connection-probe";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
+import {
+  getFreePort,
+  signInFromFirstRun,
+  startConsoleProcess,
+  stopConsoleProcess,
+  waitForConsole,
+} from "../support/console-app";
+import { withProcessLock } from "../support/process-lock";
 
 const masterKeySource = { kind: "inline", value: "provider-connection-health-test-key" } as const;
 
@@ -283,6 +292,181 @@ test("a probe whose Provider snapshot changes does not commit health or retry st
       `,
     );
     expect(state.rows[0]).toEqual({ events: 0, jobs: 0, summaries: 0 });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("Worker persists a canceled job when its Provider is disabled", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_connection_probe_canceled_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const providerId = randomUUID();
+  const jobId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await fixture.query(
+      `
+        insert into providers (
+          id, provider_type, provider_key, display_name, base_url, enabled
+        )
+        values ($1, 'local', 'openai', 'Disabled Probe', 'http://provider.test/v1', false)
+      `,
+      [providerId],
+    );
+    await fixture.query(
+      `
+        insert into jobs (
+          id, job_type, status, trigger, payload, max_attempts, run_after
+        )
+        values (
+          $1, 'provider_connection_probe', 'pending', 'scheduled', $2::jsonb, 3,
+          now() - interval '1 second'
+        )
+      `,
+      [
+        jobId,
+        JSON.stringify({
+          providerConnectionId: providerId,
+          providerId,
+          source: "scheduled_probe",
+        }),
+      ],
+    );
+    const runner = createPostgresJobRunner({
+      databaseUrl: fixture.databaseUrl,
+      handlers: {
+        provider_connection_probe: createProviderConnectionProbeJobHandler({
+          databaseUrl: fixture.databaseUrl,
+          fetch: async () => {
+            throw new Error("A canceled probe must not call the Provider.");
+          },
+          masterKeySource,
+        }),
+      },
+      workerId: "provider-connection-canceled-test",
+    });
+
+    await expect(runner.runOnce()).resolves.toBe(true);
+    const state = await fixture.query<{
+      attempt_result: { canceled: boolean; reason: string };
+      attempt_status: string;
+      events: number;
+      job_result: { canceled: boolean; reason: string };
+      job_status: string;
+      pending_jobs: number;
+      summaries: number;
+    }>(
+      `
+        select jobs.status as job_status,
+               jobs.result as job_result,
+               job_attempts.status as attempt_status,
+               job_attempts.result as attempt_result,
+               (select count(*)::int from provider_health_events) as events,
+               (select count(*)::int from provider_health_summary) as summaries,
+               (
+                 select count(*)::int
+                 from jobs as pending
+                 where pending.job_type = 'provider_connection_probe'
+                   and pending.status = 'pending'
+               ) as pending_jobs
+        from jobs
+        join job_attempts on job_attempts.job_id = jobs.id
+        where jobs.id = $1
+      `,
+      [jobId],
+    );
+    expect(state.rows[0]).toEqual({
+      attempt_result: { canceled: true, reason: "provider_disabled_or_missing" },
+      attempt_status: "succeeded",
+      events: 0,
+      job_result: { canceled: true, reason: "provider_disabled_or_missing" },
+      job_status: "canceled",
+      pending_jobs: 0,
+      summaries: 0,
+    });
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("Console sidebar counts aggregate Provider health", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_provider_health_sidebar_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const mixedProviderId = randomUUID();
+  const failedProviderId = randomUUID();
+  const mixedHealthyConnectionId = randomUUID();
+  const mixedUnhealthyConnectionId = randomUUID();
+  const failedConnectionId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await fixture.query(
+      `
+        insert into providers (
+          id, provider_type, provider_key, display_name, base_url, enabled
+        )
+        values
+          ($1, 'api_key', 'openai', 'Mixed Provider', 'https://mixed.test/v1', true),
+          ($2, 'api_key', 'anthropic', 'Failed Provider', 'https://failed.test/v1', true)
+      `,
+      [mixedProviderId, failedProviderId],
+    );
+    for (const [id, providerId, prefix] of [
+      [mixedHealthyConnectionId, mixedProviderId, "mixed-ok"],
+      [mixedUnhealthyConnectionId, mixedProviderId, "mixed-bad"],
+      [failedConnectionId, failedProviderId, "failed"],
+    ]) {
+      await fixture.query(
+        `
+          insert into provider_api_keys (
+            id, provider_id, key_prefix, encrypted_key, key_id
+          )
+          values ($1, $2, $3, '{}'::jsonb, 'test-key')
+        `,
+        [id, providerId, prefix],
+      );
+    }
+    for (const [providerId, providerConnectionId] of [
+      [mixedProviderId, mixedUnhealthyConnectionId],
+      [failedProviderId, failedConnectionId],
+    ]) {
+      await fixture.query(
+        `
+          insert into provider_health_summary (
+            id, provider_id, provider_connection_id, reason_code, reason_message
+          )
+          values ($1, $2, $3, 'invalid_api_key', 'Invalid API key')
+        `,
+        [randomUUID(), providerId, providerConnectionId],
+      );
+    }
+
+    await withProcessLock("llmingress-console-next-dev", async () => {
+      const consoleApp = startConsoleProcess({
+        databaseUrl: fixture.databaseUrl,
+        port: await getFreePort(),
+      });
+      try {
+        const baseUrl = `http://localhost:${consoleApp.port}`;
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        try {
+          await waitForConsole(baseUrl, consoleApp);
+          await signInFromFirstRun(page, baseUrl);
+          await expect(page.getByRole("img", { name: "1 healthy providers" })).toBeVisible();
+          await expect(page.getByRole("img", { name: "1 unhealthy providers" })).toBeVisible();
+          await expect(page.getByRole("img", { name: "2 unhealthy providers" })).toHaveCount(0);
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await stopConsoleProcess(consoleApp);
+      }
+    });
   } finally {
     await fixture.dispose();
   }

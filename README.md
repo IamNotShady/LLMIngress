@@ -117,14 +117,6 @@ Gateway health endpoints do not require an Agent API key:
 
 ## How it works
 
-```mermaid
-flowchart LR
-  agents[AI Agents] --> gateway[Gateway] --> providers[Model Providers]
-  browser[Browser] --> console[Console] --> db[(PostgreSQL)] <--> worker[Worker]
-  gateway --> db
-  worker --> providers
-```
-
 - **Gateway** authenticates Agents, enforces enabled limits, resolves Virtual Models, executes
   fallback, and records request metadata.
 - **Console** owns configuration and operational views. It does not proxy Agent traffic or call

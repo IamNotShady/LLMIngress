@@ -1,14 +1,18 @@
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "@playwright/test";
-import { getFreePort } from "../support/console-app";
+import { buildGatewayAgentApiKeyHash } from "../../packages/gateway-runtime/src/gateway-auth";
+import { getFreePort, signInFromFirstRun } from "../support/console-app";
 
 const execFileAsync = promisify(execFile);
 
-test("one release-bound command installs, no-ops, and repairs a real Docker instance", async () => {
+test("one release-bound command installs, no-ops, and repairs a real Docker instance", async ({
+  page,
+}) => {
   test.setTimeout(600_000);
   const suffix = Math.random().toString(36).slice(2, 10);
   const instance = `e2e-${suffix}`;
@@ -110,7 +114,33 @@ test("one release-bound command installs, no-ops, and repairs a real Docker inst
       ) as string[];
       expect(environment.some((value) => value.startsWith("POSTGRES_PASSWORD="))).toBe(false);
       expect(environment.some((value) => value.startsWith("MASTER_KEY="))).toBe(false);
+      if (container !== `${prefix}-postgres`) {
+        expect(environment).toContain("MASTER_KEY_FILE=/run/llmingress/master-key");
+        await dockerExec(
+          container,
+          "sh",
+          "-c",
+          'test "$MASTER_KEY_FILE" = /run/llmingress/master-key && test -r "$MASTER_KEY_FILE"',
+        );
+      }
     }
+
+    const consoleUrl = `http://127.0.0.1:${consolePort}`;
+    await signInFromFirstRun(page, consoleUrl);
+    await expect(
+      page.getByText(`Gateway URL 127.0.0.1:${gatewayPort}`, { exact: true }),
+    ).toBeVisible();
+
+    const agentApiKey = `llmi_docker_${suffix}_agent_key`;
+    await startDockerFakeProvider(prefix, imageId);
+    await seedDockerGatewayRoute(prefix, agentApiKey);
+    await execFileAsync("docker", ["restart", `${prefix}-gateway`]);
+    await expect
+      .poll(() => httpStatus(`http://127.0.0.1:${gatewayPort}/health/ready`).catch(() => 0), {
+        timeout: 60_000,
+      })
+      .toBe(200);
+    await expectDockerGatewayRoute(gatewayPort, agentApiKey);
 
     await execFileAsync("bash", installerArgs, { maxBuffer: 20 * 1024 * 1024 });
     expect(await containerIds(containers)).toEqual(initialIds);
@@ -119,6 +149,27 @@ test("one release-bound command installs, no-ops, and repairs a real Docker inst
     await execFileAsync("bash", installerArgs, { maxBuffer: 20 * 1024 * 1024 });
     expect((await containerIds(containers))[`${prefix}-worker`]).toBeTruthy();
     expect(await httpStatus(`http://127.0.0.1:${gatewayPort}/health/ready`)).toBe(200);
+
+    await renderInstaller({ image: imageId, outputDirectory, version: "v1.1.0" });
+    await execFileAsync("bash", installerArgs, { maxBuffer: 20 * 1024 * 1024 });
+    expect(await readInstalledVersion(prefix)).toBe("v1.1.0");
+    expect(
+      await dockerExec(
+        `${prefix}-postgres`,
+        "psql",
+        "-U",
+        "postgres",
+        "-d",
+        "llmingress",
+        "-Atc",
+        "select display_name from providers where provider_key = 'ollama'",
+      ),
+    ).toBe("Docker Fake Provider");
+    await page.reload();
+    await expect(
+      page.getByText(`Gateway URL 127.0.0.1:${gatewayPort}`, { exact: true }),
+    ).toBeVisible();
+    await expectDockerGatewayRoute(gatewayPort, agentApiKey);
 
     await renderInstaller({ image: imageId, outputDirectory, version: "v0.9.0" });
     await expect(
@@ -397,6 +448,110 @@ async function dockerExec(container: string, ...args: string[]): Promise<string>
   return (await execFileAsync("docker", ["exec", container, ...args])).stdout.trim();
 }
 
+async function startDockerFakeProvider(prefix: string, image: string): Promise<void> {
+  const responseBody = JSON.stringify({
+    choices: [
+      {
+        finish_reason: "stop",
+        index: 0,
+        message: { content: "docker route ok", role: "assistant" },
+      },
+    ],
+    created: 1,
+    id: "chatcmpl-docker-lifecycle",
+    model: "fake-model",
+    object: "chat.completion",
+    usage: { completion_tokens: 3, prompt_tokens: 2, total_tokens: 5 },
+  });
+  const server = [
+    'const http = require("node:http");',
+    "http.createServer(async (request, response) => {",
+    "  for await (const chunk of request) void chunk;",
+    '  response.writeHead(200, { "content-type": "application/json" });',
+    `  response.end(${JSON.stringify(responseBody)});`,
+    '}).listen(8080, "0.0.0.0");',
+  ].join("\n");
+  await execFileAsync("docker", [
+    "run",
+    "-d",
+    "--name",
+    `${prefix}-fake-provider`,
+    "--network",
+    `${prefix}-network`,
+    "--entrypoint",
+    "node",
+    image,
+    "-e",
+    server,
+  ]);
+}
+
+async function seedDockerGatewayRoute(prefix: string, agentApiKey: string): Promise<void> {
+  const agentId = randomUUID();
+  const providerId = randomUUID();
+  const providerModelId = randomUUID();
+  const virtualModelId = randomUUID();
+  const routePolicyId = randomUUID();
+  const sql = `
+    insert into agents (id, name, key_prefix, key_hash, enabled)
+    values ('${agentId}', 'Docker Test Agent', '${agentApiKey.slice(0, 12)}', '${buildGatewayAgentApiKeyHash(agentApiKey)}', true);
+    insert into providers (
+      id, provider_type, provider_key, provider_template_id, display_name, base_url, enabled
+    ) values (
+      '${providerId}', 'local', 'ollama', 'ollama', 'Docker Fake Provider',
+      'http://${prefix}-fake-provider:8080/v1', true
+    );
+    insert into provider_models (
+      id, provider_id, model_id, display_name, input_modalities, output_modalities,
+      context_window, max_output_tokens, supports_streaming, supports_function_calling,
+      supports_reasoning, availability
+    ) values (
+      '${providerModelId}', '${providerId}', 'fake-model', 'Fake Model', array['text']::text[],
+      array['text']::text[], 128000, 8192, true, true, false, 'available'
+    );
+    insert into virtual_models (id, name, description, enabled)
+    values ('${virtualModelId}', 'docker-fixture-vm', 'Docker fixture VM', true);
+    update agents set default_virtual_model_id = '${virtualModelId}' where id = '${agentId}';
+    insert into route_policies (id, virtual_model_id, strategy, endpoint_protocol)
+    values ('${routePolicyId}', '${virtualModelId}', 'fixed', 'chat_completions');
+    insert into route_policy_candidates (id, route_policy_id, provider_model_id, candidate_order)
+    values ('${randomUUID()}', '${routePolicyId}', '${providerModelId}', 1);
+    insert into agent_virtual_models (agent_id, virtual_model_id)
+    values ('${agentId}', '${virtualModelId}');
+    insert into config_versions (version, source, description)
+    select coalesce(max(version), 0) + 1, 'console', 'Docker lifecycle route fixture'
+    from config_versions;
+  `;
+  await dockerExec(
+    `${prefix}-postgres`,
+    "psql",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-U",
+    "postgres",
+    "-d",
+    "llmingress",
+    "-c",
+    sql,
+  );
+}
+
+async function expectDockerGatewayRoute(gatewayPort: number, agentApiKey: string): Promise<void> {
+  const response = await fetch(`http://127.0.0.1:${gatewayPort}/v1/chat/completions`, {
+    body: JSON.stringify({
+      messages: [{ content: "ping", role: "user" }],
+      model: "docker-fixture-vm",
+      stream: false,
+    }),
+    headers: {
+      authorization: `Bearer ${agentApiKey}`,
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+  expect(response.status, await response.text()).toBe(200);
+}
+
 async function httpStatus(url: string): Promise<number> {
   const response = await fetch(url);
   await response.body?.cancel();
@@ -464,7 +619,7 @@ async function readConfigFile(prefix: string, filename: string): Promise<string>
 }
 
 async function cleanupInstance(prefix: string): Promise<void> {
-  for (const role of ["migrate", "worker", "console", "gateway", "postgres"]) {
+  for (const role of ["fake-provider", "migrate", "worker", "console", "gateway", "postgres"]) {
     await execFileAsync("docker", ["rm", "-f", `${prefix}-${role}`]).catch(() => undefined);
   }
   await execFileAsync("docker", ["network", "rm", `${prefix}-network`]).catch(() => undefined);

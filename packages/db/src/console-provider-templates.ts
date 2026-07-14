@@ -94,6 +94,7 @@ export type ProviderTemplateCreateInput = {
 
 export type ProviderTemplateFormInput = {
   baseUrl?: string | null;
+  displayName?: string | null;
   templateId?: string | null;
 };
 
@@ -346,8 +347,17 @@ export function normalizeProviderTemplateFormInput(
     providerType: template.providerType,
     value: input.baseUrl ?? template.baseUrl,
   });
+  const displayName = input.displayName?.trim();
+  if (!displayName) {
+    throw consoleValidationError(
+      "Provider display name is required.",
+      "provider_display_name_required",
+      { field: "displayName" },
+    );
+  }
   return {
     ...toCreateInput(template, baseUrl),
+    displayName,
     providerTemplateId: template.id,
   };
 }

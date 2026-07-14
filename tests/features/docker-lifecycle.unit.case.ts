@@ -47,8 +47,23 @@ describe("one-command Docker lifecycle", () => {
     expect(installer).toContain("$filename.partial");
     expect(installer).toContain("unless-stopped");
     expect(installer).toContain("/health/ready");
+    expect(installer).toContain("-e MASTER_KEY_FILE=/run/llmingress/master-key");
+    expect(installer).toMatch(/console\)[\s\S]*-e "GATEWAY_URL=\$GATEWAY_URL"/);
+    expect(installer.match(/-e "GATEWAY_URL=\$GATEWAY_URL"/g)).toHaveLength(1);
+    expect(installer).not.toContain("GATEWAY_PUBLIC_BASE_URL");
     expect(installer).not.toMatch(/POSTGRES_PASSWORD=/);
     expect(installer).not.toMatch(/MASTER_KEY=/);
+  });
+
+  it("exposes the public Gateway URL only to the Compose Console service", async () => {
+    const compose = await readFile("docker-compose.yml", "utf8");
+    const consoleService = compose.slice(
+      compose.indexOf("  console:"),
+      compose.indexOf("  worker:"),
+    );
+
+    expect(consoleService).toContain("GATEWAY_URL:");
+    expect(compose.match(/^\s+GATEWAY_URL:/gm)).toHaveLength(1);
   });
 
   it("renders auditable release assets bound to exact image digests", async () => {

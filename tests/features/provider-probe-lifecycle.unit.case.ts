@@ -23,24 +23,28 @@ describe("provider probe lifecycle", () => {
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "https://proxy.example.test/google/v1/",
+        displayName: "Google Gemini",
         templateId: "google",
       }).baseUrl,
     ).toBe("https://proxy.example.test/google/v1");
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "https://proxy.example.test/codex/",
+        displayName: "OpenAI Codex",
         templateId: "openai_codex",
       }).baseUrl,
     ).toBe("https://proxy.example.test/codex");
     expect(() =>
       normalizeProviderTemplateFormInput({
         baseUrl: "http://provider.example.test/v1",
+        displayName: "Google Gemini",
         templateId: "google",
       }),
     ).toThrow(/https/i);
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "http://127.0.0.1:4010/v1",
+        displayName: "Google Gemini",
         templateId: "google",
       }).baseUrl,
     ).toBe("http://127.0.0.1:4010/v1");

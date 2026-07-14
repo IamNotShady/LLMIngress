@@ -72,15 +72,30 @@ describe("console provider template registry", () => {
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "http://127.0.0.1:11434/v1/",
+        displayName: "  Local Ollama  ",
         templateId: "ollama",
       }),
     ).toMatchObject({
       baseUrl: "http://127.0.0.1:11434/v1",
+      displayName: "Local Ollama",
       id: "ollama",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
     });
+    expect(() =>
+      normalizeProviderTemplateFormInput({
+        baseUrl: "http://127.0.0.1:11434/v1",
+        displayName: "   ",
+        templateId: "ollama",
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "provider_display_name_required",
+        details: { field: "displayName" },
+        kind: "validation",
+      }),
+    );
   });
 
   it("keeps subscription protocol paths fixed while allowing custom API roots", () => {
@@ -108,6 +123,7 @@ describe("console provider template registry", () => {
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "https://example.com/codex",
+        displayName: "OpenAI Codex",
         templateId: "openai_codex",
       }).baseUrl,
     ).toBe("https://example.com/codex");

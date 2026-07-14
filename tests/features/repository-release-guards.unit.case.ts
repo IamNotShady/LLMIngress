@@ -42,6 +42,17 @@ const retiredProductionTerms = [
 ];
 
 describe("core release guards", () => {
+  it("pins local and CI PostgreSQL to 18.4 Alpine", () => {
+    const compose = readFileSync(join(repoRoot, "docker-compose.yml"), "utf8");
+    const ci = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+
+    expect(compose).toContain("image: postgres:18.4-alpine");
+    expect(compose).toMatch(/^\s+- postgres-data:\/var\/lib\/postgresql$/m);
+    expect(compose).not.toContain("- postgres-data:/var/lib/postgresql/data");
+    expect(ci).toContain("image: postgres:18.4-alpine");
+    expect(`${compose}\n${ci}`).not.toMatch(/image:\s*postgres:16(?:\b|-)/);
+  });
+
   it("tracks exactly nine passing core milestones", () => {
     const tracker = JSON.parse(readFileSync(join(repoRoot, "feature_list.json"), "utf8")) as {
       features: Array<{ id: string; status: string; verification: string }>;

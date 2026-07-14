@@ -13,6 +13,7 @@ const gatewayErrorStatusByCode: Record<GatewayErrorCode, number> = {
   missing_agent_api_key: 401,
   missing_model: 400,
   provider_credentials_missing: 500,
+  provider_connection_unavailable: 503,
   provider_protocol_unsupported: 400,
   provider_rate_limited: 429,
   provider_redirect_rejected: 502,

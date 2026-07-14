@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { gatewayBackgroundTasks } from "../../packages/gateway-runtime/src/gateway-background-tasks";
 import type { GatewayRouteCandidateSnapshot } from "../../packages/gateway-runtime/src/gateway-config-reload";
 import {
   buildGatewayProviderErrorLog,
@@ -53,7 +54,11 @@ describe("gateway fallback health", () => {
   it("tries the next credential on auth, quota, and rate-limit failures", async () => {
     const calls: string[] = [];
     const fallbackAttempts: FallbackFailedAttempt[] = [];
-    const recordHealthEvent = vi.fn();
+    const enqueueConnectionProbe = vi.fn(async () => ({
+      jobId: "probe-job",
+      queued: true as const,
+      reused: false,
+    }));
 
     const result = await executeProviderFallbackAttempts({
       callProvider: vi.fn(async ({ providerApiKey }) => {
@@ -71,15 +76,16 @@ describe("gateway fallback health", () => {
       candidates: [
         fallbackCandidate({
           providerApiKeys: [
-            providerKey({ keyPrefix: "bad-auth" }),
-            providerKey({ keyPrefix: "good-auth" }),
+            providerKey({ keyPrefix: "bad-auth", providerConnectionId: "bad-connection" }),
+            providerKey({ keyPrefix: "good-auth", providerConnectionId: "good-connection" }),
           ],
         }),
         fallbackCandidate({ providerModelId: "pm-should-not-run" }),
       ],
       fallbackAttempts,
-      recordHealthEvent,
+      enqueueConnectionProbe,
     });
+    await gatewayBackgroundTasks.drain({ timeoutMs: 1_000 });
 
     expect(result?.candidate.providerApiKeyPrefix).toBe("good-auth");
     expect(calls).toEqual(["bad-auth", "good-auth"]);
@@ -91,16 +97,23 @@ describe("gateway fallback health", () => {
         statusCode: 401,
       },
     ]);
-    expect(recordHealthEvent).not.toHaveBeenCalled();
+    expect(enqueueConnectionProbe).toHaveBeenCalledOnce();
+    expect(enqueueConnectionProbe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerConnectionId: "bad-connection",
+        providerId: "provider-1",
+        source: "gateway_credential_error",
+      }),
+    );
   });
 
-  it("skips remaining credentials for 5xx failures and records failed candidate health once", async () => {
+  it("skips remaining credentials for 5xx failures without probing credential health", async () => {
     const calls: string[] = [];
     const fallbackAttempts: FallbackFailedAttempt[] = [];
-    const recordHealthEvent = vi.fn(async () => ({
-      eventId: "event",
-      notification: {},
-      summaryId: "summary",
+    const enqueueConnectionProbe = vi.fn(async () => ({
+      jobId: "probe-job",
+      queued: true as const,
+      reused: false,
     }));
 
     const result = await executeProviderFallbackAttempts({
@@ -132,7 +145,7 @@ describe("gateway fallback health", () => {
         }),
       ],
       fallbackAttempts,
-      recordHealthEvent,
+      enqueueConnectionProbe,
     });
 
     expect(result?.candidate.providerModelId).toBe("pm-2");
@@ -146,21 +159,14 @@ describe("gateway fallback health", () => {
         statusCode: 503,
       },
     ]);
-    expect(recordHealthEvent).toHaveBeenCalledOnce();
-    expect(recordHealthEvent).toHaveBeenCalledWith({
-      event: expect.objectContaining({
-        providerId: "provider-1",
-        status: "unhealthy",
-        trigger: "request_path",
-      }),
-      providerModelId: "pm-1",
-    });
+    await gatewayBackgroundTasks.drain({ timeoutMs: 1_000 });
+    expect(enqueueConnectionProbe).not.toHaveBeenCalled();
   });
 
   it("falls back for any Provider HTTP 400 without polluting provider health", async () => {
     const calls: string[] = [];
     const fallbackAttempts: FallbackFailedAttempt[] = [];
-    const recordHealthEvent = vi.fn();
+    const enqueueConnectionProbe = vi.fn();
 
     const result = await executeProviderFallbackAttempts({
       callProvider: vi.fn(async ({ candidate, providerApiKey }) => {
@@ -191,7 +197,7 @@ describe("gateway fallback health", () => {
         }),
       ],
       fallbackAttempts,
-      recordHealthEvent,
+      enqueueConnectionProbe,
     });
 
     expect(result?.candidate.providerModelId).toBe("pm-2");
@@ -205,7 +211,7 @@ describe("gateway fallback health", () => {
         statusCode: 400,
       },
     ]);
-    expect(recordHealthEvent).not.toHaveBeenCalled();
+    expect(enqueueConnectionProbe).not.toHaveBeenCalled();
   });
 
   it("keeps streaming on the shared fallback attempt executor", () => {
@@ -229,7 +235,6 @@ function fallbackCandidate(
     baseUrl: "http://provider.test/v1",
     candidateOrder: 1,
     displayName: "Fake Model",
-    healthStatus: "healthy",
     modelId: "fake-model",
     price: {
       modelId: "fake-model",
@@ -249,6 +254,7 @@ function providerKey(overrides: Partial<FallbackProviderApiKey> = {}): FallbackP
   return {
     apiKey: "fake-provider-key",
     keyPrefix: "fake-key",
+    providerConnectionId: "connection-1",
     ...overrides,
   };
 }

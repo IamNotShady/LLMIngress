@@ -5,7 +5,7 @@ describe("core Worker operations", () => {
   it("keeps provider maintenance handlers and leased job execution", () => {
     const workerMain = readFileSync("apps/worker/src/main.ts", "utf8");
     expect(workerMain).toContain("createModelRefreshJobHandler");
-    expect(workerMain).toContain("createProviderConnectivityCheckJobHandler");
+    expect(workerMain).toContain("createProviderConnectionProbeJobHandler");
     expect(workerMain).toContain("createPriceSyncJobHandler");
 
     const runner = readFileSync("packages/worker-runtime/src/worker-job-runner.ts", "utf8");

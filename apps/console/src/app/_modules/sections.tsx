@@ -89,17 +89,19 @@ export function formatRouteEndpointProtocolLabel(protocol: string): string {
   return "Unspecified";
 }
 
-export function buildRoutePolicyHealthWarningCandidates(
+export function buildRoutePolicyConnectionHealthWarningCandidates(
   routePolicy: Awaited<ReturnType<typeof listRoutePolicies>>[number],
-  providerHealthByProviderId: Map<string, ConsoleProviderHealthSummary>,
+  providerHealthByProviderId: Map<string, ConsoleProviderHealthSummary[]>,
 ) {
   return routePolicy.candidates.map((candidate) => {
-    const providerHealth = providerHealthByProviderId.get(candidate.providerId);
-    const modelHealth = providerHealth?.models.find((model) => model.id === candidate.id);
+    const providerHealth = providerHealthByProviderId.get(candidate.providerId) ?? [];
+    const enabledConnections = providerHealth.filter((connection) => connection.enabled);
+    const allConnectionsUnhealthy =
+      enabledConnections.length > 0 &&
+      enabledConnections.every((connection) => connection.status === "unhealthy");
     return {
-      modelHealthStatus: modelHealth?.status ?? null,
+      allConnectionsUnhealthy,
       optionLabel: candidate.optionLabel,
-      providerHealthStatus: providerHealth?.status ?? null,
     };
   });
 }

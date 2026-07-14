@@ -1,9 +1,7 @@
-import { recordProviderAndModelHealth } from "@llmingress/db/provider-health";
+import { enqueueProviderConnectionProbeJob } from "@llmingress/db/provider-jobs";
 import { createLogger } from "@llmingress/logging";
-import {
-  classifyProviderFailureStatus,
-  shouldRecordProviderRequestPathHealthFailure,
-} from "@llmingress/provider/connectivity";
+import { isProviderCredentialFailure } from "@llmingress/provider/connectivity";
+import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import type { GatewayRouteCandidateSnapshot } from "./gateway-config-reload.ts";
 import { GatewayPipelineError, truncateProviderMessage } from "./gateway-errors.ts";
 
@@ -12,6 +10,7 @@ const logger = createLogger("gateway");
 export type FallbackChainCandidate = GatewayRouteCandidateSnapshot & {
   apiKey: string;
   baseUrl: string;
+  providerConnectionId?: string;
   providerApiKeyId?: string;
   providerApiKeyPrefix?: string;
   providerApiKeys?: readonly FallbackProviderApiKey[];
@@ -21,6 +20,7 @@ export type FallbackProviderApiKey = {
   apiKey: string;
   credentialKind?: "api_key" | "oauth";
   keyPrefix?: string;
+  providerConnectionId: string;
   providerApiKeyId?: string;
   providerOAuthId?: string;
 };
@@ -30,6 +30,7 @@ export type FallbackFailedAttempt = {
   errorCode: string;
   errorMessage: string;
   failedBeforeFirstByte: boolean;
+  providerConnectionId?: string;
   providerApiKeyId?: string;
   providerApiKeyPrefix?: string;
   providerModelId: string;
@@ -66,7 +67,7 @@ export type ExecuteProviderFallbackAttemptsInput<TSuccess extends ProviderFallba
     databaseUrl?: string;
     fallbackAttempts: FallbackFailedAttempt[];
     recordFailedAttempt?: (attempt: FallbackFailedAttempt) => Promise<void> | void;
-    recordHealthEvent?: typeof recordProviderAndModelHealth;
+    enqueueConnectionProbe?: typeof enqueueProviderConnectionProbeJob;
     requestId?: string;
   };
 
@@ -120,7 +121,6 @@ export async function executeProviderFallbackAttempts<
 ): Promise<ProviderFallbackAttemptsResult<TSuccess> | undefined> {
   let attemptOrder = 0;
   for (const candidate of input.candidates) {
-    const candidateFailedAttempts: FallbackFailedAttempt[] = [];
     let stopChain = false;
     for (const providerApiKey of readFallbackProviderApiKeys(candidate)) {
       attemptOrder += 1;
@@ -131,6 +131,7 @@ export async function executeProviderFallbackAttempts<
           candidate: {
             ...candidate,
             apiKey: providerApiKey.apiKey,
+            providerConnectionId: providerApiKey.providerConnectionId,
             providerApiKeyId: providerApiKey.providerApiKeyId,
             providerApiKeyPrefix: providerApiKey.keyPrefix,
           },
@@ -155,8 +156,8 @@ export async function executeProviderFallbackAttempts<
         result,
       });
       input.fallbackAttempts.push(failedAttempt);
-      candidateFailedAttempts.push(failedAttempt);
       await input.recordFailedAttempt?.(failedAttempt);
+      await recordCandidateHealthFailure(input, candidate, [failedAttempt]);
 
       const decision = classifyFallbackFailure(result);
       if (decision.stopChain) {
@@ -168,9 +169,6 @@ export async function executeProviderFallbackAttempts<
       }
     }
 
-    if (candidateFailedAttempts.length > 0) {
-      await recordCandidateHealthFailure(input, candidate, candidateFailedAttempts);
-    }
     if (stopChain) {
       return undefined;
     }
@@ -225,6 +223,7 @@ export function buildFallbackFailedAttempt(input: {
     errorCode: input.result.errorCode,
     errorMessage: input.result.errorMessage,
     failedBeforeFirstByte,
+    providerConnectionId: input.providerApiKey.providerConnectionId,
     ...(input.providerApiKey.providerApiKeyId
       ? { providerApiKeyId: input.providerApiKey.providerApiKeyId }
       : {}),
@@ -269,6 +268,8 @@ export function readFallbackProviderApiKeys(
   return [
     {
       apiKey: candidate.apiKey,
+      providerConnectionId:
+        candidate.providerConnectionId ?? candidate.providerApiKeyId ?? candidate.providerId,
       ...(candidate.providerApiKeyPrefix ? { keyPrefix: candidate.providerApiKeyPrefix } : {}),
       ...(candidate.providerApiKeyId ? { providerApiKeyId: candidate.providerApiKeyId } : {}),
     },
@@ -278,50 +279,39 @@ export function readFallbackProviderApiKeys(
 export async function recordCandidateHealthFailure(
   input: {
     databaseUrl?: string;
-    recordHealthEvent?: typeof recordProviderAndModelHealth;
+    enqueueConnectionProbe?: typeof enqueueProviderConnectionProbeJob;
   },
   candidate: FallbackChainCandidate,
   failedAttempts: FallbackFailedAttempt[],
 ): Promise<void> {
-  if (failedAttempts.length === 0) {
-    return;
+  const enqueue = input.enqueueConnectionProbe ?? enqueueProviderConnectionProbeJob;
+  for (const attempt of failedAttempts) {
+    if (
+      !attempt.providerConnectionId ||
+      !isProviderCredentialFailure({
+        errorCode: attempt.errorCode,
+        errorMessage: attempt.errorMessage,
+        statusCode: attempt.statusCode,
+      })
+    ) {
+      continue;
+    }
+    runGatewayBackgroundTask({
+      message: "gateway provider connection probe enqueue failed",
+      metadata: {
+        providerConnectionId: attempt.providerConnectionId,
+        providerId: candidate.providerId,
+      },
+      name: "gateway.provider_connection_probe.enqueue",
+      task: async () => {
+        await enqueue({
+          ...(input.databaseUrl ? { databaseUrl: input.databaseUrl } : {}),
+          providerConnectionId: attempt.providerConnectionId as string,
+          providerId: candidate.providerId,
+          source: "gateway_credential_error",
+          trigger: "system",
+        });
+      },
+    });
   }
-
-  const latestAttempt = failedAttempts[failedAttempts.length - 1];
-  if (!latestAttempt) {
-    return;
-  }
-  if (
-    !shouldRecordProviderRequestPathHealthFailure({
-      errorCode: latestAttempt.errorCode,
-      errorMessage: latestAttempt.errorMessage,
-      statusCode: latestAttempt.statusCode,
-    })
-  ) {
-    return;
-  }
-
-  const healthRecorder = input.recordHealthEvent ?? recordProviderAndModelHealth;
-
-  const shared = {
-    ...(input.databaseUrl ? { databaseUrl: input.databaseUrl } : {}),
-    errorCode: latestAttempt.errorCode,
-    errorMessage: latestAttempt.errorMessage,
-    metadata: {
-      attemptCount: failedAttempts.length,
-      failedBeforeFirstByte: latestAttempt.failedBeforeFirstByte,
-      providerApiKeyPrefix: latestAttempt.providerApiKeyPrefix ?? null,
-    },
-    status: classifyProviderFailureStatus({
-      errorCode: latestAttempt.errorCode,
-      errorMessage: latestAttempt.errorMessage,
-      statusCode: latestAttempt.statusCode,
-    }),
-    trigger: "request_path" as const,
-  };
-
-  await healthRecorder({
-    event: { ...shared, providerId: candidate.providerId },
-    providerModelId: candidate.providerModelId,
-  });
 }

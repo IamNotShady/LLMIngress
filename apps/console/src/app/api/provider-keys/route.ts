@@ -2,8 +2,9 @@ import {
   deleteProviderApiKey,
   readConsoleMasterKeySource,
   saveProviderApiKey,
+  setProviderApiKeyEnabled,
 } from "@llmingress/db/console-provider-keys";
-import { enqueueProviderProbeLifecycleJob } from "@llmingress/db/provider-jobs";
+import { enqueueProviderConnectionProbeJob } from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
@@ -23,6 +24,25 @@ export const POST = withConsoleAuth(async (request) => {
       );
     }
 
+    if (action === "enable" || action === "disable") {
+      const result = await setProviderApiKeyEnabled({
+        enabled: action === "enable",
+        providerApiKeyId: readRequiredText(form, "providerApiKeyId"),
+      });
+      if (result.enabled) {
+        await enqueueProviderConnectionProbeJob({
+          providerConnectionId: result.id,
+          providerId: result.providerId,
+          resetHealth: true,
+          source: "api_key_saved",
+        });
+      }
+      return NextResponse.redirect(
+        new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
+        303,
+      );
+    }
+
     const providerId = readRequiredText(form, "providerId");
     const plaintext = readRequiredText(form, "providerApiKey");
     const result = await saveProviderApiKey({
@@ -30,10 +50,13 @@ export const POST = withConsoleAuth(async (request) => {
       masterKeySource: readConsoleMasterKeySource(),
       plaintext,
       priority: readNumber(form, "priority"),
+      providerApiKeyId: readText(form, "providerApiKeyId"),
       providerId,
     });
-    await enqueueProviderProbeLifecycleJob({
+    await enqueueProviderConnectionProbeJob({
+      providerConnectionId: result.metadata.id,
       providerId,
+      resetHealth: true,
       source: "api_key_saved",
     });
 

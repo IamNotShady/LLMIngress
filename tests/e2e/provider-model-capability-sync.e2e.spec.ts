@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { updateProviderModelManualCapabilities } from "@llmingress/db/console-provider-model-capabilities";
-import { recordProviderHealthEvent } from "@llmingress/db/provider-health";
 import { mergeProviderModelRegistryEntries } from "@llmingress/provider/price-source";
 import { refreshProviderModels } from "@llmingress/worker-runtime/worker-model-refresh";
-import { createProviderConnectivityCheckJobHandler } from "@llmingress/worker-runtime/worker-provider-connectivity-check";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
@@ -157,90 +155,6 @@ test("provider model refresh respects source priority and manual overrides", asy
       supports_reasoning: false,
     });
     expect(cleared.capability_metadata.manualCapabilities).toBeUndefined();
-  } finally {
-    await fixture.dispose();
-  }
-});
-
-test("successful connectivity probe restores the selected provider model health", async () => {
-  const fixture = await createTestPostgresFixture({
-    databaseNamePrefix: `llmingress_model_health_${randomUUID().replaceAll("-", "_")}`,
-  });
-  const providerId = randomUUID();
-  const providerModelId = randomUUID();
-
-  try {
-    await runMigrations({ databaseUrl: fixture.databaseUrl });
-    await fixture.query(
-      `
-        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
-        values ($1, 'local', 'openai', 'Health Provider', 'http://provider.test/v1', true)
-      `,
-      [providerId],
-    );
-    await fixture.query(
-      `
-        insert into provider_models (
-          id,
-          provider_id,
-          model_id,
-          display_name,
-          context_window,
-          supports_streaming,
-          availability
-        )
-        values ($1, $2, 'gpt-health', 'GPT Health', 128000, true, 'available')
-      `,
-      [providerModelId, providerId],
-    );
-    await recordProviderHealthEvent({
-      databaseUrl: fixture.databaseUrl,
-      errorCode: "provider_http_error",
-      errorMessage: "Provider request failed.",
-      providerId,
-      providerModelId,
-      status: "unhealthy",
-      trigger: "request_path",
-    });
-
-    const handler = createProviderConnectivityCheckJobHandler({
-      databaseUrl: fixture.databaseUrl,
-      fetch: async (url) =>
-        String(url).endsWith("/models")
-          ? Response.json({ data: [{ id: "gpt-health" }] })
-          : new Response(JSON.stringify({ choices: [{ message: { content: "pong" } }] }), {
-              headers: { "content-type": "application/json" },
-              status: 200,
-            }),
-      modelPriceSource: async () => [],
-      modelRegistrySource: async () => [],
-      masterKeySource: { kind: "inline", value: "test-master-key" },
-    });
-    await handler({
-      attemptNumber: 1,
-      id: randomUUID(),
-      jobType: "provider_connectivity_check",
-      maxAttempts: 1,
-      payload: { providerId },
-      priority: 0,
-      signal: new AbortController().signal,
-      trigger: "manual",
-      workerId: "provider-health-test",
-    });
-
-    const summaries = await fixture.query<{ provider_model_id: string | null; status: string }>(
-      `
-        select provider_model_id::text, status
-        from provider_health_summary
-        where provider_id = $1
-        order by provider_model_id nulls first
-      `,
-      [providerId],
-    );
-    expect(summaries.rows).toEqual([
-      { provider_model_id: null, status: "healthy" },
-      { provider_model_id: providerModelId, status: "healthy" },
-    ]);
   } finally {
     await fixture.dispose();
   }

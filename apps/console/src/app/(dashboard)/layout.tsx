@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { FirstRunSetup, Login } from "../_components/auth-screens";
 import { Sidebar } from "../_components/sidebar";
 import { Topbar } from "../_components/topbar";
+import { countProviderAggregateHealthStatuses } from "../_lib/provider-health";
 
 // Auth guard + persistent shell for every console module. When the console is
 // not initialized or the visitor is signed out, the matching auth screen is
@@ -22,19 +23,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
 
   const providerHealthSummaries = await listConsoleProviderHealthSummaries();
-  const providerHealthyCount = providerHealthSummaries.filter(
-    (summary) => summary.status === "healthy",
-  ).length;
-  const providerUnhealthyCount = providerHealthSummaries.filter((summary) =>
-    ["auth_failed", "network_error", "quota_limited", "unhealthy"].includes(summary.status),
-  ).length;
+  const providerHealthCounts = countProviderAggregateHealthStatuses(providerHealthSummaries);
 
   return (
     <div className="app-shell">
       <Sidebar
         gatewayUrlLabel={formatRuntimeAddress(getGatewayBaseUrl())}
-        providerHealthyCount={providerHealthyCount}
-        providerUnhealthyCount={providerUnhealthyCount}
+        providerHealthyCount={providerHealthCounts.healthy}
+        providerUnhealthyCount={providerHealthCounts.unhealthy}
       />
       <div className="app-main">
         <Topbar />

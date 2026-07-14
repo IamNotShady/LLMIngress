@@ -2,10 +2,6 @@ import { randomUUID } from "node:crypto";
 import { withPostgresTransaction } from "@llmingress/db/client";
 import { type ConfigChange, publishConfigChangeWithClient } from "@llmingress/db/config-versions";
 import {
-  recordProviderAndModelHealthWithClient,
-  recordProviderHealthEventWithClient,
-} from "@llmingress/db/provider-health";
-import {
   completeProviderOAuthConnection,
   type PostgresQueryClient,
   readEnabledCompletedProviderOAuthConnections,
@@ -18,7 +14,6 @@ import {
   resolveProviderModelCapabilities,
   type SyncedModelCapabilities,
 } from "@llmingress/domain";
-import { selectProviderProbeModel } from "@llmingress/provider/connectivity";
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
 import {
   fetchListedProviderModels as fetchProviderModelList,
@@ -26,11 +21,9 @@ import {
 } from "@llmingress/provider/model-list";
 import { refreshProviderOAuthToken } from "@llmingress/provider/oauth";
 import {
-  fetchProviderModelPrices,
   fetchProviderModelRegistryEntries,
   findProviderModelRegistryEntry,
   type ProviderModelRegistryEntry,
-  type ProviderModelSyncedPrice,
 } from "@llmingress/provider/price-source";
 import { isSubscriptionProviderKey } from "@llmingress/provider/subscription";
 import type { MasterKeySource } from "@llmingress/security/master-key";
@@ -43,10 +36,6 @@ import {
   readWorkerMasterKeySource,
 } from "./worker-credential-utils.ts";
 import { JOB_CREATED_CHANNEL, type JobHandler, JobHandlerError } from "./worker-job-runner.ts";
-import {
-  type AggregatedProviderConnectivityResult,
-  probeProvider,
-} from "./worker-provider-probe.ts";
 
 export type ProviderModelAvailability = "available" | "unavailable" | "not_listed" | "deprecated";
 export type { ListedProviderModel } from "@llmingress/provider/model-list";
@@ -101,17 +90,11 @@ type CreateModelRefreshJobHandlerOptions = {
   databaseUrl?: string;
   fetch?: typeof globalThis.fetch;
   masterKeySource?: MasterKeySource;
-  modelPriceSource?: () => Promise<ProviderModelSyncedPrice[]>;
   modelRegistrySource?: () => Promise<ProviderModelRegistryEntry[]>;
 };
 
 export type RefreshProviderModelsOptions = CreateModelRefreshJobHandlerOptions & {
-  followUpProbe?: boolean;
-  jobId?: string;
-  jobTrigger?: string;
   providerId: string;
-  requestedProviderApiKeyId?: string;
-  timeoutMs?: number;
 };
 
 type PlanProviderModelRefreshInput = {
@@ -179,9 +162,6 @@ export function createModelRefreshJobHandler(
     const payload = readModelRefreshPayload(job.payload);
     return refreshProviderModels({
       ...options,
-      followUpProbe: payload.followUpProbe,
-      jobId: job.id,
-      jobTrigger: job.trigger,
       providerId: payload.providerId,
     });
   };
@@ -338,30 +318,6 @@ export function enrichListedProviderModels(input: {
       input.providerKey,
     );
   });
-}
-
-function findSyncedProviderModelPrice(
-  prices: ProviderModelSyncedPrice[],
-  input: {
-    displayName?: string | null;
-    modelId: string;
-    providerKey: string;
-  },
-): ProviderModelSyncedPrice | null {
-  const providerKey = providerMetadataKey(input.providerKey);
-  const candidates = new Set(
-    [input.modelId, input.displayName ?? ""]
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean),
-  );
-
-  return (
-    prices.find(
-      (price) =>
-        price.providerKey.trim().toLowerCase() === providerKey &&
-        candidates.has(price.modelId.trim().toLowerCase()),
-    ) ?? null
-  );
 }
 
 function providerMetadataKey(providerKey: string): string {
@@ -573,19 +529,6 @@ async function readProviderModelRegistryEntries(input: {
   }
 }
 
-async function readProviderModelPrices(input: {
-  fetch: typeof globalThis.fetch;
-  modelPriceSource?: () => Promise<ProviderModelSyncedPrice[]>;
-}): Promise<ProviderModelSyncedPrice[]> {
-  try {
-    return input.modelPriceSource
-      ? await input.modelPriceSource()
-      : await fetchProviderModelPrices({ fetch: input.fetch });
-  } catch {
-    return [];
-  }
-}
-
 export async function refreshProviderModels(
   options: RefreshProviderModelsOptions,
 ): Promise<ProviderModelRefreshResult> {
@@ -617,85 +560,20 @@ export async function refreshProviderModels(
     fetch: fetchImpl,
     providerKey: provider.provider_key,
   });
-  const [registryEntries, syncedPrices] = await Promise.all([
-    readProviderModelRegistryEntries({
-      fetch: fetchImpl,
-      modelRegistrySource: options.modelRegistrySource,
-    }),
-    readProviderModelPrices({
-      fetch: fetchImpl,
-      modelPriceSource: options.modelPriceSource,
-    }),
-  ]);
+  const registryEntries = await readProviderModelRegistryEntries({
+    fetch: fetchImpl,
+    modelRegistrySource: options.modelRegistrySource,
+  });
   const enrichedListedModels = enrichListedProviderModels({
     listedModels: rawListedModels,
     providerKey: provider.provider_key,
     registryEntries,
   });
   const listedModels = enrichedListedModels;
-  const probeModelId = options.followUpProbe
-    ? selectProviderProbeModel(
-        listedModels.map((model) => {
-          const price = findSyncedProviderModelPrice(syncedPrices, {
-            displayName: model.displayName,
-            modelId: model.modelId,
-            providerKey: provider.provider_key,
-          });
-          return {
-            contextWindow: model.contextWindow ?? null,
-            inputUsdPerMillionTokens: price?.inputUsdPerMillionTokens ?? null,
-            modelId: model.modelId,
-            outputUsdPerMillionTokens: price?.outputUsdPerMillionTokens ?? null,
-          };
-        }),
-      )
-    : null;
-  const probeResult =
-    options.followUpProbe && probeModelId
-      ? await probeProvider({
-          databaseUrl: options.databaseUrl,
-          fetch: fetchImpl,
-          masterKeySource:
-            options.masterKeySource ??
-            readWorkerMasterKeySource(process.env, "provider connectivity checks"),
-          provider: {
-            baseUrl: requireProviderBaseUrl(provider),
-            displayName: provider.display_name,
-            id: provider.id,
-            modelId: probeModelId,
-            providerKey: provider.provider_key,
-            providerType: provider.provider_type,
-          },
-          requestedProviderApiKeyId: options.requestedProviderApiKeyId,
-          timeoutMs: options.timeoutMs,
-        })
-      : options.followUpProbe
-        ? buildNoProbeModelResult(provider)
-        : null;
   let plan: ProviderModelRefreshPlan | undefined;
   let publishedConfigVersion: number | null = null;
   let chainedPriceSyncJobId: string | null = null;
   await withPostgresTransaction(options.databaseUrl, async (client) => {
-    if (options.jobId) {
-      await client.query("select pg_advisory_xact_lock(hashtext($1))", [
-        `provider_probe_job:${options.jobId}`,
-      ]);
-      const prior = await client.query<{ exists: boolean }>(
-        `
-          select exists(
-            select 1
-            from provider_health_events
-            where job_id = $1
-              and provider_id = $2
-          ) as exists
-        `,
-        [options.jobId, provider.id],
-      );
-      if (prior.rows[0]?.exists) {
-        plan = emptyProviderModelRefreshPlan();
-        return;
-      }
-    }
     await assertProviderSnapshotCurrent(client, provider, credential?.snapshot ?? null);
     const existingModels = await readExistingProviderModels(client, provider.id);
     plan = planProviderModelRefresh({ existingModels, listedModels });
@@ -707,15 +585,6 @@ export async function refreshProviderModels(
         providerId: provider.id,
         providerKey: provider.provider_key,
       });
-      if (probeResult) {
-        await persistProbeHealth(writeClient, {
-          jobId: options.jobId,
-          jobTrigger: options.jobTrigger,
-          probeModelId,
-          provider,
-          result: probeResult,
-        });
-      }
     };
     if (plan.routingVisibleChanges.length > 0) {
       const result = await publishConfigChangeWithClient(client, {
@@ -746,39 +615,11 @@ export async function refreshProviderModels(
   };
 }
 
-function emptyProviderModelRefreshPlan(): ProviderModelRefreshPlan {
-  return {
-    insertModels: [],
-    markAvailable: [],
-    markNotListed: [],
-    markUnavailable: [],
-    routingVisibleChanges: [],
-  };
-}
-
 function requireRefreshPlan(plan: ProviderModelRefreshPlan | undefined): ProviderModelRefreshPlan {
   if (!plan) {
     throw new Error("Provider model refresh plan was not created.");
   }
   return plan;
-}
-
-function buildNoProbeModelResult(provider: ProviderRow): AggregatedProviderConnectivityResult {
-  return {
-    apiKeyResults: [],
-    checkedAt: new Date().toISOString(),
-    errorCode: "provider_probe_model_unavailable",
-    errorMessage: "Provider has no ordinary chat-compatible models for connectivity check.",
-    latencyMs: 0,
-    oauthResults: [],
-    ok: false,
-    probeModelId: null,
-    providerId: provider.id,
-    providerKey: provider.provider_key,
-    retryable: false,
-    status: "unhealthy",
-    statusCode: null,
-  };
 }
 
 async function assertProviderSnapshotCurrent(
@@ -829,69 +670,6 @@ async function assertProviderSnapshotCurrent(
       "Provider credentials changed while the probe was running.",
     );
   }
-}
-
-async function persistProbeHealth(
-  client: QueryClient,
-  input: {
-    jobId?: string;
-    jobTrigger?: string;
-    probeModelId: string | null;
-    provider: ProviderRow;
-    result: AggregatedProviderConnectivityResult;
-  },
-): Promise<void> {
-  const event = {
-    errorCode: input.result.errorCode,
-    errorMessage: input.result.errorMessage,
-    jobId: input.jobId,
-    latencyMs: input.result.latencyMs,
-    metadata: {
-      apiKeyResults: input.result.apiKeyResults.map((result) => ({
-        errorCode: result.errorCode,
-        ok: result.ok,
-        providerApiKeyPrefix: result.providerApiKeyPrefix,
-        status: result.status,
-        statusCode: result.statusCode,
-      })),
-      oauthResults: input.result.oauthResults.map((result) => ({
-        errorCode: result.errorCode,
-        ok: result.ok,
-        providerOAuthId: result.providerOAuthId,
-        providerOAuthLabel: result.providerOAuthLabel,
-        status: result.status,
-        statusCode: result.statusCode,
-      })),
-      probeModelId: input.result.probeModelId,
-      providerKey: input.result.providerKey,
-      retryable: input.result.retryable,
-      statusCode: input.result.statusCode,
-    },
-    observedAt: new Date(input.result.checkedAt),
-    providerId: input.provider.id,
-    status: input.result.status,
-    trigger: input.jobTrigger === "manual" ? ("manual" as const) : ("worker_probe" as const),
-  };
-  if (!input.probeModelId) {
-    await recordProviderHealthEventWithClient(client, event);
-    return;
-  }
-  const model = await client.query<{ id: string }>(
-    `
-      select id::text
-      from provider_models
-      where provider_id = $1
-        and model_id = $2
-        and deleted_at is null
-      for update
-    `,
-    [input.provider.id, input.probeModelId],
-  );
-  const providerModelId = model.rows[0]?.id;
-  if (!providerModelId) {
-    throw new Error("Provider probe model was not persisted.");
-  }
-  await recordProviderAndModelHealthWithClient(client, { event, providerModelId });
 }
 
 export function buildChainedPriceSyncJobPayload(input: {
@@ -1195,15 +973,9 @@ function hasCapabilityUpdate(
   );
 }
 
-function readModelRefreshPayload(payload: unknown): {
-  followUpProbe: boolean;
-  providerId: string;
-} {
+function readModelRefreshPayload(payload: unknown): { providerId: string } {
   if (isRecord(payload) && typeof payload.providerId === "string" && payload.providerId.trim()) {
-    return {
-      followUpProbe: payload.followUpProbe !== false,
-      providerId: payload.providerId,
-    };
+    return { providerId: payload.providerId };
   }
   throw new Error("model_refresh job payload requires providerId.");
 }
@@ -1220,6 +992,7 @@ async function readProviderApiKey(input: {
         from provider_api_keys
         where provider_id = $1
           and enabled = true
+          and deleted_at is null
         order by priority, created_at, id
         limit 1
       `,

@@ -54,7 +54,6 @@ function fallbackCandidate(
     apiKey: "provider-key",
     baseUrl: "http://provider.local",
     displayName: "Provider Model",
-    healthStatus: "healthy",
     modelId: "model-1",
     price: { status: "unknown_price", priceVersion: "v0" } as never,
     providerId: "provider-1",

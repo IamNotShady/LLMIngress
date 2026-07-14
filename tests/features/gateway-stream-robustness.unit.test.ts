@@ -303,24 +303,6 @@ describe("streaming backpressure", () => {
     const reader = stalled.getReader();
     const first = await reader.read();
     const source = composeGatewayProviderStreamPipeline({
-      candidate: {
-        apiKey: "provider-key",
-        baseUrl: "http://provider.test/v1",
-        candidateOrder: 1,
-        displayName: "Fake Model",
-        healthStatus: "healthy",
-        modelId: "fake-model",
-        price: {
-          modelId: "fake-model",
-          priceVersion: "test",
-          providerKey: "openai",
-          reason: "no_current_price",
-          status: "unknown_price",
-        },
-        providerId: "provider-1",
-        providerKey: "openai",
-        providerModelId: "provider-model-1",
-      },
       firstValue: first.value as Uint8Array,
       idleTimeoutMs: 10_000,
       lease: undefined,

@@ -89,7 +89,7 @@ describe("core release guards", () => {
     const handlers = [...workerMain.matchAll(/^\s{6}([a-z_]+): create\w+JobHandler/gm)]
       .map(([, jobType]) => jobType)
       .sort();
-    expect(handlers).toEqual(["model_refresh", "price_sync", "provider_connectivity_check"]);
+    expect(handlers).toEqual(["model_refresh", "price_sync", "provider_connection_probe"]);
   });
 
   it("keeps app shells thin and stale artifacts absent", () => {

@@ -5,10 +5,9 @@ import {
 } from "@llmingress/db/console-format";
 import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
 import {
-  buildRoutePolicyHealthWarnings,
+  buildRoutePolicyConnectionHealthWarnings,
   type ConsoleProviderModelOption,
   type ConsoleRoutePolicy,
-  filterRoutePolicyEditorHealthyProviderModelOptions,
   listProviderModelOptions,
   listRoutePolicies,
   routePolicyStrategies,
@@ -25,7 +24,7 @@ import { FlatIcon } from "../_components/flat-icon";
 import { StatCard } from "../_components/stat-card";
 import { buildQueryHref } from "../_lib/pagination";
 import {
-  buildRoutePolicyHealthWarningCandidates,
+  buildRoutePolicyConnectionHealthWarningCandidates,
   type ConsoleSearchParams,
   failureRateTone,
   formatRouteEndpointProtocolLabel,
@@ -291,15 +290,13 @@ export async function VirtualModelsSection({
   const virtualModels = await listVirtualModels();
   const routePolicies = await listRoutePolicies();
   const providerHealthSummaries = await listConsoleProviderHealthSummaries();
-  const providerHealthByProviderId = new Map(
-    providerHealthSummaries.map((summary) => [summary.id, summary]),
-  );
-  const providerModelOptions = orderProviderModelsForConsole(
-    filterRoutePolicyEditorHealthyProviderModelOptions(
-      await listProviderModelOptions(),
-      providerHealthSummaries,
-    ),
-  );
+  const providerHealthByProviderId = new Map<string, typeof providerHealthSummaries>();
+  for (const summary of providerHealthSummaries) {
+    const entries = providerHealthByProviderId.get(summary.providerId) ?? [];
+    entries.push(summary);
+    providerHealthByProviderId.set(summary.providerId, entries);
+  }
+  const providerModelOptions = orderProviderModelsForConsole(await listProviderModelOptions());
   const routePolicyByVmId = new Map(routePolicies.map((policy) => [policy.virtualModelId, policy]));
   const statusFilter = readSingleSearchParam(searchParams.vmStatus) ?? "";
   const strategyFilter = readSingleSearchParam(searchParams.vmStrategy) ?? "";
@@ -335,8 +332,8 @@ export async function VirtualModelsSection({
   const viewDialogRoutePolicyWarnings = viewDialogRoutePolicy
     ? [
         ...viewDialogRoutePolicy.routeWarnings,
-        ...buildRoutePolicyHealthWarnings(
-          buildRoutePolicyHealthWarningCandidates(
+        ...buildRoutePolicyConnectionHealthWarnings(
+          buildRoutePolicyConnectionHealthWarningCandidates(
             viewDialogRoutePolicy,
             providerHealthByProviderId,
           ),

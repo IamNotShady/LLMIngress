@@ -1,18 +1,13 @@
-import {
-  enqueueProviderModelRefreshJob,
-  normalizeProviderModelRefreshInput,
-} from "@llmingress/db/provider-jobs";
+import { enqueueProviderModelRefreshJob } from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
-import { readText } from "../_form";
+import { readRequiredText } from "../_form";
 
 export const POST = withConsoleAuth(async (request) => {
   try {
     const form = await request.formData();
-    const input = normalizeProviderModelRefreshInput({
-      providerId: readText(form, "providerId"),
-    });
+    const input = { providerId: readRequiredText(form, "providerId") };
     await enqueueProviderModelRefreshJob({ providerId: input.providerId });
     if (request.headers.get("accept")?.includes("application/json")) {
       return NextResponse.json({ ok: true, providerId: input.providerId });

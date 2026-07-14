@@ -53,7 +53,7 @@ test("fresh migration creates only the 24 core tables", async () => {
         and conname = 'jobs_job_type_check'
     `);
     expect(jobTypes.rows[0]?.definition).toContain("model_refresh");
-    expect(jobTypes.rows[0]?.definition).toContain("provider_connectivity_check");
+    expect(jobTypes.rows[0]?.definition).toContain("provider_connection_probe");
     expect(jobTypes.rows[0]?.definition).toContain("price_sync");
     expect(jobTypes.rows[0]?.definition).not.toContain("retention_cleanup");
   } finally {

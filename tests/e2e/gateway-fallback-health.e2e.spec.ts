@@ -69,7 +69,7 @@ test("JSON fallback skips a recognized client request error without recording pr
   }
 });
 
-test("Streaming fallback records health once when the first provider fails before first byte", async () => {
+test("Streaming fallback does not record connection health for a provider 5xx before first byte", async () => {
   const fixture = await createTestPostgresFixture({
     databaseNamePrefix: `llmingress_stream_fallback_health_${randomUUID().replaceAll("-", "_")}`,
   });
@@ -111,7 +111,10 @@ test("Streaming fallback records health once when the first provider fails befor
       expect(failingProvider.requests).toHaveLength(1);
       expect(succeedingProvider.requests).toHaveLength(1);
 
-      await expect.poll(async () => countProviderHealthEvents(fixture, seeded.providerId)).toBe(2);
+      await expect.poll(async () => countProviderHealthEvents(fixture, seeded.providerId)).toBe(0);
+      await expect
+        .poll(async () => countProviderConnectionProbeJobs(fixture, seeded.providerId))
+        .toBe(0);
     } finally {
       await stopGatewayProcess(gateway);
     }
@@ -195,6 +198,22 @@ async function countProviderHealthEvents(
 ): Promise<number> {
   const result = await fixture.query<{ count: string }>(
     "select count(*)::text as count from provider_health_events where provider_id = $1::uuid",
+    [providerId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+async function countProviderConnectionProbeJobs(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+  providerId: string,
+): Promise<number> {
+  const result = await fixture.query<{ count: string }>(
+    `
+      select count(*)::text as count
+      from jobs
+      where job_type = 'provider_connection_probe'
+        and payload->>'providerId' = $1
+    `,
     [providerId],
   );
   return Number(result.rows[0]?.count ?? 0);

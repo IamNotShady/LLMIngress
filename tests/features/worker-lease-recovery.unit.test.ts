@@ -22,6 +22,7 @@ describe("worker-lease-recovery", () => {
     let failCalls = 0;
     let handlerSignal: AbortSignal | undefined;
     const store: JobStore = {
+      cancelJob: async () => true,
       claimNextJob: async () => {
         if (claimed) {
           return null;
@@ -84,6 +85,7 @@ describe("worker-lease-recovery", () => {
       handlerStarted = resolve;
     });
     const store: JobStore = {
+      cancelJob: async () => true,
       claimNextJob: async () => {
         if (claimed) {
           return null;

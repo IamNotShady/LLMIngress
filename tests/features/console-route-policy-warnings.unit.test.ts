@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { buildRoutePolicyHealthWarnings } from "../../packages/db/src/console-route-policies";
+import { buildRoutePolicyConnectionHealthWarnings } from "../../packages/db/src/console-route-policies";
 
 const rootDir = process.cwd();
 const routePolicies = () =>
@@ -20,15 +20,15 @@ function sliceBetween(source: string, startMarker: string, endMarker: string): s
 }
 
 describe("console route policy warnings", () => {
-  test("route policy health warnings do not consume stale health flags", () => {
+  test("route policy connection health warnings do not consume stale health flags", () => {
     const warningFunction = sliceBetween(
       routePolicies(),
-      "export function buildRoutePolicyHealthWarnings",
+      "export function buildRoutePolicyConnectionHealthWarnings",
       "export function normalizeRoutePolicyEditorFilters",
     );
     const warningCandidates = sliceBetween(
       sections(),
-      "function buildRoutePolicyHealthWarningCandidates",
+      "function buildRoutePolicyConnectionHealthWarningCandidates",
       "function orderProviderModelsForConsole",
     );
 
@@ -36,30 +36,27 @@ describe("console route policy warnings", () => {
     expect(warningCandidates).not.toContain("HealthIsStale");
   });
 
-  test("healthy route candidate statuses do not create route warnings", () => {
-    const warnings = buildRoutePolicyHealthWarnings([
+  test("a route with an available connection does not create a health warning", () => {
+    const warnings = buildRoutePolicyConnectionHealthWarnings([
       {
-        modelHealthStatus: "healthy",
+        allConnectionsUnhealthy: false,
         optionLabel: "OpenAI - gpt-4 (gpt-4)",
-        providerHealthStatus: "healthy",
       },
     ]);
 
     expect(warnings).toEqual([]);
   });
 
-  test("non-healthy route candidate statuses still create route warnings", () => {
-    const warnings = buildRoutePolicyHealthWarnings([
+  test("a route with no healthy connections creates one connection warning", () => {
+    const warnings = buildRoutePolicyConnectionHealthWarnings([
       {
-        modelHealthStatus: "network_error",
+        allConnectionsUnhealthy: true,
         optionLabel: "Anthropic - claude (claude)",
-        providerHealthStatus: "quota_limited",
       },
     ]);
 
     expect(warnings).toEqual([
-      "Health warning: Anthropic - claude (claude) provider health is Quota limited.",
-      "Health warning: Anthropic - claude (claude) model health is Network error.",
+      "Health warning: Anthropic - claude (claude) has no healthy Provider connections.",
     ]);
   });
 

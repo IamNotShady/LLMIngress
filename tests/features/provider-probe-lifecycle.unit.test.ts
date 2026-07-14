@@ -4,7 +4,7 @@ import {
   listProviderTemplateSelectorGroups,
   normalizeProviderTemplateFormInput,
 } from "../../packages/db/src/console-provider-templates";
-import { buildProviderProbeJobPayload } from "../../packages/db/src/provider-jobs";
+import { buildProviderConnectionProbeJobPayload } from "../../packages/db/src/provider-jobs";
 import { selectProviderProbeModel } from "../../packages/provider/src/connectivity";
 import { planProviderModelRefresh } from "../../packages/worker-runtime/src/worker-model-refresh";
 
@@ -63,9 +63,15 @@ describe("provider probe lifecycle", () => {
     expect(providerSection).toMatch(/name="baseUrl"[\s\S]{0,160}required/);
   });
 
-  it("queues one composite model refresh job for every probe trigger", () => {
-    expect(buildProviderProbeJobPayload("provider-1", "manual_probe")).toEqual({
-      followUpProbe: true,
+  it("uses a connection-scoped probe job independent from model refresh", () => {
+    expect(
+      buildProviderConnectionProbeJobPayload({
+        providerConnectionId: "connection-1",
+        providerId: "provider-1",
+        source: "manual_probe",
+      }),
+    ).toEqual({
+      providerConnectionId: "connection-1",
       providerId: "provider-1",
       source: "manual_probe",
     });
@@ -74,7 +80,7 @@ describe("provider probe lifecycle", () => {
       "packages/worker-runtime/src/worker-model-refresh.ts",
       "utf8",
     );
-    expect(refreshSource).not.toContain("enqueueChainedConnectivityCheckJob");
+    expect(refreshSource).not.toContain("probeProvider");
   });
 
   it("keeps unknown models and allows an unknown-context chat model to be probed", () => {

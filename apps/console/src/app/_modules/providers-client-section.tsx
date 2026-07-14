@@ -659,6 +659,7 @@ function ProviderConnectionTable({
                           </a>
                           <ConsoleMutationForm
                             action="/api/provider-keys"
+                            errorPresentation="toast"
                             fallbackError="Provider API key update failed."
                           >
                             <input

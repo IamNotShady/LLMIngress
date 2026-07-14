@@ -119,6 +119,33 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(providerSource).toContain("row-action-danger");
   });
 
+  test("Provider API key row mutations refresh on AJAX success and use a detached error toast", () => {
+    const mutationForm = appSource("_components/console-mutation-form.tsx");
+    const providerClient = sectionSource("providers-client-section.tsx");
+    const providerServer = sectionSource("providers-section.tsx");
+    const providerKeyRoute = source("apps/console/src/app/api/provider-keys/route.ts");
+    const stylesheet = css();
+
+    expect(providerKeyRoute).toContain(
+      'request.headers.get("accept")?.includes("application/json")',
+    );
+    expect(providerKeyRoute).toContain("return new NextResponse(null, { status: 204 });");
+    expect(providerKeyRoute).toContain("return NextResponse.redirect(");
+    expect(providerKeyRoute).toContain("303,");
+    expect(mutationForm).toContain('errorPresentation?: "inline" | "toast"');
+    expect(mutationForm).toContain("successHref?: string");
+    expect(mutationForm).toContain('className="console-mutation-toast"');
+    expect(mutationForm).toContain('popover="manual"');
+    expect(mutationForm).toContain('aria-label="Dismiss error"');
+    expect(mutationForm).toContain("5_000");
+    expect(providerClient).toContain('errorPresentation="toast"');
+    expect(providerServer).toContain('errorPresentation="toast"');
+    expect(providerServer).toContain("successHref={closeHref}");
+    expect(stylesheet).toMatch(
+      /\.console-mutation-toast\s*\{[^}]*position:\s*fixed[^}]*top:[^}]*right:[^}]*z-index:\s*70/s,
+    );
+  });
+
   test("page headers and dialog close actions are consistent", () => {
     expect(source("apps/console/src/app/(dashboard)/usage/page.tsx")).not.toContain("eyebrow=");
     const limitsSource = sectionSource("limits-section.tsx");

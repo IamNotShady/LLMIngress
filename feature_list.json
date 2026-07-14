@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-14: console-core and console-layout-interactions focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-14: Provider API Key Enable, Disable, and Delete now return AJAX-safe success responses, refresh Console state immediately, and present real failures in a detached top-right toast. Focused verification passed with 70 Unit contracts and 10 real Console E2E tests; all 9 feature domains, 325 repository tests, production build, and Chrome desktop/mobile QA passed."
     },
     {
       "id": "release-guards",

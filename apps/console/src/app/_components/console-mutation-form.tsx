@@ -68,11 +68,15 @@ export function toConsoleMutationFailure(
 }
 
 export function ConsoleMutationError({
+  errorPresentation = "inline",
   failure,
   formRef,
+  onDismiss = ignoreDismiss,
 }: {
+  errorPresentation?: "inline" | "toast";
   failure: ConsoleMutationFailure | null;
   formRef: RefObject<HTMLFormElement | null>;
+  onDismiss?: () => void;
 }) {
   const errorId = useId();
   const [fieldErrorTarget, setFieldErrorTarget] = useState<HTMLElement | null>(null);
@@ -130,6 +134,12 @@ export function ConsoleMutationError({
       fieldErrorTarget,
     );
   }
+  if (errorPresentation === "toast") {
+    return createPortal(
+      <ConsoleMutationToast message={failure.message} onDismiss={onDismiss} />,
+      document.body,
+    );
+  }
   return (
     <p className="form-error" role="alert">
       {failure.message}
@@ -137,23 +147,38 @@ export function ConsoleMutationError({
   );
 }
 
+function ignoreDismiss() {}
+
 export function ConsoleMutationForm({
   action,
   children,
   className,
+  errorPresentation = "inline",
   fallbackError = "Console operation failed.",
   id,
+  successHref,
 }: {
   action: string;
   children: ReactNode;
   className?: string;
+  errorPresentation?: "inline" | "toast";
   fallbackError?: string;
   id?: string;
+  successHref?: string;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [failure, setFailure] = useState<ConsoleMutationFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!failure || failure.field || errorPresentation !== "toast") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setFailure(null), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [errorPresentation, failure]);
 
   const submit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
@@ -169,6 +194,10 @@ export function ConsoleMutationForm({
       });
       if (!response.ok) {
         setFailure(toConsoleMutationFailure(await readErrorPayload(response), fallbackError));
+        return;
+      }
+      if (successHref) {
+        router.replace(successHref);
         return;
       }
       if (response.redirected) {
@@ -208,8 +237,40 @@ export function ConsoleMutationForm({
       ref={formRef}
     >
       {children}
-      <ConsoleMutationError failure={failure} formRef={formRef} />
+      <ConsoleMutationError
+        errorPresentation={errorPresentation}
+        failure={failure}
+        formRef={formRef}
+        onDismiss={() => setFailure(null)}
+      />
     </form>
+  );
+}
+
+function ConsoleMutationToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const toastRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const toast = toastRef.current;
+    if (!toast || typeof toast.showPopover !== "function") {
+      return;
+    }
+
+    toast.showPopover();
+    return () => {
+      if (toast.matches(":popover-open")) {
+        toast.hidePopover();
+      }
+    };
+  }, []);
+
+  return (
+    <div className="console-mutation-toast" popover="manual" ref={toastRef} role="alert">
+      <span>{message}</span>
+      <button aria-label="Dismiss error" onClick={onDismiss} type="button">
+        &times;
+      </button>
+    </div>
   );
 }
 

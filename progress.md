@@ -1,8 +1,6 @@
 # LLMIngress V1 Release State
 
-Updated: 2026-07-14
-Branch: `dev`
-Version: V1 pre-release baseline with Docker lifecycle
+Updated: 2026-07-14 · Branch: `dev` · Version: V1 pre-release baseline with Docker lifecycle
 
 ## Release domains
 
@@ -19,8 +17,9 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest verification
 
-- `pnpm run verify`: 18 suites / 324 tests; lint, typecheck, and build passed.
+- `pnpm run verify`: 18 suites / 325 tests; lint, typecheck, and build passed.
 - Coverage: 49.23% statements, 41.79% branches, 53.22% functions, 49.32% lines.
+- Console Core: 70 focused Unit contracts and 10 real E2E tests passed, including immediate Provider API Key Enable/Disable state, Delete cleanup, and detached error Toast behavior.
 - Provider management: 57 focused unit tests and 4 real E2E tests passed, including a custom template Provider display name persisted to PostgreSQL.
 - Docker lifecycle: 5 focused unit and 3 real E2E tests passed across custom-port install, Master Key file access, a real fake-Provider Gateway request, no-op, repair, upgrade, rollback, retention, conflict/downgrade rejection, retry, and interruption recovery.
 - Feature regression: all 9 standard domains passed; 18 unit and 17 E2E entrypoints, 0 legacy.
@@ -28,6 +27,8 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest changes
 
+- Provider API Key Enable, Disable, and Delete return `204` to Console AJAX while retaining native-form `303` redirects; successful actions refresh immediately or close the delete dialog.
+- Provider API Key failures render as an accessible, dismissible, five-second top-right Toast above dialogs without changing the Actions layout; Chrome desktop and 390px mobile QA passed without framework warnings or errors.
 - Template Provider creation now trims and persists the submitted Display Name and rejects a blank value with a field error.
 - `GATEWAY_PUBLIC_BASE_URL` was removed; Console reads the canonical `GATEWAY_URL`, including installer and Compose custom-port deployments.
 - Managed Gateway, Console, and Worker containers receive `MASTER_KEY_FILE=/run/llmingress/master-key`; the secret value remains out of container environment variables and logs.

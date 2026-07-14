@@ -10,9 +10,9 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 RUN pnpm install --frozen-lockfile
-RUN pnpm exec esbuild apps/gateway/src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=/out/gateway/main.mjs
-RUN pnpm exec esbuild apps/worker/src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=/out/worker/main.mjs
-RUN pnpm exec esbuild scripts/migrate.ts --bundle --platform=node --format=esm --target=node24 --outfile=/out/migrate/main.mjs
+RUN pnpm exec esbuild apps/gateway/src/main.ts --bundle --platform=node --format=esm --target=node24 --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" --outfile=/out/gateway/main.mjs
+RUN pnpm exec esbuild apps/worker/src/main.ts --bundle --platform=node --format=esm --target=node24 --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" --outfile=/out/worker/main.mjs
+RUN pnpm exec esbuild scripts/migrate.ts --bundle --platform=node --format=esm --target=node24 --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" --outfile=/out/migrate/main.mjs
 RUN pnpm --filter @llmingress/console build
 RUN mkdir -p /out/console/apps/console/.next \
   && cp -R apps/console/.next/standalone/. /out/console/ \

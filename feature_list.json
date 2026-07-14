@@ -3,83 +3,83 @@
     {
       "id": "core-platform-security",
       "name": "Core Platform Security",
-      "description": "Console setup, authentication, secret encryption, safe error boundaries, Gateway readiness, configuration reload, and graceful shutdown protect the core platform.",
-      "verification": "pnpm exec vitest run tests/features/console-request-security-contract.unit.test.ts tests/features/console-secure-bootstrap.unit.test.ts tests/features/gateway-lifecycle-drain.unit.test.ts && pnpm test:e2e tests/e2e/console-request-security-contract.e2e.spec.ts tests/e2e/console-secure-bootstrap.e2e.spec.ts tests/e2e/runtime-observability-removal.e2e.spec.ts --workers=1",
+      "description": "First-run auth, encrypted secrets, safe Console errors, Gateway health, reload, and shutdown.",
+      "verification": "pnpm exec vitest run tests/features/platform-security.unit.test.ts tests/features/runtime-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/platform-security.e2e.spec.ts tests/e2e/runtime-lifecycle.e2e.spec.ts --workers=1",
       "dependencies": [],
       "status": "passing",
-      "evidence": "2026-07-13: Console first-run setup creates the administrator with a password only, including on non-loopback listeners. The setup-token environment/configuration surface, lock mode, form field, and API validation were deleted while race-safe single-admin creation remains enforced. Focused unit/real-process E2E, pnpm run verify (62 files/326 tests), and all 9 feature regressions pass."
+      "evidence": "2026-07-14: platform-security and runtime-lifecycle focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "provider-model-management",
       "name": "Provider Model Management",
-      "description": "Provider credentials, editable API roots, OAuth, connection-scoped health probes across up to three models, sparse unhealthy summaries, durable recovery, complete Provider-listed model discovery, manual overrides, dependency guards, and price synchronization remain supported.",
-      "verification": "pnpm exec vitest run tests/features/provider-connection-health.unit.test.ts tests/features/provider-probe-lifecycle.unit.test.ts tests/features/provider-model-capability-sync.unit.test.ts tests/features/console-provider-templates.unit.test.ts tests/features/console-provider-dependency-guard.unit.test.ts tests/features/provider-authenticated-http-safety.unit.test.ts && pnpm test:e2e tests/e2e/provider-connection-health.e2e.spec.ts tests/e2e/provider-probe-lifecycle.e2e.spec.ts tests/e2e/provider-model-capability-sync.e2e.spec.ts tests/e2e/console-provider-dependency-guard.e2e.spec.ts tests/e2e/provider-authenticated-http-safety.e2e.spec.ts --workers=1",
+      "description": "Provider credentials, OAuth, models, prices, exact connection health, probes, and dependency guards.",
+      "verification": "pnpm exec vitest run tests/features/provider-management.unit.test.ts tests/features/provider-model-sync.unit.test.ts tests/features/provider-connection-health.unit.test.ts && pnpm test:e2e tests/e2e/provider-management.e2e.spec.ts tests/e2e/provider-model-sync.e2e.spec.ts tests/e2e/provider-connection-health.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-14: Provider health is connection-scoped for API keys, OAuth tokens, and Local logical connections. Console sidebar health counts aggregate connections by provider_id using the same Healthy/Checking/Unhealthy priority as the Provider list. Exact probes try up to three models, sparse unhealthy summaries recover by deletion, retries use 5/10/30/60 minutes, and stale or disabled work persists jobs.status=canceled with lease fencing while retaining a succeeded diagnostic attempt. OAuth Connection soft deletion clears the encrypted token blob, token expiry, PKCE pending state, and completion marker on both direct Connection deletion and cascading Provider deletion. Gateway filters only confirmed unhealthy connections. Focused verification passes 32 unit and 17 database/real-process E2E checks; merged dev verification passes 63 files/337 tests and all 9 feature regressions."
+      "evidence": "2026-07-14: provider management, model sync, and connection health focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "virtual-model-routing",
       "name": "Virtual Model Routing",
-      "description": "Virtual Models are atomically created with one Route Policy and at least one candidate, reject conflicting known capability values while allowing unknowns, and route with fixed, input-plus-output cost_first, or random ordering, connection filtering, unknown-price fallback, and fallback execution.",
-      "verification": "pnpm exec vitest run tests/features/virtual-model-capability-contract.unit.test.ts tests/features/virtual-model-endpoint-routing.unit.test.ts tests/features/gateway-fallback-health.unit.test.ts tests/features/refactor-route-strategy-registry.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-capability-contract.e2e.spec.ts tests/e2e/virtual-model-endpoint-routing.e2e.spec.ts tests/e2e/gateway-fallback-health.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts --workers=1",
+      "description": "Atomic Virtual Models, capability contracts, fixed/cost-first/random ordering, and fallback chains.",
+      "verification": "pnpm exec vitest run tests/features/virtual-model-routing.unit.test.ts tests/features/route-strategies.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-routing.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-13: Gateway fallback keeps network, client, and Provider 5xx failures out of connection health; only credential failures enqueue exact connection probes. Focused verification passes 26 unit and 12 database/real-Gateway E2E checks."
+      "evidence": "2026-07-14: virtual-model-routing and route-strategies focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "gateway-protocol-execution",
       "name": "Gateway Protocol Execution",
-      "description": "Gateway executes Chat Completions, Responses, Messages, and Embeddings with provider header/body transparency, streaming safety, and metadata-only logs.",
-      "verification": "pnpm exec vitest run tests/features/gateway-request-hygiene.unit.test.ts tests/features/gateway-error-fidelity.unit.test.ts tests/features/gateway-metadata-only-logging.unit.test.ts && pnpm test:e2e tests/e2e/v1-gateway-routing.e2e.spec.ts tests/e2e/gateway-request-hygiene.e2e.spec.ts tests/e2e/gateway-error-fidelity.e2e.spec.ts tests/e2e/gateway-metadata-only-logging.e2e.spec.ts",
+      "description": "Chat Completions, Responses, Messages, and Embeddings with safe fallback, streaming, and logs.",
+      "verification": "pnpm exec vitest run tests/features/gateway-protocols.unit.test.ts tests/features/gateway-fallback-streaming.unit.test.ts tests/features/gateway-security-logging.unit.test.ts && pnpm test:e2e tests/e2e/gateway-protocols.e2e.spec.ts tests/e2e/gateway-fallback-streaming.e2e.spec.ts tests/e2e/gateway-security-logging.e2e.spec.ts --workers=1",
       "dependencies": ["virtual-model-routing"],
       "status": "passing",
-      "evidence": "2026-07-11: All four public protocols, streaming/error fidelity, request-metadata-only logs, and provider smoke E2E pass. Responses requires canonical list input and performs no Codex parameter rewriting or SSE-to-JSON bridging. Gateway strips browser transport headers before Provider dispatch, Provider failures log their complete upstream response, and Claude Code Messages retains its required Agent SDK identity and Subscription headers."
+      "evidence": "2026-07-14: protocol, fallback/streaming, and security/logging focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "agent-access-and-limits",
       "name": "Agent Access And Limits",
-      "description": "Agent API keys, required Virtual Model grants, atomic creation, explicit Limits enablement, reversible Agent enable/disable, RPM, TPM, token, budget, and concurrency limits are enforced without non-core Agent modes or logging switches.",
-      "verification": "pnpm exec vitest run tests/features/agent-management-contract.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts tests/features/refactor-agent-limit-domain-types.unit.test.ts && pnpm test:e2e tests/e2e/agent-management-contract.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts",
+      "description": "Agent keys, Virtual Model grants, enabled state, and budget/rate/token/concurrency limits.",
+      "verification": "pnpm exec vitest run tests/features/agent-access-limits.unit.test.ts && pnpm test:e2e tests/e2e/agent-access-limits.e2e.spec.ts --workers=1",
       "dependencies": ["gateway-protocol-execution"],
       "status": "passing",
-      "evidence": "2026-07-12: Agent creation atomically commits the API key, required Virtual Model grants, default model, Limits switch, and rules. Gateway skips Limits access while the switch is off, preserved rules resume when re-enabled, and disabling/re-enabling restores the same key without deleting configuration or history. Limits list queries and runtime KPIs include only enabled Agents with Limits enabled while Agents management can still restore preserved rules. Focused verification passes 13 unit and 8 database/real-process E2E checks; pnpm run verify passes 62 files/327 tests and all 9 feature regressions pass."
+      "evidence": "2026-07-14: agent-access-limits focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "usage-and-activity",
       "name": "Usage And Activity",
-      "description": "Activity, token usage, latency, failure rate, fallback, Provider-connection health, and actual or estimated request cost are recorded and reported without savings baselines.",
-      "verification": "pnpm exec vitest run tests/features/gateway-recording-resilience.unit.test.ts tests/features/gateway-settlement-integrity.unit.test.ts && pnpm test:e2e tests/e2e/gateway-recording-resilience.e2e.spec.ts tests/e2e/gateway-settlement-integrity.e2e.spec.ts tests/e2e/schema-fallback-single-source.e2e.spec.ts",
+      "description": "Activity, tokens, latency, failures, fallback, connection health, and actual or estimated cost.",
+      "verification": "pnpm exec vitest run tests/features/usage-activity.unit.test.ts && pnpm test:e2e tests/e2e/usage-activity.e2e.spec.ts --workers=1",
       "dependencies": ["agent-access-and-limits"],
       "status": "passing",
-      "evidence": "2026-07-11: Core request recording, usage/cost settlement, fallback history, and resilience checks pass."
+      "evidence": "2026-07-14: usage-activity focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "worker-model-operations",
       "name": "Worker Model Operations",
-      "description": "Worker persists only model refresh, Provider connection probe, and price sync jobs; retention and stale concurrency maintenance run directly under advisory locks.",
-      "verification": "pnpm exec vitest run tests/features/worker-job-churn-removal.unit.test.ts tests/features/v1-worker-ops.unit.test.ts tests/features/worker-lease-recovery.unit.test.ts && pnpm test:e2e tests/e2e/worker-job-churn-removal.e2e.spec.ts tests/e2e/v1-worker-ops.e2e.spec.ts tests/e2e/worker-lease-recovery.e2e.spec.ts",
+      "description": "Three durable model/connection jobs plus direct retention and concurrency maintenance.",
+      "verification": "pnpm exec vitest run tests/features/worker-model-operations.unit.test.ts tests/features/worker-leases-maintenance.unit.test.ts && pnpm test:e2e tests/e2e/worker-model-operations.e2e.spec.ts tests/e2e/worker-leases-maintenance.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-13: Core leased jobs now include exact Provider connection probes; retention preserves referenced connection-health events and direct maintenance still creates no jobs. Focused verification passes 7 unit and 4 database E2E checks."
+      "evidence": "2026-07-14: Worker operations and leases/maintenance focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "console-core",
       "name": "Console Core",
-      "description": "Console exposes Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground with the reduced core navigation, consistent desktop content widths, readable paginated lists, and complete Agent setup and enable/disable controls.",
-      "verification": "pnpm exec vitest run tests/features/core-console-performance.unit.test.ts tests/features/console-p0-layout.unit.test.ts tests/features/console-post-slimming-ui.unit.test.ts tests/features/v1-console.unit.test.ts tests/features/console-providers-ia-and-forms.unit.test.ts tests/features/console-ui-audit-confirmed-fixes.unit.test.ts && pnpm test:e2e tests/e2e/core-console-performance.e2e.spec.ts tests/e2e/console-p0-layout.e2e.spec.ts tests/e2e/console-post-slimming-ui.e2e.spec.ts tests/e2e/v1-console.e2e.spec.ts tests/e2e/console-providers-ia-and-forms.e2e.spec.ts tests/e2e/console-ui-audit-confirmed-fixes.e2e.spec.ts --workers=1",
+      "description": "Eight supported Console pages with authenticated workflows, stable forms, layout, and interactions.",
+      "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-14: A live Chrome audit covered all eight Console pages at 1440x900 and 390x844, including authentication, navigation, dialogs, filters, pagination, client-side validation, and contained table overflow with no Console errors or hydration overlay. Activity route strategies now render as user-facing labels, and Limits search has an explicit responsive Search button. Focused unit and real-process E2E, pnpm run verify (62 files/329 tests), and all 9 feature regressions pass."
+      "evidence": "2026-07-14: console-core and console-layout-interactions focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     },
     {
       "id": "release-guards",
       "name": "Release Guards",
-      "description": "One 24-table core database baseline, deleted-surface guards, verification scripts, build contracts, and repository hygiene keep the pre-release product reproducible.",
-      "verification": "pnpm exec vitest run tests/features/core-baseline-compression.unit.test.ts tests/features/core-delivery-hardening.unit.test.ts tests/features/core-delivery-core-behavior.unit.test.ts tests/features/v1-release-guards.unit.test.ts tests/features/v1-platform.unit.test.ts && pnpm test:e2e tests/e2e/core-baseline-compression.e2e.spec.ts tests/e2e/core-delivery-hardening.e2e.spec.ts tests/e2e/v1-platform.e2e.spec.ts tests/e2e/v1-release-guards.e2e.spec.ts --workers=1",
+      "description": "Single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
+      "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-12: The single reproducible 24-table baseline includes agents.limits_enabled and its updated manifest checksum. db:migrate:check, pnpm run verify, and all 9 feature regressions pass; progress remains within its compression budget and all release contracts remain enabled."
+      "evidence": "2026-07-14: release-guards focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
     }
   ]
 }

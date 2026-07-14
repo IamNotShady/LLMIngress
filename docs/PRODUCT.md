@@ -1,23 +1,11 @@
-# LLMIngress Product
+# LLMIngress Product Scope
 
-LLMIngress is a self-hosted AI Gateway for routing AI Agent requests across real model
-providers while enforcing usage limits and recording operational usage metadata.
+This document is the V1 support boundary. A surface not listed as supported is not part of the
+release unless it is added here with code and verification.
 
-## Product Scope
+## Supported
 
-LLMIngress intentionally concentrates on four capabilities:
-
-1. Provider and real-model management.
-2. Virtual Model routing, Provider-connection filtering, and fallback.
-3. Agent authentication, permissions, rate limits, budgets, and concurrency limits.
-4. Activity, token usage, latency, failure, fallback, and actual-cost reporting.
-
-Alert delivery, notification channels, operational exports, database backup, billing
-reconciliation, Prometheus metrics, and OpenTelemetry tracing are not product features.
-
-## Gateway
-
-Agents authenticate with a dedicated `llmi_` API key and call one of:
+### Gateway protocols
 
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
@@ -25,135 +13,71 @@ Agents authenticate with a dedicated `llmi_` API key and call one of:
 - `POST /v1/embeddings`
 - `GET /v1/models`
 
-The Gateway identifies the Agent, checks its Virtual Model grant, conditionally enforces limits,
-resolves the Virtual Model, builds a deterministic fallback chain, calls real Providers, and
-records metadata after completion. Provider request bodies remain opaque and are never written
-to operational logs.
+Agents authenticate with a dedicated `llmi_` key and may access only their granted Virtual
+Models. Provider payloads remain protocol-native; Gateway replaces the Virtual Model name with
+the selected Provider model and does not log prompts, successful responses, or tool arguments.
 
-Supported routing strategies are:
+### Providers and models
 
-- `fixed`
-- `cost_first`
-- `random`
+Supported Provider types are API Key, Subscription OAuth, and Local. Current templates are:
 
-Confirmed unhealthy API keys/OAuth tokens are removed from credential fallback; models do not
-have health state. Failure before the first client byte may advance through credentials or
-fallback candidates. Failure after bytes have been sent is never replayed.
+- Subscription: OpenAI Codex, Claude Code
+- API Key: Google Gemini, OpenRouter, DeepSeek, xAI, Qwen, Moonshot/Kimi, MiniMax, Z.ai
+- Local: Ollama, LM Studio, llama.cpp
 
-## Providers and Models
+Console supports Provider lifecycle, multiple API keys, OAuth, model refresh, dependency-protected
+deletion, and connection checks. Model metadata may be merged from Provider APIs, models.dev,
+OpenRouter, LiteLLM, and Vercel; missing values remain unknown and manual values take precedence.
 
-Provider types:
+Health belongs to a Provider connection: each API key or OAuth token is independent, while a Local
+Provider has one logical connection. Worker probes up to three chat models. The sparse
+`provider_health_summary` contains only unhealthy connections; recovery deletes the row.
 
-- API Key Provider
-- Subscription OAuth Provider
-- Local Provider
+### Virtual Model routing
 
-The Console supports provider creation, enable/disable, dependency-protected deletion,
-multiple API keys, subscription OAuth, connectivity checks, and model refresh.
+A Virtual Model is created atomically with one Route Policy and at least one candidate. Supported
+strategies are `fixed`, `cost_first`, and `random`. `cost_first` orders by input price plus output
+price and places unknown prices last. Known capability values must agree across candidates;
+unknown values skip only the corresponding request pre-check.
 
-Connection health is tracked independently for each API key or OAuth token. Local Providers use
-one logical connection. A probe tries up to three distinct chat models and succeeds when any one
-works. `provider_health_summary` stores only unhealthy connections; missing rows are healthy.
-Failures retry after 5, 10, 30, then 60 minutes, while successful recovery removes the summary.
-Credential creation, material modification, enablement, and manual Console actions trigger exact
-connection probes. Gateway credential errors trigger the same asynchronous Worker probe.
+Before the first client byte, Gateway may try another credential or candidate. After streaming
+starts, it never replays the request. Confirmed unhealthy connections are filtered; models and
+Providers do not have independent health state.
 
-Model metadata can come from the Provider API, models.dev, OpenRouter, LiteLLM, and Vercel.
-Users can manually resolve missing or conflicting capability and price data.
+### Agents, limits, and accounting
 
-The stable model capability contract contains:
+Agent creation atomically stores its API key, Virtual Model grants, optional default model, Limits
+switch, and initial rules. Disabling an Agent preserves its key and configuration. Disabling Limits
+preserves rules and skips all limit reads and enforcement.
 
-- input modalities
-- output modalities
-- maximum context tokens
-- maximum output tokens
-- function calling support
-- reasoning support
+Supported rules are budget, RPM, TPM, concurrency, and per-request token limits. Supported
+operational records are request metadata, latency, status, token usage, actual or estimated cost,
+fallback attempts, and Provider-connection health history.
 
-Known values for these fields must be identical across candidates. Unknown values are allowed
-and cause Gateway to skip only that field's request pre-check. Virtual Model creation atomically
-requires one Route Policy and at least one candidate model.
+### Console, Worker, and health
 
-`cost_first` compares input price plus output price without request token weighting. Models with
-unknown prices remain at the end of the fallback chain. A successful unknown-price request records
-zero monetary cost with an unavailable price source while retaining its token usage.
+Supported Console pages are Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits,
+and Playground. Password setup, session authentication, stable operation errors, and secret
+encryption are required.
 
-## Agents and Limits
+Persistent Worker jobs are exactly `model_refresh`, `provider_connection_probe`, and `price_sync`.
+Retention and stale-concurrency repair run directly under PostgreSQL advisory locks and do not
+create jobs.
 
-Each Agent has:
+Gateway exposes `/health/live`, `/health/ready`, and the readiness-compatible `/health` alias.
 
-- a unique API key
-- an enabled state
-- allowed Virtual Models
-- an optional default Virtual Model
-- an explicit Limits enabled state
-- optional budget, RPM, TPM, concurrency, and per-request token limits
+## Unsupported
 
-Agent creation requires at least one allowed Virtual Model. The default, when set, must be one of
-those allowed models. Agent configuration, API-key creation, model grants, and initial Limits
-rules are committed atomically.
+V1 does not include:
 
-Limits are enforcement controls. When disabled, Gateway skips all Limits reads and checks while
-preserving configured rules for later re-enablement. They do not generate alerts or external
-notifications. Disabling an Agent preserves its key and configuration; enabling it restores the
-same access.
+- Runtime, Settings, or standalone Routing pages
+- notifications, alerts, Webhook delivery, or external exports
+- database backup or restore workflows
+- billing reconciliation or savings/baseline-cost reporting
+- Prometheus metrics or OpenTelemetry tracing
+- persisted runtime heartbeat, status, or error products
+- `quality_first`, legacy route rules, Agent modes, or request-logging switches
+- configuration import/export or Route Preview APIs
 
-## Usage and Activity
-
-LLMIngress records metadata required for operations and accounting:
-
-- request id and Agent
-- protocol and Virtual Model
-- selected Provider and model
-- status, error category, and latency
-- input/output/total tokens
-- actual or estimated cost and price source
-- fallback attempts and Provider-connection health events
-
-Prompt content, response content, tool arguments, credentials, cookies, and authorization
-headers are never written to operational logs.
-
-Console reporting includes request count, tokens, latency, failure rate, actual/estimated
-cost, fallback history, and Provider-connection health history.
-
-## Console
-
-The retained Console pages are:
-
-- Overview
-- Agents
-- Providers
-- Virtual Models
-- Activity
-- Usage
-- Limits
-- Playground
-
-Console authentication, first-run setup, stable operation errors, and
-secret encryption remain required.
-
-## Worker
-
-Persistent Worker jobs are limited to:
-
-- `model_refresh`
-- `provider_connection_probe`
-- `price_sync`
-
-Retention and stale-concurrency repair are idempotent internal maintenance operations and
-must not generate persistent jobs during idle operation.
-
-## Deployment
-
-LLMIngress runs as Console, Gateway, Worker, and PostgreSQL services. Published ports bind
-to loopback by default. Production deployment requires independent random values for the
-master key and database password.
-
-Gateway health endpoints:
-
-- `/health/live` for process liveness
-- `/health/ready` for database and configuration readiness
-- `/health` as a readiness-compatible alias
-
-The project is pre-release. The current baseline schema is authoritative; old development
-databases are recreated instead of upgraded in place.
+The project is pre-release. `packages/db/migrations/0001_core_baseline.sql` is authoritative;
+databases from older development migration chains are recreated rather than upgraded in place.

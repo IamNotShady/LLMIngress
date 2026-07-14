@@ -820,9 +820,6 @@ async function applyProviderModelRefreshPlan(
   providerId: string,
   plan: ProviderModelRefreshPlan,
 ): Promise<void> {
-  // TODO: when refreshed capabilities change, find affected Virtual Models and surface
-  // them proactively in Console. Gateway still validates against the effective
-  // configuration at request time and fails closed for invalid contracts.
   for (const model of plan.insertModels) {
     await client.query(
       `

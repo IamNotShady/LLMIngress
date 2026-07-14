@@ -4,9 +4,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const standardVerificationPattern =
-  /^pnpm exec vitest run (?<unitFile>\S+) && pnpm test:e2e (?<e2eFile>\S+)(?: --grep '(?<grep>[^']+)')?$/;
-const legacyCommandTimeoutMs = 600_000;
+const unitFilePattern = "tests/features/[A-Za-z0-9_-]+\\.unit\\.test\\.ts";
+const e2eFilePattern = "tests/e2e/[A-Za-z0-9_-]+\\.e2e\\.spec\\.ts";
+const standardVerificationPattern = new RegExp(
+  `^pnpm exec vitest run (?<unitFiles>${unitFilePattern}(?: ${unitFilePattern})*) && ` +
+    `pnpm test:e2e (?<e2eFiles>${e2eFilePattern}(?: ${e2eFilePattern})*) --workers=1$`,
+);
+const featureCommandTimeoutMs = 600_000;
 const batchUnitTimeoutMs = 600_000;
 const batchE2eTimeoutMs = 1_800_000;
 
@@ -17,16 +21,13 @@ export function parseStandardVerification(verification) {
   }
 
   return {
-    e2eFile: match.groups.e2eFile,
-    grep: match.groups.grep,
-    unitFile: match.groups.unitFile,
+    e2eFiles: match.groups.e2eFiles.split(" "),
+    unitFiles: match.groups.unitFiles.split(" "),
   };
 }
 
 export function buildOptimizedPlan(features) {
   const passingFeatures = features.filter((feature) => feature.status === "passing");
-  const standardFeatures = [];
-  const legacyFeatures = [];
   const standardByFeatureId = new Map();
   const unitFiles = [];
   const e2eFiles = [];
@@ -36,37 +37,37 @@ export function buildOptimizedPlan(features) {
   for (const feature of passingFeatures) {
     const parsed = parseStandardVerification(feature.verification);
     if (!parsed) {
-      legacyFeatures.push(feature);
-      continue;
+      throw new Error(
+        `Feature ${feature.id} must use the standard unit + E2E verification format.`,
+      );
     }
 
-    standardFeatures.push(feature);
     standardByFeatureId.set(feature.id, parsed);
-    if (!seenUnitFiles.has(parsed.unitFile)) {
-      seenUnitFiles.add(parsed.unitFile);
-      unitFiles.push(parsed.unitFile);
+    for (const unitFile of parsed.unitFiles) {
+      if (!seenUnitFiles.has(unitFile)) {
+        seenUnitFiles.add(unitFile);
+        unitFiles.push(unitFile);
+      }
     }
-    if (!seenE2eFiles.has(parsed.e2eFile)) {
-      seenE2eFiles.add(parsed.e2eFile);
-      e2eFiles.push(parsed.e2eFile);
+    for (const e2eFile of parsed.e2eFiles) {
+      if (!seenE2eFiles.has(e2eFile)) {
+        seenE2eFiles.add(e2eFile);
+        e2eFiles.push(e2eFile);
+      }
     }
   }
 
   return {
     e2eFiles,
-    legacyFeatures,
     passingFeatures,
     standardByFeatureId,
-    standardFeatures,
+    standardFeatures: passingFeatures,
     unitFiles,
   };
 }
 
 export function assertOptimizedPlanCoverage(plan, passingFeatures = plan.passingFeatures) {
-  const coveredFeatureIds = new Set([
-    ...plan.standardFeatures.map((feature) => feature.id),
-    ...plan.legacyFeatures.map((feature) => feature.id),
-  ]);
+  const coveredFeatureIds = new Set(plan.standardFeatures.map((feature) => feature.id));
   const missingFeatureIds = passingFeatures
     .filter((feature) => feature.status === "passing")
     .map((feature) => feature.id)
@@ -82,8 +83,8 @@ export function assertOptimizedPlanCoverage(plan, passingFeatures = plan.passing
 export function formatDryRunPlan(plan) {
   const lines = [
     `Optimized feature regression plan: ${plan.passingFeatures.length} passing feature(s).`,
-    `Standard batch feature(s): ${plan.standardFeatures.length}`,
-    `Legacy feature(s): ${plan.legacyFeatures.length}`,
+    `Standard feature(s): ${plan.standardFeatures.length}`,
+    "Legacy feature(s): 0",
     `Unit batch file(s): ${plan.unitFiles.length}`,
     `E2E batch file(s): ${plan.e2eFiles.length}`,
     "",
@@ -91,16 +92,8 @@ export function formatDryRunPlan(plan) {
 
   for (const feature of plan.standardFeatures) {
     const parsed = plan.standardByFeatureId.get(feature.id);
-    lines.push(`${feature.id} -> batch unit: ${parsed.unitFile}`);
-    lines.push(
-      `${feature.id} -> batch e2e: ${parsed.e2eFile}${
-        parsed.grep ? ` --grep '${parsed.grep}'` : ""
-      }`,
-    );
-  }
-
-  for (const feature of plan.legacyFeatures) {
-    lines.push(`${feature.id} -> legacy: ${feature.verification}`);
+    lines.push(`${feature.id} -> batch unit: ${parsed.unitFiles.join(" ")}`);
+    lines.push(`${feature.id} -> batch e2e: ${parsed.e2eFiles.join(" ")}`);
   }
 
   return lines.join("\n");
@@ -113,16 +106,7 @@ export function runOptimizedPlan(plan, options = {}) {
   const failures = [];
 
   print(`Regressing ${plan.passingFeatures.length} passing feature(s) with optimized runner...`);
-  print(
-    `Plan: ${plan.standardFeatures.length} standard feature(s), ${plan.legacyFeatures.length} legacy feature(s).`,
-  );
-
-  const legacyFailures = runFeatureCommands(plan.legacyFeatures, {
-    execute,
-    print,
-    timings,
-  });
-  failures.push(...legacyFailures);
+  print(`Plan: ${plan.standardFeatures.length} standard feature(s), 0 legacy feature(s).`);
 
   if (plan.unitFiles.length > 0) {
     const unitCommand = `pnpm exec vitest run ${plan.unitFiles.map(shellQuote).join(" ")}`;
@@ -136,22 +120,19 @@ export function runOptimizedPlan(plan, options = {}) {
     });
     if (unitResult.status !== 0) {
       printCommandTail("unit batch", unitResult.output, print);
-      const fallbackFailures = runFallbackFeatureCommands("unit batch", plan.standardFeatures, {
-        execute,
-        print,
-        timings,
-      });
-      failures.push(...fallbackFailures);
+      failures.push(
+        ...runFallbackFeatureCommands("unit batch", plan.standardFeatures, {
+          execute,
+          print,
+          timings,
+        }),
+      );
       printSlowTimings(timings, print);
       return { failures: unique(failures), timings };
     }
   }
 
   if (plan.e2eFiles.length > 0) {
-    // Run the E2E batch in parallel. Console specs share apps/console/.next and
-    // serialize themselves via the llmingress-console-next-dev process lock, so
-    // worker concurrency is safe; non-console specs use isolated DBs + free
-    // ports. 50% scales down on small CI runners and up on dev machines.
     const e2eCommand = `pnpm test:e2e ${plan.e2eFiles.map(shellQuote).join(" ")} --workers=50%`;
     const e2eResult = runTimedCommand({
       command: e2eCommand,
@@ -163,33 +144,17 @@ export function runOptimizedPlan(plan, options = {}) {
     });
     if (e2eResult.status !== 0) {
       printCommandTail("e2e batch", e2eResult.output, print);
-      const fallbackFailures = runFallbackFeatureCommands("e2e batch", plan.standardFeatures, {
-        execute,
-        print,
-        timings,
-      });
-      failures.push(...fallbackFailures);
+      failures.push(
+        ...runFallbackFeatureCommands("e2e batch", plan.standardFeatures, {
+          execute,
+          print,
+          timings,
+        }),
+      );
     }
   }
 
   printSlowTimings(timings, print);
-  return { failures: unique(failures), timings };
-}
-
-export function runLegacyFeatures(features, options = {}) {
-  const passingFeatures = features.filter((feature) => feature.status === "passing");
-  const execute = options.execute ?? ((command, runOptions) => runShellCommand(command, runOptions));
-  const print = options.print ?? console.log;
-  const timings = [];
-
-  print(`Regressing ${passingFeatures.length} passing feature(s) with legacy runner...`);
-  const failures = runFeatureCommands(passingFeatures, {
-    execute,
-    print,
-    timings,
-  });
-  printSlowTimings(timings, print);
-
   return { failures: unique(failures), timings };
 }
 
@@ -199,26 +164,18 @@ export function loadFeatureList(featureListPath = resolve(root, "feature_list.js
 }
 
 export function main(args = process.argv.slice(2), options = {}) {
-  const mode = parseMode(args);
   const print = options.print ?? console.log;
   const printError = options.printError ?? console.error;
   const features = options.features ?? loadFeatureList();
 
   try {
-    if (mode === "legacy") {
-      const result = runLegacyFeatures(features, {
-        execute: options.execute,
-        print,
-      });
-      return finish(result.failures, features, print, printError);
-    }
-
+    const dryRun = parseArguments(args);
     const plan = buildOptimizedPlan(features);
     assertOptimizedPlanCoverage(plan);
 
-    if (mode === "dry-run" || mode === "compare") {
+    if (dryRun) {
       print(formatDryRunPlan(plan));
-      print("\nOptimized coverage comparison passed.");
+      print("\nStandard verification coverage passed.");
       return 0;
     }
 
@@ -233,23 +190,13 @@ export function main(args = process.argv.slice(2), options = {}) {
   }
 }
 
-function parseMode(args) {
-  const known = new Set(["--legacy", "--dry-run", "--compare"]);
+function parseArguments(args) {
   for (const arg of args) {
-    if (!known.has(arg)) {
+    if (arg !== "--dry-run") {
       throw new Error(`Unknown verify-features argument: ${arg}`);
     }
   }
-  if (args.includes("--legacy")) {
-    return "legacy";
-  }
-  if (args.includes("--dry-run")) {
-    return "dry-run";
-  }
-  if (args.includes("--compare")) {
-    return "compare";
-  }
-  return "optimized";
+  return args.includes("--dry-run");
 }
 
 function runFeatureCommands(features, options) {
@@ -261,7 +208,7 @@ function runFeatureCommands(features, options) {
       execute: options.execute,
       label: `${feature.id} ${feature.name}`,
       print: options.print,
-      timeoutMs: legacyCommandTimeoutMs,
+      timeoutMs: featureCommandTimeoutMs,
       timings: options.timings,
     });
     if (result.status !== 0) {
@@ -274,7 +221,7 @@ function runFeatureCommands(features, options) {
 }
 
 function runFallbackFeatureCommands(reason, features, options) {
-  options.print(`Falling back to original feature verification after ${reason} failure...`);
+  options.print(`Falling back to per-feature verification after ${reason} failure...`);
   return runFeatureCommands(features, options);
 }
 
@@ -284,28 +231,17 @@ function runTimedCommand({ command, execute, label, print, timeoutMs, timings })
   const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   const status = result.status ?? 1;
 
-  timings.push({
-    label,
-    seconds: Number(seconds),
-  });
+  timings.push({ label, seconds: Number(seconds) });
+  print(`${label} ... ${status === 0 ? "PASS" : "FAIL"} (${seconds}s)`);
 
-  if (status === 0) {
-    print(`${label} ... PASS (${seconds}s)`);
-  } else {
-    print(`${label} ... FAIL (${seconds}s)`);
-  }
-
-  return {
-    output: result.output ?? "",
-    status,
-  };
+  return { output: result.output ?? "", status };
 }
 
 function runShellCommand(command, options = {}) {
   const result = spawnSync("bash", ["-c", command], {
     cwd: root,
     encoding: "utf8",
-    timeout: options.timeoutMs ?? legacyCommandTimeoutMs,
+    timeout: options.timeoutMs ?? featureCommandTimeoutMs,
   });
 
   return {

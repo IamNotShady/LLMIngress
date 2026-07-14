@@ -120,10 +120,8 @@ Gateway health endpoints do not require an Agent API key:
 ```mermaid
 flowchart LR
   agents[AI Agents] --> gateway[Gateway] --> providers[Model Providers]
-  browser[Browser] --> console[Console]
-  gateway --> db[(PostgreSQL)]
-  console --> db
-  worker[Worker] --> db
+  browser[Browser] --> console[Console] --> db[(PostgreSQL)] <--> worker[Worker]
+  gateway --> db
   worker --> providers
 ```
 

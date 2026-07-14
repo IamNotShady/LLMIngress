@@ -501,6 +501,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
     providerKey: readSingleSearchParam(searchParams.providerKeyValue) ?? "",
   };
   const providerKeyDialog = readSingleSearchParam(searchParams.providerKeyDialog);
+  const providerKeyEdit = readSingleSearchParam(searchParams.providerKeyEdit);
   const providerKeyDelete = readSingleSearchParam(searchParams.providerKeyDelete);
   const providerOAuthError = readSingleSearchParam(searchParams.providerOAuthError);
   const providerOAuthId = readSingleSearchParam(searchParams.providerOAuthId);
@@ -510,6 +511,7 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const providerKeyDialogCloseHref = buildQueryHref(searchParams, {
     providerKeyDelete: undefined,
     providerKeyDialog: undefined,
+    providerKeyEdit: undefined,
     providerAuthorizeUrl: undefined,
     providerOAuthError: undefined,
     providerOAuthId: undefined,
@@ -548,6 +550,9 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
   const deleteProviderKey = selectedProviderKeys.find(
     (providerKey) => providerKey.id === providerKeyDelete,
   );
+  const editProviderKey = selectedProviderKeys.find(
+    (providerKey) => providerKey.id === providerKeyEdit,
+  );
 
   return (
     <section className="providers-dashboard" aria-label="Providers & Models">
@@ -584,6 +589,9 @@ export async function ProvidersSection({ searchParams }: { searchParams: Console
         ) : (
           <ProviderKeyCreateDialogClient
             closeHref={providerKeyDialogCloseHref}
+            initialLabel={editProviderKey?.label}
+            initialPriority={editProviderKey?.priority}
+            providerApiKeyId={editProviderKey?.id}
             providerId={selectedProvider.id}
             providerName={selectedProvider.displayName}
           />

@@ -62,6 +62,16 @@ const defaultTimeoutMs = 5_000;
 const timeoutErrorMessage = "Provider connectivity check timed out.";
 
 export function selectProviderProbeModel(candidates: ProviderProbeModelCandidate[]): string | null {
+  return selectProviderProbeModels(candidates, 1)[0] ?? null;
+}
+
+export function selectProviderProbeModels(
+  candidates: ProviderProbeModelCandidate[],
+  limit = 3,
+): string[] {
+  if (!Number.isInteger(limit) || limit <= 0) {
+    return [];
+  }
   const ranked = candidates
     .filter((candidate) => isEligibleProbeModel(candidate))
     .map((candidate) => ({
@@ -70,7 +80,7 @@ export function selectProviderProbeModel(candidates: ProviderProbeModelCandidate
     }));
 
   ranked.sort((left, right) => compareProbeModelRank(left.rank, right.rank));
-  return ranked[0]?.candidate.modelId ?? null;
+  return [...new Set(ranked.map(({ candidate }) => candidate.modelId))].slice(0, limit);
 }
 
 export async function checkProviderConnectivity(
@@ -290,12 +300,24 @@ export function classifyProviderFailureStatus(input: {
   return "unhealthy";
 }
 
-export function shouldRecordProviderRequestPathHealthFailure(input: {
+export function isProviderCredentialFailure(input: {
   errorCode?: string | null;
   errorMessage?: string | null;
   statusCode?: number | null;
 }): boolean {
-  return input.statusCode !== 400;
+  if (
+    input.statusCode === 401 ||
+    input.statusCode === 402 ||
+    input.statusCode === 403 ||
+    input.statusCode === 429
+  ) {
+    return true;
+  }
+
+  const text = `${input.errorCode ?? ""} ${input.errorMessage ?? ""}`.toLowerCase();
+  return /invalid[_ -]?(api[_ -]?key|token)|authentication|unauthori[sz]ed|permission_denied|forbidden|quota|rate[_ -]?limit|billing|balance|insufficient|resource_exhausted|no resource package/.test(
+    text,
+  );
 }
 
 type ProbeModelRank = {

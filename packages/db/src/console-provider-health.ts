@@ -1,251 +1,166 @@
-import { type PostgresQueryClient, withPooledPostgresClient } from "@llmingress/db/client";
+import { withPooledPostgresClient } from "@llmingress/db/client";
 
-export type ConsoleStoredProviderHealthStatus =
-  | "auth_failed"
+export type ConsoleProviderConnectionHealthStatus =
+  | "checking"
+  | "disabled"
   | "healthy"
-  | "network_error"
-  | "quota_limited"
-  | "unknown"
   | "unhealthy";
-export type ConsoleProviderHealthStatus = "checking" | ConsoleStoredProviderHealthStatus;
-export type ConsoleProviderHealthTrigger = "manual" | "request_path" | "worker_probe";
-
-export type ConsoleProviderModelHealthSummary = {
-  consecutiveFailures: number;
-  displayName: string;
-  id: string;
-  isStale: boolean;
-  latestProbeAt: Date | null;
-  modelId: string;
-  providerId: string;
-  status: ConsoleProviderHealthStatus;
-  trigger: ConsoleProviderHealthTrigger | null;
-};
+export type ConsoleProviderHealthTrigger = "manual" | "worker_probe";
 
 export type ConsoleProviderHealthSummary = {
+  connectionKind: "api_key" | "local" | "oauth";
+  connectionLabel: string;
   consecutiveFailures: number;
-  displayName: string;
+  enabled: boolean;
   id: string;
-  isStale: boolean;
   latestProbeAt: Date | null;
-  models: ConsoleProviderModelHealthSummary[];
+  nextProbeAt: Date | null;
+  providerDisplayName: string;
+  providerId: string;
   providerKey: string;
-  status: ConsoleProviderHealthStatus;
+  reasonCode: string | null;
+  reasonMessage: string | null;
+  status: ConsoleProviderConnectionHealthStatus;
   trigger: ConsoleProviderHealthTrigger | null;
 };
 
 export type ListConsoleProviderHealthSummariesInput = {
   databaseUrl?: string;
-  now?: Date;
-  staleAfterMs?: number;
 };
 
-type ActiveProviderConnectivityCheckJobRow = {
-  provider_id: string | null;
-};
-
-type StoredProviderHealthSummaryRow = {
+type ProviderConnectionHealthRow = {
+  connection_kind: ConsoleProviderHealthSummary["connectionKind"];
+  connection_label: string;
   consecutive_failures: number | null;
-  display_name: string;
+  enabled: boolean;
   id: string;
   latest_probe_at: Date | null;
-  provider_key: string;
-  status: ConsoleStoredProviderHealthStatus | null;
-  trigger: ConsoleProviderHealthTrigger | null;
-};
-
-type ProviderModelHealthSummaryRow = {
-  consecutive_failures: number | null;
-  display_name: string;
-  id: string;
-  latest_probe_at: Date | null;
-  model_id: string;
+  next_probe_at: Date | null;
+  provider_display_name: string;
   provider_id: string;
-  status: ConsoleStoredProviderHealthStatus | null;
+  provider_key: string;
+  reason_code: string | null;
+  reason_message: string | null;
+  status: "unhealthy" | null;
   trigger: ConsoleProviderHealthTrigger | null;
 };
-
-const defaultHealthStaleAfterMs = 5 * 60 * 1000;
 
 export async function listConsoleProviderHealthSummaries(
   input: ListConsoleProviderHealthSummariesInput = {},
 ): Promise<ConsoleProviderHealthSummary[]> {
   return withPooledPostgresClient(input.databaseUrl, async (client) => {
-    const hasSoftDeleteColumns = await providerHealthSoftDeleteColumnsAvailable(client);
-    const providerDeletedFilter = hasSoftDeleteColumns ? "where providers.deleted_at is null" : "";
-    const providerModelDeletedFilter = hasSoftDeleteColumns
-      ? "where providers.deleted_at is null and provider_models.deleted_at is null"
-      : "";
-    const providerResult = await client.query<StoredProviderHealthSummaryRow>(
-      `
-          select providers.id::text,
-                 providers.provider_key,
-                 providers.display_name,
+    const [connections, activeJobs] = await Promise.all([
+      client.query<ProviderConnectionHealthRow>(
+        `
+          with provider_connections as (
+            select providers.id,
+                   providers.id as provider_id,
+                   providers.provider_key,
+                   providers.display_name as provider_display_name,
+                   providers.enabled,
+                   'local'::text as connection_kind,
+                   'Local connection'::text as connection_label
+            from providers
+            where providers.provider_type = 'local'
+              and providers.deleted_at is null
+
+            union all
+
+            select provider_api_keys.id,
+                   providers.id as provider_id,
+                   providers.provider_key,
+                   providers.display_name as provider_display_name,
+                   providers.enabled and provider_api_keys.enabled as enabled,
+                   'api_key'::text as connection_kind,
+                   coalesce(provider_api_keys.label, provider_api_keys.key_prefix) as connection_label
+            from provider_api_keys
+            join providers on providers.id = provider_api_keys.provider_id
+            where provider_api_keys.deleted_at is null
+              and providers.deleted_at is null
+
+            union all
+
+            select provider_oauth.id,
+                   providers.id as provider_id,
+                   providers.provider_key,
+                   providers.display_name as provider_display_name,
+                   providers.enabled and provider_oauth.enabled as enabled,
+                   'oauth'::text as connection_kind,
+                   coalesce(provider_oauth.label, 'OAuth connection') as connection_label
+            from provider_oauth
+            join providers on providers.id = provider_oauth.provider_id
+            where provider_oauth.deleted_at is null
+              and provider_oauth.completed_at is not null
+              and provider_oauth.encrypted_token is not null
+              and providers.deleted_at is null
+          )
+          select provider_connections.id::text,
+                 provider_connections.provider_id::text,
+                 provider_connections.provider_key,
+                 provider_connections.provider_display_name,
+                 provider_connections.enabled,
+                 provider_connections.connection_kind,
+                 provider_connections.connection_label,
                  provider_health_summary.status,
                  provider_health_summary.consecutive_failures,
-                 provider_health_events.observed_at as latest_probe_at,
-                 provider_health_events.trigger
-          from providers
+                 provider_health_summary.reason_code,
+                 provider_health_summary.reason_message,
+                 provider_health_summary.next_probe_at,
+                 latest_event.observed_at as latest_probe_at,
+                 latest_event.trigger
+          from provider_connections
           left join provider_health_summary
-            on provider_health_summary.provider_id = providers.id
-           and provider_health_summary.provider_model_id is null
-          left join provider_health_events
-            on provider_health_events.id = provider_health_summary.last_event_id
-          ${providerDeletedFilter}
-          order by providers.provider_key
+            on provider_health_summary.provider_id = provider_connections.provider_id
+           and provider_health_summary.provider_connection_id = provider_connections.id
+          left join lateral (
+            select observed_at, trigger
+            from provider_health_events
+            where provider_health_events.provider_id = provider_connections.provider_id
+              and provider_health_events.provider_connection_id = provider_connections.id
+            order by observed_at desc, id desc
+            limit 1
+          ) as latest_event on true
+          order by provider_connections.provider_key,
+                   provider_connections.connection_kind,
+                   provider_connections.connection_label,
+                   provider_connections.id
         `,
-    );
-    const modelResult = await client.query<ProviderModelHealthSummaryRow>(
-      `
-          select provider_models.id::text,
-                 provider_models.provider_id::text,
-                 provider_models.model_id,
-                 provider_models.display_name,
-                 provider_health_summary.status,
-                 provider_health_summary.consecutive_failures,
-                 provider_health_events.observed_at as latest_probe_at,
-                 provider_health_events.trigger
-          from provider_models
-          join providers on providers.id = provider_models.provider_id
-          left join provider_health_summary
-            on provider_health_summary.provider_id = providers.id
-           and provider_health_summary.provider_model_id = provider_models.id
-          left join provider_health_events
-            on provider_health_events.id = provider_health_summary.last_event_id
-          ${providerModelDeletedFilter}
-          order by providers.provider_key,
-                   provider_models.display_name
-        `,
-    );
-    const activeJobResult = await client.query<ActiveProviderConnectivityCheckJobRow>(
-      `
-          select distinct payload ->> 'providerId' as provider_id
-          from jobs
-          where job_type in ('model_refresh', 'provider_connectivity_check')
-            and status in ('pending', 'running')
-            and payload ->> 'providerId' is not null
-        `,
-    );
-    const now = input.now ?? new Date();
-    const staleAfterMs = input.staleAfterMs ?? defaultHealthStaleAfterMs;
-    const checkingProviderIds = new Set(
-      activeJobResult.rows
-        .map((row) => row.provider_id)
-        .filter((providerId): providerId is string => typeof providerId === "string"),
-    );
-    const modelsByProviderId = groupModelsByProviderId(
-      modelResult.rows.map((row) =>
-        rowToProviderModelHealthSummary(row, {
-          now,
-          staleAfterMs,
-        }),
       ),
+      client.query<{ provider_connection_id: string; provider_id: string }>(
+        `
+          select distinct payload ->> 'providerId' as provider_id,
+                          payload ->> 'providerConnectionId' as provider_connection_id
+          from jobs
+          where job_type = 'provider_connection_probe'
+            and status in ('pending', 'running')
+            and (status = 'running' or run_after <= now())
+            and payload ->> 'providerId' is not null
+            and payload ->> 'providerConnectionId' is not null
+        `,
+      ),
+    ]);
+    const checking = new Set(
+      activeJobs.rows.map((row) => `${row.provider_id}:${row.provider_connection_id}`),
     );
-
-    return providerResult.rows.map((row) =>
-      rowToProviderHealthSummary(row, {
-        checkingProviderIds,
-        models: modelsByProviderId.get(row.id) ?? [],
-        now,
-        staleAfterMs,
-      }),
-    );
+    return connections.rows.map((row) => ({
+      connectionKind: row.connection_kind,
+      connectionLabel: row.connection_label,
+      consecutiveFailures: row.consecutive_failures ?? 0,
+      enabled: row.enabled,
+      id: row.id,
+      latestProbeAt: row.latest_probe_at ? new Date(row.latest_probe_at) : null,
+      nextProbeAt: row.next_probe_at ? new Date(row.next_probe_at) : null,
+      providerDisplayName: row.provider_display_name,
+      providerId: row.provider_id,
+      providerKey: row.provider_key,
+      reasonCode: row.reason_code,
+      reasonMessage: row.reason_message,
+      status: !row.enabled
+        ? "disabled"
+        : checking.has(`${row.provider_id}:${row.id}`)
+          ? "checking"
+          : (row.status ?? "healthy"),
+      trigger: row.trigger,
+    }));
   });
-}
-
-async function providerHealthSoftDeleteColumnsAvailable(
-  client: PostgresQueryClient,
-): Promise<boolean> {
-  const result = await client.query<{ available: boolean }>(
-    `
-      select count(*) = 2 as available
-      from information_schema.columns
-      where table_schema = 'public'
-        and column_name = 'deleted_at'
-        and table_name in ('providers', 'provider_models')
-    `,
-  );
-  return result.rows[0]?.available ?? false;
-}
-
-export function formatProviderHealthStaleStatus(input: {
-  latestProbeAt: Date | null;
-  now?: Date;
-  staleAfterMs?: number;
-}): string {
-  if (!input.latestProbeAt) {
-    return "No probe";
-  }
-
-  const now = input.now ?? new Date();
-  const staleAfterMs = input.staleAfterMs ?? defaultHealthStaleAfterMs;
-  const ageMs = now.getTime() - input.latestProbeAt.getTime();
-  return ageMs <= staleAfterMs ? "Fresh" : "Stale";
-}
-
-function rowToProviderHealthSummary(
-  row: StoredProviderHealthSummaryRow,
-  input: {
-    checkingProviderIds: Set<string>;
-    models: ConsoleProviderModelHealthSummary[];
-    now: Date;
-    staleAfterMs: number;
-  },
-): ConsoleProviderHealthSummary {
-  const latestProbeAt = row.latest_probe_at;
-  const status = input.checkingProviderIds.has(row.id) ? "checking" : (row.status ?? "unknown");
-  return {
-    consecutiveFailures: row.consecutive_failures ?? 0,
-    displayName: row.display_name,
-    id: row.id,
-    isStale:
-      formatProviderHealthStaleStatus({
-        latestProbeAt,
-        now: input.now,
-        staleAfterMs: input.staleAfterMs,
-      }) !== "Fresh",
-    latestProbeAt,
-    models: input.models,
-    providerKey: row.provider_key,
-    status,
-    trigger: row.trigger,
-  };
-}
-
-function rowToProviderModelHealthSummary(
-  row: ProviderModelHealthSummaryRow,
-  input: {
-    now: Date;
-    staleAfterMs: number;
-  },
-): ConsoleProviderModelHealthSummary {
-  const latestProbeAt = row.latest_probe_at;
-  return {
-    consecutiveFailures: row.consecutive_failures ?? 0,
-    displayName: row.display_name,
-    id: row.id,
-    isStale:
-      formatProviderHealthStaleStatus({
-        latestProbeAt,
-        now: input.now,
-        staleAfterMs: input.staleAfterMs,
-      }) !== "Fresh",
-    latestProbeAt,
-    modelId: row.model_id,
-    providerId: row.provider_id,
-    status: row.status ?? "unknown",
-    trigger: row.trigger,
-  };
-}
-
-function groupModelsByProviderId(
-  models: ConsoleProviderModelHealthSummary[],
-): Map<string, ConsoleProviderModelHealthSummary[]> {
-  const modelsByProviderId = new Map<string, ConsoleProviderModelHealthSummary[]>();
-  for (const model of models) {
-    const modelsForProvider = modelsByProviderId.get(model.providerId) ?? [];
-    modelsForProvider.push(model);
-    modelsByProviderId.set(model.providerId, modelsForProvider);
-  }
-  return modelsByProviderId;
 }

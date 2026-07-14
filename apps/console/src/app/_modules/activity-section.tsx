@@ -176,6 +176,12 @@ function activityFallbackCount(activity: ConsoleActivity): number {
 
 type ActivityRange = "24h" | "7d" | "30d";
 
+const routeStrategyLabels: Record<string, string> = {
+  cost_first: "Cost First",
+  fixed: "Fixed",
+  random: "Random",
+};
+
 function parseActivityRange(value: string | undefined): ActivityRange {
   if (value === "24h" || value === "30d") {
     return value;
@@ -190,7 +196,7 @@ function getActivityWindowStart(now: Date, range: ActivityRange): Date {
 
 function formatRouteReasonStrategy(routeReason: unknown): string {
   if (isActivityRecord(routeReason) && typeof routeReason.strategy === "string") {
-    return routeReason.strategy;
+    return routeStrategyLabels[routeReason.strategy] ?? routeReason.strategy;
   }
   return "Unknown";
 }
@@ -357,7 +363,7 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
         <div className="activity-table-region">
           <h2 className="activity-region-title">Request list</h2>
           <div className="data-table-wrap activity-table-wrap">
-            <table className="data-table activity-table">
+            <table className="data-table bounded-table activity-table">
               <thead>
                 <tr>
                   <th>Time</th>

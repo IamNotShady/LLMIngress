@@ -90,6 +90,17 @@ export async function closePostgresPools(): Promise<void> {
   await Promise.all(pools.map((pool) => pool.end()));
 }
 
+export async function closePostgresPool(databaseUrl?: string): Promise<void> {
+  const connectionString = databaseUrl?.trim() || readPostgresDatabaseUrl();
+  const pool = postgresPools.get(connectionString);
+  if (!pool) {
+    return;
+  }
+
+  postgresPools.delete(connectionString);
+  await pool.end();
+}
+
 export async function withPooledPostgresClient<T>(
   databaseUrl: string | undefined,
   operation: (client: PostgresQueryClient) => Promise<T>,

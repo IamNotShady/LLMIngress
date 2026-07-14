@@ -27,7 +27,6 @@ const errorFieldByCode: Record<string, string> = {
   agent_allowed_virtual_model_required: "allowedVirtualModelIds",
   agent_integration_platform_invalid: "integrationPlatform",
   agent_name_required: "name",
-  console_setup_token_invalid: "setupToken",
   invalid_admin_password: "password",
   provider_api_key_label_too_long: "label",
   provider_api_key_priority_invalid: "priority",

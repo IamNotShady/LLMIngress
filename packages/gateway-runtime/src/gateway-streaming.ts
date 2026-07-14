@@ -272,7 +272,6 @@ export async function executeGatewayStreamingRequest(input: {
       routeDecision,
     });
     const body = composeGatewayProviderStreamPipeline({
-      candidate: success.candidate,
       databaseUrl: input.databaseUrl,
       firstValue: success.result.firstValue,
       lease: concurrencyLease,

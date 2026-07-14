@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client, type QueryResult, type QueryResultRow } from "pg";
+import { closePostgresPool } from "./client.js";
 import {
   type AppliedMigrationStatus,
   type MigrationStatusSummary,
@@ -14,6 +15,7 @@ export type {
   PostgresQueryResultRow,
 } from "./client.js";
 export {
+  closePostgresPool,
   closePostgresPools,
   getPostgresPool,
   PostgresClient,
@@ -287,6 +289,8 @@ class PostgresFixture implements TestPostgresFixture {
       await this.client.end();
       this.client = undefined;
     }
+
+    await closePostgresPool(this.databaseUrl);
 
     await withClient(this.maintenanceUrl, async (client) => {
       await client.query(

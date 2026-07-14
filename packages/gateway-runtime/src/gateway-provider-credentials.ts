@@ -3,6 +3,7 @@ import {
   withPooledPostgresClient,
   withPostgresTransaction,
 } from "@llmingress/db/client";
+import { enqueueProviderConnectionProbeJob } from "@llmingress/db/provider-jobs";
 import { readEnabledCompletedProviderOAuthConnections } from "@llmingress/db/providers";
 import {
   type ProviderOAuthTokenBlob,
@@ -52,6 +53,11 @@ type ProviderCredentialOAuthLockRow = {
   encrypted_token: unknown;
 };
 
+type UnhealthyProviderConnectionRow = {
+  provider_connection_id: string;
+  provider_id: string;
+};
+
 export async function attachGatewayProviderCredentials(input: {
   candidates: readonly GatewayRouteCandidateSnapshot[];
   databaseUrl?: string;
@@ -77,8 +83,8 @@ export async function attachGatewayProviderCredentials(input: {
     const primaryKey = credential.keys[0];
     if (!primaryKey) {
       throw new GatewayPipelineError(
-        "provider_credentials_missing",
-        `Provider credentials are missing for provider ${candidate.providerId}.`,
+        "provider_connection_unavailable",
+        `Provider has no healthy connections for provider ${candidate.providerId}.`,
       );
     }
 
@@ -86,6 +92,7 @@ export async function attachGatewayProviderCredentials(input: {
       ...candidate,
       apiKey: primaryKey.apiKey,
       baseUrl: credential.baseUrl,
+      providerConnectionId: primaryKey.providerConnectionId,
       providerApiKeyId: primaryKey.providerApiKeyId,
       providerApiKeyPrefix: primaryKey.keyPrefix,
       providerApiKeys: credential.keys,
@@ -114,8 +121,8 @@ export async function attachGatewayProviderCredentialsLeniently(input: {
   }
   if (attached.length === 0) {
     throw new GatewayPipelineError(
-      "provider_credentials_missing",
-      "Provider credentials are not configured for any candidate on the selected route.",
+      "provider_connection_unavailable",
+      "No healthy provider connections are available for the selected route.",
     );
   }
   return attached;
@@ -148,7 +155,7 @@ async function readProviderCredentials(input: {
   }
 
   const encryption = createSecretEncryption(input.masterKeySource);
-  const { apiKeyRows, providerRows } = await withPooledPostgresClient(
+  const { apiKeyRows, providerRows, unhealthyConnectionIds } = await withPooledPostgresClient(
     input.databaseUrl,
     async (client) => {
       const providerResult = await client.query<ProviderCredentialProviderRow>(
@@ -179,6 +186,7 @@ async function readProviderCredentials(input: {
             and providers.deleted_at is null
             and providers.provider_type = 'api_key'
             and provider_api_keys.enabled = true
+            and provider_api_keys.deleted_at is null
           order by providers.id,
                    provider_api_keys.priority asc,
                    provider_api_keys.created_at asc,
@@ -187,9 +195,24 @@ async function readProviderCredentials(input: {
         [input.providerIds],
       );
 
+      const unhealthyResult = await client.query<UnhealthyProviderConnectionRow>(
+        `
+          select provider_id::text,
+                 provider_connection_id::text
+          from provider_health_summary
+          where provider_id = any($1::uuid[])
+        `,
+        [input.providerIds],
+      );
+
       return {
         apiKeyRows: apiKeyResult.rows,
         providerRows: providerResult.rows,
+        unhealthyConnectionIds: new Set(
+          unhealthyResult.rows.map((row) =>
+            providerConnectionHealthKey(row.provider_id, row.provider_connection_id),
+          ),
+        ),
       };
     },
   );
@@ -201,23 +224,43 @@ async function readProviderCredentials(input: {
     }
     credentials.set(row.provider_id, {
       baseUrl: row.base_url,
-      keys: row.provider_type === "local" ? [{ apiKey: "" }] : [],
+      keys:
+        row.provider_type === "local" &&
+        !unhealthyConnectionIds.has(providerConnectionHealthKey(row.provider_id, row.provider_id))
+          ? [{ apiKey: "", providerConnectionId: row.provider_id }]
+          : [],
     });
   }
 
   for (const row of apiKeyRows) {
+    if (
+      unhealthyConnectionIds.has(
+        providerConnectionHealthKey(row.provider_id, row.provider_api_key_id),
+      )
+    ) {
+      continue;
+    }
     if (!row.base_url?.trim()) {
       throw new Error(`Provider base URL is missing for provider ${row.provider_id}.`);
     }
 
     const existing = credentials.get(row.provider_id);
     const providerCredentials = existing ?? { baseUrl: row.base_url, keys: [] };
-    providerCredentials.keys.push({
-      apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
-      credentialKind: "api_key",
-      keyPrefix: row.key_prefix,
-      providerApiKeyId: row.provider_api_key_id,
-    });
+    try {
+      providerCredentials.keys.push({
+        apiKey: encryption.decrypt(readEncryptedSecret(row.encrypted_key)),
+        credentialKind: "api_key",
+        keyPrefix: row.key_prefix,
+        providerConnectionId: row.provider_api_key_id,
+        providerApiKeyId: row.provider_api_key_id,
+      });
+    } catch {
+      enqueueConnectionProbeAfterCredentialLoadFailure({
+        databaseUrl: input.databaseUrl,
+        providerConnectionId: row.provider_api_key_id,
+        providerId: row.provider_id,
+      });
+    }
     credentials.set(row.provider_id, providerCredentials);
   }
 
@@ -235,26 +278,40 @@ async function readProviderCredentials(input: {
       providerId: provider.provider_id,
     });
     for (const connection of connections) {
-      let token = readProviderOAuthTokenBlob(
-        encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
-      );
-      if (isProviderOAuthTokenExpired(token)) {
-        if (!token.refreshToken) {
-          continue;
+      if (
+        unhealthyConnectionIds.has(providerConnectionHealthKey(provider.provider_id, connection.id))
+      ) {
+        continue;
+      }
+      try {
+        let token = readProviderOAuthTokenBlob(
+          encryption.decrypt(readEncryptedSecret(connection.encryptedToken)),
+        );
+        if (isProviderOAuthTokenExpired(token)) {
+          if (!token.refreshToken) {
+            throw new Error("Provider OAuth token expired without a refresh token.");
+          }
+          token = await refreshProviderOAuthTokenWithLock({
+            databaseUrl: input.databaseUrl,
+            encryption,
+            providerKey: provider.provider_key,
+            providerOAuthId: connection.id,
+            refresh,
+          });
         }
-        token = await refreshProviderOAuthTokenWithLock({
-          databaseUrl: input.databaseUrl,
-          encryption,
-          providerKey: provider.provider_key,
+        providerCredentials.keys.push({
+          apiKey: token.accessToken,
+          credentialKind: "oauth",
+          providerConnectionId: connection.id,
           providerOAuthId: connection.id,
-          refresh,
+        });
+      } catch {
+        enqueueConnectionProbeAfterCredentialLoadFailure({
+          databaseUrl: input.databaseUrl,
+          providerConnectionId: connection.id,
+          providerId: provider.provider_id,
         });
       }
-      providerCredentials.keys.push({
-        apiKey: token.accessToken,
-        credentialKind: "oauth",
-        providerOAuthId: connection.id,
-      });
     }
   }
 
@@ -350,6 +407,30 @@ export function recordGatewayProviderApiKeyLastUsed(input: {
   });
 }
 
+function enqueueConnectionProbeAfterCredentialLoadFailure(input: {
+  databaseUrl?: string;
+  providerConnectionId: string;
+  providerId: string;
+}): void {
+  runGatewayBackgroundTask({
+    message: "gateway provider connection probe enqueue failed",
+    metadata: {
+      providerConnectionId: input.providerConnectionId,
+      providerId: input.providerId,
+    },
+    name: "gateway.provider_connection_probe.enqueue",
+    task: async () => {
+      await enqueueProviderConnectionProbeJob({
+        ...(input.databaseUrl ? { databaseUrl: input.databaseUrl } : {}),
+        providerConnectionId: input.providerConnectionId,
+        providerId: input.providerId,
+        source: "gateway_credential_error",
+        trigger: "system",
+      });
+    },
+  });
+}
+
 function readEncryptedSecret(value: unknown): EncryptedSecret {
   if (
     isRecord(value) &&
@@ -397,4 +478,8 @@ function readProviderOAuthTokenBlob(value: string): ProviderOAuthTokenBlob {
 
 function isProviderOAuthTokenExpired(token: ProviderOAuthTokenBlob): boolean {
   return token.expiresAt !== null && token.expiresAt <= Date.now() + 60_000;
+}
+
+function providerConnectionHealthKey(providerId: string, providerConnectionId: string): string {
+  return `${providerId}:${providerConnectionId}`;
 }

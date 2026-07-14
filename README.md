@@ -1,38 +1,65 @@
-# LLMIngress
+<p align="center">
+  <img src="apps/console/public/llmingress-icon.svg" alt="LLMIngress" width="96" />
+</p>
 
-## Docker Compose
+<h1 align="center">LLMIngress</h1>
 
-Run the local stack, including Postgres:
+<p align="center">Self-hosted ingress for routing AI Agent traffic across model providers.</p>
+
+## Install
+
+Docker Compose starts PostgreSQL, applies the baseline migration, then starts Console, Gateway,
+and Worker:
 
 ```bash
+git clone https://github.com/IamNotShady/LLMIngress.git
+cd LLMIngress
+
 export MASTER_KEY="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
 export POSTGRES_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
-export CONSOLE_SETUP_TOKEN="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
+
 docker compose up --build
 ```
 
-Compose builds one shared `llmingress:local` app image, runs migrations once,
-then starts Gateway on `http://localhost:4000`, Console on
-`http://localhost:3000`, and Worker against the `postgres` service.
+Published ports bind to `127.0.0.1` by default. Runtime and port overrides are documented in
+[`.env.example`](.env.example).
 
-`MASTER_KEY`, `POSTGRES_PASSWORD`, and `CONSOLE_SETUP_TOKEN` are required for
-Compose. They intentionally have no public defaults. Production startup rejects
-the old public default `MASTER_KEY=test-master-key-change-me`; the temporary
-compatibility switch is `LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY=true`, and
-should only be used long enough to migrate a legacy deployment.
+## First request
 
-When exposing Console through a reverse proxy or any browser-facing origin other
-than the request URL seen by the Node process, set `CONSOLE_PUBLIC_BASE_URL` to
-the exact public origin, for example `https://console.example.com`. Console
-mutating requests require an exact `Origin` match and do not infer the public
-origin from forwarded headers.
-
-If local Postgres already uses port `55432`, override only the host port:
+Open [http://localhost:3000](http://localhost:3000), create the administrator password, then add a
+Provider, create a Virtual Model, and create an Agent allowed to use that model. Copy the Agent's
+one-time `llmi_` API key and send:
 
 ```bash
-POSTGRES_PORT=55433 docker compose up --build
+curl http://localhost:4000/v1/chat/completions \
+  --header "Authorization: Bearer llmi_your_agent_key" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "model": "your-virtual-model",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
 ```
 
-Compose binds host-published ports to `127.0.0.1` by default. To expose one
-service, set only that service's publish host, for example
-`CONSOLE_PUBLISH_HOST=0.0.0.0`; exposing Console does not also expose Postgres.
+## Public endpoints
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/v1/chat/completions` | OpenAI Chat Completions |
+| `POST` | `/v1/responses` | OpenAI Responses |
+| `POST` | `/v1/messages` | Anthropic Messages |
+| `POST` | `/v1/embeddings` | OpenAI Embeddings |
+| `GET` | `/v1/models` | Authorized Virtual Model discovery |
+| `GET` | `/health/live` | Gateway process liveness |
+| `GET` | `/health/ready` | Database and configuration readiness |
+| `GET` | `/health` | Readiness-compatible alias |
+
+Agent endpoints are served by Gateway at [http://localhost:4000](http://localhost:4000) and require
+the Agent API key except for health checks.
+
+## User entry points
+
+- Console: [http://localhost:3000](http://localhost:3000)
+- Overview, Agents, Providers, Virtual Models, Activity, Usage, Limits, and Playground are the
+  supported Console pages.
+- Gateway: [http://localhost:4000](http://localhost:4000)
+- PostgreSQL: `postgresql://postgres:<POSTGRES_PASSWORD>@127.0.0.1:55432/postgres`

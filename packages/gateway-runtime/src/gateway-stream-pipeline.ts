@@ -1,10 +1,7 @@
 import { PassThrough, Readable } from "node:stream";
-import { recordProviderAndModelHealth } from "@llmingress/db/provider-health";
-import { classifyProviderFailureStatus } from "@llmingress/provider/connectivity";
 import { type GatewayConcurrencyLease, releaseGatewayConcurrency } from "./gateway-agent-limits.ts";
 import { runGatewayBackgroundTask } from "./gateway-background-tasks.ts";
 import { gatewayStreamIdleTimeoutMs } from "./gateway-env.ts";
-import type { FallbackChainCandidate } from "./gateway-fallback-chain.ts";
 
 export function streamIdleTimeoutMs(env: Record<string, string | undefined> = process.env): number {
   return gatewayStreamIdleTimeoutMs(env);
@@ -132,53 +129,6 @@ export function wrapProviderStreamWithActivityCompletion(
   return output;
 }
 
-export function wrapProviderStreamWithMidStreamHealthRecording(
-  source: Readable,
-  input: {
-    candidate: FallbackChainCandidate;
-    databaseUrl?: string;
-  },
-): Readable {
-  let bytesSent = false;
-
-  source.on("data", () => {
-    bytesSent = true;
-  });
-
-  source.once("error", (error) => {
-    const errorMessage = error instanceof Error ? error.message : "Provider stream failed.";
-    const healthStatus = classifyProviderFailureStatus({
-      errorCode: "provider_stream_error",
-      errorMessage,
-      statusCode: undefined,
-    });
-    const shared = {
-      databaseUrl: input.databaseUrl,
-      errorCode: "provider_stream_error",
-      errorMessage,
-      metadata: { failedBeforeFirstByte: !bytesSent },
-      status: healthStatus,
-      trigger: "request_path" as const,
-    };
-    runGatewayBackgroundTask({
-      message: "gateway stream provider health recording failed",
-      metadata: {
-        providerId: input.candidate.providerId,
-        providerModelId: input.candidate.providerModelId,
-      },
-      name: "gateway.stream.health",
-      task: async () => {
-        await recordProviderAndModelHealth({
-          event: { ...shared, providerId: input.candidate.providerId },
-          providerModelId: input.candidate.providerModelId,
-        });
-      },
-    });
-  });
-
-  return source;
-}
-
 export function wrapProviderStreamWithConcurrencyRelease(
   source: Readable,
   input: {
@@ -211,7 +161,6 @@ export function wrapProviderStreamWithConcurrencyRelease(
 }
 
 export function composeGatewayProviderStreamPipeline(input: {
-  candidate: FallbackChainCandidate;
   databaseUrl?: string;
   firstValue: Uint8Array;
   idleTimeoutMs?: number;
@@ -219,15 +168,9 @@ export function composeGatewayProviderStreamPipeline(input: {
   reader: ReadableStreamDefaultReader<Uint8Array>;
 }): Readable {
   return wrapProviderStreamWithConcurrencyRelease(
-    wrapProviderStreamWithMidStreamHealthRecording(
-      createReadaheadStream(input.reader, input.firstValue, {
-        idleTimeoutMs: input.idleTimeoutMs,
-      }),
-      {
-        candidate: input.candidate,
-        databaseUrl: input.databaseUrl,
-      },
-    ),
+    createReadaheadStream(input.reader, input.firstValue, {
+      idleTimeoutMs: input.idleTimeoutMs,
+    }),
     {
       databaseUrl: input.databaseUrl,
       lease: input.lease,

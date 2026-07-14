@@ -254,7 +254,7 @@ export function VirtualModelRouteDialogClient({
                 <p>No candidates selected.</p>
               ) : (
                 <div className="data-table-wrap">
-                  <table className="data-table vm-candidate-table">
+                  <table className="data-table bounded-table vm-candidate-table">
                     <thead>
                       <tr>
                         <th>Order</th>
@@ -383,7 +383,7 @@ export function VirtualModelRouteDialogClient({
             </div>
           </div>
           <div className="data-table-wrap">
-            <table className="data-table vm-model-picker-table">
+            <table className="data-table bounded-table vm-model-picker-table">
               <thead>
                 <tr>
                   <th>Provider</th>

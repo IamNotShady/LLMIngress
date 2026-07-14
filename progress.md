@@ -17,9 +17,9 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest verification
 
-- `pnpm run verify`: 18 suites / 326 tests; lint, typecheck, and build passed.
-- Coverage: 49.23% statements, 41.79% branches, 53.22% functions, 49.32% lines.
-- Console Core: 71 focused Unit contracts and 10 real E2E tests passed, including shared pagination plus immediate Provider API Key Enable/Disable state, Delete cleanup, and detached error Toast behavior.
+- `pnpm run verify`: 18 suites / 329 tests; lint, typecheck, and build passed.
+- Coverage: 49.34% statements, 41.86% branches, 53.30% functions, 49.41% lines.
+- Console Core: focused Unit runs passed 104 assertions and 10 real E2E tests passed; Chrome exercised every supported page and visible workflow at 1440px/390px, and two consecutive post-fix rounds found no new issue, overflow, accessibility-contract failure, framework overlay, warning, or error.
 - Provider management: 57 focused unit tests and 4 real E2E tests passed, including a custom template Provider display name persisted to PostgreSQL.
 - Docker lifecycle: 5 focused unit and 3 real E2E tests passed across custom-port install, Master Key file access, a real fake-Provider Gateway request, no-op, repair, upgrade, rollback, retention, conflict/downgrade rejection, retry, and interruption recovery.
 - Feature regression: all 9 standard domains passed; 18 unit and 17 E2E entrypoints, 0 legacy.
@@ -27,9 +27,9 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest changes
 
+- Virtual Model strategy cards now have contained, keyboard-visible hit regions and correct filtered empty states; Playground uses `x-llmingress-request-id` plus bounded detail retries to populate routing metadata after asynchronous recording.
 - Activity and Provider Model library now use one accessible shared Pagination component with consistent page/total summaries, query-preserving Previous/Next controls, disabled states, and responsive desktop/mobile alignment.
-- Provider API Key Enable, Disable, and Delete return `204` to Console AJAX while retaining native-form `303` redirects; successful actions refresh immediately or close the delete dialog.
-- Provider API Key failures render as an accessible, dismissible, five-second top-right Toast above dialogs without changing the Actions layout; Chrome desktop and 390px mobile QA passed without framework warnings or errors.
+- Provider API Key Enable, Disable, and Delete refresh immediately or close their dialog; failures use an accessible, dismissible Toast without changing the Actions layout.
 - Template Provider creation now trims and persists the submitted Display Name and rejects a blank value with a field error.
 - `GATEWAY_PUBLIC_BASE_URL` was removed; Console reads the canonical `GATEWAY_URL`, including installer and Compose custom-port deployments.
 - Managed Gateway, Console, and Worker containers receive `MASTER_KEY_FILE=/run/llmingress/master-key`; the secret value remains out of container environment variables and logs.

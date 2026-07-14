@@ -42,6 +42,26 @@ export type PlaygroundRequestInput = {
   topP?: number;
 };
 
+export async function retryPlaygroundRequestDetail<T>(
+  loadDetail: () => Promise<T | null>,
+  options: { delayMs?: number; maxAttempts?: number } = {},
+): Promise<T | null> {
+  const delayMs = Math.max(0, options.delayMs ?? 200);
+  const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 20));
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const detail = await loadDetail();
+    if (detail !== null) {
+      return detail;
+    }
+    if (attempt + 1 < maxAttempts) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  return null;
+}
+
 export function normalizePlaygroundGatewayBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }

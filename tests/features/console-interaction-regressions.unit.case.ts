@@ -187,9 +187,20 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(searchInput).toContain("suppressHydrationWarning");
   });
 
+  test("virtual model filters distinguish no matches from an empty configuration", () => {
+    const sourceText = sectionSource("virtual-models-section.tsx");
+
+    expect(sourceText).toContain("const hasActiveFilters = Boolean(");
+    expect(sourceText).toContain("No Virtual Models match the selected filters.");
+    expect(sourceText).toContain("Add a Provider and refresh its models");
+  });
+
   test("playground API key hint matches LLMIngress keys", () => {
-    expect(appSource("playground.tsx")).toContain('placeholder="llmi_************************"');
-    expect(appSource("playground.tsx")).not.toContain("sk-************************8fA7");
+    const playground = appSource("playground.tsx");
+
+    expect(playground).toContain('placeholder="llmi_************************"');
+    expect(playground).toContain('response.headers.get("x-llmingress-request-id")');
+    expect(playground).not.toContain("sk-************************8fA7");
   });
 
   test("activity strategy labels and limits search stay user-facing", () => {

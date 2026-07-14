@@ -2530,6 +2530,7 @@ button.table-row-link {
   gap: var(--space-sm);
 }
 .option-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
@@ -2548,8 +2549,17 @@ button.table-row-link {
 }
 .option-card input[type="radio"] {
   position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
+}
+.option-card:has(input[type="radio"]:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .option-card.is-selected,
 .option-card:has(input[type="radio"]:checked) {

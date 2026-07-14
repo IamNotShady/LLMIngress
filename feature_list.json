@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-14: Activity and Provider Model library now use one shared accessible Pagination component with consistent page/total summaries, Previous/Next states, query preservation, and responsive alignment. 71 focused Unit contracts and 10 real Console E2E tests passed; Chrome desktop and 390px mobile QA confirmed both lists without overflow, framework errors, warnings, or layout collisions. Full verify:features passed all 9 domains and pnpm run verify passed 18 suites / 326 tests, lint, typecheck, and build."
+      "evidence": "2026-07-14: exhaustive Chrome DevTools QA covered authentication and every visible button, input, filter, dialog, mutation, detail view, responsive layout, and live Playground request across all eight pages. Fixed Virtual Model strategy-card hit regions and filtered empty-state semantics, plus Playground request correlation and bounded asynchronous detail retrieval. After cleanup, two consecutive 1440px/390px all-page rounds found no new issue, overflow, unlabeled control, duplicate ID, framework overlay, warning, or error. Focused Unit runs passed 104 assertions and 10 real Console E2E tests; pnpm run verify passed 18 suites / 329 tests, lint, typecheck, and build; verify:features passed all 9 domains."
     },
     {
       "id": "release-guards",

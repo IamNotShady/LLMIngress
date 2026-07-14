@@ -230,6 +230,10 @@ test("console audit fixes keep time windows honest and prevent activity timestam
         await page.goto(`${baseUrl}/models`, { waitUntil: "networkidle" });
         await expect(page.locator(".vm-table thead")).toContainText("Failure rate total");
         expect(consoleErrors.filter((error) => error.includes("hydration"))).toEqual([]);
+        await page.getByLabel("Search Virtual Model Name").fill("no-such-virtual-model");
+        await page.getByRole("button", { name: "Filter" }).click();
+        await expect(page.getByText("No Virtual Models match the selected filters.")).toBeVisible();
+        await expect(page.getByText(/Add a Provider and refresh its models/)).toHaveCount(0);
 
         await page.goto(`${baseUrl}/agents?agentDialog=new`, { waitUntil: "networkidle" });
         await expect(page.locator("#agent-allowed-virtual-models")).toHaveCount(0);

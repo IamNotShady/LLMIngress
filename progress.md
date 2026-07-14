@@ -42,6 +42,7 @@ existing password/session authentication boundary.
 - Post-slimming Console audit completed across all eight retained pages: fresh installs now show the core Provider → Virtual Model → Agent → Playground path, empty states link to their prerequisites, and the sidebar no longer implies Gateway readiness without a health signal.
 - Provider model capability refresh now keeps the first available value by source priority and no longer computes conflicts that erase explicit values; the current OpenAI Codex model catalog was refreshed and restored GPT-5.4-Mini and GPT-5.5 to 272K context.
 - Provider health is now connection-scoped only. API keys, OAuth tokens, and Local logical connections have independent exact probe jobs; model health state and Provider-level probes were removed. Worker tries up to three ranked models, stores only unhealthy summaries, retries at 5/10/30/60 minutes, deletes state on recovery, and rejects stale snapshots. Canceled stale or disabled work now persists `jobs.status=canceled` under the normal lease fence while its successful diagnostic attempt retains the cancellation reason. Gateway filters only confirmed unhealthy connections and asynchronously probes credential failures. Console sidebar health badges aggregate connection states by Provider instead of counting credentials as Providers.
+- OAuth Connection soft deletion now destroys the encrypted access/refresh-token blob, token expiry, PKCE pending state, and completion marker while retaining the non-sensitive soft-deleted row. The same cleanup applies when a Provider cascades deletion to all of its OAuth Connections.
 - Gateway fallback failures log the complete Provider response body, response headers, status, Provider, model, and request ID without logging the outbound request or credentials. Provider HTTP 400, network, 5xx, model, and client failures do not directly change connection health.
 - Responses now has a strict boundary: Playground sends canonical list input, Gateway rejects string input before routing, and Codex adapters no longer force `store`/`stream`, remove parameters, rewrite input, or bridge SSE into non-streaming JSON. Claude Code Messages retains its required Agent SDK system identity.
 - Provider API Key creation now stays on the Providers page and shows the one-time plaintext in the shared native dialog; closing the dialog returns to the refreshed key list instead of leaving users on a standalone HTML page.
@@ -58,8 +59,8 @@ existing password/session authentication boundary.
 
 ## Verification
 
-Final 2026-07-14 result: Provider-connection health focused verification (31 unit and 16
-database/real-process E2E checks), `pnpm run verify` (63 files/335 tests), and all 9 milestone
+Final 2026-07-14 result: Provider-connection health focused verification (32 unit and 17
+database/real-process E2E checks), `pnpm run verify` (63 files/336 tests), and all 9 milestone
 regressions passed. Coverage is 49.08% statements, 49.19% lines, 41.73% branches, and 53.07%
 functions.
 

@@ -174,6 +174,29 @@ describe("provider connection health", () => {
     });
   });
 
+  it("clears OAuth credential material on every soft-delete path", () => {
+    const providerConnections = readFileSync("packages/db/src/providers.ts", "utf8");
+    const consoleProviders = readFileSync("packages/db/src/console-providers.ts", "utf8");
+    const directDelete = providerConnections.slice(
+      providerConnections.indexOf("export async function deleteProviderOAuthConnection"),
+      providerConnections.indexOf("export async function readProviderOAuthRuntimeConnection"),
+    );
+    const providerDelete = consoleProviders.slice(
+      consoleProviders.indexOf("export async function deleteProvider"),
+      consoleProviders.indexOf("async function clearProviderHealthForCurrentConnections"),
+    );
+
+    for (const deletePath of [directDelete, providerDelete]) {
+      expect(deletePath).toContain("encrypted_token = null");
+      expect(deletePath).toContain("token_expires_at = null");
+      expect(deletePath).toContain("pending_state = null");
+      expect(deletePath).toContain("pending_code_verifier = null");
+      expect(deletePath).toContain("pending_code_challenge = null");
+      expect(deletePath).toContain("pending_expires_at = null");
+      expect(deletePath).toContain("completed_at = null");
+    }
+  });
+
   it("keeps the baseline schema and Console connection-scoped", () => {
     const migration = readFileSync("packages/db/migrations/0001_core_baseline.sql", "utf8");
     const healthStart = migration.indexOf("CREATE TABLE public.provider_health_events");

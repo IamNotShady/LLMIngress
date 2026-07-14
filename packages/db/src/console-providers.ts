@@ -476,7 +476,16 @@ export async function deleteProvider(input: { databaseUrl?: string; id: string }
       await client.query(
         `
           update provider_oauth
-          set deleted_at = now(), enabled = false, updated_at = now()
+          set encrypted_token = null,
+              token_expires_at = null,
+              pending_state = null,
+              pending_code_verifier = null,
+              pending_code_challenge = null,
+              pending_expires_at = null,
+              completed_at = null,
+              deleted_at = now(),
+              enabled = false,
+              updated_at = now()
           where provider_id = $1 and deleted_at is null
         `,
         [input.id],

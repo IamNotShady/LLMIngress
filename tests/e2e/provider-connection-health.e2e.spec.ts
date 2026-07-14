@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { listConsoleProviderHealthSummaries } from "@llmingress/db/console-provider-health";
+import { deleteProvider } from "@llmingress/db/console-providers";
+import { deleteProviderOAuthConnection } from "@llmingress/db/providers";
 import { gatewayBackgroundTasks } from "@llmingress/gateway-runtime/gateway-background-tasks";
 import { attachGatewayProviderCredentials } from "@llmingress/gateway-runtime/gateway-provider-credentials";
 import { createSecretEncryption } from "@llmingress/security/secret-encryption";
@@ -17,6 +19,72 @@ import {
 import { withProcessLock } from "../support/process-lock";
 
 const masterKeySource = { kind: "inline", value: "provider-connection-health-test-key" } as const;
+
+test("OAuth soft deletes clear encrypted credentials and pending authorization state", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_oauth_delete_secret_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const directProviderId = randomUUID();
+  const directConnectionId = randomUUID();
+  const providerDeleteId = randomUUID();
+  const providerDeleteConnectionId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url)
+        values
+          ($1, 'subscription', 'openai_codex', 'Direct OAuth Delete', 'https://direct.test/v1'),
+          ($2, 'subscription', 'claude_code', 'Provider OAuth Delete', 'https://provider.test/v1')
+      `,
+      [directProviderId, providerDeleteId],
+    );
+    for (const [connectionId, providerId] of [
+      [directConnectionId, directProviderId],
+      [providerDeleteConnectionId, providerDeleteId],
+    ]) {
+      await fixture.query(
+        `
+          insert into provider_oauth (
+            id, provider_id, pending_state, pending_code_verifier,
+            pending_code_challenge, pending_expires_at, encrypted_token,
+            token_expires_at, completed_at
+          )
+          values (
+            $1, $2, $3, 'oauth-verifier', 'oauth-challenge',
+            now() + interval '10 minutes', '{"ciphertext":"secret"}'::jsonb,
+            now() + interval '1 hour', now()
+          )
+        `,
+        [connectionId, providerId, `oauth-state-${connectionId}`],
+      );
+    }
+
+    await deleteProviderOAuthConnection({
+      databaseUrl: fixture.databaseUrl,
+      providerOAuthId: directConnectionId,
+    });
+
+    const afterDirectDelete = await readOAuthDeletionState(fixture, [
+      directConnectionId,
+      providerDeleteConnectionId,
+    ]);
+    expect(afterDirectDelete.get(directConnectionId)).toEqual(clearedOAuthDeletionState);
+    expect(afterDirectDelete.get(providerDeleteConnectionId)).toMatchObject({
+      deleted: false,
+      enabled: true,
+      encrypted_token: { ciphertext: "secret" },
+    });
+
+    await deleteProvider({ databaseUrl: fixture.databaseUrl, id: providerDeleteId });
+
+    const afterProviderDelete = await readOAuthDeletionState(fixture, [providerDeleteConnectionId]);
+    expect(afterProviderDelete.get(providerDeleteConnectionId)).toEqual(clearedOAuthDeletionState);
+  } finally {
+    await fixture.dispose();
+  }
+});
 
 test("connection probe succeeds when the third distinct model succeeds", async () => {
   const fixture = await createTestPostgresFixture({
@@ -867,4 +935,52 @@ async function seedLocalProviderWithModels(
       [randomUUID(), providerId, modelId],
     );
   }
+}
+
+type OAuthDeletionState = {
+  completed_at: Date | null;
+  deleted: boolean;
+  enabled: boolean;
+  encrypted_token: unknown;
+  pending_code_challenge: string | null;
+  pending_code_verifier: string | null;
+  pending_expires_at: Date | null;
+  pending_state: string | null;
+  token_expires_at: Date | null;
+};
+
+const clearedOAuthDeletionState: OAuthDeletionState = {
+  completed_at: null,
+  deleted: true,
+  enabled: false,
+  encrypted_token: null,
+  pending_code_challenge: null,
+  pending_code_verifier: null,
+  pending_expires_at: null,
+  pending_state: null,
+  token_expires_at: null,
+};
+
+async function readOAuthDeletionState(
+  fixture: Awaited<ReturnType<typeof createTestPostgresFixture>>,
+  connectionIds: string[],
+): Promise<Map<string, OAuthDeletionState>> {
+  const result = await fixture.query<OAuthDeletionState & { id: string }>(
+    `
+      select id::text,
+             enabled,
+             encrypted_token,
+             token_expires_at,
+             pending_state,
+             pending_code_verifier,
+             pending_code_challenge,
+             pending_expires_at,
+             completed_at,
+             deleted_at is not null as deleted
+      from provider_oauth
+      where id = any($1::uuid[])
+    `,
+    [connectionIds],
+  );
+  return new Map(result.rows.map(({ id, ...state }) => [id, state]));
 }

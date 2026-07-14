@@ -269,7 +269,14 @@ export async function deleteProviderOAuthConnection(input: {
     const result = await client.query<{ provider_id: string }>(
       `
         update provider_oauth
-        set deleted_at = now(),
+        set encrypted_token = null,
+            token_expires_at = null,
+            pending_state = null,
+            pending_code_verifier = null,
+            pending_code_challenge = null,
+            pending_expires_at = null,
+            completed_at = null,
+            deleted_at = now(),
             enabled = false,
             updated_at = now()
         where id = $1

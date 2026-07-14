@@ -275,12 +275,40 @@ test("console audit fixes keep time windows honest and prevent activity timestam
             page.locator(".activity-table tbody tr", { hasText: "gw_audit_old_request" }),
           ).toBeVisible();
           await expectActivityTimeCellContained(page);
+          if (viewport.width === 390) {
+            const mobilePagination = page.getByRole("navigation", { name: "Activity pages" });
+            const mobileMetrics = await mobilePagination.evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              return {
+                flexDirection: getComputedStyle(element).flexDirection,
+                left: rect.left,
+                right: rect.right,
+                viewportWidth: document.documentElement.clientWidth,
+              };
+            });
+            expect(mobileMetrics.flexDirection).toBe("column");
+            expect(mobileMetrics.left).toBeGreaterThanOrEqual(0);
+            expect(mobileMetrics.right).toBeLessThanOrEqual(mobileMetrics.viewportWidth);
+          }
         }
 
         await page.setViewportSize({ width: 1920, height: 1080 });
         await page.goto(`${baseUrl}/activity`, { waitUntil: "networkidle" });
         await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
-        await expect(page.locator(".pager-status")).toHaveText("1–20 of 21");
+        const activityPagination = page.getByRole("navigation", { name: "Activity pages" });
+        await expect(activityPagination).toHaveClass(/list-pagination/);
+        await expect(activityPagination.locator(".list-pagination-summary strong")).toHaveText(
+          "Page 1 of 2",
+        );
+        await expect(activityPagination.locator(".list-pagination-range")).toHaveText(
+          "1–20 of 21 activities",
+        );
+        await activityPagination.getByRole("link", { name: "Next page" }).click();
+        await expect(page).toHaveURL(`${baseUrl}/activity?page=2`);
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(1);
+        await activityPagination.getByRole("link", { name: "Previous page" }).click();
+        await expect(page).toHaveURL(`${baseUrl}/activity`);
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(20);
 
         await page.getByRole("link", { name: "gw_audit_old_request" }).click();
         const activityDetail = page.getByRole("dialog", { name: "Request detail" });

@@ -41,6 +41,28 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(activity).toContain("Math.ceil(total / ACTIVITY_PAGE_SIZE)");
   });
 
+  test("all paginated Console lists use one shared Pagination component", () => {
+    const activity = sectionSource("activity-section.tsx");
+    const providers = sectionSource("providers-client-section.tsx");
+    const pagination = appSource("_components/pagination.tsx");
+    const stylesheet = css();
+
+    expect(pagination).toContain("export function Pagination");
+    expect(pagination).toContain('className="list-pagination"');
+    expect(pagination).toContain('className="list-pagination-summary"');
+    expect(pagination).toContain('aria-label="Previous page"');
+    expect(pagination).toContain('aria-label="Next page"');
+    expect(activity).toContain("<Pagination");
+    expect(activity).toContain('ariaLabel="Activity pages"');
+    expect(providers).toContain("<Pagination");
+    expect(providers).toContain('ariaLabel="Model pages"');
+    expect(providers).not.toContain("model-library-truncation-note");
+    expect(stylesheet).toMatch(/\.list-pagination\s*\{[^}]*display:\s*flex[^}]*border-top:/s);
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 40rem\)[\s\S]*?\.list-pagination\s*\{[^}]*flex-direction:\s*column/s,
+    );
+  });
+
   test("activity timestamp cells cannot paint into request id cells", () => {
     const stylesheet = css();
     expect(stylesheet).toMatch(

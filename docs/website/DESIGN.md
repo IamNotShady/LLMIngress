@@ -165,14 +165,17 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
 - Center-right: anchor links (Onest 15px, `--text-2`, hover `--text`).
   Anchor targets carry `scroll-margin-top: 76px` so the sticky bar never
   covers a section head.
-- Right: `GitHub ↗` ghost button (hairline border) linking to
-  `github.com/IamNotShady/LLMIngress`, with a live star-count pill chip
-  (mono 12px, hairline border, tabular numerals). The count comes from the
-  GitHub REST API on page load, cached in `localStorage` for 1 hour; the
-  chip stays hidden when the API is unreachable or rate-limited, so the
-  button never shows a broken state. Mobile ≤768px: links collapse into a
-  single `Menu` disclosure (native `<details>`), nav gaps tighten, GitHub
-  button stays visible. Progressive narrowing: ≤374px drops the star chip,
+- Right: a two-segment GitHub star badge in the style of the official
+  github-buttons widget, dark-adapted. Left segment: octocat mark + `Star`
+  label on `--surface` (links to the repo). Right segment: joined count
+  cell on `--bg-raised` with a shared hairline border, mono tabular
+  numerals, full number with thousands separators (links to
+  `/stargazers`). The count comes from the GitHub REST API on page load,
+  cached in `localStorage` for 1 hour; on API failure the count cell stays
+  hidden and the Star segment regains full corner radius (`:has()`), so
+  the badge never shows a broken state. Mobile ≤768px: links collapse into
+  a single `Menu` disclosure (native `<details>`), nav gaps tighten, badge
+  stays visible. Progressive narrowing: ≤374px drops the count cell,
   ≤340px drops the wordmark (icon remains) — no horizontal overflow down
   to 320px.
 

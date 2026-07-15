@@ -250,11 +250,11 @@ boxes, no icons.
 | # | Code | Title | Copy | Spec line |
 | --- | --- | --- | --- | --- |
 | 01 | `ONE_ENDPOINT` | Unified ingress | OpenAI- and Anthropic-compatible APIs from one port. Chat, responses, messages, and model discovery — every agent speaks to the same door, each with its own scoped key. | `spec: /v1/chat/completions · /v1/messages · /v1/responses · /v1/models` |
-| 02 | `VIRTUAL_MODELS` | Routing that reads the request | Agents ask for `code-fast`. A deterministic rule engine resolves the real model from task type, context length, and tool use. Same request, same route — no LLM judge in the loop. | `spec: p95 routing overhead < 100 ms` |
+| 02 | `VIRTUAL_MODELS` | Routing that reads the request | Agents ask for `code-fast`. A deterministic rule engine resolves the real model from task type, context length, and tool use. Same request, same route — no LLM judge in the loop. | `spec: p95 routing target < 100 ms` |
 | 03 | `FALLBACK_CHAIN` | Failure is a routing event | 429s, 5xx, timeouts — the request moves to the next model in the chain, up to five deep, across providers and local models. Your agent never sees the outage. | `spec: triggers before first streamed chunk` |
 | 04 | `COST_LEDGER` | Every token accounted | Tokens, cost, and latency per agent, per virtual model, per provider — plus savings measured against a fixed baseline model. | `spec: cache + reasoning tokens tracked separately` |
-| 05 | `HARD_LIMITS` | Budgets with teeth | Per-agent budgets from hourly to monthly, RPM / TPM / concurrency caps. Block or notify at threshold. A runaway loop dies at the gate, not on your card. | `spec: block · notify · webhook` |
-| 06 | `YOUR_METAL` | Self-hosted, single-user | Runs on your laptop or server, binds to localhost by default. Provider keys encrypted at rest; prompts recorded only if you opt in. | `spec: Node + Postgres · one compose file` |
+| 05 | `HARD_LIMITS` | Budgets and rate limits | Per-agent budgets from hourly to monthly, plus RPM / TPM / concurrency caps. Block or notify at the threshold, so a runaway loop stops at the gateway instead of running up cost. | `spec: block · notify · webhook` |
+| 06 | `SELF_HOSTED` | Self-hosted, single-user | Runs on your laptop or server, binds to localhost by default. Provider keys encrypted at rest; prompts recorded only if you opt in. | `spec: Node + Postgres · one compose file` |
 
 ### 4.4 How It Works
 

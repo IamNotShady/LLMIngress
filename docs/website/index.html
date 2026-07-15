@@ -821,7 +821,7 @@ main, .footer { position: relative; z-index: 1; }
         <p>Agents ask for <code>code-fast</code>. A deterministic rule engine
           resolves the real model from task type, context length, and tool
           use. Same request, same route — no LLM judge in the loop.</p>
-        <p class="spec-line"><b>spec:</b> p95 routing overhead &lt; 100 ms</p>
+        <p class="spec-line"><b>spec:</b> p95 routing target &lt; 100 ms</p>
       </article>
       <article class="spec">
         <p class="spec-id"><span class="n">03</span> <span class="code">FALLBACK_CHAIN</span></p>
@@ -840,14 +840,14 @@ main, .footer { position: relative; z-index: 1; }
       </article>
       <article class="spec">
         <p class="spec-id"><span class="n">05</span> <span class="code">HARD_LIMITS</span></p>
-        <h3>Budgets with teeth</h3>
-        <p>Per-agent budgets from hourly to monthly, RPM / TPM / concurrency
-          caps. Block or notify at threshold. A runaway loop dies at the
-          gate, not on your card.</p>
+        <h3>Budgets and rate limits</h3>
+        <p>Per-agent budgets from hourly to monthly, plus RPM / TPM /
+          concurrency caps. Block or notify at the threshold, so a runaway
+          loop stops at the gateway instead of running up cost.</p>
         <p class="spec-line"><b>spec:</b> block · notify · webhook</p>
       </article>
       <article class="spec">
-        <p class="spec-id"><span class="n">06</span> <span class="code">YOUR_METAL</span></p>
+        <p class="spec-id"><span class="n">06</span> <span class="code">SELF_HOSTED</span></p>
         <h3>Self-hosted, single-user</h3>
         <p>Runs on your laptop or server, binds to localhost by default.
           Provider keys encrypted at rest; prompts recorded only if you opt
@@ -1172,8 +1172,8 @@ docker compose up --build</pre>
           </svg>
           <span class="wordmark">LLMIngress</span>
         </a>
-        <p>A self-hosted AI gateway for AI agents. One endpoint, every
-          model, your keys.</p>
+        <p>A self-hosted AI gateway for AI agents. One endpoint for every
+          agent; your providers, models, and keys stay yours.</p>
       </div>
       <nav aria-label="Product">
         <h4>Product</h4>

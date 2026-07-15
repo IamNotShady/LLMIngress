@@ -127,6 +127,10 @@ Wrapping: `h2`/`h3` use `text-wrap: balance`, body copy uses
 - Topology: 2px light dots travel agent→core→provider paths via SVG
   `animateMotion` (staggered loops). Purely narrative, not decorative.
 - Hover: buttons/links 150ms; transform/opacity only, no layout animation.
+  The primary CTA's arrow-circle nudges its arrow 3px right on hover.
+- Hero `WORKS WITH` marquee: a duplicated mono name row translated 0 → −50%
+  on a 46s linear loop for a seamless scroll, masked to a fade at both edges.
+  Paused under `prefers-reduced-motion`.
 - Pixel star field backdrop: a fixed full-viewport `<canvas>` behind the
   content layer (`z-index 0`; `main`/footer at 1) draws a sparse 4px pixel
   starfield in brand hues (`#efeef5 #d7c8ff #b494ff #8b6cff #93899f`,
@@ -197,10 +201,19 @@ Left column:
   right model for each request, falls back
   when a provider fails, and meters every token. On your machine, with your
   keys."
-- CTA row: primary `Deploy locally` (violet fill, `--ink` label, → `#deploy`);
-  secondary `View on GitHub ↗` (hairline ghost).
+- CTA row (pills): primary `Deploy locally` (violet fill, `--ink` label,
+  → `#deploy`) carries an arrow-circle accent — a trailing near-white
+  circle holding a right-arrow that nudges 3px right on hover. This is the
+  one premium fintech flourish borrowed for the two primary conversion
+  buttons (hero + final CTA); no other button uses it. Secondary
+  `View on GitHub ↗` is a matching hairline ghost pill.
 - Trust line (mono 13px, `--text-3`, must fit one line in the text column):
   `Apache-2.0 · Single-user · Keys never leave your box`
+- Below the two hero columns, a full-width **`WORKS WITH` marquee**: a
+  single mono row of ecosystem names (agents + providers) scrolling left on
+  a 46s loop, each prefixed with a small violet dot, edges masked to a fade.
+  Ambient breadth signal, not a substitute for the categorized compatibility
+  section (§4.5). Paused under `prefers-reduced-motion`.
 
 Right column — topology diagram (inline SVG, ~660×448). The diagram stays
 inside the centered 1120px content column so the hero reads as balanced:

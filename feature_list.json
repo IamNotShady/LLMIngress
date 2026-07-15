@@ -16,7 +16,7 @@
       "verification": "pnpm exec vitest run tests/features/provider-management.unit.test.ts tests/features/provider-model-sync.unit.test.ts tests/features/provider-connection-health.unit.test.ts && pnpm test:e2e tests/e2e/provider-management.e2e.spec.ts tests/e2e/provider-model-sync.e2e.spec.ts tests/e2e/provider-connection-health.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-14: template Provider creation now trims and persists the submitted displayName; 57 focused unit tests and 4 real Console/Provider E2E tests passed, and all other non-release feature regressions passed."
+      "evidence": "2026-07-15: known embedding-only models remain stored but are hidden from Console catalogs, route candidates, and visible Provider counts; mixed text/embedding and unknown-output models remain visible. Focused unit, Provider model sync E2E, verify, and feature regression passed."
     },
     {
       "id": "virtual-model-routing",
@@ -25,16 +25,16 @@
       "verification": "pnpm exec vitest run tests/features/virtual-model-routing.unit.test.ts tests/features/route-strategies.unit.test.ts && pnpm test:e2e tests/e2e/virtual-model-routing.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management"],
       "status": "passing",
-      "evidence": "2026-07-14: virtual-model-routing and route-strategies focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: Virtual Model endpoint choices exclude Embeddings, and direct saves reject known embedding-only candidates with route_policy_endpoint_unsupported. Focused unit/E2E, verify, and feature regression passed."
     },
     {
       "id": "gateway-protocol-execution",
       "name": "Gateway Protocol Execution",
-      "description": "Chat Completions, Responses, Messages, and Embeddings with safe fallback, streaming, and logs.",
+      "description": "Chat Completions, Responses, and Messages with safe fallback, streaming, and logs.",
       "verification": "pnpm exec vitest run tests/features/gateway-protocols.unit.test.ts tests/features/gateway-fallback-streaming.unit.test.ts tests/features/gateway-security-logging.unit.test.ts && pnpm test:e2e tests/e2e/gateway-protocols.e2e.spec.ts tests/e2e/gateway-fallback-streaming.e2e.spec.ts tests/e2e/gateway-security-logging.e2e.spec.ts --workers=1",
       "dependencies": ["virtual-model-routing"],
       "status": "passing",
-      "evidence": "2026-07-14: protocol, fallback/streaming, and security/logging focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: POST /v1/embeddings is unregistered, returns 404, and never forwards to Providers; the dedicated executor, adapter contract, errors, protocol vocabulary, and docs were removed while embedding model metadata remains. Focused unit/E2E, verify, and feature regression passed."
     },
     {
       "id": "agent-access-and-limits",
@@ -70,7 +70,7 @@
       "verification": "pnpm exec vitest run tests/features/console-core.unit.test.ts tests/features/console-layout-interactions.unit.test.ts && pnpm test:e2e tests/e2e/console-core.e2e.spec.ts tests/e2e/console-layout-interactions.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-14: exhaustive Chrome DevTools QA covered authentication and every visible button, input, filter, dialog, mutation, detail view, responsive layout, and live Playground request across all eight pages. Fixed Virtual Model strategy-card hit regions and filtered empty-state semantics, plus Playground request correlation and bounded asynchronous detail retrieval. After cleanup, two consecutive 1440px/390px all-page rounds found no new issue, overflow, unlabeled control, duplicate ID, framework overlay, warning, or error. Focused Unit runs passed 104 assertions and 10 real Console E2E tests; pnpm run verify passed 18 suites / 329 tests, lint, typecheck, and build; verify:features passed all 9 domains."
+      "evidence": "2026-07-15: Console E2E ignores only Next-generated unused .woff2 preload warnings while retaining all real console errors and other warnings; the focused Provider API key interaction E2E, full serial Console Core regression, and optimized feature batch passed."
     },
     {
       "id": "release-guards",
@@ -79,7 +79,7 @@
       "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts tests/features/docker-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts tests/e2e/docker-lifecycle.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-14: GATEWAY_URL is the single Console-facing public URL; Gateway, Console, and Worker receive only MASTER_KEY_FILE, and a real custom-port Docker install, no-op, repair, upgrade, rollback, interrupted recovery, persisted Provider route, and Gateway request passed."
+      "evidence": "2026-07-15: retired-surface guards prevent the Embeddings route, executor, adapter, schema vocabulary, and public docs from returning while preserving singular embedding model metadata. Focused release checks, all 3 Docker lifecycle E2Es, verify, and the optimized 9-domain feature batch passed."
     }
   ]
 }

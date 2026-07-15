@@ -460,7 +460,7 @@ CREATE TABLE public.request_activity (
     provider_model_display_name_snapshot text,
     CONSTRAINT request_activity_http_status_check CHECK (((http_status IS NULL) OR ((http_status >= 100) AND (http_status <= 599)))),
     CONSTRAINT request_activity_latency_ms_check CHECK (((latency_ms IS NULL) OR (latency_ms >= 0))),
-    CONSTRAINT request_activity_protocol_check CHECK ((protocol = ANY (ARRAY['chat_completions'::text, 'responses'::text, 'messages'::text, 'embeddings'::text, 'models'::text]))),
+    CONSTRAINT request_activity_protocol_check CHECK ((protocol = ANY (ARRAY['chat_completions'::text, 'responses'::text, 'messages'::text, 'models'::text]))),
     CONSTRAINT request_activity_provider_model_requires_provider CHECK (((provider_model_id IS NULL) OR (provider_id IS NOT NULL))),
     CONSTRAINT request_activity_status_check CHECK ((status = ANY (ARRAY['started'::text, 'succeeded'::text, 'failed'::text, 'canceled'::text])))
 );
@@ -527,7 +527,7 @@ CREATE TABLE public.route_policies (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     endpoint_protocol text NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT route_policies_endpoint_protocol_check CHECK ((endpoint_protocol = ANY (ARRAY['chat_completions'::text, 'responses'::text, 'messages'::text, 'embeddings'::text]))),
+    CONSTRAINT route_policies_endpoint_protocol_check CHECK ((endpoint_protocol = ANY (ARRAY['chat_completions'::text, 'responses'::text, 'messages'::text]))),
     CONSTRAINT route_policies_strategy_check CHECK ((strategy = ANY (ARRAY['fixed'::text, 'cost_first'::text, 'random'::text])))
 );
 

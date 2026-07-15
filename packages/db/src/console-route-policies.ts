@@ -18,6 +18,7 @@ import {
   consoleNotFoundError,
   consoleValidationError,
 } from "./console-operation-error.ts";
+import { consoleVisibleProviderModelFilterSql } from "./console-provider-model-visibility.ts";
 import { listProviderTemplateEndpointProtocols } from "./console-provider-templates.ts";
 import { lockProvidersForProviderModels } from "./console-providers.ts";
 import { buildManualPriceOverride, buildSyncedPriceSnapshot } from "./price-rows.ts";
@@ -336,7 +337,7 @@ export function listProviderRouteEndpointProtocols(input: {
   }
 
   if (input.providerKey === "openai") {
-    return ["chat_completions", "responses", "embeddings"];
+    return ["chat_completions", "responses"];
   }
   if (input.providerKey === "anthropic") {
     return ["messages"];
@@ -397,6 +398,7 @@ export async function listProviderModelPage(input: {
       provider_models.provider_id = $1::uuid
       and provider_models.deleted_at is null
       and providers.deleted_at is null
+      and ${consoleVisibleProviderModelFilterSql}
       and (
         $2::text is null
         or provider_models.model_id ilike '%' || $2 || '%'
@@ -730,7 +732,9 @@ async function assertEndpointSupportedRoutePolicyCandidates(
 ): Promise<void> {
   const candidates = await readProviderModelOptionsById(client, routePolicy.providerModelIds);
   const unsupportedCandidates = candidates.filter(
-    (candidate) => !candidate.supportedEndpoints.includes(routePolicy.endpointProtocol),
+    (candidate) =>
+      isEmbeddingOnlyProviderModel(candidate) ||
+      !candidate.supportedEndpoints.includes(routePolicy.endpointProtocol),
   );
   if (unsupportedCandidates.length === 0) {
     return;
@@ -927,7 +931,7 @@ function normalizeOptionalEndpointProtocol(
   }
   if (!isRouteEndpointProtocol(protocol)) {
     throw consoleValidationError(
-      "Route policy endpoint protocol must be chat_completions, responses, messages, or embeddings.",
+      "Route policy endpoint protocol must be chat_completions, responses, or messages.",
       "route_policy_endpoint_invalid",
       { field: "endpointProtocol" },
     );
@@ -954,6 +958,7 @@ function providerModelOptionsSql(): string {
     where provider_models.deleted_at is null
       and provider_models.availability = 'available'
       and providers.deleted_at is null
+      and ${consoleVisibleProviderModelFilterSql}
     order by providers.display_name, provider_models.display_name
   `;
 }
@@ -1096,6 +1101,13 @@ function rowToProviderModelOption(row: ProviderModelOptionRow): ConsoleProviderM
     supportsReasoning: row.supports_reasoning ?? null,
     supportsStreaming: row.supports_streaming ?? false,
   };
+}
+
+function isEmbeddingOnlyProviderModel(candidate: ConsoleProviderModelOption): boolean {
+  return (
+    candidate.outputModalities?.includes("embedding") === true &&
+    !candidate.outputModalities.includes("text")
+  );
 }
 
 function readProviderModelCapabilityMetadata(value: unknown): ProviderModelCapabilityMetadata {

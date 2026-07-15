@@ -21,6 +21,7 @@ const retiredPaths = [
   "apps/console/src/app/(dashboard)/settings/page.tsx",
   "apps/console/src/app/api/notifications/route.ts",
   "apps/console/src/app/api/route-policies/preview/route.ts",
+  "packages/gateway-runtime/src/gateway-embeddings.ts",
   "packages/db/src/console-notification-channels.ts",
   "packages/worker-runtime/src/worker-alerts.ts",
   "packages/worker-runtime/src/worker-backup.ts",
@@ -120,6 +121,36 @@ describe("core release guards", () => {
 
   it("keeps retired routes and modules deleted", () => {
     expect(retiredPaths.filter((path) => existsSync(join(repoRoot, path)))).toEqual([]);
+  });
+
+  it("keeps the embeddings protocol retired while retaining embedding model metadata", () => {
+    const gatewayMain = readFileSync(join(repoRoot, "apps/gateway/src/main.ts"), "utf8");
+    const providerAdapter = readFileSync(
+      join(repoRoot, "packages/provider/src/adapters/openai.ts"),
+      "utf8",
+    );
+    const providerTemplates = readFileSync(
+      join(repoRoot, "packages/db/src/console-provider-templates.ts"),
+      "utf8",
+    );
+    const domain = readFileSync(join(repoRoot, "packages/domain/src/index.ts"), "utf8");
+    const baseline = readFileSync(
+      join(repoRoot, "packages/db/migrations/0001_core_baseline.sql"),
+      "utf8",
+    );
+    const product = readFileSync(join(repoRoot, "docs/PRODUCT.md"), "utf8");
+    const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
+
+    expect(gatewayMain).not.toContain("/v1/embeddings");
+    expect(providerAdapter).not.toMatch(/Embeddings|embeddings/);
+    expect(providerTemplates).not.toMatch(/embeddingsEndpoint|path: "embeddings"/);
+    expect(domain.match(/routeEndpointProtocols = \[([\s\S]*?)\]/)?.[1]).not.toContain(
+      "embeddings",
+    );
+    expect(domain.match(/modelOutputModalities = \[([^\]]+)\]/)?.[1]).toContain("embedding");
+    expect(baseline).not.toContain("'embeddings'::text");
+    expect(baseline).toContain("'embedding'::text");
+    expect(`${product}\n${readme}`).not.toContain("/v1/embeddings");
   });
 
   it("keeps retired tables, configuration, and behavior out of production", () => {

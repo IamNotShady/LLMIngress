@@ -40,6 +40,17 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
         }),
       }),
     ).rejects.toThrow(/endpoint messages is not supported/i);
+    await expect(
+      createRoutePolicy({
+        databaseUrl: fixture.databaseUrl,
+        routePolicy: normalizeRoutePolicyFormInput({
+          endpointProtocol: "chat_completions",
+          providerModelIds: [seeded.embeddingOnlyModelId],
+          strategy: "fixed",
+          virtualModelId: seeded.virtualModelId,
+        }),
+      }),
+    ).rejects.toThrow(/endpoint chat_completions is not supported/i);
     await seedVirtualModelRoutePolicy(fixture.databaseUrl, seeded);
 
     const consoleApp = startConsoleProcess({
@@ -71,19 +82,23 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
         await page.goto(`${baseUrl}/models?virtualModelDialog=new`, {
           waitUntil: "networkidle",
         });
-        await page.locator("#virtual-model-dialog-endpoint").selectOption("messages");
+        const endpointSelect = page.locator("#virtual-model-dialog-endpoint");
+        await expect(endpointSelect.locator('option[value="embeddings"]')).toHaveCount(0);
+        await endpointSelect.selectOption("messages");
         await page.getByRole("button", { name: "Add Model" }).click();
         const picker = page.locator(".vm-model-picker");
         await expect(picker).toContainText("Claude Messages");
         await expect(picker).not.toContainText("GPT Chat");
         await expect(picker).not.toContainText("Codex Responses");
+        await expect(picker).not.toContainText("Embedding Only");
 
         await picker.getByRole("button", { name: "Close" }).click();
-        await page.locator("#virtual-model-dialog-endpoint").selectOption("responses");
+        await endpointSelect.selectOption("responses");
         await page.getByRole("button", { name: "Add Model" }).click();
         await expect(picker).toContainText("GPT Chat");
         await expect(picker).toContainText("Codex Responses");
         await expect(picker).not.toContainText("Claude Messages");
+        await expect(picker).not.toContainText("Embedding Only");
 
         await picker.getByRole("button", { name: "Codex Responses" }).click();
         await page.getByLabel("Virtual Model name", { exact: true }).fill("vm-endpoint-api");
@@ -129,6 +144,7 @@ test("virtual model endpoint selection filters candidates and rejects incompatib
 });
 
 async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
+  embeddingOnlyModelId: string;
   openAiModelId: string;
   routePolicyId: string;
   virtualModelId: string;
@@ -137,6 +153,7 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
   const anthropicProviderId = randomUUID();
   const codexProviderId = randomUUID();
   const openAiModelId = randomUUID();
+  const embeddingOnlyModelId = randomUUID();
   const anthropicModelId = randomUUID();
   const codexModelId = randomUUID();
   const virtualModelId = randomUUID();
@@ -176,13 +193,15 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
           supports_reasoning,
           availability
         )
-        values ($1, $2, 'gpt-chat', 'GPT Chat', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available'),
-               ($3, $4, 'claude-msg', 'Claude Messages', array['text']::text[], array['text']::text[], 200000, 8192, true, true, false, 'available'),
-               ($5, $6, 'codex-resp', 'Codex Responses', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
+        values ($1, $2, 'gpt-chat', 'GPT Chat', array['text']::text[], array['text', 'embedding']::text[], 128000, 8192, true, true, false, 'available'),
+               ($3, $2, 'embedding-only', 'Embedding Only', array['text']::text[], array['embedding']::text[], 8192, null, false, false, false, 'available'),
+               ($4, $5, 'claude-msg', 'Claude Messages', array['text']::text[], array['text']::text[], 200000, 8192, true, true, false, 'available'),
+               ($6, $7, 'codex-resp', 'Codex Responses', array['text']::text[], array['text']::text[], 128000, 8192, true, true, false, 'available')
       `,
       [
         openAiModelId,
         openAiProviderId,
+        embeddingOnlyModelId,
         anthropicModelId,
         anthropicProviderId,
         codexModelId,
@@ -199,6 +218,7 @@ async function seedVirtualModelEndpointData(databaseUrl: string): Promise<{
   });
 
   return {
+    embeddingOnlyModelId,
     openAiModelId,
     routePolicyId,
     virtualModelId,

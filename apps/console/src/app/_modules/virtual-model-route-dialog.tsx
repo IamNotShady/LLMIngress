@@ -6,7 +6,7 @@ import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
 
 type Strategy = "fixed" | "cost_first" | "random";
-type EndpointProtocol = "chat_completions" | "responses" | "messages" | "embeddings";
+type EndpointProtocol = "chat_completions" | "responses" | "messages";
 
 type ProviderModelOption = {
   availability: string;
@@ -42,12 +42,7 @@ type VirtualModel = {
 };
 
 const strategies: Strategy[] = ["fixed", "cost_first", "random"];
-const endpointProtocols: EndpointProtocol[] = [
-  "chat_completions",
-  "responses",
-  "messages",
-  "embeddings",
-];
+const endpointProtocols: EndpointProtocol[] = ["chat_completions", "responses", "messages"];
 
 export function VirtualModelRouteDialogClient({
   closeHref,
@@ -464,10 +459,7 @@ function formatEndpointProtocolLabel(protocol: EndpointProtocol): string {
   if (protocol === "responses") {
     return "Responses";
   }
-  if (protocol === "messages") {
-    return "Messages";
-  }
-  return "Embeddings";
+  return "Messages";
 }
 
 function formatRouteStrategyDescription(strategy: Strategy): string {

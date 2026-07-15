@@ -13,7 +13,6 @@ import {
   type GatewayConfigRuntime,
   type GatewayConfigSnapshot,
 } from "@llmingress/gateway-runtime/gateway-config-reload";
-import { executeGatewayOpenAIEmbeddings } from "@llmingress/gateway-runtime/gateway-embeddings";
 import {
   gatewayBodyLimitBytes,
   gatewayConfigNotifications,
@@ -146,12 +145,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
       object: "list",
       requestId: auth.requestId,
     });
-  });
-
-  registerGatewayJsonEndpoint(app, options, {
-    execute: (input) => executeGatewayOpenAIEmbeddings(input),
-    path: "/v1/embeddings",
-    protocol: "embeddings",
   });
 
   registerGatewayJsonEndpoint(app, options, {

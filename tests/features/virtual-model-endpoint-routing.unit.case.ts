@@ -44,7 +44,16 @@ describe("virtual model endpoint routing", () => {
         strategy: "fixed",
         virtualModelId,
       }),
-    ).toThrow(/endpoint protocol must be chat_completions, responses, messages, or embeddings/i);
+    ).toThrow(/endpoint protocol must be chat_completions, responses, or messages/i);
+
+    expect(() =>
+      normalizeRoutePolicyFormInput({
+        endpointProtocol: "embeddings",
+        providerModelIds: [providerModelId],
+        strategy: "fixed",
+        virtualModelId,
+      }),
+    ).toThrow(/endpoint protocol must be chat_completions, responses, or messages/i);
   });
 
   it("derives route endpoint protocols from provider templates and direct providers", () => {
@@ -53,7 +62,7 @@ describe("virtual model endpoint routing", () => {
         providerKey: "openai",
         providerTemplateId: null,
       }),
-    ).toEqual(["chat_completions", "responses", "embeddings"]);
+    ).toEqual(["chat_completions", "responses"]);
     expect(
       listProviderRouteEndpointProtocols({
         providerKey: "anthropic",
@@ -65,7 +74,7 @@ describe("virtual model endpoint routing", () => {
         providerKey: "openrouter",
         providerTemplateId: "openrouter",
       }),
-    ).toEqual(["chat_completions", "embeddings", "messages", "responses"]);
+    ).toEqual(["chat_completions", "messages", "responses"]);
     expect(
       listProviderRouteEndpointProtocols({
         providerKey: "moonshot",
@@ -79,7 +88,7 @@ describe("virtual model endpoint routing", () => {
       providerOption({
         id: "chat",
         providerKey: "openai",
-        supportedEndpoints: ["chat_completions", "responses", "embeddings"],
+        supportedEndpoints: ["chat_completions", "responses"],
       }),
       providerOption({
         id: "messages",

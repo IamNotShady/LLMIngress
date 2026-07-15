@@ -18,7 +18,6 @@ export type FakeProviderMode =
   | "first-byte-failure"
   | "midstream-error"
   | "openrouter-error"
-  | "embeddings"
   | "cached-usage";
 
 export type CapturedFakeProviderRequest = {
@@ -238,35 +237,6 @@ async function handleRequest(
       return;
     }
 
-    if (mode === "embeddings" && url.pathname.endsWith("/embeddings")) {
-      writeJson(response, 200, {
-        data: [
-          {
-            embedding: [0.1, 0.2, 0.3],
-            index: 0,
-            object: "embedding",
-          },
-        ],
-        model: "text-embedding-3-small",
-        object: "list",
-        usage: {
-          prompt_tokens: 5,
-          total_tokens: 5,
-        },
-      });
-      return;
-    }
-
-    if (mode === "embeddings") {
-      writeJson(response, 404, {
-        error: {
-          code: "fake_embeddings_path_error",
-          message: "Fake provider expected embeddings path",
-        },
-      });
-      return;
-    }
-
     if (mode === "json") {
       writeJson(response, 200, {
         id: "fake-provider-response",
@@ -417,7 +387,6 @@ function readMode(url: URL): FakeProviderMode {
     mode === "first-byte-failure" ||
     mode === "midstream-error" ||
     mode === "openrouter-error" ||
-    mode === "embeddings" ||
     mode === "cached-usage"
   ) {
     return mode;

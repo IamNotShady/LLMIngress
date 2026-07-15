@@ -22,7 +22,6 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const responsesAgentApiKey = "llmi_resp_request_hygiene_key_094";
     const messagesAgentApiKey = "llmi_msg_request_hygiene_key_094";
-    const embeddingsAgentApiKey = "llmi_embed_request_hygiene_key_094";
     await seedOpenAIGatewayRoute({
       agentApiKey,
       fixture,
@@ -46,13 +45,6 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
     await fixture.query("update providers set provider_key = 'anthropic' where id = $1", [
       messagesSeed.providerId,
     ]);
-    await seedOpenAIGatewayRoute({
-      agentApiKey: embeddingsAgentApiKey,
-      endpointProtocol: "embeddings",
-      fixture,
-      providerBaseUrl: fakeProvider.url,
-      virtualModelName: "vm-request-hygiene-embeddings",
-    });
     await fixture.query(
       `
         update provider_models
@@ -411,35 +403,21 @@ test("gateway accepts large bodies and passes chat parameters through", async ()
         system: { provider: "owned" },
       });
 
-      const providerOwnedEmbeddingsResponse = await fetch(`${baseUrl}/v1/embeddings`, {
+      const retiredEmbeddingsResponse = await fetch(`${baseUrl}/v1/embeddings`, {
         body: JSON.stringify({
-          dimensions: "provider-owned",
-          encoding_format: "provider-owned",
-          input: { provider: "owned" },
-          model: "vm-request-hygiene-embeddings",
+          input: "must not be forwarded",
+          model: "vm-request-hygiene",
         }),
         headers: {
-          authorization: `Bearer ${embeddingsAgentApiKey}`,
+          authorization: `Bearer ${agentApiKey}`,
           "content-type": "application/json",
-          ...openAIHeaderProbe,
-          "x-client-request-id": "client-embeddings-1",
         },
         method: "POST",
       });
-      await providerOwnedEmbeddingsResponse.text();
+      await retiredEmbeddingsResponse.text();
 
-      expect(providerOwnedEmbeddingsResponse.status).toBe(200);
-      expect(fakeProvider.requests).toHaveLength(8);
-      expectOpenAIProviderHeaders(fakeProvider.requests[7]?.headers);
-      expect(readHeader(fakeProvider.requests[7]?.headers, "x-client-request-id")).toBe(
-        "client-embeddings-1",
-      );
-      expect(fakeProvider.requests[7]?.bodyJson).toMatchObject({
-        dimensions: "provider-owned",
-        encoding_format: "provider-owned",
-        input: { provider: "owned" },
-        model: "fake-model",
-      });
+      expect(retiredEmbeddingsResponse.status).toBe(404);
+      expect(fakeProvider.requests).toHaveLength(7);
     } finally {
       await stopGatewayProcess(gateway);
     }

@@ -84,7 +84,7 @@ h1, h2, h3 {
 }
 h2, h3 { text-wrap: balance; }
 p { margin: 0; max-width: 62ch; text-wrap: pretty; }
-section[id] { scroll-margin-top: 76px; }
+section[id] { scroll-margin-top: 88px; }
 a { color: var(--text); text-decoration: none; }
 code, pre, .mono { font-family: var(--f-mono); font-variant-ligatures: none; }
 pre { margin: 0; }
@@ -157,16 +157,21 @@ main, .footer { position: relative; z-index: 1; }
 .btn-arrow:hover .arrow { transform: translateX(3px); }
 .btn-ghost.cta-ghost { padding: 13px 24px; }
 
-/* ============ navbar ============ */
+/* ============ navbar (floating pill) ============ */
 .nav {
   position: sticky; top: 0; z-index: 50;
-  background: oklch(0.15 0.012 292 / 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--line-soft);
+  padding: clamp(10px, 1.4vw, 18px) var(--gutter) 0;
 }
 .nav-in {
-  height: 64px; display: flex; align-items: center; gap: var(--s-8);
+  max-width: 1120px; margin-inline: auto;
+  height: 58px; display: flex; align-items: center; gap: var(--s-8);
+  padding-inline: 18px 12px;
+  background: oklch(0.17 0.014 292 / 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 10px 34px oklch(0.08 0.02 292 / 0.45);
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; }
 .brand svg { display: block; }
@@ -459,12 +464,22 @@ main, .footer { position: relative; z-index: 1; }
   display: block; font-family: var(--f-mono); font-size: 0.7rem;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
 }
+.cstat-row { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
 .cstat-v {
-  display: block; margin-top: 6px;
   font-family: var(--f-mono); font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
   color: var(--text); font-variant-numeric: tabular-nums;
 }
 .cstat-v.ok { color: var(--ok); }
+/* trend pill — colored delta chip with an arrow glyph (borrowed from the
+   Convix dashboard cards, in the mono/dark idiom) */
+.trend {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--f-mono); font-size: 0.65rem; font-variant-numeric: tabular-nums;
+  padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  align-self: center;
+}
+.trend.good { color: var(--ok); background: oklch(0.74 0.11 158 / 0.13); }
+.trend.bad { color: var(--warn); background: oklch(0.79 0.115 75 / 0.13); }
 .console-grid {
   display: grid; grid-template-columns: 5fr 4fr 3fr;
   gap: var(--s-4); padding: var(--s-4); align-items: stretch;
@@ -672,7 +687,7 @@ main, .footer { position: relative; z-index: 1; }
 
 <!-- ================= navbar ================= -->
 <header class="nav">
-  <div class="wrap nav-in">
+  <div class="nav-in">
     <a class="brand" href="#" aria-label="LLMIngress home">
       <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true">
         <rect x="4" y="4" width="56" height="56" rx="14" fill="oklch(0.19 0.018 292)" stroke="oklch(0.5 0.16 292 / 0.85)" stroke-width="2"/>
@@ -1038,10 +1053,10 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
     <div class="console-frame">
       <div class="console-titlebar"><span class="live"></span> llmingress console — localhost:3000</div>
       <div class="console-stats">
-        <div class="cstat"><span class="cstat-k">requests · today</span><span class="cstat-v">1,284</span></div>
-        <div class="cstat"><span class="cstat-k">cost · today</span><span class="cstat-v">$3.42</span></div>
-        <div class="cstat"><span class="cstat-k">failure rate</span><span class="cstat-v">0.4%</span></div>
-        <div class="cstat"><span class="cstat-k">saved vs baseline</span><span class="cstat-v ok">−62%</span></div>
+        <div class="cstat"><span class="cstat-k">requests · today</span><span class="cstat-row"><span class="cstat-v">1,284</span><span class="trend good">↑ 8%</span></span></div>
+        <div class="cstat"><span class="cstat-k">cost · today</span><span class="cstat-row"><span class="cstat-v">$3.42</span><span class="trend good">↓ 12%</span></span></div>
+        <div class="cstat"><span class="cstat-k">failure rate</span><span class="cstat-row"><span class="cstat-v">0.4%</span><span class="trend good">↓ 0.2pp</span></span></div>
+        <div class="cstat"><span class="cstat-k">saved vs baseline</span><span class="cstat-row"><span class="cstat-v ok">−62%</span></span></div>
       </div>
       <div class="console-grid">
 

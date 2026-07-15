@@ -164,12 +164,17 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
 
 ### 4.0 Navbar
 
-- Sticky, `--bg` at 92% opacity + `backdrop-filter: blur(12px)`, bottom
-  hairline. Height 64px.
+- **Floating pill**: sticky with a top gap, inset from the viewport by the
+  gutter, centered at content width (max 1120px). The pill itself is
+  `--surface` at ~82% opacity + `backdrop-filter: blur(14px)`, a full
+  hairline border, `border-radius: 999px`, and a soft drop shadow so it
+  reads as floating over the star field. Height 58px. (Borrowed from the
+  floating-pill nav pattern in the Convix reference, dark-adapted — no light
+  theme, orange, or video.)
 - Left: brand icon (24px, from `docs/brand/llmingress-icon.svg` geometry) +
   wordmark "LLMIngress" (Archivo 600).
 - Center-right: anchor links (Onest 15px, `--text-2`, hover `--text`).
-  Anchor targets carry `scroll-margin-top: 76px` so the sticky bar never
+  Anchor targets carry `scroll-margin-top: 88px` so the floating pill never
   covers a section head.
 - Right: a two-segment GitHub star badge in the style of the official
   github-buttons widget, dark-adapted. Left segment: octocat mark + `Star`
@@ -362,6 +367,11 @@ screenshot, not floating cards:
 - Overview stat row, 4 cells divided by hairlines (2×2 grid ≤768px):
   `requests · today 1,284` / `cost · today $3.42` / `failure rate 0.4%` /
   `saved vs baseline −62%` (`--ok`). Numbers agree with the panels below.
+  The first three carry a small **trend pill** — a rounded mono delta chip
+  with an arrow glyph (`↑ 8%`, `↓ 12%`, `↓ 0.2pp`), colored by *valence*
+  not direction: a lower cost and lower failure rate are wins, so their
+  down-arrows are green (`.good`), never red. (Trend-pill pattern borrowed
+  from the Convix dashboard cards, in the mono idiom.)
 - Inside the window, three evidence panels (grid 5 / 4 / 3; stacks ≤1024px),
   each a `--surface` panel with a mono title bar:
 

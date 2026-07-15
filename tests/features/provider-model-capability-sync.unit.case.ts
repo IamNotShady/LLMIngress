@@ -6,6 +6,7 @@ import {
   resolveProviderModelCapabilities,
 } from "../../packages/domain/src/index.ts";
 import {
+  fetchProviderModelPrices,
   mergeProviderModelRegistryEntries,
   normalizeLiteLlmProviderModelRegistryEntries,
   normalizeModelsDevProviderModelRegistryEntries,
@@ -198,5 +199,22 @@ describe("provider model capability sync", () => {
     expect(migration).toContain("supports_reasoning boolean");
     expect(migration).toContain("provider_models_input_modalities_values_check");
     expect(migration).toContain("provider_models_output_modalities_values_check");
+  });
+
+  it("bounds price-source fetches with a timeout instead of hanging", async () => {
+    const neverResolving: typeof globalThis.fetch = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            reject(new Error("aborted"));
+          },
+          { once: true },
+        );
+      });
+
+    await expect(
+      fetchProviderModelPrices({ fetch: neverResolving, timeoutMs: 20 }),
+    ).rejects.toThrow();
   });
 });

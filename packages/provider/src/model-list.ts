@@ -16,7 +16,7 @@ export type ListedProviderModel = {
 };
 
 import { resolveProviderDescriptor } from "@llmingress/provider/descriptor";
-import { fetchCredentialedProviderRequest } from "./authenticated-http.js";
+import { fetchCredentialedProviderRequestWithTimeout } from "./authenticated-http.js";
 import {
   buildClaudeCodeModelListUrl,
   buildClaudeCodeSubscriptionHeaders,
@@ -24,17 +24,24 @@ import {
   buildCodexSubscriptionHeaders,
 } from "./subscription.js";
 
+const defaultModelListTimeoutMs = 15_000;
+
 export async function fetchListedProviderModels(input: {
   apiKey?: string | null;
   baseUrl: string;
   fetch?: typeof globalThis.fetch;
   providerKey?: string | null;
+  timeoutMs?: number;
 }): Promise<ListedProviderModel[]> {
   const fetchImpl = input.fetch ?? globalThis.fetch;
+  const timeoutMs = input.timeoutMs ?? defaultModelListTimeoutMs;
   const request = buildProviderModelListRequest(input);
-  const response = input.apiKey
-    ? await fetchCredentialedProviderRequest(fetchImpl, request.url, request.init)
-    : await fetchImpl(request.url, request.init);
+  const response = await fetchCredentialedProviderRequestWithTimeout(
+    fetchImpl,
+    request.url,
+    request.init,
+    { timeoutMs },
+  );
   const body = await readResponseBody(response);
 
   if (!response.ok) {
@@ -47,6 +54,7 @@ export async function fetchListedProviderModels(input: {
       baseUrl: input.baseUrl,
       fetch: fetchImpl,
       models,
+      timeoutMs,
     });
   }
   return models;
@@ -244,9 +252,15 @@ async function enrichLlamaCppProviderModels(input: {
   baseUrl: string;
   fetch: typeof globalThis.fetch;
   models: ListedProviderModel[];
+  timeoutMs: number;
 }): Promise<ListedProviderModel[]> {
   try {
-    const response = await input.fetch(buildLlamaCppPropsUrl(input.baseUrl), { method: "GET" });
+    const response = await fetchCredentialedProviderRequestWithTimeout(
+      input.fetch,
+      buildLlamaCppPropsUrl(input.baseUrl),
+      { method: "GET" },
+      { timeoutMs: input.timeoutMs },
+    );
     if (!response.ok) {
       return input.models;
     }

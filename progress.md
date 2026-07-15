@@ -26,6 +26,7 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 - Removed production weak-`MASTER_KEY` refusal / `LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY` transitional guard.
 - Removed one-command `install.sh` delivery; Compose remains the supported self-hosted path.
 - `/v1/embeddings` remains retired; embedding model metadata remains supported and embedding-only catalog entries stay hidden.
+- Worker resiliency (worker-model-operations): H1 self-healing poll loop (`wake()` catch/re-arm) + worker `unhandledRejection`/`uncaughtException` guards; H2 timeout-bounded provider fetches (model-list, llama.cpp, price-source) + `maxJobDurationMs` per-job cap; M1 auto-reconnecting `job_created` LISTEN.
 
 ## Blockers
 

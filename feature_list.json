@@ -61,7 +61,7 @@
       "verification": "pnpm exec vitest run tests/features/worker-model-operations.unit.test.ts tests/features/worker-leases-maintenance.unit.test.ts && pnpm test:e2e tests/e2e/worker-model-operations.e2e.spec.ts tests/e2e/worker-leases-maintenance.e2e.spec.ts --workers=1",
       "dependencies": ["provider-model-management", "usage-and-activity"],
       "status": "passing",
-      "evidence": "2026-07-14: Worker operations and leases/maintenance focused suites passed; verify, 85 E2E, feature regression, and Compose passed."
+      "evidence": "2026-07-15: Worker resiliency fixes — H1 self-healing poll loop + process rejection/exception guards; H2 timeout-bounded provider network calls + maxJobDurationMs per-job cap; H2/M1 no-apiKey model-list redirect refusal + auto-reconnecting job_created LISTEN. New unit cases (loop re-arm after claim/terminal-write throw, model-list/price-source timeouts, redirect refusal, max-duration abort, subscription reconnect/stop) pass; pnpm run verify + verify:features re-verified all 9 features with zero regression. 2026-07-14 baseline: focused suites, 85 E2E, and Compose passed."
     },
     {
       "id": "console-core",

@@ -25,6 +25,7 @@ export async function startWorker() {
       price_sync: createPriceSyncJobHandler({}),
     },
     leaseMs: readWorkerJobLeaseMs(),
+    maxJobDurationMs: readWorkerMaxJobDurationMs(),
     pollIntervalMs: config.workerHeartbeatMs,
     shutdownGraceMs: readWorkerShutdownGraceMs(),
     workerId: readWorkerId(),
@@ -38,7 +39,7 @@ export async function startWorker() {
 
   logger.info("[worker] started");
 
-  return {
+  const worker = {
     async stop() {
       await maintenanceScheduler.stop();
       await jobRunner.stop();
@@ -46,6 +47,23 @@ export async function startWorker() {
       logger.info("[worker] stopped");
     },
   };
+
+  process.on("unhandledRejection", (reason: unknown) => {
+    logger.error({ err: reason }, "unhandled promise rejection");
+  });
+  process.on("uncaughtException", (error: unknown) => {
+    logger.error({ err: error }, "uncaught exception; shutting down worker");
+    worker
+      .stop()
+      .catch((shutdownError: unknown) => {
+        logger.error({ err: shutdownError }, "worker shutdown after uncaught exception failed");
+      })
+      .finally(() => {
+        process.exit(1);
+      });
+  });
+
+  return worker;
 }
 
 function readWorkerId(): string {
@@ -58,6 +76,10 @@ function readWorkerJobLeaseMs(): number {
 
 function readWorkerShutdownGraceMs(): number {
   return readPositiveIntegerEnv("WORKER_SHUTDOWN_GRACE_MS", 25_000);
+}
+
+function readWorkerMaxJobDurationMs(): number {
+  return readPositiveIntegerEnv("WORKER_MAX_JOB_DURATION_MS", 300_000);
 }
 
 function readPositiveIntegerEnv(name: string, fallback: number): number {

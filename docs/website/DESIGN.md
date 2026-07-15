@@ -320,9 +320,12 @@ concrete compatibility claim, not decoration:
   taxonomy (PRODUCT.md §8):
   - `API KEYS` — OpenAI · Anthropic · Google Gemini · OpenRouter · DeepSeek ·
     xAI · Qwen · Moonshot · MiniMax · Z.ai
-  - `SUBSCRIPTIONS` — ChatGPT Plus / Pro · Claude Pro / Max · GitHub Copilot ·
-    Kimi Coding Plan · GLM Coding Plan (reflects built-in allowlisted
-    templates; individual templates may be disabled per ToS constraints)
+  - `SUBSCRIPTIONS` — Kimi Coding Plan · GLM Coding Plan · OpenCode Go
+    (coding-plan subscriptions built for programmatic use. Consumer chat
+    subscriptions like ChatGPT Plus / Claude Pro / Copilot are deliberately
+    omitted from the marketing site: PRODUCT.md §8.3 flags them as high-risk
+    templates that may be disabled per provider ToS, so advertising them
+    would overpromise.)
   - `LOCAL` — Ollama · LM Studio · llama.cpp
 
 Chips are mono 13px with hairline border on `--surface`; the final chip in

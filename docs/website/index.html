@@ -276,7 +276,7 @@ main, .footer { position: relative; z-index: 1; }
   font-family: var(--f-mono); font-size: 0.8125rem; letter-spacing: 0.02em;
   color: var(--text-3);
 }
-.marquee-item .mi { width: 15px; height: 15px; fill: var(--text-3); flex-shrink: 0; }
+.marquee-item .mi { width: 20px; height: 20px; fill: var(--text-3); flex-shrink: 0; }
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 /* hero entrance stagger */
@@ -771,7 +771,7 @@ main, .footer { position: relative; z-index: 1; }
     </div>
 
     <div class="orbital rise rise-6">
-      <svg viewBox="0 0 560 520" role="img" aria-labelledby="orb-t orb-d">
+      <svg viewBox="0 0 560 560" role="img" aria-labelledby="orb-t orb-d">
         <title id="orb-t">The LLMIngress ecosystem</title>
         <desc id="orb-d">The ecosystem orbits one LLMIngress gateway core —
           Claude Code, Cursor, OpenCode, and GitHub Copilot app tiles on the
@@ -779,80 +779,80 @@ main, .footer { position: relative; z-index: 1; }
           provider marks on the inner ring.</desc>
 
         <!-- rings -->
-        <circle class="oring faint" cx="280" cy="256" r="252"/>
-        <circle class="oring" cx="280" cy="256" r="230"/>
-        <circle class="oring" cx="280" cy="256" r="150"/>
+        <circle class="oring faint" cx="280" cy="280" r="274"/>
+        <circle class="oring" cx="280" cy="280" r="252"/>
+        <circle class="oring" cx="280" cy="280" r="170"/>
 
         <!-- outer orbit: agents, clockwise -->
         <g>
           <animateTransform attributeName="transform" type="rotate"
-            from="0 280 256" to="360 280 256" dur="110s" repeatCount="indefinite"/>
-          <g transform="rotate(45 280 256)"><g transform="translate(280 26)"><g transform="rotate(-45)"><g>
+            from="0 280 280" to="360 280 280" dur="110s" repeatCount="indefinite"/>
+          <g transform="rotate(45 280 280)"><g transform="translate(280 28)"><g transform="rotate(-45)"><g>
             <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
-            <rect class="otile hot" x="-22" y="-22" width="44" height="44" rx="14"/>
-            <use class="omark hot" href="#si-claude" x="-12" y="-12" width="24" height="24"/>
+            <rect class="otile hot" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark hot" href="#si-claude" x="-14" y="-14" width="28" height="28"/>
           </g></g></g></g>
-          <g transform="rotate(135 280 256)"><g transform="translate(280 26)"><g transform="rotate(-135)"><g>
+          <g transform="rotate(135 280 280)"><g transform="translate(280 28)"><g transform="rotate(-135)"><g>
             <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
-            <rect class="otile" x="-22" y="-22" width="44" height="44" rx="14"/>
-            <use class="omark" href="#si-cursor" x="-12" y="-12" width="24" height="24"/>
+            <rect class="otile" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark" href="#si-cursor" x="-14" y="-14" width="28" height="28"/>
           </g></g></g></g>
-          <g transform="rotate(225 280 256)"><g transform="translate(280 26)"><g transform="rotate(-225)"><g>
+          <g transform="rotate(225 280 280)"><g transform="translate(280 28)"><g transform="rotate(-225)"><g>
             <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
-            <rect class="otile" x="-22" y="-22" width="44" height="44" rx="14"/>
-            <use class="omark" href="#si-opencode" x="-12" y="-12" width="24" height="24"/>
+            <rect class="otile" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark" href="#si-opencode" x="-14" y="-14" width="28" height="28"/>
           </g></g></g></g>
-          <g transform="rotate(315 280 256)"><g transform="translate(280 26)"><g transform="rotate(-315)"><g>
+          <g transform="rotate(315 280 280)"><g transform="translate(280 28)"><g transform="rotate(-315)"><g>
             <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
-            <rect class="otile" x="-22" y="-22" width="44" height="44" rx="14"/>
-            <use class="omark" href="#si-githubcopilot" x="-12" y="-12" width="24" height="24"/>
+            <rect class="otile" x="-26" y="-26" width="52" height="52" rx="16"/>
+            <use class="omark" href="#si-githubcopilot" x="-14" y="-14" width="28" height="28"/>
           </g></g></g></g>
-          <g transform="rotate(100 280 256)" aria-hidden="true"><circle class="odot" cx="280" cy="26" r="2.5"/></g>
-          <g transform="rotate(280 280 256)" aria-hidden="true"><circle class="odot" cx="280" cy="26" r="2"/></g>
+          <g transform="rotate(100 280 280)" aria-hidden="true"><circle class="odot" cx="280" cy="28" r="2.5"/></g>
+          <g transform="rotate(280 280 280)" aria-hidden="true"><circle class="odot" cx="280" cy="28" r="2"/></g>
         </g>
 
         <!-- inner orbit: providers, counter-clockwise -->
         <g>
           <animateTransform attributeName="transform" type="rotate"
-            from="360 280 256" to="0 280 256" dur="80s" repeatCount="indefinite"/>
-          <g transform="rotate(126 280 256)"><g transform="translate(280 106)"><g transform="rotate(-126)"><g>
+            from="360 280 280" to="0 280 280" dur="80s" repeatCount="indefinite"/>
+          <g transform="rotate(126 280 280)"><g transform="translate(280 110)"><g transform="rotate(-126)"><g>
             <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
-            <circle class="obadge" r="22"/>
-            <use class="omark" href="#si-openai" x="-12" y="-12" width="24" height="24"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-openai" x="-15" y="-15" width="30" height="30"/>
           </g></g></g></g>
-          <g transform="rotate(198 280 256)"><g transform="translate(280 106)"><g transform="rotate(-198)"><g>
+          <g transform="rotate(198 280 280)"><g transform="translate(280 110)"><g transform="rotate(-198)"><g>
             <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
-            <circle class="obadge hot" r="22"/>
-            <use class="omark hot" href="#si-anthropic" x="-12" y="-12" width="24" height="24"/>
+            <circle class="obadge hot" r="27"/>
+            <use class="omark hot" href="#si-anthropic" x="-15" y="-15" width="30" height="30"/>
           </g></g></g></g>
-          <g transform="rotate(270 280 256)"><g transform="translate(280 106)"><g transform="rotate(-270)"><g>
+          <g transform="rotate(270 280 280)"><g transform="translate(280 110)"><g transform="rotate(-270)"><g>
             <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
-            <circle class="obadge" r="22"/>
-            <use class="omark" href="#si-google" x="-12" y="-12" width="24" height="24"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-google" x="-15" y="-15" width="30" height="30"/>
           </g></g></g></g>
-          <g transform="rotate(342 280 256)"><g transform="translate(280 106)"><g transform="rotate(-342)"><g>
+          <g transform="rotate(342 280 280)"><g transform="translate(280 110)"><g transform="rotate(-342)"><g>
             <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
-            <circle class="obadge" r="22"/>
-            <use class="omark" href="#si-openrouter" x="-12" y="-12" width="24" height="24"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-openrouter" x="-15" y="-15" width="30" height="30"/>
           </g></g></g></g>
-          <g transform="rotate(30 280 256)"><g transform="translate(280 106)"><g transform="rotate(-30)"><g>
+          <g transform="rotate(30 280 280)"><g transform="translate(280 110)"><g transform="rotate(-30)"><g>
             <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
-            <circle class="obadge" r="22"/>
-            <use class="omark" href="#si-ollama" x="-12" y="-12" width="24" height="24"/>
+            <circle class="obadge" r="27"/>
+            <use class="omark" href="#si-ollama" x="-15" y="-15" width="30" height="30"/>
           </g></g></g></g>
-          <g transform="rotate(90 280 256)" aria-hidden="true"><circle class="odot" cx="280" cy="106" r="2"/></g>
+          <g transform="rotate(90 280 280)" aria-hidden="true"><circle class="odot" cx="280" cy="110" r="2"/></g>
         </g>
 
         <!-- gateway core (echoes brand icon) -->
         <g class="core-glow">
-          <rect class="core-panel" x="240" y="216" width="80" height="80" rx="19"/>
-          <rect class="core-inner" x="246" y="222" width="68" height="68" rx="14"/>
-          <rect class="core-slot" x="254.5" y="249" width="21" height="16" rx="5.5"/>
-          <rect class="core-socket" x="278.5" y="253.5" width="8.5" height="8" rx="4"/>
-          <rect class="core-quiet" x="291" y="231.5" width="14.5" height="16" rx="5.4"/>
-          <rect class="core-quiet" x="291" y="264.5" width="14.5" height="16" rx="5.4"/>
+          <rect class="core-panel" x="240" y="240" width="80" height="80" rx="19"/>
+          <rect class="core-inner" x="246" y="246" width="68" height="68" rx="14"/>
+          <rect class="core-slot" x="254.5" y="273" width="21" height="16" rx="5.5"/>
+          <rect class="core-socket" x="278.5" y="277.5" width="8.5" height="8" rx="4"/>
+          <rect class="core-quiet" x="291" y="255.5" width="14.5" height="16" rx="5.4"/>
+          <rect class="core-quiet" x="291" y="288.5" width="14.5" height="16" rx="5.4"/>
         </g>
-        <text class="core-label" x="280" y="318" text-anchor="middle">LLMIngress</text>
+        <text class="core-label" x="280" y="342" text-anchor="middle">LLMIngress</text>
       </svg>
     </div>
 

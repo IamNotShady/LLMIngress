@@ -224,7 +224,7 @@ Left column:
 - Trust line (mono 13px, `--text-3`, must fit one line in the text column):
   `Apache-2.0 · Single-user · Keys never leave your box`
 - Below the two hero columns, a full-width **`WORKS WITH` marquee**: a
-  single mono row of icon + name lockups (15px sprite marks tinted
+  single mono row of icon + name lockups (20px sprite marks tinted
   `--text-3` beside each ecosystem name) scrolling left on a 46s loop,
   edges masked to a fade. Ambient breadth signal, not a substitute for the
   categorized compatibility section (§4.5). Paused under
@@ -233,23 +233,23 @@ Left column:
 Right column — **orbital ecosystem** (inline SVG, 560×520, frameless so it
 floats directly over the pixel star field; the space theme is deliberate):
 
-- Three concentric rings around center: a faint dashed outermost ring
-  (r 252, depth only), the agent ring (r 230), and the provider ring
-  (r 150). Hairline `--line-soft` strokes.
+- Square 560×560 canvas. Three concentric rings around center: a faint
+  dashed outermost ring (r 274, depth only), the agent ring (r 252), and
+  the provider ring (r 170). Hairline `--line-soft` strokes.
 - The orbit is **logo-only — no text satellites**. 4 agent app tiles orbit
   the outer ring clockwise (110s/rev); 5 provider badges orbit the inner
   ring counter-clockwise (80s/rev). Each satellite counter-rotates at the
   same rate so its mark stays upright while its position orbits (SMIL
   `animateTransform`, nested placement → unrotate → counter-spin groups).
   A few 2–2.5px violet dots ride the rings as sparks.
-- Agents: **rounded-square app tiles** (44×44, rx 14, `--surface`,
+- Agents: **rounded-square app tiles** (52×52, rx 16, `--surface`,
   hairline) holding the Claude, Cursor, OpenCode, and GitHub Copilot
-  marks; the Claude tile carries the violet hot stroke. Codex is
+  marks (28px); the Claude tile carries the violet hot stroke. Codex is
   deliberately absent from the orbit — its official mark is the OpenAI
   blossom, which would visually duplicate the provider badge; Codex stays
   in the marquee and compatibility chips where a text label disambiguates.
-- Providers: **circular badges** (r 22, `--surface`, hairline) holding the
-  OpenAI, Anthropic, Google, OpenRouter, and Ollama marks; `anthropic`
+- Providers: **circular badges** (r 27, `--surface`, hairline) holding the
+  OpenAI, Anthropic, Google, OpenRouter, and Ollama marks (30px); `anthropic`
   gets the violet hot stroke and `--text` glyph.
 - All marks are single-tint `--text-2` (no brand colors, keeping the mono
   idiom) and live as 24×24 `<symbol>`s in one hidden SVG sprite reused via

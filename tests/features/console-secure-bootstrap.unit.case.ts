@@ -43,6 +43,7 @@ describe("console secure bootstrap", () => {
     accessSync("scripts/deploy.sh", constants.X_OK);
     expect(deploy).toContain("openssl rand -base64 32");
     expect(deploy).toContain("^MASTER_KEY=");
+    expect(deploy).toContain('--ensure-env');
     expect(deploy).toContain('exec docker compose up --build "$@"');
   });
 

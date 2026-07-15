@@ -1,6 +1,0 @@
-ARG BASE_IMAGE
-FROM ${BASE_IMAGE}
-ARG FIXTURE_MODE
-ENV LLMINGRESS_FIXTURE_MODE=${FIXTURE_MODE}
-COPY --chmod=755 role-wrapper.sh /role-wrapper.sh
-ENTRYPOINT ["/role-wrapper.sh"]

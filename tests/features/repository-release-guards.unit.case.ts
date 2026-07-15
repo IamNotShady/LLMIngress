@@ -29,6 +29,15 @@ const retiredPaths = [
   "packages/worker-runtime/src/worker-notification-dispatch.ts",
   "packages/worker-runtime/src/worker-periodic-scheduler.ts",
   "scripts/backup.ts",
+  "scripts/docker/install.sh.template",
+  "scripts/docker/init-state.ts",
+  "scripts/render-release-assets.ts",
+  "docs/DOCKER_DEPLOYMENT.md",
+  ".github/workflows/release.yml",
+  "tests/features/docker-lifecycle.unit.test.ts",
+  "tests/features/docker-lifecycle.unit.case.ts",
+  "tests/e2e/docker-lifecycle.e2e.spec.ts",
+  "tests/e2e/docker-lifecycle.e2e.case.ts",
 ];
 
 const retiredProductionTerms = [
@@ -151,6 +160,27 @@ describe("core release guards", () => {
     expect(baseline).not.toContain("'embeddings'::text");
     expect(baseline).toContain("'embedding'::text");
     expect(`${product}\n${readme}`).not.toContain("/v1/embeddings");
+  });
+
+  it("keeps Compose as the supported Docker path without one-command install.sh", () => {
+    const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
+    const product = readFileSync(join(repoRoot, "docs/PRODUCT.md"), "utf8");
+    const architecture = readFileSync(join(repoRoot, "docs/ARCHITECTURE.md"), "utf8");
+    const dockerfile = readFileSync(join(repoRoot, "Dockerfile"), "utf8");
+    const entrypoint = readFileSync(join(repoRoot, "scripts/docker/docker-entrypoint.sh"), "utf8");
+    const compose = readFileSync(join(repoRoot, "docker-compose.yml"), "utf8");
+
+    expect(readme).toContain("docker compose up --build");
+    expect(`${readme}\n${product}`).not.toContain("/latest/download/install.sh");
+    expect(`${readme}\n${product}`).not.toContain("install.sh");
+    expect(product).toContain("one-command remote installer");
+    expect(architecture).not.toContain("Installer-managed instances");
+    expect(architecture).not.toContain("stop-the-world transactions");
+    expect(dockerfile).not.toContain("init-state.ts");
+    expect(dockerfile).not.toContain("install/state.mjs");
+    expect(entrypoint).not.toContain("install/state.mjs");
+    expect(compose).toContain("command: gateway");
+    expect(compose).toContain("GATEWAY_URL");
   });
 
   it("keeps retired tables, configuration, and behavior out of production", () => {

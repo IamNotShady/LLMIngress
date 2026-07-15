@@ -7,14 +7,20 @@ import { describe, expect, it } from "vitest";
 import { loadBootstrapRuntimeConfig } from "../../packages/config/src/index";
 
 describe("console secure bootstrap", () => {
-  it("keeps compose secrets required and host publishes loopback-bound by default", () => {
+  it("keeps compose local defaults and host publishes loopback-bound by default", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
     const shell = "$";
 
-    expect(compose).toContain(`${shell}{MASTER_KEY:?MASTER_KEY is required}`);
-    expect(compose).toContain(`${shell}{POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}`);
+    expect(compose).toContain(
+      `${shell}{MASTER_KEY:-llmi-local-master}`,
+    );
+    expect(compose).toContain(
+      `${shell}{DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
+    );
+    expect(compose).toContain("POSTGRES_PASSWORD: llmi-local-db");
     expect(compose).not.toContain("CONSOLE_SETUP_TOKEN");
-    expect(compose).not.toContain(`${shell}{MASTER_KEY:-`);
+    expect(compose).not.toContain(`${shell}{MASTER_KEY:?`);
+    expect(compose).not.toContain(`${shell}{POSTGRES_PASSWORD`);
     expect(compose).not.toContain("POSTGRES_PASSWORD: postgres");
 
     expect(compose).toContain("GATEWAY_HOST: 0.0.0.0");

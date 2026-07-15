@@ -75,11 +75,11 @@
     {
       "id": "release-guards",
       "name": "Release Guards",
-      "description": "PostgreSQL 18.4 runtime, one-command Docker install and upgrade with rollback, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
-      "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts tests/features/docker-lifecycle.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts tests/e2e/docker-lifecycle.e2e.spec.ts --workers=1",
+      "description": "PostgreSQL 18.4 runtime, Compose-based multi-role Docker delivery, single 24-table baseline, retired-surface guards, standard verification, and repository hygiene.",
+      "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-15: retired-surface guards prevent the Embeddings route, executor, adapter, schema vocabulary, and public docs from returning while preserving singular embedding model metadata. Focused release checks, all 3 Docker lifecycle E2Es, verify, and the optimized 9-domain feature batch passed."
+      "evidence": "2026-07-15: one-command install.sh delivery removed; Compose remains the supported self-hosted path. Retired-surface guards keep Embeddings and installer assets deleted while embedding model metadata remains. Focused release checks updated."
     }
   ]
 }

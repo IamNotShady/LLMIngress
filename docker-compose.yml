@@ -1,7 +1,7 @@
 x-llmingress-env: &llmingress-env
   NODE_ENV: production
-  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
-  MASTER_KEY: ${MASTER_KEY:?MASTER_KEY is required}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}
+  MASTER_KEY: ${MASTER_KEY:-llmi-local-master}
   GATEWAY_PORT: 4000
   GATEWAY_HOST: 0.0.0.0
   CONSOLE_PORT: 3000
@@ -21,7 +21,7 @@ services:
     image: postgres:18.4-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_PASSWORD: llmi-local-db
       POSTGRES_DB: postgres
     ports:
       - "${POSTGRES_PUBLISH_HOST:-127.0.0.1}:${POSTGRES_PORT:-55432}:5432"

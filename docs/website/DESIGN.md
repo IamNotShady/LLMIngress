@@ -7,8 +7,10 @@ open directly in a browser). Single-page landing site, English copy, desktop
 ## 1. Goals And Audience
 
 - Audience: personal developers, indie hackers, AI power users who run several
-  coding agents (Codex, Claude Code, Cursor, OpenCode, Hermes, OpenClaw,
-  Copilot) against several model providers and subscriptions at once.
+  AI agents (coding, terminal, desktop, and IDE agents — Codex, Claude Code,
+  Cursor, OpenCode, Hermes, OpenClaw, Copilot) against several model providers
+  and subscriptions at once. LLMIngress is an AI gateway for AI agents, not a
+  coding-only tool; copy must not narrow it to coding agents.
 - Job to be done on this page: understand in under 30 seconds that LLMIngress
   is a self-hosted gateway that gives every agent one endpoint, routes each
   request to the right model, falls back on failure, and meters cost — then
@@ -189,9 +191,10 @@ Left column:
 
 - Eyebrow (mono): `SELF-HOSTED AI GATEWAY`
 - H1: **One gateway for every AI agent.**
-- Lede (max 58ch): "LLMIngress sits between your coding agents and your model
-  providers. Point Codex, Claude Code, Cursor — any OpenAI-compatible agent —
-  at a single endpoint. It picks the right model for each request, falls back
+- Lede (max 58ch): "LLMIngress sits between your AI agents and your model
+  providers. Point Codex, Claude Code, Cursor — or any agent that speaks an
+  OpenAI- or Anthropic-compatible API — at a single endpoint. It picks the
+  right model for each request, falls back
   when a provider fails, and meters every token. On your machine, with your
   keys."
 - CTA row: primary `Deploy locally` (violet fill, `--ink` label, → `#deploy`);

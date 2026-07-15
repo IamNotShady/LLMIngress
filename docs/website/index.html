@@ -242,10 +242,6 @@ main, .footer { position: relative; z-index: 1; }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 /* topology diagram */
-/* bleed the frame toward the right viewport edge on wide screens */
-.hero .topo {
-  margin-right: max(calc((min(1120px, 100vw) - 100vw) / 2 - var(--gutter) + 24px), -220px);
-}
 .topo-frame {
   border: 1px solid var(--line-soft); border-radius: var(--r-lg);
   background: var(--bg-raised);
@@ -585,7 +581,6 @@ main, .footer { position: relative; z-index: 1; }
 /* ============ responsive ============ */
 @media (max-width: 1024px) {
   .hero-grid { grid-template-columns: 1fr; }
-  .hero .topo { margin-right: 0; }
   .topo-frame { max-width: 720px; }
   .how-grid { grid-template-columns: 1fr; }
   .code-panel { position: static; }

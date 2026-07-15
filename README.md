@@ -7,6 +7,10 @@
 <p align="center">Route your AI agents across the model providers you already use.</p>
 
 <p align="center">
+  <img src="docs/assets/console-demo.gif" alt="LLMIngress Console demo" />
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/status-pre--release-yellow" alt="Pre-release status" />
   <a href="https://github.com/IamNotShady/LLMIngress/stargazers"><img src="https://img.shields.io/github/stars/IamNotShady/LLMIngress?style=flat&label=stars" alt="GitHub stars" /></a>
   <a href="https://github.com/IamNotShady/LLMIngress/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/IamNotShady/LLMIngress/ci.yml?branch=main&label=CI" alt="CI status" /></a>

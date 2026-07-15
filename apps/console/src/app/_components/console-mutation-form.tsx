@@ -85,6 +85,11 @@ export function ConsoleMutationError({
     );
   }
   if (errorPresentation === "toast") {
+    // Toast failures only exist after client-side interaction, but guard the
+    // document read so server rendering can never touch a browser global.
+    if (typeof document === "undefined") {
+      return null;
+    }
     return createPortal(
       <ConsoleMutationToast message={failure.message} onDismiss={onDismiss} />,
       document.body,

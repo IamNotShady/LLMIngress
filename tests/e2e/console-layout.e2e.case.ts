@@ -249,7 +249,24 @@ test("console keeps layout integrity with real data: no overflow, visible limits
         await expectTableColumnsContained(page, [".limits-rule-table"]);
         await page.goto(`${baseUrl}/activity`);
         await expectTableColumnsContained(page, [".activity-table"]);
+        await page.setViewportSize({ width: 1440, height: 1000 });
         await page.goto(`${baseUrl}/models?virtualModelDialog=${seeded.virtualModelId}`);
+        const routeDialog = page.locator(".vm-route-dialog");
+        await expect(routeDialog).toBeVisible();
+        expect(
+          await routeDialog.evaluate((element) => ({
+            scrollLeft: element.scrollLeft,
+            overflowPx: element.scrollWidth - element.clientWidth,
+          })),
+        ).toEqual({ overflowPx: 0, scrollLeft: 0 });
+        const randomStrategy = page.getByRole("radio", {
+          name: "Random Pick a random eligible candidate each request",
+        });
+        await randomStrategy.check();
+        await expect(randomStrategy).toBeChecked();
+        await expect(
+          page.getByRole("radio", { name: "Fixed Always use the first candidate" }),
+        ).not.toBeChecked();
         await expect(page.locator(".vm-candidate-table")).toBeVisible();
         await expectTableColumnsContained(page, [".vm-candidate-table"]);
         await page.getByRole("button", { name: "Add Model" }).click();

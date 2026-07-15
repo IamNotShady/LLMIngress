@@ -18,10 +18,7 @@ export const POST = withConsoleAuth(async (request) => {
     if (action === "delete") {
       const providerApiKeyId = readRequiredText(form, "providerApiKeyId");
       const result = await deleteProviderApiKey({ providerApiKeyId });
-      return NextResponse.redirect(
-        new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
-        303,
-      );
+      return providerApiKeyMutationResponse(request, result.providerId);
     }
 
     if (action === "enable" || action === "disable") {
@@ -37,10 +34,7 @@ export const POST = withConsoleAuth(async (request) => {
           source: "api_key_saved",
         });
       }
-      return NextResponse.redirect(
-        new URL(`/providers?selected=${encodeURIComponent(result.providerId)}`, request.url),
-        303,
-      );
+      return providerApiKeyMutationResponse(request, result.providerId);
     }
 
     const providerId = readRequiredText(form, "providerId");
@@ -89,6 +83,17 @@ export const POST = withConsoleAuth(async (request) => {
     return consoleActionErrorResponse(error, "Provider API key operation failed.");
   }
 });
+
+function providerApiKeyMutationResponse(request: Request, providerId: string): NextResponse {
+  if (request.headers.get("accept")?.includes("application/json")) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  return NextResponse.redirect(
+    new URL(`/providers?selected=${encodeURIComponent(providerId)}`, request.url),
+    303,
+  );
+}
 
 function renderOneTimeProviderKeyPage(input: {
   action: "created" | "rotated";

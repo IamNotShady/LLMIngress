@@ -193,7 +193,7 @@ function readBootstrapSecurityWarnings(
 export function gatewayPublicBaseUrl(
   env: Record<string, string | undefined> = process.env,
 ): string {
-  return env.GATEWAY_PUBLIC_BASE_URL?.trim() || "http://127.0.0.1:4000";
+  return env.GATEWAY_URL?.trim() || "http://127.0.0.1:4000";
 }
 
 export function readConsoleListenHost(

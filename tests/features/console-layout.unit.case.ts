@@ -93,4 +93,15 @@ describe("console P0 layout static contract", () => {
       /\.sidebar:not\(\.is-menu-open\) \.sidebar-nav,\s*\.sidebar:not\(\.is-menu-open\) \.sidebar-footer\s*\{\s*display:\s*none/,
     );
   });
+
+  test("strategy radio hit areas stay inside their option cards", () => {
+    const stylesheet = css();
+    expect(stylesheet).toMatch(/\.option-card\s*\{[^}]*position:\s*relative/s);
+    expect(stylesheet).toMatch(
+      /\.option-card input\[type="radio"\]\s*\{[^}]*inset:\s*0[^}]*width:\s*100%[^}]*height:\s*100%/s,
+    );
+    expect(stylesheet).not.toMatch(
+      /\.option-card input\[type="radio"\]\s*\{[^}]*pointer-events:\s*none/s,
+    );
+  });
 });

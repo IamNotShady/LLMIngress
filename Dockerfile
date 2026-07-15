@@ -13,7 +13,6 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm exec esbuild apps/gateway/src/main.ts --bundle --platform=node --format=esm --target=node24 --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" --outfile=/out/gateway/main.mjs
 RUN pnpm exec esbuild apps/worker/src/main.ts --bundle --platform=node --format=esm --target=node24 --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" --outfile=/out/worker/main.mjs
 RUN pnpm exec esbuild scripts/migrate.ts --bundle --platform=node --format=esm --target=node24 --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" --outfile=/out/migrate/main.mjs
-RUN pnpm exec esbuild scripts/docker/init-state.ts --bundle --platform=node --format=esm --target=node24 --outfile=/out/install/state.mjs
 RUN pnpm --filter @llmingress/console build
 RUN mkdir -p /out/console/apps/console/.next \
   && cp -R apps/console/.next/standalone/. /out/console/ \
@@ -31,7 +30,6 @@ RUN groupadd --system --gid 1001 llmingress && useradd --system --uid 1001 --gid
 COPY --from=build --chown=llmingress:llmingress /out/gateway/main.mjs ./gateway/main.mjs
 COPY --from=build --chown=llmingress:llmingress /out/worker/main.mjs ./worker/main.mjs
 COPY --from=build --chown=llmingress:llmingress /out/migrate/main.mjs ./migrate/main.mjs
-COPY --from=build --chown=llmingress:llmingress /out/install/state.mjs ./install/state.mjs
 COPY --from=build --chown=llmingress:llmingress /out/console/ ./console/
 COPY --from=build --chown=llmingress:llmingress /src/packages/db/migrations ./packages/db/migrations
 COPY --chmod=755 scripts/docker/docker-entrypoint.sh ./docker-entrypoint.sh

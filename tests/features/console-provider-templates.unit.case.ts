@@ -7,7 +7,6 @@ import {
 } from "../../packages/db/src/console-provider-templates";
 
 const chatEndpoint = { method: "POST", path: "chat/completions" };
-const embeddingsEndpoint = { method: "POST", path: "embeddings" };
 const messagesEndpoint = { method: "POST", path: "messages" };
 const modelsEndpoint = { method: "GET", path: "models" };
 const responsesEndpoint = { method: "POST", path: "responses" };
@@ -41,7 +40,6 @@ describe("console provider template registry", () => {
       displayName: "Google Gemini",
       endpoints: {
         chat_completions: chatEndpoint,
-        embeddings: embeddingsEndpoint,
         models: modelsEndpoint,
       },
       fixedBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -58,7 +56,6 @@ describe("console provider template registry", () => {
       baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
       endpoints: {
         chat_completions: chatEndpoint,
-        embeddings: embeddingsEndpoint,
         messages: messagesEndpoint,
         models: modelsEndpoint,
         responses: responsesEndpoint,
@@ -72,15 +69,30 @@ describe("console provider template registry", () => {
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "http://127.0.0.1:11434/v1/",
+        displayName: "  Local Ollama  ",
         templateId: "ollama",
       }),
     ).toMatchObject({
       baseUrl: "http://127.0.0.1:11434/v1",
+      displayName: "Local Ollama",
       id: "ollama",
       providerKey: "ollama",
       providerTemplateId: "ollama",
       providerType: "local",
     });
+    expect(() =>
+      normalizeProviderTemplateFormInput({
+        baseUrl: "http://127.0.0.1:11434/v1",
+        displayName: "   ",
+        templateId: "ollama",
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "provider_display_name_required",
+        details: { field: "displayName" },
+        kind: "validation",
+      }),
+    );
   });
 
   it("keeps subscription protocol paths fixed while allowing custom API roots", () => {
@@ -108,6 +120,7 @@ describe("console provider template registry", () => {
     expect(
       normalizeProviderTemplateFormInput({
         baseUrl: "https://example.com/codex",
+        displayName: "OpenAI Codex",
         templateId: "openai_codex",
       }).baseUrl,
     ).toBe("https://example.com/codex");
@@ -139,7 +152,6 @@ describe("console provider template registry", () => {
   it("records provider-documented endpoint subsets for routed template providers", () => {
     expect(readTemplate("remote_api_key", "openrouter").endpoints).toEqual({
       chat_completions: chatEndpoint,
-      embeddings: embeddingsEndpoint,
       messages: messagesEndpoint,
       models: modelsEndpoint,
       responses: responsesEndpoint,
@@ -154,7 +166,6 @@ describe("console provider template registry", () => {
     });
     expect(readTemplate("local", "lmstudio").endpoints).toEqual({
       chat_completions: chatEndpoint,
-      embeddings: embeddingsEndpoint,
       messages: messagesEndpoint,
       models: modelsEndpoint,
       responses: responsesEndpoint,

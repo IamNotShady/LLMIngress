@@ -19,7 +19,7 @@ import { listProviders } from "@llmingress/db/console-providers";
 import { listVirtualModels } from "@llmingress/db/console-virtual-models";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
-import { Pager } from "../_components/list-ui";
+import { Pagination } from "../_components/pagination";
 import { buildQueryHref, readPageParam } from "../_lib/pagination";
 import { ActivityStatusPill } from "./activity-status-pill";
 import {
@@ -416,7 +416,16 @@ export async function ActivitySection({ searchParams }: { searchParams: ConsoleS
               </tbody>
             </table>
           </div>
-          <Pager view={view} searchParams={searchParams} />
+          <Pagination
+            ariaLabel="Activity pages"
+            from={view.from}
+            itemLabel="activities"
+            page={view.page}
+            searchParams={searchParams}
+            to={view.to}
+            total={view.total}
+            totalPages={view.totalPages}
+          />
         </div>
       </div>
 

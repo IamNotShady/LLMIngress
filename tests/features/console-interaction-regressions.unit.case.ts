@@ -41,6 +41,28 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(activity).toContain("Math.ceil(total / ACTIVITY_PAGE_SIZE)");
   });
 
+  test("all paginated Console lists use one shared Pagination component", () => {
+    const activity = sectionSource("activity-section.tsx");
+    const providers = sectionSource("providers-client-section.tsx");
+    const pagination = appSource("_components/pagination.tsx");
+    const stylesheet = css();
+
+    expect(pagination).toContain("export function Pagination");
+    expect(pagination).toContain('className="list-pagination"');
+    expect(pagination).toContain('className="list-pagination-summary"');
+    expect(pagination).toContain('aria-label="Previous page"');
+    expect(pagination).toContain('aria-label="Next page"');
+    expect(activity).toContain("<Pagination");
+    expect(activity).toContain('ariaLabel="Activity pages"');
+    expect(providers).toContain("<Pagination");
+    expect(providers).toContain('ariaLabel="Model pages"');
+    expect(providers).not.toContain("model-library-truncation-note");
+    expect(stylesheet).toMatch(/\.list-pagination\s*\{[^}]*display:\s*flex[^}]*border-top:/s);
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 40rem\)[\s\S]*?\.list-pagination\s*\{[^}]*flex-direction:\s*column/s,
+    );
+  });
+
   test("activity timestamp cells cannot paint into request id cells", () => {
     const stylesheet = css();
     expect(stylesheet).toMatch(
@@ -119,6 +141,33 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(providerSource).toContain("row-action-danger");
   });
 
+  test("Provider API key row mutations refresh on AJAX success and use a detached error toast", () => {
+    const mutationForm = appSource("_components/console-mutation-form.tsx");
+    const providerClient = sectionSource("providers-client-section.tsx");
+    const providerServer = sectionSource("providers-section.tsx");
+    const providerKeyRoute = source("apps/console/src/app/api/provider-keys/route.ts");
+    const stylesheet = css();
+
+    expect(providerKeyRoute).toContain(
+      'request.headers.get("accept")?.includes("application/json")',
+    );
+    expect(providerKeyRoute).toContain("return new NextResponse(null, { status: 204 });");
+    expect(providerKeyRoute).toContain("return NextResponse.redirect(");
+    expect(providerKeyRoute).toContain("303,");
+    expect(mutationForm).toContain('errorPresentation?: "inline" | "toast"');
+    expect(mutationForm).toContain("successHref?: string");
+    expect(mutationForm).toContain('className="console-mutation-toast"');
+    expect(mutationForm).toContain('popover="manual"');
+    expect(mutationForm).toContain('aria-label="Dismiss error"');
+    expect(mutationForm).toContain("5_000");
+    expect(providerClient).toContain('errorPresentation="toast"');
+    expect(providerServer).toContain('errorPresentation="toast"');
+    expect(providerServer).toContain("successHref={closeHref}");
+    expect(stylesheet).toMatch(
+      /\.console-mutation-toast\s*\{[^}]*position:\s*fixed[^}]*top:[^}]*right:[^}]*z-index:\s*70/s,
+    );
+  });
+
   test("page headers and dialog close actions are consistent", () => {
     expect(source("apps/console/src/app/(dashboard)/usage/page.tsx")).not.toContain("eyebrow=");
     const limitsSource = sectionSource("limits-section.tsx");
@@ -138,9 +187,20 @@ describe("console UI audit confirmed fixes static contract", () => {
     expect(searchInput).toContain("suppressHydrationWarning");
   });
 
+  test("virtual model filters distinguish no matches from an empty configuration", () => {
+    const sourceText = sectionSource("virtual-models-section.tsx");
+
+    expect(sourceText).toContain("const hasActiveFilters = Boolean(");
+    expect(sourceText).toContain("No Virtual Models match the selected filters.");
+    expect(sourceText).toContain("Add a Provider and refresh its models");
+  });
+
   test("playground API key hint matches LLMIngress keys", () => {
-    expect(appSource("playground.tsx")).toContain('placeholder="llmi_************************"');
-    expect(appSource("playground.tsx")).not.toContain("sk-************************8fA7");
+    const playground = appSource("playground.tsx");
+
+    expect(playground).toContain('placeholder="llmi_************************"');
+    expect(playground).toContain('response.headers.get("x-llmingress-request-id")');
+    expect(playground).not.toContain("sk-************************8fA7");
   });
 
   test("activity strategy labels and limits search stay user-facing", () => {

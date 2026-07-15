@@ -19,9 +19,6 @@ case "$role" in
   migrate)
     exec node /app/migrate/main.mjs "$@"
     ;;
-  init)
-    exec node /app/install/state.mjs "$@"
-    ;;
   version)
     printf '%s\n' "${LLMINGRESS_VERSION:-dev}"
     ;;

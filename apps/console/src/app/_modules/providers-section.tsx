@@ -434,7 +434,9 @@ function ProviderKeyDeleteDialog({
         </a>
         <ConsoleMutationForm
           action="/api/provider-keys"
+          errorPresentation="toast"
           fallbackError="Provider API key deletion failed."
+          successHref={closeHref}
         >
           <input type="hidden" name="action" value="delete" />
           <input type="hidden" name="providerApiKeyId" value={providerApiKeyId} />

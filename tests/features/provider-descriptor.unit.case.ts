@@ -47,7 +47,6 @@ describe("provider descriptors", () => {
       "packages/gateway-runtime/src/gateway-chat-completions.ts",
       "packages/gateway-runtime/src/gateway-messages.ts",
       "packages/gateway-runtime/src/gateway-responses.ts",
-      "packages/gateway-runtime/src/gateway-embeddings.ts",
     ];
     for (const file of files) {
       const source = readFileSync(file, "utf8");

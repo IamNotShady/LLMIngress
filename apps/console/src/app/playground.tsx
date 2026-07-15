@@ -14,6 +14,7 @@ import {
   readOptionalPlaygroundNumber,
   readPlaygroundResponseText,
   readPlaygroundStreamResponseText,
+  retryPlaygroundRequestDetail,
 } from "./playground-helpers";
 
 type PlaygroundProps = {
@@ -230,7 +231,8 @@ export function Playground({ defaultGatewayBaseUrl }: PlaygroundProps) {
         return;
       }
 
-      const responseRequestId = response.headers.get("x-request-id")?.trim() || requestId;
+      const responseRequestId =
+        response.headers.get("x-llmingress-request-id")?.trim() || requestId;
       if (isStreamResponse) {
         const streamResult: PlaygroundResult = {
           detail: null,
@@ -533,17 +535,19 @@ function createPlaygroundRequestId(): string {
 async function fetchPlaygroundRequestDetail(
   requestId: string,
 ): Promise<PlaygroundRequestDetail | null> {
-  const response = await fetch(
-    `/api/playground/result?requestId=${encodeURIComponent(requestId)}`,
-    {
-      cache: "no-store",
-    },
-  ).catch(() => null);
-  if (!response?.ok) {
-    return null;
-  }
-  const body: unknown = await response.json().catch(() => null);
-  return readPlaygroundRequestDetail(body);
+  return retryPlaygroundRequestDetail(async () => {
+    const response = await fetch(
+      `/api/playground/result?requestId=${encodeURIComponent(requestId)}`,
+      {
+        cache: "no-store",
+      },
+    ).catch(() => null);
+    if (!response?.ok) {
+      return null;
+    }
+    const body: unknown = await response.json().catch(() => null);
+    return readPlaygroundRequestDetail(body);
+  });
 }
 
 function formatCost(value: string | null): string {

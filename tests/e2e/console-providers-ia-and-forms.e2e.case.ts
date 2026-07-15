@@ -92,7 +92,24 @@ test("providers page shows one provider representation with a searchable capped 
 
         const libraryRows = page.locator(".model-library-table tbody tr");
         await expect(libraryRows).toHaveCount(50);
-        await expect(page.getByText(`Page 1 of 2 · ${MODEL_COUNT} models`)).toBeVisible();
+        const modelPagination = page.getByRole("navigation", { name: "Model pages" });
+        await expect(modelPagination).toHaveClass(/list-pagination/);
+        await expect(modelPagination.locator(".list-pagination-summary strong")).toHaveText(
+          "Page 1 of 2",
+        );
+        await expect(modelPagination.locator(".list-pagination-range")).toHaveText(
+          `${MODEL_COUNT} models`,
+        );
+        await expect(modelPagination.getByRole("button", { name: "Previous page" })).toBeDisabled();
+        await modelPagination.getByRole("link", { name: "Next page" }).click();
+        await expect(page).toHaveURL(`${baseUrl}/providers?modelPage=2`);
+        await expect(libraryRows).toHaveCount(10);
+        await expect(modelPagination.locator(".list-pagination-summary strong")).toHaveText(
+          "Page 2 of 2",
+        );
+        await modelPagination.getByRole("link", { name: "Previous page" }).click();
+        await expect(page).toHaveURL(`${baseUrl}/providers`);
+        await expect(libraryRows).toHaveCount(50);
 
         await page.goto(`${baseUrl}/providers?selected=${providerId}&modelQuery=ia-needle`, {
           waitUntil: "networkidle",

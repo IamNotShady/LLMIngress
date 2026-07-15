@@ -306,6 +306,7 @@ export async function VirtualModelsSection({
   const statusFilter = readSingleSearchParam(searchParams.vmStatus) ?? "";
   const strategyFilter = readSingleSearchParam(searchParams.vmStrategy) ?? "";
   const queryFilter = readSingleSearchParam(searchParams.vmQuery)?.toLowerCase() ?? "";
+  const hasActiveFilters = Boolean(statusFilter || strategyFilter || queryFilter);
   const visibleVirtualModels = virtualModels.filter((virtualModel) => {
     const policy = routePolicyByVmId.get(virtualModel.id);
     if (statusFilter === "enabled" && !virtualModel.enabled) {
@@ -448,12 +449,16 @@ export async function VirtualModelsSection({
           <div className="chart-card">
             <h2 className="chart-card-title">Virtual Model list</h2>
             {visibleVirtualModels.length === 0 ? (
-              <p>
-                <Link className="empty-state-action" href="/providers?providerDialog=new">
-                  Add a Provider and refresh its models
-                </Link>
-                , then create a Virtual Model from compatible candidates.
-              </p>
+              hasActiveFilters ? (
+                <p>No Virtual Models match the selected filters.</p>
+              ) : (
+                <p>
+                  <Link className="empty-state-action" href="/providers?providerDialog=new">
+                    Add a Provider and refresh its models
+                  </Link>
+                  , then create a Virtual Model from compatible candidates.
+                </p>
+              )
             ) : (
               <div className="data-table-wrap">
                 <table className="data-table bounded-table vm-table">

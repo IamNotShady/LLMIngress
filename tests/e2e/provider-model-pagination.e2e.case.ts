@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { listProviderModelPage } from "@llmingress/db/console-route-policies";
+import { listProviders } from "@llmingress/db/console-providers";
+import {
+  listProviderModelOptions,
+  listProviderModelPage,
+} from "@llmingress/db/console-route-policies";
 import { expect, test } from "@playwright/test";
 import { createTestPostgresFixture, runMigrations } from "../../packages/db/src/index";
 
@@ -61,6 +65,70 @@ test("Provider model catalog is searched and paginated in PostgreSQL", async () 
       "model-123",
       "model-124",
       "model-125",
+    ]);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("Console model catalogs hide only known embedding-only models", async () => {
+  const fixture = await createTestPostgresFixture({
+    databaseNamePrefix: `llmingress_console_model_visibility_${randomUUID().replaceAll("-", "_")}`,
+  });
+  const providerId = randomUUID();
+
+  try {
+    await runMigrations({ databaseUrl: fixture.databaseUrl });
+    await fixture.query(
+      `
+        insert into providers (id, provider_type, provider_key, display_name, base_url, enabled)
+        values ($1, 'api_key', 'openai', 'OpenAI', 'https://api.openai.com/v1', true)
+      `,
+      [providerId],
+    );
+    await fixture.query(
+      `
+        insert into provider_models (
+          id, provider_id, model_id, display_name, output_modalities, availability
+        )
+        values ($1, $5, 'embedding-only', 'Embedding Only', array['embedding']::text[], 'available'),
+               ($2, $5, 'mixed-output', 'Mixed Output', array['text', 'embedding']::text[], 'available'),
+               ($3, $5, 'text-output', 'Text Output', array['text']::text[], 'available'),
+               ($4, $5, 'unknown-output', 'Unknown Output', null, 'available')
+      `,
+      [randomUUID(), randomUUID(), randomUUID(), randomUUID(), providerId],
+    );
+
+    const page = await listProviderModelPage({
+      databaseUrl: fixture.databaseUrl,
+      providerId,
+    });
+    const options = await listProviderModelOptions(fixture.databaseUrl);
+    const provider = (await listProviders(fixture.databaseUrl)).find(
+      (candidate) => candidate.id === providerId,
+    );
+
+    expect(page.items.map((model) => model.modelId)).toEqual([
+      "mixed-output",
+      "text-output",
+      "unknown-output",
+    ]);
+    expect(page.total).toBe(3);
+    expect(options.map((model) => model.modelId)).toEqual([
+      "mixed-output",
+      "text-output",
+      "unknown-output",
+    ]);
+    expect(provider?.providerModelCount).toBe(3);
+
+    const storedModels = await fixture.query<{ model_id: string }>(
+      "select model_id from provider_models order by model_id",
+    );
+    expect(storedModels.rows.map((model) => model.model_id)).toEqual([
+      "embedding-only",
+      "mixed-output",
+      "text-output",
+      "unknown-output",
     ]);
   } finally {
     await fixture.dispose();

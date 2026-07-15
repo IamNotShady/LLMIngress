@@ -13,8 +13,6 @@ test("Docker Compose starts PostgreSQL 18.4", async () => {
   const composeArgs = ["compose", "-p", projectName, "-f", "docker-compose.yml"];
   const env = {
     ...process.env,
-    MASTER_KEY: "m".repeat(32),
-    POSTGRES_PASSWORD: "p".repeat(32),
     POSTGRES_PORT: String(await getFreePort()),
   };
 
@@ -86,8 +84,6 @@ test("release verification runner and docker compose contracts stay runnable", a
 
   const composeEnv = {
     ...process.env,
-    MASTER_KEY: "m".repeat(32),
-    POSTGRES_PASSWORD: "p".repeat(32),
   };
   const services = await execFileAsync(
     "docker",

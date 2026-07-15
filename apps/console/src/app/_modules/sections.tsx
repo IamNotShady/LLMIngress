@@ -72,9 +72,6 @@ export function formatRouteEndpointProtocolLabel(protocol: string): string {
   if (protocol === "messages") {
     return "Messages";
   }
-  if (protocol === "embeddings") {
-    return "Embeddings";
-  }
   return "Unspecified";
 }
 

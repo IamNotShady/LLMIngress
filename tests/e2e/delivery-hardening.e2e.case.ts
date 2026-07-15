@@ -77,7 +77,7 @@ test("Playground omits blank optional numeric parameters from Gateway requests",
     await runMigrations({ databaseUrl: fixture.databaseUrl });
     const consoleApp = startConsoleProcess({
       databaseUrl: fixture.databaseUrl,
-      env: { GATEWAY_PUBLIC_BASE_URL: "http://gateway.test" },
+      env: { GATEWAY_URL: "http://gateway.test" },
       port: await getFreePort(),
     });
     try {

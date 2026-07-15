@@ -233,25 +233,31 @@ Right column — **orbital ecosystem** (inline SVG, 560×520, frameless so it
 floats directly over the pixel star field; the space theme is deliberate):
 
 - Three concentric rings around center: a faint dashed outermost ring
-  (r 240, depth only), the agent ring (r 180), and the provider ring
-  (r 106). Hairline `--line-soft` strokes.
-- 5 agent chips orbit the outer ring clockwise (110s/rev); 5 provider chips
-  orbit the inner ring counter-clockwise (80s/rev). Each chip
-  counter-rotates at the same rate so its mono label stays upright while
-  its position orbits (SMIL `animateTransform`, nested placement →
+  (r 248, depth only), the agent ring (r 208), and the provider ring
+  (r 132). Hairline `--line-soft` strokes.
+- 5 agent chips orbit the outer ring clockwise (110s/rev); 5 provider
+  logo badges orbit the inner ring counter-clockwise (80s/rev). Each
+  satellite counter-rotates at the same rate so its content stays upright
+  while its position orbits (SMIL `animateTransform`, nested placement →
   unrotate → counter-spin groups). A few 2–2.5px violet dots ride the
   rings as sparks.
 - Initial phases are chosen so the load-time view has no chip crossings;
-  mid-cycle pass-overs are brief and occlude cleanly (solid chip fills,
-  inner ring drawn above outer).
-- Chips: rounded mono pills on `--surface`; `claude-code` and `anthropic`
-  carry the violet hot stroke. No per-chip badges or sub-labels (the
-  local/$0 story belongs to the compatibility section, §4.5).
-- Center: gateway core — rounded square echoing the brand icon (dark
-  panel, violet inner slot, drop-shadow glow), labeled `LLMIngress` in
-  mono below. No counters or invented stats in the center (the reference
-  pattern's "20k+ specialists" style number is fabricated marketing data —
-  deliberately not copied).
+  mid-cycle pass-overs are brief and occlude cleanly (solid fills, inner
+  ring drawn above outer).
+- Agents: rounded mono text pills on `--surface`; `claude-code` carries
+  the violet hot stroke.
+- Providers: **circular logo badges** (r 22, `--surface`, hairline) holding
+  the official brand marks as inline 24×24 paths — OpenAI, Anthropic,
+  Google, OpenRouter, Ollama — tinted `--text-2` (single-color, no brand
+  colors, keeping the mono idiom); `anthropic` gets the violet hot stroke
+  and `--text` glyph. Paths vendored from the `simple-icons` set at build
+  time; nominative use to indicate interoperability.
+- Center: gateway core — an 80px rounded square echoing the brand icon
+  (dark panel, violet inner slot, drop-shadow glow), labeled `LLMIngress`
+  in mono below; kept deliberately smaller than the rings so the
+  ecosystem, not the logo, dominates. No counters or invented stats in
+  the center (the reference pattern's "20k+ specialists" style number is
+  fabricated marketing data — deliberately not copied).
 - The diagram carries no explanatory text beyond chip names and the core
   label — routing detail and the fallback/429 story live in the Console
   showcase (§4.6).

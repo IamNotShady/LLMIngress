@@ -16,7 +16,7 @@
       "verification": "pnpm exec vitest run tests/features/provider-management.unit.test.ts tests/features/provider-model-sync.unit.test.ts tests/features/provider-connection-health.unit.test.ts && pnpm test:e2e tests/e2e/provider-management.e2e.spec.ts tests/e2e/provider-model-sync.e2e.spec.ts tests/e2e/provider-connection-health.e2e.spec.ts --workers=1",
       "dependencies": ["core-platform-security"],
       "status": "passing",
-      "evidence": "2026-07-15: known embedding-only models remain stored but are hidden from Console catalogs, route candidates, and visible Provider counts; mixed text/embedding and unknown-output models remain visible. Focused unit, Provider model sync E2E, verify, and feature regression passed."
+      "evidence": "2026-07-15: API key save/enable and OAuth complete/enable now enqueue model_refresh (source api_key_saved/oauth_ready, trigger system) alongside connection probes; enqueueProviderModelRefreshJob accepts source/trigger. Focused unit + provider-connection-health E2E (incl. credential auto-refresh cases), pnpm run verify, and verify:features (9/9) passed."
     },
     {
       "id": "virtual-model-routing",

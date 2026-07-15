@@ -4,7 +4,10 @@ import {
   saveProviderApiKey,
   setProviderApiKeyEnabled,
 } from "@llmingress/db/console-provider-keys";
-import { enqueueProviderConnectionProbeJob } from "@llmingress/db/provider-jobs";
+import {
+  enqueueProviderConnectionProbeJob,
+  enqueueProviderModelRefreshJob,
+} from "@llmingress/db/provider-jobs";
 import { NextResponse } from "next/server";
 import { withConsoleAuth } from "../_auth";
 import { consoleActionErrorResponse } from "../_errors";
@@ -33,6 +36,11 @@ export const POST = withConsoleAuth(async (request) => {
           resetHealth: true,
           source: "api_key_saved",
         });
+        await enqueueProviderModelRefreshJob({
+          providerId: result.providerId,
+          source: "api_key_saved",
+          trigger: "system",
+        });
       }
       return providerApiKeyMutationResponse(request, result.providerId);
     }
@@ -52,6 +60,11 @@ export const POST = withConsoleAuth(async (request) => {
       providerId,
       resetHealth: true,
       source: "api_key_saved",
+    });
+    await enqueueProviderModelRefreshJob({
+      providerId,
+      source: "api_key_saved",
+      trigger: "system",
     });
 
     if (request.headers.get("accept")?.includes("application/json")) {

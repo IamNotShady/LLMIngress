@@ -17,6 +17,8 @@ export type ProviderConnectionProbeSource =
   | "provider_enabled"
   | "scheduled_probe";
 
+export type ProviderModelRefreshSource = "api_key_saved" | "manual_refresh" | "oauth_ready";
+
 export type ProviderConnectionProbeJobPayload = {
   providerConnectionId: string;
   providerId: string;
@@ -53,8 +55,12 @@ export function buildProviderConnectionProbeJobPayload(input: {
 export async function enqueueProviderModelRefreshJob(input: {
   databaseUrl?: string;
   providerId: string;
+  source?: ProviderModelRefreshSource;
+  trigger?: "manual" | "system";
 }): Promise<{ id: string; providerId: string; status: "pending" }> {
   const providerId = requireId(input.providerId, "Provider id");
+  const source = input.source ?? "manual_refresh";
+  const trigger = input.trigger ?? "manual";
   return withPostgresTransaction(input.databaseUrl, async (client) => {
     const provider = await readProviderForUpdate(client, providerId);
     if (!provider.enabled) {
@@ -92,9 +98,9 @@ export async function enqueueProviderModelRefreshJob(input: {
       await client.query(
         `
           insert into jobs (id, job_type, status, trigger, payload, max_attempts)
-          values ($1, 'model_refresh', 'pending', 'manual', $2::jsonb, 3)
+          values ($1, 'model_refresh', 'pending', $2, $3::jsonb, 3)
         `,
-        [jobId, JSON.stringify({ providerId, source: "manual_refresh" })],
+        [jobId, trigger, JSON.stringify({ providerId, source })],
       );
     }
     await notifyJobCreated(client, jobId);

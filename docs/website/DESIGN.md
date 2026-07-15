@@ -249,7 +249,7 @@ boxes, no icons.
 
 | # | Code | Title | Copy | Spec line |
 | --- | --- | --- | --- | --- |
-| 01 | `ONE_ENDPOINT` | Unified ingress | OpenAI- and Anthropic-compatible APIs from one port. Chat, responses, messages, embeddings — every agent speaks to the same door, each with its own scoped key. | `spec: /v1/chat/completions · /v1/messages · /v1/responses · /v1/embeddings` |
+| 01 | `ONE_ENDPOINT` | Unified ingress | OpenAI- and Anthropic-compatible APIs from one port. Chat, responses, messages, and model discovery — every agent speaks to the same door, each with its own scoped key. | `spec: /v1/chat/completions · /v1/messages · /v1/responses · /v1/models` |
 | 02 | `VIRTUAL_MODELS` | Routing that reads the request | Agents ask for `code-fast`. A deterministic rule engine resolves the real model from task type, context length, and tool use. Same request, same route — no LLM judge in the loop. | `spec: p95 routing overhead < 100 ms` |
 | 03 | `FALLBACK_CHAIN` | Failure is a routing event | 429s, 5xx, timeouts — the request moves to the next model in the chain, up to five deep, across providers and local models. Your agent never sees the outage. | `spec: triggers before first streamed chunk` |
 | 04 | `COST_LEDGER` | Every token accounted | Tokens, cost, and latency per agent, per virtual model, per provider — plus savings measured against a fixed baseline model. | `spec: cache + reasoning tokens tracked separately` |
@@ -366,25 +366,28 @@ Data is fabricated but internally consistent (prices ≈ real per-1M rates).
 ### 4.7 Deploy
 
 Eyebrow `04 — DEPLOY`. H2: **Runs where you work.** Copy-able command block
-(mono, copy button) centered:
+(mono, copy button) centered. Compose ships local-only default keys, so the
+quick start is clone-and-run with no secret exports:
 
 ```bash
-export MASTER_KEY=$(openssl rand -base64 32)
-export POSTGRES_PASSWORD=$(openssl rand -base64 32)
-export CONSOLE_SETUP_TOKEN=$(openssl rand -base64 32)
+git clone https://github.com/IamNotShady/LLMIngress.git
+cd LLMIngress
 docker compose up --build
 ```
 
-Caption: `Gateway :4000 · Console :3000 · bound to 127.0.0.1 by default`.
+Caption: `Gateway :4000 · Console :3000 · Postgres :55432 · bound to
+127.0.0.1 by default`.
 
 Below, three shape cards (equal row, stacks ≤768px) — title + 2 lines:
 
-- **Docker Compose** — recommended. Postgres included, migrations run once,
-  secrets required up front. Nothing listens publicly unless you say so.
+- **Docker Compose** — recommended. Postgres bundled, migrations run on
+  first boot, local-only default keys. Nothing listens publicly until you
+  change a host.
 - **Local Node** — `pnpm install && ./init.sh` against your own Postgres.
   For hacking on it.
-- **Server / VPS** — same compose file; expose Console deliberately, set
-  `CONSOLE_PUBLIC_BASE_URL`, keep the Gateway private.
+- **Server / VPS** — same compose file; set a private `MASTER_KEY`, point
+  `CONSOLE_PUBLISH_HOST` at your network, keep the Gateway and Postgres
+  private.
 
 ### 4.8 FAQ
 

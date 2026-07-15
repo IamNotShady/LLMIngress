@@ -816,9 +816,9 @@ main, .footer { position: relative; z-index: 1; }
         <p class="spec-id"><span class="n">01</span> <span class="code">ONE_ENDPOINT</span></p>
         <h3>Unified ingress</h3>
         <p>OpenAI- and Anthropic-compatible APIs from one port. Chat,
-          responses, messages, embeddings — every agent speaks to the same
-          door, each with its own scoped key.</p>
-        <p class="spec-line"><b>spec:</b> /v1/chat/completions · /v1/messages · /v1/responses · /v1/embeddings</p>
+          responses, messages, and model discovery — every agent speaks to
+          the same door, each with its own scoped key.</p>
+        <p class="spec-line"><b>spec:</b> /v1/chat/completions · /v1/messages · /v1/responses · /v1/models</p>
       </article>
       <article class="spec">
         <p class="spec-id"><span class="n">02</span> <span class="code">VIRTUAL_MODELS</span></p>
@@ -1073,21 +1073,19 @@ claude   <span class="c"># model: code-fast (virtual)</span></pre>
 
     <div class="deploy-cmd">
       <button class="copy-btn" data-copy-target="deploy-pre">copy</button>
-      <pre id="deploy-pre"><span class="c"># secrets are required — no public defaults</span>
-export <span class="k">MASTER_KEY</span>=$(openssl rand -base64 32)
-export <span class="k">POSTGRES_PASSWORD</span>=$(openssl rand -base64 32)
-export <span class="k">CONSOLE_SETUP_TOKEN</span>=$(openssl rand -base64 32)
-
+      <pre id="deploy-pre"><span class="c"># clone and run — local defaults, no secrets to set</span>
+git clone https://github.com/IamNotShady/LLMIngress.git
+cd LLMIngress
 docker compose up --build</pre>
     </div>
-    <p class="deploy-cap">Gateway :4000 · Console :3000 · bound to 127.0.0.1 by default</p>
+    <p class="deploy-cap">Gateway :4000 · Console :3000 · Postgres :55432 · bound to 127.0.0.1 by default</p>
 
     <div class="shapes">
       <div class="shape">
         <span class="tag">RECOMMENDED</span>
         <h3>Docker Compose</h3>
-        <p>Postgres included, migrations run once, secrets required up
-          front. Nothing listens publicly unless you say so.</p>
+        <p>Postgres bundled, migrations run on first boot, local-only
+          default keys. Nothing listens publicly until you change a host.</p>
       </div>
       <div class="shape">
         <span class="tag">FOR HACKING</span>
@@ -1098,8 +1096,9 @@ docker compose up --build</pre>
       <div class="shape">
         <span class="tag">ALWAYS ON</span>
         <h3>Server / VPS</h3>
-        <p>Same compose file. Expose the Console deliberately, set
-          <code>CONSOLE_PUBLIC_BASE_URL</code>, keep the Gateway private.</p>
+        <p>Same compose file. Set a private <code>MASTER_KEY</code>, point
+          <code>CONSOLE_PUBLISH_HOST</code> at your network, keep the Gateway
+          and Postgres private.</p>
       </div>
     </div>
   </div>

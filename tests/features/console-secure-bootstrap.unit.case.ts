@@ -11,9 +11,7 @@ describe("console secure bootstrap", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
     const shell = "$";
 
-    expect(compose).toContain(
-      `${shell}{MASTER_KEY:-llmi-local-master}`,
-    );
+    expect(compose).toContain(`${shell}{MASTER_KEY:-llmi-local-master}`);
     expect(compose).toContain(
       `${shell}{DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
     );

@@ -273,7 +273,7 @@ number badges vertically to express sequence):
    `llmi_` key, and a budget. Done — every request now routes, falls back, and
    gets metered.
 
-Code panel: tab bar (mono, 3 tabs) — `Claude Code`, `Codex`, `curl`.
+Code panel: tab bar (mono, 3 tabs) — `Claude`, `Codex`, `Curl`.
 Realistic snippets:
 
 ```bash

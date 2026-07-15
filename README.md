@@ -113,7 +113,6 @@ Agents use the same API key and Virtual Model grants across all supported protoc
 | OpenAI Chat Completions | `POST /v1/chat/completions` |
 | OpenAI Responses | `POST /v1/responses` |
 | Anthropic Messages | `POST /v1/messages` |
-| OpenAI Embeddings | `POST /v1/embeddings` |
 | Virtual Model discovery | `GET /v1/models` |
 
 Provider payloads remain protocol-native. LLMIngress replaces the Virtual Model name with the

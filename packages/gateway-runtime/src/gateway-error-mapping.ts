@@ -7,7 +7,6 @@ const gatewayErrorStatusByCode: Record<GatewayErrorCode, number> = {
   disabled_agent_api_key: 401,
   invalid_agent_api_key: 401,
   invalid_chat_request: 400,
-  invalid_embeddings_request: 400,
   invalid_messages_request: 400,
   invalid_responses_request: 400,
   missing_agent_api_key: 401,

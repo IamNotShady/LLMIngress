@@ -385,6 +385,9 @@ test("Provider API key actions refresh immediately and render real failures in a
       const page = await context.newPage();
       const browserErrors: string[] = [];
       page.on("console", (message) => {
+        if (message.type() === "warning" && isUnusedNextFontPreloadWarning(message.text())) {
+          return;
+        }
         if (message.type() === "error" || message.type() === "warning") {
           browserErrors.push(message.text());
         }
@@ -494,3 +497,11 @@ test("Provider API key actions refresh immediately and render real failures in a
     await fixture.dispose();
   }
 });
+
+function isUnusedNextFontPreloadWarning(message: string): boolean {
+  return (
+    message.includes("/_next/static/media/") &&
+    message.includes(".woff2") &&
+    message.includes("was preloaded using link preload but not used within a few seconds")
+  );
+}

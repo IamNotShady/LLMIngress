@@ -38,7 +38,7 @@ Each Gateway request uses one immutable configuration snapshot. Reload validates
 before atomically swapping it; failure retains the last-known-good snapshot. PostgreSQL
 `LISTEN/NOTIFY` wakes reloads, while periodic reconcile covers missed notifications.
 
-Chat Completions, Responses, Messages, and Embeddings keep their native Provider contracts.
+Chat Completions, Responses, and Messages keep their native Provider contracts.
 Gateway strips browser transport headers before Provider dispatch and never repairs rejected
 payload fields. A streaming attempt succeeds only after first-byte read-ahead; failures after a
 client byte are not replayed.

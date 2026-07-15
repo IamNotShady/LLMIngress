@@ -92,7 +92,7 @@ export type ConsoleActivityDetail = {
   responseMetadata: unknown;
 };
 
-type ConsoleActivityProtocol = "chat_completions" | "embeddings" | "messages" | "responses";
+type ConsoleActivityProtocol = "chat_completions" | "messages" | "responses";
 type ConsoleActivityStatus = "canceled" | "failed" | "started" | "succeeded";
 
 type ActivityRow = {
@@ -160,7 +160,6 @@ const activityStatuses = new Set<ConsoleActivityStatus>([
 ]);
 const activityProtocols = new Set<ConsoleActivityProtocol>([
   "chat_completions",
-  "embeddings",
   "messages",
   "responses",
 ]);

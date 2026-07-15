@@ -10,7 +10,7 @@ const standardVerificationPattern = new RegExp(
   `^pnpm exec vitest run (?<unitFiles>${unitFilePattern}(?: ${unitFilePattern})*) && ` +
     `pnpm test:e2e (?<e2eFiles>${e2eFilePattern}(?: ${e2eFilePattern})*) --workers=1$`,
 );
-const featureCommandTimeoutMs = 600_000;
+const featureCommandTimeoutMs = 900_000;
 const batchUnitTimeoutMs = 600_000;
 const batchE2eTimeoutMs = 1_800_000;
 

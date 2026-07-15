@@ -22,12 +22,7 @@ export type ProviderTemplateId =
   | SubscriptionProviderTemplateId
   | LocalProviderTemplateId;
 export type ProviderTemplateSelectorGroupId = "local" | "remote_api_key" | "subscription";
-export type ProviderEndpointProtocol =
-  | "chat_completions"
-  | "embeddings"
-  | "messages"
-  | "models"
-  | "responses";
+export type ProviderEndpointProtocol = "chat_completions" | "messages" | "models" | "responses";
 export type ProviderEndpoint = {
   method: "GET" | "POST";
   path: string;
@@ -125,10 +120,6 @@ const chatCompletionsEndpoint: ProviderEndpoint = {
   method: "POST",
   path: "chat/completions",
 };
-const embeddingsEndpoint: ProviderEndpoint = {
-  method: "POST",
-  path: "embeddings",
-};
 const messagesEndpoint: ProviderEndpoint = {
   method: "POST",
   path: "messages",
@@ -146,17 +137,12 @@ const openAICompatibleEndpoints: ProviderEndpoints = {
   chat_completions: chatCompletionsEndpoint,
   models: modelsEndpoint,
 };
-const openAICompatibleWithEmbeddingsEndpoints: ProviderEndpoints = {
-  ...openAICompatibleEndpoints,
-  embeddings: embeddingsEndpoint,
-};
 const openAICompatibleWithResponsesEndpoints: ProviderEndpoints = {
   ...openAICompatibleEndpoints,
   responses: responsesEndpoint,
 };
 const fullTextProviderEndpoints: ProviderEndpoints = {
   ...openAICompatibleEndpoints,
-  embeddings: embeddingsEndpoint,
   messages: messagesEndpoint,
   responses: responsesEndpoint,
 };
@@ -186,7 +172,7 @@ const providerTemplates: Record<ProviderTemplateId, ProviderInfo> = {
     auth: remoteTemplateAuth,
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     displayName: "Google Gemini",
-    endpoints: openAICompatibleWithEmbeddingsEndpoints,
+    endpoints: openAICompatibleEndpoints,
     providerKey: "google",
     providerType: "api_key",
   },

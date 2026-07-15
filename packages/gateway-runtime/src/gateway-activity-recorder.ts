@@ -9,11 +9,7 @@ import {
   insertGatewayUsageAndCost,
 } from "./gateway-usage-recorder.ts";
 
-export type GatewayRequestActivityProtocol =
-  | "chat_completions"
-  | "embeddings"
-  | "messages"
-  | "responses";
+export type GatewayRequestActivityProtocol = "chat_completions" | "messages" | "responses";
 
 export type GatewayRequestActivityRoute = {
   fallbackAttempts?: unknown[];

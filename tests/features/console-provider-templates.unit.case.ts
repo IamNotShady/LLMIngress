@@ -7,7 +7,6 @@ import {
 } from "../../packages/db/src/console-provider-templates";
 
 const chatEndpoint = { method: "POST", path: "chat/completions" };
-const embeddingsEndpoint = { method: "POST", path: "embeddings" };
 const messagesEndpoint = { method: "POST", path: "messages" };
 const modelsEndpoint = { method: "GET", path: "models" };
 const responsesEndpoint = { method: "POST", path: "responses" };
@@ -41,7 +40,6 @@ describe("console provider template registry", () => {
       displayName: "Google Gemini",
       endpoints: {
         chat_completions: chatEndpoint,
-        embeddings: embeddingsEndpoint,
         models: modelsEndpoint,
       },
       fixedBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -58,7 +56,6 @@ describe("console provider template registry", () => {
       baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
       endpoints: {
         chat_completions: chatEndpoint,
-        embeddings: embeddingsEndpoint,
         messages: messagesEndpoint,
         models: modelsEndpoint,
         responses: responsesEndpoint,
@@ -155,7 +152,6 @@ describe("console provider template registry", () => {
   it("records provider-documented endpoint subsets for routed template providers", () => {
     expect(readTemplate("remote_api_key", "openrouter").endpoints).toEqual({
       chat_completions: chatEndpoint,
-      embeddings: embeddingsEndpoint,
       messages: messagesEndpoint,
       models: modelsEndpoint,
       responses: responsesEndpoint,
@@ -170,7 +166,6 @@ describe("console provider template registry", () => {
     });
     expect(readTemplate("local", "lmstudio").endpoints).toEqual({
       chat_completions: chatEndpoint,
-      embeddings: embeddingsEndpoint,
       messages: messagesEndpoint,
       models: modelsEndpoint,
       responses: responsesEndpoint,

@@ -289,26 +289,39 @@ main, .footer { position: relative; z-index: 1; }
 .rise-5 { animation-delay: 280ms; } .rise-6 { animation-delay: 360ms; }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
-/* topology diagram */
-.topo-frame {
-  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
-  background: var(--bg-raised);
-  padding: clamp(10px, 1.6vw, 18px);
+/* orbital ecosystem — agents and providers circle the gateway core */
+.orbital svg { display: block; width: 100%; height: auto; }
+.oring { fill: none; stroke: var(--line-soft); stroke-width: 1; }
+.oring.faint { stroke-dasharray: 2 7; opacity: 0.55; }
+.ochip { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.ochip.hot { fill: oklch(0.23 0.03 292); stroke: oklch(0.5 0.16 292 / 0.85); }
+.olabel { fill: var(--text-2); font-family: var(--f-mono); font-size: 12.5px; }
+.olabel.hot { fill: var(--text); }
+.odot { fill: var(--accent-bright); opacity: 0.55; }
+.orbital .core-panel { fill: oklch(0.19 0.018 292); stroke: oklch(0.5 0.16 292 / 0.85); stroke-width: 1.5; }
+.orbital .core-inner { fill: none; stroke: var(--line); stroke-width: 1; opacity: 0.5; }
+.orbital .core-slot { fill: var(--accent); }
+.orbital .core-socket { fill: oklch(0.32 0.06 292); }
+.orbital .core-quiet { fill: var(--surface-2); }
+.orbital .core-label { fill: var(--text); font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
+.orbital .core-glow { filter: drop-shadow(0 0 26px oklch(0.63 0.19 292 / 0.5)); }
+
+/* typewriter headline */
+.type-h1 { position: relative; }
+.type-h1 .type-ghost { visibility: hidden; }
+.type-h1 .type-live { position: absolute; inset: 0; }
+.type-h1 .hl { color: var(--accent-bright); }
+.type-caret {
+  display: inline-block; width: 0.06em; height: 0.74em; margin-left: 0.05em;
+  background: var(--accent-bright);
+  animation: caretblink 1.1s steps(1) infinite;
 }
-.topo-frame svg { display: block; width: 100%; height: auto; }
-.topo .chip { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
-.topo .chip-label { fill: var(--text-2); font-family: var(--f-mono); font-size: 12.5px; }
-.topo .rail-label { fill: var(--text-3); font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.16em; }
-.topo .path { fill: none; stroke: var(--line); stroke-width: 1.25; }
-.topo .path-hot { fill: none; stroke: var(--accent-deep); stroke-width: 1.8; }
-.topo .core-panel { fill: oklch(0.19 0.018 292); stroke: oklch(0.5 0.16 292 / 0.85); stroke-width: 1.5; }
-.topo .core-inner { fill: none; stroke: var(--line); stroke-width: 1; opacity: 0.5; }
-.topo .core-slot { fill: var(--accent); }
-.topo .core-socket { fill: oklch(0.32 0.06 292); }
-.topo .core-quiet { fill: var(--surface-2); }
-.topo .core-label { fill: var(--text); font-family: var(--f-mono); font-size: 13px; font-weight: 500; }
-.topo .pulse { fill: var(--accent-bright); }
-.topo-glow { filter: drop-shadow(0 0 22px oklch(0.63 0.19 292 / 0.45)); }
+@keyframes caretblink { 50% { opacity: 0; } }
+
+.sr-only, .sr-live {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
 /* ============ pain strip ============ */
 .pain {
@@ -639,7 +652,7 @@ main, .footer { position: relative; z-index: 1; }
 /* ============ responsive ============ */
 @media (max-width: 1024px) {
   .hero-grid { grid-template-columns: 1fr; }
-  .topo-frame { max-width: 720px; }
+  .orbital { max-width: 560px; margin-inline: auto; }
   .how-grid { grid-template-columns: 1fr; }
   .code-panel { position: static; }
   .console-grid { grid-template-columns: 1fr; }
@@ -675,8 +688,8 @@ main, .footer { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .rise { animation: none; }
-  .topo .pulse, .topo .pulse-warn { display: none; }
   .marquee-track { animation: none; }
+  .type-caret { animation: none; }
   * { transition-duration: 0.01ms !important; }
 }
 </style>
@@ -730,7 +743,7 @@ main, .footer { position: relative; z-index: 1; }
   <div class="wrap hero-grid">
     <div>
       <p class="eyebrow rise rise-1"><b>//</b> SELF-HOSTED AI GATEWAY</p>
-      <h1 id="hero-h" class="rise rise-2">One gateway for every AI&nbsp;agent.</h1>
+      <h1 id="hero-h" class="rise rise-2 type-h1"><span class="type-ghost" aria-hidden="true">One gateway for every AI&nbsp;agent.</span><span class="type-live" aria-hidden="true">One gateway for every <span class="hl">AI&nbsp;agent.</span></span><span class="sr-only">One gateway for every AI agent.</span></h1>
       <p class="lede rise rise-3">LLMIngress sits between your AI agents and your model
         providers. Point Codex, Claude Code, Cursor — or any agent that
         speaks an OpenAI- or Anthropic-compatible API — at a single
@@ -744,93 +757,94 @@ main, .footer { position: relative; z-index: 1; }
       <p class="trust rise rise-5">Apache-2.0 · Single-user · Keys never leave your box</p>
     </div>
 
-    <div class="topo rise rise-6">
-      <div class="topo-frame">
-        <svg viewBox="0 0 660 448" role="img" aria-labelledby="topo-t topo-d">
-          <title id="topo-t">LLMIngress routing topology</title>
-          <desc id="topo-d">Five AI agents connect to one LLMIngress gateway,
-            which routes each request to the right provider — here a Claude
-            Code coding request is routed to Anthropic.</desc>
+    <div class="orbital rise rise-6">
+      <svg viewBox="0 0 560 520" role="img" aria-labelledby="orb-t orb-d">
+        <title id="orb-t">The LLMIngress ecosystem</title>
+        <desc id="orb-d">AI agents and model providers orbit one LLMIngress
+          gateway core — agents on the outer ring, providers on the inner
+          ring.</desc>
 
-          <!-- rail labels -->
-          <text class="rail-label" x="12" y="18">AGENTS</text>
-          <text class="rail-label" x="512" y="18">PROVIDERS</text>
+        <!-- rings -->
+        <circle class="oring faint" cx="280" cy="256" r="240"/>
+        <circle class="oring" cx="280" cy="256" r="180"/>
+        <circle class="oring" cx="280" cy="256" r="106"/>
 
-          <!-- connection paths: agents -> core -->
-          <path class="path"     d="M148 52  C 214 52, 238 205, 276 211"/>
-          <path class="path-hot" d="M148 140 C 214 140, 238 222, 276 224" id="p-in-hot"/>
-          <path class="path"     d="M148 228 C 230 228, 242 235, 276 236"/>
-          <path class="path"     d="M148 316 C 214 316, 238 250, 276 248"/>
-          <path class="path"     d="M148 404 C 222 404, 234 265, 276 260"/>
+        <!-- outer orbit: agents, clockwise -->
+        <g>
+          <animateTransform attributeName="transform" type="rotate"
+            from="0 280 256" to="360 280 256" dur="110s" repeatCount="indefinite"/>
+          <g transform="rotate(0 280 256)"><g transform="translate(280 76)"><g transform="rotate(0)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-34" y="-14" width="68" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">codex</text>
+          </g></g></g></g>
+          <g transform="rotate(72 280 256)"><g transform="translate(280 76)"><g transform="rotate(-72)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="ochip hot" x="-56" y="-14" width="112" height="28" rx="9"/>
+            <text class="olabel hot" y="4.5" text-anchor="middle">claude-code</text>
+          </g></g></g></g>
+          <g transform="rotate(144 280 256)"><g transform="translate(280 76)"><g transform="rotate(-144)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-37" y="-14" width="74" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">cursor</text>
+          </g></g></g></g>
+          <g transform="rotate(216 280 256)"><g transform="translate(280 76)"><g transform="rotate(-216)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-44" y="-14" width="88" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">opencode</text>
+          </g></g></g></g>
+          <g transform="rotate(288 280 256)"><g transform="translate(280 76)"><g transform="rotate(-288)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="110s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-41" y="-14" width="82" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">copilot</text>
+          </g></g></g></g>
+          <g transform="rotate(40 280 256)" aria-hidden="true"><circle class="odot" cx="280" cy="76" r="2.5"/></g>
+          <g transform="rotate(250 280 256)" aria-hidden="true"><circle class="odot" cx="280" cy="76" r="2"/></g>
+        </g>
 
-          <!-- core -> providers -->
-          <path class="path"      d="M384 211 C 422 205, 446 52, 512 52"/>
-          <path class="path-hot"  d="M384 224 C 422 222, 446 140, 512 140" id="p-out-hot"/>
-          <path class="path"      d="M384 236 C 418 235, 430 228, 512 228"/>
-          <path class="path"      d="M384 248 C 422 250, 446 316, 512 316"/>
-          <path class="path"      d="M384 260 C 426 265, 438 404, 512 404"/>
+        <!-- inner orbit: providers, counter-clockwise -->
+        <g>
+          <animateTransform attributeName="transform" type="rotate"
+            from="360 280 256" to="0 280 256" dur="80s" repeatCount="indefinite"/>
+          <g transform="rotate(126 280 256)"><g transform="translate(280 150)"><g transform="rotate(-126)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-37" y="-14" width="74" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">openai</text>
+          </g></g></g></g>
+          <g transform="rotate(198 280 256)"><g transform="translate(280 150)"><g transform="rotate(-198)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <rect class="ochip hot" x="-48" y="-14" width="96" height="28" rx="9"/>
+            <text class="olabel hot" y="4.5" text-anchor="middle">anthropic</text>
+          </g></g></g></g>
+          <g transform="rotate(270 280 256)"><g transform="translate(280 150)"><g transform="rotate(-270)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-37" y="-14" width="74" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">google</text>
+          </g></g></g></g>
+          <g transform="rotate(342 280 256)"><g transform="translate(280 150)"><g transform="rotate(-342)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-52" y="-14" width="104" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">openrouter</text>
+          </g></g></g></g>
+          <g transform="rotate(30 280 256)"><g transform="translate(280 150)"><g transform="rotate(-30)"><g>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="80s" repeatCount="indefinite"/>
+            <rect class="ochip" x="-37" y="-14" width="74" height="28" rx="9"/>
+            <text class="olabel" y="4.5" text-anchor="middle">ollama</text>
+          </g></g></g></g>
+          <g transform="rotate(90 280 256)" aria-hidden="true"><circle class="odot" cx="280" cy="150" r="2"/></g>
+        </g>
 
-          <!-- agent chips -->
-          <g>
-            <rect class="chip" x="8"  y="30"  width="140" height="44" rx="10"/>
-            <text class="chip-label" x="24" y="57">codex</text>
-            <rect class="chip" x="8"  y="118" width="140" height="44" rx="10" stroke="oklch(0.5 0.16 292 / 0.8)"/>
-            <text class="chip-label" x="24" y="145" fill="oklch(0.93 0.008 292)">claude-code</text>
-            <rect class="chip" x="8"  y="206" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="24" y="233">cursor</text>
-            <rect class="chip" x="8"  y="294" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="24" y="321">opencode</text>
-            <rect class="chip" x="8"  y="382" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="24" y="409">copilot</text>
-          </g>
-
-          <!-- provider chips -->
-          <g>
-            <rect class="chip" x="512" y="30"  width="140" height="44" rx="10"/>
-            <text class="chip-label" x="528" y="57">openai</text>
-            <rect class="chip" x="512" y="118" width="140" height="44" rx="10" stroke="oklch(0.5 0.16 292 / 0.8)"/>
-            <text class="chip-label" x="528" y="145" fill="oklch(0.93 0.008 292)">anthropic</text>
-            <rect class="chip" x="512" y="206" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="528" y="233">google</text>
-            <rect class="chip" x="512" y="294" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="528" y="321">openrouter</text>
-            <rect class="chip" x="512" y="382" width="140" height="44" rx="10"/>
-            <text class="chip-label" x="528" y="409">ollama</text>
-          </g>
-
-          <!-- gateway core (echoes brand icon) -->
-          <g class="topo-glow">
-            <rect class="core-panel" x="276" y="181" width="108" height="108" rx="24"/>
-            <rect class="core-inner" x="284" y="189" width="92" height="92" rx="18"/>
-            <!-- active slot + sockets, from the brand icon -->
-            <rect class="core-slot" x="296" y="226" width="28" height="22" rx="7"/>
-            <rect class="core-socket" x="328" y="232" width="11" height="10" rx="5"/>
-            <rect class="core-quiet" x="344" y="202" width="20" height="22" rx="7"/>
-            <rect class="core-quiet" x="344" y="246" width="20" height="22" rx="7"/>
-          </g>
-          <text class="core-label" x="330" y="314" text-anchor="middle">LLMIngress</text>
-
-          <!-- traveling pulses (hidden when reduced motion) -->
-          <g aria-hidden="true">
-            <circle class="pulse" r="2.5">
-              <animateMotion dur="3.2s" repeatCount="indefinite"
-                path="M148 140 C 214 140, 238 222, 276 224"/>
-            </circle>
-            <circle class="pulse" r="2.5">
-              <animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite"
-                path="M384 224 C 422 222, 446 140, 512 140"/>
-            </circle>
-            <circle class="pulse" r="2" opacity="0.7">
-              <animateMotion dur="4.8s" begin="0.8s" repeatCount="indefinite"
-                path="M148 52 C 214 52, 238 205, 276 211"/>
-            </circle>
-            <circle class="pulse" r="2" opacity="0.7">
-              <animateMotion dur="5.4s" begin="2.4s" repeatCount="indefinite"
-                path="M148 316 C 214 316, 238 250, 276 248"/>
-            </circle>
-          </g>
-        </svg>
-      </div>
+        <!-- gateway core (echoes brand icon) -->
+        <g class="core-glow">
+          <rect class="core-panel" x="228" y="204" width="104" height="104" rx="24"/>
+          <rect class="core-inner" x="236" y="212" width="88" height="88" rx="18"/>
+          <rect class="core-slot" x="247" y="247" width="27" height="21" rx="7"/>
+          <rect class="core-socket" x="278" y="253" width="11" height="10" rx="5"/>
+          <rect class="core-quiet" x="294" y="224" width="19" height="21" rx="7"/>
+          <rect class="core-quiet" x="294" y="267" width="19" height="21" rx="7"/>
+        </g>
+        <text class="core-label" x="280" y="332" text-anchor="middle">LLMIngress</text>
+      </svg>
     </div>
 
     <div class="hero-marquee rise rise-6" aria-label="Works with your existing agents and providers">
@@ -1343,6 +1357,44 @@ document.addEventListener('click', function (e) {
     if (!menu.contains(e.target)) menu.removeAttribute('open');
   });
 });
+
+/* typewriter headline — types the H1 with a violet tail, honors reduced
+   motion (full text stays as-is); a ghost span holds the layout steady */
+(function () {
+  var live = document.querySelector('.type-live');
+  if (!live) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var head = 'One gateway for every ';
+  var tail = 'AI agent.';
+  var hl = document.createElement('span'); hl.className = 'hl';
+  var caret = document.createElement('span'); caret.className = 'type-caret';
+  var i = 0, total = head.length + tail.length;
+  live.textContent = '';
+  live.append(caret);
+  function step() {
+    i++;
+    if (i <= head.length) {
+      live.textContent = head.slice(0, i);
+    } else {
+      live.textContent = head;
+      hl.textContent = tail.slice(0, i - head.length);
+      live.append(hl);
+    }
+    live.append(caret);
+    if (i < total) {
+      setTimeout(step, 42 + Math.random() * 36);
+    } else {
+      setTimeout(function () { caret.remove(); }, 1800);
+    }
+  }
+  setTimeout(step, 550);
+})();
+
+/* pause the orbital SVG under reduced motion (SMIL has no CSS hook) */
+if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  var orbSvg = document.querySelector('.orbital svg');
+  if (orbSvg && orbSvg.pauseAnimations) orbSvg.pauseAnimations();
+}
 
 /* live GitHub star count in the nav (1h localStorage cache; chip stays
    hidden if the API is unreachable or rate-limited) */

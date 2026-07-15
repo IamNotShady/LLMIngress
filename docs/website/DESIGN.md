@@ -18,10 +18,11 @@ open directly in a browser). Single-page landing site, English copy, desktop
 - Primary conversion: `docker compose up` command copy + GitHub link.
   There is no signup, no pricing, no email capture. The page sells a repo.
 
-Narrative chosen with the product owner: **gateway topology**. The hero draws
-the product concept (agents → gateway core → providers) instead of describing
-it, and the hero diagram shows a live fallback (`429` reroute) because
-reliability is the emotional hook for the target user.
+Narrative chosen with the product owner: **the ecosystem orbits one
+gateway**. The hero draws the product concept instead of describing it —
+agent and provider chips slowly orbit the LLMIngress core on concentric
+rings (see §4.1), while the H1 types itself out. The fallback/reliability
+story lives in the Console showcase (§4.6).
 
 ## 2. Brand Voice And Aesthetic Direction
 
@@ -124,8 +125,9 @@ Wrapping: `h2`/`h3` use `text-wrap: balance`, body copy uses
 
 - Entrance: hero children stagger in (60ms steps), `translateY(12px)` +
   opacity, 600ms `cubic-bezier(0.22, 1, 0.36, 1)` (ease-out-quint).
-- Topology: 2px light dots travel agent→core→provider paths via SVG
-  `animateMotion` (staggered loops). Purely narrative, not decorative.
+- Orbital hero: two counter-rotating chip rings (110s outer / 80s inner,
+  SMIL) with per-chip counter-spin keeping labels upright; paused under
+  reduced motion via `pauseAnimations()`. Typewriter H1 per §4.1.
 - Hover: buttons/links 150ms; transform/opacity only, no layout animation.
   The primary CTA's arrow-circle nudges its arrow 3px right on hover.
 - Hero `WORKS WITH` marquee: a duplicated mono name row translated 0 → −50%
@@ -151,7 +153,7 @@ Single page, 10 blocks. Anchor nav: Features `#features`, How it works
 
 ```text
 [0] Navbar (sticky)
-[1] Hero + topology diagram
+[1] Hero + orbital ecosystem
 [2] Pain strip (3 error-coded pains)
 [3] Features — numbered spec sheet, 6 entries
 [4] How it works — 3 steps + agent config code tabs
@@ -199,7 +201,14 @@ diagram frame may grow to 720px wide.
 Left column:
 
 - Eyebrow (mono): `SELF-HOSTED AI GATEWAY`
-- H1: **One gateway for every AI agent.**
+- H1: **One gateway for every AI agent.** — typed out character by
+  character on load (~40–80ms/char, starting ~550ms in, under the rise
+  entrance), with the tail `AI agent.` in `--accent-bright` and a blinking
+  violet caret that disappears 1.8s after typing completes. A hidden ghost
+  copy of the full text reserves the H1's final size so nothing reflows
+  while typing. The full text ships in the markup (visible when JS is off)
+  and in an `sr-only` span for assistive tech; under reduced motion the
+  text simply appears complete.
 - Lede (max 58ch): "LLMIngress sits between your AI agents and your model
   providers. Point Codex, Claude Code, Cursor — or any agent that speaks an
   OpenAI- or Anthropic-compatible API — at a single endpoint. It picks the
@@ -220,31 +229,39 @@ Left column:
   Ambient breadth signal, not a substitute for the categorized compatibility
   section (§4.5). Paused under `prefers-reduced-motion`.
 
-Right column — topology diagram (inline SVG, ~660×448). The diagram stays
-inside the centered 1120px content column so the hero reads as balanced:
-the text column's left edge and the diagram frame's right edge sit an equal
-distance from the viewport edges, and the frame's right edge lines up with
-the nav's right edge. Inside the canvas the rails sit 128px from the core
-on each side so paths curve loosely:
+Right column — **orbital ecosystem** (inline SVG, 560×520, frameless so it
+floats directly over the pixel star field; the space theme is deliberate):
 
-- Left rail: 5 agent chips — Codex, Claude Code, Cursor, OpenCode, Copilot
-  (rounded rects, `--surface`, mono labels).
-- Center: gateway core — rounded square echoing the brand icon (dark panel,
-  violet inner slot, `--glow`), labeled `LLMIngress` in mono.
-- Right rail: 5 provider chips — OpenAI, Anthropic, Google, OpenRouter,
-  Ollama. All chips share one style; no per-chip badges or sub-labels
-  (the local/$0 story belongs to the compatibility section, §4.5).
-- Curved paths agent→core (violet-deep, 1.5px) and core→provider.
-- Story beat drawn into the diagram: the `Claude Code → core → Anthropic`
-  route is highlighted. The diagram carries no explanatory text beyond chip
-  names and the core label — routing detail and the fallback/429 story are
-  told in the Console showcase (§4.6), keeping the hero clean.
-- Traveling dots per §3.4. Diagram framed in `--r-lg` panel with hairline.
+- Three concentric rings around center: a faint dashed outermost ring
+  (r 240, depth only), the agent ring (r 180), and the provider ring
+  (r 106). Hairline `--line-soft` strokes.
+- 5 agent chips orbit the outer ring clockwise (110s/rev); 5 provider chips
+  orbit the inner ring counter-clockwise (80s/rev). Each chip
+  counter-rotates at the same rate so its mono label stays upright while
+  its position orbits (SMIL `animateTransform`, nested placement →
+  unrotate → counter-spin groups). A few 2–2.5px violet dots ride the
+  rings as sparks.
+- Initial phases are chosen so the load-time view has no chip crossings;
+  mid-cycle pass-overs are brief and occlude cleanly (solid chip fills,
+  inner ring drawn above outer).
+- Chips: rounded mono pills on `--surface`; `claude-code` and `anthropic`
+  carry the violet hot stroke. No per-chip badges or sub-labels (the
+  local/$0 story belongs to the compatibility section, §4.5).
+- Center: gateway core — rounded square echoing the brand icon (dark
+  panel, violet inner slot, drop-shadow glow), labeled `LLMIngress` in
+  mono below. No counters or invented stats in the center (the reference
+  pattern's "20k+ specialists" style number is fabricated marketing data —
+  deliberately not copied).
+- The diagram carries no explanatory text beyond chip names and the core
+  label — routing detail and the fallback/429 story live in the Console
+  showcase (§4.6).
 - A faint brand-hue radial (`oklch(0.24 0.055 292 / 0.4)`, 70% falloff) sits
   behind the diagram side of the hero — the only background wash on the page,
   echoing the icon's radial canvas.
-- Mobile: SVG scales to container width (`max-width: 100%; height: auto`),
-  min legible width 340px content.
+- Mobile: SVG scales to container width; when the hero stacks the orbital
+  centers itself at max-width 560px.
+- Reduced motion: the orbits pause via `svg.pauseAnimations()` (SMIL has no
+  CSS hook); the static composition remains fully legible.
 
 ### 4.2 Pain Strip
 
@@ -467,8 +484,10 @@ never reads as an empty list. Five items:
 
 - Semantic landmarks: `header / nav / main / section[aria-labelledby] /
   footer`. One `h1`; sections use `h2` → `h3` in order.
-- Topology SVG: `role="img"` + `<title>/<desc>` describing the routing story;
-  decorative dots `aria-hidden`.
+- Orbital SVG: `role="img"` + `<title>/<desc>` describing the orbiting
+  ecosystem; decorative spark dots `aria-hidden`.
+- Typewriter H1: the animated spans are `aria-hidden`; an `sr-only` span
+  carries the full headline so assistive tech never hears partial text.
 - Keyboard: skip-link, visible `:focus-visible` rings (2px `--accent-bright`
   offset 2px), FAQ is native disclosure. Code tabs follow the ARIA tabs
   pattern: `button` + `aria-selected`, roving tabindex, Arrow-key switching.
@@ -484,7 +503,7 @@ never reads as an empty list. Five items:
 ## 7. Production Notes (Beyond Prototype)
 
 - Self-host fonts (woff2 subsets); add `size-adjust` fallback metrics.
-- Extract the topology SVG into a component if the site moves to a framework;
+- Extract the orbital SVG into a component if the site moves to a framework;
   the prototype keeps everything inline by design.
 - OG image: reuse the hero diagram composition on `--bg` at 1200×630.
 - Favicon: `docs/brand/llmingress-icon.svg`.

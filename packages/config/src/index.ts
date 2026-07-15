@@ -54,10 +54,7 @@ export type BootstrapRuntimeConfig = {
   consolePort: number;
   workerHeartbeatMs: number;
   masterKeySource: MasterKeySource;
-  securityWarnings: string[];
 };
-
-const insecurePublicDefaultMasterKey = "test-master-key-change-me";
 
 export function loadBootstrapRuntimeConfig(
   options: LoadBootstrapRuntimeConfigOptions = {},
@@ -77,7 +74,6 @@ export function loadBootstrapRuntimeConfig(
       30_000,
     ),
     masterKeySource,
-    securityWarnings: readBootstrapSecurityWarnings(env, masterKeySource),
   };
 }
 
@@ -149,7 +145,6 @@ function readMasterKeySource(
 ): MasterKeySource {
   const inlineKey = env.MASTER_KEY ?? fileConfig.masterKey;
   if (inlineKey?.trim()) {
-    assertMasterKeySafeForRuntime(env, inlineKey);
     return { kind: "inline", value: inlineKey };
   }
 
@@ -159,35 +154,6 @@ function readMasterKeySource(
   }
 
   throw new Error("MASTER_KEY or MASTER_KEY_FILE is required.");
-}
-
-function assertMasterKeySafeForRuntime(env: BootstrapEnvironment, inlineKey: string): void {
-  if (env.NODE_ENV !== "production" || inlineKey !== insecurePublicDefaultMasterKey) {
-    return;
-  }
-  if (env.LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY === "true") {
-    return;
-  }
-  throw new Error(
-    "Production startup refused the public default MASTER_KEY. Generate a URL-safe random MASTER_KEY or set LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY=true temporarily to acknowledge the risk.",
-  );
-}
-
-function readBootstrapSecurityWarnings(
-  env: BootstrapEnvironment,
-  masterKeySource: MasterKeySource,
-): string[] {
-  if (
-    env.NODE_ENV === "production" &&
-    masterKeySource.kind === "inline" &&
-    masterKeySource.value === insecurePublicDefaultMasterKey &&
-    env.LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY === "true"
-  ) {
-    return [
-      "HIGH PRIORITY: production is using the public default MASTER_KEY through LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY.",
-    ];
-  }
-  return [];
 }
 
 export function gatewayPublicBaseUrl(

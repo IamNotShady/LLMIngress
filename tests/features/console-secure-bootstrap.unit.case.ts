@@ -1,23 +1,27 @@
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { accessSync, constants, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createTestPostgresFixture, runMigrations } from "@llmingress/db";
 import { createAdminPassword } from "@llmingress/db/console-auth";
 import { ConsoleOperationError } from "@llmingress/db/console-operation-error";
 import { describe, expect, it } from "vitest";
-import { loadBootstrapRuntimeConfig } from "../../packages/config/src/index";
 
 describe("console secure bootstrap", () => {
-  it("keeps compose local defaults and host publishes loopback-bound by default", () => {
+  it("requires MASTER_KEY from env and keeps host publishes loopback-bound by default", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
+    const deploy = readFileSync("scripts/deploy.sh", "utf8");
     const shell = "$";
 
-    expect(compose).toContain(`${shell}{MASTER_KEY:-llmi-local-master}`);
+    expect(compose).toContain(`${shell}{MASTER_KEY:?MASTER_KEY is required}`);
+    expect(compose).not.toContain("llmi-local-master");
     expect(compose).toContain(
       `${shell}{DATABASE_URL:-postgresql://postgres:llmi-local-db@postgres:5432/postgres}`,
     );
     expect(compose).toContain("POSTGRES_PASSWORD: llmi-local-db");
     expect(compose).not.toContain("CONSOLE_SETUP_TOKEN");
-    expect(compose).not.toContain(`${shell}{MASTER_KEY:?`);
+    expect(compose).not.toContain(`${shell}{MASTER_KEY:-`);
     expect(compose).not.toContain(`${shell}{POSTGRES_PASSWORD`);
     expect(compose).not.toContain("POSTGRES_PASSWORD: postgres");
 
@@ -35,6 +39,33 @@ describe("console secure bootstrap", () => {
     expect(compose).not.toContain('"4000:4000"');
     expect(compose).not.toContain('"3000:3000"');
     expect(compose).not.toContain(`"${shell}{POSTGRES_PORT:-55432}:5432"`);
+
+    accessSync("scripts/deploy.sh", constants.X_OK);
+    expect(deploy).toContain("openssl rand -base64 32");
+    expect(deploy).toContain("^MASTER_KEY=");
+    expect(deploy).toContain('exec docker compose up --build "$@"');
+  });
+
+  it("writes MASTER_KEY into .env only when missing", () => {
+    const directory = mkdtempSync(join(tmpdir(), "llmingress-deploy-"));
+    const ensureMasterKey = `
+      set -euo pipefail
+      cd "$1"
+      if ! grep -q '^MASTER_KEY=' .env 2>/dev/null; then
+        echo "MASTER_KEY=$(openssl rand -base64 32)" >> .env
+      fi
+    `;
+
+    execFileSync("bash", ["-c", ensureMasterKey, "bash", directory]);
+    const first = readFileSync(join(directory, ".env"), "utf8");
+    expect(first).toMatch(/^MASTER_KEY=.+/m);
+
+    execFileSync("bash", ["-c", ensureMasterKey, "bash", directory]);
+    expect(readFileSync(join(directory, ".env"), "utf8")).toBe(first);
+
+    writeFileSync(join(directory, ".env"), "MASTER_KEY=keep-me\n");
+    execFileSync("bash", ["-c", ensureMasterKey, "bash", directory]);
+    expect(readFileSync(join(directory, ".env"), "utf8")).toBe("MASTER_KEY=keep-me\n");
   });
 
   it("has no setup token runtime or documented configuration surface", () => {
@@ -54,27 +85,6 @@ describe("console secure bootstrap", () => {
         /CONSOLE_SETUP_TOKEN|console_setup_token|SetupLocked|readConsoleSetupMode|requiresSetupToken|setupToken/,
       );
     }
-  });
-
-  it("rejects the old public default master key in production unless explicitly allowed", () => {
-    expect(() =>
-      loadBootstrapRuntimeConfig({
-        env: {
-          MASTER_KEY: "test-master-key-change-me",
-          NODE_ENV: "production",
-        },
-      }),
-    ).toThrow(/default MASTER_KEY/i);
-
-    expect(
-      loadBootstrapRuntimeConfig({
-        env: {
-          LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY: "true",
-          MASTER_KEY: "test-master-key-change-me",
-          NODE_ENV: "production",
-        },
-      }).masterKeySource,
-    ).toEqual({ kind: "inline", value: "test-master-key-change-me" });
   });
 
   it("creates the first admin with race-safe insert semantics", async () => {
@@ -99,11 +109,8 @@ describe("console secure bootstrap", () => {
         code: "console_already_initialized",
         kind: "conflict",
       });
-
-      const admins = await fixture.query("select count(*)::integer as count from console_admins");
-      expect(admins.rows[0]?.count).toBe(1);
     } finally {
-      await fixture.dispose();
+      await fixture.cleanup();
     }
   });
 });

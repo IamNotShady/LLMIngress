@@ -15,7 +15,7 @@ open directly in a browser). Single-page landing site, English copy, desktop
   is a self-hosted gateway that gives every agent one endpoint, routes each
   request to the right model, falls back on failure, and meters cost — then
   copy one command and deploy it.
-- Primary conversion: `docker compose up` command copy + GitHub link.
+- Primary conversion: `./scripts/deploy.sh` command copy + GitHub link.
   There is no signup, no pricing, no email capture. The page sells a repo.
 
 Narrative chosen with the product owner: **the ecosystem orbits one
@@ -425,13 +425,13 @@ Data is fabricated but internally consistent (prices ≈ real per-1M rates).
 ### 4.7 Deploy
 
 Eyebrow `04 — DEPLOY`. H2: **Runs where you work.** Copy-able command block
-(mono, copy button) centered. Compose ships local-only default keys, so the
-quick start is clone-and-run with no secret exports:
+(mono, copy button) centered. `./scripts/deploy.sh` writes a random
+`MASTER_KEY` into gitignored `.env` when missing, then runs Compose:
 
 ```bash
 git clone https://github.com/IamNotShady/LLMIngress.git
 cd LLMIngress
-docker compose up --build
+./scripts/deploy.sh
 ```
 
 Caption: `Gateway :4000 · Console :3000 · Postgres :55432 · bound to
@@ -440,13 +440,13 @@ Caption: `Gateway :4000 · Console :3000 · Postgres :55432 · bound to
 Below, three shape cards (equal row, stacks ≤768px) — title + 2 lines:
 
 - **Docker Compose** — recommended. Postgres bundled, migrations run on
-  first boot, local-only default keys. Nothing listens publicly until you
-  change a host.
+  first boot, random `MASTER_KEY` via `deploy.sh`. Nothing listens publicly
+  until you change a host.
 - **Local Node** — `pnpm install && ./init.sh` against your own Postgres.
   For hacking on it.
-- **Server / VPS** — same compose file; set a private `MASTER_KEY`, point
-  `CONSOLE_PUBLISH_HOST` at your network, keep the Gateway and Postgres
-  private.
+- **Server / VPS** — same compose file; override `.env` `MASTER_KEY` if you
+  want, point `CONSOLE_PUBLISH_HOST` at your network, keep the Gateway and
+  Postgres private.
 
 ### 4.8 FAQ
 

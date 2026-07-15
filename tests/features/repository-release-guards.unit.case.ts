@@ -171,6 +171,7 @@ describe("core release guards", () => {
     const compose = readFileSync(join(repoRoot, "docker-compose.yml"), "utf8");
 
     expect(readme).toContain("docker compose up --build");
+    expect(readme).toContain("./scripts/deploy.sh");
     expect(`${readme}\n${product}`).not.toContain("/latest/download/install.sh");
     expect(`${readme}\n${product}`).not.toContain("install.sh");
     expect(product).toContain("one-command remote installer");

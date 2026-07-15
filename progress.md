@@ -17,12 +17,13 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 
 ## Latest verification
 
-- Compose smoke (no secret exports): `docker compose down -v` then `docker compose up --build` — migrate 0, gateway/console HTTP 200.
-- `platform-security` unit (incl. compose local-default guards): 30 passed.
+- 2026-07-15: `vitest` platform-security (MASTER_KEY/deploy/setup-token cases) + release-guards Compose path — passed. DB-backed cases need local `TEST_DATABASE_URL` (postgres auth failed in this session).
+- Compose path: `./scripts/deploy.sh` (generates `.env` `MASTER_KEY` when missing, then `docker compose up --build`).
 
 ## Latest changes
 
-- Compose local defaults: `MASTER_KEY` defaults to `llmi-local-master`; PostgreSQL password is the compose literal `llmi-local-db` embedded in the default `DATABASE_URL` (no user-facing `POSTGRES_PASSWORD`). Quick start is `docker compose up --build` with no secret exports.
+- Compose no longer ships a public default `MASTER_KEY`. `./scripts/deploy.sh` writes a random key into `.env` when missing, then runs `docker compose up --build`. PostgreSQL password remains the compose literal `llmi-local-db` embedded in the default `DATABASE_URL` (no user-facing `POSTGRES_PASSWORD`).
+- Removed production weak-`MASTER_KEY` refusal / `LLMINGRESS_ALLOW_INSECURE_DEFAULT_MASTER_KEY` transitional guard.
 - Removed one-command `install.sh` delivery; Compose remains the supported self-hosted path.
 - `/v1/embeddings` remains retired; embedding model metadata remains supported and embedding-only catalog entries stay hidden.
 

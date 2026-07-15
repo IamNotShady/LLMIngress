@@ -37,12 +37,13 @@ and control routing, access, limits, fallback, and usage from one Console.
 ```bash
 git clone https://github.com/IamNotShady/LLMIngress.git
 cd LLMIngress
-docker compose up --build
+./scripts/deploy.sh
 ```
 
-Compose uses local-only defaults for `MASTER_KEY` (`llmi-local-master`) and PostgreSQL password
-(`llmi-local-db`). Override `MASTER_KEY` in a gitignored `.env` when you need a private key.
-Published ports bind to `127.0.0.1` by default.
+`./scripts/deploy.sh` writes a random `MASTER_KEY` into a gitignored `.env` when missing,
+then runs `docker compose up --build`. Compose still uses a local-only default PostgreSQL
+password (`llmi-local-db`). Published ports bind to `127.0.0.1` by default. Keep a backup of
+`.env` — the same `MASTER_KEY` is required to decrypt stored provider credentials.
 
 | Service | Address | Purpose |
 | --- | --- | --- |
@@ -129,12 +130,12 @@ LLMIngress uses Node.js 24, pnpm 11.5.1, and PostgreSQL 18.4.
 ```bash
 pnpm install
 cp .env.example .env.local
-# Set MASTER_KEY and confirm DATABASE_URL / TEST_DATABASE_URL in .env.local.
+# Set MASTER_KEY (e.g. openssl rand -base64 32) and confirm DATABASE_URL / TEST_DATABASE_URL.
 pnpm run db:migrate
 ./init.sh
 ```
 
-To exercise the production-shaped containers from a checkout, run `docker compose up --build`.
+To exercise the production-shaped containers from a checkout, run `./scripts/deploy.sh`.
 Compose builds the same multi-role application image used by local delivery checks, while also
 publishing PostgreSQL on `127.0.0.1:55432` for development.
 

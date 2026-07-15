@@ -171,7 +171,6 @@ export function createGatewayApp(options: CreateGatewayAppOptions = {}) {
 export async function startGateway() {
   const config = loadBootstrapRuntimeConfig();
   assertPostgresDatabaseConfigured();
-  logBootstrapSecurityWarnings(config.securityWarnings);
   const configRuntime = createGatewayConfigRuntime({
     enableNotifications: gatewayConfigNotifications(),
     reconcileIntervalMs: gatewayConfigReconcileIntervalMs(),
@@ -222,12 +221,6 @@ export async function startGateway() {
       process.exit(1);
     });
   });
-}
-
-function logBootstrapSecurityWarnings(warnings: string[]): void {
-  for (const warning of warnings) {
-    logger.warn({ securityWarning: true }, warning);
-  }
 }
 
 function requireGatewayConfigSnapshot(options: CreateGatewayAppOptions) {

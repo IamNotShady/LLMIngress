@@ -110,7 +110,7 @@ describe("console secure bootstrap", () => {
         kind: "conflict",
       });
     } finally {
-      await fixture.cleanup();
+      await fixture.dispose();
     }
   });
 });

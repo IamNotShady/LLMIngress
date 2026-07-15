@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type DragEvent, useMemo, useState } from "react";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
@@ -63,7 +64,7 @@ export function VirtualModelRouteDialogClient({
   virtualModel: VirtualModel | null;
 }) {
   const [strategy, setStrategy] = useState<Strategy>(routePolicy?.strategy ?? "random");
-  const [endpointProtocol, setEndpointProtocol] = useState<EndpointProtocol>(
+  const [endpointProtocol, setEndpointProtocol] = useState<EndpointProtocol>(() =>
     readInitialEndpointProtocol(routePolicy),
   );
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>(
@@ -400,9 +401,9 @@ export function VirtualModelRouteDialogClient({
                   <tr>
                     <td colSpan={7}>
                       <p>No compatible models available for this endpoint.</p>
-                      <a className="empty-state-action" href="/providers">
+                      <Link className="empty-state-action" href="/providers">
                         Open Providers
-                      </a>{" "}
+                      </Link>{" "}
                       to add or refresh Provider Models.
                     </td>
                   </tr>

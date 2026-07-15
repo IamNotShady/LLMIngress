@@ -11,12 +11,13 @@ import {
   getConsolePrevious24HourKpis,
   getConsoleUsageSummary,
 } from "@llmingress/db/console-usage";
+import Link from "next/link";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { chartAccent, chartOk } from "../_components/charts/palette";
 import { TrendLineChart } from "../_components/charts/trend-line-chart";
 import { StatCard } from "../_components/stat-card";
+import { ActivityStatusPill } from "./activity-status-pill";
 import {
-  ActivityStatusPill,
   failureRateTone,
   formatActivityProviderLabel,
   formatActivityVirtualModelLabel,
@@ -95,28 +96,28 @@ export async function OverviewSection() {
           </div>
           <ol className="core-onboarding-steps">
             <li>
-              <a href="/providers?providerDialog=new">
+              <Link href="/providers?providerDialog=new">
                 <span>1</span>
                 Add a Provider
-              </a>
+              </Link>
             </li>
             <li>
-              <a href="/models?virtualModelDialog=new">
+              <Link href="/models?virtualModelDialog=new">
                 <span>2</span>
                 Create a Virtual Model
-              </a>
+              </Link>
             </li>
             <li>
-              <a href="/agents?agentDialog=new">
+              <Link href="/agents?agentDialog=new">
                 <span>3</span>
                 Create an Agent
-              </a>
+              </Link>
             </li>
             <li>
-              <a href="/playground">
+              <Link href="/playground">
                 <span>4</span>
                 Send a test request
-              </a>
+              </Link>
             </li>
           </ol>
         </section>

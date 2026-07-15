@@ -12,6 +12,7 @@ import {
   type ProviderDependencyImpact,
 } from "@llmingress/db/console-providers";
 import { listProviderModelPage } from "@llmingress/db/console-route-policies";
+import Link from "next/link";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
 import { FlatIcon } from "../_components/flat-icon";
@@ -349,7 +350,7 @@ function ProviderDeleteDialog({
           <ul>
             {impact.virtualModels.map((virtualModel) => (
               <li key={virtualModel.id}>
-                <a href="/models">{virtualModel.name}</a>
+                <Link href="/models">{virtualModel.name}</Link>
               </li>
             ))}
           </ul>
@@ -361,7 +362,7 @@ function ProviderDeleteDialog({
           <ul>
             {impact.routePolicies.map((routePolicy) => (
               <li key={routePolicy.id}>
-                <a href="/models">{routePolicy.virtualModelName}</a>
+                <Link href="/models">{routePolicy.virtualModelName}</Link>
               </li>
             ))}
           </ul>

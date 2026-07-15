@@ -21,8 +21,8 @@ import { ConsoleDialog } from "../_components/console-dialog";
 import { FlatIcon } from "../_components/flat-icon";
 import { Pager } from "../_components/list-ui";
 import { buildQueryHref, readPageParam } from "../_lib/pagination";
+import { ActivityStatusPill } from "./activity-status-pill";
 import {
-  ActivityStatusPill,
   type ConsoleSearchParams,
   formatActivityProviderLabel,
   formatActivityVirtualModelLabel,

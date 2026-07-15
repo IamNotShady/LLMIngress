@@ -17,6 +17,7 @@ import {
   listVirtualModelFallbackBreakdown,
   listVirtualModels,
 } from "@llmingress/db/console-virtual-models";
+import Link from "next/link";
 import { DonutBreakdown } from "../_components/charts/donut-breakdown";
 import { ConsoleDialog } from "../_components/console-dialog";
 import { ConsoleMutationForm } from "../_components/console-mutation-form";
@@ -287,16 +288,20 @@ export async function VirtualModelsSection({
 }: {
   searchParams: ConsoleSearchParams;
 }) {
-  const virtualModels = await listVirtualModels();
-  const routePolicies = await listRoutePolicies();
-  const providerHealthSummaries = await listConsoleProviderHealthSummaries();
+  const [virtualModels, routePolicies, providerHealthSummaries, unorderedProviderModelOptions] =
+    await Promise.all([
+      listVirtualModels(),
+      listRoutePolicies(),
+      listConsoleProviderHealthSummaries(),
+      listProviderModelOptions(),
+    ]);
   const providerHealthByProviderId = new Map<string, typeof providerHealthSummaries>();
   for (const summary of providerHealthSummaries) {
     const entries = providerHealthByProviderId.get(summary.providerId) ?? [];
     entries.push(summary);
     providerHealthByProviderId.set(summary.providerId, entries);
   }
-  const providerModelOptions = orderProviderModelsForConsole(await listProviderModelOptions());
+  const providerModelOptions = orderProviderModelsForConsole(unorderedProviderModelOptions);
   const routePolicyByVmId = new Map(routePolicies.map((policy) => [policy.virtualModelId, policy]));
   const statusFilter = readSingleSearchParam(searchParams.vmStatus) ?? "";
   const strategyFilter = readSingleSearchParam(searchParams.vmStrategy) ?? "";
@@ -444,9 +449,9 @@ export async function VirtualModelsSection({
             <h2 className="chart-card-title">Virtual Model list</h2>
             {visibleVirtualModels.length === 0 ? (
               <p>
-                <a className="empty-state-action" href="/providers?providerDialog=new">
+                <Link className="empty-state-action" href="/providers?providerDialog=new">
                   Add a Provider and refresh its models
-                </a>
+                </Link>
                 , then create a Virtual Model from compatible candidates.
               </p>
             ) : (

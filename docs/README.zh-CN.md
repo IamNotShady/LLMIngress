@@ -7,6 +7,10 @@
 <p align="center">把你的 AI Agent 路由到你已经在用的模型提供商。</p>
 
 <p align="center">
+  <a href="https://llmingress.ai">llmingress.ai</a> · <a href="https://github.com/IamNotShady/LLMIngress/releases">版本发布</a>
+</p>
+
+<p align="center">
   [<a href="../README.md">English</a>] [<a href="README.zh-CN.md">简体中文</a>]
 </p>
 

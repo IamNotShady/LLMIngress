@@ -10,7 +10,7 @@ type ConsoleMode = "dev" | "start";
 type ConsoleChildProcess = Pick<ChildProcess, "kill" | "on">;
 type ConsoleRuntime = {
   exit: (code: number) => void;
-  killSelf: (signal: NodeJS.Signals) => void;
+  signalSelf: (signal: NodeJS.Signals) => void;
   off: (signal: NodeJS.Signals, listener: () => void) => void;
   once: (signal: NodeJS.Signals, listener: () => void) => void;
 };
@@ -27,7 +27,7 @@ const shutdownSignals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 const consolePackageRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultConsoleRuntime: ConsoleRuntime = {
   exit: (code) => process.exit(code),
-  killSelf: (signal) => process.kill(process.pid, signal),
+  signalSelf: (signal) => process.kill(process.pid, signal),
   off: (signal, listener) => process.off(signal, listener),
   once: (signal, listener) => process.once(signal, listener),
 };
@@ -75,22 +75,22 @@ export function attachConsoleChildLifecycle(
   runtime: ConsoleRuntime = defaultConsoleRuntime,
 ): void {
   let forwardedSignal: NodeJS.Signals | null = null;
-  let forceKillTimer: NodeJS.Timeout | null = null;
+  let forceTerminateTimer: NodeJS.Timeout | null = null;
   const parentSignalHandlers = new Map<NodeJS.Signals, () => void>();
 
   for (const shutdownSignal of shutdownSignals) {
     const listener = () => {
       forwardedSignal ??= shutdownSignal;
-      killChild(child, shutdownSignal);
-      forceKillTimer ??= setChildForceKillTimer(child);
+      terminateChildProcess(child, shutdownSignal);
+      forceTerminateTimer ??= scheduleChildForceTerminate(child);
     };
     parentSignalHandlers.set(shutdownSignal, listener);
     runtime.once(shutdownSignal, listener);
   }
 
   child.on("exit", (code, signal) => {
-    if (forceKillTimer) {
-      clearTimeout(forceKillTimer);
+    if (forceTerminateTimer) {
+      clearTimeout(forceTerminateTimer);
     }
     for (const [parentSignal, listener] of parentSignalHandlers) {
       runtime.off(parentSignal, listener);
@@ -102,7 +102,7 @@ export function attachConsoleChildLifecycle(
     }
 
     if (signal) {
-      runtime.killSelf(signal);
+      runtime.signalSelf(signal);
       return;
     }
 
@@ -110,13 +110,13 @@ export function attachConsoleChildLifecycle(
   });
 }
 
-function setChildForceKillTimer(child: ConsoleChildProcess): NodeJS.Timeout {
-  const timer = setTimeout(() => killChild(child, "SIGKILL"), 2_000);
+function scheduleChildForceTerminate(child: ConsoleChildProcess): NodeJS.Timeout {
+  const timer = setTimeout(() => terminateChildProcess(child, "SIGKILL"), 2_000);
   timer.unref();
   return timer;
 }
 
-function killChild(child: ConsoleChildProcess, signal: NodeJS.Signals): void {
+function terminateChildProcess(child: ConsoleChildProcess, signal: NodeJS.Signals): void {
   try {
     child.kill(signal);
   } catch (error) {

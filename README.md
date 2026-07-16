@@ -7,6 +7,10 @@
 <p align="center">Route your AI agents across the model providers you already use.</p>
 
 <p align="center">
+  <a href="https://llmingress.ai">llmingress.ai</a> · <a href="https://github.com/IamNotShady/LLMIngress/releases">Releases</a>
+</p>
+
+<p align="center">
   [<a href="README.md">English</a>] [<a href="docs/README.zh-CN.md">简体中文</a>]
 </p>
 

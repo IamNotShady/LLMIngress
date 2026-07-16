@@ -29,6 +29,7 @@ Core Platform Security; Provider Model Management; Virtual Model Routing; Gatewa
 - Compose no longer ships a public default `ENCRYPTION_KEY`. `./scripts/deploy.sh` writes a random key into `.env` when missing.
 - Removed one-command `install.sh` delivery; Compose remains the supported self-hosted path.
 - `/v1/embeddings` remains retired; embedding model metadata remains supported and embedding-only catalog entries stay hidden.
+- Beta promo pass: README link line to llmingress.ai, landing copy aligned to PRODUCT.md scope; `docs/marketing/` is gitignored local-only.
 
 ## Blockers
 

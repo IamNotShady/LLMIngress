@@ -67,8 +67,8 @@ create jobs.
 
 Gateway exposes `/health/live`, `/health/ready`, and the readiness-compatible `/health` alias.
 
-Self-hosted beta deployments use repository Docker Compose: one multi-role application image plus
-PostgreSQL 18.4.
+Self-hosted beta deployments use repository Docker Compose: one app container (multi-role image)
+plus one PostgreSQL 18.4 container.
 
 ## Unsupported
 

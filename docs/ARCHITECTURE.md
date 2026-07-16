@@ -96,8 +96,7 @@ advisory locks. They create no `jobs` or `job_attempts`. Retention deletes in ba
   closes pools, and exits. Drain-timeout diagnostics contain safe metadata only.
 - Runtime images use compiled output and non-root users. Console uses Next standalone output;
   Gateway and Worker start with `node`.
-- Docker Compose uses one non-root multi-role application image. Gateway, Console, Worker, and
-  Migration run as separate containers from that image; PostgreSQL 18.4 runs in a separate official
-  container.
+- Docker Compose uses two containers: one non-root multi-role application container (migrate on
+  boot, then Gateway, Console, and Worker processes) and one official PostgreSQL 18.4 container.
 - The pre-release schema is the single `0001_core_baseline.sql`: 23 product tables plus migration
   history, 24 total. Old development databases are recreated rather than mixed with this schema.

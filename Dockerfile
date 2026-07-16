@@ -36,4 +36,4 @@ COPY --chmod=755 scripts/docker/docker-entrypoint.sh ./docker-entrypoint.sh
 USER llmingress
 EXPOSE 3000 4000
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["gateway"]
+CMD ["all"]

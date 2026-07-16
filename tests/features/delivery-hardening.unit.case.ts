@@ -24,13 +24,18 @@ describe("core delivery hardening", () => {
   it("builds one non-root multi-role runtime image without repository source", () => {
     const dockerfile = read("Dockerfile");
     const compose = read("docker-compose.yml");
+    const entrypoint = read("scripts/docker/docker-entrypoint.sh");
     expect(dockerfile).toContain("AS runtime");
     expect(dockerfile.match(/^USER /gm)).toHaveLength(1);
     expect(dockerfile).toContain('ENTRYPOINT ["/app/docker-entrypoint.sh"]');
-    for (const role of ["gateway", "worker", "migrate", "console"]) {
-      expect(compose).toContain(`command: ${role}`);
-    }
-    expect(compose.match(/image: llmingress-app:local/g)).toHaveLength(4);
+    expect(dockerfile).toContain('CMD ["all"]');
+    expect(compose).toContain("command: all");
+    expect(entrypoint).toContain("all)");
+    expect(compose).not.toContain("command: gateway");
+    expect(compose).not.toContain("command: console");
+    expect(compose).not.toContain("command: worker");
+    expect(compose).not.toContain("command: migrate");
+    expect(compose.match(/image: llmingress-app:local/g)).toHaveLength(1);
     expect(compose.match(/target: runtime/g)).toHaveLength(1);
     expect(dockerfile).not.toContain("COPY --from=build /app /app");
     expect(compose).toContain("/health/ready");

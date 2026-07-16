@@ -180,8 +180,9 @@ describe("core release guards", () => {
     expect(dockerfile).not.toContain("init-state.ts");
     expect(dockerfile).not.toContain("install/state.mjs");
     expect(entrypoint).not.toContain("install/state.mjs");
-    expect(compose).toContain("command: gateway");
+    expect(compose).toContain("command: all");
     expect(compose).toContain("GATEWAY_URL");
+    expect(entrypoint).toContain("all)");
   });
 
   it("keeps retired tables, configuration, and behavior out of production", () => {

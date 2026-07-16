@@ -101,9 +101,7 @@ test("release verification runner and docker compose contracts stay runnable", a
       env: composeEnv,
     },
   );
-  expect(services.stdout.trim().split(/\r?\n/)).toEqual(
-    expect.arrayContaining(["postgres", "migrate", "gateway", "console", "worker"]),
-  );
+  expect(services.stdout.trim().split(/\r?\n/).sort()).toEqual(["app", "postgres"].sort());
 
   await execFileAsync("docker", ["compose", "-f", "docker-compose.yml", "config", "--quiet"], {
     cwd: process.cwd(),

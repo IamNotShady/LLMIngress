@@ -45,12 +45,15 @@ then runs `docker compose up --build`. Compose still uses a local-only default P
 password (`llmi-local-db`). Published ports bind to `127.0.0.1` by default. Keep a backup of
 `.env` — the same `MASTER_KEY` is required to decrypt stored provider credentials.
 
-| Service | Address | Purpose |
+Compose runs two containers: the app (Console, Gateway, and Worker in one process group) and
+PostgreSQL.
+
+| Endpoint | Address | Purpose |
 | --- | --- | --- |
 | Console | [http://localhost:3000](http://localhost:3000) | Configure and observe LLMIngress |
 | Gateway | [http://localhost:4000](http://localhost:4000) | Serve Agent API traffic |
 | PostgreSQL | `localhost:55432` | Store configuration and operational metadata |
-| Worker | Internal only | Refresh models, probe connections, and synchronize prices |
+| Worker | Inside the app container | Refresh models, probe connections, and synchronize prices |
 
 Runtime and port overrides are documented in [`.env.example`](.env.example).
 
@@ -135,9 +138,9 @@ pnpm run db:migrate
 ./init.sh
 ```
 
-To exercise the production-shaped containers from a checkout, run `./scripts/deploy.sh`.
-Compose builds the same multi-role application image used by local delivery checks, while also
-publishing PostgreSQL on `127.0.0.1:55432` for development.
+To exercise the production-shaped stack from a checkout, run `./scripts/deploy.sh`.
+Compose builds one multi-role application image, runs it as a single app container alongside
+PostgreSQL (published on `127.0.0.1:55432` for development).
 
 `./init.sh` runs lint, type-checking, unit tests, and the build before starting Console, Gateway,
 and Worker. The standalone verification commands are:

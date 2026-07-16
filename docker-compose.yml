@@ -32,27 +32,18 @@ services:
       timeout: 5s
       retries: 20
 
-  migrate:
+  app:
     image: llmingress-app:local
     build: *llmingress-build
-    command: migrate
-    environment: *llmingress-env
+    command: all
+    environment:
+      <<: *llmingress-env
+      GATEWAY_URL: ${GATEWAY_URL:-http://127.0.0.1:4000}
     depends_on:
       postgres:
         condition: service_healthy
-    restart: "no"
-
-  gateway:
-    image: llmingress-app:local
-    build: *llmingress-build
-    command: gateway
-    environment: *llmingress-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     ports:
+      - "${CONSOLE_PUBLISH_HOST:-127.0.0.1}:${CONSOLE_PORT:-3000}:3000"
       - "${GATEWAY_PUBLISH_HOST:-127.0.0.1}:${GATEWAY_PORT:-4000}:4000"
     healthcheck:
       test:
@@ -63,32 +54,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-
-  console:
-    image: llmingress-app:local
-    build: *llmingress-build
-    command: console
-    environment:
-      <<: *llmingress-env
-      GATEWAY_URL: ${GATEWAY_URL:-http://localhost:4000}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    ports:
-      - "${CONSOLE_PUBLISH_HOST:-127.0.0.1}:${CONSOLE_PORT:-3000}:3000"
-
-  worker:
-    image: llmingress-app:local
-    build: *llmingress-build
-    command: worker
-    environment: *llmingress-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
 
 volumes:
   postgres-data:

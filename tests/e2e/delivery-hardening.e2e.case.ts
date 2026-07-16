@@ -174,6 +174,12 @@ test("the multi-role runtime image is non-root and omits development sources", a
       { cwd: process.cwd() },
     );
     expect(JSON.parse(entrypoint.stdout)).toEqual(["/app/docker-entrypoint.sh"]);
+    const cmd = await execFileAsync(
+      "docker",
+      ["image", "inspect", "--format", "{{json .Config.Cmd}}", image],
+      { cwd: process.cwd() },
+    );
+    expect(JSON.parse(cmd.stdout)).toEqual(["all"]);
     const runtime = await execFileAsync(
       "docker",
       [

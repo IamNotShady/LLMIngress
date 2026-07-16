@@ -79,7 +79,7 @@
       "verification": "pnpm exec vitest run tests/features/release-guards.unit.test.ts && pnpm test:e2e tests/e2e/release-guards.e2e.spec.ts --workers=1",
       "dependencies": ["console-core", "worker-model-operations"],
       "status": "passing",
-      "evidence": "2026-07-15: one-command install.sh delivery removed; Compose remains the supported self-hosted path. Retired-surface guards keep Embeddings and installer assets deleted while embedding model metadata remains. Focused release checks updated."
+      "evidence": "2026-07-16: Compose delivery is two containers (app command:all + postgres); entrypoint all migrates then supervises Gateway/Console/Worker; Dockerfile CMD all. Focused release/delivery unit+e2e, pnpm run verify, and verify:features (9/9) passed."
     }
   ]
 }
